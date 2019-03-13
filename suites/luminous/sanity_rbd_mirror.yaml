@@ -6,7 +6,7 @@
       desc: install ceph pre requisites
 
    - test:
-      name: setup dual cluster using ceph-ansible
+      name: ceph ansible
       module: test_ansible.py
       clusters:
         ceph-rbd1:
@@ -16,7 +16,7 @@
               ceph_origin: distro
               ceph_stable_release: luminous
               ceph_repository: rhcs
-              osd_scenario: collocated
+              osd_scenario: lvm
               osd_auto_discovery: False
               journal_size: 1024
               ceph_stable: True
@@ -31,6 +31,11 @@
                   mon_max_pg_per_osd: 1024
                 mon:
                   mon_allow_pool_delete: true
+              cephfs_pools:
+                - name: "cephfs_data"
+                  pgs: "8"
+                - name: "cephfs_metadata"
+                  pgs: "8"
         ceph-rbd2:
           config:
             ansi_config:
@@ -38,7 +43,7 @@
               ceph_origin: distro
               ceph_stable_release: luminous
               ceph_repository: rhcs
-              osd_scenario: collocated
+              osd_scenario: lvm
               osd_auto_discovery: False
               journal_size: 1024
               ceph_stable: True
@@ -53,19 +58,28 @@
                   mon_max_pg_per_osd: 1024
                 mon:
                   mon_allow_pool_delete: true
+              cephfs_pools:
+                - name: "cephfs_data"
+                  pgs: "8"
+                - name: "cephfs_metadata"
+                  pgs: "8"
+      desc: setup dual cluster using ceph-ansible
+      destroy-cluster: false
+      abort-on-fail: true
 
    - test:
-      name: Setup RBD Mirror
+      name: rbd mirror pre-req
       module: mirror_setup.py
       clusters:
         ceph-rbd1:
           config:
             way: two-way
+      desc: pre-req for mirroring host
       abort-on-fail: true
 
    - test:
-      name: Test CEPH-9470
-      module: CEPH-9470.py
+      name: test_9470
+      module: test_9470.py
       clusters:
         ceph-rbd1:
           config:
@@ -75,8 +89,8 @@
       desc: Recovery of abrupt failure of primary cluster
 
    - test:
-      name: Test CEPH-9471
-      module: CEPH-9471.py
+      name: test_9471
+      module: test_9471.py
       clusters:
         ceph-rbd1:
           config:
@@ -86,8 +100,8 @@
       desc: Recovery of shutdown primary cluster
 
    - test:
-      name: Test CEPH-9474
-      module: CEPH-9474.py
+      name: test_9474
+      module: test_9474.py
       clusters:
         ceph-rbd1:
           config:
@@ -97,8 +111,8 @@
       desc: Recovery of abrupt failure of secondary cluster
 
    - test:
-      name: Test CEPH-9475
-      module: CEPH-9475.py
+      name: test_9475
+      module: test_9475.py
       clusters:
         ceph-rbd1:
           config:
@@ -108,8 +122,8 @@
       desc: Recovery of shutdown secondary cluster
 
    - test:
-      name: Test CEPH-11489
-      module: CEPH-11489.py
+      name: test_11489
+      module: test_11489.py
       clusters:
         ceph-rbd1:
           config:
