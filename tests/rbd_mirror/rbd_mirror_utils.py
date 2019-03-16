@@ -90,20 +90,17 @@ class RbdMirror:
         self.cluster_name = name
         self.cluster_spec = self.rbd_client + '@' + self.cluster_name
         self.ceph_args = ' --cluster {}'.format(self.cluster_name)
-        self.exec_cmd(
-            ceph_args=False,
-            cmd="grep -v 'CLUSTER=ceph' /etc/sysconfig/ceph | tee temp "
-                + "&& mv temp /etc/sysconfig/ceph")
-        self.exec_cmd(
-            ceph_args=False,
-            cmd="echo 'CLUSTER={}' | tee -a /etc/sysconfig/ceph"
-                .format(name))
+        self.exec_cmd(ceph_args=False,
+                      cmd="grep -v 'CLUSTER=ceph' /etc/sysconfig/ceph | tee temp && mv temp /etc/sysconfig/ceph")
+        self.exec_cmd(ceph_args=False,
+                      cmd="echo 'CLUSTER={}' | tee -a /etc/sysconfig/ceph"
+                      .format(name))
         self.exec_cmd(ceph_args=False,
                       cmd="ln -s /etc/ceph/ceph.conf /etc/ceph/{}.conf"
                       .format(name))
-        self.exec_cmd(ceph_args=False, node=self.ceph_mon,
-                      cmd="ln -s /etc/ceph/ceph.client.admin.keyring "
-                          + "/etc/ceph/{}.client.admin.keyring".format(name))
+        self.exec_cmd(ceph_args=False,
+                      cmd="ln -s /etc/ceph/ceph.client.admin.keyring /etc/ceph/{}.client.admin.keyring"
+                      .format(name))
 
     # Enable, Start or Stop Rbd Mirror Daemon
     def mirror_daemon(self, enable=None, start=None, stop=None, restart=None):
@@ -123,46 +120,35 @@ class RbdMirror:
             self.exec_cmd(ceph_args=False,
                           cmd='systemctl restart ceph-rbd-mirror@admin')
 
-    # Initial setup of rbd mirroring
+    # Initial setup of mirroring host
     def setup_mirror(self, peer_cluster, **kw):
         self.exec_cmd(ceph_args=False, cmd="yum install -y rbd-mirror")
 
-        # Copy keyring from monitor node to client node
+        self.copy_file(file_name='/etc/ceph/{}.conf'
+                       .format(peer_cluster.cluster_name),
+                       src=peer_cluster.ceph_client, dest=self.ceph_mon)
         self.copy_file(file_name='/etc/ceph/{}.client.admin.keyring'
-                       .format(self.cluster_name), src=self.ceph_mon,
-                       dest=self.ceph_client)
+                       .format(peer_cluster.cluster_name),
+                       src=peer_cluster.ceph_client, dest=self.ceph_mon)
+        self.copy_file(file_name='/etc/ceph/{}.conf'
+                       .format(peer_cluster.cluster_name),
+                       src=peer_cluster.ceph_client, dest=self.ceph_client)
+        self.copy_file(file_name='/etc/ceph/{}.client.admin.keyring'
+                       .format(peer_cluster.cluster_name),
+                       src=peer_cluster.ceph_client, dest=self.ceph_client)
 
-        if 'one-way' not in kw.get('way', ''):
-            self.copy_file(file_name='/etc/ceph/{}.conf'
-                           .format(self.cluster_name),
-                           src=self.ceph_client,
-                           dest=peer_cluster.ceph_mon)
-            self.copy_file(file_name='/etc/ceph/{}.client.admin.keyring'
-                           .format(self.cluster_name),
-                           src=self.ceph_client,
-                           dest=peer_cluster.ceph_mon)
-            self.copy_file(file_name='/etc/ceph/{}.conf'
-                           .format(self.cluster_name),
-                           src=self.ceph_client,
-                           dest=peer_cluster.ceph_client)
-            self.copy_file(file_name='/etc/ceph/{}.client.admin.keyring'
-                           .format(self.cluster_name),
-                           src=self.ceph_client,
-                           dest=peer_cluster.ceph_client)
+        self.mirror_daemon(enable=True, start=True)
 
     def config_mirror(self, peer_cluster, **kw):
         poolname = kw.get('poolname')
         mode = kw.get('mode')
 
-        self.mirror_daemon(enable=True, start=True, restart=True)
-        peer_cluster.mirror_daemon(enable=True, start=True, restart=True)
-
         self.enable_mirroring('pool', poolname, mode=mode)
         peer_cluster.enable_mirroring('pool', poolname, mode=mode)
 
         if 'one-way' in kw.get('way', ''):
-            self.peer_add(poolname=poolname,
-                          cluster_spec=peer_cluster.cluster_spec)
+            peer_cluster.peer_add(poolname=poolname,
+                                  cluster_spec=self.cluster_spec)
         else:
             self.peer_add(poolname=poolname,
                           cluster_spec=peer_cluster.cluster_spec)
@@ -233,14 +219,14 @@ class RbdMirror:
                 log.error('Required status can not be attained')
                 return 1
 
-    # Wait for replay to complete, check every 60 seconds
+    # Wait for replay to complete, check every 30 seconds
     def wait_for_replay_complete(self, imagespec):
         while True:
+            time.sleep(30)
             out = self.wait_for_status(imagespec=imagespec,
                                        description_pattern='entries')
             if int(out.split('=')[-1]) == 0:
                 return 0
-            time.sleep(60)
 
     # Get Position
     def get_position(self, imagespec, pattern=None):
@@ -418,7 +404,8 @@ class RbdMirror:
             peercluster.exec_cmd(cmd='rm -rf {}'.format(kw.get('dir_name')))
         if kw.get('pools'):
             pool_list = kw.get('pools')
-            pool_list.append(self.datapool)
+            if self.datapool:
+                pool_list.append(self.datapool)
             for pool in pool_list:
                 self.delete_pool(poolname=pool)
                 peercluster.delete_pool(poolname=pool)
