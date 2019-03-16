@@ -31,7 +31,7 @@ def run(**kw):
     mirror2.promote(imagespec=imagespec, force=True)
     mirror2.wait_for_status(imagespec=imagespec, state_pattern='up+stopped')
     mirror2.benchwrite(imagespec=imagespec, io=config.get('io-total'))
-    time.sleep(10)
+    time.sleep(60)
     mirror1.demote(imagespec=imagespec)
     mirror1.wait_for_status(imagespec=imagespec, state_pattern='up+error')
     mirror1.resync(imagespec=imagespec)

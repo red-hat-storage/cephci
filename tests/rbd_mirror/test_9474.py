@@ -29,7 +29,7 @@ def run(**kw):
         p.spawn(mirror1.benchwrite, imagespec=imagespec,
                 io=config.get('io-total'))
         p.spawn(hard_reboot, osd_cred, name='ceph-rbd2')
-    time.sleep(10)
+    time.sleep(60)
     rc = mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
     if rc == 0:
         mirror1.clean_up(peercluster=mirror2, pools=[poolname])
