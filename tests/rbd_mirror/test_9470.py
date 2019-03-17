@@ -16,6 +16,7 @@ def run(**kw):
         poolname = mirror1.random_string() + '9470pool'
         imagename = mirror1.random_string() + '9470image'
         imagespec = poolname + '/' + imagename
+        state_after_demote = 'up+stopped' if mirror1.ceph_version < 3 else 'up+unknown'
 
         mirror1.create_pool(poolname=poolname)
         mirror2.create_pool(poolname=poolname)
@@ -39,8 +40,8 @@ def run(**kw):
         mirror1.wait_for_status(imagespec=imagespec, state_pattern='up+replaying')
         mirror1.wait_for_replay_complete(imagespec=imagespec)
         mirror2.demote(imagespec=imagespec)
-        mirror2.wait_for_status(imagespec=imagespec, state_pattern='up+unknown')
-        mirror1.wait_for_status(imagespec=imagespec, state_pattern='up+unknown')
+        mirror2.wait_for_status(imagespec=imagespec, state_pattern=state_after_demote)
+        mirror1.wait_for_status(imagespec=imagespec, state_pattern=state_after_demote)
         mirror1.promote(imagespec=imagespec)
         mirror2.wait_for_status(imagespec=imagespec, state_pattern='up+replaying')
         mirror1.wait_for_status(imagespec=imagespec, state_pattern='up+stopped')
