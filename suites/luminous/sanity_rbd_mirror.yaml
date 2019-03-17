@@ -83,8 +83,8 @@
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 500M
-            io-total: 25M
+            imagesize: 2G
+            io-total: 200M
       polarion-id: CEPH-9470
       desc: Recovery of abrupt failure of primary cluster
 
@@ -94,8 +94,8 @@
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 500M
-            io-total: 25M
+            imagesize: 2G
+            io-total: 200M
       polarion-id: CEPH-9471
       desc: Recovery of shutdown primary cluster
 
@@ -105,8 +105,8 @@
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 500M
-            io-total: 25M
+            imagesize: 2G
+            io-total: 200M
       polarion-id: CEPH-9474
       desc: Recovery of abrupt failure of secondary cluster
 
@@ -116,8 +116,8 @@
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 500M
-            io-total: 25M
+            imagesize: 2G
+            io-total: 200M
       polarion-id: CEPH-9475
       desc: Recovery of shutdown secondary cluster
 
@@ -127,8 +127,8 @@
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 500M
-            io-total: 10M
+            imagesize: 2G
+            io-total: 100M
             delay: 600
       polarion-id: CEPH-11489
       desc: Delayed replication
