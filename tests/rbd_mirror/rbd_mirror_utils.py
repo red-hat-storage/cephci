@@ -55,10 +55,8 @@ class RbdMirror:
 
             return 0
 
-        except CommandFailed as e:
-            log.info(e)
-            self.flag = 1
-            return 1
+        except CommandFailed:
+            raise
 
     def copy_file(self, file_name, src, dest):
         out, err = src.exec_command(sudo=True, cmd='cat {}'.format(file_name))
@@ -91,10 +89,9 @@ class RbdMirror:
         self.cluster_spec = self.rbd_client + '@' + self.cluster_name
         self.ceph_args = ' --cluster {}'.format(self.cluster_name)
         self.exec_cmd(ceph_args=False,
-                      cmd="grep -v 'CLUSTER=ceph' /etc/sysconfig/ceph | tee temp && mv temp /etc/sysconfig/ceph")
-        self.exec_cmd(ceph_args=False,
-                      cmd="echo 'CLUSTER={}' | tee -a /etc/sysconfig/ceph"
-                      .format(name))
+                      cmd="[ -e /etc/sysconfig/ceph ] && sed -i 's/CLUSTER=ceph/CLUSTER={name}/' /etc/sysconfig/ceph "
+                          "|| echo 'CLUSTER={name}' >> /etc/sysconfig/ceph"
+                      .format(name=name))
         self.exec_cmd(ceph_args=False,
                       cmd="ln -s /etc/ceph/ceph.conf /etc/ceph/{}.conf"
                       .format(name))
@@ -216,8 +213,7 @@ class RbdMirror:
             if datetime.datetime.now() - starttime <= tout:
                 time.sleep(20)
             else:
-                log.error('Required status can not be attained')
-                return 1
+                raise Exception("Required status can not be attained")
 
     # Wait for replay to complete, check every 30 seconds
     def wait_for_replay_complete(self, imagespec):
@@ -274,8 +270,7 @@ class RbdMirror:
                                  cmd='rm -f {}'.format(export_path))
             return 0
         else:
-            log.error('Data Inconsistency found')
-            return 1
+            raise Exception("Data Inconsistency found")
 
     # CLIs
     def benchwrite(self, **kw):
