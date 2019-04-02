@@ -1,5 +1,5 @@
 import logging
-from . import rbd_mirror_utils as rbdmirror
+from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 
 log = logging.getLogger(__name__)
 
@@ -21,8 +21,7 @@ def run(**kw):
             mirror2.handle_same_name('slave')
 
     if 'one-way' in config.get('way', ''):
-        mirror1.setup_mirror(mirror2)
-        mirror2.setup_mirror(mirror1, way='one-way')
+        mirror2.setup_mirror(mirror1)
     else:
         mirror1.setup_mirror(mirror2)
         mirror2.setup_mirror(mirror1)
