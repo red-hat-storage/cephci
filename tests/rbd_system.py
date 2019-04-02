@@ -10,7 +10,7 @@ def run(**kw):
     for node in ceph_nodes:
         if node.role == 'client':
             rgw_client_nodes.append(node)
-    git_url = 'http://gitlab.cee.redhat.com/ceph/ceph-qe-scripts.git'
+    git_url = 'https://github.com/red-hat-storage/ceph-qe-scripts.git'
     git_clone = 'git clone ' + git_url
     client_node = rgw_client_nodes[0]
     # cleanup any existing stale test dir
