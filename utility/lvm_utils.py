@@ -89,7 +89,7 @@ def osd_scenario1(osd, devices_dict, dmcrypt=False):
                                                datalv3=data_lv3, wallv1=wal_lv1, datalv4=data_lv4,
                                                dblv2=db_lv2, wallv2=wal_lv2)
 
-    return scenario, dmcrypt
+    return {'scenario': scenario, 'dmcrypt': dmcrypt}
 
 
 def osd_scenario1_dmcrypt(osd, devices_dict):
@@ -102,9 +102,8 @@ def osd_scenario1_dmcrypt(osd, devices_dict):
     Returns:
         generated scenario, dmcrypt(overridden to True)
     """
-    scenario, _ = osd_scenario1(osd, devices_dict)
-    dmcrypt = True
-    return scenario, dmcrypt
+    generated_sce_dict = osd_scenario1(osd, devices_dict, dmcrypt=True)
+    return {'scenario': generated_sce_dict.get('scenario'), 'dmcrypt': generated_sce_dict.get('dmcrypt')}
 
 
 def osd_scenario2(osd, devices_dict, dmcrypt=False):
@@ -131,7 +130,7 @@ def osd_scenario2(osd, devices_dict, dmcrypt=False):
                                            vdb4=devices_dict.get('device1') + '4',
                                            vdb5=devices_dict.get('device1') + '5', vdd=devices_dict.get('device3'))
 
-    return scenario, dmcrypt
+    return {'scenario': scenario, 'dmcrypt': dmcrypt}
 
 
 def osd_scenario2_dmcrypt(osd, devices_dict):
@@ -144,9 +143,8 @@ def osd_scenario2_dmcrypt(osd, devices_dict):
     Returns:
         generated scenario, dmcrypt(overridden to True)
     """
-    scenario, _ = osd_scenario2(osd, devices_dict)
-    dmcrypt = True
-    return scenario, dmcrypt
+    generated_sce_dict = osd_scenario2(osd, devices_dict, dmcrypt=True)
+    return {'scenario': generated_sce_dict.get('scenario'), 'dmcrypt': generated_sce_dict.get('dmcrypt')}
 
 
 def osd_scenario3(osd, devices_dict, dmcrypt=False):
@@ -191,7 +189,7 @@ def osd_scenario3(osd, devices_dict, dmcrypt=False):
                 vdd1=devices_dict.get('device3') + '1', vdd2=devices_dict.get('device3') + '2',
                 vdd3=devices_dict.get('device3') + '3')
 
-    return scenario, dmcrypt
+    return {'scenario': scenario, 'dmcrypt': dmcrypt}
 
 
 def osd_scenario3_dmcrypt(osd, devices_dict):
@@ -204,6 +202,50 @@ def osd_scenario3_dmcrypt(osd, devices_dict):
     Returns:
         generated scenario, dmcrypt(overridden to True)
     """
-    scenario, _ = osd_scenario3(osd, devices_dict)
-    dmcrypt = True
-    return scenario, dmcrypt
+    generated_sce_dict = osd_scenario3(osd, devices_dict, dmcrypt=True)
+    return {'scenario': generated_sce_dict.get('scenario'), 'dmcrypt': generated_sce_dict.get('dmcrypt')}
+
+
+def osd_scenario4(osd, devices_dict, dmcrypt=False, batch=True):
+    """
+    OSD scenario type7 generator
+    Args:
+        osd: osd node
+        devices_dict: dict of devices of the osd node supplied
+        dmcrypt: False by default
+        batch: True by default
+    Returns:
+        generated scenario, dmcrypt,batch
+    """
+    devices = devices_dict.get('devices')
+    devices = devices.split()
+    scenario = (', '.join("'" + item + "'" for item in devices))
+
+    return {'scenario': scenario, 'dmcrypt': dmcrypt, 'batch': batch}
+
+
+def osd_scenario4_dmcyrpt(osd, devices_dict):
+    """
+    OSD scenario type8 generator
+    Args:
+        osd: osd node
+        devices_dict: dict of devices of the osd node supplied
+        dmcrypt: False by default
+    Returns:
+        generated scenario, dmcrypt(overridden to True),batch
+    """
+    generated_sce_dict = osd_scenario4(osd, devices_dict, dmcrypt=True)
+    return {'scenario': generated_sce_dict.get('scenario'),
+            'dmcrypt': generated_sce_dict.get('dmcrypt'),
+            'batch': generated_sce_dict.get('batch')}
+
+
+osd_scenario_list = [
+    osd_scenario1,
+    osd_scenario1_dmcrypt,
+    osd_scenario2,
+    osd_scenario2_dmcrypt,
+    osd_scenario3,
+    osd_scenario3_dmcrypt,
+    osd_scenario4,
+    osd_scenario4_dmcyrpt]
