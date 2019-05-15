@@ -637,7 +637,7 @@ class Ceph(object):
                                       cmd='wget -O {}/iso/ceph.iso {}'.format(node.ansible_dir, iso_file_url))
             if node.pkg_type == 'rpm':
                 logger.info("Updating metadata")
-                node.exec_command(sudo=True, cmd='yum update metadata')
+                node.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
             sleep(15)
 
     def create_rbd_pool(self, k_and_m):
@@ -1282,7 +1282,8 @@ class CephNode(object):
                         continue
                     self.exec_command(
                         cmd='sudo ping -I {interface} -c 3 {ceph_node}'.format(interface=eth_interface,
-                                                                               ceph_node=ceph_node.shortname))
+                                                                               ceph_node=ceph_node.shortname),
+                        check_ec=False)
                 logger.info(
                     'Suitable ethernet interface {eth_interface} found on {node}'.format(eth_interface=eth_interface,
                                                                                          node=ceph_node.ip_address))
@@ -1746,18 +1747,19 @@ class CephInstaller(CephObject):
         if self.pkg_type == 'deb':
             self.exec_command(sudo=True, cmd='apt-get install -y ceph-ansible')
         else:
-            self.exec_command(
-                cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
-                long_running=True)
+            if rhbuild.startswith("3"):
+                self.exec_command(
+                    cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
+                    long_running=True)
 
-            if rhbuild == "3.2":
-                self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
-                    long_running=True)
-            else:
-                self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
-                    long_running=True)
+                if rhbuild == "3.2":
+                    self.exec_command(
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
+                        long_running=True)
+                else:
+                    self.exec_command(
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
+                        long_running=True)
 
             if kw.get('upgrade'):
                 self.exec_command(sudo=True, cmd='yum update metadata')
