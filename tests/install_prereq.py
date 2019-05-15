@@ -26,6 +26,7 @@ def run(**kw):
     skip_subscription = config.get('skip_subscription', False)
     repo = config.get('add-repo', False)
     rhbuild = config.get('rhbuild')
+
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(install_prereq, ceph, 1800, skip_subscription, repo, rhbuild)
@@ -44,6 +45,8 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     else:
         if not skip_subscription:
             setup_subscription_manager(ceph)
+            if not rhbuild.startswith('4'):
+                enable_rhel7_rpms(ceph)
         if repo:
             setup_addition_repo(ceph, repo)
         ceph.exec_command(cmd='sudo yum install -y ' + rpm_all_pkgs, long_running=True)
@@ -72,7 +75,7 @@ def setup_addition_repo(ceph, repo):
              repo=repo, sn=ceph.shortname))
     ceph.exec_command(sudo=True,
                       cmd='curl -o /etc/yum.repos.d/rh_add_repo.repo {repo}'.format(repo=repo))
-    ceph.exec_command(sudo=True, cmd='yum update metadata')
+    ceph.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
 
 
 def setup_subscription_manager(ceph, timeout=1800):
@@ -106,6 +109,9 @@ def setup_subscription_manager(ceph, timeout=1800):
                 wait = iter(x for x in itertools.count(1, 10))
                 time.sleep(next(wait))
     ceph.exec_command(cmd='sudo subscription-manager repos --disable=*', long_running=True)
+
+
+def enable_rhel7_rpms(ceph):
     ceph.exec_command(
         cmd='sudo subscription-manager repos --enable=rhel-7-server-rpms \
              --enable=rhel-7-server-optional-rpms \
