@@ -1,6 +1,7 @@
 instance:
   create:
-    image-name: RHEL-8.0.1-x86_64-nightly-latest
+    # image-name: RHEL-8.0.1-x86_64-nightly-latest
+    image-name: RHEL-8.0.0-x86_64-latest
     vm-size: m1.medium
 
   setup: |
