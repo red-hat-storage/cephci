@@ -200,13 +200,7 @@ class Ceph(object):
         nfs_hosts = []
         client_hosts = []
         iscsi_gw_hosts = []
-        osd_scenario_list = [
-            lvm_utils.osd_scenario1,
-            lvm_utils.osd_scenario1_dmcrypt,
-            lvm_utils.osd_scenario2,
-            lvm_utils.osd_scenario2_dmcrypt,
-            lvm_utils.osd_scenario3,
-            lvm_utils.osd_scenario3_dmcrypt]
+        counter = 0
 
         for node in self:  # type: CephNode
             eth_interface = node.search_ethernet_interface(self)
@@ -250,11 +244,14 @@ class Ceph(object):
                                                   if device_to_add else None,
                                                   check_lvm=False if device_to_add else True)
                     else:
-                        lvm_vols = node.multiple_lvm_scenarios(devices, osd_scenario_list[-1])
-                        osd_scenario_list.pop()
+                        lvm_vols = node.multiple_lvm_scenarios(devices, lvm_utils.osd_scenario_list[counter])
+                        counter+= 1
+                        logger.info(lvm_vols)
                         devices = '"[' + lvm_vols.get(node.hostname)[0] + ']"'
                         dmcrypt_opt = lvm_vols.get(node.hostname)[1]
+                        batch_opt = lvm_vols.get(node.hostname)[2]
                         dmcrypt = "dmcrypt='True'" + ' ' if dmcrypt_opt.get('dmcrypt') else ''
+                        devices_prefix = 'devices' if batch_opt.get('batch') else 'lvm_volumes'
                 else:
                     devices_prefix = 'devices'
                 if mixed_lvm_confs and len(devices) > 2:
@@ -550,8 +547,8 @@ class Ceph(object):
         all_osds = int(match.group(1))
         up_osds = int(match.group(2))
         in_osds = int(match.group(3))
-        if self.ceph_demon_stat['osd'] != all_osds:
-            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (all_osds, self.ceph_demon_stat['osd']))
+        if up_osds != all_osds:
+            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (all_osds, up_osds))
             return 1
         if up_osds != in_osds:
             logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (up_osds, all_osds))
@@ -1505,12 +1502,11 @@ class CephNode(object):
         file_Name = "osd_scenarios_%s"
         '''
         device1,device2,device3 --> devices of the node
-        '''
-        devices_dict = {
-            'devices': devices_str,
-            'device1': devices[0],
-            'device2': devices[1],
-            'device3': devices[2]}
+        # '''
+        devices_dict = {'devices': devices_str}
+        for dev in devices:
+            devices_dict.update({'device%s' % (devices.index(dev)): dev})
+
         exists = self.chk_lvm_exists()
         if exists == 0:
             '''
@@ -1525,8 +1521,8 @@ class CephNode(object):
             fileObject.close()
 
         else:
-            scenario, dmcryt = scenario(self, devices_dict)
-            osd_scenarios.update({self.hostname: [scenario, {'dmcrypt': dmcryt}]})
+            generated_sce_dict = scenario(self, devices_dict)
+            osd_scenarios.update({self.hostname: [generated_sce_dict.get('scenario'), {'dmcrypt': generated_sce_dict.get('dmcrypt')}, {'batch': generated_sce_dict.get('batch',None)}]})
             logger.info('generated scenario on %s %s' % (self.hostname, scenario))
 
         fileObject = open(file_Name % self.hostname, 'wb')
