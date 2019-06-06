@@ -49,8 +49,7 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     else:
         if not skip_subscription:
             setup_subscription_manager(ceph)
-            if not rhbuild.startswith('4'):
-                enable_rhel7_rpms(ceph)
+            enable_rhel_rpms(ceph,rhbuild)
         if repo:
             setup_addition_repo(ceph, repo)
         ceph.exec_command(cmd='sudo yum install -y ' + rpm_all_pkgs, long_running=True)
@@ -115,9 +114,24 @@ def setup_subscription_manager(ceph, timeout=1800):
     ceph.exec_command(cmd='sudo subscription-manager repos --disable=*', long_running=True)
 
 
-def enable_rhel7_rpms(ceph):
-    ceph.exec_command(
-        cmd='sudo subscription-manager repos --enable=rhel-7-server-rpms \
-             --enable=rhel-7-server-optional-rpms \
-             --enable=rhel-7-server-extras-rpms',
-        long_running=True)
+def enable_rhel_rpms(self, rhbuild):
+        """
+        Setup cdn repositories for rhel systems
+        Args:
+            build(str|LooseVersion): rhcs version
+        """
+        repos_7x = ['--enable=rhel-7-server-rpms',
+                    '--enable=rhel-7-server-optional-rpms',
+                    '--enable=rhel-7-server-extras-rpms']
+
+        repos_8x = ['rhel-8-for-x86_64-appstream-rpms',
+                    'rhel-8-for-x86_64-baseos-rpms']
+
+        repos = None
+        if not rhbuild.startswith('4'):
+                repos = repos_7x
+        else:
+                repos = repos_8x
+        for repo in repos:
+            self.exec_command(
+                sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo),long_running=True)
