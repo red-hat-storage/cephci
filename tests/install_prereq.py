@@ -10,12 +10,13 @@ from ceph.utils import update_ca_cert
 from utility.retry import retry
 
 log = logging.getLogger(__name__)
-rpm_pkgs = ['wget', 'git', 'python-virtualenv', 'redhat-lsb', 'python-nose', 'ntp']
-deb_pkgs = ['wget', 'git', 'python-virtualenv', 'lsb-release', 'ntp']
+
+rpm_packages = {'py2': ['wget', 'git', 'python-virtualenv', 'redhat-lsb', 'python-nose', 'ntp'],
+                'py3': ['wget', 'git', 'python3-virtualenv', 'redhat-lsb', 'python3-nose', 'python3-pip']}
+deb_packages = ['wget', 'git', 'python-virtualenv', 'lsb-release', 'ntp']
 epel_rpm = 'https://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-9.noarch.rpm'
-epel_pkgs = ['python-pip']
-deb_all_pkgs = " ".join(deb_pkgs)
-rpm_all_pkgs = ' '.join(rpm_pkgs)
+epel_packages = ['python-pip']
+deb_all_packages = " ".join(deb_packages)
 
 
 def run(**kw):
@@ -45,18 +46,21 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     log.info('distro id: {id}'.format(id=distro_info['ID']))
     log.info('distro version_id: {version_id}'.format(version_id=distro_info['VERSION_ID']))
     if ceph.pkg_type == 'deb':
-        ceph.exec_command(cmd='sudo apt-get install -y ' + deb_all_pkgs, long_running=True)
+        ceph.exec_command(cmd='sudo apt-get install -y ' + deb_all_packages, long_running=True)
     else:
         if not skip_subscription:
             setup_subscription_manager(ceph)
             enable_rhel_rpms(ceph,rhbuild)
         if repo:
             setup_addition_repo(ceph, repo)
-        ceph.exec_command(cmd='sudo yum install -y ' + rpm_all_pkgs, long_running=True)
+        if rhbuild.startswith('4'):
+            rpm_all_packages = ' '.join(rpm_packages.get('py3'))
+        else:
+            rpm_all_packages = ' '.join(rpm_packages.get('py2'))
+        ceph.exec_command(cmd='sudo yum install -y ' + rpm_all_packages, long_running=True)
         if ceph.role == 'client':
             ceph.exec_command(cmd='sudo yum install -y attr', long_running=True)
             ceph.exec_command(cmd='sudo pip install crefi', long_running=True)
-
         # install epel package
         ceph.exec_command(cmd='sudo yum clean metadata')
         # finally install python2-pip directly using rpm since its available only in epel
