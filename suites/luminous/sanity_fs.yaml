@@ -208,3 +208,9 @@ tests:
        polarion-id: CEPH-11262
        desc: Mount CephFS on multiple clients and do multiple client IOs, parallely do osd power failre
        abort-on-fail: false
+   - test:
+       name: cephfs - stress io
+       module: CEPH-11221.py
+       polarion-id: CEPH-11221
+       desc: Mount CephFS on multiple clients and perform IO ,fill cluster upto 30%
+       abort-on-fail: false 

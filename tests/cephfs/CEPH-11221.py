@@ -135,7 +135,7 @@ def chech_df(ceph_cluster):
                     l.append(s)
             print(l[3])
             cluster_filled_perc = float(l[3])
-            if cluster_filled_perc > 50:
+            if cluster_filled_perc > 30:
                return 0
             return 1
 

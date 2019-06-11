@@ -13,12 +13,12 @@ def run(ceph_cluster, **kw):
     fs_util = FsUtils(ceph_cluster)
     client_info, rc = fs_util.get_clients()
     config = kw.get('config')
-    bluestore = config.get('bluestore')
+    filestore = config.get('filestore')
     k_and_m = config.get('ec-pool-k-m')
-    if (bluestore is not None and k_and_m is None) or (bluestore is None and k_and_m is None):
+    if (filestore is not None and k_and_m is None) or (filestore is None and k_and_m is None):
         log.info('tests will run on replicated pool')
         return 0
-    elif bluestore is None and k_and_m is not None:
+    elif filestore is not None and k_and_m is not None:
         log.error('Filestore does not support ecpools')
         return 1
 
