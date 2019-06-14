@@ -39,6 +39,10 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     log.info("cloud config to completed on " + ceph.hostname)
     update_ca_cert(ceph, 'https://password.corp.redhat.com/RH-IT-Root-CA.crt')
     update_ca_cert(ceph, 'https://password.corp.redhat.com/legacy.crt')
+    distro_info = ceph.distro_info
+    log.info('distro name: {name}'.format(name=distro_info['NAME']))
+    log.info('distro id: {id}'.format(id=distro_info['ID']))
+    log.info('distro version_id: {version_id}'.format(version_id=distro_info['VERSION_ID']))
     if ceph.pkg_type == 'deb':
         ceph.exec_command(cmd='sudo apt-get install -y ' + deb_all_pkgs, long_running=True)
     else:
