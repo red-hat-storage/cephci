@@ -998,6 +998,17 @@ class CephNode(object):
         self.run_once = False
 
     @property
+    def distro_info(self):
+        out, err = self.exec_command(cmd='cat /etc/os-release')
+        info = out.read().decode().split('\n')
+        info = filter(None, info)
+        info_dict = {}
+        for each in info:
+            key, value = each.rstrip().split('=')
+            info_dict[key] = value.strip('"')
+        return info_dict
+
+    @property
     def role(self):
         return RolesContainer([ceph_demon.role for ceph_demon in self.ceph_object_list if ceph_demon])
 
@@ -1545,6 +1556,10 @@ class CephObject(object):
     @property
     def pkg_type(self):
         return self.node.pkg_type
+
+    @property
+    def distro_info(self):
+        return self.node.distro_info
 
     def exec_command(self, cmd, **kw):
         """
