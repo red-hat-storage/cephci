@@ -511,11 +511,12 @@ class Ceph(object):
                 return metadata
         return None
 
-    def check_health(self, client=None, timeout=300):
+    def check_health(self, rhbuild, client=None, timeout=300):
         """
         Check if ceph is in healthy state
 
         Args:
+           rhbuild (str): rhcs build version
            client(CephObject): ceph object with ceph-common and ceph-keyring
            timeout (int): max time to check if cluster is not healthy within timeout period - return 1
         Returns:
@@ -543,15 +544,18 @@ class Ceph(object):
         if not all(state in lines for state in valid_states):
             logger.error("Valid States are not found in the health check")
             return 1
-        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
+        if rhbuild.startswith('4'):
+            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", lines)
+        else:
+            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
         all_osds = int(match.group(1))
         up_osds = int(match.group(2))
         in_osds = int(match.group(3))
         if up_osds != all_osds:
-            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (all_osds, up_osds))
+            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (up_osds, all_osds))
             return 1
         if up_osds != in_osds:
-            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (up_osds, all_osds))
+            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (in_osds, all_osds))
             return 1
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
@@ -1758,19 +1762,21 @@ class CephInstaller(CephObject):
         if self.pkg_type == 'deb':
             self.exec_command(sudo=True, cmd='apt-get install -y ceph-ansible')
         else:
-            if rhbuild.startswith("3"):
+            if rhbuild.startswith("4"):
+                self.exec_command(
+                    cmd='sudo subscription-manager repos --enable=ansible-2.8-for-rhel-8-x86_64-rpms',
+                    long_running=True)
+            elif rhbuild.startswith("3"):
                 self.exec_command(
                     cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
                     long_running=True)
-
-                if rhbuild == "3.2":
-                    self.exec_command(
-                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
-                        long_running=True)
-                else:
-                    self.exec_command(
-                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
-                        long_running=True)
+                self.exec_command(
+                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
+                    long_running=True)
+            else:
+                self.exec_command(
+                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
+                    long_running=True)
 
             if kw.get('upgrade'):
                 self.exec_command(sudo=True, cmd='yum update metadata')
