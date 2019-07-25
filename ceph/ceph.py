@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class Ceph(object):
-    DEFAULT_RHCS_VERSION = '3.2'
+    DEFAULT_RHCS_VERSION = '3.3'
 
     def __init__(self, name, node_list=None):
         """
