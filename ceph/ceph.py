@@ -1761,7 +1761,7 @@ class CephInstaller(CephObject):
                 cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
                 long_running=True)
 
-            if rhbuild == "3.2":
+            if rhbuild.startswith("3"):
                 self.exec_command(
                     cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
                     long_running=True)
