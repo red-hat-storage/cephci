@@ -108,7 +108,7 @@ def run(ceph_cluster, **kw):
                 50,
                 iotype='fio')
             for osd in client_info['osd_nodes']:
-                node_power_failure(osp_cred, name=osd.hostname)
+                node_power_failure(osp_cred, name=osd.node.hostname)
             p.spawn(
                 fs_util.stress_io,
                 client3,
