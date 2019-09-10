@@ -1,0 +1,7 @@
+language: python
+# installation of dependencies, the rest is handled by tox
+install:
+  - pip install tox
+# command to run unit tests
+script:
+  - tox
