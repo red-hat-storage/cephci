@@ -1,7 +1,7 @@
 language: python
-# installation of dependencies, the rest is handled by tox
+python:
+  - "3.7"
 install:
   - pip install tox
-# command to run unit tests
 script:
   - tox
