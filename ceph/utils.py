@@ -176,7 +176,7 @@ def setup_repos(ceph, base_url, installer_url=None):
         inst_file.write(inst_repo)
         inst_file.flush()
 
-
+# similar health check function is in ceph/ceph.py
 def check_ceph_healthly(ceph_mon, num_osds, num_mons, mon_container=None, timeout=300):
     """
     Function to check ceph is in healthy state
