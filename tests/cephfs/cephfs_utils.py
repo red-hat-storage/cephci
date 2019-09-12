@@ -164,7 +164,7 @@ class FsUtils(object):
                             (client.node.hostname, self.path))
 
             for client in clients:
-                log.info("Giving required permissions for clients from MON node:")
+                log.info("Giving the required permissions for clients from MON node:")
                 for mon in mons:
                     if self.mds_perm:
                         mon.exec_command(
