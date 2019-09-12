@@ -1,0 +1,7 @@
+# Lines starting with '#' are comments.
+# Each line is a file pattern followed by one or more owners,
+# the last matching pattern has the most precendence.
+
+# These owners will be the default owners for everything in this repo.
+# all changes.
+*   @red-hat-storage/cephci-top-reviewers
