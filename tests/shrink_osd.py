@@ -21,6 +21,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Shrinking osd")
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
     osd_to_kill_list = config.get('osd-to-kill')
     osd_to_kill = ','.join((str(osd) for osd in osd_to_kill_list))
 
@@ -50,4 +51,4 @@ def run(ceph_cluster, **kw):
         log.error("Failed during ansible playbook run")
         return err
 
-    return ceph_cluster.check_health()
+    return ceph_cluster.check_health(build)

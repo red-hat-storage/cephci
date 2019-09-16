@@ -273,20 +273,27 @@ def run(args):
         if ubuntu_repo is None:
             ubuntu_repo = \
                 'http://download.engineering.redhat.com/rcm-guest/ceph-drops/3.1/latest-RHCEPH-3.1-Ubuntu/'
-    elif rhbuild.startswith('3'):
+    elif rhbuild == '3.2':
         if base_url is None:
             # default to latest RHCeph build 3.2
             base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.2-rhel-7/latest-RHCEPH-3-RHEL-7/'
         if ubuntu_repo is None:
             ubuntu_repo = \
                 'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.2/latest-RHCEPH-3.2-Ubuntu/'
+    elif rhbuild.startswith('3'):
+        if base_url is None:
+            # default to latest RHCeph build 3.3
+            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.3-rhel-7/latest-RHCEPH-3-RHEL-7/'
+        if ubuntu_repo is None:
+            ubuntu_repo = \
+                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
     elif rhbuild.startswith('4'):
         if base_url is None:
             # default to latest RHCeph build 4.0
             base_url = 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.0-rhel-8/latest-RHCEPH-4-RHEL-8/'
         if ubuntu_repo is None:
             ubuntu_repo = \
-                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.2/latest-RHCEPH-3.2-Ubuntu/'
+                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
     if os.environ.get('TOOL') is not None:
         ci_message = json.loads(os.environ['CI_MESSAGE'])
         compose_id = ci_message['compose_id']

@@ -563,6 +563,8 @@ class Ceph(object):
         if not match:
             match = re.search(r"(\d+) mons at", lines)
         all_mons = int(match.group(1))
+        logger.info(all_mons)
+        logger.info(self.ceph_demon_stat['mon'])
         if all_mons != self.ceph_demon_stat['mon']:
             logger.error("Not all monitors are in cluster")
             return 1
@@ -1762,19 +1764,25 @@ class CephInstaller(CephObject):
         if self.pkg_type == 'deb':
             self.exec_command(sudo=True, cmd='apt-get install -y ceph-ansible')
         else:
-            if rhbuild.startswith("4"):
+            distro_ver = self.distro_info['VERSION_ID']
+            if distro_ver.startswith('8'):
                 self.exec_command(
                     cmd='sudo subscription-manager repos --enable=ansible-2.8-for-rhel-8-x86_64-rpms',
                     long_running=True)
-            elif rhbuild.startswith("3"):
+            else:
                 self.exec_command(
                     cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
                     long_running=True)
-                self.exec_command(
+                if rhbuild.startswith('4'):
+                    self.exec_command(
+                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.8-rpms',
+                    long_running=True)
+                elif rhbuild.startswith('3'):
+                    self.exec_command(
                     cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
                     long_running=True)
-            else:
-                self.exec_command(
+                else:
+                    self.exec_command(
                     cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
                     long_running=True)
 

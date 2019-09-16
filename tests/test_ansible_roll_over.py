@@ -155,6 +155,6 @@ def run(ceph_cluster, **kw):
     # create rbd pool used by tests/workunits
     ceph_cluster.create_rbd_pool(k_and_m)
 
-    if ceph_cluster.check_health(timeout=timeout) != 0:
+    if ceph_cluster.check_health(build, timeout=timeout) != 0:
         return 1
     return rc

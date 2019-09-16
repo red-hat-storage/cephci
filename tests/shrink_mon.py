@@ -17,6 +17,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Shrinking monitor")
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
     mon_to_kill_list = config.get('mon-to-kill')
     mon_to_kill = None
     mon_short_name_list = [ceph_node.shortname for ceph_node in ceph_cluster.get_nodes('mon')]
@@ -49,4 +50,4 @@ def run(ceph_cluster, **kw):
         log.error("Failed during ansible playbook run")
         return err
 
-    return ceph_cluster.check_health()
+    return ceph_cluster.check_health(build)
