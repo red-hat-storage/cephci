@@ -1777,22 +1777,22 @@ class CephInstaller(CephObject):
                     long_running=True)
                 if rhbuild.startswith('4'):
                     self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.8-rpms',
-                    long_running=True)
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.8-rpms',
+                        long_running=True)
                 elif rhbuild.startswith('3'):
                     self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
-                    long_running=True)
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
+                        long_running=True)
                 else:
                     self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
-                    long_running=True)
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
+                        long_running=True)
 
-            if kw.get('upgrade'):
-                self.exec_command(sudo=True, cmd='yum update metadata')
-                self.exec_command(sudo=True, cmd='yum update -y ansible ceph-ansible')
-            else:
-                self.exec_command(sudo=True, cmd='yum install -y ceph-ansible')
+        if kw.get('upgrade'):
+            self.exec_command(sudo=True, cmd='yum update metadata')
+            self.exec_command(sudo=True, cmd='yum update -y ansible ceph-ansible')
+        else:
+            self.exec_command(sudo=True, cmd='yum install -y ceph-ansible')
 
         if self.pkg_type == 'deb':
             out, rc = self.exec_command(cmd='dpkg -s ceph-ansible')

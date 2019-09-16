@@ -119,24 +119,24 @@ def setup_subscription_manager(ceph, timeout=1800):
 
 
 def enable_rhel_rpms(ceph, distro_info):
-        """
+    """
         Setup cdn repositories for rhel systems
         Args:
             distro_info(dict): distro details
-        """
-        repos_7x = ['rhel-7-server-rpms',
-                    'rhel-7-server-optional-rpms',
-                    'rhel-7-server-extras-rpms']
+    """
+    repos_7x = ['rhel-7-server-rpms',
+                'rhel-7-server-optional-rpms',
+                'rhel-7-server-extras-rpms']
 
-        repos_8x = ['rhel-8-for-x86_64-appstream-rpms',
-                    'rhel-8-for-x86_64-baseos-rpms']
+    repos_8x = ['rhel-8-for-x86_64-appstream-rpms',
+                'rhel-8-for-x86_64-baseos-rpms']
 
-        repos = None
-        distro_ver = distro_info['VERSION_ID']
-        if not distro_ver.startswith('8'):
-                repos = repos_7x
-        else:
-                repos = repos_8x
-        for repo in repos:
-            ceph.exec_command(
-                sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo),long_running=True)
+    repos = None
+    distro_ver = distro_info['VERSION_ID']
+    if not distro_ver.startswith('8'):
+        repos = repos_7x
+    else:
+        repos = repos_8x
+    for repo in repos:
+        ceph.exec_command(
+            sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo), long_running=True)
