@@ -4,7 +4,7 @@ log = logging.getLogger(__name__)
 
 
 def run(**kw):
-    log.info("Running test")
+    log.info("Running rgw test")
     ceph_nodes = kw.get('ceph_nodes')
     log.info("Running rgw tests")
     rgw_client_nodes = []

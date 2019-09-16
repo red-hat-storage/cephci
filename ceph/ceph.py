@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class Ceph(object):
-    DEFAULT_RHCS_VERSION = '3.2'
+    DEFAULT_RHCS_VERSION = '3.3'
 
     def __init__(self, name, node_list=None):
         """
@@ -245,7 +245,7 @@ class Ceph(object):
                                                   check_lvm=False if device_to_add else True)
                     else:
                         lvm_vols = node.multiple_lvm_scenarios(devices, lvm_utils.osd_scenario_list[counter])
-                        counter+= 1
+                        counter += 1
                         logger.info(lvm_vols)
                         devices = '"[' + lvm_vols.get(node.hostname)[0] + ']"'
                         dmcrypt_opt = lvm_vols.get(node.hostname)[1]
@@ -1540,7 +1540,9 @@ class CephNode(object):
 
         else:
             generated_sce_dict = scenario(self, devices_dict)
-            osd_scenarios.update({self.hostname: [generated_sce_dict.get('scenario'), {'dmcrypt': generated_sce_dict.get('dmcrypt')}, {'batch': generated_sce_dict.get('batch',None)}]})
+            osd_scenarios.update({self.hostname: [generated_sce_dict.get('scenario'),
+                                                  {'dmcrypt': generated_sce_dict.get('dmcrypt')},
+                                                  {'batch': generated_sce_dict.get('batch', None)}]})
             logger.info('generated scenario on %s %s' % (self.hostname, scenario))
 
         fileObject = open(file_Name % self.hostname, 'wb')

@@ -164,7 +164,7 @@ class FsUtils(object):
                             (client.node.hostname, self.path))
 
             for client in clients:
-                log.info("Giving required permissions for clients from MON node:")
+                log.info("Giving the required permissions for clients from MON node:")
                 for mon in mons:
                     if self.mds_perm:
                         mon.exec_command(
@@ -689,7 +689,7 @@ finally:
         for client in clients:
             rc = self.check_mount_exists(client)
             if rc == 0:
-                for num in range(range1, range2):
+                for num in range(int(range1), int(range2)):
                     client.exec_command(
                         cmd='sudo setfattr -n ceph.dir.pin -v %s %s%s_%d' %
                             (pin_val, mounting_dir, dir_name, num))
@@ -699,7 +699,7 @@ finally:
         for client in clients:
             rc = self.check_mount_exists(client)
             if rc == 0:
-                for num in range(range1, range2):
+                for num in range(int(range1), int(range2)):
                     log.info("Creating Directories")
                     out, rc = client.exec_command(
                         cmd='sudo mkdir %s%s_%d' %
@@ -842,7 +842,7 @@ finally:
                                     (mounting_dir, dir_name, range1, range2))
                         self.return_counts = self.io_verify(client)
                     elif val == 'fio':
-                        for num in range(range1, range2):
+                        for num in range(int(range1), int(range2)):
                             rand_num = random.randint(1, 5)
                             out, rc = client.exec_command(
                                 cmd="sudo fio --name=global --rw=write "
@@ -855,7 +855,7 @@ finally:
                             self.return_counts = self.io_verify(client)
 
                     elif val == 'dd':
-                        for num in range(range1, range2):
+                        for num in range(int(range1), int(range2)):
                             rand_bs = random.randint(1, 5)
                             rand_count = random.randint(1, 5)
                             out, rc = client.exec_command(
@@ -947,7 +947,7 @@ finally:
         for client in clients:
             rc = self.check_mount_exists(client)
             if rc == 0:
-                for num in range(range1, range2):
+                for num in range(int(range1), int(range2)):
                     out, rc = client.exec_command(
                         cmd='sudo crefi -n %d %s%s_%d' %
                             (num_of_files, mounting_dir, dir_name, num),
@@ -969,7 +969,7 @@ finally:
         for client in clients:
             rc = self.check_mount_exists(client)
             if rc == 0:
-                for num in range(range1, range2):
+                for num in range(int(range1), int(range2)):
                     log.info("Performing MDS failover:")
                     mds_fail_over(mds_nodes)
                     out, rc = client.exec_command(
@@ -991,7 +991,7 @@ finally:
         for client in clients:
             rc = self.check_mount_exists(client)
             if rc == 0:
-                for num in range(range1, range2):
+                for num in range(int(range1), int(range2)):
                     if random.choice(commands) == 'ls':
                         out, rc = client.exec_command(
                             cmd='sudo ls %s%s_%d' %

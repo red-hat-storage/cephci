@@ -84,7 +84,7 @@ def run(ceph_cluster, **kw):
                         client_info['mounting_dir'])
                 for op in p:
                     (return_counts, rc) = op
-            c1 = chech_df(ceph_cluster)
+            c1 = ceph_df(ceph_cluster)
 
         check_health(ceph_cluster)
         log.info('Test completed for CEPH-%s' % tc)
@@ -120,7 +120,7 @@ def run(ceph_cluster, **kw):
         return 1
 
 
-def chech_df(ceph_cluster):
+def ceph_df(ceph_cluster):
     for mnode in ceph_cluster.get_nodes('mon'):
         if mnode.role == 'mon':
             m = mnode.role
@@ -136,8 +136,9 @@ def chech_df(ceph_cluster):
             print(l[3])
             cluster_filled_perc = float(l[3])
             if cluster_filled_perc > 30:
-               return 0
+                return 0
             return 1
+
 
 def check_health(ceph_cluster):
     for mnode in ceph_cluster.get_nodes('mon'):
@@ -155,8 +156,3 @@ def check_health(ceph_cluster):
             else:
                 log.info('Health IS OK')
                 return 1
-
-
-
-
-

@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.com/red-hat-storage/cephci.svg?branch=master)](https://travis-ci.com/red-hat-storage/cephci)
 # Ceph-CI
 CEPH-CI is a framework tightly coupled with CentralCI and Redhat Builds for
 testing Ceph downstream builds with CentralCI and Jenkins.
