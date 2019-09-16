@@ -42,6 +42,7 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     update_ca_cert(ceph, 'https://password.corp.redhat.com/RH-IT-Root-CA.crt')
     update_ca_cert(ceph, 'https://password.corp.redhat.com/legacy.crt')
     distro_info = ceph.distro_info
+    distro_ver = distro_info['VERSION_ID']
     log.info('distro name: {name}'.format(name=distro_info['NAME']))
     log.info('distro id: {id}'.format(id=distro_info['ID']))
     log.info('distro version_id: {version_id}'.format(version_id=distro_info['VERSION_ID']))
@@ -50,10 +51,10 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     else:
         if not skip_subscription:
             setup_subscription_manager(ceph)
-            enable_rhel_rpms(ceph, distro_info)
+            enable_rhel_rpms(ceph, distro_ver)
         if repo:
             setup_addition_repo(ceph, repo)
-        if rhbuild.startswith('4'):
+        if distro_ver.startswith('8'):
             rpm_all_packages = ' '.join(rpm_packages.get('py3'))
         else:
             rpm_all_packages = ' '.join(rpm_packages.get('py2'))
@@ -118,21 +119,19 @@ def setup_subscription_manager(ceph, timeout=1800):
     ceph.exec_command(cmd='sudo subscription-manager repos --disable=*', long_running=True)
 
 
-def enable_rhel_rpms(ceph, distro_info):
+def enable_rhel_rpms(ceph, distro_ver):
     """
         Setup cdn repositories for rhel systems
         Args:
-            distro_info(dict): distro details
+            distro_ver: distro version details
     """
     repos_7x = ['rhel-7-server-rpms',
-                'rhel-7-server-optional-rpms',
                 'rhel-7-server-extras-rpms']
 
     repos_8x = ['rhel-8-for-x86_64-appstream-rpms',
                 'rhel-8-for-x86_64-baseos-rpms']
 
     repos = None
-    distro_ver = distro_info['VERSION_ID']
     if not distro_ver.startswith('8'):
         repos = repos_7x
     else:
