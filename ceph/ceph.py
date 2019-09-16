@@ -511,11 +511,12 @@ class Ceph(object):
                 return metadata
         return None
 
-    def check_health(self, client=None, timeout=300):
+    def check_health(self, rhbuild, client=None, timeout=300):
         """
         Check if ceph is in healthy state
 
         Args:
+           rhbuild (str): rhcs build version
            client(CephObject): ceph object with ceph-common and ceph-keyring
            timeout (int): max time to check if cluster is not healthy within timeout period - return 1
         Returns:
@@ -543,15 +544,18 @@ class Ceph(object):
         if not all(state in lines for state in valid_states):
             logger.error("Valid States are not found in the health check")
             return 1
-        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
+        if rhbuild.startswith('4'):
+            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", lines)
+        else:
+            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
         all_osds = int(match.group(1))
         up_osds = int(match.group(2))
         in_osds = int(match.group(3))
         if up_osds != all_osds:
-            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (all_osds, up_osds))
+            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (up_osds, all_osds))
             return 1
         if up_osds != in_osds:
-            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (up_osds, all_osds))
+            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (in_osds, all_osds))
             return 1
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
@@ -559,6 +563,8 @@ class Ceph(object):
         if not match:
             match = re.search(r"(\d+) mons at", lines)
         all_mons = int(match.group(1))
+        logger.info(all_mons)
+        logger.info(self.ceph_demon_stat['mon'])
         if all_mons != self.ceph_demon_stat['mon']:
             logger.error("Not all monitors are in cluster")
             return 1
@@ -634,7 +640,7 @@ class Ceph(object):
                                       cmd='wget -O {}/iso/ceph.iso {}'.format(node.ansible_dir, iso_file_url))
             if node.pkg_type == 'rpm':
                 logger.info("Updating metadata")
-                node.exec_command(sudo=True, cmd='yum update metadata')
+                node.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
             sleep(15)
 
     def create_rbd_pool(self, k_and_m):
@@ -1290,7 +1296,8 @@ class CephNode(object):
                         continue
                     self.exec_command(
                         cmd='sudo ping -I {interface} -c 3 {ceph_node}'.format(interface=eth_interface,
-                                                                               ceph_node=ceph_node.shortname))
+                                                                               ceph_node=ceph_node.shortname),
+                        check_ec=False)
                 logger.info(
                     'Suitable ethernet interface {eth_interface} found on {node}'.format(eth_interface=eth_interface,
                                                                                          node=ceph_node.ip_address))
@@ -1759,24 +1766,33 @@ class CephInstaller(CephObject):
         if self.pkg_type == 'deb':
             self.exec_command(sudo=True, cmd='apt-get install -y ceph-ansible')
         else:
-            self.exec_command(
-                cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
-                long_running=True)
-
-            if rhbuild.startswith("3"):
+            distro_ver = self.distro_info['VERSION_ID']
+            if distro_ver.startswith('8'):
                 self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
+                    cmd='sudo subscription-manager repos --enable=ansible-2.8-for-rhel-8-x86_64-rpms',
                     long_running=True)
             else:
                 self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
+                    cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
                     long_running=True)
+                if rhbuild.startswith('4'):
+                    self.exec_command(
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.8-rpms',
+                        long_running=True)
+                elif rhbuild.startswith('3'):
+                    self.exec_command(
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
+                        long_running=True)
+                else:
+                    self.exec_command(
+                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
+                        long_running=True)
 
-            if kw.get('upgrade'):
-                self.exec_command(sudo=True, cmd='yum update metadata')
-                self.exec_command(sudo=True, cmd='yum update -y ansible ceph-ansible')
-            else:
-                self.exec_command(sudo=True, cmd='yum install -y ceph-ansible')
+        if kw.get('upgrade'):
+            self.exec_command(sudo=True, cmd='yum update metadata')
+            self.exec_command(sudo=True, cmd='yum update -y ansible ceph-ansible')
+        else:
+            self.exec_command(sudo=True, cmd='yum install -y ceph-ansible')
 
         if self.pkg_type == 'deb':
             out, rc = self.exec_command(cmd='dpkg -s ceph-ansible')

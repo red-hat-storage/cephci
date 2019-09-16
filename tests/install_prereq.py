@@ -10,12 +10,13 @@ from ceph.utils import update_ca_cert
 from utility.retry import retry
 
 log = logging.getLogger(__name__)
-rpm_pkgs = ['wget', 'git', 'python-virtualenv', 'redhat-lsb', 'python-nose', 'ntp']
-deb_pkgs = ['wget', 'git', 'python-virtualenv', 'lsb-release', 'ntp']
+
+rpm_packages = {'py2': ['wget', 'git', 'python-virtualenv', 'redhat-lsb', 'python-nose', 'ntp'],
+                'py3': ['wget', 'git', 'python3-virtualenv', 'redhat-lsb', 'python3-nose', 'python3-pip']}
+deb_packages = ['wget', 'git', 'python-virtualenv', 'lsb-release', 'ntp']
 epel_rpm = 'https://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-9.noarch.rpm'
-epel_pkgs = ['python-pip']
-deb_all_pkgs = " ".join(deb_pkgs)
-rpm_all_pkgs = ' '.join(rpm_pkgs)
+epel_packages = ['python-pip']
+deb_all_packages = " ".join(deb_packages)
 
 
 def run(**kw):
@@ -26,6 +27,7 @@ def run(**kw):
     skip_subscription = config.get('skip_subscription', False)
     repo = config.get('add-repo', False)
     rhbuild = config.get('rhbuild')
+
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(install_prereq, ceph, 1800, skip_subscription, repo, rhbuild)
@@ -40,21 +42,26 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     update_ca_cert(ceph, 'https://password.corp.redhat.com/RH-IT-Root-CA.crt')
     update_ca_cert(ceph, 'https://password.corp.redhat.com/legacy.crt')
     distro_info = ceph.distro_info
+    distro_ver = distro_info['VERSION_ID']
     log.info('distro name: {name}'.format(name=distro_info['NAME']))
     log.info('distro id: {id}'.format(id=distro_info['ID']))
     log.info('distro version_id: {version_id}'.format(version_id=distro_info['VERSION_ID']))
     if ceph.pkg_type == 'deb':
-        ceph.exec_command(cmd='sudo apt-get install -y ' + deb_all_pkgs, long_running=True)
+        ceph.exec_command(cmd='sudo apt-get install -y ' + deb_all_packages, long_running=True)
     else:
         if not skip_subscription:
             setup_subscription_manager(ceph)
+            enable_rhel_rpms(ceph, distro_ver)
         if repo:
             setup_addition_repo(ceph, repo)
-        ceph.exec_command(cmd='sudo yum install -y ' + rpm_all_pkgs, long_running=True)
+        if distro_ver.startswith('8'):
+            rpm_all_packages = ' '.join(rpm_packages.get('py3'))
+        else:
+            rpm_all_packages = ' '.join(rpm_packages.get('py2'))
+        ceph.exec_command(cmd='sudo yum install -y ' + rpm_all_packages, long_running=True)
         if ceph.role == 'client':
             ceph.exec_command(cmd='sudo yum install -y attr', long_running=True)
             ceph.exec_command(cmd='sudo pip install crefi', long_running=True)
-
         # install epel package
         ceph.exec_command(cmd='sudo yum clean metadata')
         # finally install python2-pip directly using rpm since its available only in epel
@@ -76,7 +83,7 @@ def setup_addition_repo(ceph, repo):
              repo=repo, sn=ceph.shortname))
     ceph.exec_command(sudo=True,
                       cmd='curl -o /etc/yum.repos.d/rh_add_repo.repo {repo}'.format(repo=repo))
-    ceph.exec_command(sudo=True, cmd='yum update metadata')
+    ceph.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
 
 
 def setup_subscription_manager(ceph, timeout=1800):
@@ -110,8 +117,25 @@ def setup_subscription_manager(ceph, timeout=1800):
                 wait = iter(x for x in itertools.count(1, 10))
                 time.sleep(next(wait))
     ceph.exec_command(cmd='sudo subscription-manager repos --disable=*', long_running=True)
-    ceph.exec_command(
-        cmd='sudo subscription-manager repos --enable=rhel-7-server-rpms \
-             --enable=rhel-7-server-optional-rpms \
-             --enable=rhel-7-server-extras-rpms',
-        long_running=True)
+
+
+def enable_rhel_rpms(ceph, distro_ver):
+    """
+        Setup cdn repositories for rhel systems
+        Args:
+            distro_ver: distro version details
+    """
+    repos_7x = ['rhel-7-server-rpms',
+                'rhel-7-server-extras-rpms']
+
+    repos_8x = ['rhel-8-for-x86_64-appstream-rpms',
+                'rhel-8-for-x86_64-baseos-rpms']
+
+    repos = None
+    if not distro_ver.startswith('8'):
+        repos = repos_7x
+    else:
+        repos = repos_8x
+    for repo in repos:
+        ceph.exec_command(
+            sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo), long_running=True)
