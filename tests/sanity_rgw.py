@@ -18,7 +18,7 @@ def run(ceph_cluster, **kw):
     config = kw.get('config')
     log.info("Running rgw tests %s" % config.get('test-version', 'v2'))
     rgw_ceph_object = ceph_cluster.get_ceph_object('rgw')
-    git_url = 'http://gitlab.cee.redhat.com/ceph/ceph-qe-scripts.git'
+    git_url = 'https://github.com/red-hat-storage/ceph-qe-scripts.git'
     branch = ' -b master'
     git_clone = 'sudo git clone ' + git_url + branch
     rgw_node = rgw_ceph_object.node
