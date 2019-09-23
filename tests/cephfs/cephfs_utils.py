@@ -54,7 +54,7 @@ class FsUtils(object):
                     node.exec_command(cmd='sudo yum install -y attr')
 
                 out, rc = node.exec_command(
-                    cmd='sudo pip  list --format=legacy')
+                    cmd='sudo pip  list --format=columns')
                 output = out.read().decode()
                 output.split()
                 if 'crefi' not in output:
