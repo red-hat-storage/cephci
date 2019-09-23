@@ -32,40 +32,43 @@
     <h2>General Information</h2>
     <table class="half-table">
         <tr>
-            <th>Ceph Version</th>
+            <th style="color: blue">Ceph Version</th>
             <td>{{ test_results[0]['ceph-version'] }}</td>
         </tr>
         <tr>
-            <th>Ceph-Ansible Version</th>
+            <th style="color: blue">Ceph-Ansible Version</th>
             <td>{{ test_results[0]['ceph-ansible-version'] }}</td>
         </tr>
         <tr>
-            <th>Distro</th>
+            <th style="color: blue">Distro</th>
             <td>{{ test_results[0]['distro'] }}</td>
         </tr>
         <tr>
-            <th>Compose</th>
+            <th style="color: blue">Compose</th>
             <td>{{ test_results[0]['compose-id'] }}</td>
         </tr>
         <tr>
-            <th>Logs</th>
+            <th style="color: blue">Logs</th>
             <td>{{ log_link }}</td>
         </tr>
     </table>
     <h2>Test Results</h2>
     <table class="full-table">
         <tr>
-            <th>Test Name</th>
-            <th>Test Description</th>
-            <th>Duration</th>
-            <th>Status</th>
+            <th style="color: blue">Test Name</th>
+            <th style="color: blue">Test Description</th>
+            <th style="color: blue">Duration</th>
+            <th style="color: blue">Status</th>
         </tr>
         {% for test in test_results %}
             <tr>
                 <td>{{ test.name }}</td>
                 <td>{{ test.desc }}</td>
                 <td>{{ test.duration }}</td>
-                <td>{{ test.status }}</td>
+                {%  if test.status == 'Pass' %}
+                <td style="color: green;">{{ test.status }}</td>
+                {% if test.status == 'Failed' %}
+                <td style="color: red;">{{ test.status }}</td>
             </tr>
         {% endfor %}
     </table>
