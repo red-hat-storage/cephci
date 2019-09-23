@@ -1296,8 +1296,7 @@ class CephNode(object):
                         continue
                     self.exec_command(
                         cmd='sudo ping -I {interface} -c 3 {ceph_node}'.format(interface=eth_interface,
-                                                                               ceph_node=ceph_node.shortname),
-                        check_ec=False)
+                                                                               ceph_node=ceph_node.shortname))
                 logger.info(
                     'Suitable ethernet interface {eth_interface} found on {node}'.format(eth_interface=eth_interface,
                                                                                          node=ceph_node.ip_address))
