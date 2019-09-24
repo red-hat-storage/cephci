@@ -65,10 +65,11 @@
                 <td>{{ test.name }}</td>
                 <td>{{ test.desc }}</td>
                 <td>{{ test.duration }}</td>
-                {%  if test.status == 'Pass' %}
-                <td style="color: green;">{{ test.status }}</td>
-                {% if test.status == 'Failed' %}
-                <td style="color: red;">{{ test.status }}</td>
+                {% if test.status == 'Pass' %}
+                    <td style="color: green;">{{ test.status }}</td>
+                {% elif test.status == 'Failed' %}
+                    <td style="color: red;">{{ test.status }}</td>
+                {% endif %}
             </tr>
         {% endfor %}
     </table>
