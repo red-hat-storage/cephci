@@ -755,13 +755,7 @@ class Ceph(object):
         Returns:
 
         """
-        osd_demon = self.get_osd_by_id(osd_id, client)
-        if osd_demon is None:
-            raise RuntimeError('Unable to locate osd@{id} demon'.format(id=osd_id))
-        if not osd_demon.containerized:
-            osd_service_id = osd_id
-        else:
-            osd_service_id = self.get_osd_device(osd_id)
+        osd_service_id = osd_id
         osd_service_name = 'ceph-osd@{id}'.format(id=osd_service_id)
         return osd_service_name
 

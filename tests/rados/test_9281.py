@@ -21,10 +21,11 @@ def prepare_sdata(mon):
     global fcsum
     sdata = "/tmp/sdata.txt"
     DSTR = "hello world"
-    dbuf = DSTR * 419430
+    dbuf = DSTR * 4
     sfd = None
 
     try:
+
         sfd = mon.write_file(file_name=sdata, file_mode='w+')
         sfd.write(dbuf)
         sfd.flush()
@@ -33,7 +34,7 @@ def prepare_sdata(mon):
         log.error(traceback.format_exc())
 
     sfd.seek(0)
-    fcsum = hashlib.md5(sfd.read().decode()).hexdigest()
+    fcsum = hashlib.md5(sfd.read()).hexdigest()
     log.info("md5 digest = {fcsum}".format(fcsum=fcsum))
     sfd.close()
 
@@ -93,7 +94,7 @@ def do_rados_get(mon, pool, niter):
                     obj=obj))
                 log.error(traceback.format_exc)
             dfd = mon.write_file(file_name=file_name, file_mode='r')
-            dcsum = hashlib.md5(dfd.read().decode()).hexdigest()
+            dcsum = hashlib.md5(dfd.read()).hexdigest()
             log.info("csum of obj {objname}={dcsum}".format(
                 objname=obj, dcsum=dcsum))
             print(type(fcsum))
@@ -198,8 +199,8 @@ def run(ceph_cluster, **kw):
         return 1
 
     log.info("SIGTERM osd")
-    pri_osd = ceph_cluster.get_osd_by_id(pri_osd_id)
-    pri_osd_node = pri_osd.node
+    target_osd_hostname = ceph_cluster.get_osd_metadata(pri_osd_id).get('hostname')
+    pri_osd_node = ceph_cluster.get_node_by_hostname(target_osd_hostname)
     pri_osd_service = ceph_cluster.get_osd_service_name(pri_osd_id)
     try:
         helper.kill_osd(pri_osd_node, pri_osd_service)
@@ -238,8 +239,8 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     log.info("SIGTERM osd")
-    rand_osd = ceph_cluster.get_osd_by_id(rand_osd_id)
-    rand_osd_node = rand_osd.node
+    target_osd_hostname = ceph_cluster.get_osd_metadata(rand_osd_id).get('hostname')
+    rand_osd_node = ceph_cluster.get_node_by_hostname(target_osd_hostname)
     rand_osd_service = ceph_cluster.get_osd_service_name(rand_osd_id)
     try:
         helper.kill_osd(rand_osd_node, rand_osd_service)

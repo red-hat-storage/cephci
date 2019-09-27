@@ -12,7 +12,8 @@ def get_ms_type(osd, osds, ceph_cluster):
     """
     check what's the default messenger
     """
-    tosd = ceph_cluster.get_osd_by_id(osd, osds)
+    target_osd_hostname = ceph_cluster.get_osd_metadata(osd).get('hostname')
+    tosd = ceph_cluster.get_node_by_hostname(target_osd_hostname)
     probe_ms = "sudo ceph --admin-daemon /var/run/ceph/ceph-osd.{oid}.asok \
                 config show --format json".format(oid=osd)
     (out, err) = tosd.exec_command(cmd=probe_ms)
