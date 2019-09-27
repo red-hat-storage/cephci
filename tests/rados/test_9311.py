@@ -111,7 +111,8 @@ def run(ceph_cluster, **kw):
     '''Bringdown tosds'''
     osd_service_map_list = []
     for osd_id in target_osds_ids:
-        target_osd_node = ceph_cluster.get_osd_by_id(osd_id).node
+        target_osd_hostname = ceph_cluster.get_osd_metadata(osd_id).get('hostname')
+        target_osd_node = ceph_cluster.get_node_by_hostname(target_osd_hostname)
         osd_service = ceph_cluster.get_osd_service_name(osd_id)
         osd_service_map_list.append({'osd_node': target_osd_node, 'osd_service': osd_service})
         helper.kill_osd(target_osd_node, osd_service)

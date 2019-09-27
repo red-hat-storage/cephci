@@ -81,11 +81,14 @@ def run(ceph_cluster, **kw):
     use ceph-objectstore-tool to corrupt
     snap info
     '''
-    target_osd = ceph_cluster.get_osd_by_id(targt_osd_id)
-    target_osd_node = target_osd.node
+#    target_osd = ceph_cluster.get_osd_by_id(targt_osd_id)
+#    target_osd_node = target_osd.node
+    target_osd_hostname = ceph_cluster.get_osd_metadata(targt_osd_id).get('hostname')
+    log.info(target_osd_hostname)
+    target_osd_node = ceph_cluster.get_node_by_hostname(target_osd_hostname)
     cot_environment = target_osd_node
     osd_service = ceph_cluster.get_osd_service_name(targt_osd_id)
-    partition_path = ceph_cluster.get_osd_data_partition_path(targt_osd_id)
+    partition_path = ceph_cluster.get_osd_metadata(targt_osd_id).get('osd_data')
     helper.kill_osd(target_osd_node, osd_service)
     time.sleep(10)
     osd_metadata = ceph_cluster.get_osd_metadata(targt_osd_id)
