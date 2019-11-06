@@ -24,6 +24,7 @@ from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import timestamp, create_run_dir, create_unique_test_name, create_report_portal_session, \
     configure_logger, close_and_remove_filehandlers, get_latest_container, email_results
+from utility.xunit import create_xunit_results
 
 doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
@@ -55,6 +56,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--skip-version-compare]
         [--custom-config <key>=<value>]...
         [--custom-config-file <file>]
+        [--xunit-results]
   run.py --cleanup=name [--osp-cred <file>]
         [--log-level <LEVEL>]
 
@@ -99,6 +101,7 @@ Options:
   --skip-version-compare            Skip verification that ceph versions change post upgrade
   -c --custom-config <name>=<value> Add a custom config key/value to ceph_conf_overrides
   --custom-config-file <file>       Add custom config yaml to ceph_conf_overrides
+  --xunit-results                   Create xUnit result file for test suite run [default: false]
 """
 log = logging.getLogger(__name__)
 root = logging.getLogger()
@@ -229,6 +232,7 @@ def run(args):
     skip_version_compare = args.get('--skip-version-compare', False)
     custom_config = args.get('--custom-config')
     custom_config_file = args.get('--custom-config-file')
+    xunit_results = args.get('--xunit-results', False)
     if console_log_level:
         ch.setLevel(logging.getLevelName(console_log_level.upper()))
 
@@ -578,6 +582,8 @@ def run(args):
     if post_to_report_portal:
         service.finish_launch(end_time=timestamp())
         service.terminate()
+    if xunit_results:
+        create_xunit_results(suite_name, tcs, run_dir)
     url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
     run_dir_name = run_dir.split('/')[-1]
     print("\nAll test logs located here: {base}/{dir}".format(base=url_base, dir=run_dir_name))
