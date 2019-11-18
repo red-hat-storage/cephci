@@ -20,7 +20,8 @@ def run(ceph_cluster, **kw):
         config = kw.get('config')
         num_of_osds = config.get('num_of_osds')
         fs_util = FsUtils(ceph_cluster)
-        client_info, rc = fs_util.get_clients()
+        build = config.get('build', config.get('rhbuild'))
+        client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info("Got client info")
         else:
@@ -33,7 +34,7 @@ def run(ceph_cluster, **kw):
         client4.append(client_info['kernel_clients'][1])
         cluster_health_beforeIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), None, 300)
+                client_info['mon_node']), build, None, 300)
         rc1 = fs_util.auth_list(client1)
         rc2 = fs_util.auth_list(client2)
         rc3 = fs_util.auth_list(client3)
@@ -195,7 +196,7 @@ def run(ceph_cluster, **kw):
                     return_counts, rc = op
             cluster_health_afterIO = check_ceph_healthly(
                 client_info['mon_node'][0], num_of_osds, len(
-                    client_info['mon_node']), None, 300)
+                    client_info['mon_node']), build, None, 300)
 
             log.info("Execution of Test case CEPH-%s ended" % (tc))
             print("Results:")

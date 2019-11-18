@@ -18,7 +18,8 @@ def run(ceph_cluster, **kw):
         config = kw.get('config')
         osp_cred = config.get('osp_cred')
         fs_util = FsUtils(ceph_cluster)
-        client_info, rc = fs_util.get_clients()
+        build = config.get('build', config.get('rhbuild'))
+        client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info('Got client info')
         else:

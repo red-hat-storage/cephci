@@ -16,7 +16,9 @@ def run(ceph_cluster, **kw):
         dir_name = 'dir'
         log.info("Running cephfs %s test case" % (tc))
         fs_util = FsUtils(ceph_cluster)
-        client_info, rc = fs_util.get_clients()
+        config = kw.get('config')
+        build = config.get('build', config.get('rhbuild'))
+        client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info("Got client info")
         else:

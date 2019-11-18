@@ -24,9 +24,10 @@ def run(ceph_cluster, **kw):
     rgw_node = rgw_ceph_object.node
     # cleanup any existing stale test dir
     log.info('flushing iptables')
-    rgw_node.exec_command(cmd='sudo iptables -F')
+    rgw_node.exec_command(cmd='sudo iptables -F', check_ec=False)
     test_folder = 'rgw-tests'
     test_folder_path = '~/{test_folder}'.format(test_folder=test_folder)
+    rgw_node.exec_command(cmd='sudo yum install python2 -y', check_ec=False)
     rgw_node.exec_command(cmd='sudo rm -rf ' + test_folder)
     rgw_node.exec_command(cmd='sudo mkdir ' + test_folder)
     rgw_node.exec_command(cmd='cd ' + test_folder + ' ; ' + git_clone)
@@ -50,7 +51,7 @@ def run(ceph_cluster, **kw):
     config_dir = DIR[test_version]['config']
     timeout = config.get('timeout', 300)
     out, err = rgw_ceph_object.exec_command(
-        cmd='sudo python ' + test_folder_path + script_dir + script_name + ' -c '
+        cmd='sudo python2 ' + test_folder_path + script_dir + script_name + ' -c '
             + test_folder + config_dir + config_file_name,
         timeout=timeout)
     log.info(out.read().decode())
