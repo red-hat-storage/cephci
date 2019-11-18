@@ -30,7 +30,7 @@ class FsUtils(object):
         self.mons = ceph_cluster.get_ceph_objects('mon')
         self.mgrs = ceph_cluster.get_ceph_objects('mgr')
 
-    def get_clients(self):
+    def get_clients(self, build):
         log.info("Getting Clients")
 
         self.clients = self.ceph_cluster.get_ceph_objects('client')
@@ -42,7 +42,13 @@ class FsUtils(object):
             self.mon_node_ip = self.mon_node_ip[-3].strip('/0') + ' ' + self.mon_node_ip[-2].strip('/0') + ' ' + \
                 self.mon_node_ip[-1].strip('/0')
             self.mon_node_ip = self.mon_node_ip.split(' ')
-
+            if build.startswith('4'):
+                self.mon_node_ip[0] = re.search(r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
+                                                self.mon_node_ip[0]).group(2)
+                self.mon_node_ip[1] = re.search(r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
+                                                self.mon_node_ip[1]).group(2)
+                self.mon_node_ip[2] = re.search(r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
+                                                self.mon_node_ip[2]).group(2)
             break
         for client in self.clients:
             node = client.node
@@ -52,6 +58,7 @@ class FsUtils(object):
                 output.split()
                 if 'attr' not in output:
                     node.exec_command(cmd='sudo yum install -y attr')
+                    node.exec_command(cmd='sudo yum install -y gcc python2-devel', check_ec=False)
 
                 out, rc = node.exec_command(
                     cmd='sudo pip  list --format=columns')
@@ -652,7 +659,7 @@ finally:
             to_lock_code.write(to_lock_file)
             to_lock_code.flush()
             out, rc = client.exec_command(
-                cmd="sudo python /home/cephuser/file_lock.py")
+                cmd="sudo python2 /home/cephuser/file_lock.py")
             output = out.read().decode()
             output.split()
             if 'Errno 11' in output:
@@ -724,7 +731,7 @@ finally:
             else:
                 node.exec_command(
                     cmd="sudo ceph fs set %s allow_multimds true "
-                        "--yes-i-really-mean-it" % fs_info.get('fs_name'))
+                        "--yes-i-really-mean-it" % fs_info.get('fs_name'), check_ec=False)
                 log.info("Setting max mdss 2:")
                 node.exec_command(
                     cmd="sudo ceph fs set %s max_mds 2" %
@@ -1105,7 +1112,7 @@ os.system('sudo systemctl start  network')
         nw_disconnect.flush()
         log.info('Stopping the network..')
         out, rc = node.exec_command(
-            cmd="sudo python /home/cephuser/nw_disconnect.py")
+            cmd="sudo python2 /home/cephuser/nw_disconnect.py")
         log.info('Starting the network..')
         return 0
 
@@ -1935,7 +1942,7 @@ mds standby for rank = 1
                         client.exec_command(
                             cmd='sudo rm -rf /home/cephuser/*',
                             long_running=True)
-                        client.exec_command(cmd='sudo iptables -F')
+                        client.exec_command(cmd='sudo iptables -F', check_ec=False)
             for client in kernel_clients:
                 if client.pkg_type == 'deb':
                     pass
@@ -2004,7 +2011,7 @@ mds standby for rank = 1
                         client.exec_command(
                             cmd='sudo rm -rf /home/cephuser/*',
                             long_running=True)
-                        client.exec_command(cmd='sudo iptables -F')
+                        client.exec_command(cmd='sudo iptables -F', check_ec=False)
             for client in kernel_clients:
                 if client.pkg_type == 'deb':
                     pass
@@ -2050,7 +2057,7 @@ mds standby for rank = 1
             log.info("Deactivating Multiple MDSs")
             node.exec_command(
                 cmd="sudo ceph fs set %s allow_multimds false "
-                    "--yes-i-really-mean-it" % fs_info.get('fs_name'))
+                    "--yes-i-really-mean-it" % fs_info.get('fs_name'), check_ec=False)
             log.info("Setting Max mds to 1:")
             node.exec_command(
                 cmd="sudo ceph fs set %s max_mds 1" %
