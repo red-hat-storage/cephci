@@ -219,14 +219,6 @@ tests:
 # basic rgw tests
 
    - test:
-      name: s3 tests
-      module: test_s3.py
-      config:
-         branch: ceph-luminous
-      desc: execution of s3 tests against radosgw
-      destroy-cluster: False
-
-   - test:
        name: Mbuckets
        desc: test to create "M" no of buckets
        polarion-id: CEPH-9789

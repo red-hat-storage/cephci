@@ -58,7 +58,7 @@ class FsUtils(object):
                 output.split()
                 if 'attr' not in output:
                     node.exec_command(cmd='sudo yum install -y attr')
-                    node.exec_command(cmd='sudo yum install -y gcc python2-devel', check_ec=False)
+                node.exec_command(cmd='sudo yum install -y gcc python2-devel', check_ec=False)
 
                 out, rc = node.exec_command(
                     cmd='sudo pip  list --format=columns')
