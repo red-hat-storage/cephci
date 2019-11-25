@@ -719,7 +719,7 @@ tests:
        module: sanity_rgw.py
        config:
          test-version: v2
-         script-name: test_ssl.py
+         script-name: test_frontends_with_ssl.py
          config-file-name: test_ssl_civetweb.yaml
          timeout: 500
 
@@ -730,7 +730,7 @@ tests:
        module: sanity_rgw.py
        config:
          test-version: v2
-         script-name: test_ssl.py
+         script-name: test_frontends_with_ssl.py
          config-file-name: test_ssl_beast.yaml
          timeout: 500
 
