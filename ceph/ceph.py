@@ -1714,26 +1714,43 @@ class CephInstaller(CephObject):
             out, rc = self.exec_command(sudo=True, cmd='apt-cache search ceph')
         return out.read().decode()
 
-    def write_inventory_file(self, inventory_config):
+    def write_inventory_file(self, inventory_config, file_name="hosts"):
         """
         Write inventory to hosts file for ansible use. Old file will be overwritten
         Args:
-            inventory_config(str):invnetory config compatible with ceph-ansible
+            inventory_config(str):inventory config compatible with ceph-ansible
+            file_name(str): custom inventory file name. (default : "hosts")
         """
-        host_file = self.write_file(
-            sudo=True, file_name='{}/hosts'.format(self.ansible_dir), file_mode='w')
+        host_file = self.write_file(sudo=True,
+                                    file_mode='w',
+                                    file_name='{ansible_dir}/{inventory_file}'.format(ansible_dir=self.ansible_dir,
+                                                                                      inventory_file=file_name))
         logger.info(inventory_config)
         host_file.write(inventory_config)
         host_file.flush()
 
-        out, rc = self.exec_command(sudo=True, cmd='cat {}/hosts'.format(self.ansible_dir))
+        out, rc = self.exec_command(sudo=True,
+                                    cmd='cat {ansible_dir}/{inventory_file}'.format(ansible_dir=self.ansible_dir,
+                                                                                    inventory_file=file_name))
         out = out.read().decode().rstrip('\n')
         out = re.sub(r'\]+', ']', out)
         out = re.sub(r'\[+', '[', out)
-        host_file = self.write_file(
-            sudo=True, file_name='{}/hosts'.format(self.ansible_dir), file_mode='w')
+        host_file = self.write_file(sudo=True,
+                                    file_mode='w',
+                                    file_name='{ansible_dir}/{inventory_file}'.format(ansible_dir=self.ansible_dir,
+                                                                                      inventory_file=file_name))
         host_file.write(out)
         host_file.flush()
+
+    def read_inventory_file(self):
+        """
+        Read inventory file from ansible node
+        Returns:
+            out : inventory file data
+        """
+        out, err = self.exec_command(sudo=True,
+                                     cmd='cat {ansible_dir}/hosts'.format(ansible_dir=self.ansible_dir))
+        return out.readlines()
 
     def setup_ansible_site_yml(self, containerized):
         """
