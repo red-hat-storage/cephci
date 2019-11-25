@@ -889,3 +889,10 @@ tests:
             playbook-command: purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes
       desc: Purge ceph cluster
       destroy-cluster: True
+
+   - test:
+      name: User access to mgr keyring
+      module: test_mgr_keyring.py
+      polarion-id: CEPH-83573394
+      desc: Validation for user access to mgr keyring
+
