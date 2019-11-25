@@ -713,6 +713,28 @@ tests:
          timeout: 300
 
    - test:
+       name: Civetweb SSL RGW test
+       desc: RGW SSL testing with Civetweb enabled
+       polarion-id: CEPH-10359
+       module: sanity_rgw.py
+       config:
+         test-version: v2
+         script-name: test_frontends_with_ssl.py
+         config-file-name: test_ssl_civetweb.yaml
+         timeout: 500
+
+   - test:
+       name: Beast SSL RGW test
+       desc: RGW SSL testing with Beast frontend enabled
+       polarion-id: CEPH-10359
+       module: sanity_rgw.py
+       config:
+         test-version: v2
+         script-name: test_frontends_with_ssl.py
+         config-file-name: test_ssl_beast.yaml
+         timeout: 500
+
+   - test:
        name: ceph ansible purge
        polarion-id: CEPH-83571498
        module: purge_cluster.py
