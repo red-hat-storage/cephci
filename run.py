@@ -47,6 +47,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--post-results]
         [--report-portal]
         [--log-level <LEVEL>]
+        [--log-dir  <directory-name>]
         [--instances-name <name>]
         [--osp-image <image>]
         [--filestore]
@@ -92,6 +93,7 @@ Options:
                                     in test suite yamls. Requires config file, see README.
   --report-portal                   Post results to report portal. Requires config file, see README.
   --log-level <LEVEL>               Set logging level
+  --log-dir <LEVEL>                 Set log directory [default: /tmp]
   --instances-name <name>           Name that will be used for instances creation
   --osp-image <image>               Image for osp instances, default value is taken from conf file
   --filestore                       To specify filestore as osd object store
@@ -113,15 +115,6 @@ ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.ERROR)
 ch.setFormatter(formatter)
 root.addHandler(ch)
-
-run_id = timestamp()
-run_dir = create_run_dir(run_id)
-startup_log = os.path.join(run_dir, "startup.log")
-print("Startup log location: {}".format(startup_log))
-handler = logging.FileHandler(startup_log)
-handler.setLevel(logging.INFO)
-handler.setFormatter(formatter)
-root.addHandler(handler)
 
 test_names = []
 
@@ -224,6 +217,7 @@ def run(args):
     cleanup_name = args.get('--cleanup', None)
     post_to_report_portal = args.get('--report-portal', False)
     console_log_level = args.get('--log-level')
+    log_directory = args.get('--log-dir', '/tmp')
     instances_name = args.get('--instances-name')
     osp_image = args.get('--osp-image')
     filestore = args.get('--filestore', False)
@@ -233,6 +227,17 @@ def run(args):
     custom_config = args.get('--custom-config')
     custom_config_file = args.get('--custom-config-file')
     xunit_results = args.get('--xunit-results', False)
+
+    # Set log directory and get absolute path
+    run_id = timestamp()
+    run_dir = create_run_dir(run_id, log_directory)
+    startup_log = os.path.join(run_dir, "startup.log")
+    print("Startup log location: {}".format(startup_log))
+    handler = logging.FileHandler(startup_log)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
     if console_log_level:
         ch.setLevel(logging.getLevelName(console_log_level.upper()))
 
@@ -451,7 +456,6 @@ def run(args):
         tc['ceph-ansible-version'] = ceph_ansible_version
         tc['compose-id'] = compose_id
         tc['distro'] = distro
-        tc['suite-name'] = suite_name
         test_file = tc['file']
         report_portal_description = tc['desc'] or ''
         unique_test_name = create_unique_test_name(tc['name'], test_names)
