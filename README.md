@@ -150,3 +150,5 @@ Results are posted to report portal if the `--report-portal` argument is passed 
 A result email is automatically sent to the address configured in your `~/.cephci.yaml` file.
 In addition to personally configured emails, if the `--post-results` or `--report-portal` arguments are
 passed to `run.py` an email will also be sent to `cephci@redhat.com`.
+
+=====================
