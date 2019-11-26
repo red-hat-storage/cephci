@@ -238,6 +238,36 @@ def run(args):
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
+    # Get ceph cluster version name
+    with open("rhbuild.yaml") as fd:
+        rhbuild_file = yaml.safe_load(fd)
+    ceph = rhbuild_file['ceph']
+    ceph_name = None
+    rhbuild_ = None
+    try:
+        ceph_name, rhbuild_ =\
+            next(filter(
+                lambda x: x,
+                [(ceph[x]['name'], x) for x in ceph if x == rhbuild.split(".")[0]]))
+    except StopIteration:
+        print("\nERROR: Please provide correct RH build version, run exited.")
+        sys.exit(1)
+
+    # Get base-url
+    composes = ceph[rhbuild_]['composes']
+    if not base_url:
+        if rhbuild in composes:
+            base_url = composes[rhbuild]['base_url']
+        else:
+            base_url = composes['latest']['base_url']
+
+    # Get ubuntu-repo
+    if not ubuntu_repo:
+        if rhbuild in composes:
+            ubuntu_repo = composes[rhbuild]['ubuntu_repo']
+        else:
+            ubuntu_repo = composes['latest']['ubuntu_repo']
+
     if console_log_level:
         ch.setLevel(logging.getLevelName(console_log_level.upper()))
 
@@ -267,42 +297,7 @@ def run(args):
         inventory.get('instance').get('create').update({'image-name': osp_image})
 
     compose_id = None
-    if rhbuild.startswith('2'):
-        if base_url is None:
-            # use latest as default when nothing is specified in cli
-            # base_url = 'http://download.engineering.redhat.com/rcm-guest/ceph-drops/2/latest-RHCEPH-2.4-Ubuntu/'
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-2-rhel-7/latest-RHCEPH-2-RHEL-7/'
-        if ubuntu_repo is None:
-            log.info("Using latest ubuntu repo since no default value provided")
-            ubuntu_repo = 'http://download-node-02.eng.bos.redhat.com/rcm-guest/ceph-drops/2/latest-Ceph-2-Ubuntu/'
-    elif rhbuild == '3.1':
-        if base_url is None:
-            # default to latest RHCeph build 3.1
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.1-rhel-7/latest-RHCEPH-3-RHEL-7/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.engineering.redhat.com/rcm-guest/ceph-drops/3.1/latest-RHCEPH-3.1-Ubuntu/'
-    elif rhbuild == '3.2':
-        if base_url is None:
-            # default to latest RHCeph build 3.2
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.2-rhel-7/latest-RHCEPH-3-RHEL-7/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.2/latest-RHCEPH-3.2-Ubuntu/'
-    elif rhbuild.startswith('3'):
-        if base_url is None:
-            # default to latest RHCeph build 3.3
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.3-rhel-7/latest-RHCEPH-3-RHEL-7/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
-    elif rhbuild.startswith('4'):
-        if base_url is None:
-            # default to latest RHCeph build 4.0
-            base_url = 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.0-rhel-8/latest-RHCEPH-4-RHEL-8/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
+
     if os.environ.get('TOOL') is not None:
         ci_message = json.loads(os.environ['CI_MESSAGE'])
         compose_id = ci_message['compose_id']
@@ -456,6 +451,10 @@ def run(args):
         tc['ceph-ansible-version'] = ceph_ansible_version
         tc['compose-id'] = compose_id
         tc['distro'] = distro
+        tc['suite-name'] = suite_name
+        tc['suite-file'] = suite_file
+        tc['conf-file'] = glb_file
+        tc['ceph-version-name'] = ceph_name
         test_file = tc['file']
         report_portal_description = tc['desc'] or ''
         unique_test_name = create_unique_test_name(tc['name'], test_names)
