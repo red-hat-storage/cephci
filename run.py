@@ -598,6 +598,7 @@ def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
     pickle.dump(ceph_cluster_object, cn)
     cn.close()
     log.info("ceph_clusters_file %s", ceph_clusters_file_name)
+    # some comment
 
 
 if __name__ == '__main__':
