@@ -5,6 +5,7 @@ import random
 import smtplib
 import time
 import traceback
+import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -547,14 +548,18 @@ def email_results(results_list, run_id, send_to_cephci=False):
     cfg = get_cephci_config().get('email')
     sender = "cephci@redhat.com"
     recipients = []
-    if cfg and cfg.get('address'):
-        recipients = [cfg['address']]
-    else:
-        log.warning("No email address configured in ~/.cephci.yaml. "
+    address = cfg.get('address')
+
+    if cfg and address:
+        recipients = re.split(r",\s*", cfg['address'])
+    if address.count("@") != len(recipients):
+        log.warning("No email address configured in ~/.cephci.yaml."
+                    "Or please specify in this format eg., address: email1, email2.......emailn"
                     "Please configure if you would like to receive run result emails.")
 
     if send_to_cephci:
         recipients.append(sender)
+        recipients = list(set(recipients))
 
     if recipients:
         run_name = "cephci-run-{id}".format(id=run_id)

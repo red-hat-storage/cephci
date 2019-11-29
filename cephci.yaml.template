@@ -8,5 +8,7 @@ polarion:
   username: some_user
   password: some_password
 
+# Provide email address(es) in comma-seperated values
+# Example., address: email1, email2, ...... ,emailn
 email:
   address: cephci@redhat.com
