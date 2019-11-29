@@ -3,7 +3,7 @@ import json
 import re
 from distutils.version import LooseVersion
 from select import select
-from time import sleep
+from time import sleep, time
 
 import datetime
 import requests
@@ -1823,6 +1823,37 @@ class CephInstaller(CephObject):
         iscsi_file.write(test_data["initiator_setting"])
         iscsi_file.write(test_data["gw_ip_list"])
         iscsi_file.flush()
+
+    def enable_ceph_mgr_restful(self):
+        """
+        Enable restful service from MGR module with self-signed certificate.
+        Returns:
+            user_cred: user credentials for restful calls
+        """
+        try:
+            # enable restful service from MGR module
+            out, err = self.exec_command(sudo=True, cmd="ceph mgr module enable restful")
+            out, err = out.read().decode(), err.read().decode()
+            if err:
+                raise CommandFailed(err)
+            logger.info(out)
+
+            # Start restful service with self-signed certificate
+            out, err = self.exec_command(sudo=True, cmd="ceph restful create-self-signed-cert")
+            out, err = out.read().decode().strip(), err.read().decode()
+            if err:
+                raise CommandFailed(err)
+            logger.info(out)
+
+            # Create new restful user
+            user = "test_{}".format(int(time()))
+            cred, err = self.exec_command(sudo=True,
+                                          cmd="ceph restful create-key {user}".format(user=user))
+
+            return {'user': user, 'password': cred.read().decode().strip()}
+        except CommandFailed as err:
+            logger.error(err.args)
+        return False
 
 
 class CephObjectFactory(object):
