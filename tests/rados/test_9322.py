@@ -28,6 +28,7 @@ def run(**kw):
 
     ceph_nodes = kw.get('ceph_nodes')
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
 
     mons = []
     osds = []
@@ -54,12 +55,12 @@ def run(**kw):
         (k, m, l) = conf
         suffix = "{k}_{m}_{l}".format(k=k, m=m, l=l)
         prof_name = "LRCprofile{suf}".format(suf=suffix)
-        profile = "osd erasure-code-profile set {LRC} \
-                plugin=lrc\
-                k={k} m={m} l={l}\
-                ruleset-failure-domain=osd\
-                crush-failure-domain=osd".format(LRC=prof_name,
-                                                 k=k, m=m, l=l)
+        if build.startswith('4'):
+            profile = "osd erasure-code-profile set {LRC} plugin=lrc k={k} m={m} l={l} \
+                crush-failure-domain=osd".format(LRC=prof_name, k=k, m=m, l=l)
+        else:
+            profile = "osd erasure-code-profile set {LRC} plugin=lrc k={k} m={m} l={l} \
+                ruleset-failure-domain=osd crush-failure-domain=osd".format(LRC=prof_name, k=k, m=m, l=l)
         try:
             (out, err) = helper.raw_cluster_cmd(profile)
             outbuf = out.read().decode()
