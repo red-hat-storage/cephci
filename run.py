@@ -238,6 +238,17 @@ def run(args):
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
+    if console_log_level:
+        ch.setLevel(logging.getLevelName(console_log_level.upper()))
+
+    if osp_cred_file:
+        with open(osp_cred_file, 'r') as osp_cred_stream:
+            osp_cred = yaml.safe_load(osp_cred_stream)
+
+    if cleanup_name is not None:
+        cleanup_ceph_nodes(osp_cred, cleanup_name)
+        return 0
+
     # Get ceph cluster version name
     with open("rhbuild.yaml") as fd:
         rhbuild_file = yaml.safe_load(fd)
@@ -268,9 +279,6 @@ def run(args):
         else:
             ubuntu_repo = composes['latest']['ubuntu_repo']
 
-    if console_log_level:
-        ch.setLevel(logging.getLevelName(console_log_level.upper()))
-
     if glb_file:
         conf_path = os.path.abspath(glb_file)
         with open(conf_path, 'r') as conf_stream:
@@ -285,13 +293,6 @@ def run(args):
         suites_path = os.path.abspath(suite_file)
         with open(suites_path, 'r') as suite_stream:
             suite = yaml.safe_load(suite_stream)
-    if osp_cred_file:
-        with open(osp_cred_file, 'r') as osp_cred_stream:
-            osp_cred = yaml.safe_load(osp_cred_stream)
-
-    if cleanup_name is not None:
-        cleanup_ceph_nodes(osp_cred, cleanup_name)
-        return 0
 
     if osp_image and inventory.get('instance').get('create'):
         inventory.get('instance').get('create').update({'image-name': osp_image})
