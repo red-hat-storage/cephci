@@ -30,6 +30,7 @@ def run(ceph_cluster, **kw):
 
     ceph_nodes = kw.get('ceph_nodes')
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
     mons = []
     osds = []
     role = 'client'
@@ -51,12 +52,12 @@ def run(ceph_cluster, **kw):
     pname = "ecsnapdelete_{rand}_{k}_{m}".format(
         rand=random.randint(0, 1000), k=k, m=m)
     profile = pname
-    prof_cmd = "osd erasure-code-profile set {profile}\
-                k={k}\
-                m={m}\
-                ruleset-failure-domain=osd\
-                crush-failure-domain=osd".format(profile=profile,
-                                                 k=k, m=m)
+    if build.startswith('4'):
+        prof_cmd = "osd erasure-code-profile set {profile} k={k} m={m} \
+            crush-failure-domain=osd".format(profile=profile, k=k, m=m)
+    else:
+        prof_cmd = "osd erasure-code-profile set {profile} k={k} m={m} \
+            ruleset-failure-domain=osd crush-failure-domain=osd".format(profile=profile, k=k, m=m)
     try:
         (out, err) = helper.raw_cluster_cmd(prof_cmd)
         outbuf = out.read().decode()

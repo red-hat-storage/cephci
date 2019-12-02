@@ -44,6 +44,7 @@ def run(ceph_cluster, **kw):
     log.info("Running test ceph-9311")
     ceph_nodes = kw.get('ceph_nodes')
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
 
     mons = []
     role = 'client'
@@ -60,11 +61,12 @@ def run(ceph_cluster, **kw):
     '''Create an LRC profile'''
     sufix = random.randint(0, 10000)
     prof_name = "LRCprofile{suf}".format(suf=sufix)
-    profile = "osd erasure-code-profile set {LRCprofile} \
-            plugin=lrc\
-            k=4 m=2 l=3 \
-            ruleset-failure-domain=osd \
+    if build.startswith('4'):
+        profile = "osd erasure-code-profile set {LRCprofile} plugin=lrc k=4 m=2 l=3 \
             crush-failure-domain=osd".format(LRCprofile=prof_name)
+    else:
+        profile = "osd erasure-code-profile set {LRCprofile}plugin=lrc k=4 m=2 l=3 \
+            ruleset-failure-domain=osd crush-failure-domain=osd".format(LRCprofile=prof_name)
     try:
         (out, err) = helper.raw_cluster_cmd(profile)
         outbuf = out.read().decode()
