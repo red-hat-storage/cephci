@@ -149,6 +149,7 @@ def create_nodes(conf, inventory, osp_cred, run_id, report_portal_session=None, 
                                 role=node.role,
                                 no_of_volumes=node.no_of_volumes,
                                 ip_address=node.ip_address,
+                                subnet=node.subnet,
                                 private_ip=node.get_private_ip(),
                                 hostname=node.hostname,
                                 ceph_vmnode=node)

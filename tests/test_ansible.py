@@ -14,6 +14,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running test")
     log.info("Running ceph ansible test")
+    ceph_nodes = kw.get('ceph_nodes')
     config = kw.get('config')
     filestore = config.get('filestore', False)
     k_and_m = config.get('ec-pool-k-m')
@@ -25,7 +26,7 @@ def run(ceph_cluster, **kw):
     installer_url = config.get('installer_url', None)
     mixed_lvm_configs = config.get('is_mixed_lvm_configs', None)
     device_to_add = config.get('device', None)
-    config['ansi_config']['public_network'] = get_public_network()
+    config['ansi_config']['public_network'] = get_public_network(ceph_nodes[0])
 
     ceph_cluster.ansible_config = config['ansi_config']
     ceph_cluster.custom_config = test_data.get('custom-config')
