@@ -197,24 +197,24 @@ tests:
       desc: add osd to existing node with lvm scenario
 
 
-   - test:
-      name: shrink mon
-      polarion-id: CEPH-9584
-      module: shrink_mon.py
-      config:
-           mon-to-kill:
-            - .*node6.*
-      desc: remove monitor
+   # - test:
+   #    name: shrink mon
+   #    polarion-id: CEPH-9584
+   #    module: shrink_mon.py
+   #    config:
+   #         mon-to-kill:
+   #          - .*node6.*
+   #    desc: remove monitor
 
 
-   - test:
-      name: shrink osd
-      polarion-id: CEPH-9585
-      module: shrink_osd.py
-      config:
-          osd-to-kill:
-            - 2
-      desc: shrink osd
+   # - test:
+   #    name: shrink osd
+   #    polarion-id: CEPH-9585
+   #    module: shrink_osd.py
+   #    config:
+   #        osd-to-kill:
+   #          - 2
+   #    desc: shrink osd
 
 # basic rgw tests
 
@@ -229,15 +229,15 @@ tests:
 #above upstream tests script has known failure, will add once its fixed later
 
 
-   - test:
-       name: Mbuckets
-       desc: test to create "M" no of buckets
-       polarion-id: CEPH-9789
-       module: sanity_rgw.py
-       config:
-           script-name: test_Mbuckets_with_Nobjects.py
-           config-file-name: test_Mbuckets.yaml
-           timeout: 300
+   # - test:
+   #     name: Mbuckets
+   #     desc: test to create "M" no of buckets
+   #     polarion-id: CEPH-9789
+   #     module: sanity_rgw.py
+   #     config:
+   #         script-name: test_Mbuckets_with_Nobjects.py
+   #         config-file-name: test_Mbuckets.yaml
+   #         timeout: 300
 
    - test:
        name: Mbuckets_with_Nobjects
