@@ -26,7 +26,7 @@ def run(ceph_cluster, **kw):
     hotfix_repo = config.get('hotfix_repo')
     base_url = config.get('base_url')
     installer_url = config.get('installer_url')
-    config['ansi_config']['public_network'] = get_public_network()
+    config['ansi_config']['public_network'] = get_public_network(ceph_nodes[0])
 
     ceph_cluster.ansible_config = config['ansi_config']
     ceph_cluster.custom_config = test_data.get('custom-config')

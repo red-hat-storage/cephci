@@ -965,8 +965,9 @@ class CephNode(object):
         Initialize a CephNode in a libcloud environment
         eg CephNode(username='cephuser', password='cephpasswd',
                     root_password='passwd', ip_address='ip_address',
-                    hostname='hostname', role='mon|osd|client',
-                    no_of_volumes=3, ceph_vmnode='ref_to_libcloudvm')
+                    subnet='subnet', hostname='hostname',
+                    role='mon|osd|client', no_of_volumes=3,
+                    ceph_vmnode='ref_to_libcloudvm')
 
         """
         self.username = kw['username']
@@ -975,6 +976,7 @@ class CephNode(object):
         self.root_login = kw['root_login']
         self.private_ip = kw['private_ip']
         self.ip_address = kw['ip_address']
+        self.subnet = kw['subnet']
         self.vmname = kw['hostname']
         vmshortname = self.vmname.split('.')
         self.vmshortname = vmshortname[0]

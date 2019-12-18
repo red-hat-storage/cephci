@@ -42,6 +42,7 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
             params['image-name'] = inventory.get('instance').get('create').get('image-name')
         params['cluster-name'] = ceph_cluster.get('name')
         params['vm-size'] = inventory.get('instance').get('create').get('vm-size')
+        params['vm-network'] = inventory.get('instance').get('create').get('vm-network')
         if params.get('root-login') is False:
             params['root-login'] = False
         else:
@@ -502,11 +503,17 @@ def get_root_permissions(node, path):
     node.obtain_root_permissions(path)
 
 
-def get_public_network():
+def get_public_network(node):
     """
     Get the configured public network subnet for nodes in the cluster.
+    This function retrieves the public network subnet from the ceph node
+    object. The subnet is retrieved at runtime when creating nodes. See:
+    ~ mita.openstack.CephVMNode().create_node()
+
+    Args:
+        node(ceph.ceph.CephNode)
 
     Returns:
         (str) public network subnet
     """
-    return "10.0.144.0/22"  # TODO: pull from configuration file
+    return getattr(node, 'subnet')
