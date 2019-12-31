@@ -21,6 +21,7 @@ tests:
             ceph_stable_rh_storage: True
             fetch_directory: ~/fetch
             copy_admin_key: true
+            dashboard_enabled: False
             ceph_conf_overrides:
                 global:
                   osd_pool_default_pg_num: 64
@@ -99,6 +100,7 @@ tests:
               ceph_stable_rh_storage: True
               fetch_directory: ~/fetch
               copy_admin_key: true
+              dashboard_enabled: False
               ceph_conf_overrides:
                   global:
                     osd_pool_default_pg_num: 64
@@ -137,6 +139,7 @@ tests:
               ceph_stable_rh_storage: True
               fetch_directory: ~/fetch
               copy_admin_key: true
+              dashboard_enabled: False
               ceph_conf_overrides:
                   global:
                     osd_pool_default_pg_num: 64
@@ -176,6 +179,7 @@ tests:
               ceph_stable_rh_storage: True
               fetch_directory: ~/fetch
               copy_admin_key: true
+              dashboard_enabled: False
               ceph_conf_overrides:
                   global:
                     osd_pool_default_pg_num: 64
