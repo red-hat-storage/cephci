@@ -36,12 +36,12 @@ def run(ceph_cluster, **kw):
         rgw_ceph_object.exec_command(cmd='sudo rm -rf ' + test_folder)
         rgw_ceph_object.exec_command(cmd='sudo mkdir ' + test_folder)
         rgw_node.exec_command(
-            cmd='sudo docker cp {test_folder}/* {container}:/{test_folder}/'.format(
+            cmd='sudo podman cp {test_folder}/* {container}:/{test_folder}/'.format(
                 container=rgw_ceph_object.container_name,
                 test_folder=test_folder))
         rgw_node.exec_command(cmd='curl https://bootstrap.pypa.io/get-pip.py -o ~/get-pip.py')
         rgw_node.exec_command(
-            cmd='sudo docker cp ~/get-pip.py {container}:/get-pip.py'.format(container=rgw_ceph_object.container_name))
+            cmd='sudo podman cp ~/get-pip.py {container}:/get-pip.py'.format(container=rgw_ceph_object.container_name))
         rgw_ceph_object.exec_command('python3 /get-pip.py')
     rgw_ceph_object.exec_command(
         cmd='sudo pip3 install boto boto3 names PyYaml ConfigParser python-swiftclient swiftly')

@@ -1308,6 +1308,7 @@ class CephNode(object):
         Args:
             json_text (str): json as string
         """
+        # FIXME - no longer needed
         self.exec_command(cmd='sudo mkdir -p /etc/docker/ && sudo chown $USER /etc/docker && chmod 755 /etc/docker')
         docker_daemon = self.write_file(file_name='/etc/docker/daemon.json', file_mode='w')
         docker_daemon.write(json_text)
@@ -1613,7 +1614,7 @@ class CephDemon(CephObject):
 
     @property
     def container_prefix(self):
-        return 'sudo docker exec {container_name}'.format(
+        return 'sudo podman exec {container_name}'.format(
             container_name=self.container_name) if self.containerized else ''
 
     def exec_command(self, cmd, **kw):
@@ -1630,7 +1631,7 @@ class CephDemon(CephObject):
                                       **kw) if self.containerized else self.node.exec_command(cmd=cmd, **kw)
 
     def ceph_demon_by_container_name(self, container_name):
-        self.exec_command(cmd='sudo docker info')
+        self.exec_command(cmd='sudo podman info')
 
 
 class CephOsd(CephDemon):
@@ -1761,6 +1762,7 @@ class CephInstaller(CephObject):
             containerized(bool): use site-docker.yml.sample if True else site.yml.sample
         """
         if containerized:
+            # FIXME
             self.exec_command(
                 sudo=True,
                 cmd='cp -R {ansible_dir}/site-docker.yml.sample {ansible_dir}/site.yml'.format(

@@ -204,7 +204,8 @@ def check_ceph_healthly(ceph_mon, num_osds, num_mons, build, mon_container=None,
 
     while datetime.datetime.now() - starttime <= timeout:
         if mon_container:
-            out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'.format(container=mon_container))
+            # FIXME
+            out, err = ceph_mon.exec_command(cmd='sudo podman exec {container} ceph -s'.format(container=mon_container))
         else:
             out, err = ceph_mon.exec_command(cmd='sudo ceph -s')
         lines = out.read().decode()
@@ -431,14 +432,14 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                     if node.role == 'client':
                         pass
                     else:
-                        out, rc = node.exec_command(sudo=True, cmd='docker ps --format "{{.Names}}"')
+                        out, rc = node.exec_command(sudo=True, cmd='podman ps --format "{{.Names}}"')
                         output = out.read().decode()
                         containers = [container for container in output.split('\n') if container != '']
                         log.info("Containers: {}".format(containers))
 
                     for container_name in containers:
                         out, rc = node.exec_command(
-                            sudo=True, cmd='sudo docker exec {container} ceph --version'.format(
+                            sudo=True, cmd='sudo podman exec {container} ceph --version'.format(
                                 container=container_name))
                         output = out.read().decode().rstrip()
                         log.info(output)

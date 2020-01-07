@@ -171,7 +171,7 @@ def get_container_counts(ceph_cluster):
     """
     container_counts = {}
     for node in ceph_cluster.get_nodes(ignore="installer"):
-        out, rc = node.exec_command(sudo=True, cmd='docker ps | grep $(hostname) | wc -l')
+        out, rc = node.exec_command(sudo=True, cmd='podman ps | grep $(hostname) | wc -l')
         count = int(out.read().decode().rstrip())
         log.info("{} has {} containers running".format(node.shortname, count))
         container_counts.update({node.shortname: count})
@@ -223,10 +223,8 @@ def configure_insecure_registry(ceph_cluster, registry):
         role_list.append('mgr')
     ignored_roles = RolesContainer(role_list)
     log.info("Roles ignored for insecure registry configuration: {roles}".format(roles=ignored_roles))
-    for node in ceph_cluster.get_nodes(ignore=ignored_roles):
-        write_docker_daemon_json(insecure_registry, node)
-        log.info("Restarting docker on {node}".format(node=node.shortname))
-        node.exec_command(sudo=True, cmd='systemctl restart docker')
+    # FIXME not needed
+    # node.exec_command(sudo=True, cmd='systemctl restart docker')
 
 
 def collocate_mons_with_mgrs(ceph_cluster, ansible_dir):

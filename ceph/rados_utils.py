@@ -231,9 +231,10 @@ class RadosHelper:
         Returns:
             ceph.ceph.CephDemon: mgr object
         """
-        out, err = node.exec_command(cmd='sudo docker inspect {container}'.format(container=proxy_container),
+        out, err = node.exec_command(cmd='sudo podman inspect {container}'.format(container=proxy_container),
                                      check_ec=False)
         if err.read():
+            # FIXME
             node.exec_command(
                 cmd='sudo /usr/bin/docker-current run -d --rm --net=host --privileged=true --pid=host --memory=1839m '
                     '--cpu-quota=100000 -v /dev:/dev -v /etc/localtime:/etc/localtime:ro -v '
