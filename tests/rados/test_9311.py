@@ -65,7 +65,7 @@ def run(ceph_cluster, **kw):
         profile = "osd erasure-code-profile set {LRCprofile} plugin=lrc k=4 m=2 l=3 \
             crush-failure-domain=osd".format(LRCprofile=prof_name)
     else:
-        profile = "osd erasure-code-profile set {LRCprofile}plugin=lrc k=4 m=2 l=3 \
+        profile = "osd erasure-code-profile set {LRCprofile} plugin=lrc k=4 m=2 l=3 \
             ruleset-failure-domain=osd crush-failure-domain=osd".format(LRCprofile=prof_name)
     try:
         (out, err) = helper.raw_cluster_cmd(profile)
