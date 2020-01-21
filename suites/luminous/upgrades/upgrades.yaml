@@ -16,7 +16,7 @@ tests:
         ceph_repository_type: cdn
         ceph_rhcs_version: 2
         ceph_stable_release: jewel
-        ceph_rhcs_cdn_debian_repo: https://redhat:OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9@rhcs.download.redhat.com
+        ceph_rhcs_cdn_debian_repo: ''
         ceph_rhcs_cdn_debian_repo_version: /2-updates/
         osd_scenario: collocated
         osd_auto_discovery: False
@@ -46,7 +46,7 @@ tests:
         ceph_repository: rhcs
         ceph_rhcs_version: 3
         ceph_stable_release: luminous
-        ceph_rhcs_cdn_debian_repo: https://redhat:OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9@rhcs.download.redhat.com
+        ceph_rhcs_cdn_debian_repo: ''
         ceph_rhcs_cdn_debian_repo_version: /3-updates/
         osd_scenario: collocated
         osd_auto_discovery: True
@@ -149,7 +149,7 @@ tests:
         ceph_repository_type: cdn
         ceph_rhcs_version: 2
         ceph_stable_release: jewel
-        ceph_rhcs_cdn_debian_repo: https://redhat:OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9@rhcs.download.redhat.com
+        ceph_rhcs_cdn_debian_repo: ''
         ceph_rhcs_cdn_debian_repo_version: /2-updates/
         osd_scenario: collocated
         osd_auto_discovery: False
@@ -181,7 +181,7 @@ tests:
         ceph_repository_type: cdn
         ceph_rhcs_version: 3
         ceph_stable_release: luminous
-        ceph_rhcs_cdn_debian_repo: https://redhat:OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9@rhcs.download.redhat.com
+        ceph_rhcs_cdn_debian_repo: ''
         ceph_rhcs_cdn_debian_repo_version: /3-updates/
         osd_scenario: collocated
         osd_auto_discovery: False
@@ -206,7 +206,7 @@ tests:
         ceph_origin: distro
         ceph_repository: rhcs
         ceph_stable_release: luminous
-        ceph_rhcs_cdn_debian_repo: https://redhat:OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9@rhcs.download.redhat.com
+        ceph_rhcs_cdn_debian_repo: ''
         ceph_rhcs_cdn_debian_repo_version: /3-updates/
         osd_scenario: collocated
         osd_auto_discovery: False
@@ -309,7 +309,7 @@ tests:
         ceph_repository_type: cdn
         ceph_rhcs_version: 3
         ceph_stable_release: luminous
-        ceph_rhcs_cdn_debian_repo: https://redhat:OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9@rhcs.download.redhat.com
+        ceph_rhcs_cdn_debian_repo: ''
         ceph_rhcs_cdn_debian_repo_version: /3-updates/
         osd_scenario: collocated
         osd_auto_discovery: False
@@ -333,7 +333,7 @@ tests:
         ceph_origin: distro
         ceph_repository: rhcs
         ceph_stable_release: luminous
-        ceph_rhcs_cdn_debian_repo: https://redhat:OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9@rhcs.download.redhat.com
+        ceph_rhcs_cdn_debian_repo: ''
         ceph_rhcs_cdn_debian_repo_version: /3-updates/
         osd_scenario: collocated
         osd_auto_discovery: False
