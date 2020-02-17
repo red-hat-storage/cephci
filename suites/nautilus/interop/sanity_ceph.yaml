@@ -13,7 +13,7 @@ tests:
         ansi_config:
             ceph_test: True
             ceph_origin: distro
-            ceph_stable_release: luminous
+            ceph_stable_release: nautilus
             ceph_repository: rhcs
             osd_scenario: lvm
             journal_size: 1024
@@ -91,7 +91,7 @@ tests:
           ansi_config:
               ceph_test: True
               ceph_origin: distro
-              ceph_stable_release: luminous
+              ceph_stable_release: nautilus
               ceph_repository: rhcs
               osd_scenario: lvm
               osd_auto_discovery: False
@@ -130,7 +130,7 @@ tests:
           ansi_config:
               ceph_test: True
               ceph_origin: distro
-              ceph_stable_release: luminous
+              ceph_stable_release: nautilus
               ceph_repository: rhcs
               osd_scenario: lvm
               osd_auto_discovery: False
@@ -170,7 +170,7 @@ tests:
           ansi_config:
               ceph_test: True
               ceph_origin: distro
-              ceph_stable_release: luminous
+              ceph_stable_release: nautilus
               ceph_repository: rhcs
               osd_scenario: lvm
               osd_auto_discovery: False
