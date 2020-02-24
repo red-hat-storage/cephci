@@ -94,11 +94,17 @@ def run(ceph_cluster, **kw):
 
     # copy rolling update from infrastructure playbook
     jewel_minor_update = build.startswith('2')
-    ceph_installer.exec_command(
-        sudo=True, cmd='cd {} ; cp infrastructure-playbooks/rolling_update.yml .'.format(ansible_dir))
-    cmd = 'cd {};' \
-          'ANSIBLE_STDOUT_CALLBACK=debug;' \
-          'ansible-playbook -e ireallymeanit=yes -vv -i hosts rolling_update.yml'.format(ansible_dir)
+    if build.startswith('4'):
+        cmd = 'cd {};' \
+              'ANSIBLE_STDOUT_CALLBACK=debug;' \
+              'ansible-playbook -e ireallymeanit=yes -vv -i'\
+              'hosts infrastructure-playbooks/rolling_update.yml'.format(ansible_dir)
+    else:
+        ceph_installer.exec_command(
+            sudo=True, cmd='cd {} ; cp infrastructure-playbooks/rolling_update.yml .'.format(ansible_dir))
+        cmd = 'cd {};' \
+              'ANSIBLE_STDOUT_CALLBACK=debug;' \
+              'ansible-playbook -e ireallymeanit=yes -vv -i hosts rolling_update.yml'.format(ansible_dir)
     if jewel_minor_update:
         cmd += " -e jewel_minor_update=true"
         log.info("Upgrade is jewel_minor_update, cmd: {cmd}".format(cmd=cmd))

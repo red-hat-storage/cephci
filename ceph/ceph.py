@@ -511,6 +511,24 @@ class Ceph(object):
                 return metadata
         return None
 
+    def osd_check(self, client):
+
+        out, err = client.exec_command(cmd='sudo ceph -s -f json')
+        out_json = out.read().decode()
+        ceph_status_json = json.loads(out_json)
+        num_osds = ceph_status_json['osdmap']['osdmap']['num_osds']
+        num_up_osds = ceph_status_json['osdmap']['osdmap']['num_up_osds']
+        num_in_osds = ceph_status_json['osdmap']['osdmap']['num_in_osds']
+        if num_osds != num_up_osds:
+            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (num_up_osds, num_osds))
+            return 1
+        if num_osds != num_in_osds:
+            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (num_in_osds, num_osds))
+            return 1
+        if num_osds == num_up_osds == num_in_osds:
+            logger.info("All osds are up and in")
+            return 0
+
     def check_health(self, rhbuild, client=None, timeout=300):
         """
         Check if ceph is in healthy state
@@ -544,19 +562,8 @@ class Ceph(object):
         if not all(state in lines for state in valid_states):
             logger.error("Valid States are not found in the health check")
             return 1
-        if rhbuild.startswith('4'):
-            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", lines)
-        else:
-            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
-        all_osds = int(match.group(1))
-        up_osds = int(match.group(2))
-        in_osds = int(match.group(3))
-        if up_osds != all_osds:
-            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (up_osds, all_osds))
-            return 1
-        if up_osds != in_osds:
-            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (in_osds, all_osds))
-            return 1
+
+        self.osd_check(client)
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
         match = re.search(r"(\d+) daemons, quorum", lines)
