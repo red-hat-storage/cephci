@@ -75,8 +75,8 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
 @retry(Exception, tries=5, delay=10)
 def install_pip(ceph):
     log.info("Installing pip on {host}".format(host=ceph.hostname))
-    base_dir_path = "http://dl.fedoraproject.org/pub/fedora-secondary/releases/29/Everything/i386/os/Packages/p"
-    pip_package_name = "python2-pip-18.0-4.fc29.noarch.rpm"
+    base_dir_path = "http://dl.fedoraproject.org/pub/fedora-secondary/releases/30/Everything/i386/os/Packages/p"
+    pip_package_name = "python2-pip-19.0.3-1.fc30.noarch.rpm"
     ceph.exec_command(
         cmd='sudo yum install -y {base}/{package}'.format(base=base_dir_path, package=pip_package_name))
 
