@@ -27,6 +27,12 @@ ceph:
       '4.0-rhel-8':
         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.0-rhel-8/latest-RHCEPH-4-RHEL-8/'
         ubuntu_repo: 'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
+      '4.1-rhel-7':
+         base_url: 'http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.1-rhel-7/latest-RHCEPH-4-RHEL-7/'
+         ubuntu_repo: 'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
+      '4.1-rhel-8':
+         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.1-rhel-8/latest-RHCEPH-4-RHEL-8/'
+         ubuntu_repo: 'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
       'latest':
-        base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.0-rhel-8/latest-RHCEPH-4-RHEL-8/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.1-rhel-8/latest-RHCEPH-4-RHEL-8/'
         ubuntu_repo: 'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
