@@ -33,7 +33,7 @@ globals:
        node9:
          role:
            - client
-           - nfs
+          #  - nfs https://bugzilla.redhat.com/show_bug.cgi?id=1796160
        node10:
          role: pool
          no-of-volumes: 4
@@ -72,4 +72,3 @@ globals:
          role: client
        node21:
          role: client
-
