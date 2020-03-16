@@ -1,74 +1,75 @@
 globals:
-    - ceph-cluster:
-       name: ceph
-       node1:
-         role:
-            - mon
-            - mgr
-            - installer
-       node2:
-         role:
-            - mon
-            - mds
-       node3:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node4:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node5:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node6:
-         role:
-            - mon
-            - rgw
-       node7:
-         role: mds
-       node8:
-         role: rgw
-       node9:
-         role:
-           - client
-          #  - nfs https://bugzilla.redhat.com/show_bug.cgi?id=1796160
-       node10:
-         role: pool
-         no-of-volumes: 4
-         disk-size: 15
-       node11:
-         role: pool
-         no-of-volumes: 4
-         disk-size: 15
-       node12:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node13:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node14:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node15:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node16:
-         role: osd
-         no-of-volumes: 4
-         disk-size: 15
-       node17:
-         role: mds
-       node18:
-         role: mds
-       node19:
-         role: client
-       node20:
-         role: client
-       node21:
-         role: client
+  - ceph-cluster:
+     name: ceph
+     node1:
+      role: installer
+     node2:
+       role:
+          - mon
+          - mgr
+     node3:
+       role:
+          - mon
+          - mds
+     node4:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node5:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node6:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node7:
+       role:
+          - mon
+          - rgw
+     node8:
+       role: mds
+     node9:
+       role: rgw
+     node10:
+       role:
+         - client
+        #  - nfs https://bugzilla.redhat.com/show_bug.cgi?id=1796160
+     node11:
+       role: pool
+       no-of-volumes: 4
+       disk-size: 15
+     node12:
+       role: pool
+       no-of-volumes: 4
+       disk-size: 15
+     node13:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node14:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node15:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node16:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node17:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node18:
+       role: mds
+     node19:
+       role: mds
+     node20:
+       role: client
+     node21:
+       role: client
+     node22:
+       role: client
