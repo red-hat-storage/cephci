@@ -319,7 +319,7 @@ def run(args):
             # is a docker compose
             log.info("Trigger on CI Docker Compose")
             docker_registry, docker_tag = ci_message['repository'].split('/rh-osbs/rhceph:')
-            docker_image = '/rh-osbs/rhceph'
+            docker_image = 'rh-osbs/rhceph'
             log.info("\nUsing docker registry from ci message: {registry} \nDocker image: {image}\nDocker tag:{tag}"
                      .format(registry=docker_registry, image=docker_image, tag=docker_tag))
             log.warning('Using Docker insecure registry setting')
