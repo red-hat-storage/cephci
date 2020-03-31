@@ -213,4 +213,11 @@ tests:
        module: CEPH-11221.py
        polarion-id: CEPH-11221
        desc: Mount CephFS on multiple clients and perform IO ,fill cluster upto 30%
-       abort-on-fail: false 
+       abort-on-fail: false
+  - test:
+       name: kcephfs mount with long user name
+       module: BUG-1798719.py
+       polarion-id: BUG-1798719
+       desc: Create user with name longer than 37 letters & mount cephfs on kernel client
+       abort-on-fail: false
+
