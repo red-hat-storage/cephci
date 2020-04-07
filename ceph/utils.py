@@ -204,7 +204,12 @@ def check_ceph_healthly(ceph_mon, num_osds, num_mons, build, mon_container=None,
 
     while datetime.datetime.now() - starttime <= timeout:
         if mon_container:
-            out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'.format(container=mon_container))
+            distro_info = ceph_mon.distro_info
+            distro_ver = distro_info['VERSION_ID']
+            if distro_ver.startswith('8'):
+                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'.format(container=mon_container))
+            else:
+                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'.format(container=mon_container))
         else:
             out, err = ceph_mon.exec_command(cmd='sudo ceph -s')
         lines = out.read().decode()
@@ -357,16 +362,6 @@ def update_ca_cert(node, cert_url, timeout=120):
         node.exec_command(cmd='sudo update-ca-trust extract', timeout=timeout)
 
 
-def write_docker_daemon_json(json_text, node):
-    """
-    Write given string to /etc/docker/daemon/daemon
-    Args:
-        json_text: json string
-        node (ceph.ceph.CephNode): Ceph node object
-    """
-    node.write_docker_daemon_json(json_text)
-
-
 def search_ethernet_interface(ceph_node, ceph_node_list):
     """
     Search interface on the given node node which allows every node in the cluster accesible by it's shortname.
@@ -431,15 +426,21 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                     if node.role == 'client':
                         pass
                     else:
-                        out, rc = node.exec_command(sudo=True, cmd='docker ps --format "{{.Names}}"')
+                        distro_info = node.distro_info
+                        distro_ver = distro_info['VERSION_ID']
+                        if distro_ver.startswith('8'):
+                            out, rc = node.exec_command(sudo=True, cmd='podman ps --format "{{.Names}}"')
+                        else:
+                            out, rc = node.exec_command(sudo=True, cmd='docker ps --format "{{.Names}}"')
                         output = out.read().decode()
                         containers = [container for container in output.split('\n') if container != '']
                         log.info("Containers: {}".format(containers))
 
                     for container_name in containers:
-                        out, rc = node.exec_command(
-                            sudo=True, cmd='sudo docker exec {container} ceph --version'.format(
-                                container=container_name))
+                        if distro_ver.startswith('8'):
+                            out, rc = node.exec_command(sudo=True, cmd='sudo podman exec {container} ceph --version'.format(container=container_name))
+                        else:
+                            out, rc = node.exec_command(sudo=True, cmd='sudo docker exec {container} ceph --version'.format(container=container_name))
                         output = out.read().decode().rstrip()
                         log.info(output)
                         versions_dict.update({container_name: output})

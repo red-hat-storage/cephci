@@ -467,18 +467,18 @@ def get_latest_container(version):
     Retrieves latest nightly-build container details from magna002.ceph.redhat.com
 
     Args:
-        version: version to get the latest image tag, should match ceph-container-latest-{version} filename at magna002
+        version: version to get the latest image tag, should match latest-RHCEPH-{version} filename at magna002
                  storage
 
     Returns:
         Container details dictionary with given format:
         {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
     """
-    url = 'http://magna002.ceph.redhat.com/latest-ceph-container-builds/latest-RHCEPH-{version}.json'.format(
+    url = 'http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{version}.json'.format(
         version=version)
     data = requests.get(url)
-    docker_registry, docker_image_tag = data.json()['repository'].split('/')
-    docker_image, docker_tag = docker_image_tag.split(':')
+    docker_registry, docker_tag = data.json()['repository'].split('/rh-osbs/rhceph:')
+    docker_image = "rh-osbs/rhceph"
     return {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
 
 

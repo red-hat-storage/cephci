@@ -366,9 +366,8 @@ def run(args):
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
 
     if not os.environ.get('TOOL') and not ignore_latest_nightly_container:
-        major_version = re.match(r'RHCEPH-(\d+\.\d+)', compose_id).group(1)
         try:
-            latest_container = get_latest_container(major_version)
+            latest_container = get_latest_container(rhbuild)
         except ValueError:
             latest_container = get_latest_container('.'.join([major_version.split('.')[0], 'x']))
         docker_registry = latest_container.get('docker_registry') if not docker_registry else docker_registry

@@ -414,11 +414,12 @@ class Ceph(object):
         Update all ceph demons nodes to allow insecure registry use
         """
         if self.containerized and self.ansible_config.get('ceph_docker_registry'):
-            insecure_registry = '{{"insecure-registries" : ["{registry}"]}}'.format(
-                registry=self.ansible_config.get('ceph_docker_registry'))
-            logger.warn('Adding insecure registry:\n{registry}'.format(registry=insecure_registry))
-            for node in self.get_nodes():
-                node.write_docker_daemon_json(insecure_registry)
+            logger.warn('Adding insecure registry:\n{registry}'.format(registry=self.ansible_config.get('ceph_docker_registry')))
+            # for node in self.get_nodes():
+            #     node.exec_command(sudo=True, cmd="sudo chmod 777 /etc/containers/registries.conf;
+            #                                       sudo sed -i '16,17d' /etc/containers/registries.conf;echo "[registries.insecure]
+            #                                       registries = ['registry-proxy.engineering.redhat.com']" >> /etc/containers/registries.conf;
+            #                                       sudo systemctl restart docker")
 
     @property
     def ceph_demon_stat(self):
@@ -1309,18 +1310,6 @@ class CephNode(object):
         logger.info('No suitable ethernet interface found on {node}'.format(node=ceph_node.ip_address))
         return None
 
-    def write_docker_daemon_json(self, json_text):
-        """
-        Write given string to /etc/docker/daemon/daemon
-        Args:
-            json_text (str): json as string
-        """
-        self.exec_command(cmd='sudo mkdir -p /etc/docker/ && sudo chown $USER /etc/docker && chmod 755 /etc/docker')
-        docker_daemon = self.write_file(file_name='/etc/docker/daemon.json', file_mode='w')
-        docker_daemon.write(json_text)
-        docker_daemon.flush()
-        docker_daemon.close()
-
     def setup_deb_cdn_repos(self, build):
         """
         Setup cdn repositories for deb systems
@@ -1620,8 +1609,11 @@ class CephDemon(CephObject):
 
     @property
     def container_prefix(self):
-        return 'sudo docker exec {container_name}'.format(
-            container_name=self.container_name) if self.containerized else ''
+        distro_ver = self.distro_info['VERSION_ID']
+        if distro_ver.startswith('8'):
+            return 'sudo podman exec {container_name}'.format(container_name=self.container_name) if self.containerized else ''
+        else:
+            return 'sudo docker exec {container_name}'.format(container_name=self.container_name) if self.containerized else ''
 
     def exec_command(self, cmd, **kw):
         """
@@ -1637,7 +1629,11 @@ class CephDemon(CephObject):
                                       **kw) if self.containerized else self.node.exec_command(cmd=cmd, **kw)
 
     def ceph_demon_by_container_name(self, container_name):
-        self.exec_command(cmd='sudo docker info')
+        distro_ver = self.distro_info['VERSION_ID']
+        if distro_ver.startswith('8'):
+            self.exec_command(cmd='sudo podman info')
+        else:
+            self.exec_command(cmd='sudo docker info')
 
 
 class CephOsd(CephDemon):
@@ -1767,6 +1763,8 @@ class CephInstaller(CephObject):
         Args:
             containerized(bool): use site-docker.yml.sample if True else site.yml.sample
         """
+        # https://github.com/ansible/ansible/issues/11536
+        self.exec_command(sudo=True, cmd="export ANSIBLE_SSH_CONTROL_PATH='%(directory)s/%%C'")
         if containerized:
             self.exec_command(
                 sudo=True,
