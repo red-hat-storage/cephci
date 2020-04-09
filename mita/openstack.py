@@ -48,7 +48,7 @@ class CephVMNode(object):
         self.image_name = kw['image-name']
         self.node_name = kw['node-name']
         self.vm_size = kw['vm-size']
-        self.vm_network = "provider_net_cci_4"
+        self.vm_network = "provider_net_cci_8"
         if kw.get('vm-network'):
             self.vm_network = kw['vm-network']
         self.role = kw['role']

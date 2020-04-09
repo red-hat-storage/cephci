@@ -60,6 +60,7 @@ def run(ceph_cluster, **kw):
     hosts_file = ''.join(hosts_file)
     log.info("Modified Inventory File : \n %s" % hosts_file)
     ceph_installer.write_inventory_file(hosts_file, file_name="new_hosts")
+    ceph_installer.setup_ansible_site_yml(ceph_cluster.containerized)
 
     # Run Ansible with limit=OSD
     log.info("Run Ansible playbook with OSD limit")
