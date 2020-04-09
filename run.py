@@ -369,7 +369,9 @@ def run(args):
         try:
             latest_container = get_latest_container(rhbuild)
         except ValueError:
-            latest_container = get_latest_container('4.1-rhel-8')
+            print("\nERROR:No latest nightly container UMB msg at /ceph/cephci-jenkins/latest-rhceph-container-info/,"
+                  "specify using the cli args or use --ignore-latest-container")
+            sys.exit(1)
         docker_registry = latest_container.get('docker_registry') if not docker_registry else docker_registry
         docker_image = latest_container.get('docker_image') if not docker_image else docker_image
         docker_tag = latest_container.get('docker_tag') if not docker_tag else docker_tag

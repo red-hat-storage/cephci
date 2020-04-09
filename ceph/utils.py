@@ -207,7 +207,7 @@ def check_ceph_healthly(ceph_mon, num_osds, num_mons, build, mon_container=None,
             distro_info = ceph_mon.distro_info
             distro_ver = distro_info['VERSION_ID']
             if distro_ver.startswith('8'):
-                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'
+                out, err = ceph_mon.exec_command(cmd='sudo podman exec {container} ceph -s'
                                                      .format(container=mon_container))
             else:
                 out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'
