@@ -66,7 +66,7 @@ def run(ceph_cluster, **kw):
     log.info("Run Ansible playbook with OSD limit")
     out, rc = ceph_installer.exec_command(
         cmd='cd {};'
-            ' ANSIBLE_STDOUT_CALLBACK=debug;ANSIBLE_SSH_CONTROL_PATH="%(directory)s/%%C"'
+            ' ANSIBLE_STDOUT_CALLBACK=debug;'
             ' ansible-playbook -vv -i new_hosts site.yml --limit {daemon}'.format(ansible_dir,
                                                                                   daemon=config.get('demon') + 's'),
         long_running=True)

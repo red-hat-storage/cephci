@@ -474,8 +474,8 @@ def get_latest_container(version):
         Container details dictionary with given format:
         {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
     """
-    url = 'http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{version}.json'.format(
-        version=version)
+    url = 'http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{version}'
+    '.json'.format(version=version)
     data = requests.get(url)
     docker_registry, docker_tag = data.json()['repository'].split('/rh-osbs/rhceph:')
     docker_image = "rh-osbs/rhceph"

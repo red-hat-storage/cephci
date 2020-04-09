@@ -414,12 +414,15 @@ class Ceph(object):
         Update all ceph demons nodes to allow insecure registry use
         """
         if self.containerized and self.ansible_config.get('ceph_docker_registry'):
-            logger.warn('Adding insecure registry:\n{registry}'.format(registry=self.ansible_config.get('ceph_docker_registry')))
+            logger.warn('Adding insecure registry:\n{registry}'
+                        .format(registry=self.ansible_config.get('ceph_docker_registry')))
             # for node in self.get_nodes():
-            #     node.exec_command(sudo=True, cmd="sudo chmod 777 /etc/containers/registries.conf;
-            #                                       sudo sed -i '16,17d' /etc/containers/registries.conf;echo "[registries.insecure]
-            #                                       registries = ['registry-proxy.engineering.redhat.com']" >> /etc/containers/registries.conf;
-            #                                       sudo systemctl restart docker")
+            #     node.exec_command(sudo=True, cmd='sudo chmod 777 /etc/containers/registries.conf;'
+            #                                      'sudo sed -i "16,17d" /etc/containers/registries.conf;'
+            #                                      'echo "[registries.insecure]'
+            #                                      ' registries = ["registry-proxy.engineering.redhat.com"]"'
+            #                                      '>> /etc/containers/registries.conf;'
+            #                                      'sudo systemctl restart docker')
 
     @property
     def ceph_demon_stat(self):
@@ -1611,9 +1614,9 @@ class CephDemon(CephObject):
     def container_prefix(self):
         distro_ver = self.distro_info['VERSION_ID']
         if distro_ver.startswith('8'):
-            return 'sudo podman exec {container_name}'.format(container_name=self.container_name) if self.containerized else ''
+            return 'sudo podman exec {c_name}'.format(c_name=self.container_name) if self.containerized else ''
         else:
-            return 'sudo docker exec {container_name}'.format(container_name=self.container_name) if self.containerized else ''
+            return 'sudo docker exec {c_name}'.format(c_name=self.container_name) if self.containerized else ''
 
     def exec_command(self, cmd, **kw):
         """
@@ -1764,7 +1767,8 @@ class CephInstaller(CephObject):
             containerized(bool): use site-docker.yml.sample if True else site.yml.sample
         """
         # https://github.com/ansible/ansible/issues/11536
-        self.exec_command(sudo=True, cmd="export ANSIBLE_SSH_CONTROL_PATH='%(directory)s/%%C'")
+        self.exec_command(cmd='''echo 'export ANSIBLE_SSH_CONTROL_PATH="%(directory)s/%%C"'>> ~/.bashrc;
+                                 source ~/.bashrc''')
         if containerized:
             self.exec_command(
                 sudo=True,

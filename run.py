@@ -369,7 +369,7 @@ def run(args):
         try:
             latest_container = get_latest_container(rhbuild)
         except ValueError:
-            latest_container = get_latest_container('.'.join([major_version.split('.')[0], 'x']))
+            latest_container = get_latest_container('4.1-rhel-8')
         docker_registry = latest_container.get('docker_registry') if not docker_registry else docker_registry
         docker_image = latest_container.get('docker_image') if not docker_image else docker_image
         docker_tag = latest_container.get('docker_tag') if not docker_tag else docker_tag

@@ -2,7 +2,7 @@ import logging
 
 import yaml
 
-from ceph.ceph import RolesContainer
+
 from ceph.utils import get_ceph_versions
 from ceph.utils import get_public_network
 from utility.utils import get_latest_container_image_tag
@@ -21,7 +21,7 @@ def run(ceph_cluster, **kw):
     containerized = config.get('ansi_config').get('containerized_deployment')
     build = config.get('build', config.get('rhbuild'))
     log.info("Build for upgrade: {build}".format(build=build))
-    
+
     ubuntu_repo = config.get('ubuntu_repo')
     hotfix_repo = config.get('hotfix_repo')
     base_url = config.get('base_url')
@@ -50,9 +50,6 @@ def run(ceph_cluster, **kw):
 
     # setup packages based on build
     ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo, build)
-
-    distro_info = ceph_installer.distro_info
-    distro_ver = distro_info['VERSION_ID']
 
     # backup existing hosts file and ansible config
     ceph_installer.exec_command(cmd='cp {}/hosts /tmp/hosts'.format(ansible_dir))
@@ -105,7 +102,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd='cd {} ; cp infrastructure-playbooks/rolling_update.yml .'.format(ansible_dir))
         cmd = 'cd {};' \
               'ANSIBLE_STDOUT_CALLBACK=debug;' \
-              'ANSIBLE_SSH_CONTROL_PATH="%(directory)s/%%C";ansible-playbook -e ireallymeanit=yes -vv -i hosts rolling_update.yml'.format(ansible_dir)
+              'ansible-playbook -e ireallymeanit=yes -vv -i hosts rolling_update.yml'.format(ansible_dir)
     if jewel_minor_update:
         cmd += " -e jewel_minor_update=true"
         log.info("Upgrade is jewel_minor_update, cmd: {cmd}".format(cmd=cmd))
@@ -178,6 +175,8 @@ def get_container_counts(ceph_cluster):
     """
     container_counts = {}
     for node in ceph_cluster.get_nodes(ignore="installer"):
+        distro_info = node.distro_info
+        distro_ver = distro_info['VERSION_ID']
         if distro_ver.startswith('8'):
             out, rc = node.exec_command(sudo=True, cmd='podman ps | grep $(hostname) | wc -l')
         else:

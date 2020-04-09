@@ -207,9 +207,11 @@ def check_ceph_healthly(ceph_mon, num_osds, num_mons, build, mon_container=None,
             distro_info = ceph_mon.distro_info
             distro_ver = distro_info['VERSION_ID']
             if distro_ver.startswith('8'):
-                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'.format(container=mon_container))
+                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'
+                                                     .format(container=mon_container))
             else:
-                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'.format(container=mon_container))
+                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'
+                                                     .format(container=mon_container))
         else:
             out, err = ceph_mon.exec_command(cmd='sudo ceph -s')
         lines = out.read().decode()
@@ -438,9 +440,11 @@ def get_ceph_versions(ceph_nodes, containerized=False):
 
                     for container_name in containers:
                         if distro_ver.startswith('8'):
-                            out, rc = node.exec_command(sudo=True, cmd='sudo podman exec {container} ceph --version'.format(container=container_name))
+                            out, rc = node.exec_command(sudo=True, cmd='sudo podman exec {container} ceph --version'
+                                                                       .format(container=container_name))
                         else:
-                            out, rc = node.exec_command(sudo=True, cmd='sudo docker exec {container} ceph --version'.format(container=container_name))
+                            out, rc = node.exec_command(sudo=True, cmd='sudo docker exec {container} ceph --version'
+                                                                       .format(container=container_name))
                         output = out.read().decode().rstrip()
                         log.info(output)
                         versions_dict.update({container_name: output})

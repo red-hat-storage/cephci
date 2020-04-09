@@ -130,7 +130,7 @@ def run(ceph_cluster, **kw):
     log.info("Ceph versions " + ceph_installer.get_installed_ceph_versions())
 
     out, rc = ceph_installer.exec_command(
-        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ANSIBLE_SSH_CONTROL_PATH="%(directory)s/%%C"; ansible-playbook -vv -i hosts site.yml --limit {daemon}'.format(
+        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vv -i hosts site.yml --limit {daemon}'.format(
             ansible_dir, daemon=demon + 's'), long_running=True)
 
     # manually handle client creation in a containerized deployment (temporary)
