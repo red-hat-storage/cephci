@@ -1,44 +1,75 @@
 globals:
-    - ceph-cluster:
-        name: ceph
-        node1:
-          role: installer
-        node2:
-          role:
-            - osd
-            - mon
-            - mgr
-          no-of-volumes: 3
-          disk-size: 30
-        node3:
-          role:
-            - osd
-            - rgw
-          no-of-volumes: 3
-          disk-size: 30
-        node4:
-          role:
-            - osd
-            - mds
-          no-of-volumes: 3
-          disk-size: 30
-        node5:
-          role:
-            - mon
-            - mgr
-        node6:
-          role:
-            - mon
-            - mgr
-        node7:
-          role: mds
-        node8:
-          role: rgw
-        node9:
-          role: osd
-          no-of-volumes: 3
-          disk-size: 30
-        node10:
-          role:
-            - client
-            - nfs
+  - ceph-cluster:
+     name: ceph
+     node1:
+      role: installer
+     node2:
+       role:
+          - mon
+          - mgr
+     node3:
+       role:
+          - mon
+          - mds
+     node4:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node5:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node6:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node7:
+       role:
+          - mon
+          - rgw
+     node8:
+       role: mds
+     node9:
+       role: rgw
+     node10:
+       role:
+         - client
+         - nfs
+     node11:
+       role: pool
+       no-of-volumes: 4
+       disk-size: 15
+     node12:
+       role: pool
+       no-of-volumes: 4
+       disk-size: 15
+     node13:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node14:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node15:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node16:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node17:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node18:
+       role: mds
+     node19:
+       role: mds
+     node20:
+       role: client
+     node21:
+       role: client
+     node22:
+       role: client
