@@ -34,13 +34,15 @@ cp cephci.yaml.template ~/.cephci.yaml
 #### CentralCI Authentication
 CentralCI auth files are kept in the `osp` directory.
 
-The `osp-cred.yaml` file has OpenStack credentials details to create/destroy resources.
-For local cephci runs, you will want to replace the username/password with your own OpenStack credentials.
+The `osp-cred-ci-2.yaml` file has OpenStack credentials details to create/destroy resources.
+For local cephci runs, you will want to replace the username/password and domain,tenant-domain-id: with
+your own OpenStack credentials.
 
 #### Cluster Configuration
 Cluster configuration files are kept in a directory under `conf` for each ceph version.
 For jewel, configs are under `conf/jewel`.
 For luminous, configs are under `conf/luminous`.
+For nautilus, configs are under `conf/nautilus`
 
 The conf files describes the test bed configuration.
 The image-name inside globals: define what image is used to clone ceph-nodes(
@@ -129,7 +131,7 @@ python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrades/upgrade.yaml --
 
 #### Manual cluster cleanup
 Ceph-CI also has the ability to manually clean up cluster nodes if anything was left behind during a test run.
-All you need to provide is your osp credentials and the instances name for the cluster.
+All you need to provide is your osp credentials and the instances name for the cluster. Don't use subset naming for custom instances name.eg: --instances-name vp and --instances-name vpoliset  at same time.
 ```
 python run.py --osp-cred <cred_file> --cleanup <instances_name>
 ```
