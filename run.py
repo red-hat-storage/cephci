@@ -129,7 +129,7 @@ def create_nodes(conf, inventory, osp_cred, run_id, report_portal_session=None, 
                                               description=desc,
                                               start_time=timestamp(),
                                               item_type="STEP")
-    log.info("Destroying existing osp instances")
+    log.info("Destroying existing osp instances..")
     cleanup_ceph_nodes(osp_cred, instances_name)
     ceph_cluster_dict = {}
     log.info('Creating osp instances')

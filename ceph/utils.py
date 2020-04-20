@@ -33,6 +33,8 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
     params['auth-version'] = os_cred['auth-version']
     params['tenant-name'] = os_cred['tenant-name']
     params['service-region'] = os_cred['service-region']
+    params['domain'] = os_cred['domain']
+    params['tenant-domain-id'] = os_cred['tenant-domain-id']
     params['keypair'] = os_cred.get('keypair', None)
     ceph_nodes = dict()
     if inventory.get('instance').get('create'):
@@ -89,6 +91,8 @@ def get_openstack_driver(yaml):
     auth_version = os_cred['auth-version']
     tenant_name = os_cred['tenant-name']
     service_region = os_cred['service-region']
+    domain_name = os_cred['domain']
+    tenant_domain_id = os_cred['tenant-domain-id']
     driver = OpenStack(
         username,
         password,
@@ -96,7 +100,8 @@ def get_openstack_driver(yaml):
         ex_force_auth_version=auth_version,
         ex_tenant_name=tenant_name,
         ex_force_service_region=service_region,
-        ex_domain_name='redhat.com'
+        ex_domain_name=domain_name,
+        ex_tenant_domain_id=tenant_domain_id
     )
     return driver
 
@@ -107,17 +112,21 @@ def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
     driver = get_openstack_driver(osp_cred)
     timeout = datetime.timedelta(seconds=timeout)
     with parallel() as p:
+        for volume in driver.list_volumes():
+            if volume.name is None:
+                log.info("Volume has no name, skipping")
+            elif name in volume.name:
+                p.spawn(volume_cleanup, volume, osp_cred)
+    log.info("Done cleaning up volumes")
+    with parallel() as p:
         for node in driver.list_nodes():
             if name in node.name:
-                for ip in node.public_ips:
-                    log.info("removing ip %s from node %s", ip, node.name)
-                    driver.ex_detach_floating_ip_from_node(node, ip)
                 starttime = datetime.datetime.now()
                 log.info(
                     "Destroying node {node_name} with {timeout} timeout".format(node_name=node.name, timeout=timeout))
                 while True:
                     try:
-                        p.spawn(node.destroy)
+                        node.destroy()
                         break
                     except AttributeError:
                         if datetime.datetime.now() - starttime > timeout:
@@ -128,28 +137,26 @@ def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
                         else:
                             sleep(1)
                 sleep(5)
-    with parallel() as p:
-        for fips in driver.ex_list_floating_ips():
-            if fips.node_id is None:
-                log.info("Releasing ip %s", fips.ip_address)
-                driver.ex_delete_floating_ip(fips)
-    with parallel() as p:
-        errors = {}
-        for volume in driver.list_volumes():
-            if volume.name is None:
-                log.info("Volume has no name, skipping")
-            elif name in volume.name:
-                log.info("Removing volume %s", volume.name)
-                sleep(10)
-                try:
-                    volume.destroy()
-                except BaseHTTPError as e:
-                    log.error(e, exc_info=True)
-                    errors.update({volume.name: e.message})
-        if errors:
-            for vol, err in errors.items():
-                log.error("Error destroying {vol}: {err}".format(vol=vol, err=err))
-            raise RuntimeError("Encountered errors during volume deletion. Volume names and messages have been logged.")
+    log.info("Done cleaning up nodes")
+
+
+def volume_cleanup(volume, osp_cred):
+    log.info("Removing volume %s", volume.name)
+    errors = {}
+    driver = get_openstack_driver(osp_cred)
+    sleep(10)
+    try:
+        volobj = driver.ex_get_volume(volume.id)
+        driver.detach_volume(volobj)
+        sleep(10)
+        driver.destroy_volume(volobj)
+    except BaseHTTPError as e:
+        log.error(e, exc_info=True)
+        errors.update({volume.name: e.message})
+    if errors:
+        for vol, err in errors.items():
+            log.error("Error destroying {vol}: {err}".format(vol=vol, err=err))
+        raise RuntimeError("Encountered errors during volume deletion. Volume names and messages have been logged.")
 
 
 def keep_alive(ceph_nodes):
