@@ -65,6 +65,8 @@ class CephVMNode(object):
         self.service_region = kw['service-region']
         self.keypair = kw['keypair']
         self.root_login = kw['root-login']
+        self.domain_name = kw['domain']
+        self.tenant_domain_id = kw['tenant-domain-id']
         self.create_node()
         sleep(10)
 
@@ -77,7 +79,8 @@ class CephVMNode(object):
             ex_force_auth_version=self.auth_version,
             ex_tenant_name=self.tenant_name,
             ex_force_service_region=self.service_region,
-            ex_domain_name='redhat.com'
+            ex_domain_name=self.domain_name,
+            ex_tenant_domain_id=self.tenant_domain_id
         )
         return driver
 
@@ -104,7 +107,7 @@ class CephVMNode(object):
         Returns:
             OpenStack driver
         """
-        return self.get_driver(api_version="2.0")
+        return self.get_driver(api_version="2.2")
 
     def create_node(self, **kw):
         name = self.node_name
@@ -115,6 +118,7 @@ class CephVMNode(object):
         networks = driver_v2.ex_list_networks()
         subnets = driver_v2.ex_list_subnets()
         available_sizes = [s for s in sizes if s.name == self.vm_size]
+        # TO-DO: auto assign network/subnet with more than 30 IPs available
         network = [n for n in networks if n.name == self.vm_network]
         subnet = [s.cidr for s in subnets if s.id == network[0].extra['subnets'][0]]
         self.subnet = subnet[0]
