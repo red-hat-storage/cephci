@@ -117,6 +117,7 @@ def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
                 log.info("Volume has no name, skipping")
             elif name in volume.name:
                 p.spawn(volume_cleanup, volume, osp_cred)
+                sleep(1)
     log.info("Done cleaning up volumes")
     with parallel() as p:
         for node in driver.list_nodes():
@@ -148,7 +149,7 @@ def volume_cleanup(volume, osp_cred):
     try:
         volobj = driver.ex_get_volume(volume.id)
         driver.detach_volume(volobj)
-        sleep(10)
+        sleep(30)
         driver.destroy_volume(volobj)
     except BaseHTTPError as e:
         log.error(e, exc_info=True)
