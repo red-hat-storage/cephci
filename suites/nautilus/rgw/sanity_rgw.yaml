@@ -110,6 +110,15 @@ tests:
          config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
          timeout: 300
 
+   # REST API test
+   - test:
+       name: test REST api operation
+       desc: test user operation using REST API
+       module: sanity_rgw.py
+       config:
+         script-name: user_op_using_rest.py
+         timeout: 300
+
    # Versioning Tests
 
    - test:
