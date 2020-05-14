@@ -245,7 +245,9 @@ osd_scenario_list = [
     osd_scenario1_dmcrypt,
     osd_scenario2,
     osd_scenario2_dmcrypt,
-    osd_scenario3,
+    osd_scenario3_dmcrypt,
     osd_scenario3_dmcrypt,
     osd_scenario4,
     osd_scenario4_dmcyrpt]
+# add the scenario "osd_scenario3" back to list when https://bugzilla.redhat.com/show_bug.cgi?id=1822134 is fixed,
+# dint see this race condition in dmcrypt scenario "osd_scenario3_dmcrypt" will remove that too if we hit the issue
