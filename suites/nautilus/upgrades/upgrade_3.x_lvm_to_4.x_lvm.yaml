@@ -98,4 +98,3 @@ tests:
     module: purge_cluster.py
     desc: Purge ceph cluster
     abort-on-fail: True
-    recreate-cluster: True
