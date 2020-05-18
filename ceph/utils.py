@@ -323,44 +323,6 @@ def setup_deb_cdn_repo(node, build=None):
     node.exec_command(sudo=True, cmd='apt-get update')
 
 
-def setup_cdn_repos(ceph_nodes, build=None):
-    repos_13x = ['rhel-7-server-rhceph-1.3-mon-rpms',
-                 'rhel-7-server-rhceph-1.3-osd-rpms',
-                 'rhel-7-server-rhceph-1.3-calamari-rpms',
-                 'rhel-7-server-rhceph-1.3-installer-rpms',
-                 'rhel-7-server-rhceph-1.3-tools-rpms']
-
-    repos_20 = ['rhel-7-server-rhceph-2-mon-rpms',
-                'rhel-7-server-rhceph-2-osd-rpms',
-                'rhel-7-server-rhceph-2-tools-rpms',
-                'rhel-7-server-rhscon-2-agent-rpms',
-                'rhel-7-server-rhscon-2-installer-rpms',
-                'rhel-7-server-rhscon-2-main-rpms']
-
-    repos_30 = ['rhel-7-server-rhceph-3-mon-rpms',
-                'rhel-7-server-rhceph-3-osd-rpms',
-                'rhel-7-server-rhceph-3-tools-rpms',
-                'rhel-7-server-extras-rpms']
-
-    repos = None
-    if build.startswith('1'):
-        repos = repos_13x
-    elif build.startswith('2'):
-        repos = repos_20
-    elif build.startswith('3'):
-        repos = repos_30
-    with parallel() as p:
-        for node in ceph_nodes:
-            p.spawn(set_cdn_repo, node, repos)
-
-
-def set_cdn_repo(node, repos):
-    for repo in repos:
-        node.exec_command(
-            sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo))
-    # node.exec_command(sudo=True, cmd='subscription-manager refresh')
-
-
 def update_ca_cert(node, cert_url, timeout=120):
     if node.pkg_type == 'deb':
         cmd = 'cd /usr/local/share/ca-certificates/ && {{ sudo curl -O {url} ; cd -; }}'.format(url=cert_url)

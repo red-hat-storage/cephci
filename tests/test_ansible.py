@@ -49,7 +49,7 @@ def run(ceph_cluster, **kw):
 
     ceph_cluster.setup_ssh_keys()
 
-    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo)
+    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo, build)
 
     ceph_installer.install_ceph_ansible(build)
     hosts_file = ceph_cluster.generate_ansible_inventory(device_to_add, mixed_lvm_configs, filestore)
