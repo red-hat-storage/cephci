@@ -19,7 +19,7 @@ from getpass import getuser
 from libcloud.common.types import LibcloudError
 from ceph.ceph import CephNode, Ceph
 from ceph.clients import WinNode
-from ceph.utils import create_ceph_nodes, cleanup_ceph_nodes, setup_cdn_repos
+from ceph.utils import create_ceph_nodes, cleanup_ceph_nodes
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import timestamp, create_run_dir, create_unique_test_name, create_report_portal_session, \
@@ -30,7 +30,7 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE [--use-cdn ]
+  run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE
         [--osp-cred <file>]
         [--rhs-con-repo <repo> --rhs-ceph-repo <repo>]
         [ --ubuntu-repo <repo>]
@@ -73,7 +73,6 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --use-cdn                         whether to use cdn or not [deafult: false]
   --rhs-con-repo <repo>             location of rhs console repo
                                     Top level location of console compose
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
@@ -212,7 +211,6 @@ def run(args):
     docker_tag = args.get('--docker-tag', None)
     docker_insecure_registry = args.get('--insecure-registry', False)
     post_results = args.get('--post-results')
-    use_cdn = args.get('--use-cdn', False)
     skip_setup = args.get('--skip-cluster', False)
     skip_subscription = args.get('--skip-subscription', False)
     cleanup_name = args.get('--cleanup', None)
@@ -433,9 +431,6 @@ def run(args):
     tests = suite.get('tests')
     tcs = []
     jenkins_rc = 0
-    if use_cdn is True and reuse is None:
-        for cluster_name, cluster in ceph_cluster_dict.itreritems():
-            setup_cdn_repos(cluster, build=rhbuild)
     # use ceph_test_data to pass around dynamic data between tests
     ceph_test_data = dict()
     ceph_test_data['custom-config'] = custom_config
@@ -482,8 +477,6 @@ def run(args):
             config['rhbuild'] = rhbuild
             if 'ubuntu_repo' in locals():
                 config['ubuntu_repo'] = ubuntu_repo
-            if not config.get('use_cdn'):
-                config['use_cdn'] = use_cdn
             if skip_setup is True:
                 config['skip_setup'] = True
             if skip_subscription is True:

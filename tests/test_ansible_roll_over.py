@@ -107,7 +107,7 @@ def run(ceph_cluster, **kw):
 
     ceph_cluster.setup_ceph_firewall()
 
-    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo)
+    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo, build)
 
     ceph_installer.install_ceph_ansible(build)
 
