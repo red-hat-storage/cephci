@@ -60,7 +60,6 @@ tests:
            script-name: test_Mbuckets_with_Nobjects.py
            config-file-name: test_Mbuckets_with_Nobjects.yaml
            timeout: 300
-
    - test:
        name: Mbuckets_with_Nobjects
        desc: test to create "M" no of buckets and "N" no of objects with encryption
@@ -110,11 +109,9 @@ tests:
            config-file-name: test_user_with_REST.yaml
            timeout: 300
 
-
    # multipart test
-
    - test:
-       name: Mbuckets_with_Nobjects
+       name: Mbuckets_with_Nobjects_with_multipart
        desc: test to create "M" no of buckets and "N" no of objects with multipart upload
        module: sanity_rgw.py
        config:
