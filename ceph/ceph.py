@@ -1377,8 +1377,9 @@ class CephNode(object):
             repos = repos_4x_rhel8
         elif build.startswith('4') & distro_ver.startswith('7'):
             repos = repos_4x_rhel7
-        # for repo in repos: ansible should enable remaining repos mon/osd
-        self.exec_command(sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repos[0]))
+        for repo in repos:
+            self.exec_command(sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo))
+        # https://bugzilla.redhat.com/show_bug.cgi?id=1796853 fixed in 4.1
 
     def setup_deb_repos(self, deb_repo):
         """
