@@ -10,13 +10,13 @@ tests:
       module: test_ansible.py
       config:
         build: '4.x'
-        use_cdn: True
+        use_cdn: False
         is_mixed_lvm_configs: True
         ansi_config:
             ceph_test: False
             ceph_origin: repository
             ceph_stable_release: nautilus
-            ceph_repository_type: cdn
+            ceph_repository_type: distro
             ceph_rhcs_version: 4
             ceph_repository: rhcs
             osd_scenario: lvm
@@ -91,13 +91,13 @@ tests:
       module: test_ansible_roll_over.py
       config:
           build: '4.x'
-          use_cdn: True
+          use_cdn: False
           is_mixed_lvm_configs: True
           ansi_config:
               ceph_test: False
               ceph_origin: repository
               ceph_stable_release: nautilus
-              ceph_repository_type: cdn
+              ceph_repository_type: distro
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
@@ -132,13 +132,13 @@ tests:
       module: test_ansible_roll_over.py
       config:
           build: '4.x'
-          use_cdn: True
+          use_cdn: False
           is_mixed_lvm_configs: True
           ansi_config:
               ceph_test: False
               ceph_origin: repository
               ceph_stable_release: nautilus
-              ceph_repository_type: cdn
+              ceph_repository_type: False
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
@@ -173,14 +173,14 @@ tests:
       module: test_ansible_roll_over.py
       config:
           build: '4.x'
-          use_cdn: True
+          use_cdn: False
           is_mixed_lvm_configs: True
           device: /dev/vdc
           ansi_config:
               ceph_test: False
               ceph_origin: repository
               ceph_stable_release: nautilus
-              ceph_repository_type: cdn
+              ceph_repository_type: False
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
