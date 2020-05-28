@@ -14,9 +14,8 @@ tests:
         is_mixed_lvm_configs: True
         ansi_config:
             ceph_test: False
-            ceph_origin: repository
+            ceph_origin: distro
             ceph_stable_release: nautilus
-            ceph_repository_type: distro
             ceph_rhcs_version: 4
             ceph_repository: rhcs
             osd_scenario: lvm
@@ -95,9 +94,8 @@ tests:
           is_mixed_lvm_configs: True
           ansi_config:
               ceph_test: False
-              ceph_origin: repository
+              ceph_origin: distro
               ceph_stable_release: nautilus
-              ceph_repository_type: distro
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
@@ -136,9 +134,8 @@ tests:
           is_mixed_lvm_configs: True
           ansi_config:
               ceph_test: False
-              ceph_origin: repository
+              ceph_origin: distro
               ceph_stable_release: nautilus
-              ceph_repository_type: distro
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
@@ -178,9 +175,8 @@ tests:
           device: /dev/vdc
           ansi_config:
               ceph_test: False
-              ceph_origin: repository
+              ceph_origin: distro
               ceph_stable_release: nautilus
-              ceph_repository_type: distro
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
