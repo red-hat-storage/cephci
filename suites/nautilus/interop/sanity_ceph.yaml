@@ -138,7 +138,7 @@ tests:
               ceph_test: False
               ceph_origin: repository
               ceph_stable_release: nautilus
-              ceph_repository_type: False
+              ceph_repository_type: distro
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
@@ -180,7 +180,7 @@ tests:
               ceph_test: False
               ceph_origin: repository
               ceph_stable_release: nautilus
-              ceph_repository_type: False
+              ceph_repository_type: distro
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
