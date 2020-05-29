@@ -4,11 +4,12 @@ tests:
     module: install_prereq.py
     abort-on-fail: True
 - test:
-    name: ceph ansible install rhcs 3 stable
+    name: ceph ansible install rhcs 3.x cdn
     module: test_ansible.py
+    polarion-id: CEPH-83571467
     config:
       use_cdn: True
-      build: '3.0'
+      build: '3.x'
       ansi_config:
         ceph_test: True
         ceph_origin: repository
@@ -18,7 +19,6 @@ tests:
         ceph_stable_release: luminous
         osd_scenario: collocated
         osd_auto_discovery: False
-        journal_size: 1024
         copy_admin_key: True
         ceph_conf_overrides:
           global:
@@ -31,10 +31,11 @@ tests:
             rgw crypt require ssl: false
             rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
               testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
-    desc: test cluster setup using ceph-ansible
+    desc: test cluster ceph-disk 3.x cdn setup using ceph-ansible
     abort-on-fail: True
 - test:
-    name: ceph ansible
+    name: Upgrade ceph ansible to 4.x implicit ceph-volume
+    polarion-id: CEPH-11110
     module: test_ansible_upgrade.py
     config:
       ansi_config:
@@ -67,7 +68,7 @@ tests:
             rgw crypt require ssl: false
             rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
               testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
-    desc: Test Ceph-Ansible rolling update - 3.x -> 4.x
+    desc: Test Ceph-Ansible rolling update - 3.x on rhel7 -> 4.x on rhel7
     abort-on-fail: True
 - test:
     name: librbd workunit
@@ -93,7 +94,8 @@ tests:
     desc: run rados bench for 360 - normal profile
 - test:
     name: ceph ansible purge
+    polarion-id: CEPH-83571498
     module: purge_cluster.py
     desc: Purge ceph cluster
     abort-on-fail: True
-    recreate-cluster: True
+ 
