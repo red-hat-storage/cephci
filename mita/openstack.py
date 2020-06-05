@@ -157,7 +157,7 @@ class CephVMNode(object):
         sleep(15)
         all_nodes = driver.list_nodes()
         new_node_state = [node.state for node in all_nodes if node.uuid == new_node.uuid]
-        timeout = datetime.timedelta(seconds=240)
+        timeout = datetime.timedelta(seconds=600)
         starttime = datetime.datetime.now()
         while True:
             logger.info("Waiting for node %s to become available", name)
