@@ -2,7 +2,11 @@ globals:
     openstack-credentials:
         username: 'vakulkar'
         password: 'XX'
-        auth-url: 'https://ci-rhos.centralci.eng.rdu2.redhat.com:13000'
-        auth-version: '2.0_password'
+        auth-url: 'https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000'
+        auth-version: '3.x_password'
         tenant-name: 'ceph-jenkins'
         service-region: 'regionOne'
+        domain: 'redhat.com'
+        tenant-domain-id: '62cf1b5ec006489db99e2b0ebfb55f57'
+        osp-version: '13'
+

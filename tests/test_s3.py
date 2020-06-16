@@ -14,6 +14,7 @@ def run(**kw):
     log.info("Running s3-tests")
     ceph_nodes = kw.get('ceph_nodes')
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
     test_data = kw.get('test_data')
     client_node = None
     rgw_node = None
@@ -30,7 +31,7 @@ def run(**kw):
     if client_node:
         if test_data['install_version'].startswith('2'):
             client_node.exec_command(sudo=True, cmd='yum install -y ceph-radosgw')
-        setup_s3_tests(client_node, rgw_node, config)
+        setup_s3_tests(client_node, rgw_node, config, build)
         exit_status = execute_s3_tests(client_node)
         cleanup(client_node)
 
@@ -42,7 +43,7 @@ def run(**kw):
         return 0
 
 
-def setup_s3_tests(client_node, rgw_node, config):
+def setup_s3_tests(client_node, rgw_node, config, build):
     """
     Performs initial setup and configuration for s3 tests on client node.
 
@@ -50,6 +51,7 @@ def setup_s3_tests(client_node, rgw_node, config):
         client_node: node to setup for s3 tests
         rgw_node: node running rados gateway
         config: test configuration
+        build: rhcs4 build version
 
     Returns:
         None
@@ -64,7 +66,16 @@ def setup_s3_tests(client_node, rgw_node, config):
     client_node.exec_command(cmd="git clone -b {branch} {repo_url}".format(branch=branch, repo_url=repo_url))
 
     log.info("Running bootstrap")
-    client_node.exec_command(cmd="cd s3-tests; ./bootstrap")
+    if build.startswith('4'):
+        client_node.exec_command(cmd="cd s3-tests")
+        client_node.exec_command(cmd="sudo yum install -y python2-virtualenv python2-devel libevent-devel"
+                                 "libffi-devel libxml2-devel libxslt-devel zlib-devel", check_ec=False)
+        client_node.exec_command(cmd="virtualenv --no-site-packages --distribute virtualenv")
+        client_node.exec_command(cmd="./virtualenv/bin/pip install setuptools==32.3.1")
+        client_node.exec_command(cmd="./virtualenv/bin/pip install -r requirements.txt")
+        client_node.exec_command(cmd="./virtualenv/bin/python setup.py develop")
+    else:
+        client_node.exec_command(cmd="cd s3-tests; ./bootstrap",)
 
     main_info = create_s3_user(client_node, 'main-user')
     alt_info = create_s3_user(client_node, 'alt-user', email=True)

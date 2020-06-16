@@ -265,6 +265,23 @@ tests:
       desc: shrink osd
 
    - test:
+      name: Prevent OSD creation on OS Disk
+      polarion-id: CEPH-83573391
+      module: test_ceph_1623580.py
+      config:
+        demon: osd
+      desc: prevent osd creation on existing node OS Disk with lvm scenario
+
+   - test:
+      name: ceph-mgr restful API call for listing osds
+      polarion-id: CEPH-83573397
+      module: test_ceph_83573397.py
+      config:
+        mgr_restful_port: 8003
+        relative_uri: osd
+      desc: ceph-mgr list OSD rest call should not throw KeyError
+
+   - test:
       name: ceph ansible purge
       polarion-id: CEPH-83571498
       module: purge_cluster.py

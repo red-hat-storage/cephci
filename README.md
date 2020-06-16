@@ -34,13 +34,15 @@ cp cephci.yaml.template ~/.cephci.yaml
 #### CentralCI Authentication
 CentralCI auth files are kept in the `osp` directory.
 
-The `osp-cred.yaml` file has OpenStack credentials details to create/destroy resources.
-For local cephci runs, you will want to replace the username/password with your own OpenStack credentials.
+The `osp-cred-ci-2.yaml` file has OpenStack credentials details to create/destroy resources.
+For local cephci runs, you will want to replace the username/password and domain,tenant-domain-id: with
+your own OpenStack credentials.
 
 #### Cluster Configuration
 Cluster configuration files are kept in a directory under `conf` for each ceph version.
 For jewel, configs are under `conf/jewel`.
 For luminous, configs are under `conf/luminous`.
+For nautilus, configs are under `conf/nautilus`
 
 The conf files describes the test bed configuration.
 The image-name inside globals: define what image is used to clone ceph-nodes(
@@ -58,8 +60,8 @@ All test suite configurations are found inside the `suites` directory.
 There are various suites that are mapped to versions of Ceph under test
 
 ```
-suites/jewel/sanity_ceph_ansible will be valid for 2.0 builds
-suites/luminous/sanity_ceph_ansible will be valid for 3.0 builds
+suites/jewel/ansible/sanity_ceph_ansible will be valid for 2.0 builds
+suites/luminous/ansible/sanity_ceph_ansible will be valid for 3.0 builds
 ```
 The tests inside the suites are described in yaml format
 
@@ -110,26 +112,26 @@ Some non-required arguments that we end up using a lot:
 #### Examples
 Ceph ansible install suite:
 ```
-python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrade.yaml --osp-cred osp/osp-cred-ci-2.yaml
---inventory conf/inventory/rhel-7.6-server-x86_64-released.yaml --suite suites/luminous/sanity_ceph_ansible.yaml
+python run.py --rhbuild 3.3 --global-conf conf/luminous/ansible/sanity-ansible-lvm.yaml --osp-cred osp/osp-cred-ci-2.yaml
+--inventory conf/inventory/rhel-7.7-server-x86_64.yaml --suite suites/luminous/ansible/sanity_ceph_ansible_lvm.yaml
 --log-level info
 ```
 Upgrade suite:
 ```
-python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrade.yaml --osp-cred osp/osp-cred-ci-2.yaml
---inventory conf/inventory/rhel-7.6-server-x86_64-released.yaml --suite suites/luminous/upgrades.yaml
+python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrades/upgrade.yaml --osp-cred osp/osp-cred-ci-2.yaml
+--inventory conf/inventory/rhel-7.6-server-x86_64-released.yaml --suite suites/luminous/upgrades/upgrades.yaml
 --log-level info
 ```
 Containerized upgrade suite:
 ```
-python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrade.yaml --osp-cred osp/osp-cred-ci-2.yaml
---inventory conf/inventory/rhel-7.6-server-x86_64-released.yaml --suite suites/luminous/upgrades_containerized.yaml
+python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrades/upgrade.yaml --osp-cred osp/osp-cred-ci-2.yaml
+--inventory conf/inventory/rhel-7.6-server-x86_64-released.yaml --suite suites/luminous/upgrades/upgrades_containerized.yaml
 --log-level info --ignore-latest-container --insecure-registry --skip-version-compare
 ```
 
 #### Manual cluster cleanup
 Ceph-CI also has the ability to manually clean up cluster nodes if anything was left behind during a test run.
-All you need to provide is your osp credentials and the instances name for the cluster.
+All you need to provide is your osp credentials and the instances name for the cluster. Don't use subset naming for custom instances name.eg: --instances-name vp and --instances-name vpoliset  at same time.
 ```
 python run.py --osp-cred <cred_file> --cleanup <instances_name>
 ```

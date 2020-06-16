@@ -18,7 +18,7 @@
     table.half-table{
         font-family: arial, sans-serif;
         border-collapse: collapse;
-        width: 50%;
+        width: 75%;
     }
 
     td, th {
@@ -38,6 +38,26 @@
         <tr>
             <th style="color: blue">Ceph-Ansible Version</th>
             <td>{{ test_results[0]['ceph-ansible-version'] }}</td>
+        </tr>
+        <tr>
+            <th style="color: blue">Ceph</th>
+            <td>{{ test_results[0]['ceph-version-name'] }}</td>
+        </tr>
+        <tr>
+            <th style="color: blue">RH Build</th>
+            <td>{{ test_results[0]['rhbuild'] }}</td>
+        </tr>
+        <tr>
+            <th style="color: blue">Test Suite Name</th>
+            <td>{{ test_results[0]['suite-name'] }}</td>
+        </tr>
+        <tr>
+            <th style="color: blue">Suite-File</th>
+            <td>{{ test_results[0]['suite-file'] }}</td>
+        </tr>
+        <tr>
+            <th style="color: blue">Configuration-File</th>
+            <td>{{ test_results[0]['conf-file'] }}</td>
         </tr>
         <tr>
             <th style="color: blue">Distro</th>

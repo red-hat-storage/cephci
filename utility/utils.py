@@ -5,6 +5,7 @@ import random
 import smtplib
 import time
 import traceback
+import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -345,20 +346,27 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     return log_url
 
 
-def create_run_dir(run_id):
+def create_run_dir(run_id, log_dir="/tmp"):
     """
     Create the directory where test logs will be placed.
 
     Args:
         run_id: id of the test run. used to name the directory
-
+        log_dir: log directory. default: "/tmp"
     Returns:
         Full path of the created directory
     """
+    msg = """\nNote :
+    1. Custom log directory will be disabled if '/ceph/cephci-jenkins' exists.
+    2. If custom log directory not specified, then '/tmp' directory is considered .
+    """
+    print(msg)
     dir_name = "cephci-run-{run_id}".format(run_id=run_id)
     base_dir = "/ceph/cephci-jenkins"
     if not os.path.isdir(base_dir):
-        base_dir = "/tmp"
+        if not os.path.isabs(log_dir):
+            log_dir = os.path.join(os.getcwd(), log_dir)
+        base_dir = log_dir
     run_dir = os.path.join(base_dir, dir_name)
     try:
         os.makedirs(run_dir)
@@ -459,18 +467,18 @@ def get_latest_container(version):
     Retrieves latest nightly-build container details from magna002.ceph.redhat.com
 
     Args:
-        version: version to get the latest image tag, should match ceph-container-latest-{version} filename at magna002
+        version: version to get the latest image tag, should match latest-RHCEPH-{version} filename at magna002
                  storage
 
     Returns:
         Container details dictionary with given format:
         {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
     """
-    url = 'http://magna002.ceph.redhat.com/latest-ceph-container-builds/latest-RHCEPH-{version}.json'.format(
-        version=version)
+    url = 'http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json'.format(
+        version)
     data = requests.get(url)
-    docker_registry, docker_image_tag = data.json()['repository'].split('/')
-    docker_image, docker_tag = docker_image_tag.split(':')
+    docker_registry, docker_tag = data.json()['repository'].split('/rh-osbs/rhceph:')
+    docker_image = "rh-osbs/rhceph"
     return {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
 
 
@@ -540,14 +548,18 @@ def email_results(results_list, run_id, send_to_cephci=False):
     cfg = get_cephci_config().get('email')
     sender = "cephci@redhat.com"
     recipients = []
-    if cfg and cfg.get('address'):
-        recipients = [cfg['address']]
-    else:
-        log.warning("No email address configured in ~/.cephci.yaml. "
+    address = cfg.get('address')
+
+    if cfg and address:
+        recipients = re.split(r",\s*", cfg['address'])
+    if address.count("@") != len(recipients):
+        log.warning("No email address configured in ~/.cephci.yaml."
+                    "Or please specify in this format eg., address: email1, email2.......emailn"
                     "Please configure if you would like to receive run result emails.")
 
     if send_to_cephci:
         recipients.append(sender)
+        recipients = list(set(recipients))
 
     if recipients:
         run_name = "cephci-run-{id}".format(id=run_id)

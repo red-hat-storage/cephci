@@ -14,6 +14,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running test")
     log.info("Running ceph ansible test")
+    ceph_nodes = kw.get('ceph_nodes')
     config = kw.get('config')
     filestore = config.get('filestore', False)
     k_and_m = config.get('ec-pool-k-m')
@@ -25,7 +26,7 @@ def run(ceph_cluster, **kw):
     installer_url = config.get('installer_url', None)
     mixed_lvm_configs = config.get('is_mixed_lvm_configs', None)
     device_to_add = config.get('device', None)
-    config['ansi_config']['public_network'] = get_public_network()
+    config['ansi_config']['public_network'] = get_public_network(ceph_nodes[0])
 
     ceph_cluster.ansible_config = config['ansi_config']
     ceph_cluster.custom_config = test_data.get('custom-config')
@@ -48,7 +49,7 @@ def run(ceph_cluster, **kw):
 
     ceph_cluster.setup_ssh_keys()
 
-    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo)
+    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo, build)
 
     ceph_installer.install_ceph_ansible(build)
     hosts_file = ceph_cluster.generate_ansible_inventory(device_to_add, mixed_lvm_configs, filestore)
@@ -69,7 +70,7 @@ def run(ceph_cluster, **kw):
     log.info("Ceph ansible version " + ceph_installer.get_installed_ceph_versions())
 
     out, rc = ceph_installer.exec_command(
-        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug; ansible-playbook -vv -i hosts site.yml'.format(ansible_dir),
+        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vv -i hosts site.yml'.format(ansible_dir),
         long_running=True)
 
     # manually handle client creation in a containerized deployment (temporary)

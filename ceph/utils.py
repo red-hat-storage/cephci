@@ -33,6 +33,8 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
     params['auth-version'] = os_cred['auth-version']
     params['tenant-name'] = os_cred['tenant-name']
     params['service-region'] = os_cred['service-region']
+    params['domain'] = os_cred['domain']
+    params['tenant-domain-id'] = os_cred['tenant-domain-id']
     params['keypair'] = os_cred.get('keypair', None)
     ceph_nodes = dict()
     if inventory.get('instance').get('create'):
@@ -42,6 +44,7 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
             params['image-name'] = inventory.get('instance').get('create').get('image-name')
         params['cluster-name'] = ceph_cluster.get('name')
         params['vm-size'] = inventory.get('instance').get('create').get('vm-size')
+        params['vm-network'] = inventory.get('instance').get('create').get('vm-network')
         if params.get('root-login') is False:
             params['root-login'] = False
         else:
@@ -88,6 +91,8 @@ def get_openstack_driver(yaml):
     auth_version = os_cred['auth-version']
     tenant_name = os_cred['tenant-name']
     service_region = os_cred['service-region']
+    domain_name = os_cred['domain']
+    tenant_domain_id = os_cred['tenant-domain-id']
     driver = OpenStack(
         username,
         password,
@@ -95,7 +100,8 @@ def get_openstack_driver(yaml):
         ex_force_auth_version=auth_version,
         ex_tenant_name=tenant_name,
         ex_force_service_region=service_region,
-        ex_domain_name='redhat.com'
+        ex_domain_name=domain_name,
+        ex_tenant_domain_id=tenant_domain_id
     )
     return driver
 
@@ -106,17 +112,22 @@ def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
     driver = get_openstack_driver(osp_cred)
     timeout = datetime.timedelta(seconds=timeout)
     with parallel() as p:
+        for volume in driver.list_volumes():
+            if volume.name is None:
+                log.info("Volume has no name, skipping")
+            elif name in volume.name:
+                p.spawn(volume_cleanup, volume, osp_cred)
+                sleep(1)
+    log.info("Done cleaning up volumes")
+    with parallel() as p:
         for node in driver.list_nodes():
             if name in node.name:
-                for ip in node.public_ips:
-                    log.info("removing ip %s from node %s", ip, node.name)
-                    driver.ex_detach_floating_ip_from_node(node, ip)
                 starttime = datetime.datetime.now()
                 log.info(
                     "Destroying node {node_name} with {timeout} timeout".format(node_name=node.name, timeout=timeout))
                 while True:
                     try:
-                        p.spawn(node.destroy)
+                        node.destroy()
                         break
                     except AttributeError:
                         if datetime.datetime.now() - starttime > timeout:
@@ -127,28 +138,26 @@ def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
                         else:
                             sleep(1)
                 sleep(5)
-    with parallel() as p:
-        for fips in driver.ex_list_floating_ips():
-            if fips.node_id is None:
-                log.info("Releasing ip %s", fips.ip_address)
-                driver.ex_delete_floating_ip(fips)
-    with parallel() as p:
-        errors = {}
-        for volume in driver.list_volumes():
-            if volume.name is None:
-                log.info("Volume has no name, skipping")
-            elif name in volume.name:
-                log.info("Removing volume %s", volume.name)
-                sleep(10)
-                try:
-                    volume.destroy()
-                except BaseHTTPError as e:
-                    log.error(e, exc_info=True)
-                    errors.update({volume.name: e.message})
-        if errors:
-            for vol, err in errors.items():
-                log.error("Error destroying {vol}: {err}".format(vol=vol, err=err))
-            raise RuntimeError("Encountered errors during volume deletion. Volume names and messages have been logged.")
+    log.info("Done cleaning up nodes")
+
+
+def volume_cleanup(volume, osp_cred):
+    log.info("Removing volume %s", volume.name)
+    errors = {}
+    driver = get_openstack_driver(osp_cred)
+    sleep(10)
+    try:
+        volobj = driver.ex_get_volume(volume.id)
+        driver.detach_volume(volobj)
+        sleep(30)
+        driver.destroy_volume(volobj)
+    except BaseHTTPError as e:
+        log.error(e, exc_info=True)
+        errors.update({volume.name: e.message})
+    if errors:
+        for vol, err in errors.items():
+            log.error("Error destroying {vol}: {err}".format(vol=vol, err=err))
+        raise RuntimeError("Encountered errors during volume deletion. Volume names and messages have been logged.")
 
 
 def keep_alive(ceph_nodes):
@@ -177,7 +186,7 @@ def setup_repos(ceph, base_url, installer_url=None):
         inst_file.flush()
 
 
-def check_ceph_healthly(ceph_mon, num_osds, num_mons, mon_container=None, timeout=300):
+def check_ceph_healthly(ceph_mon, num_osds, num_mons, build, mon_container=None, timeout=300):
     """
     Function to check ceph is in healthy state
 
@@ -185,6 +194,7 @@ def check_ceph_healthly(ceph_mon, num_osds, num_mons, mon_container=None, timeou
        ceph_mon: monitor node
        num_osds: number of osds in cluster
        num_mons: number of mons in cluster
+       build: rhcs build version
        mon_container: monitor container name if monitor is placed in the container
        timeout: 300 seconds(default) max time to check
          if cluster is not healthy within timeout period
@@ -202,7 +212,14 @@ def check_ceph_healthly(ceph_mon, num_osds, num_mons, mon_container=None, timeou
 
     while datetime.datetime.now() - starttime <= timeout:
         if mon_container:
-            out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'.format(container=mon_container))
+            distro_info = ceph_mon.distro_info
+            distro_ver = distro_info['VERSION_ID']
+            if distro_ver.startswith('8'):
+                out, err = ceph_mon.exec_command(cmd='sudo podman exec {container} ceph -s'
+                                                     .format(container=mon_container))
+            else:
+                out, err = ceph_mon.exec_command(cmd='sudo docker exec {container} ceph -s'
+                                                     .format(container=mon_container))
         else:
             out, err = ceph_mon.exec_command(cmd='sudo ceph -s')
         lines = out.read().decode()
@@ -215,7 +232,10 @@ def check_ceph_healthly(ceph_mon, num_osds, num_mons, mon_container=None, timeou
     if not all(state in lines for state in valid_states):
         log.error("Valid States are not found in the health check")
         return 1
-    match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
+    if build.startswith('4'):
+        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", lines)
+    else:
+        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
     all_osds = int(match.group(1))
     up_osds = int(match.group(2))
     in_osds = int(match.group(3))
@@ -303,44 +323,6 @@ def setup_deb_cdn_repo(node, build=None):
     node.exec_command(sudo=True, cmd='apt-get update')
 
 
-def setup_cdn_repos(ceph_nodes, build=None):
-    repos_13x = ['rhel-7-server-rhceph-1.3-mon-rpms',
-                 'rhel-7-server-rhceph-1.3-osd-rpms',
-                 'rhel-7-server-rhceph-1.3-calamari-rpms',
-                 'rhel-7-server-rhceph-1.3-installer-rpms',
-                 'rhel-7-server-rhceph-1.3-tools-rpms']
-
-    repos_20 = ['rhel-7-server-rhceph-2-mon-rpms',
-                'rhel-7-server-rhceph-2-osd-rpms',
-                'rhel-7-server-rhceph-2-tools-rpms',
-                'rhel-7-server-rhscon-2-agent-rpms',
-                'rhel-7-server-rhscon-2-installer-rpms',
-                'rhel-7-server-rhscon-2-main-rpms']
-
-    repos_30 = ['rhel-7-server-rhceph-3-mon-rpms',
-                'rhel-7-server-rhceph-3-osd-rpms',
-                'rhel-7-server-rhceph-3-tools-rpms',
-                'rhel-7-server-extras-rpms']
-
-    repos = None
-    if build.startswith('1'):
-        repos = repos_13x
-    elif build.startswith('2'):
-        repos = repos_20
-    elif build.startswith('3'):
-        repos = repos_30
-    with parallel() as p:
-        for node in ceph_nodes:
-            p.spawn(set_cdn_repo, node, repos)
-
-
-def set_cdn_repo(node, repos):
-    for repo in repos:
-        node.exec_command(
-            sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo))
-    # node.exec_command(sudo=True, cmd='subscription-manager refresh')
-
-
 def update_ca_cert(node, cert_url, timeout=120):
     if node.pkg_type == 'deb':
         cmd = 'cd /usr/local/share/ca-certificates/ && {{ sudo curl -O {url} ; cd -; }}'.format(url=cert_url)
@@ -350,16 +332,6 @@ def update_ca_cert(node, cert_url, timeout=120):
         cmd = 'cd /etc/pki/ca-trust/source/anchors && {{ sudo curl -O {url} ; cd -; }}'.format(url=cert_url)
         node.exec_command(cmd=cmd, timeout=timeout)
         node.exec_command(cmd='sudo update-ca-trust extract', timeout=timeout)
-
-
-def write_docker_daemon_json(json_text, node):
-    """
-    Write given string to /etc/docker/daemon/daemon
-    Args:
-        json_text: json string
-        node (ceph.ceph.CephNode): Ceph node object
-    """
-    node.write_docker_daemon_json(json_text)
 
 
 def search_ethernet_interface(ceph_node, ceph_node_list):
@@ -426,15 +398,23 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                     if node.role == 'client':
                         pass
                     else:
-                        out, rc = node.exec_command(sudo=True, cmd='docker ps --format "{{.Names}}"')
+                        distro_info = node.distro_info
+                        distro_ver = distro_info['VERSION_ID']
+                        if distro_ver.startswith('8'):
+                            out, rc = node.exec_command(sudo=True, cmd='podman ps --format "{{.Names}}"')
+                        else:
+                            out, rc = node.exec_command(sudo=True, cmd='docker ps --format "{{.Names}}"')
                         output = out.read().decode()
                         containers = [container for container in output.split('\n') if container != '']
                         log.info("Containers: {}".format(containers))
 
                     for container_name in containers:
-                        out, rc = node.exec_command(
-                            sudo=True, cmd='sudo docker exec {container} ceph --version'.format(
-                                container=container_name))
+                        if distro_ver.startswith('8'):
+                            out, rc = node.exec_command(sudo=True, cmd='sudo podman exec {container} ceph --version'
+                                                                       .format(container=container_name))
+                        else:
+                            out, rc = node.exec_command(sudo=True, cmd='sudo docker exec {container} ceph --version'
+                                                                       .format(container=container_name))
                         output = out.read().decode().rstrip()
                         log.info(output)
                         versions_dict.update({container_name: output})
@@ -498,11 +478,17 @@ def get_root_permissions(node, path):
     node.obtain_root_permissions(path)
 
 
-def get_public_network():
+def get_public_network(node):
     """
     Get the configured public network subnet for nodes in the cluster.
+    This function retrieves the public network subnet from the ceph node
+    object. The subnet is retrieved at runtime when creating nodes. See:
+    ~ mita.openstack.CephVMNode().create_node()
+
+    Args:
+        node(ceph.ceph.CephNode)
 
     Returns:
         (str) public network subnet
     """
-    return "10.0.144.0/22"  # TODO: pull from configuration file
+    return getattr(node, 'subnet')

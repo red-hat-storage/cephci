@@ -2,9 +2,9 @@ import logging
 
 import yaml
 
-from ceph.ceph import RolesContainer
+
 from ceph.utils import get_ceph_versions
-from ceph.utils import write_docker_daemon_json, get_public_network
+from ceph.utils import get_public_network
 from utility.utils import get_latest_container_image_tag
 
 log = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def run(ceph_cluster, **kw):
     hotfix_repo = config.get('hotfix_repo')
     base_url = config.get('base_url')
     installer_url = config.get('installer_url')
-    config['ansi_config']['public_network'] = get_public_network()
+    config['ansi_config']['public_network'] = get_public_network(ceph_nodes[0])
 
     ceph_cluster.ansible_config = config['ansi_config']
     ceph_cluster.custom_config = test_data.get('custom-config')
@@ -87,18 +87,22 @@ def run(ceph_cluster, **kw):
         pre_upgrade_container_counts = get_container_counts(ceph_cluster)
 
     # configure insecure registry if necessary
-    if containerized and config.get('docker-insecure-registry') and \
-            config.get('ansi_config').get('ceph_docker_registry'):
-        registry = config.get('ansi_config').get('ceph_docker_registry')
-        configure_insecure_registry(ceph_cluster, registry)
+    if config.get('docker-insecure-registry'):
+        ceph_cluster.setup_insecure_registry()
 
     # copy rolling update from infrastructure playbook
     jewel_minor_update = build.startswith('2')
-    ceph_installer.exec_command(
-        sudo=True, cmd='cd {} ; cp infrastructure-playbooks/rolling_update.yml .'.format(ansible_dir))
-    cmd = 'cd {};' \
-          'ANSIBLE_STDOUT_CALLBACK=debug;' \
-          'ansible-playbook -e ireallymeanit=yes -vv -i hosts rolling_update.yml'.format(ansible_dir)
+    if build.startswith('4'):
+        cmd = 'cd {};' \
+              'ANSIBLE_STDOUT_CALLBACK=debug;' \
+              'ansible-playbook -e ireallymeanit=yes -vv -i'\
+              'hosts infrastructure-playbooks/rolling_update.yml'.format(ansible_dir)
+    else:
+        ceph_installer.exec_command(
+            sudo=True, cmd='cd {} ; cp infrastructure-playbooks/rolling_update.yml .'.format(ansible_dir))
+        cmd = 'cd {};' \
+              'ANSIBLE_STDOUT_CALLBACK=debug;' \
+              'ansible-playbook -e ireallymeanit=yes -vv -i hosts rolling_update.yml'.format(ansible_dir)
     if jewel_minor_update:
         cmd += " -e jewel_minor_update=true"
         log.info("Upgrade is jewel_minor_update, cmd: {cmd}".format(cmd=cmd))
@@ -171,7 +175,12 @@ def get_container_counts(ceph_cluster):
     """
     container_counts = {}
     for node in ceph_cluster.get_nodes(ignore="installer"):
-        out, rc = node.exec_command(sudo=True, cmd='docker ps | grep $(hostname) | wc -l')
+        distro_info = node.distro_info
+        distro_ver = distro_info['VERSION_ID']
+        if distro_ver.startswith('8'):
+            out, rc = node.exec_command(sudo=True, cmd='podman ps | grep $(hostname) | wc -l')
+        else:
+            out, rc = node.exec_command(sudo=True, cmd='docker ps | grep $(hostname) | wc -l')
         count = int(out.read().decode().rstrip())
         log.info("{} has {} containers running".format(node.shortname, count))
         container_counts.update({node.shortname: count})
@@ -203,30 +212,6 @@ def compare_container_counts(pre_upgrade_counts, post_upgrade_counts, prev_insta
             log.error("Mismatched container count post upgrade")
             return 1
     return 0
-
-
-def configure_insecure_registry(ceph_cluster, registry):
-    """
-    Configure the insecure registry for nightly docker images.
-
-    Args:
-        ceph_cluster(ceph.ceph.Ceph): cluster to configure insecure registry on.
-        registry(str): registry to configure.
-
-    Returns: None
-
-    """
-    insecure_registry = '{{"insecure-registries" : ["{registry}"]}}'.format(registry=registry)
-    log.warning('Adding insecure registry:\n{registry}'.format(registry=insecure_registry))
-    role_list = ["installer"]
-    if ceph_cluster.rhcs_version < '3':
-        role_list.append('mgr')
-    ignored_roles = RolesContainer(role_list)
-    log.info("Roles ignored for insecure registry configuration: {roles}".format(roles=ignored_roles))
-    for node in ceph_cluster.get_nodes(ignore=ignored_roles):
-        write_docker_daemon_json(insecure_registry, node)
-        log.info("Restarting docker on {node}".format(node=node.shortname))
-        node.exec_command(sudo=True, cmd='systemctl restart docker')
 
 
 def collocate_mons_with_mgrs(ceph_cluster, ansible_dir):

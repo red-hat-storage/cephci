@@ -3,7 +3,8 @@ import json
 import re
 from distutils.version import LooseVersion
 from select import select
-from time import sleep
+from time import sleep, time
+from ceph.parallel import parallel
 
 import datetime
 import requests
@@ -414,11 +415,15 @@ class Ceph(object):
         Update all ceph demons nodes to allow insecure registry use
         """
         if self.containerized and self.ansible_config.get('ceph_docker_registry'):
-            insecure_registry = '{{"insecure-registries" : ["{registry}"]}}'.format(
-                registry=self.ansible_config.get('ceph_docker_registry'))
-            logger.warn('Adding insecure registry:\n{registry}'.format(registry=insecure_registry))
-            for node in self.get_nodes():
-                node.write_docker_daemon_json(insecure_registry)
+            logger.warn('Adding insecure registry:\n{registry}'
+                        .format(registry=self.ansible_config.get('ceph_docker_registry')))
+            # for node in self.get_nodes():
+            #     node.exec_command(sudo=True, cmd='sudo chmod 777 /etc/containers/registries.conf;'
+            #                                      'sudo sed -i "16,17d" /etc/containers/registries.conf;'
+            #                                      'echo "[registries.insecure]'
+            #                                      ' registries = ["registry-proxy.engineering.redhat.com"]"'
+            #                                      '>> /etc/containers/registries.conf;'
+            #                                      'sudo systemctl restart docker')
 
     @property
     def ceph_demon_stat(self):
@@ -511,6 +516,24 @@ class Ceph(object):
                 return metadata
         return None
 
+    def osd_check(self, client):
+
+        out, err = client.exec_command(cmd='sudo ceph -s -f json')
+        out_json = out.read().decode()
+        ceph_status_json = json.loads(out_json)
+        num_osds = ceph_status_json['osdmap']['osdmap']['num_osds']
+        num_up_osds = ceph_status_json['osdmap']['osdmap']['num_up_osds']
+        num_in_osds = ceph_status_json['osdmap']['osdmap']['num_in_osds']
+        if num_osds != num_up_osds:
+            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (num_up_osds, num_osds))
+            return 1
+        if num_osds != num_in_osds:
+            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (num_in_osds, num_osds))
+            return 1
+        if num_osds == num_up_osds == num_in_osds:
+            logger.info("All osds are up and in")
+            return 0
+
     def check_health(self, rhbuild, client=None, timeout=300):
         """
         Check if ceph is in healthy state
@@ -544,19 +567,8 @@ class Ceph(object):
         if not all(state in lines for state in valid_states):
             logger.error("Valid States are not found in the health check")
             return 1
-        if rhbuild.startswith('4'):
-            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", lines)
-        else:
-            match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
-        all_osds = int(match.group(1))
-        up_osds = int(match.group(2))
-        in_osds = int(match.group(3))
-        if up_osds != all_osds:
-            logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (up_osds, all_osds))
-            return 1
-        if up_osds != in_osds:
-            logger.error("Not all osd's are in. Actual: %s / Expected: %s" % (in_osds, all_osds))
-            return 1
+
+        self.osd_check(client)
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
         match = re.search(r"(\d+) daemons, quorum", lines)
@@ -600,48 +612,52 @@ class Ceph(object):
             hotfix_repo (str): hotfix repo to use with priority
             installer_url (str): installer url
             ubuntu_repo (str): deb repo url
-            build (str): ceph-ansible build as numeric
+            build (str):  ansible_config.build or rhbuild cli argument
         """
         if not build:
             build = self.rhcs_version
-        for node in self.get_nodes():
-            if self.use_cdn:
-                if node.pkg_type == 'deb':
-                    if node.role == 'installer':
-                        logger.info("Enabling tools repository")
-                        node.setup_deb_cdn_repos(build)
-                else:
-                    logger.info("Using the cdn repo for the test")
-                    node.setup_rhel_cdn_repos(build)
-            else:
-                if self.ansible_config.get('ceph_repository_type') != 'iso' or \
-                        self.ansible_config.get('ceph_repository_type') == 'iso' and \
-                        (node.role == 'installer'):
+        with parallel() as p:
+            for node in self.get_nodes():
+                if self.use_cdn:
                     if node.pkg_type == 'deb':
-                        node.setup_deb_repos(ubuntu_repo)
-                        sleep(15)
-                        # install python2 on xenial
-                        node.exec_command(sudo=True, cmd='sudo apt-get install -y python')
-                        node.exec_command(sudo=True, cmd='apt-get install -y python-pip')
-                        node.exec_command(sudo=True, cmd='apt-get install -y ntp')
-                        node.exec_command(sudo=True, cmd='apt-get install -y chrony')
-                        node.exec_command(sudo=True, cmd='pip install nose')
+                        if node.role == 'installer':
+                            logger.info("Enabling tools repository")
+                            node.setup_deb_cdn_repos(build)
                     else:
-                        if hotfix_repo:
-                            node.exec_command(sudo=True,
-                                              cmd='wget -O /etc/yum.repos.d/rh_repo.repo {repo}'.format(
-                                                  repo=hotfix_repo))
+                        logger.info("Using the cdn repo for the test")
+                        distro_info = node.distro_info
+                        distro_ver = distro_info['VERSION_ID']
+                        node.setup_rhceph_cdn_repos(build, distro_ver)
+                else:
+                    if self.ansible_config.get('ceph_repository_type') != 'iso' or \
+                            self.ansible_config.get('ceph_repository_type') == 'iso' and \
+                            (node.role == 'installer'):
+                        if node.pkg_type == 'deb':
+                            node.setup_deb_repos(ubuntu_repo)
+                            sleep(15)
+                            # install python2 on xenial
+                            node.exec_command(sudo=True, cmd='sudo apt-get install -y python')
+                            node.exec_command(sudo=True, cmd='apt-get install -y python-pip')
+                            node.exec_command(sudo=True, cmd='apt-get install -y ntp')
+                            node.exec_command(sudo=True, cmd='apt-get install -y chrony')
+                            node.exec_command(sudo=True, cmd='pip install nose')
                         else:
-                            node.setup_rhel_repos(base_url, installer_url)
-                if self.ansible_config.get('ceph_repository_type') == 'iso' and node.role == 'installer':
-                    iso_file_url = self.get_iso_file_url(base_url)
-                    node.exec_command(sudo=True, cmd='mkdir -p {}/iso'.format(node.ansible_dir))
-                    node.exec_command(sudo=True,
-                                      cmd='wget -O {}/iso/ceph.iso {}'.format(node.ansible_dir, iso_file_url))
-            if node.pkg_type == 'rpm':
-                logger.info("Updating metadata")
-                node.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
-            sleep(15)
+                            if hotfix_repo:
+                                node.exec_command(sudo=True,
+                                                  cmd='wget -O /etc/yum.repos.d/rh_repo.repo {repo}'.format(
+                                                      repo=hotfix_repo))
+                            if not self.ansible_config.get('ceph_repository_type') == 'cdn':
+                                node.setup_rhceph_repos(base_url, installer_url)
+                    if self.ansible_config.get('ceph_repository_type') == 'iso' and node.role == 'installer':
+                        iso_file_url = self.get_iso_file_url(base_url)
+                        node.exec_command(sudo=True, cmd='mkdir -p {}/iso'.format(node.ansible_dir))
+                        node.exec_command(sudo=True,
+                                          cmd='wget -O {}/iso/ceph.iso {}'.format(node.ansible_dir, iso_file_url))
+                if node.pkg_type == 'rpm':
+                    logger.info("Updating metadata")
+                    node.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
+                    p.spawn(node.exec_command, sudo=True, cmd='yum update -y', long_running=True)
+                sleep(10)
 
     def create_rbd_pool(self, k_and_m):
         """
@@ -965,8 +981,9 @@ class CephNode(object):
         Initialize a CephNode in a libcloud environment
         eg CephNode(username='cephuser', password='cephpasswd',
                     root_password='passwd', ip_address='ip_address',
-                    hostname='hostname', role='mon|osd|client',
-                    no_of_volumes=3, ceph_vmnode='ref_to_libcloudvm')
+                    subnet='subnet', hostname='hostname',
+                    role='mon|osd|client', no_of_volumes=3,
+                    ceph_vmnode='ref_to_libcloudvm')
 
         """
         self.username = kw['username']
@@ -975,6 +992,7 @@ class CephNode(object):
         self.root_login = kw['root_login']
         self.private_ip = kw['private_ip']
         self.ip_address = kw['ip_address']
+        self.subnet = kw['subnet']
         self.vmname = kw['hostname']
         vmshortname = self.vmname.split('.')
         self.vmshortname = vmshortname[0]
@@ -1300,18 +1318,6 @@ class CephNode(object):
         logger.info('No suitable ethernet interface found on {node}'.format(node=ceph_node.ip_address))
         return None
 
-    def write_docker_daemon_json(self, json_text):
-        """
-        Write given string to /etc/docker/daemon/daemon
-        Args:
-            json_text (str): json as string
-        """
-        self.exec_command(cmd='sudo mkdir -p /etc/docker/ && sudo chown $USER /etc/docker && chmod 755 /etc/docker')
-        docker_daemon = self.write_file(file_name='/etc/docker/daemon.json', file_mode='w')
-        docker_daemon.write(json_text)
-        docker_daemon.flush()
-        docker_daemon.close()
-
     def setup_deb_cdn_repos(self, build):
         """
         Setup cdn repositories for deb systems
@@ -1328,11 +1334,12 @@ class CephNode(object):
         self.exec_command(sudo=True, cmd='wget -O - https://www.redhat.com/security/fd431d51.txt | apt-key add -')
         self.exec_command(sudo=True, cmd='apt-get update')
 
-    def setup_rhel_cdn_repos(self, build):
+    def setup_rhceph_cdn_repos(self, build, distro_ver):
         """
         Setup cdn repositories for rhel systems
         Args:
-            build(str|LooseVersion): rhcs version
+            build(str): rhcs version
+            distro_ver: os distro version from /etc/os-release
         """
         repos_13x = ['rhel-7-server-rhceph-1.3-mon-rpms',
                      'rhel-7-server-rhceph-1.3-osd-rpms',
@@ -1340,28 +1347,38 @@ class CephNode(object):
                      'rhel-7-server-rhceph-1.3-installer-rpms',
                      'rhel-7-server-rhceph-1.3-tools-rpms']
 
-        repos_20 = ['rhel-7-server-rhceph-2-mon-rpms',
+        repos_2x = ['rhel-7-server-rhceph-2-mon-rpms',
                     'rhel-7-server-rhceph-2-osd-rpms',
                     'rhel-7-server-rhceph-2-tools-rpms',
                     'rhel-7-server-rhscon-2-agent-rpms',
                     'rhel-7-server-rhscon-2-installer-rpms',
                     'rhel-7-server-rhscon-2-main-rpms']
 
-        repos_30 = ['rhel-7-server-rhceph-3-mon-rpms',
+        repos_3x = ['rhel-7-server-rhceph-3-tools-rpms',
                     'rhel-7-server-rhceph-3-osd-rpms',
-                    'rhel-7-server-rhceph-3-tools-rpms',
-                    'rhel-7-server-extras-rpms']
+                    'rhel-7-server-rhceph-3-mon-rpms']
+
+        repos_4x_rhel7 = ['rhel-7-server-rhceph-4-tools-rpms',
+                          'rhel-7-server-rhceph-4-osd-rpms',
+                          'rhel-7-server-rhceph-4-mon-rpms']
+
+        repos_4x_rhel8 = ['rhceph-4-tools-for-rhel-8-x86_64-rpms',
+                          'rhceph-4-mon-for-rhel-8-x86_64-rpms',
+                          'rhceph-4-osd-for-rhel-8-x86_64-rpms']
 
         repos = None
-        if '2' > build >= '1':
+        if build.startswith('1'):
             repos = repos_13x
-        elif '3' > build >= '2':
-            repos = repos_20
-        elif '4' > build >= '3':
-            repos = repos_30
-        for repo in repos:
-            self.exec_command(
-                sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo))
+        elif build.startswith('2'):
+            repos = repos_2x
+        elif build.startswith('3'):
+            repos = repos_3x
+        elif build.startswith('4') & distro_ver.startswith('8'):
+            repos = repos_4x_rhel8
+        elif build.startswith('4') & distro_ver.startswith('7'):
+            repos = repos_4x_rhel7
+        self.exec_command(sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repos[0]))
+        # ansible will enable remaining osd/mon rpms
 
     def setup_deb_repos(self, deb_repo):
         """
@@ -1389,7 +1406,7 @@ class CephNode(object):
             self.exec_command(cmd=wget_cmd)
             self.exec_command(cmd='sudo apt-get update')
 
-    def setup_rhel_repos(self, base_url, installer_url=None):
+    def setup_rhceph_repos(self, base_url, installer_url=None):
         """
         Setup repositories for rhel
         Args:
@@ -1611,8 +1628,11 @@ class CephDemon(CephObject):
 
     @property
     def container_prefix(self):
-        return 'sudo docker exec {container_name}'.format(
-            container_name=self.container_name) if self.containerized else ''
+        distro_ver = self.distro_info['VERSION_ID']
+        if distro_ver.startswith('8'):
+            return 'sudo podman exec {c_name}'.format(c_name=self.container_name) if self.containerized else ''
+        else:
+            return 'sudo docker exec {c_name}'.format(c_name=self.container_name) if self.containerized else ''
 
     def exec_command(self, cmd, **kw):
         """
@@ -1628,7 +1648,11 @@ class CephDemon(CephObject):
                                       **kw) if self.containerized else self.node.exec_command(cmd=cmd, **kw)
 
     def ceph_demon_by_container_name(self, container_name):
-        self.exec_command(cmd='sudo docker info')
+        distro_ver = self.distro_info['VERSION_ID']
+        if distro_ver.startswith('8'):
+            self.exec_command(cmd='sudo podman info')
+        else:
+            self.exec_command(cmd='sudo docker info')
 
 
 class CephOsd(CephDemon):
@@ -1714,26 +1738,43 @@ class CephInstaller(CephObject):
             out, rc = self.exec_command(sudo=True, cmd='apt-cache search ceph')
         return out.read().decode()
 
-    def write_inventory_file(self, inventory_config):
+    def write_inventory_file(self, inventory_config, file_name="hosts"):
         """
         Write inventory to hosts file for ansible use. Old file will be overwritten
         Args:
-            inventory_config(str):invnetory config compatible with ceph-ansible
+            inventory_config(str):inventory config compatible with ceph-ansible
+            file_name(str): custom inventory file name. (default : "hosts")
         """
-        host_file = self.write_file(
-            sudo=True, file_name='{}/hosts'.format(self.ansible_dir), file_mode='w')
+        host_file = self.write_file(sudo=True,
+                                    file_mode='w',
+                                    file_name='{ansible_dir}/{inventory_file}'.format(ansible_dir=self.ansible_dir,
+                                                                                      inventory_file=file_name))
         logger.info(inventory_config)
         host_file.write(inventory_config)
         host_file.flush()
 
-        out, rc = self.exec_command(sudo=True, cmd='cat {}/hosts'.format(self.ansible_dir))
+        out, rc = self.exec_command(sudo=True,
+                                    cmd='cat {ansible_dir}/{inventory_file}'.format(ansible_dir=self.ansible_dir,
+                                                                                    inventory_file=file_name))
         out = out.read().decode().rstrip('\n')
         out = re.sub(r'\]+', ']', out)
         out = re.sub(r'\[+', '[', out)
-        host_file = self.write_file(
-            sudo=True, file_name='{}/hosts'.format(self.ansible_dir), file_mode='w')
+        host_file = self.write_file(sudo=True,
+                                    file_mode='w',
+                                    file_name='{ansible_dir}/{inventory_file}'.format(ansible_dir=self.ansible_dir,
+                                                                                      inventory_file=file_name))
         host_file.write(out)
         host_file.flush()
+
+    def read_inventory_file(self):
+        """
+        Read inventory file from ansible node
+        Returns:
+            out : inventory file data
+        """
+        out, err = self.exec_command(sudo=True,
+                                     cmd='cat {ansible_dir}/hosts'.format(ansible_dir=self.ansible_dir))
+        return out.readlines()
 
     def setup_ansible_site_yml(self, containerized):
         """
@@ -1741,6 +1782,9 @@ class CephInstaller(CephObject):
         Args:
             containerized(bool): use site-docker.yml.sample if True else site.yml.sample
         """
+        # https://github.com/ansible/ansible/issues/11536
+        self.exec_command(cmd='''echo 'export ANSIBLE_SSH_CONTROL_PATH="%(directory)s/%%C"'>> ~/.bashrc;
+                                 source ~/.bashrc''')
         if containerized:
             self.exec_command(
                 sudo=True,
@@ -1806,6 +1850,37 @@ class CephInstaller(CephObject):
         iscsi_file.write(test_data["initiator_setting"])
         iscsi_file.write(test_data["gw_ip_list"])
         iscsi_file.flush()
+
+    def enable_ceph_mgr_restful(self):
+        """
+        Enable restful service from MGR module with self-signed certificate.
+        Returns:
+            user_cred: user credentials for restful calls
+        """
+        try:
+            # enable restful service from MGR module
+            out, err = self.exec_command(sudo=True, cmd="ceph mgr module enable restful")
+            out, err = out.read().decode(), err.read().decode()
+            if err:
+                raise CommandFailed(err)
+            logger.info(out)
+
+            # Start restful service with self-signed certificate
+            out, err = self.exec_command(sudo=True, cmd="ceph restful create-self-signed-cert")
+            out, err = out.read().decode().strip(), err.read().decode()
+            if err:
+                raise CommandFailed(err)
+            logger.info(out)
+
+            # Create new restful user
+            user = "test_{}".format(int(time()))
+            cred, err = self.exec_command(sudo=True,
+                                          cmd="ceph restful create-key {user}".format(user=user))
+
+            return {'user': user, 'password': cred.read().decode().strip()}
+        except CommandFailed as err:
+            logger.error(err.args)
+        return False
 
 
 class CephObjectFactory(object):

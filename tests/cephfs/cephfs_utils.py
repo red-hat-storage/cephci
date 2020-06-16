@@ -30,7 +30,7 @@ class FsUtils(object):
         self.mons = ceph_cluster.get_ceph_objects('mon')
         self.mgrs = ceph_cluster.get_ceph_objects('mgr')
 
-    def get_clients(self):
+    def get_clients(self, build):
         log.info("Getting Clients")
 
         self.clients = self.ceph_cluster.get_ceph_objects('client')
@@ -42,7 +42,13 @@ class FsUtils(object):
             self.mon_node_ip = self.mon_node_ip[-3].strip('/0') + ' ' + self.mon_node_ip[-2].strip('/0') + ' ' + \
                 self.mon_node_ip[-1].strip('/0')
             self.mon_node_ip = self.mon_node_ip.split(' ')
-
+            if build.startswith('4'):
+                self.mon_node_ip[0] = re.search(r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
+                                                self.mon_node_ip[0]).group(2)
+                self.mon_node_ip[1] = re.search(r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
+                                                self.mon_node_ip[1]).group(2)
+                self.mon_node_ip[2] = re.search(r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
+                                                self.mon_node_ip[2]).group(2)
             break
         for client in self.clients:
             node = client.node
@@ -52,6 +58,7 @@ class FsUtils(object):
                 output.split()
                 if 'attr' not in output:
                     node.exec_command(cmd='sudo yum install -y attr')
+                node.exec_command(cmd='sudo yum install -y gcc python2-devel', check_ec=False)
 
                 out, rc = node.exec_command(
                     cmd='sudo pip  list --format=columns')
@@ -542,14 +549,14 @@ class FsUtils(object):
                                 rand_size = random.randint(1, 5)
                                 client.exec_command(cmd=fio_read % (
                                     rand_size, size, client.node.hostname, rand_size, rand_size, rand_num, mounting_dir,
-                                    self.dir_name), long_running=True)
+                                    self.dir_name), long_running=True, timeout=300)
                                 self.return_counts = self.io_verify(client)
                             elif size == 'm':
                                 for num in range(0, 10):
                                     rand_size = random.randint(1, 5)
                                     client.exec_command(cmd=fio_read % (
                                         rand_size, size, client.node.hostname, rand_size, rand_size, num, mounting_dir,
-                                        self.dir_name), long_running=True)
+                                        self.dir_name), long_running=True, timeout=300)
                                     self.return_counts = self.io_verify(client)
                                 break
 
@@ -558,7 +565,7 @@ class FsUtils(object):
                                     rand_size = random.randint(50, 100)
                                     client.exec_command(cmd=fio_read % (
                                         rand_size, size, client.node.hostname, rand_size, rand_size, num, mounting_dir,
-                                        self.dir_name), long_running=True)
+                                        self.dir_name), long_running=True, timeout=300)
                                     self.return_counts = self.io_verify(client)
                                 break
 
@@ -567,7 +574,7 @@ class FsUtils(object):
                                 rand_size = random.randint(1, 5)
                                 client.exec_command(cmd=fio_write % (
                                     rand_size, size, client.node.hostname, rand_size, rand_size, rand_num, mounting_dir,
-                                    self.dir_name), long_running=True)
+                                    self.dir_name), long_running=True, timeout=300)
                                 self.return_counts = self.io_verify(client)
                                 break
 
@@ -576,7 +583,7 @@ class FsUtils(object):
                                     rand_size = random.randint(1, 5)
                                     client.exec_command(cmd=fio_write % (
                                         rand_size, size, client.node.hostname, rand_size, rand_size, num, mounting_dir,
-                                        self.dir_name), long_running=True)
+                                        self.dir_name), long_running=True, timeout=300)
                                     self.return_counts = self.io_verify(client)
                                 break
 
@@ -585,7 +592,7 @@ class FsUtils(object):
                                     rand_size = random.randint(50, 100)
                                     client.exec_command(cmd=fio_write % (
                                         rand_size, size, client.node.hostname, rand_size, rand_size, num, mounting_dir,
-                                        self.dir_name), long_running=True)
+                                        self.dir_name), long_running=True, timeout=300)
                                     self.return_counts = self.io_verify(client)
                                 break
 
@@ -595,7 +602,7 @@ class FsUtils(object):
 
                                 client.exec_command(cmd=fio_readwrite % (
                                     rand_size, size, client.node.hostname, rand_num, rand_num, rand_size, mounting_dir,
-                                    self.dir_name), long_running=True)
+                                    self.dir_name), long_running=True, timeout=300)
                                 self.return_counts = self.io_verify(client)
                                 break
 
@@ -604,7 +611,7 @@ class FsUtils(object):
                                     rand_size = random.randint(50, 100)
                                     client.exec_command(cmd=fio_readwrite % (
                                         rand_size, size, client.node.hostname, rand_size, num, rand_size, mounting_dir,
-                                        self.dir_name), long_running=True)
+                                        self.dir_name), long_running=True, timeout=300)
                                     self.return_counts = self.io_verify(client)
                                 break
 
@@ -623,7 +630,7 @@ class FsUtils(object):
                         rand_size = random.randint(50, 100)
                         client.exec_command(cmd=fio_readwrite % (
                             rand_size, size, client.node.hostname, rand_size, rand_size, num, mounting_dir,
-                            self.dir_name), long_running=True)
+                            self.dir_name), long_running=True, timeout=300)
                         self.return_counts = self.io_verify(client)
         return self.return_counts, 0
 
@@ -652,7 +659,7 @@ finally:
             to_lock_code.write(to_lock_file)
             to_lock_code.flush()
             out, rc = client.exec_command(
-                cmd="sudo python /home/cephuser/file_lock.py")
+                cmd="sudo python2 /home/cephuser/file_lock.py")
             output = out.read().decode()
             output.split()
             if 'Errno 11' in output:
@@ -724,7 +731,7 @@ finally:
             else:
                 node.exec_command(
                     cmd="sudo ceph fs set %s allow_multimds true "
-                        "--yes-i-really-mean-it" % fs_info.get('fs_name'))
+                        "--yes-i-really-mean-it" % fs_info.get('fs_name'), check_ec=False)
                 log.info("Setting max mdss 2:")
                 node.exec_command(
                     cmd="sudo ceph fs set %s max_mds 2" %
@@ -851,7 +858,7 @@ finally:
                                     "--runtime=10 --verify=meta" %
                                     (rand_num, client.node.hostname, rand_num, range2, range1,
                                      mounting_dir, dir_name),
-                                long_running=True)
+                                long_running=True, timeout=300)
                             self.return_counts = self.io_verify(client)
 
                     elif val == 'dd':
@@ -864,7 +871,7 @@ finally:
                                     "bs=%dM count=%d" %
                                     (mounting_dir, dir_name, client.node.hostname,
                                      range1, num, rand_bs, rand_bs, rand_count),
-                                long_running=True)
+                                long_running=True, timeout=300)
                             self.return_counts = self.io_verify(client)
                     elif val == 'crefi':
                         out, rc = client.exec_command(
@@ -872,7 +879,7 @@ finally:
                                 '--multi -b 10 -d 10 -n 10 -T 10 '
                                 '--random --min=1K --max=%dK' %
                                 (mounting_dir, dir_name, 'text',
-                                 5), long_running=True)
+                                 5), long_running=True, timeout=300)
                         for i in range(0, 6):
                             ops = [
                                 'create',
@@ -891,7 +898,7 @@ finally:
                                     '--random --min=1K --max=%dK' %
                                     (mounting_dir, dir_name, rand_ops,
                                      rand_filetype, rand_count),
-                                long_running=True)
+                                long_running=True, timeout=300)
                             self.return_counts = self.io_verify(client)
 
                     elif val == 'smallfile_create':
@@ -901,7 +908,7 @@ finally:
                                 '--threads 4 --file-size %d --files %d'
                                 ' --top %s%s ' %
                                 (self.file_size, self.num_files, mounting_dir,
-                                 dir_name), long_running=True)
+                                 dir_name), long_running=True, timeout=600)
                         self.return_counts = self.io_verify(client)
 
                     elif val == 'smallfile_rename':
@@ -911,7 +918,7 @@ finally:
                                 '--threads 4 --file-size %d --files %d'
                                 ' --top %s%s' %
                                 (self.file_size, self.num_files, mounting_dir,
-                                 dir_name), long_running=True)
+                                 dir_name), long_running=True, timeout=600)
                         self.return_counts = self.io_verify(client)
                     elif val == 'smallfile_delete':
                         client.exec_command(
@@ -921,7 +928,7 @@ finally:
                                 ' --top %s%s ' %
                                 (self.file_size, self.num_files,
                                  mounting_dir, dir_name),
-                            long_running=True)
+                            long_running=True, timeout=600)
                         self.return_counts = self.io_verify(client)
                     elif val == 'smallfile_delete-renamed':
                         client.exec_command(
@@ -931,7 +938,7 @@ finally:
                                 '--threads 4 --file-size %d --files %d'
                                 ' --top %s%s ' %
                                 (self.file_size, self.num_files, mounting_dir,
-                                 dir_name), long_running=True)
+                                 dir_name), long_running=True, timeout=600)
                         self.return_counts = self.io_verify(client)
 
         return self.return_counts, 0
@@ -951,7 +958,7 @@ finally:
                     out, rc = client.exec_command(
                         cmd='sudo crefi -n %d %s%s_%d' %
                             (num_of_files, mounting_dir, dir_name, num),
-                        long_running=True)
+                        long_running=True, timeout=300)
                     self.return_counts = self.io_verify(client)
         return self.return_counts, 0
 
@@ -975,7 +982,7 @@ finally:
                     out, rc = client.exec_command(
                         cmd='sudo crefi -n %d %s%s_%d' %
                             (num_of_files, mounting_dir, dir_name, num),
-                        long_running=True)
+                        long_running=True, timeout=300)
                     self.return_counts = self.io_verify(client)
                 break
         return self.return_counts, 0
@@ -1105,7 +1112,7 @@ os.system('sudo systemctl start  network')
         nw_disconnect.flush()
         log.info('Stopping the network..')
         out, rc = node.exec_command(
-            cmd="sudo python /home/cephuser/nw_disconnect.py")
+            cmd="sudo python2 /home/cephuser/nw_disconnect.py")
         log.info('Starting the network..')
         return 0
 
@@ -1907,10 +1914,10 @@ mds standby for rank = 1
                 log.info("Removing files:")
                 client.exec_command(
                     cmd='sudo find %s -type f -delete' %
-                        (mounting_dir), long_running=True)
+                        (mounting_dir), long_running=True, timeout=3600)
                 client.exec_command(
                     cmd='sudo rm -rf %s*' %
-                        (mounting_dir), long_running=True)
+                        (mounting_dir), long_running=True, timeout=3600)
                 if args:
                     if 'umount' in args:
                         log.info("Unmounting fuse client:")
@@ -1931,11 +1938,11 @@ mds standby for rank = 1
                                 (client_name))
                         client.exec_command(
                             cmd='sudo find /home/cephuser/ -type f -delete',
-                            long_running=True)
+                            long_running=True, timeout=3600)
                         client.exec_command(
                             cmd='sudo rm -rf /home/cephuser/*',
-                            long_running=True)
-                        client.exec_command(cmd='sudo iptables -F')
+                            long_running=True, timeout=3600)
+                        client.exec_command(cmd='sudo iptables -F', check_ec=False)
             for client in kernel_clients:
                 if client.pkg_type == 'deb':
                     pass
@@ -1943,10 +1950,10 @@ mds standby for rank = 1
                     log.info("Removing files:")
                     client.exec_command(
                         cmd='sudo find %s -type f -delete' %
-                            (mounting_dir), long_running=True)
+                            (mounting_dir), long_running=True, timeout=3600)
                     client.exec_command(
                         cmd='sudo rm -rf %s*' %
-                            (mounting_dir), long_running=True)
+                            (mounting_dir), long_running=True, timeout=3600)
                     if args:
                         if 'umount' in args:
                             log.info("Unmounting kernel client:")
@@ -1966,20 +1973,20 @@ mds standby for rank = 1
                                 cmd="sudo ceph auth del client.%s" %
                                     (client_name))
                             client.exec_command(
-                                cmd='sudo find /home/cephuser/ -type f -delete', long_running=True)
+                                cmd='sudo find /home/cephuser/ -type f -delete', long_running=True, timeout=3600)
                             client.exec_command(
                                 cmd='sudo rm -rf /home/cephuser/*',
-                                long_running=True)
+                                long_running=True, timeout=3600)
 
         else:
             for client in fuse_clients:
                 log.info("Removing files:")
                 client.exec_command(
                     cmd='sudo find %s -type f -delete' %
-                        (mounting_dir), long_running=True)
+                        (mounting_dir), long_running=True, timeout=3600)
                 client.exec_command(
                     cmd='sudo rm -rf %s*' %
-                        (mounting_dir), long_running=True)
+                        (mounting_dir), long_running=True, timeout=3600)
                 if args:
                     if 'umount' in args:
                         log.info("Unmounting fuse client:")
@@ -2000,11 +2007,11 @@ mds standby for rank = 1
                                 % client.node.hostname)
                         client.exec_command(
                             cmd='sudo find /home/cephuser/ -type f -delete',
-                            long_running=True)
+                            long_running=True, timeout=3600)
                         client.exec_command(
                             cmd='sudo rm -rf /home/cephuser/*',
-                            long_running=True)
-                        client.exec_command(cmd='sudo iptables -F')
+                            long_running=True, timeout=3600)
+                        client.exec_command(cmd='sudo iptables -F', check_ec=False)
             for client in kernel_clients:
                 if client.pkg_type == 'deb':
                     pass
@@ -2012,10 +2019,10 @@ mds standby for rank = 1
                     log.info("Removing files:")
                     client.exec_command(
                         cmd='sudo find %s -type f -delete' %
-                            (mounting_dir), long_running=True)
+                            (mounting_dir), long_running=True, timeout=3600)
                     client.exec_command(
                         cmd='sudo rm -rf %s*' %
-                            (mounting_dir), long_running=True)
+                            (mounting_dir), long_running=True, timeout=3600)
                     if args:
                         if 'umount' in args:
                             log.info("Unmounting kernel client:")
@@ -2036,10 +2043,10 @@ mds standby for rank = 1
                                     (client.node.hostname))
                             client.exec_command(
                                 cmd='sudo find /home/cephuser/ -type f'
-                                    ' -delete', long_running=True)
+                                    ' -delete', long_running=True, timeout=3600)
                             client.exec_command(
                                 cmd='sudo rm -rf /home/cephuser/*',
-                                long_running=True)
+                                long_running=True, timeout=3600)
 
         return 0
 
@@ -2050,7 +2057,7 @@ mds standby for rank = 1
             log.info("Deactivating Multiple MDSs")
             node.exec_command(
                 cmd="sudo ceph fs set %s allow_multimds false "
-                    "--yes-i-really-mean-it" % fs_info.get('fs_name'))
+                    "--yes-i-really-mean-it" % fs_info.get('fs_name'), check_ec=False)
             log.info("Setting Max mds to 1:")
             node.exec_command(
                 cmd="sudo ceph fs set %s max_mds 1" %

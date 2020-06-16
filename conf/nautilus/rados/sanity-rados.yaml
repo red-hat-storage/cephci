@@ -1,12 +1,18 @@
 globals:
+# supports is_mixed_lvm_configs: True
     - ceph-cluster:
        name: ceph
        node1:
-         role: installer
+         role:
+            - mon
+            - mgr
+            - installer
        node2:
-         role: client
-       node3:
          role: mon
+       node3:
+         role: osd
+         no-of-volumes: 4
+         disk-size: 15
        node4:
          role: osd
          no-of-volumes: 4
@@ -16,32 +22,27 @@ globals:
          no-of-volumes: 4
          disk-size: 15
        node6:
+         role: mon
+       node7:
          role: osd
          no-of-volumes: 4
          disk-size: 15
-       node7:
-         role: mon
        node8:
-         role: mon
+         role: osd
+         no-of-volumes: 4
+         disk-size: 15
        node9:
-         role: mds
+         role: client
        node10:
-         role: mds
+         role: osd
+         no-of-volumes: 4
+         disk-size: 15
        node11:
-         role: rgw
+         role: osd
+         no-of-volumes: 4
+         disk-size: 15
        node12:
-         role: rgw
-       node13:
-         role:
-           - client
-           - nfs
-       node14:
-         role: mgr
-       node15:
-         role: pool
+         role: osd
          no-of-volumes: 4
          disk-size: 15
-       node16:
-         role: pool
-         no-of-volumes: 4
-         disk-size: 15
+

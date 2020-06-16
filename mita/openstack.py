@@ -48,6 +48,9 @@ class CephVMNode(object):
         self.image_name = kw['image-name']
         self.node_name = kw['node-name']
         self.vm_size = kw['vm-size']
+        self.vm_network = "provider_net_cci_8"
+        if kw.get('vm-network'):
+            self.vm_network = kw['vm-network']
         self.role = kw['role']
         self.no_of_volumes = None
         if kw.get('no-of-volumes'):
@@ -62,29 +65,64 @@ class CephVMNode(object):
         self.service_region = kw['service-region']
         self.keypair = kw['keypair']
         self.root_login = kw['root-login']
+        self.domain_name = kw['domain']
+        self.tenant_domain_id = kw['tenant-domain-id']
         self.create_node()
         sleep(10)
 
     def get_driver(self, **kw):
-        self.driver = OpenStack(
+        driver = OpenStack(
             self.username,
             self.password,
+            api_version=kw.get("api_version", "1.1"),
             ex_force_auth_url=self.auth_url,
             ex_force_auth_version=self.auth_version,
             ex_tenant_name=self.tenant_name,
             ex_force_service_region=self.service_region,
-            ex_domain_name='redhat.com'
+            ex_domain_name=self.domain_name,
+            ex_tenant_domain_id=self.tenant_domain_id
         )
+        return driver
+
+    def get_driver_v1(self):
+        """
+        Get Apache Libcloud OpenStack driver for nova version 1.1.
+
+        https://libcloud.readthedocs.io/en/latest/compute/drivers/
+        openstack.html#compute-1-0-api-version-older-installations
+
+        Returns:
+            OpenStack driver
+        """
+        self.driver = self.get_driver(api_version="1.1")
         return self.driver
+
+    def get_driver_v2(self):
+        """
+        Get Apache Libcloud OpenStack driver for nova version 2.0.
+
+        https://libcloud.readthedocs.io/en/latest/compute/drivers/
+        openstack.html#compute-2-0-api-version-current
+
+        Returns:
+            OpenStack driver
+        """
+        return self.get_driver(api_version="2.2")
 
     def create_node(self, **kw):
         name = self.node_name
-        driver = self.get_driver()
+        driver = self.get_driver_v1()
+        driver_v2 = self.get_driver_v2()
         images = driver.list_images()
         sizes = driver.list_sizes()
-        networks = driver.ex_list_networks()
+        networks = driver_v2.ex_list_networks()
+        subnets = driver_v2.ex_list_subnets()
         available_sizes = [s for s in sizes if s.name == self.vm_size]
-        network = [n for n in networks if n.name == 'provider_net_cci_4']
+        # TO-DO: auto assign network/subnet with more than 30 IPs available
+        network = [n for n in networks if n.name == self.vm_network]
+        subnet = [s.cidr for s in subnets if s.id == network[0].extra['subnets'][0]]
+        self.subnet = subnet[0]
+
         if not available_sizes:
             logger.error(
                 "provider does not have a matching 'size' for %s",
@@ -119,7 +157,7 @@ class CephVMNode(object):
         sleep(15)
         all_nodes = driver.list_nodes()
         new_node_state = [node.state for node in all_nodes if node.uuid == new_node.uuid]
-        timeout = datetime.timedelta(seconds=240)
+        timeout = datetime.timedelta(seconds=600)
         starttime = datetime.datetime.now()
         while True:
             logger.info("Waiting for node %s to become available", name)

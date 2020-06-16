@@ -23,7 +23,8 @@ def run(ceph_cluster, **kw):
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         num_of_osds = config.get('num_of_osds')
-        client_info, rc = fs_util.get_clients()
+        build = config.get('build', config.get('rhbuild'))
+        client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info("Got client info")
         else:
@@ -66,7 +67,7 @@ def run(ceph_cluster, **kw):
             raise Exception("kernel mount failed")
         cluster_health_beforeIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), None, 300)
+                client_info['mon_node']), build, None, 300)
         rc = fs_util.activate_multiple_mdss(client_info['mds_nodes'])
         if rc == 0:
             log.info("Activate multiple mdss successfully")
@@ -168,7 +169,7 @@ def run(ceph_cluster, **kw):
 
         cluster_health_afterIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), None, 300)
+                client_info['mon_node']), build, None, 300)
         if cluster_health_afterIO == cluster_health_beforeIO:
             log.info('cluster is healthy')
         else:
@@ -252,7 +253,7 @@ def run(ceph_cluster, **kw):
                 p.spawn(fs_util.heartbeat_map, node)
         cluster_health_afterIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), None, 300)
+                client_info['mon_node']), build, None, 300)
         if cluster_health_beforeIO == cluster_health_afterIO:
             log.info("Cluster is healthy")
         else:

@@ -22,7 +22,8 @@ def run(ceph_cluster, **kw):
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         num_of_osds = config.get('num_of_osds')
-        client_info, rc = fs_util.get_clients()
+        build = config.get('build', config.get('rhbuild'))
+        client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info("Got client info")
         else:
@@ -72,7 +73,7 @@ def run(ceph_cluster, **kw):
             raise CommandFailed("Activate multiple mdss failed")
         cluster_health_beforeIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), None, 300)
+                client_info['mon_node']), build, None, 300)
 
         dir1 = ''.join(
             random.choice(
@@ -190,7 +191,7 @@ def run(ceph_cluster, **kw):
         print(result2)
         cluster_health_afterIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), None, 300)
+                client_info['mon_node']), build, None, 300)
         client1[0].exec_command(
             cmd='sudo mkdir %s%s' %
                 (client_info['mounting_dir'], dir_name))

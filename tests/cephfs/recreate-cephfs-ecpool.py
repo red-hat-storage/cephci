@@ -11,8 +11,9 @@ def run(ceph_cluster, **kw):
     new_fs_name = 'cephfs_ec'
     new_fs_datapool = 'ec_data_pool'
     fs_util = FsUtils(ceph_cluster)
-    client_info, rc = fs_util.get_clients()
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
+    client_info, rc = fs_util.get_clients(build)
     filestore = config.get('filestore')
     k_and_m = config.get('ec-pool-k-m')
     if (filestore is not None and k_and_m is None) or (filestore is None and k_and_m is None):

@@ -19,17 +19,18 @@ from getpass import getuser
 from libcloud.common.types import LibcloudError
 from ceph.ceph import CephNode, Ceph
 from ceph.clients import WinNode
-from ceph.utils import create_ceph_nodes, cleanup_ceph_nodes, setup_cdn_repos
+from ceph.utils import create_ceph_nodes, cleanup_ceph_nodes
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import timestamp, create_run_dir, create_unique_test_name, create_report_portal_session, \
     configure_logger, close_and_remove_filehandlers, get_latest_container, email_results
+from utility.xunit import create_xunit_results
 
 doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE [--use-cdn ]
+  run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE
         [--osp-cred <file>]
         [--rhs-con-repo <repo> --rhs-ceph-repo <repo>]
         [ --ubuntu-repo <repo>]
@@ -46,6 +47,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--post-results]
         [--report-portal]
         [--log-level <LEVEL>]
+        [--log-dir  <directory-name>]
         [--instances-name <name>]
         [--osp-image <image>]
         [--filestore]
@@ -55,6 +57,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--skip-version-compare]
         [--custom-config <key>=<value>]...
         [--custom-config-file <file>]
+        [--xunit-results]
   run.py --cleanup=name [--osp-cred <file>]
         [--log-level <LEVEL>]
 
@@ -70,7 +73,6 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --use-cdn                         whether to use cdn or not [deafult: false]
   --rhs-con-repo <repo>             location of rhs console repo
                                     Top level location of console compose
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
@@ -90,6 +92,7 @@ Options:
                                     in test suite yamls. Requires config file, see README.
   --report-portal                   Post results to report portal. Requires config file, see README.
   --log-level <LEVEL>               Set logging level
+  --log-dir <LEVEL>                 Set log directory [default: /tmp]
   --instances-name <name>           Name that will be used for instances creation
   --osp-image <image>               Image for osp instances, default value is taken from conf file
   --filestore                       To specify filestore as osd object store
@@ -99,6 +102,7 @@ Options:
   --skip-version-compare            Skip verification that ceph versions change post upgrade
   -c --custom-config <name>=<value> Add a custom config key/value to ceph_conf_overrides
   --custom-config-file <file>       Add custom config yaml to ceph_conf_overrides
+  --xunit-results                   Create xUnit result file for test suite run [default: false]
 """
 log = logging.getLogger(__name__)
 root = logging.getLogger()
@@ -110,15 +114,6 @@ ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.ERROR)
 ch.setFormatter(formatter)
 root.addHandler(ch)
-
-run_id = timestamp()
-run_dir = create_run_dir(run_id)
-startup_log = os.path.join(run_dir, "startup.log")
-print("Startup log location: {}".format(startup_log))
-handler = logging.FileHandler(startup_log)
-handler.setLevel(logging.INFO)
-handler.setFormatter(formatter)
-root.addHandler(handler)
 
 test_names = []
 
@@ -133,7 +128,7 @@ def create_nodes(conf, inventory, osp_cred, run_id, report_portal_session=None, 
                                               description=desc,
                                               start_time=timestamp(),
                                               item_type="STEP")
-    log.info("Destroying existing osp instances")
+    log.info("Destroying existing osp instances..")
     cleanup_ceph_nodes(osp_cred, instances_name)
     ceph_cluster_dict = {}
     log.info('Creating osp instances')
@@ -153,6 +148,7 @@ def create_nodes(conf, inventory, osp_cred, run_id, report_portal_session=None, 
                                 role=node.role,
                                 no_of_volumes=node.no_of_volumes,
                                 ip_address=node.ip_address,
+                                subnet=node.subnet,
                                 private_ip=node.get_private_ip(),
                                 hostname=node.hostname,
                                 ceph_vmnode=node)
@@ -215,12 +211,12 @@ def run(args):
     docker_tag = args.get('--docker-tag', None)
     docker_insecure_registry = args.get('--insecure-registry', False)
     post_results = args.get('--post-results')
-    use_cdn = args.get('--use-cdn', False)
     skip_setup = args.get('--skip-cluster', False)
     skip_subscription = args.get('--skip-subscription', False)
     cleanup_name = args.get('--cleanup', None)
     post_to_report_portal = args.get('--report-portal', False)
     console_log_level = args.get('--log-level')
+    log_directory = args.get('--log-dir', '/tmp')
     instances_name = args.get('--instances-name')
     osp_image = args.get('--osp-image')
     filestore = args.get('--filestore', False)
@@ -229,8 +225,58 @@ def run(args):
     skip_version_compare = args.get('--skip-version-compare', False)
     custom_config = args.get('--custom-config')
     custom_config_file = args.get('--custom-config-file')
+    xunit_results = args.get('--xunit-results', False)
+
+    # Set log directory and get absolute path
+    run_id = timestamp()
+    run_dir = create_run_dir(run_id, log_directory)
+    startup_log = os.path.join(run_dir, "startup.log")
+    print("Startup log location: {}".format(startup_log))
+    handler = logging.FileHandler(startup_log)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
     if console_log_level:
         ch.setLevel(logging.getLevelName(console_log_level.upper()))
+
+    if osp_cred_file:
+        with open(osp_cred_file, 'r') as osp_cred_stream:
+            osp_cred = yaml.safe_load(osp_cred_stream)
+
+    if cleanup_name is not None:
+        cleanup_ceph_nodes(osp_cred, cleanup_name)
+        return 0
+
+    # Get ceph cluster version name
+    with open("rhbuild.yaml") as fd:
+        rhbuild_file = yaml.safe_load(fd)
+    ceph = rhbuild_file['ceph']
+    ceph_name = None
+    rhbuild_ = None
+    try:
+        ceph_name, rhbuild_ =\
+            next(filter(
+                lambda x: x,
+                [(ceph[x]['name'], x) for x in ceph if x == rhbuild.split(".")[0]]))
+    except StopIteration:
+        print("\nERROR: Please provide correct RH build version, run exited.")
+        sys.exit(1)
+
+    # Get base-url
+    composes = ceph[rhbuild_]['composes']
+    if not base_url:
+        if rhbuild in composes:
+            base_url = composes[rhbuild]['base_url']
+        else:
+            base_url = composes['latest']['base_url']
+
+    # Get ubuntu-repo
+    if not ubuntu_repo:
+        if rhbuild in composes:
+            ubuntu_repo = composes[rhbuild]['ubuntu_repo']
+        else:
+            ubuntu_repo = composes['latest']['ubuntu_repo']
 
     if glb_file:
         conf_path = os.path.abspath(glb_file)
@@ -246,54 +292,12 @@ def run(args):
         suites_path = os.path.abspath(suite_file)
         with open(suites_path, 'r') as suite_stream:
             suite = yaml.safe_load(suite_stream)
-    if osp_cred_file:
-        with open(osp_cred_file, 'r') as osp_cred_stream:
-            osp_cred = yaml.safe_load(osp_cred_stream)
-
-    if cleanup_name is not None:
-        cleanup_ceph_nodes(osp_cred, cleanup_name)
-        return 0
 
     if osp_image and inventory.get('instance').get('create'):
         inventory.get('instance').get('create').update({'image-name': osp_image})
 
     compose_id = None
-    if rhbuild.startswith('2'):
-        if base_url is None:
-            # use latest as default when nothing is specified in cli
-            # base_url = 'http://download.engineering.redhat.com/rcm-guest/ceph-drops/2/latest-RHCEPH-2.4-Ubuntu/'
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-2-rhel-7/latest-RHCEPH-2-RHEL-7/'
-        if ubuntu_repo is None:
-            log.info("Using latest ubuntu repo since no default value provided")
-            ubuntu_repo = 'http://download-node-02.eng.bos.redhat.com/rcm-guest/ceph-drops/2/latest-Ceph-2-Ubuntu/'
-    elif rhbuild == '3.1':
-        if base_url is None:
-            # default to latest RHCeph build 3.1
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.1-rhel-7/latest-RHCEPH-3-RHEL-7/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.engineering.redhat.com/rcm-guest/ceph-drops/3.1/latest-RHCEPH-3.1-Ubuntu/'
-    elif rhbuild == '3.2':
-        if base_url is None:
-            # default to latest RHCeph build 3.2
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.2-rhel-7/latest-RHCEPH-3-RHEL-7/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.2/latest-RHCEPH-3.2-Ubuntu/'
-    elif rhbuild.startswith('3'):
-        if base_url is None:
-            # default to latest RHCeph build 3.3
-            base_url = 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.3-rhel-7/latest-RHCEPH-3-RHEL-7/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
-    elif rhbuild.startswith('4'):
-        if base_url is None:
-            # default to latest RHCeph build 4.0
-            base_url = 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.0-rhel-8/latest-RHCEPH-4-RHEL-8/'
-        if ubuntu_repo is None:
-            ubuntu_repo = \
-                'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.3/latest-RHCEPH-3.3-Ubuntu/'
+
     if os.environ.get('TOOL') is not None:
         ci_message = json.loads(os.environ['CI_MESSAGE'])
         compose_id = ci_message['compose_id']
@@ -312,8 +316,8 @@ def run(args):
         elif os.environ['TOOL'] == 'bucko':
             # is a docker compose
             log.info("Trigger on CI Docker Compose")
-            docker_registry, docker_image_tag = ci_message['repository'].split('/')
-            docker_image, docker_tag = docker_image_tag.split(':')
+            docker_registry, docker_tag = ci_message['repository'].split('/rh-osbs/rhceph:')
+            docker_image = 'rh-osbs/rhceph'
             log.info("\nUsing docker registry from ci message: {registry} \nDocker image: {image}\nDocker tag:{tag}"
                      .format(registry=docker_registry, image=docker_image, tag=docker_tag))
             log.warning('Using Docker insecure registry setting')
@@ -341,9 +345,9 @@ def run(args):
         compose_id = id.text
         if 'rhel' in image_name.lower():
             ceph_pkgs = requests.get(base_url + "/compose/Tools/x86_64/os/Packages/")
-            m = re.search(r'ceph-common-(.*?)cp', ceph_pkgs.text)
+            m = re.search(r'ceph-common-(.*?).x86', ceph_pkgs.text)
             ceph_version.append(m.group(1))
-            m = re.search(r'ceph-ansible-(.*?)cp', ceph_pkgs.text)
+            m = re.search(r'ceph-ansible-(.*?).rpm', ceph_pkgs.text)
             ceph_ansible_version.append(m.group(1))
             log.info("Compose id is: " + compose_id)
         else:
@@ -360,11 +364,12 @@ def run(args):
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
 
     if not os.environ.get('TOOL') and not ignore_latest_nightly_container:
-        major_version = re.match(r'RHCEPH-(\d+\.\d+)', compose_id).group(1)
         try:
-            latest_container = get_latest_container(major_version)
+            latest_container = get_latest_container(rhbuild)
         except ValueError:
-            latest_container = get_latest_container('.'.join([major_version.split('.')[0], 'x']))
+            print("\nERROR:No latest nightly container UMB msg at /ceph/cephci-jenkins/latest-rhceph-container-info/,"
+                  "specify using the cli args or use --ignore-latest-container")
+            sys.exit(1)
         docker_registry = latest_container.get('docker_registry') if not docker_registry else docker_registry
         docker_image = latest_container.get('docker_image') if not docker_image else docker_image
         docker_tag = latest_container.get('docker_tag') if not docker_tag else docker_tag
@@ -426,9 +431,6 @@ def run(args):
     tests = suite.get('tests')
     tcs = []
     jenkins_rc = 0
-    if use_cdn is True and reuse is None:
-        for cluster_name, cluster in ceph_cluster_dict.itreritems():
-            setup_cdn_repos(cluster, build=rhbuild)
     # use ceph_test_data to pass around dynamic data between tests
     ceph_test_data = dict()
     ceph_test_data['custom-config'] = custom_config
@@ -448,6 +450,9 @@ def run(args):
         tc['compose-id'] = compose_id
         tc['distro'] = distro
         tc['suite-name'] = suite_name
+        tc['suite-file'] = suite_file
+        tc['conf-file'] = glb_file
+        tc['ceph-version-name'] = ceph_name
         test_file = tc['file']
         report_portal_description = tc['desc'] or ''
         unique_test_name = create_unique_test_name(tc['name'], test_names)
@@ -472,8 +477,6 @@ def run(args):
             config['rhbuild'] = rhbuild
             if 'ubuntu_repo' in locals():
                 config['ubuntu_repo'] = ubuntu_repo
-            if not config.get('use_cdn'):
-                config['use_cdn'] = use_cdn
             if skip_setup is True:
                 config['skip_setup'] = True
             if skip_subscription is True:
@@ -578,6 +581,8 @@ def run(args):
     if post_to_report_portal:
         service.finish_launch(end_time=timestamp())
         service.terminate()
+    if xunit_results:
+        create_xunit_results(suite_name, tcs, run_dir)
     url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
     run_dir_name = run_dir.split('/')[-1]
     print("\nAll test logs located here: {base}/{dir}".format(base=url_base, dir=run_dir_name))

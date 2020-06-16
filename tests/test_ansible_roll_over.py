@@ -107,7 +107,7 @@ def run(ceph_cluster, **kw):
 
     ceph_cluster.setup_ceph_firewall()
 
-    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo)
+    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo, build)
 
     ceph_installer.install_ceph_ansible(build)
 
@@ -130,7 +130,7 @@ def run(ceph_cluster, **kw):
     log.info("Ceph versions " + ceph_installer.get_installed_ceph_versions())
 
     out, rc = ceph_installer.exec_command(
-        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug; ansible-playbook -vv -i hosts site.yml --limit {daemon}'.format(
+        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vv -i hosts site.yml --limit {daemon}'.format(
             ansible_dir, daemon=demon + 's'), long_running=True)
 
     # manually handle client creation in a containerized deployment (temporary)
