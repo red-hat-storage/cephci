@@ -99,10 +99,21 @@ tests:
            config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
            timeout: 300
 
+   # REST API test
+   - test:
+       name: test REST api operation
+       desc: test user operation using REST API
+       module: sanity_rgw.py
+       polarion-id: CEPH-83573505
+       config:
+         script-name: user_op_using_rest.py
+         config-file-name: test_user_with_REST.yaml
+         timeout: 300
+
    # multipart test
 
    - test:
-       name: Mbuckets_with_Nobjects
+       name: Mbuckets_with_Nobjects_with_multipart
        desc: test to create "M" no of buckets and "N" no of objects with multipart upload
        module: sanity_rgw.py
        config:
@@ -711,6 +722,17 @@ tests:
          script-name: test_multipart_upload_cancel.py
          config-file-name: test_multipart_upload_cancel.yaml
          timeout: 300
+
+   - test:
+       name: Beast SSL RGW test
+       desc: RGW SSL testing with Beast frontend enabled
+       polarion-id: CEPH-10359
+       module: sanity_rgw.py
+       config:
+         test-version: v2
+         script-name: test_frontends_with_ssl.py
+         config-file-name: test_ssl_beast.yaml
+         timeout: 500
 
    - test:
        name: ceph ansible purge

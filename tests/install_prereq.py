@@ -99,10 +99,12 @@ def setup_subscription_manager(ceph, timeout=1800):
             ceph.exec_command(
                 cmd='sudo subscription-manager --force register  '
                     '--serverurl=subscription.rhsm.stage.redhat.com:443/subscription  '
-                    '--baseurl=https://cdn.redhat.com --username=cephuser --password=cephuser '
-                    '--auto-attach',
+                    '--baseurl=https://cdn.redhat.com --username=rhcsuser --password=rhcsuser',
                 timeout=720)
 
+            ceph.exec_command(cmd='sudo subscription-manager attach '
+                                  '--pool $(sudo subscription-manager list --all --available --pool-only | head -1)',
+                              timeout=720)
             break
         except BaseException:
             if datetime.datetime.now() - starttime > timeout:

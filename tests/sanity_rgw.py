@@ -44,7 +44,7 @@ def run(ceph_cluster, **kw):
             cmd='sudo docker cp ~/get-pip.py {container}:/get-pip.py'.format(container=rgw_ceph_object.container_name))
         rgw_ceph_object.exec_command('python3 /get-pip.py')
     rgw_ceph_object.exec_command(
-        cmd='sudo pip3 install boto boto3 names PyYaml ConfigParser python-swiftclient swiftly')
+        cmd='sudo pip3 install -r ' + test_folder + '/ceph-qe-scripts/rgw/requirements.txt')
     script_name = config.get('script-name')
     config_file_name = config.get('config-file-name')
     test_version = config.get('test-version', 'v2')

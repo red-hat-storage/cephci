@@ -31,6 +31,7 @@ def run(**kw):
     inventory = 'hosts'
     playbook_command = "purge-cluster.yml --extra-vars 'ireallymeanit=yes'"
     config = kw.get('config')
+    build = config.get('build', config.get('rhbuild'))
     if config:
         ansible_dir = config.get('ansible-dir', ansible_dir)
         inventory = config.get('inventory', inventory)
@@ -54,14 +55,22 @@ def run(**kw):
     playbook_regex = re.search('(purge-.*?\\.yml)(.*)', playbook_command)
     playbook = playbook_regex.group(1)
     playbook_options = playbook_regex.group(2)
-    installer_node.exec_command(sudo=True,
-                                cmd='cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{playbook} .'
-                                .format(ansible_dir=ansible_dir, playbook=playbook))
-    out, err = installer_node.exec_command(
-        cmd="cd {ansible_dir} ; ansible-playbook -i {inventory} {playbook} {playbook_options}"
-            .format(ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
-                    inventory=inventory.strip()),
-        long_running=True)
+    if not build.startswith('4'):
+        installer_node.exec_command(sudo=True,
+                                    cmd='cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{playbook} .'
+                                    .format(ansible_dir=ansible_dir, playbook=playbook))
+        out, err = installer_node.exec_command(
+            cmd="cd {ansible_dir} ; ansible-playbook -i {inventory} {playbook} {playbook_options}"
+                .format(ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
+                        inventory=inventory.strip()),
+            long_running=True)
+    else:
+        out, err = installer_node.exec_command(
+            cmd="cd {ansible_dir} ; ansible-playbook -i {inventory} infrastructure-playbooks/{playbook} "
+                "{playbook_options}"
+                .format(ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
+                        inventory=inventory.strip()),
+            long_running=True)
 
     if err == 0:
         log.info("ansible-playbook purge cluster successful")

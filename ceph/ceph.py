@@ -4,6 +4,7 @@ import re
 from distutils.version import LooseVersion
 from select import select
 from time import sleep, time
+from ceph.parallel import parallel
 
 import datetime
 import requests
@@ -611,48 +612,52 @@ class Ceph(object):
             hotfix_repo (str): hotfix repo to use with priority
             installer_url (str): installer url
             ubuntu_repo (str): deb repo url
-            build (str): ceph-ansible build as numeric
+            build (str):  ansible_config.build or rhbuild cli argument
         """
         if not build:
             build = self.rhcs_version
-        for node in self.get_nodes():
-            if self.use_cdn:
-                if node.pkg_type == 'deb':
-                    if node.role == 'installer':
-                        logger.info("Enabling tools repository")
-                        node.setup_deb_cdn_repos(build)
-                else:
-                    logger.info("Using the cdn repo for the test")
-                    node.setup_rhel_cdn_repos(build)
-            else:
-                if self.ansible_config.get('ceph_repository_type') != 'iso' or \
-                        self.ansible_config.get('ceph_repository_type') == 'iso' and \
-                        (node.role == 'installer'):
+        with parallel() as p:
+            for node in self.get_nodes():
+                if self.use_cdn:
                     if node.pkg_type == 'deb':
-                        node.setup_deb_repos(ubuntu_repo)
-                        sleep(15)
-                        # install python2 on xenial
-                        node.exec_command(sudo=True, cmd='sudo apt-get install -y python')
-                        node.exec_command(sudo=True, cmd='apt-get install -y python-pip')
-                        node.exec_command(sudo=True, cmd='apt-get install -y ntp')
-                        node.exec_command(sudo=True, cmd='apt-get install -y chrony')
-                        node.exec_command(sudo=True, cmd='pip install nose')
+                        if node.role == 'installer':
+                            logger.info("Enabling tools repository")
+                            node.setup_deb_cdn_repos(build)
                     else:
-                        if hotfix_repo:
-                            node.exec_command(sudo=True,
-                                              cmd='wget -O /etc/yum.repos.d/rh_repo.repo {repo}'.format(
-                                                  repo=hotfix_repo))
+                        logger.info("Using the cdn repo for the test")
+                        distro_info = node.distro_info
+                        distro_ver = distro_info['VERSION_ID']
+                        node.setup_rhceph_cdn_repos(build, distro_ver)
+                else:
+                    if self.ansible_config.get('ceph_repository_type') != 'iso' or \
+                            self.ansible_config.get('ceph_repository_type') == 'iso' and \
+                            (node.role == 'installer'):
+                        if node.pkg_type == 'deb':
+                            node.setup_deb_repos(ubuntu_repo)
+                            sleep(15)
+                            # install python2 on xenial
+                            node.exec_command(sudo=True, cmd='sudo apt-get install -y python')
+                            node.exec_command(sudo=True, cmd='apt-get install -y python-pip')
+                            node.exec_command(sudo=True, cmd='apt-get install -y ntp')
+                            node.exec_command(sudo=True, cmd='apt-get install -y chrony')
+                            node.exec_command(sudo=True, cmd='pip install nose')
                         else:
-                            node.setup_rhel_repos(base_url, installer_url)
-                if self.ansible_config.get('ceph_repository_type') == 'iso' and node.role == 'installer':
-                    iso_file_url = self.get_iso_file_url(base_url)
-                    node.exec_command(sudo=True, cmd='mkdir -p {}/iso'.format(node.ansible_dir))
-                    node.exec_command(sudo=True,
-                                      cmd='wget -O {}/iso/ceph.iso {}'.format(node.ansible_dir, iso_file_url))
-            if node.pkg_type == 'rpm':
-                logger.info("Updating metadata")
-                node.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
-            sleep(15)
+                            if hotfix_repo:
+                                node.exec_command(sudo=True,
+                                                  cmd='wget -O /etc/yum.repos.d/rh_repo.repo {repo}'.format(
+                                                      repo=hotfix_repo))
+                            if not self.ansible_config.get('ceph_repository_type') == 'cdn':
+                                node.setup_rhceph_repos(base_url, installer_url)
+                    if self.ansible_config.get('ceph_repository_type') == 'iso' and node.role == 'installer':
+                        iso_file_url = self.get_iso_file_url(base_url)
+                        node.exec_command(sudo=True, cmd='mkdir -p {}/iso'.format(node.ansible_dir))
+                        node.exec_command(sudo=True,
+                                          cmd='wget -O {}/iso/ceph.iso {}'.format(node.ansible_dir, iso_file_url))
+                if node.pkg_type == 'rpm':
+                    logger.info("Updating metadata")
+                    node.exec_command(sudo=True, cmd='yum update metadata', check_ec=False)
+                    p.spawn(node.exec_command, sudo=True, cmd='yum update -y', long_running=True)
+                sleep(10)
 
     def create_rbd_pool(self, k_and_m):
         """
@@ -1329,11 +1334,12 @@ class CephNode(object):
         self.exec_command(sudo=True, cmd='wget -O - https://www.redhat.com/security/fd431d51.txt | apt-key add -')
         self.exec_command(sudo=True, cmd='apt-get update')
 
-    def setup_rhel_cdn_repos(self, build):
+    def setup_rhceph_cdn_repos(self, build, distro_ver):
         """
         Setup cdn repositories for rhel systems
         Args:
-            build(str|LooseVersion): rhcs version
+            build(str): rhcs version
+            distro_ver: os distro version from /etc/os-release
         """
         repos_13x = ['rhel-7-server-rhceph-1.3-mon-rpms',
                      'rhel-7-server-rhceph-1.3-osd-rpms',
@@ -1341,28 +1347,38 @@ class CephNode(object):
                      'rhel-7-server-rhceph-1.3-installer-rpms',
                      'rhel-7-server-rhceph-1.3-tools-rpms']
 
-        repos_20 = ['rhel-7-server-rhceph-2-mon-rpms',
+        repos_2x = ['rhel-7-server-rhceph-2-mon-rpms',
                     'rhel-7-server-rhceph-2-osd-rpms',
                     'rhel-7-server-rhceph-2-tools-rpms',
                     'rhel-7-server-rhscon-2-agent-rpms',
                     'rhel-7-server-rhscon-2-installer-rpms',
                     'rhel-7-server-rhscon-2-main-rpms']
 
-        repos_30 = ['rhel-7-server-rhceph-3-mon-rpms',
+        repos_3x = ['rhel-7-server-rhceph-3-tools-rpms',
                     'rhel-7-server-rhceph-3-osd-rpms',
-                    'rhel-7-server-rhceph-3-tools-rpms',
-                    'rhel-7-server-extras-rpms']
+                    'rhel-7-server-rhceph-3-mon-rpms']
+
+        repos_4x_rhel7 = ['rhel-7-server-rhceph-4-tools-rpms',
+                          'rhel-7-server-rhceph-4-osd-rpms',
+                          'rhel-7-server-rhceph-4-mon-rpms']
+
+        repos_4x_rhel8 = ['rhceph-4-tools-for-rhel-8-x86_64-rpms',
+                          'rhceph-4-mon-for-rhel-8-x86_64-rpms',
+                          'rhceph-4-osd-for-rhel-8-x86_64-rpms']
 
         repos = None
-        if '2' > build >= '1':
+        if build.startswith('1'):
             repos = repos_13x
-        elif '3' > build >= '2':
-            repos = repos_20
-        elif '4' > build >= '3':
-            repos = repos_30
-        for repo in repos:
-            self.exec_command(
-                sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo))
+        elif build.startswith('2'):
+            repos = repos_2x
+        elif build.startswith('3'):
+            repos = repos_3x
+        elif build.startswith('4') & distro_ver.startswith('8'):
+            repos = repos_4x_rhel8
+        elif build.startswith('4') & distro_ver.startswith('7'):
+            repos = repos_4x_rhel7
+        self.exec_command(sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repos[0]))
+        # ansible will enable remaining osd/mon rpms
 
     def setup_deb_repos(self, deb_repo):
         """
@@ -1390,7 +1406,7 @@ class CephNode(object):
             self.exec_command(cmd=wget_cmd)
             self.exec_command(cmd='sudo apt-get update')
 
-    def setup_rhel_repos(self, base_url, installer_url=None):
+    def setup_rhceph_repos(self, base_url, installer_url=None):
         """
         Setup repositories for rhel
         Args:
