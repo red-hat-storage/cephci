@@ -49,6 +49,10 @@ def run(**kw):
     client.exec_command(cmd=pool_create)
     block = str(config.get('size', 4 << 20))
     time = str(config.get('time', 360))
+    # block and time parameters are hardcoded to unblock the CI jobs.
+    # Remove block=10 and time = 60 lines after #Bug-1848016 fix
+    block = 10
+    time = 60
     rados_bench = \
         'sudo rados --no-log-to-stderr  -b {block} -p {pool} bench {time} {op} \
      {cleanup}'.format(name=name, block=block, pool=pool_name,
