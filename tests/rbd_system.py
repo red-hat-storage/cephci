@@ -19,6 +19,7 @@ def run(**kw):
     client_node.exec_command(cmd='mkdir ' + test_folder)
     client_node.exec_command(cmd='cd ' + test_folder + ' ; ' + git_clone)
     client_node.exec_command(cmd='sudo pip install boto names PyYaml ConfigParser')
+    client_node.exec_command(cmd='sudo yum -y install python3')
     config = kw.get('config')
     script_name = config.get('test_name')
     timeout = config.get('timeout', 1800)
@@ -26,7 +27,7 @@ def run(**kw):
         ec_pool_arg = ' --ec-pool-k-m ' + config.get('ec-pool-k-m')
     else:
         ec_pool_arg = ''
-    command = 'sudo python ~/' + test_folder + '/ceph-qe-scripts/rbd/system/' + script_name + ec_pool_arg
+    command = 'sudo python3 ~/' + test_folder + '/ceph-qe-scripts/rbd/system/' + script_name + ec_pool_arg
     stdout, stderr = client_node.exec_command(cmd=command, timeout=timeout, check_ec=False)
     output = stdout.read().decode()
     if output:
