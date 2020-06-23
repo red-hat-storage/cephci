@@ -1,7 +1,4 @@
-import logging
-
-log = logging.getLogger(__name__)
-
+import logging as log
 
 def run(**kw):
     log.info("Running rbd tests")
