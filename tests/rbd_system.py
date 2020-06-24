@@ -1,5 +1,6 @@
 import logging as log
 
+
 def run(**kw):
     log.info("Running rbd tests")
     ceph_nodes = kw.get('ceph_nodes')
