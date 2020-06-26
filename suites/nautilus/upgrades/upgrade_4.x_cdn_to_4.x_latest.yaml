@@ -1,0 +1,96 @@
+tests:
+- test:
+    name: install ceph pre-requisites
+    module: install_prereq.py
+    abort-on-fail: True
+- test:
+    name: ceph ansible install rhcs 4.x from cdn
+    polarion-id: CEPH-83571467
+    module: test_ansible.py
+    config:
+      use_cdn: True
+      build: '4.x'
+      ansi_config:
+        ceph_origin: repository
+        ceph_repository: rhcs
+        ceph_repository_type: cdn
+        ceph_rhcs_version: 4 
+        ceph_stable_release: nautilus
+        osd_scenario: lvm
+        osd_auto_discovery: False
+        ceph_docker_registry_auth: false
+        dashboard_enabled: false
+        copy_admin_key: True
+        ceph_conf_overrides:
+          global:
+            osd_pool_default_pg_num: 128
+            osd_default_pool_size: 2
+            osd_pool_default_pgp_num: 128
+            mon_max_pg_per_osd: 4096
+            mon_allow_pool_delete: True
+          client:
+            rgw crypt require ssl: false
+            rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+              testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+    desc: test cluster 4.x cdn setup using ceph-ansible
+    abort-on-fail: True
+- test:
+    name: Upgrade ceph ansible to 4.x latest
+    polarion-id: CEPH-83573508
+    module: test_ansible_upgrade.py
+    config:
+      ansi_config:
+        ceph_origin: distro
+        ceph_stable_release: nautilus
+        ceph_repository: rhcs
+        osd_scenario: lvm
+        osd_auto_discovery: False
+        ceph_stable: True
+        ceph_stable_rh_storage: True
+        fetch_directory: ~/fetch
+        copy_admin_key: true
+        dashboard_enabled: False
+        upgrade_ceph_packages: True
+        ceph_rhcs_version: 4
+        ceph_iscsi_config_dev: false
+        ceph_conf_overrides:
+          global:
+            osd_pool_default_pg_num: 64
+            osd_default_pool_size: 2
+            osd_pool_default_pgp_num: 64
+            mon_max_pg_per_osd: 1024
+            mon_allow_pool_delete: true
+            client:
+            rgw crypt require ssl: false
+            rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+              testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+    desc: Test Ceph-Ansible rolling update 4.x cdn -> 4.x latest
+    abort-on-fail: True
+- test:
+    name: librbd workunit
+    module: test_workunit.py
+    config:
+      test_name: rbd/test_librbd_python.sh
+      branch: nautilus
+      role: mon
+    desc: Test librbd unit tests
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      cmd: ceph -s
+      sudo: True
+    desc: Check for ceph health debug info
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+- test:
+    name: ceph ansible purge
+    polarion-id: CEPH-83571498
+    module: purge_cluster.py
+    desc: Purge ceph cluster
+    abort-on-fail: True
