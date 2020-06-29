@@ -29,7 +29,7 @@ def osd_scenario1(osd, devices_dict, dmcrypt=False):
     """
 
     pvcreate(osd, devices_dict.get('devices'))
-    vgname = vgcreate(osd, osd.LvmConfig.vg_name % '1', devices_dict.get('device1'))  # dev is a single device
+    vgname = vgcreate(osd, osd.LvmConfig.vg_name % '1', devices_dict.get('devices'))  # all /dev/vd{b,c,d,e}
     data_lv1 = lvcreate(osd,
                         osd.LvmConfig.data_lv %
                         '1',
@@ -158,8 +158,9 @@ def osd_scenario3(osd, devices_dict, dmcrypt=False):
         generated scenario, dmcrypt
     """
     pvcreate(osd, devices_dict.get('devices'))
-    vgname = vgcreate(osd, osd.LvmConfig.vg_name % '1', devices_dict.get('device2'))
-    make_partition(osd, devices_dict.get('device3'), gpt=True)
+    devs = "{a} {b}".format(a=devices_dict.get('device0'), b=devices_dict.get('device2'))  # vdb vdd
+    vgname = vgcreate(osd, osd.LvmConfig.vg_name % '1', devs)
+    make_partition(osd, devices_dict.get('device3'), gpt=True)  # vde
     make_partition(osd, devices_dict.get('device3'), '1', '80%')
     make_partition(osd, devices_dict.get('device3'), '80%', '90%')
     make_partition(osd, devices_dict.get('device3'), '90%', '100%')
@@ -182,7 +183,7 @@ def osd_scenario3(osd, devices_dict, dmcrypt=False):
                        osd.LvmConfig.vg_name %
                        '1',
                        osd.LvmConfig.size.format(10))
-
+    # To-Do remove disk name references like /vdb /vdd to avoid confusion when more disks are added
     scenario = "{{'data':'{vdb}','db':'{dblv1}','db_vg':'{vgname}','wal':'{wallv1}','wal_vg':'{vgname}'}}," \
                "{{'data':'{datalv1}','data_vg':'{vgname}','db':'{vdd2}','wal':'{vdd3}'}},{{'data':'{vdd1}'}}" \
         .format(vdb=devices_dict.get('device1'), dblv1=db_lv1, vgname=vgname, wallv1=wal_lv1, datalv1=data_lv1,
