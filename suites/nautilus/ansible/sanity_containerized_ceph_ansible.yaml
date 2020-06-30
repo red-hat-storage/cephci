@@ -264,6 +264,7 @@ tests:
 
    - test:
       name: Check for old container directories
+      polarion-id: CEPH-83573507
       module: bug_1834974.py
       desc: Check for old container directories
       destroy-cluster: True
