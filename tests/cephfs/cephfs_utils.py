@@ -1937,11 +1937,11 @@ mds standby for rank = 1
                             cmd="sudo ceph auth del client.%s" %
                                 (client_name))
                         client.exec_command(
-                            cmd='sudo find /home/cephuser/ -type f -delete',
-                            long_running=True, timeout=3600)
+                            cmd="find /home/cephuser -type f -not -name 'authorized_keys'"
+                                "-delete", long_running=True, timeout=3600)
                         client.exec_command(
-                            cmd='sudo rm -rf /home/cephuser/*',
-                            long_running=True, timeout=3600)
+                            cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' |"
+                                "xargs sudo rm -f", long_running=True, timeout=3600)
                         client.exec_command(cmd='sudo iptables -F', check_ec=False)
             for client in kernel_clients:
                 if client.pkg_type == 'deb':
@@ -1973,10 +1973,11 @@ mds standby for rank = 1
                                 cmd="sudo ceph auth del client.%s" %
                                     (client_name))
                             client.exec_command(
-                                cmd='sudo find /home/cephuser/ -type f -delete', long_running=True, timeout=3600)
+                                cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
+                                    "-delete", long_running=True, timeout=3600)
                             client.exec_command(
-                                cmd='sudo rm -rf /home/cephuser/*',
-                                long_running=True, timeout=3600)
+                                cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' | "
+                                    "xargs sudo rm -f", long_running=True, timeout=3600)
 
         else:
             for client in fuse_clients:
@@ -2006,11 +2007,11 @@ mds standby for rank = 1
                             cmd="sudo ceph auth del client.%s"
                                 % client.node.hostname)
                         client.exec_command(
-                            cmd='sudo find /home/cephuser/ -type f -delete',
-                            long_running=True, timeout=3600)
+                            cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
+                                "-delete", long_running=True, timeout=3600)
                         client.exec_command(
-                            cmd='sudo rm -rf /home/cephuser/*',
-                            long_running=True, timeout=3600)
+                            cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' | "
+                                "xargs sudo rm -f", long_running=True, timeout=3600)
                         client.exec_command(cmd='sudo iptables -F', check_ec=False)
             for client in kernel_clients:
                 if client.pkg_type == 'deb':
@@ -2042,11 +2043,11 @@ mds standby for rank = 1
                                 cmd="sudo ceph auth del client.%s" %
                                     (client.node.hostname))
                             client.exec_command(
-                                cmd='sudo find /home/cephuser/ -type f'
-                                    ' -delete', long_running=True, timeout=3600)
+                                cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
+                                    "-delete", long_running=True, timeout=3600)
                             client.exec_command(
-                                cmd='sudo rm -rf /home/cephuser/*',
-                                long_running=True, timeout=3600)
+                                cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' | "
+                                    "xargs sudo rm -f", long_running=True, timeout=3600)
 
         return 0
 
