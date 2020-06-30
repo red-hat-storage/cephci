@@ -93,6 +93,13 @@ tests:
       pool_type: 'normal'
     desc: run rados bench for 360 - normal profile
 - test:
+    name: deep scrub and osd memory utilization
+    module: test_bz_1754078.py
+    config:
+          pg_count: 128
+          timeout: 20
+    desc: run deep scrub and check each osd daemon memory usage
+- test:
     name: ceph ansible purge
     polarion-id: CEPH-83571498
     module: purge_cluster.py

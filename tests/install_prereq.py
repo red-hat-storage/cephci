@@ -7,15 +7,12 @@ import traceback
 from ceph.parallel import parallel
 from ceph.utils import config_ntp
 from ceph.utils import update_ca_cert
-from utility.retry import retry
 
 log = logging.getLogger(__name__)
 
 rpm_packages = {'py2': ['wget', 'git', 'python-virtualenv', 'redhat-lsb', 'python-nose', 'ntp'],
                 'py3': ['wget', 'git', 'python3-virtualenv', 'redhat-lsb', 'python3-nose', 'python3-pip']}
 deb_packages = ['wget', 'git', 'python-virtualenv', 'lsb-release', 'ntp']
-epel_rpm = 'https://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-9.noarch.rpm'
-epel_packages = ['python-pip']
 deb_all_packages = " ".join(deb_packages)
 
 
@@ -65,20 +62,8 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
         if ceph.role == 'client':
             ceph.exec_command(cmd='sudo yum install -y attr', long_running=True)
             ceph.exec_command(cmd='sudo pip install crefi', long_running=True)
-        # install epel package
         ceph.exec_command(cmd='sudo yum clean metadata')
-        # finally install python2-pip directly using rpm since its available only in epel
-        install_pip(ceph)
         config_ntp(ceph)
-
-
-@retry(Exception, tries=5, delay=10)
-def install_pip(ceph):
-    log.info("Installing pip on {host}".format(host=ceph.hostname))
-    base_dir_path = "http://dl.fedoraproject.org/pub/fedora-secondary/releases/30/Everything/i386/os/Packages/p"
-    pip_package_name = "python2-pip-19.0.3-1.fc30.noarch.rpm"
-    ceph.exec_command(
-        cmd='sudo yum install -y {base}/{package}'.format(base=base_dir_path, package=pip_package_name))
 
 
 def setup_addition_repo(ceph, repo):

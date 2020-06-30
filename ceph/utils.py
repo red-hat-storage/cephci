@@ -118,8 +118,8 @@ def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
             elif name in volume.name:
                 p.spawn(volume_cleanup, volume, osp_cred)
                 sleep(1)
-    log.info("Done cleaning up volumes")
-    with parallel() as p:
+        sleep(30)
+        log.info("Done cleaning up volumes")
         for node in driver.list_nodes():
             if name in node.name:
                 starttime = datetime.datetime.now()
@@ -146,18 +146,23 @@ def volume_cleanup(volume, osp_cred):
     errors = {}
     driver = get_openstack_driver(osp_cred)
     sleep(10)
-    try:
-        volobj = driver.ex_get_volume(volume.id)
-        driver.detach_volume(volobj)
-        sleep(30)
-        driver.destroy_volume(volobj)
-    except BaseHTTPError as e:
-        log.error(e, exc_info=True)
-        errors.update({volume.name: e.message})
-    if errors:
-        for vol, err in errors.items():
-            log.error("Error destroying {vol}: {err}".format(vol=vol, err=err))
-        raise RuntimeError("Encountered errors during volume deletion. Volume names and messages have been logged.")
+    timeout = datetime.timedelta(seconds=200)
+    starttime = datetime.datetime.now()
+    while True:
+        try:
+            volobj = driver.ex_get_volume(volume.id)
+            driver.detach_volume(volobj)
+            sleep(30)
+            driver.destroy_volume(volobj)
+            break
+        except BaseHTTPError as e:
+            log.error(e, exc_info=True)
+            errors.update({volume.name: e.message})
+            if errors:
+                if datetime.datetime.now() - starttime > timeout:
+                    for vol, err in errors.items():
+                        log.error("Error destroying {vol}: {err}".format(vol=vol, err=err))
+                    return 1
 
 
 def keep_alive(ceph_nodes):
