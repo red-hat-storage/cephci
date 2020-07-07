@@ -13,7 +13,7 @@ def run(**kw):
     client_node = rgw_client_nodes[0]
     # cleanup any existing stale test dir
     test_folder = 'rbd-tests'
-    client_node.exec_command(cmd='rm -rf ' + test_folder)
+    client_node.exec_command(cmd='sudo rm -rf ' + test_folder)
     client_node.exec_command(cmd='mkdir ' + test_folder)
     client_node.exec_command(cmd='cd ' + test_folder + ' ; ' + git_clone)
     client_node.exec_command(cmd='sudo pip install boto names PyYaml ConfigParser')
