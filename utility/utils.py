@@ -6,6 +6,8 @@ import smtplib
 import time
 import traceback
 import re
+import shutil
+import subprocess
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -533,13 +535,15 @@ def custom_ceph_config(suite_config, custom_config, custom_config_file):
     return full_custom_config
 
 
-def email_results(results_list, run_id, send_to_cephci=False):
+def email_results(results_list, run_id, run_dir, suite_run_time, send_to_cephci=False):
     """
     Email results of test run to QE
 
     Args:
         results_list (list): test case results info
         run_id (str): id of the test run
+        run_dir (str): log directory path
+        suite_run_time (str): suite total duration info
         send_to_cephci (bool): send to cephci@redhat.com as well as user email
 
     Returns: None
@@ -566,7 +570,11 @@ def email_results(results_list, run_id, send_to_cephci=False):
         log_link = "http://magna002.ceph.redhat.com/cephci-jenkins/{run}/".format(run=run_name)
 
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = "cephci results for {run}".format(run=run_name)
+        run_status = get_run_status(results_list)
+        msg['Subject'] = "[{run_status}] {compose} {suite} {run}".format(run=run_name,
+                                                                         compose=results_list[0]['compose-id'],
+                                                                         suite=results_list[0]['suite-name'],
+                                                                         run_status=run_status)
         msg['From'] = sender
         msg['To'] = ", ".join(recipients)
 
@@ -581,10 +589,19 @@ def email_results(results_list, run_id, send_to_cephci=False):
 
         html = template.render(run_name=run_name,
                                log_link=log_link,
-                               test_results=results_list)
+                               test_results=results_list,
+                               suite_run_time=suite_run_time)
 
         part1 = MIMEText(html, 'html')
         msg.attach(part1)
+        text_file = open("result.html", "wt")
+        text_file.write(html)
+        text_file.close()
+        shutil.copy('result.html', run_dir)
+        # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
+        subprocess.call('echo run_status="{}" > result.props'.format(run_status), shell=True)
+        subprocess.call('echo compose="{}" >> result.props'.format(results_list[0]['compose-id']), shell=True)
+        subprocess.call('echo suite="{}" >> result.props'.format(results_list[0]['suite-name']), shell=True)
 
         try:
             s = smtplib.SMTP('localhost')
@@ -615,3 +632,13 @@ def get_cephci_config():
                   "See README for more information.")
         raise
     return cfg
+
+
+def get_run_status(results_list):
+    """
+    Returns overall run status either Pass or Fail.
+    """
+    for tc in results_list:
+        if tc['status'] == 'Failed':
+            return "FAILED"
+    return "PASSED"
