@@ -5,6 +5,7 @@ monkey.patch_all()
 import traceback
 import yaml
 import sys
+import datetime
 import os
 import json
 import logging
@@ -174,7 +175,7 @@ def create_nodes(conf, inventory, osp_cred, run_id, report_portal_session=None, 
 
 
 def print_results(tc):
-    header = '\n{name:<20s}   {desc:50s}   {duration:20s}   {status:>15s}'.format(
+    header = '\n{name:<30s}   {desc:<60s}   {duration:<30s}   {status:>15s}'.format(
         name='TEST NAME',
         desc='TEST DESCRIPTION',
         duration='DURATION',
@@ -189,7 +190,7 @@ def print_results(tc):
         name = test['name']
         desc = test['desc'] or "None"
         status = test['status']
-        line = f'{name:<20s}   {desc:50s}   {dur:20s}   {status:>15s}'
+        line = f'{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:>15s}'
         print(line)
 
 
@@ -232,6 +233,7 @@ def run(args):
     run_dir = create_run_dir(run_id, log_directory)
     startup_log = os.path.join(run_dir, "startup.log")
     print("Startup log location: {}".format(startup_log))
+    run_start_time = datetime.datetime.now()
     handler = logging.FileHandler(startup_log)
     handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
@@ -444,6 +446,8 @@ def run(args):
         tc['desc'] = test.get('desc')
         tc['file'] = test.get('module')
         tc['polarion-id'] = test.get('polarion-id')
+        polarion_default_url = "https://polarion.engineering.redhat.com/polarion/#/project/CEPH/workitem?id="
+        tc['polarion-id-link'] = "{}{}".format(polarion_default_url, tc['polarion-id'])
         tc['rhbuild'] = rhbuild
         tc['ceph-version'] = ceph_version
         tc['ceph-ansible-version'] = ceph_ansible_version
@@ -466,7 +470,7 @@ def run(args):
         log.info("Running test %s", test_file)
         tc['duration'] = '0s'
         tc['status'] = 'Not Executed'
-        start = time.time()
+        start = datetime.datetime.now()
         for cluster_name in test.get('clusters', ceph_cluster_dict):
             if test.get('clusters'):
                 config = test.get('clusters').get(cluster_name).get('config', {})
@@ -547,7 +551,7 @@ def run(args):
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
             if rc != 0:
                 break
-        elapsed = (time.time() - start)
+        elapsed = (datetime.datetime.now() - start)
         tc['duration'] = elapsed
         if rc == 0:
             tc['status'] = 'Pass'
@@ -577,18 +581,23 @@ def run(args):
         if test.get('recreate-cluster') is True:
             ceph_cluster_dict, clients = create_nodes(conf, inventory, osp_cred, run_id, service, instances_name)
         tcs.append(tc)
+    url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
+    run_dir_name = run_dir.split('/')[-1]
+    log.info("\nAll test logs located here: {base}/{dir}".format(base=url_base, dir=run_dir_name))
     close_and_remove_filehandlers()
     if post_to_report_portal:
         service.finish_launch(end_time=timestamp())
         service.terminate()
     if xunit_results:
         create_xunit_results(suite_name, tcs, run_dir)
-    url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
-    run_dir_name = run_dir.split('/')[-1]
     print("\nAll test logs located here: {base}/{dir}".format(base=url_base, dir=run_dir_name))
     print_results(tcs)
     send_to_cephci = post_results or post_to_report_portal
-    email_results(tcs, run_id, send_to_cephci)
+    run_end_time = datetime.datetime.now()
+    total_run_time = (datetime.datetime.now() - run_start_time)
+    total_time = """'''Start Time:''' {a} '''End Time:''' {b} '''Total duration:'''{c} \
+                 """.format(a=run_start_time, b=run_end_time, c=total_run_time)
+    email_results(tcs, run_id, run_dir, total_time, send_to_cephci)
     return jenkins_rc
 
 

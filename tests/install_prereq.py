@@ -10,7 +10,7 @@ from ceph.utils import update_ca_cert
 
 log = logging.getLogger(__name__)
 
-rpm_packages = {'py2': ['wget', 'git', 'python-virtualenv', 'redhat-lsb', 'python-nose', 'ntp'],
+rpm_packages = {'py2': ['wget', 'git', 'python-virtualenv', 'redhat-lsb', 'python-nose', 'ntp', 'python2-pip'],
                 'py3': ['wget', 'git', 'python3-virtualenv', 'redhat-lsb', 'python3-nose', 'python3-pip']}
 deb_packages = ['wget', 'git', 'python-virtualenv', 'lsb-release', 'ntp']
 deb_all_packages = " ".join(deb_packages)
@@ -54,6 +54,7 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
             enable_rhel_rpms(ceph, distro_ver)
         if repo:
             setup_addition_repo(ceph, repo)
+        # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
         if distro_ver.startswith('8'):
             rpm_all_packages = ' '.join(rpm_packages.get('py3'))
         else:

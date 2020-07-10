@@ -71,6 +71,10 @@
             <th style="color: blue">Logs</th>
             <td>{{ log_link }}</td>
         </tr>
+        <tr>
+            <th style="color: blue">Total suite duration</th>
+            <td>{{ suite_run_time }}</td>
+        </tr>
     </table>
     <h2>Test Results</h2>
     <table class="full-table">
@@ -82,13 +86,13 @@
         </tr>
         {% for test in test_results %}
             <tr>
-                <td>{{ test.name }}</td>
+                <td><a href="{{ test['polarion-id-link'] }}">{{ test.name }}</a></td>
                 <td>{{ test.desc }}</td>
                 <td>{{ test.duration }}</td>
                 {% if test.status == 'Pass' %}
-                    <td style="color: green;">{{ test.status }}</td>
+                    <td><a style="color: green;" href="{{ test['log-link'] }}">{{ test.status }}</a></td>
                 {% elif test.status == 'Failed' %}
-                    <td style="color: red;">{{ test.status }}</td>
+                    <td><a style="color: red;" href="{{ test['log-link'] }}">{{ test.status }}</a></td>
                 {% endif %}
             </tr>
         {% endfor %}
