@@ -435,6 +435,7 @@ def run(args):
     sys.path.append(os.path.abspath('tests/ceph_installer'))
     sys.path.append(os.path.abspath('tests/mgr'))
     sys.path.append(os.path.abspath('tests/dashboard'))
+    sys.path.append(os.path.abspath('tests/misc_env'))
 
     tests = suite.get('tests')
     tcs = []
