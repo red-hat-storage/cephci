@@ -1,5 +1,11 @@
 tests:
    - test:
+      name: interop suite pre-reqs
+      desc: rhel-ceph interop layered product testing pre-requisites
+      module: interop_pre_req.py
+      abort-on-fail: true
+
+   - test:
       name: install ceph pre-requisites
       module: install_prereq.py
       abort-on-fail: true
@@ -10,12 +16,13 @@ tests:
       module: test_ansible.py
       config:
         build: '4.x'
-        use_cdn: False
+        use_cdn: True
         is_mixed_lvm_configs: True
         ansi_config:
             ceph_test: False
-            ceph_origin: distro
+            ceph_origin: repository
             ceph_stable_release: nautilus
+            ceph_repository_type: cdn
             ceph_rhcs_version: 4
             ceph_repository: rhcs
             osd_scenario: lvm
@@ -90,12 +97,13 @@ tests:
       module: test_ansible_roll_over.py
       config:
           build: '4.x'
-          use_cdn: False
+          use_cdn: True
           is_mixed_lvm_configs: True
           ansi_config:
               ceph_test: False
-              ceph_origin: distro
+              ceph_origin: repository
               ceph_stable_release: nautilus
+              ceph_repository_type: cdn
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
@@ -130,12 +138,13 @@ tests:
       module: test_ansible_roll_over.py
       config:
           build: '4.x'
-          use_cdn: False
+          use_cdn: True
           is_mixed_lvm_configs: True
           ansi_config:
               ceph_test: False
-              ceph_origin: distro
+              ceph_origin: repository
               ceph_stable_release: nautilus
+              ceph_repository_type: cdn
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm
@@ -170,13 +179,14 @@ tests:
       module: test_ansible_roll_over.py
       config:
           build: '4.x'
-          use_cdn: False
+          use_cdn: True
           is_mixed_lvm_configs: True
           device: /dev/vdc
           ansi_config:
               ceph_test: False
-              ceph_origin: distro
+              ceph_origin: repository
               ceph_stable_release: nautilus
+              ceph_repository_type: cdn
               ceph_rhcs_version: 4
               ceph_repository: rhcs
               osd_scenario: lvm

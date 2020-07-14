@@ -430,6 +430,13 @@ def run(args):
     sys.path.append(os.path.abspath('tests/rbd_mirror'))
     sys.path.append(os.path.abspath('tests/cephfs'))
     sys.path.append(os.path.abspath('tests/iscsi'))
+    sys.path.append(os.path.abspath('tests/rgw'))
+    sys.path.append(os.path.abspath('tests/ceph_ansible'))
+    sys.path.append(os.path.abspath('tests/ceph_installer'))
+    sys.path.append(os.path.abspath('tests/mgr'))
+    sys.path.append(os.path.abspath('tests/dashboard'))
+    sys.path.append(os.path.abspath('tests/misc_env'))
+
     tests = suite.get('tests')
     tcs = []
     jenkins_rc = 0
