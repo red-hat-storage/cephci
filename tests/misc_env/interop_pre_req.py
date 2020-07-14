@@ -13,7 +13,10 @@ def run(**kw):
 
     with parallel() as p:
         for ceph in ceph_nodes:
-            p.spawn(add_recent_rhel8_product_cert, ceph)
+            distro_info = ceph.distro_info
+            distro_ver = distro_info['VERSION_ID']
+            if distro_ver.startswith('8'):
+                p.spawn(add_recent_rhel8_product_cert, ceph)
             time.sleep(5)
     return 0
 
