@@ -571,9 +571,9 @@ def email_results(results_list, run_id, run_dir, suite_run_time, send_to_cephci=
 
         msg = MIMEMultipart('alternative')
         run_status = get_run_status(results_list)
-        msg['Subject'] = "[{run_status}] {compose} {suite} {run}".format(run=run_name,
-                                                                         compose=results_list[0]['compose-id'],
+        msg['Subject'] = "[{run_status}] {suite} {compose} {run}".format(run=run_name,
                                                                          suite=results_list[0]['suite-name'],
+                                                                         compose=results_list[0]['compose-id'],
                                                                          run_status=run_status)
         msg['From'] = sender
         msg['To'] = ", ".join(recipients)
