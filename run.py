@@ -274,7 +274,7 @@ def run(args):
             base_url = composes['latest']['base_url']
 
     # Get ubuntu-repo
-    if not ubuntu_repo:
+    if not ubuntu_repo and rhbuild.startswith('3'):
         if rhbuild in composes:
             ubuntu_repo = composes[rhbuild]['ubuntu_repo']
         else:
