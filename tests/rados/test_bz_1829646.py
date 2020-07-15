@@ -21,7 +21,8 @@ def run(ceph_cluster, **kw):
     log.info("Running bz-1829646")
     log.info(run.__doc__)
     ceph_nodes = kw.get('ceph_nodes')
-    mons = osds = []
+    mons = []
+    osds = []
     osd_list_dict = dict()
 
     # The OSD back filling/Recovery can take up a lot of time... Waiting up to 5 hours for the task to complete.
@@ -165,7 +166,7 @@ def collect_osd_daemon_info(mon_node, osd_node):
     """
 
     cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
-    log.info(f"Collecting the OSD details from node {osd_node.hostname} by executing the command : {cmd}")
+    log.info(f"Collecting the OSD details from node {mon_node.hostname} by executing the command : {cmd}")
     out, err = mon_node.exec_command(cmd=cmd)
     return [int(ids) for ids in out.read().decode().split()]
 
