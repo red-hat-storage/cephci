@@ -3,6 +3,7 @@ import logging
 import random
 import time
 import re
+from ceph.rados_utils import RadosHelper
 
 log = logging.getLogger(__name__)
 
@@ -50,9 +51,11 @@ def run(ceph_cluster, **kw):
 
     controller = mons[0]
     log.info(f"choosing mon {controller.hostname} as Control monitor")
+    helper = RadosHelper(controller, config, log)
+
     # collecting the osd daemons present on the OSD node
     for node in osds:
-        osd_list_dict[node] = collect_osd_daemon_info(mon_node=controller, osd_node=node)
+        osd_list_dict[node] = helper.collect_osd_daemon_ids(mon_node=controller, osd_node=node)
 
     # collecting the initial size of the Mon DB and the OSD map epoch times
     mon_db_initial_size = get_mon_db_size(mon_node=controller)
@@ -132,11 +135,11 @@ def run(ceph_cluster, **kw):
         flag_db_size = 1
 
     # checking the OSD map, if the old mappings were updated.
-    initial_epoch_time_difference = osd_map_initial_epoch_times['osdmap_last_committed'] - \
-                                    osd_map_initial_epoch_times['osdmap_first_committed']
+    initial_epoch_time_difference =\
+        osd_map_initial_epoch_times['osdmap_last_committed'] - osd_map_initial_epoch_times['osdmap_first_committed']
     log.debug(f"The initial difference in the osd maps is : {initial_epoch_time_difference}")
-    final_epoch_time_difference = osd_map_final_epoch_times['osdmap_last_committed'] - \
-                                  osd_map_final_epoch_times['osdmap_first_committed']
+    final_epoch_time_difference = \
+        osd_map_final_epoch_times['osdmap_last_committed'] - osd_map_final_epoch_times['osdmap_first_committed']
     log.debug(f"The Final difference in the osd maps is : {final_epoch_time_difference}")
 
     flag_osd_map = 1 if final_epoch_time_difference > 800 else 0
@@ -193,20 +196,6 @@ def get_status_from_ceph_report(mon_node, operation=None):
         status_dict = status_json
         log.debug(f"Cluster report : {str(status_dict)} ")
     return status_dict
-
-
-def collect_osd_daemon_info(mon_node, osd_node):
-    """
-    The method is used to collect the various OSD's present on a particular node
-    :param mon_node: name of the monitor node (ceph.ceph.CephNode): ceph node
-    :param osd_node: name of the OSD node on which osd daemon details are collected (ceph.ceph.CephNode): ceph node
-    :return: list od OSD's present on the node
-    """
-
-    cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
-    log.info(f"Collecting the OSD details from node {mon_node.hostname} by executing the command : {cmd}")
-    out, err = mon_node.exec_command(cmd=cmd)
-    return [int(ids) for ids in out.read().decode().split()]
 
 
 def change_osd_daemon_status(osd_node, task, osd_number=None):

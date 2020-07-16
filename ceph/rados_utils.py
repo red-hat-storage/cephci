@@ -281,3 +281,16 @@ class RadosHelper:
             scrub_cmd = "sudo ceph osd deep-scrub all"
             self.mon.exec_command(cmd=scrub_cmd)
             timeout = timeout - 2
+
+    def collect_osd_daemon_ids(self, mon_node, osd_node):
+        """
+        The method is used to collect the various OSD's present on a particular node
+        :param mon_node: name of the monitor node (ceph.ceph.CephNode): ceph node
+        :param osd_node: name of the OSD node on which osd daemon details are collected (ceph.ceph.CephNode): ceph node
+        :return: list od OSD's present on the node
+        """
+
+        cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
+        self.log(f"Collecting the OSD details from node {mon_node.hostname} by executing the command : {cmd}")
+        out, err = mon_node.exec_command(cmd=cmd)
+        return [int(ids) for ids in out.read().decode().split()]
