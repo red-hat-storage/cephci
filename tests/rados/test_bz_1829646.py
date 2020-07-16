@@ -217,4 +217,3 @@ def change_osd_daemon_status(osd_node, task, osd_number=None):
         log.debug(f"{task}ing all OSD daemons on node {osd_node.hostname} by executing the command : {cmd}")
     osd_node.exec_command(cmd=cmd)
     return None
-
