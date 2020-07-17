@@ -59,7 +59,7 @@ def run(ceph_cluster, **kw):
         ceph_cluster.setup_insecure_registry()
 
     # use the provided sample file as main site.yml
-    ceph_installer.setup_ansible_site_yml(ceph_cluster.containerized)
+    ceph_installer.setup_ansible_site_yml(build, ceph_cluster.containerized)
 
     ceph_cluster.distribute_all_yml()
 

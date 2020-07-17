@@ -521,9 +521,13 @@ class Ceph(object):
         out, err = client.exec_command(cmd='sudo ceph -s -f json')
         out_json = out.read().decode()
         ceph_status_json = json.loads(out_json)
-        num_osds = ceph_status_json['osdmap']['osdmap']['num_osds']
-        num_up_osds = ceph_status_json['osdmap']['osdmap']['num_up_osds']
-        num_in_osds = ceph_status_json['osdmap']['osdmap']['num_in_osds']
+
+        # Support extraction of OSDmap attributes for 3.x, 4.x & 5.x
+        osd_status = ceph_status_json['osdmap'].get('osdmap',
+                                                    ceph_status_json['osdmap'])
+        num_osds = osd_status['num_osds']
+        num_up_osds = osd_status['num_up_osds']
+        num_in_osds = osd_status['num_in_osds']
         if num_osds != num_up_osds:
             logger.error("Not all osd's are up. Actual: %s / Expected: %s" % (num_up_osds, num_osds))
             return 1
@@ -1776,20 +1780,27 @@ class CephInstaller(CephObject):
                                      cmd='cat {ansible_dir}/hosts'.format(ansible_dir=self.ansible_dir))
         return out.readlines()
 
-    def setup_ansible_site_yml(self, containerized):
+    def setup_ansible_site_yml(self, build, containerized):
         """
         Create proper site.yml from sample for containerized or non-containerized deployment
         Args:
+            build(string): RHCS build
             containerized(bool): use site-docker.yml.sample if True else site.yml.sample
         """
         # https://github.com/ansible/ansible/issues/11536
         self.exec_command(cmd='''echo 'export ANSIBLE_SSH_CONTROL_PATH="%(directory)s/%%C"'>> ~/.bashrc;
                                  source ~/.bashrc''')
         if containerized:
+            file_name = "site-docker.yml"
+            if build.startswith("5"):
+                file_name = "site-container.yml"
+
             self.exec_command(
                 sudo=True,
-                cmd='cp -R {ansible_dir}/site-docker.yml.sample {ansible_dir}/site.yml'.format(
-                    ansible_dir=self.ansible_dir))
+                cmd='cp -R {ansible_dir}/{file_name}.sample {ansible_dir}/site.yml'.format(
+                    ansible_dir=self.ansible_dir,
+                    file_name=file_name
+                ))
         else:
             self.exec_command(
                 sudo=True, cmd='cp -R {ansible_dir}/site.yml.sample {ansible_dir}/site.yml'.format(
@@ -1800,30 +1811,38 @@ class CephInstaller(CephObject):
         Installs ceph-ansible
         """
         logger.info("Installing ceph-ansible")
+
+        ansible_rpm = {
+            "2": {
+                "7": "rhel-7-server-ansible-2.4-rpms"
+            },
+            "3": {
+                "7": "rhel-7-server-ansible-2.6-rpms"
+            },
+            "4": {
+                "7": "rhel-7-server-ansible-2.8-rpms",
+                "8": "ansible-2.8-for-rhel-8-x86_64-rpms"
+            },
+            "5": {
+                "8": "ansible-2.9-for-rhel-8-x86_64-rpms"
+            }
+        }
+
         if self.pkg_type == 'deb':
             self.exec_command(sudo=True, cmd='apt-get install -y ceph-ansible')
         else:
-            distro_ver = self.distro_info['VERSION_ID']
-            if distro_ver.startswith('8'):
+            distro_ver = self.distro_info['VERSION_ID'].split(".")[0]
+            rhcs_ver = rhbuild.split(".")[0]
+
+            try:
+                rpm = ansible_rpm[rhcs_ver][distro_ver]
                 self.exec_command(
-                    cmd='sudo subscription-manager repos --enable=ansible-2.8-for-rhel-8-x86_64-rpms',
+                    cmd='sudo subscription-manager repos --enable={}'.format(rpm),
                     long_running=True)
-            else:
-                self.exec_command(
-                    cmd='sudo subscription-manager repos --disable=rhel-7-server-ansible-*-rpms',
-                    long_running=True)
-                if rhbuild.startswith('4'):
-                    self.exec_command(
-                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.8-rpms',
-                        long_running=True)
-                elif rhbuild.startswith('3'):
-                    self.exec_command(
-                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.6-rpms',
-                        long_running=True)
-                else:
-                    self.exec_command(
-                        cmd='sudo subscription-manager repos --enable=rhel-7-server-ansible-2.4-rpms',
-                        long_running=True)
+            except KeyError as err:
+                raise KeyError(err)
+            except CommandFailed as err:
+                raise CommandFailed(err)
 
         if kw.get('upgrade'):
             self.exec_command(sudo=True, cmd='yum update metadata')
