@@ -68,7 +68,7 @@ def run(ceph_cluster, **kw):
         cmd='cd {};'
             ' ANSIBLE_STDOUT_CALLBACK=debug;'
             ' ansible-playbook -vvvv -i new_hosts site.yml --limit {daemon}'.format(ansible_dir,
-                                                                                  daemon=config.get('demon') + 's'),
+                                                                                    daemon=config.get('demon') + 's'),
         long_running=True)
 
     # Validate failure
