@@ -97,6 +97,15 @@ tests:
       desc: rewrite a known omap item of a replica and check list-inconsistent-obj
 
    - test:
+       name: Auto trim of ceph osd maps
+       polarion-id: CEPH-83573514
+       module: test_bz_1829646.py
+       config:
+         non_scale_setup: True
+         osd_count: 2
+       desc: Autotrim of OSD/MonDB maps after failed OSD recovery
+
+   - test:
       name: ceph ansible purge
       polarion-id: CEPH-83571498
       module: purge_cluster.py
