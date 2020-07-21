@@ -21,13 +21,13 @@ def run(**kw):
         installer_node.exec_command(sudo=True,
                                     cmd='cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{playbook} .'
                                     .format(ansible_dir=ansible_dir, playbook=playbook))
-        out, err = installer_node.exec_command(cmd='cd {ansible_dir};ansible-playbook {playbook}'
+        out, err = installer_node.exec_command(cmd='cd {ansible_dir};ansible-playbook -vvvv {playbook}'
                                                ' -e ireallymeanit=yes -i hosts'
                                                .format(ansible_dir=ansible_dir, playbook=playbook),
                                                long_running=True)
 
     else:
-        out, err = installer_node.exec_command(cmd='cd {ansible_dir};ansible-playbook'
+        out, err = installer_node.exec_command(cmd='cd {ansible_dir};ansible-playbook -vvvv'
                                                ' infrastructure-playbooks/{playbook} -e ireallymeanit=yes -i hosts'
                                                .format(ansible_dir=ansible_dir, playbook=playbook),
                                                long_running=True)

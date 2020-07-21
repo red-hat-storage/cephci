@@ -60,13 +60,13 @@ def run(**kw):
                                     cmd='cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{playbook} .'
                                     .format(ansible_dir=ansible_dir, playbook=playbook))
         out, err = installer_node.exec_command(
-            cmd="cd {ansible_dir} ; ansible-playbook -i {inventory} {playbook} {playbook_options}"
+            cmd="cd {ansible_dir} ; ansible-playbook -vvvv -i {inventory} {playbook} {playbook_options}"
                 .format(ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
                         inventory=inventory.strip()),
             long_running=True)
     else:
         out, err = installer_node.exec_command(
-            cmd="cd {ansible_dir} ; ansible-playbook -i {inventory} infrastructure-playbooks/{playbook} "
+            cmd="cd {ansible_dir} ; ansible-playbook -vvvv -i {inventory} infrastructure-playbooks/{playbook} "
                 "{playbook_options}"
                 .format(ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
                         inventory=inventory.strip()),

@@ -42,7 +42,7 @@ def run(ceph_cluster, **kw):
                                                '{ansible_dir}/shrink-osd.yml'.format(ansible_dir=ansible_dir))
 
     out, err = ceph_installer.exec_command(cmd='export ANSIBLE_DEPRECATION_WARNINGS=False ; cd {ansible_dir} ; '
-                                               'ansible-playbook -e ireallymeanit=yes shrink-osd.yml '
+                                               'ansible-playbook -vvvv -e ireallymeanit=yes shrink-osd.yml '
                                                '-e osd_to_kill={osd_to_kill} -i hosts'.format(ansible_dir=ansible_dir,
                                                                                               osd_to_kill=osd_to_kill),
                                            long_running=True)
