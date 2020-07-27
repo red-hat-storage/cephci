@@ -21,6 +21,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Shrinking osd")
     config = kw.get('config')
+    osd_scenario = ceph_cluster.ansible_config.get('osd_scenario')
     build = config.get('build', config.get('rhbuild'))
     osd_to_kill_list = config.get('osd-to-kill')
     osd_to_kill = ','.join((str(osd) for osd in osd_to_kill_list))
@@ -37,15 +38,33 @@ def run(ceph_cluster, **kw):
     ceph_installer = ceph_cluster.get_ceph_object('installer')
     ceph_installer.node.obtain_root_permissions('/var/log')
     ansible_dir = ceph_installer.ansible_dir
+    if build.startswith('2'):
+        ceph_installer.exec_command(sudo=True, cmd='cp -R {ansible_dir}/infrastructure-playbooks/shrink-osd.yml '
+                                    '{ansible_dir}/shrink-osd.yml'.format(ansible_dir=ansible_dir))
+        cmd = 'export ANSIBLE_DEPRECATION_WARNINGS=False ; cd {ansible_dir} ; ansible-playbook -e ireallymeanit=yes \
+                shrink-osd.yml -e osd_to_kill={osd_to_kill} -i hosts'.format(
+            ansible_dir=ansible_dir, osd_to_kill=osd_to_kill)
 
-    ceph_installer.exec_command(sudo=True, cmd='cp -R {ansible_dir}/infrastructure-playbooks/shrink-osd.yml '
-                                               '{ansible_dir}/shrink-osd.yml'.format(ansible_dir=ansible_dir))
+    if build.startswith('3'):
+        if osd_scenario == 'lvm':
+            ceph_installer.exec_command(sudo=True, cmd='cp -R {ansible_dir}/infrastructure-playbooks/shrink-osd.yml '
+                                        '{ansible_dir}/shrink-osd.yml'.format(ansible_dir=ansible_dir))
+            cmd = 'export ANSIBLE_DEPRECATION_WARNINGS=False ; cd {ansible_dir} ; ansible-playbook -e ireallymeanit=yes \
+                    shrink-osd.yml -e osd_to_kill={osd_to_kill} -i hosts'.format(
+                ansible_dir=ansible_dir, osd_to_kill=osd_to_kill)
+        else:
+            ceph_installer.exec_command(sudo=True,
+                                        cmd='cp -R {ansible_dir}/infrastructure-playbooks/shrink-osd-ceph-disk.yml '
+                                        '{ansible_dir}/shrink-osd-ceph-disk.yml'.format(ansible_dir=ansible_dir))
+            cmd = 'export ANSIBLE_DEPRECATION_WARNINGS=False ; cd {ansible_dir} ; ansible-playbook -e ireallymeanit=yes\
+                    shrink-osd-ceph-disk.yml -e osd_to_kill={osd_to_kill} -i hosts'.format(
+                ansible_dir=ansible_dir, osd_to_kill=osd_to_kill)
+    else:
+        cmd = "export ANSIBLE_DEPRECATION_WARNINGS=False ; cd {ansible_dir} ; ansible-playbook -e ireallymeanit=yes \
+                infrastructure-playbooks/shrink-osd.yml -e osd_to_kill={osd_to_kill} -i hosts".format(
+            ansible_dir=ansible_dir, osd_to_kill=osd_to_kill)
 
-    out, err = ceph_installer.exec_command(cmd='export ANSIBLE_DEPRECATION_WARNINGS=False ; cd {ansible_dir} ; '
-                                               'ansible-playbook -vvvv -e ireallymeanit=yes shrink-osd.yml '
-                                               '-e osd_to_kill={osd_to_kill} -i hosts'.format(ansible_dir=ansible_dir,
-                                                                                              osd_to_kill=osd_to_kill),
-                                           long_running=True)
+    out, err = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if err != 0:
         log.error("Failed during ansible playbook run")
