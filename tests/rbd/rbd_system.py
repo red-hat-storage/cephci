@@ -14,11 +14,12 @@ def run(**kw):
     # cleanup any existing stale test dir
     test_folder = 'rbd-tests'
     client_node.exec_command(cmd='sudo yum -y install python3')
-    client_node.exec_command(cmd='python3 -m venv ' + test_folder)
-    client_node.exec_command(cmd='sudo rm -rf ' + test_folder)
-    client_node.exec_command(cmd='mkdir ' + test_folder)
-    client_node.exec_command(cmd='cd ' + test_folder + ' ; ' + git_clone)
-    client_node.exec_command(cmd='sudo pip install boto names PyYaml ConfigParser')
+    create_virtual_env = 'python3 -m venv env'
+    activate_virtual_env = 'source env/bin/activate'
+    remove_folder = 'sudo rm -rf ' + test_folder
+    create_folder = 'mkdir ' + test_folder
+    clone_inside_folder = 'cd ' + test_folder + ' ; ' + git_clone
+    install_pyyaml = 'sudo pip install boto names PyYaml ConfigParser'
     config = kw.get('config')
     script_name = config.get('test_name')
     timeout = config.get('timeout', 1800)
@@ -27,7 +28,8 @@ def run(**kw):
     else:
         ec_pool_arg = ''
     command = 'sudo python3 ~/' + test_folder + '/ceph-qe-scripts/rbd/system/' + script_name + ec_pool_arg
-    stdout, stderr = client_node.exec_command(cmd=command, timeout=timeout, check_ec=False)
+    commands = create_virtual_env + ';' + activate_virtual_env + ';' + remove_folder + ';' + create_folder + ';' + clone_inside_folder + ';' + install_pyyaml+ ';' + command +'; deactivate'
+    stdout, stderr = client_node.exec_command(cmd=commands, timeout=timeout, check_ec=False)
     output = stdout.read().decode()
     if output:
         log.info(output)
