@@ -650,8 +650,9 @@ class Ceph(object):
                                 node.exec_command(sudo=True,
                                                   cmd='wget -O /etc/yum.repos.d/rh_repo.repo {repo}'.format(
                                                       repo=hotfix_repo))
-                            if not self.ansible_config.get('ceph_repository_type') == 'cdn':
-                                node.setup_rhceph_repos(base_url, installer_url)
+                            else:
+                                if not self.ansible_config.get('ceph_repository_type') == 'cdn':
+                                    node.setup_rhceph_repos(base_url, installer_url)
                     if self.ansible_config.get('ceph_repository_type') == 'iso' and node.role == 'installer':
                         iso_file_url = self.get_iso_file_url(base_url)
                         node.exec_command(sudo=True, cmd='mkdir -p {}/iso'.format(node.ansible_dir))

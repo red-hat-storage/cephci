@@ -535,13 +535,14 @@ def custom_ceph_config(suite_config, custom_config, custom_config_file):
     return full_custom_config
 
 
-def email_results(results_list, run_id, run_dir, suite_run_time, send_to_cephci=False):
+def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, send_to_cephci=False):
     """
     Email results of test run to QE
 
     Args:
         results_list (list): test case results info
         run_id (str): id of the test run
+        trigger_user (str): user of the node where the run is triggered from
         run_dir (str): log directory path
         suite_run_time (str): suite total duration info
         send_to_cephci (bool): send to cephci@redhat.com as well as user email
@@ -590,7 +591,8 @@ def email_results(results_list, run_id, run_dir, suite_run_time, send_to_cephci=
         html = template.render(run_name=run_name,
                                log_link=log_link,
                                test_results=results_list,
-                               suite_run_time=suite_run_time)
+                               suite_run_time=suite_run_time,
+                               trigger_user=trigger_user)
 
         part1 = MIMEText(html, 'html')
         msg.attach(part1)

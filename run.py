@@ -234,6 +234,7 @@ def run(args):
     startup_log = os.path.join(run_dir, "startup.log")
     print("Startup log location: {}".format(startup_log))
     run_start_time = datetime.datetime.now()
+    trigger_user = getuser()
     handler = logging.FileHandler(startup_log)
     handler.setLevel(logging.INFO)
     handler.setFormatter(formatter)
@@ -604,7 +605,7 @@ def run(args):
     total_run_time = (datetime.datetime.now() - run_start_time)
     total_time = """'''Start Time:''' {a} '''End Time:''' {b} '''Total duration:'''{c} \
                  """.format(a=run_start_time, b=run_end_time, c=total_run_time)
-    email_results(tcs, run_id, run_dir, total_time, send_to_cephci)
+    email_results(tcs, run_id, trigger_user, run_dir, total_time, send_to_cephci)
     return jenkins_rc
 
 
