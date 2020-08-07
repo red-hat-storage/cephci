@@ -7,6 +7,7 @@ import traceback
 from ceph.parallel import parallel
 from ceph.utils import config_ntp
 from ceph.utils import update_ca_cert
+from utility.utils import get_cephci_config
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
             ceph.exec_command(cmd='sudo pip install crefi', long_running=True)
         ceph.exec_command(cmd='sudo yum clean metadata')
         config_ntp(ceph)
+    registry_login(ceph, distro_ver)
 
 
 def setup_addition_repo(ceph, repo):
@@ -130,3 +132,29 @@ def enable_rhel_rpms(ceph, distro_ver):
     for repo in repos:
         ceph.exec_command(
             sudo=True, cmd='subscription-manager repos --enable={r}'.format(r=repo), long_running=True)
+
+
+def registry_login(ceph, distro_ver):
+    ''' login to this registry 'registry.redhat.io' on all nodes
+        docker for RHEL 7.x and podman for RHEL 8.x'''
+    cdn_cred = get_cephci_config().get('cdn_credentials')
+    if not cdn_cred:
+        log.warn('cdn_credentials not found')
+        return
+    user = cdn_cred.get('username')
+    pwd = cdn_cred.get('password')
+    if not (user and pwd):
+        log.warn('username and password not found for cdn_credentials')
+        return
+
+    container = 'docker'
+    if distro_ver.startswith('8'):
+        container = 'podman'
+
+    ceph.exec_command(cmd='sudo yum install -y {c}'.format(c=container), long_running=True)
+
+    if container == 'docker':
+        ceph.exec_command(cmd='sudo systemctl restart docker', long_running=True)
+
+    ceph.exec_command(
+        cmd='sudo {c} login -u {u} -p {p} registry.redhat.io'.format(c=container, u=user, p=pwd), check_ec=True)

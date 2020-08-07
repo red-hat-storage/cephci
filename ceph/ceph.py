@@ -152,6 +152,8 @@ class Ceph(object):
             if node.role == 'iscsi-gw':
                 node.open_firewall_port(port='3260', protocol='tcp')
                 node.open_firewall_port(port='5000-5001', protocol='tcp')
+            if node.role == 'grafana':
+                node.open_firewall_port(port='6800-6820', protocol='tcp')
 
     def setup_ssh_keys(self):
         """
@@ -201,6 +203,7 @@ class Ceph(object):
         nfs_hosts = []
         client_hosts = []
         iscsi_gw_hosts = []
+        grafana_hosts = []
         counter = 0
 
         for node in self:  # type: CephNode
@@ -277,6 +280,9 @@ class Ceph(object):
             if node.role == 'iscsi-gw':
                 iscsi_gw_host = node.shortname
                 iscsi_gw_hosts.append(iscsi_gw_host)
+            if node.role == 'grafana':
+                grafana_host = node.shortname + ' grafana_interface=' + node.eth_interface
+                grafana_hosts.append(grafana_host)
         hosts_file = ''
         if mon_hosts:
             mon = '[mons]\n' + '\n'.join(mon_hosts)
@@ -302,6 +308,9 @@ class Ceph(object):
         if iscsi_gw_hosts:
             iscsi_gw = '[iscsigws]\n' + '\n'.join(iscsi_gw_hosts)
             hosts_file += iscsi_gw + '\n'
+        if grafana_hosts:
+            grafana = '[grafana-server]\n' + '\n'.join(grafana_hosts)
+            hosts_file += grafana + '\n'
         logger.info('Generated hosts file: \n{file}'.format(file=hosts_file))
         return hosts_file
 
@@ -1907,7 +1916,7 @@ class CephInstaller(CephObject):
 
 
 class CephObjectFactory(object):
-    DEMON_ROLES = ['mon', 'osd', 'mgr', 'rgw', 'mds', 'nfs']
+    DEMON_ROLES = ['mon', 'osd', 'mgr', 'rgw', 'mds', 'nfs', 'grafana']
     CLIENT_ROLES = ['client']
 
     def __init__(self, node):
