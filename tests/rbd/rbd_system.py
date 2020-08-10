@@ -14,7 +14,6 @@ def run(**kw):
     # cleanup any existing stale test dir
     test_folder = 'rbd-tests'
     client_node.exec_command(cmd='sudo yum -y install python3')
-    client_node.exec_command(cmd='sudo pip install boto names PyYaml ConfigParser')
     create_virtual_env = 'python3 -m venv env ; source env/bin/activate'
     del_add_folder = 'sudo rm -rf ' + test_folder + ' ; ' + 'mkdir ' + test_folder
     clone_folder = 'cd ' + test_folder + ' ; ' + git_clone
