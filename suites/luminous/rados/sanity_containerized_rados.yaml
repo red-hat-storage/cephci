@@ -24,7 +24,7 @@ tests:
             containerized_deployment: true
             ceph_docker_registry: registry.access.redhat.com
             copy_admin_key: true
-            osd_objecstore: filestore
+            osd_objectstore: filestore
             ceph_conf_overrides:
                 global:
                   osd_pool_default_pg_num: 64
