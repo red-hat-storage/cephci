@@ -34,6 +34,10 @@ class FsUtils(object):
         log.info("Getting Clients")
 
         self.clients = self.ceph_cluster.get_ceph_objects('client')
+        for ceph in self.clients:
+            pass
+        distro_info = ceph.distro_info
+        distro_ver = distro_info['VERSION_ID']
         for node in self.clients:
             out, rc = node.exec_command(
                 cmd="sudo ceph mon dump  | awk {'print $2'} ")
@@ -53,6 +57,16 @@ class FsUtils(object):
         for client in self.clients:
             node = client.node
             if node.pkg_type == 'rpm':
+                if '7.' in distro_ver:
+                    node.exec_command(
+                        cmd='sudo curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py --insecure',
+                            long_running=True)
+                    node.exec_command(
+                        cmd='sudo python get-pip.py --trusted-host files.pythonhosted.org '
+                            '--trusted-host pypi.org --trusted-host pypi.python.org',
+                            long_running=True)
+                else:
+                    node.exec_command(cmd='sudo yum install -y python2-pip')
                 out, rc = node.exec_command(cmd='sudo rpm -qa | grep -w attr')
                 output = out.read().decode()
                 output.split()
@@ -61,11 +75,11 @@ class FsUtils(object):
                 node.exec_command(cmd='sudo yum install -y gcc python2-devel', check_ec=False)
 
                 out, rc = node.exec_command(
-                    cmd='sudo pip  list --format=columns')
+                    cmd='sudo pip2  list --format=columns')
                 output = out.read().decode()
                 output.split()
                 if 'crefi' not in output:
-                    node.exec_command(cmd='sudo pip install crefi')
+                    node.exec_command(cmd='sudo pip2 install crefi')
 
                 out, rc = node.exec_command(cmd="sudo ls /home/cephuser")
                 output = out.read().decode()
@@ -88,7 +102,7 @@ class FsUtils(object):
                         cmd='sudo yum install -y ceph-fuse')
 
             elif node.pkg_type == 'deb':
-                node.exec_command(cmd='sudo pip install --upgrade pip')
+                node.exec_command(cmd='sudo pip2 install --upgrade pip2')
                 out, rc = node.exec_command(cmd='sudo apt list libattr1-dev')
                 out = out.read().decode().split()
                 if 'libattr1-dev/xenial,now' not in out:
@@ -103,11 +117,11 @@ class FsUtils(object):
                 if 'fio/xenial,now' not in out:
                     node.exec_command(cmd='sudo apt-get install -y fio')
                 out, rc = node.exec_command(
-                    cmd='sudo pip list')
+                    cmd='sudo pip2 list')
                 output = out.read().decode()
                 output.split()
                 if 'crefi' not in output:
-                    node.exec_command(cmd='sudo pip install crefi')
+                    node.exec_command(cmd='sudo pip2 install crefi')
 
                 out, rc = node.exec_command(cmd="sudo ls /home/cephuser")
                 output = out.read().decode()
@@ -1111,6 +1125,7 @@ os.system('sudo systemctl start  network')
         nw_disconnect.write(script)
         nw_disconnect.flush()
         log.info('Stopping the network..')
+        node.exec_command(cmd='sudo yum install -y python2')
         out, rc = node.exec_command(
             cmd="sudo python2 /home/cephuser/nw_disconnect.py")
         log.info('Starting the network..')
