@@ -1847,7 +1847,9 @@ class CephInstaller(CephObject):
                 raise CommandFailed(err)
 
         if kw.get('upgrade'):
-            self.exec_command(sudo=True, cmd='yum update metadata')
+            self.exec_command(sudo=True,
+                              cmd='yum update meta',
+                              check_ec=False)
             self.exec_command(sudo=True, cmd='yum update -y ansible ceph-ansible')
         else:
             self.exec_command(sudo=True, cmd='yum install -y ceph-ansible')
