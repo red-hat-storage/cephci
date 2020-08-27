@@ -16,7 +16,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '11254-fuse_clients'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         config = kw.get('config')
         num_of_osds = config.get('num_of_osds')
         fs_util = FsUtils(ceph_cluster)
@@ -67,7 +67,7 @@ def run(ceph_cluster, **kw):
             return 1
         cluster_health_beforeIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), build, None, 300)
+                client_info['mon_node']), build, None, 600)
         rc = fs_util.activate_multiple_mdss(client_info['mds_nodes'])
         if rc == 0:
             log.info("Activate multiple mdss successfully")
@@ -170,7 +170,7 @@ def run(ceph_cluster, **kw):
 
         cluster_health_afterIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), build, None, 300)
+                client_info['mon_node']), build, None, 600)
         if cluster_health_afterIO == cluster_health_beforeIO:
             log.info('cluster is healthy')
         else:
@@ -257,11 +257,11 @@ def run(ceph_cluster, **kw):
                 500,
                 iotype='touch')
             for node in client_info['mon_node']:
-                fs_util.pid_kill(node, 'mon')
+                fs_util.pid_kill(node, 'ceph-mon')
 
         cluster_health_afterIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
-                client_info['mon_node']), build, None, 300)
+                client_info['mon_node']), build, None, 600)
         if cluster_health_beforeIO == cluster_health_afterIO:
             log.info("Cluster is healthy")
         else:
@@ -320,7 +320,7 @@ def run(ceph_cluster, **kw):
                 return 1
             if rc == 0:
                 log.info('Cleaning up successfull')
-        log.info("Execution of Test cases CEPH-%s ended:" % (tc))
+        log.info("Execution of Test cases CEPH-%s ended:" % tc)
         print('Script execution time:------')
         stop = timeit.default_timer()
         total_time = stop - start

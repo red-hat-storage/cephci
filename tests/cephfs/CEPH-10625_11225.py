@@ -17,7 +17,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '10625,11225'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))
@@ -229,7 +229,7 @@ def run(ceph_cluster, **kw):
             file_name = ''.join(
                 random.choice(
                     string.ascii_lowercase
-                    + string.digits) for _ in range(255))
+                    + string.digits) for _ in list(range(255)))
             client.exec_command(
                 cmd="sudo touch '%s%s/%s'" %
                     (client_info['mounting_dir'], dir_name, file_name))
@@ -238,18 +238,20 @@ def run(ceph_cluster, **kw):
                 file_name = ''.join(
                     random.choice(
                         string.ascii_lowercase
-                        + string.digits) for _ in range(255))
+                        + string.digits) for _ in list(range(255)))
                 client.exec_command(
                     cmd="sudo touch '%s%s/%s'" %
                         (client_info['mounting_dir'], dir_name, file_name))
         for num in range(0, 5):
             for client in client_info['fuse_clients']:
                 client.exec_command(
-                    cmd="sudo crefi %s'%s' --fop create -t %s "
+                    cmd="sudo %s %s'%s' --fop create -t %s "
                         "--multi -b 10 -d 10 -n 10 -T 10 "
                         "--random --min=1K --max=%dK" %
-                        (client_info['mounting_dir'], dir_name, 'text',
-                         5), long_running=True)
+                        ("python3 /home/cephuser/Crefi/crefi.py",
+                         client_info['mounting_dir'],
+                         dir_name, 'text', 5),
+                    long_running=True)
                 for i in range(0, 6):
                     ops = [
                         'create',
@@ -263,11 +265,12 @@ def run(ceph_cluster, **kw):
                     rand_filetype = random.choice(ftypes)
                     rand_count = random.randint(2, 10)
                     client.exec_command(
-                        cmd='sudo crefi %s%s --fop %s -t %s '
+                        cmd='sudo %s %s%s --fop %s -t %s '
                             '--multi -b 10 -d 10 -n 10 -T 10 '
                             '--random --min=1K --max=%dK' %
-                            (client_info['mounting_dir'], dir_name, rand_ops,
-                             rand_filetype, rand_count),
+                            ("python3 /home/cephuser/Crefi/crefi.py",
+                             client_info['mounting_dir'],
+                             dir_name, rand_ops, rand_filetype, rand_count),
                         long_running=True)
         log.info('Cleaning up!-----')
         if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
@@ -286,7 +289,7 @@ def run(ceph_cluster, **kw):
             log.info('Cleaning up successfull')
         else:
             return 1
-        log.info("Execution of Test cases CEPH-%s ended:" % (tc))
+        log.info("Execution of Test cases CEPH-%s ended:" % tc)
         print('Script execution time:------')
         stop = timeit.default_timer()
         total_time = stop - start

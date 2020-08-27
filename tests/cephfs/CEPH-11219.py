@@ -16,7 +16,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '11219,11224'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         config = kw.get('config')
         num_of_osds = config.get('num_of_osds')
         fs_util = FsUtils(ceph_cluster)
@@ -198,7 +198,7 @@ def run(ceph_cluster, **kw):
                 client_info['mon_node'][0], num_of_osds, len(
                     client_info['mon_node']), build, None, 300)
 
-            log.info("Execution of Test case CEPH-%s ended" % (tc))
+            log.info("Execution of Test case CEPH-%s ended" % tc)
             print("Results:")
             result = fs_util.rc_verify(tc, return_counts)
             if cluster_health_beforeIO == cluster_health_afterIO:
@@ -326,7 +326,7 @@ def run(ceph_cluster, **kw):
                 else:
                     return 1
 
-        log.info("Execution of Test case CEPH-%s ended" % (tc))
+        log.info("Execution of Test case CEPH-%s ended" % tc)
         print("Results:")
         result = fs_util.rc_verify(tc, return_counts)
         print(result)

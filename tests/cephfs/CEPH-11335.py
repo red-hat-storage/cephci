@@ -15,7 +15,7 @@ def run(ceph_cluster, **kw):
     try:
         start = timeit.default_timer()
         tc = '11335'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))

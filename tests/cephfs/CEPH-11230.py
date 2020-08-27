@@ -15,7 +15,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '11230'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))
@@ -101,7 +101,7 @@ def run(ceph_cluster, **kw):
         if result == 'Data validation success':
             print("Data validation success")
             fs_util.activate_multiple_mdss(client_info['mds_nodes'])
-            log.info("Execution of Test case CEPH-%s started:" % (tc))
+            log.info("Execution of Test case CEPH-%s started:" % tc)
             for client in client1:
                 client.exec_command(
                     cmd='sudo mkdir %s%s_{1..50}' %
@@ -171,7 +171,7 @@ def run(ceph_cluster, **kw):
                     client_info['mds_nodes'])
                 for op in p:
                     return_counts, rc = op
-            log.info("Execution of Test case CEPH-%s ended:" % (tc))
+            log.info("Execution of Test case CEPH-%s ended:" % tc)
             print("Results:")
             result = fs_util.rc_verify(tc, return_counts)
             log.info(result)

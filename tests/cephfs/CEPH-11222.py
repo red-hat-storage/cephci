@@ -17,7 +17,7 @@ def run(ceph_cluster, **kw):
     try:
         start = timeit.default_timer()
         tc = '11222'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))
@@ -75,7 +75,7 @@ def run(ceph_cluster, **kw):
         dir1 = ''.join(
             random.choice(
                 string.ascii_lowercase
-                + string.digits) for _ in range(10))
+                + string.digits) for _ in list(range(10)))
         for client in client_info['clients']:
             log.info("Creating directory:")
             client.exec_command(
@@ -83,9 +83,10 @@ def run(ceph_cluster, **kw):
                     (client_info['mounting_dir'], dir1))
             log.info("Creating directories with breadth and depth:")
             out, rc = client.exec_command(
-                cmd='sudo crefi %s%s --fop create --multi -b 10 -d 10 '
+                cmd='sudo %s %s%s --fop create --multi -b 10 -d 10 '
                     '--random --min=1K --max=10K' %
-                    (client_info['mounting_dir'], dir1))
+                    ("python3 /home/cephuser/Crefi/crefi.py",
+                     client_info['mounting_dir'], dir1))
             print(out.read().decode())
             break
 
@@ -136,16 +137,18 @@ def run(ceph_cluster, **kw):
         for client in client_info['clients']:
             log.info("Creating directories with breadth and depth:")
             out, rc = client.exec_command(
-                cmd='sudo crefi %s%s --fop create --multi -b 10 -d 10 '
+                cmd='sudo %s %s%s --fop create --multi -b 10 -d 10 '
                     '--random --min=1K --max=10K' %
-                    (client_info['mounting_dir'], dir1))
+                    ("python3 /home/cephuser/Crefi/crefi.py",
+                     client_info['mounting_dir'], dir1))
             print(out.read().decode())
             log.info("Renaming the dirs:")
             out, rc = client.exec_command(
-                cmd='sudo crefi '
+                cmd='sudo %s '
                     '%s%s --fop rename --multi -b 10 -d 10 --random '
                     '--min=1K --max=10K' %
-                    (client_info['mounting_dir'], dir1))
+                    ("python3 /home/cephuser/Crefi/crefi.py",
+                     client_info['mounting_dir'], dir1))
             print(out.read().decode())
 
             break
@@ -189,7 +192,7 @@ def run(ceph_cluster, **kw):
         cluster_health_afterIO = check_ceph_healthly(
             client_info['mon_node'], 12, 1, build, None, 300)
         if cluster_health_beforeIO == cluster_health_afterIO:
-            print("Testcase %s passed" % (tc))
+            print("Testcase %s passed" % tc)
             log.info('Cleaning up!-----')
             if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
                 rc = fs_util.client_clean_up(

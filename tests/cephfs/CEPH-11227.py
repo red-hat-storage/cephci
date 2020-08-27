@@ -17,7 +17,7 @@ def run(ceph_cluster, **kw):
         num_of_dirs = config.get('num_of_dirs')
         tc = '11227'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         build = config.get('build', config.get('rhbuild'))
         client_info, rc = fs_util.get_clients(build)
@@ -104,7 +104,7 @@ def run(ceph_cluster, **kw):
         if result == 'Data validation success':
             print("Data validation success")
             fs_util.activate_multiple_mdss(client_info['mds_nodes'])
-            log.info("Execution of Test case CEPH-%s started:" % (tc))
+            log.info("Execution of Test case CEPH-%s started:" % tc)
             num_of_dirs = int(num_of_dirs / 5)
             with parallel() as p:
                 p.spawn(
@@ -292,7 +292,7 @@ def run(ceph_cluster, **kw):
                     fs_util.mds_fail_over,
                     client_info['mds_nodes'])
 
-            log.info("Execution of Test case CEPH-%s ended:" % (tc))
+            log.info("Execution of Test case CEPH-%s ended:" % tc)
             log.info('Cleaning up!-----')
             if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
                 rc_client = fs_util.client_clean_up(

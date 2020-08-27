@@ -13,7 +13,7 @@ def run(ceph_cluster, **kw):
     try:
         tc = 'nfs-ganesha'
         nfs_mounting_dir = '/mnt/nfs_mount/'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
 
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
@@ -121,9 +121,9 @@ def run(ceph_cluster, **kw):
 
         for client in nfs_client:
             log.info('Unmounting nfs-ganesha mount on client:')
-            client.exec_command(cmd='sudo umount %s -l' % (nfs_mounting_dir))
+            client.exec_command(cmd='sudo umount %s -l' % nfs_mounting_dir)
             log.info('Removing nfs-ganesha mount dir on client:')
-            client.exec_command(cmd='sudo rm -rf  %s' % (nfs_mounting_dir))
+            client.exec_command(cmd='sudo rm -rf  %s' % nfs_mounting_dir)
 
         if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
             rc = fs_util.client_clean_up(

@@ -18,7 +18,7 @@ def run(ceph_cluster, **kw):
         config = kw.get('config')
         num_of_dirs = config.get('num_of_dirs')
         num_of_dirs = num_of_dirs / 5
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         build = config.get('build', config.get('rhbuild'))
         client_info, rc = fs_util.get_clients(build)
@@ -91,7 +91,7 @@ def run(ceph_cluster, **kw):
         result = fs_util.rc_verify('', return_counts)
         if result == 'Data validation success':
             print("Data validation success")
-            log.info("Execution of Test cases %s started:" % (tc))
+            log.info("Execution of Test cases %s started:" % tc)
             with parallel() as p:
                 p.spawn(
                     fs_util.mkdir,
@@ -234,7 +234,7 @@ def run(ceph_cluster, **kw):
                     num_of_dirs * 5)
                 for op in p:
                     return_counts, rc = op
-            log.info("Execution of Test case CEPH-%s ended:" % (tc))
+            log.info("Execution of Test case CEPH-%s ended:" % tc)
             print("Results:")
             result = fs_util.rc_verify(tc, return_counts)
             print(result)

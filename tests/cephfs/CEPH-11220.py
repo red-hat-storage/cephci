@@ -14,7 +14,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '11220'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))
@@ -79,7 +79,7 @@ def run(ceph_cluster, **kw):
             client3, client_info['mounting_dir'], dir_name=dir_name)
         if rc1 == 0 and rc2 == 0 and rc3 == 0:
             log.info("IOs on clients successfull")
-            log.info("Testcase %s passed" % (tc))
+            log.info("Testcase %s passed" % tc)
             log.info('Cleaning up!-----')
             if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
                 rc = fs_util.client_clean_up(

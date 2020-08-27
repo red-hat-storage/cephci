@@ -19,7 +19,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '11256-fuse'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         num_of_osds = config.get('num_of_osds')
@@ -247,7 +247,7 @@ def run(ceph_cluster, **kw):
                 1,
                 iotype='dd')
             for node in client_info['mds_nodes']:
-                fs_util.pid_kill(node, 'mds')
+                fs_util.pid_kill(node, 'ceph-mds')
         with parallel() as p:
             for node in client_info['mds_nodes']:
                 p.spawn(fs_util.heartbeat_map, node)
@@ -278,7 +278,7 @@ def run(ceph_cluster, **kw):
             client_info['mds_nodes'],
             client_info['mon_node'],
             todo='add_rank_revert')
-        log.info("Execution of Test cases CEPH-%s ended:" % (tc))
+        log.info("Execution of Test cases CEPH-%s ended:" % tc)
         print('Script execution time:------')
         stop = timeit.default_timer()
         total_time = stop - start
