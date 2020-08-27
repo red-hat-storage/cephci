@@ -1655,12 +1655,20 @@ class CephDemon(CephObject):
         Args:
             cmd(str): command to execute
             **kw: options
-
+                container_exec: system or container prefix command
+                    (default: True)
         Returns:
-        node's exec_command resut
+            node's exec_command result
         """
-        return self.node.exec_command(cmd=' '.join([self.container_prefix, cmd.replace('sudo', '')]),
-                                      **kw) if self.containerized else self.node.exec_command(cmd=cmd, **kw)
+        # Allow system commands in containerized cluster node
+        container_exec = kw.pop('container_exec', True)
+
+        if self.containerized and container_exec:
+            return self.node.exec_command(
+                cmd=' '.join([self.container_prefix, cmd.replace('sudo', '')]),
+                **kw)
+        else:
+            return self.node.exec_command(cmd=cmd, **kw)
 
     def ceph_demon_by_container_name(self, container_name):
         distro_ver = self.distro_info['VERSION_ID']

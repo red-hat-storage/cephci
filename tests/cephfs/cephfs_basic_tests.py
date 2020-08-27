@@ -68,15 +68,15 @@ def run(ceph_cluster, **kw):
         dir1 = ''.join(
             random.choice(
                 string.ascii_lowercase
-                + string.digits) for _ in range(10))
+                + string.digits) for _ in list(range(10)))
         dir2 = ''.join(
             random.choice(
                 string.ascii_lowercase
-                + string.digits) for _ in range(10))
+                + string.digits) for _ in list(range(10)))
         dir3 = ''.join(
             random.choice(
                 string.ascii_lowercase
-                + string.digits) for _ in range(10))
+                + string.digits) for _ in list(range(10)))
         results = []
         return_counts = []
         log.info("Create files and directories of 1000 depth and 1000 breadth")
@@ -92,9 +92,11 @@ def run(ceph_cluster, **kw):
                     (client_info['mounting_dir'], dir3))
             log.info('Execution of testcase %s started' % tc1)
             out, rc = client.exec_command(
-                cmd='sudo crefi %s%s --fop create --multi -b 1000 -d 1000 '
-                    '-n 1 -T 5 --random --min=1K --max=10K' %
-                    (client_info['mounting_dir'], dir1), long_running=True)
+                cmd='sudo %s %s%s --fop create --multi -b 100 -d 100 '
+                    '-n 1 -T 2 --random --min=1K --max=10K' %
+                    ("python3 /home/cephuser/Crefi/crefi.py",
+                     client_info['mounting_dir'], dir1),
+                long_running=True)
             log.info('Execution of testcase %s ended' % tc1)
             if client.node.exit_status == 0:
                 results.append("TC %s passed" % tc1)
@@ -105,7 +107,7 @@ def run(ceph_cluster, **kw):
                     (client_info['mounting_dir'], dir1,
                      client_info['mounting_dir'], dir2))
             client.exec_command(
-                cmd="diff -qr  %s%s %s%s/" %
+                cmd="sudo diff -qr  %s%s %s%s/" %
                     (client_info['mounting_dir'], dir1,
                      client_info['mounting_dir'], dir2))
             log.info('Execution of testcase %s ended' % tc2)

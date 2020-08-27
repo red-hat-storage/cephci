@@ -16,7 +16,7 @@ def run(ceph_cluster, **kw):
         tc = '11298'
         source_dir = '/mnt/source'
         target_dir = 'target'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))
@@ -158,13 +158,13 @@ def run(ceph_cluster, **kw):
             for op in p:
                 return_counts3, rc = op
         with parallel() as p:
-            p.spawn(fs_util.rsync, client1, '%s%s/*' %
+            p.spawn(fs_util.rsync, client1, '%s%s/' %
                     (client_info['mounting_dir'], target_dir), source_dir)
-            p.spawn(fs_util.rsync, client2, '%s%s/*' %
+            p.spawn(fs_util.rsync, client2, '%s%s/' %
                     (client_info['mounting_dir'], target_dir), source_dir)
-            p.spawn(fs_util.rsync, client3, '%s%s/*' %
+            p.spawn(fs_util.rsync, client3, '%s%s/' %
                     (client_info['mounting_dir'], target_dir), source_dir)
-            p.spawn(fs_util.rsync, client4, '%s%s/*' %
+            p.spawn(fs_util.rsync, client4, '%s%s/' %
                     (client_info['mounting_dir'], target_dir), source_dir)
             for op in p:
                 return_counts4, rc = op
@@ -173,10 +173,10 @@ def run(ceph_cluster, **kw):
             list(return_counts3.values()) + list(return_counts4.values())
         rc_set = set(rc)
         if len(rc_set) == 1:
-            print("Test case CEPH-%s passed" % (tc))
+            print("Test case CEPH-%s passed" % tc)
         else:
-            print(("Test case CEPH-%s failed" % (tc)))
-        log.info("Test completed for CEPH-%s" % (tc))
+            print("Test case CEPH-%s failed" % tc)
+        log.info("Test completed for CEPH-%s" % tc)
         log.info('Cleaning up!-----')
         if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
             rc = fs_util.client_clean_up(client_info['fuse_clients'],

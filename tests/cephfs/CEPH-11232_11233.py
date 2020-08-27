@@ -15,7 +15,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '11232 and 11233'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))
@@ -92,9 +92,9 @@ def run(ceph_cluster, **kw):
 
         result = fs_util.rc_verify('', return_counts)
         if 'Data validation success' in result:
-            print("Data validation success")
+            log.info("Data validation success")
             tc = '11232 and 11233'
-            log.info("Execution of Test cases %s started:" % (tc))
+            log.info("Execution of Test cases %s started:" % tc)
             fs_util.allow_dir_fragmentation(client_info['mds_nodes'])
             log.info("Creating directory:")
             for node in client_info['fuse_clients']:
@@ -111,6 +111,7 @@ def run(ceph_cluster, **kw):
                 raise CommandFailed("getting active-mdss failed")
             node1_before_io, _, rc = fs_util.get_mds_info(
                 active_mds_node_1, active_mds_node_2, info='get subtrees')
+            log.info("Node1 before IO : {}".format(node1_before_io))
             if rc == 0:
                 log.info("Got mds subtree info")
             else:
@@ -160,6 +161,7 @@ def run(ceph_cluster, **kw):
 
             node1_after_io, _, rc = fs_util.get_mds_info(
                 active_mds_node_1, active_mds_node_2, info='get subtrees')
+            log.info("Node1 after IO : {}".format(node1_after_io))
             if rc == 0:
                 log.info("Got mds subtree info")
             else:
@@ -176,6 +178,7 @@ def run(ceph_cluster, **kw):
 
             node1_after_del, _, rc = fs_util.get_mds_info(
                 active_mds_node_1, active_mds_node_2, info='get subtrees')
+            log.info("Node1 after Delete : {}".format(node1_after_del))
             if rc == 0:
                 log.info("Got mds subtree info")
             else:
@@ -183,10 +186,14 @@ def run(ceph_cluster, **kw):
 
             log.info("Execution of Test case 11232 and 11233 ended:")
             print("Results:")
+            log.info("node1_before_io : {}".format(node1_before_io))
+            log.info("node1_after_io : {}".format(node1_after_io))
+            log.info("node1_after_del : {}".format(node1_after_del))
             if node1_before_io != node1_after_io and \
                     node1_after_io != node1_after_del:
-                log.info("Test case %s Passed" % (tc))
+                log.info("Test case %s Passed" % tc)
             else:
+                log.info("Test case %s failed" % tc)
                 return 1
 
             if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
@@ -204,7 +211,7 @@ def run(ceph_cluster, **kw):
                 rc_mds = fs_util.mds_cleanup(client_info['mds_nodes'], None)
 
             if rc_client == 0 and rc_mds == 0:
-                log.info('Cleaning up successfull')
+                log.info('Cleaning up successful')
             else:
                 return 1
         print('Script execution time:------')

@@ -15,7 +15,7 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         tc = '11231'
         dir_name = 'dir'
-        log.info("Running cephfs %s test case" % (tc))
+        log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
         config = kw.get('config')
         build = config.get('build', config.get('rhbuild'))
@@ -59,6 +59,29 @@ def run(ceph_cluster, **kw):
             log.info("kernel mount passed")
         else:
             raise CommandFailed("kernel mount failed")
+
+        #  mount paths entry in fstab
+        rc1 = fs_util.fstab_entry(
+            client1,
+            client_info['mounting_dir'],
+            action='doEntry')
+        rc2 = fs_util.fstab_entry(
+            client2,
+            client_info['mounting_dir'],
+            action='doEntry')
+        rc3 = fs_util.fstab_entry(
+            client2,
+            client_info['mounting_dir'],
+            action='doEntry')
+        rc4 = fs_util.fstab_entry(
+            client2,
+            client_info['mounting_dir'],
+            action='doEntry')
+        if rc1 == 0 and rc2 == 0 and rc3 == 0 and rc4 == 0:
+            log.info("FSentry for clients are done")
+        else:
+            raise CommandFailed("FsEntry failed")
+
         rc = fs_util.activate_multiple_mdss(client_info['mds_nodes'])
         if rc == 0:
             log.info("Activate multiple mdss successfully")
@@ -97,13 +120,13 @@ def run(ceph_cluster, **kw):
         if result == 'Data validation success':
             print("Data validation success")
             fs_util.activate_multiple_mdss(client_info['mds_nodes'])
-            log.info("Execution of Test case CEPH-%s started:" % (tc))
+            log.info("Execution of Test case CEPH-%s started:" % tc)
             for client in client1:
                 client.exec_command(
                     cmd='sudo mkdir %s%s_{1..50}' %
                         (client_info['mounting_dir'], dir_name))
                 if client.node.exit_status == 0:
-                    log.info("directories created succcessfully")
+                    log.info("directories created successfully")
                 else:
                     raise CommandFailed("directories creation failed")
             with parallel() as p:
@@ -221,7 +244,7 @@ def run(ceph_cluster, **kw):
                     500,
                     iotype='touch')
                 for node in client_info['mon_node']:
-                    fs_util.pid_kill(node, 'mon')
+                    fs_util.pid_kill(node, 'ceph-mon')
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -302,7 +325,7 @@ def run(ceph_cluster, **kw):
                     500,
                     iotype='touch')
                 for node in client_info['osd_nodes']:
-                    fs_util.pid_kill(node, 'osd')
+                    fs_util.pid_kill(node, 'ceph-osd')
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -361,7 +384,7 @@ def run(ceph_cluster, **kw):
                         node,
                         'mon',
                         'restart')
-            log.info("Execution of Test case CEPH-%s ended:" % (tc))
+            log.info("Execution of Test case CEPH-%s ended:" % tc)
             log.info('Cleaning up!-----')
             if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
                 rc_client = fs_util.client_clean_up(

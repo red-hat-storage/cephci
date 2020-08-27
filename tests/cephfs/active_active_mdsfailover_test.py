@@ -76,7 +76,7 @@ def run(**kw):
     print("Results:")
     for i in utils.output:
         print(i)
-    for i, j in utils.failure.items():
+    for i, j in list(utils.failure.items()):
         print("client: %s Failure:%s " % (i, j))
 
     print('Script execution time:------')
