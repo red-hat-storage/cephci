@@ -74,7 +74,7 @@ def run(ceph_cluster, **kw):
             p.spawn(fs_util.stress_io, client1, source_dir, "", 0, 100, iotype="touch")
             p.spawn(fs_util.read_write_IO, client1, source_dir, "g", "write")
             p.spawn(fs_util.stress_io, client2, source_dir, "", 0, 10, iotype="dd")
-            p.spawn(fs_util.stress_io, client3, source_dir, "", 0, 10, iotype="crefi")
+            p.spawn(fs_util.stress_io, client3, source_dir, "", 0, 10, iotype="smallfile")
             p.spawn(fs_util.stress_io, client4, source_dir, "", 0, 1, iotype="fio")
             for op in p:
                 return_counts1, rc = op

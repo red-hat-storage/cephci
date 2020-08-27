@@ -94,7 +94,7 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 2,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(
                 fs_util.read_write_IO,
@@ -153,7 +153,7 @@ def run(ceph_cluster, **kw):
                     dirs[2],
                     0,
                     1,
-                    iotype="crefi",
+                    iotype="smallfile",
                 )
                 for op in p:
                     return_counts, rc = op
@@ -280,7 +280,7 @@ def run(ceph_cluster, **kw):
                     dirs[0],
                     0,
                     1,
-                    iotype="crefi",
+                    iotype="smallfile",
                 )
             print("-------------------------------------------------------")
             with parallel() as p:
@@ -338,7 +338,7 @@ def run(ceph_cluster, **kw):
                     dirs[0],
                     0,
                     1,
-                    iotype="crefi",
+                    iotype="smallfile",
                 )
             print("-------------------------------------------------------")
             with parallel() as p:

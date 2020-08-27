@@ -84,7 +84,7 @@ def run(ceph_cluster, **kw):
                 "",
                 0,
                 1,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(
                 fs_util.read_write_IO,
@@ -296,33 +296,23 @@ def run(ceph_cluster, **kw):
                     % (client_info["mounting_dir"], dir_name, file_name)
                 )
         for num in range(0, 5):
-            for client in client_info["fuse_clients"]:
-                client.exec_command(
-                    cmd="sudo crefi %s'%s' --fop create -t %s "
-                    "--multi -b 10 -d 10 -n 10 -T 10 "
-                    "--random --min=1K --max=%dK"
-                    % (client_info["mounting_dir"], dir_name, "text", 5),
-                    long_running=True,
-                )
-                for i in range(0, 6):
-                    ops = ["create", "rename", "chmod", "chown", "chgrp", "setxattr"]
-                    rand_ops = random.choice(ops)
-                    ftypes = ["text", "sparse", "binary", "tar"]
-                    rand_filetype = random.choice(ftypes)
-                    rand_count = random.randint(2, 10)
+            for client in client_info['fuse_clients']:
+                for i in range(0, 5):
+                    ops = [
+                        'create',
+                        'setxattr',
+                        'getxattr',
+                        'chmod',
+                        'rename']
                     client.exec_command(
-                        cmd="sudo crefi %s%s --fop %s -t %s "
-                        "--multi -b 10 -d 10 -n 10 -T 10 "
-                        "--random --min=1K --max=%dK"
-                        % (
-                            client_info["mounting_dir"],
-                            dir_name,
-                            rand_ops,
-                            rand_filetype,
-                            rand_count,
-                        ),
-                        long_running=True,
-                    )
+                        cmd='sudo python3 smallfile/smallfile_cli.py '
+                            '--operation %s --threads 10 --file-size 4'
+                            '--files 1000 '
+                            '--files-per-dir 10 --dirs-per-dir 2'
+                            ' --top %s%s' %
+                            (ops[i], client_info['mounting_dir'],
+                             dir_name),
+                        long_running=True, timeout=300)
         log.info("Cleaning up!-----")
         if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
             rc = fs_util.client_clean_up(

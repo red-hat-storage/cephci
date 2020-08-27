@@ -158,7 +158,7 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 1,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(fs_util.reboot, client1[0])
         res = []
