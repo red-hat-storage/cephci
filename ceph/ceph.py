@@ -946,7 +946,8 @@ class SSHConnectionManager(object):
                 self.__client.connect(self.ip_address,
                                       username=self.username,
                                       password=self.password,
-                                      look_for_keys=self.look_for_keys)
+                                      look_for_keys=self.look_for_keys,
+                                      allow_agent=False)
                 break
             except Exception as e:
                 logger.warn('Connection outage: \n{error}'.format(error=e))
