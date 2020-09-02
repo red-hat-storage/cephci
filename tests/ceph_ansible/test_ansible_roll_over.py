@@ -129,10 +129,27 @@ def run(ceph_cluster, **kw):
 
     log.info("Ceph versions " + ceph_installer.get_installed_ceph_versions())
 
+    # Run site-x.yml by default
+    if ceph_cluster.ansible_config.get('containerized_deployment'):
+        yaml_file = "site-container.yml"
+    else:
+        yaml_file = "site.yml"
+
+    # Run add-mon.yml if mon is to be added and build is 4.x
+    if demon == 'mon' and str(build).startswith("4"):
+        yaml_file = "infrastructure-playbooks/add-mon.yml"
+
+    # Run add-osd.yml if osd is to be added
+    if demon == 'osd':
+        yaml_file = "infrastructure-playbooks/add-osd.yml"
+
+    # Append "--limit" if daemon to be added is not mon and osd
+    if demon not in ['mon', 'osd']:
+        yaml_file = yaml_file + " --limit {}".format(demon + 's')
+
     out, rc = ceph_installer.exec_command(
-        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts site.yml '
-            '--limit {daemon}'.format(ansible_dir, daemon=demon + 's'),
-        long_running=True)
+        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {}'
+            .format(ansible_dir, yaml_file), long_running=True)
 
     # manually handle client creation in a containerized deployment (temporary)
     if ceph_cluster.containerized:
