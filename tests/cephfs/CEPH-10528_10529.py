@@ -118,9 +118,9 @@ def run(ceph_cluster, **kw):
         else:
             log.error(
                 'File Locking mechanism is failed,data is corrupted,'
-                'test case CEPH-%s failed' % (tc))
+                'test case CEPH-%s failed' % tc)
 
-        log.info('Test completed for CEPH-%s' % (tc))
+        log.info('Test completed for CEPH-%s' % tc)
         log.info('Cleaning up!-----')
         if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
             rc = fs_util.client_clean_up(client_info['fuse_clients'],
