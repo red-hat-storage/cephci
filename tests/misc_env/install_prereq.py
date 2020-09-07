@@ -63,7 +63,7 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
         if ceph.role == 'client':
             ceph.exec_command(cmd='sudo yum install -y attr', long_running=True)
             ceph.exec_command(cmd='sudo pip install crefi', long_running=True)
-        ceph.exec_command(cmd='sudo yum clean metadata')
+        ceph.exec_command(cmd='sudo yum clean metadata', check_ec=False)
         config_ntp(ceph)
 
 
