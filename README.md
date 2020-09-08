@@ -7,13 +7,13 @@ It uses a modified version of Mita to create/destroy Ceph resources dynamically
 
 ## Getting Started
 #### Prerequisites
-1. Python 3.7
+1. Python 3.6 or newer.
 
 #### Installing
 It is recommended that you use a python virtual environment to install the necessary dependencies and execute cephci.
 
-1. Setup a python 3.7 virtual environment. This is actually quite easy to do now.
-    * `python3.7 -m venv <path/to/venv>`
+1. Setup a Python 3 virtual environment.
+    * `python3 -m venv <path/to/venv>`
     * `source <path/to/venv>/bin/activate`
 2. Install requirements with `pip install -r requirements.txt`
 
