@@ -3,8 +3,7 @@ import time
 
 from ceph.utils import create_ceph_conf, keep_alive, setup_deb_repos, setup_repos
 
-logger = logging.getLogger(__name__)
-log = logger
+log = logging.getLogger(__name__)
 
 
 def run(**kw):

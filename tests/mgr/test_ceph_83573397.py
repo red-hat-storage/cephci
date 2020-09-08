@@ -2,8 +2,7 @@ import json
 import logging
 from time import time
 
-logger = logging.getLogger(__name__)
-log = logger
+log = logging.getLogger(__name__)
 
 __script = """
 import requests
@@ -43,7 +42,7 @@ def exec_cmd_status(ceph_installer, commands):
     for cmd in commands:
         out, err = ceph_installer.exec_command(sudo=True, cmd=cmd)
         out, err = out.read().decode().strip(), err.read().decode().strip()
-        logger.info("Command Response : {} {}".format(out, err))
+        log.info("Command Response : {} {}".format(out, err))
     return True
 
 
@@ -108,10 +107,10 @@ def run(ceph_cluster, **kw):
     out, err = out.read().decode().strip(), err.read().decode().strip()
 
     json_data = json.loads(out)
-    logger.info("Status Code : {}".format(json_data.get("status_code")))
+    log.info("Status Code : {}".format(json_data.get("status_code")))
 
     if json_data.get("status_code") == 200:
         logger.info(json_data.get("json"))
         return 0
-    logger.error(json_data.get("json"))
+    log.error(json_data.get("json"))
     return 1

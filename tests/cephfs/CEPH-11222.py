@@ -9,8 +9,7 @@ from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
 from tests.cephfs.cephfs_utils import FsUtils
 
-logger = logging.getLogger(__name__)
-log = logger
+log = logging.getLogger(__name__)
 
 
 def run(ceph_cluster, **kw):

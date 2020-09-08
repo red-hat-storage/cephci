@@ -3,8 +3,7 @@ import time
 
 from ceph.utils import keep_alive
 
-logger = logging.getLogger(__name__)
-log = logger
+log = logging.getLogger(__name__)
 
 
 def run(**kw):

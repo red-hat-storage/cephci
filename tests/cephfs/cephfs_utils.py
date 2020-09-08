@@ -7,8 +7,7 @@ import time
 
 from ceph.ceph import CommandFailed
 
-logger = logging.getLogger(__name__)
-log = logger
+log = logging.getLogger(__name__)
 
 
 class FsUtils(object):
