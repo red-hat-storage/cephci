@@ -132,8 +132,10 @@ python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrades/upgrade.yaml --
 #### Manual cluster cleanup
 Ceph-CI also has the ability to manually clean up cluster nodes if anything was left behind during a test run.
 All you need to provide is your osp credentials and the instances name for the cluster. Don't use subset naming for custom instances name.eg: --instances-name vp and --instances-name vpoliset  at same time.
+
+For example, this command will delete all volumes and nodes that have the substring `ceph-kdreyer` in their names:
 ```
-python run.py --osp-cred <cred_file> --cleanup <instances_name>
+python run.py --osp-cred <cred_file> --log-level info --cleanup ceph-kdreyer
 ```
 
 ## Results
