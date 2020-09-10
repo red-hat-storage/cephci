@@ -132,7 +132,16 @@ class CephVMNode(object):
                 self.vm_size)
             return
         vm_size = available_sizes[0]
-        image = [i for i in images if i.name == self.image_name][0]
+        images = [i for i in images if i.name == self.image_name]
+        if not images:
+            logger.error(
+                "provider does not have a matching 'image' for %s",
+                self.image_name)
+            logger.error(
+                "no vm will be created. Ensure that '%s' is a valid image",
+                self.image_name)
+            return
+        image = images[0]
 
         try:
             new_node = driver.create_node(
