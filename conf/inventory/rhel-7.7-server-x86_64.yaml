@@ -1,6 +1,6 @@
 instance:
   create:
-    image-name: RHEL-7.7-20190723.1-Server-x86_64
+    image-name: rhel-7.7-server-x86_64-released
     vm-size: m1.medium
 
   setup: |
