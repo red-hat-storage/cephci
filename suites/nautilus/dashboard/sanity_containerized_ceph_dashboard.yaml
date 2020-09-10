@@ -1,0 +1,99 @@
+tests:
+   - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+   - test:
+        name: containerized ceph with dashboard
+        polarion-id: CEPH-83573534
+        module: test_ansible.py
+        config:
+          is_mixed_lvm_configs: True
+          ansi_config:
+              ceph_test: True
+              ceph_origin: distro
+              ceph_stable_release: nautilus
+              ceph_repository: rhcs
+              osd_scenario: lvm
+              osd_auto_discovery: False
+              ceph_stable: True
+              ceph_stable_rh_storage: True
+              containerized_deployment: true
+              copy_admin_key: true
+              dashboard_enabled: True
+              dashboard_admin_user: admin
+              dashboard_admin_password: p@ssw0rd
+              grafana_admin_user: admin
+              grafana_admin_password: p@ssw0rd
+              node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.1
+              grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+              prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:4.1
+              alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:4.1
+              ceph_conf_overrides:
+                  global:
+                    osd_pool_default_pg_num: 64
+                    osd_default_pool_size: 2
+                    osd_pool_default_pgp_num: 64
+                    mon_max_pg_per_osd: 1024
+                  mon:
+                    mon_allow_pool_delete: true
+                  client:
+                    rgw crypt require ssl: false
+                    rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                      testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+              cephfs_pools:
+                - name: "cephfs_data"
+                  pgs: "8"
+                - name: "cephfs_metadata"
+                  pgs: "8"
+        desc: deploy ceph with dashboard
+        destroy-cluster: False
+        abort-on-fail: true
+
+   - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+            cmd: ceph -s
+            sudo: True
+      desc: Check for ceph health debug info
+
+   - test:
+      name: rados_bench_test
+      module: radosbench.py
+      config:
+            pg_num: '128'
+            pool_type: 'normal'
+      desc: run rados bench for 360 - normal profile
+
+   - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+            io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+   - test:
+      name: rgw sanity tests
+      desc: User and container access in same and different tenants
+      module: sanity_rgw.py
+      config:
+            script-name: test_multitenant_user_access.py
+            config-file-name: test_multitenant_access.yaml
+            timeout: 300
+      desc: Perform rgw tests
+
+   - test:
+      name: ceph ansible purge
+      module: purge_cluster.py
+      config:
+           ansible-dir: /usr/share/ceph-ansible
+           playbook-command: purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes
+      desc: Purge ceph cluster
+
+   - test:
+      name: Check for old container directories
+      module: bug_1834974.py
+      desc: Check for old container directories
+      destroy-cluster: True

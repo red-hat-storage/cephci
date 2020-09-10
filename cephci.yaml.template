@@ -8,6 +8,13 @@ polarion:
   username: some_user
   password: some_password
 
+# Provide cdn_credentials before running suites which needs
+# access to GAed container image registry i.e 'registry.redhat.io'
+
+#cdn_credentials:
+#  username: some_user
+#  password: some_password
+
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn
 email:
