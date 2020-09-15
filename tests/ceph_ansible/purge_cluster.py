@@ -1,3 +1,5 @@
+''' Purges the Ceph the cluster'''
+
 import logging
 from time import sleep
 
@@ -15,7 +17,7 @@ def run(**kw):
     :param kw:
        - ceph_nodes: ceph node list representing a cluster
        - config: (optional)
-         - ansible-dir: path to nsible working directory, default is /usr/share/ceph-ansible
+         - ansible-dir: path to ansible working directory, default is /usr/share/ceph-ansible
          - inventory: ansible inventory file, default is hosts
          - playbook-command: ansible playbook command string,
             default is purge-cluster.yml --extra-vars 'ireallymeanit=yes'
@@ -55,23 +57,26 @@ def run(**kw):
     playbook_regex = re.search('(purge-.*?\\.yml)(.*)', playbook_command)
     playbook = playbook_regex.group(1)
     playbook_options = playbook_regex.group(2)
+
+    # Set ansible deprecation warning to false
+    installer_node.exec_command(cmd='export ANSIBLE_DEPRECATION_WARNINGS=False')
+
+    # Based on RHCS version choosing how purge playbook needs to be executed
     if not build.startswith('4'):
         installer_node.exec_command(sudo=True,
-                                    cmd='cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{playbook} .'
+                                    cmd='cd {ansible_dir};cp {ansible_dir}/infrastructure-playbooks/{playbook} .'
                                     .format(ansible_dir=ansible_dir, playbook=playbook))
-        out, err = installer_node.exec_command(
-            cmd="cd {ansible_dir} ; ansible-playbook -vvvv -i {inventory} {playbook} {playbook_options}"
-                .format(ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
-                        inventory=inventory.strip()),
-            long_running=True)
     else:
-        out, err = installer_node.exec_command(
-            cmd="cd {ansible_dir} ; ansible-playbook -vvvv -i {inventory} infrastructure-playbooks/{playbook} "
-                "{playbook_options}"
-                .format(ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
-                        inventory=inventory.strip()),
-            long_running=True)
+        playbook = "infrastructure-playbooks/{playbook}".format(playbook=playbook)
 
+    cmd = "cd {ansible_dir} ; ansible-playbook -vvvv -i {inventory} {playbook} {playbook_options}".format(
+          ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
+          inventory=inventory.strip())
+
+    # executing the command to purge cluster
+    out, err = installer_node.exec_command(cmd=cmd, long_running=True)
+
+    # remove ceph-ansible after successful purge
     if err == 0:
         log.info("ansible-playbook purge cluster successful")
         installer_node.exec_command(sudo=True, cmd="rm -rf {ansible_dir}".format(ansible_dir=ansible_dir))
@@ -93,6 +98,8 @@ def run(**kw):
     else:
         log.info("ansible-playbook failed to purge cluster")
         return 1
+
+# Rebooting node after purge
 
 
 def reboot_node(ceph_node, timeout=300):
