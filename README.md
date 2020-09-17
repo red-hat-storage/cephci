@@ -113,19 +113,19 @@ Some non-required arguments that we end up using a lot:
 Ceph ansible install suite:
 ```
 python run.py --rhbuild 3.3 --global-conf conf/luminous/ansible/sanity-ansible-lvm.yaml --osp-cred osp/osp-cred-ci-2.yaml
---inventory conf/inventory/rhel-7.7-server-x86_64.yaml --suite suites/luminous/ansible/sanity_ceph_ansible_lvm.yaml
+--inventory conf/inventory/rhel-7.8-server-x86_64.yaml --suite suites/luminous/ansible/sanity_ceph_ansible_lvm.yaml
 --log-level info
 ```
 Upgrade suite:
 ```
 python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrades/upgrade.yaml --osp-cred osp/osp-cred-ci-2.yaml
---inventory conf/inventory/rhel-7.6-server-x86_64-released.yaml --suite suites/luminous/upgrades/upgrades.yaml
+--inventory conf/inventory/rhel-7.8-server-x86_64-released.yaml --suite suites/luminous/upgrades/upgrades.yaml
 --log-level info
 ```
 Containerized upgrade suite:
 ```
 python run.py --rhbuild 3.2 --global-conf conf/luminous/upgrades/upgrade.yaml --osp-cred osp/osp-cred-ci-2.yaml
---inventory conf/inventory/rhel-7.6-server-x86_64-released.yaml --suite suites/luminous/upgrades/upgrades_containerized.yaml
+--inventory conf/inventory/rhel-7.8-server-x86_64-released.yaml --suite suites/luminous/upgrades/upgrades_containerized.yaml
 --log-level info --ignore-latest-container --insecure-registry --skip-version-compare
 ```
 
