@@ -1831,8 +1831,8 @@ class CephInstaller(CephObject):
                 "7": "rhel-7-server-ansible-2.6-rpms"
             },
             "4": {
-                "7": "rhel-7-server-ansible-2.8-rpms",
-                "8": "ansible-2.8-for-rhel-8-x86_64-rpms"
+                "7": "rhel-7-server-ansible-2.9-rpms",
+                "8": "ansible-2.9-for-rhel-8-x86_64-rpms"
             },
             "5": {
                 "8": "ansible-2.9-for-rhel-8-x86_64-rpms"
@@ -1844,6 +1844,10 @@ class CephInstaller(CephObject):
         else:
             distro_ver = self.distro_info['VERSION_ID'].split(".")[0]
             rhcs_ver = rhbuild.split(".")[0]
+            # Use ansible 2.8 for rhcs 4.1.z
+            if str(rhbuild).startswith('4.1'):
+                ansible_rpm[rhcs_ver]['7'] = "rhel-7-server-ansible-2.8-rpms"
+                ansible_rpm[rhcs_ver]['8'] = "ansible-2.8-for-rhel-8-x86_64-rpms"
 
             try:
                 rpm = ansible_rpm[rhcs_ver][distro_ver]
