@@ -35,7 +35,7 @@ cp cephci.yaml.template ~/.cephci.yaml
 CentralCI auth files are kept in the `osp` directory.
 
 The `osp-cred-ci-2.yaml` file has OpenStack credentials details to create/destroy resources.
-For local cephci runs, you will want to replace the username/password and domain,tenant-domain-id: with
+For local cephci runs, you will want to replace the username/password with
 your own OpenStack credentials.
 
 #### Cluster Configuration
