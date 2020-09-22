@@ -8,5 +8,3 @@ globals:
         service-region: 'regionOne'
         domain: 'redhat.com'
         tenant-domain-id: '62cf1b5ec006489db99e2b0ebfb55f57'
-        osp-version: '13'
-
