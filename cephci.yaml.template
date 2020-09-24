@@ -17,5 +17,7 @@ polarion:
 
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn
+# To completely disable all email, remove the "email:" and "address:" settings
+# entirely.
 email:
   address: cephci@redhat.com

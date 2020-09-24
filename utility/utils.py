@@ -539,6 +539,9 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
     """
     Email results of test run to QE
 
+    If the user specifies no "email" settings in ~/.cephci.yaml, this method
+    is a no-op.
+
     Args:
         results_list (list): test case results info
         run_id (str): id of the test run
@@ -551,6 +554,8 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
 
     """
     cfg = get_cephci_config().get('email')
+    if not cfg:
+        return
     sender = "cephci@redhat.com"
     recipients = []
     address = cfg.get('address')
