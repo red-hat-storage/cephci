@@ -128,8 +128,21 @@ def run(ceph_cluster, **kw):
     # checking the monDB size and the OSD map trimmings
     max_size_increase = abs(max_mon_db_size_reached - mon_db_initial_size)
     final_size_change = abs(mon_db_final_size - mon_db_initial_size)
+
+    # Verifying the customer Bug-1860094.
+    #   1. Customer is facing the issue that after store.db grown huge failed to do compaction process.
+    #   2. Cannot able to execute any ceph commands
+    # Adding a verification step that, after successful compaction process user can bale to execute any
+    #   ceph commands or not
+
     if max_size_increase > final_size_change:
         log.info(f"The monDB map was trimmed by : {abs(max_size_increase - final_size_change)}")
+        ceph_health_status = get_status_from_ceph_report(mon_node=controller, operation='health')
+        # Checking that command executed or not.If executed then dictionary output should not be empty.
+        if(bool(ceph_health_status)):
+            log.info("The ceph command executed after after succesful execution of monDB trim")
+        else:
+            log.error("The ceph command not executed after after succesful execution of monDB trim")
     else:
         log.error(f"The monDB was not trimmed. The size is equal or more :{abs(max_size_increase - final_size_change)}")
         flag_db_size = 1
