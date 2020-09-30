@@ -139,7 +139,8 @@ def registry_login(ceph, distro_ver):
         docker for RHEL 7.x and podman for RHEL 8.x'''
     cdn_cred = get_cephci_config().get('cdn_credentials')
     if not cdn_cred:
-        log.warn('cdn_credentials not found')
+        log.warn('no cdn_credentials in ~/.cephci.yaml.'
+                 ' Not logging into registry.redhat.io.')
         return
     user = cdn_cred.get('username')
     pwd = cdn_cred.get('password')
