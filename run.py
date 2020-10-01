@@ -334,6 +334,7 @@ def run(args):
     ceph_version = []
     ceph_ansible_version = []
     distro = []
+    clients = []
     if inventory.get('instance').get('create'):
         distro.append(inventory.get('instance').get('create').get('image-name'))
     for cluster in conf.get('globals'):
