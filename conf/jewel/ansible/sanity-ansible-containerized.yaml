@@ -8,18 +8,18 @@ globals:
           - osd
           - mon
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node3:
         role:
           - osd
           - rgw
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node4:
         role:
           - osd
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node5:
         role:
           - mon
@@ -31,7 +31,7 @@ globals:
       node7:
         role: osd
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node8:
         role:
           - mds

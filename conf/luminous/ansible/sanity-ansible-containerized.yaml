@@ -9,19 +9,19 @@ globals:
           - mon
           - mgr
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node3:
         role:
           - osd
           - rgw
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node4:
         role:
           - osd
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node5:
         role:
           - mon
@@ -37,14 +37,14 @@ globals:
       node9:
         role: osd
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node10:
         role: client
       node11:
         role: pool
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node12:
         role: pool
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10

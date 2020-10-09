@@ -17,17 +17,17 @@ globals:
        node4:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node5:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node6:
          role: 
             - osd
             - iscsi-gw
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node7:
          role: iscsi-gw      
        node8:

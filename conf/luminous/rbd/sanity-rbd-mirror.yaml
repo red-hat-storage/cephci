@@ -11,15 +11,15 @@ globals:
      node3:
        role: osd
        no-of-volumes: 4
-       disk-size: 15
+       disk-size: 10
      node4:
        role: osd
        no-of-volumes: 4
-       disk-size: 15
+       disk-size: 10
      node5:
        role: osd
        no-of-volumes: 4
-       disk-size: 15
+       disk-size: 10
 
   - ceph-cluster:
      name: ceph-rbd2
@@ -33,12 +33,12 @@ globals:
      node3:
        role: osd
        no-of-volumes: 4
-       disk-size: 15
+       disk-size: 10
      node4:
        role: osd
        no-of-volumes: 4
-       disk-size: 15
+       disk-size: 10
      node5:
        role: osd
        no-of-volumes: 4
-       disk-size: 15
+       disk-size: 10

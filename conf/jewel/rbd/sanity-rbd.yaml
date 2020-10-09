@@ -10,19 +10,19 @@ globals:
           - osd
           - mon
         no-of-volumes: 3
-        disk-size: 20
+        disk-size: 10
       node3:
         role:
           - osd
           - mon
         no-of-volumes: 3
-        disk-size: 20
+        disk-size: 10
       node4:
         role:
           - osd
           - mds
         no-of-volumes: 3
-        disk-size: 20
+        disk-size: 10
       node5:
         role:
           - client

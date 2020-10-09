@@ -11,13 +11,13 @@ globals:
           - osd
           - iscsi-gw
         no-of-volumes: 3
-        disk-size: 20
+        disk-size: 10
       node3:
         role:
           - osd
           - iscsi-gw
         no-of-volumes: 3
-        disk-size: 20
+        disk-size: 10
       node4:
         role: iscsi-clients
       node5:
@@ -25,10 +25,10 @@ globals:
           - osd
           - iscsi-gw
         no-of-volumes: 3
-        disk-size: 20
+        disk-size: 10
       node6:
         role:
           - osd
           - iscsi-gw
         no-of-volumes: 3
-        disk-size: 20
+        disk-size: 10

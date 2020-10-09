@@ -13,15 +13,15 @@ globals:
        node3:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node4:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node5:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node6:
          role:
             - mon
@@ -37,31 +37,31 @@ globals:
        node10:
          role: pool
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node11:
          role: pool
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node12:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node13:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node14:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node15:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node16:
          role: osd
          no-of-volumes: 4
-         disk-size: 15
+         disk-size: 10
        node17:
          role: mds
        node18:

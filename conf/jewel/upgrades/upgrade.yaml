@@ -10,15 +10,15 @@ globals:
      node4:
        role: osd
        no-of-volumes: 3
-       disk-size: 20
+       disk-size: 10
      node5:
        role: osd
        no-of-volumes: 3
-       disk-size: 20
+       disk-size: 10
      node6:
        role: osd
        no-of-volumes: 3
-       disk-size: 20
+       disk-size: 10
      node7:
        role: installer
      node8:
