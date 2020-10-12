@@ -153,7 +153,7 @@ def check_health(ceph_cluster):
             print(out1)
             out2 = out1.split()
             if 'HEALTH_OK' not in out2:
-                log.warn('Ceph Health is NOT OK')
+                log.warning('Ceph Health is NOT OK')
                 return 0
             else:
                 log.info('Health IS OK')
