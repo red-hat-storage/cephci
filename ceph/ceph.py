@@ -424,8 +424,8 @@ class Ceph(object):
         Update all ceph demons nodes to allow insecure registry use
         """
         if self.containerized and self.ansible_config.get('ceph_docker_registry'):
-            logger.warn('Adding insecure registry:\n{registry}'
-                        .format(registry=self.ansible_config.get('ceph_docker_registry')))
+            logger.warning('Adding insecure registry:\n{registry}'
+                           .format(registry=self.ansible_config.get('ceph_docker_registry')))
             # for node in self.get_nodes():
             #     node.exec_command(sudo=True, cmd='sudo chmod 777 /etc/containers/registries.conf;'
             #                                      'sudo sed -i "16,17d" /etc/containers/registries.conf;'
@@ -959,7 +959,7 @@ class SSHConnectionManager(object):
                                       allow_agent=False)
                 break
             except Exception as e:
-                logger.warn('Connection outage: \n{error}'.format(error=e))
+                logger.warning('Connection outage: \n{error}'.format(error=e))
                 if not self.__outage_start_time:
                     self.__outage_start_time = datetime.datetime.now()
                 if datetime.datetime.now() - self.__outage_start_time > self.outage_timeout:
