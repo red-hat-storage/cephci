@@ -3,7 +3,6 @@ tests:
        name: install ceph pre-requisites
        module: install_prereq.py
        abort-on-fail: true
-
    - test:
       name: containerized ceph ansible
       polarion-id: CEPH-83571503
@@ -45,7 +44,6 @@ tests:
       desc: test cluster setup using ceph-ansible
       destroy-cluster: False
       abort-on-fail: true
-
    - test:
       name: check-ceph-health
       module: exec.py
@@ -53,7 +51,9 @@ tests:
             cmd: ceph -s
             sudo: True
       desc: Check for ceph health debug info
+
    # Basic Bucket Operation Tests
+
    - test:
        name: Mbuckets
        desc: test to create "M" no of buckets
@@ -109,6 +109,7 @@ tests:
            timeout: 300
 
    # REST API test
+
    - test:
        name: test REST api operation
        desc: test user operation using REST API
@@ -118,7 +119,6 @@ tests:
            script-name: user_op_using_rest.py
            config-file-name: test_user_with_REST.yaml
            timeout: 300
-
    - test:
        name: Swift based tests
        desc: RGW lifecycle operations using swift
@@ -130,6 +130,7 @@ tests:
            timeout: 300
 
    # multipart test
+
    - test:
        name: Mbuckets_with_Nobjects_with_multipart
        desc: test to create "M" no of buckets and "N" no of objects with multipart upload
@@ -138,7 +139,9 @@ tests:
            script-name: test_Mbuckets_with_Nobjects.py
            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
            timeout: 300
+
    # Versioning Tests
+
    - test:
        name: Versioning Tests
        desc: test to enable versioning
@@ -235,7 +238,9 @@ tests:
            script-name: test_versioning_copy_objects.py
            config-file-name: test_versioning_copy_objects.yaml
            timeout: 300
+
    # BucketPolicy Tests
+
    - test:
        name: Bucket Policy Tests
        desc: CEPH-11215 Modify existing bucket policy to replace the existing policy
@@ -263,7 +268,9 @@ tests:
            script-name: test_bucket_policy_ops.py
            config-file-name: test_bucket_policy_modify.yaml
            timeout: 300
+
    # Bucket Lifecycle Tests
+
    - test:
        name: Bucket Lifecycle Object_expiration_tests
        desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
@@ -309,7 +316,6 @@ tests:
            script-name: test_bucket_lifecycle_object_expiration.py
            config-file-name: test_lc_rule_prefix_non_current_days.yaml
            timeout: 300
-
    - test:
        name: Bucket Lifecycle Configuration Tests
        desc: Read lifecycle configuration on a given bucket
@@ -337,7 +343,6 @@ tests:
            script-name: test_bucket_lifecycle_config_ops.py
            config-file-name: test_bucket_lifecycle_config_disable.yaml
            timeout: 300
-
    - test:
        name: Bucket Lifecycle Configuration Tests
        desc: Modify lifecycle configuration on a given bucket
@@ -348,65 +353,8 @@ tests:
          config-file-name: test_bucket_lifecycle_config_modify.yaml
          timeout: 300
 
-   - test:
-      name: ceph ansible purge
-      polarion-id: CEPH-83571498
-      module: purge_cluster.py
-      config:
-            ansible-dir: /usr/share/ceph-ansible
-      desc: Purge ceph cluster
-
-   - test:
-      name: containerized ceph ansible
-      polarion-id: CEPH-83571503
-      module: test_ansible.py
-      config:
-        ansi_config:
-            ceph_test: True
-            ceph_origin: distro
-            ceph_stable_release: nautilus
-            ceph_repository: rhcs
-            osd_scenario: lvm
-            osd_auto_discovery: False
-            journal_size: 1024
-            ceph_stable: True
-            ceph_stable_rh_storage: True
-            ceph_docker_image: rhceph/rhceph-3-rhel7
-            ceph_docker_image_tag: latest
-            containerized_deployment: true
-            ceph_docker_registry: registry.access.redhat.com
-            copy_admin_key: true
-            dashboard_enabled: False
-            ceph_conf_overrides:
-                global:
-                  osd_pool_default_pg_num: 64
-                  osd_default_pool_size: 2
-                  osd_pool_default_pgp_num: 64
-                  mon_max_pg_per_osd: 1024
-                mon:
-                  mon_allow_pool_delete: true
-                client:
-                  rgw crypt require ssl: false
-                  rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
-                    testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
-            cephfs_pools:
-              - name: "cephfs_data"
-                pgs: "8"
-              - name: "cephfs_metadata"
-                pgs: "8"
-      desc: test cluster setup using ceph-ansible
-      destroy-cluster: False
-      abort-on-fail: true
-
-   - test:
-      name: check-ceph-health
-      module: exec.py
-      config:
-            cmd: ceph -s
-            sudo: True
-      desc: Check for ceph health debug info
-
     # Multi Tenant Tests
+
    - test:
        name: Multi Tenancy Tests
        desc: User and container access in same and different tenants
@@ -416,7 +364,6 @@ tests:
            script-name: test_multitenant_user_access.py
            config-file-name: test_multitenant_access.yaml
            timeout: 300
-
    - test:
        name: Multi Tenancy Tests
        desc: Generate secret for tenant user
@@ -426,56 +373,6 @@ tests:
            script-name: test_tenant_user_secret_key.py
            config-file-name: test_tenantuser_secretkey_gen.yaml
            timeout: 300
-
-   - test:
-      name: ceph ansible purge
-      polarion-id: CEPH-83571498
-      module: purge_cluster.py
-      config:
-            ansible-dir: /usr/share/ceph-ansible
-      desc: Purge ceph cluster
-
-   - test:
-      name: containerized ceph ansible
-      polarion-id: CEPH-83571503
-      module: test_ansible.py
-      config:
-        ansi_config:
-            ceph_test: True
-            ceph_origin: distro
-            ceph_stable_release: nautilus
-            ceph_repository: rhcs
-            osd_scenario: lvm
-            osd_auto_discovery: False
-            journal_size: 1024
-            ceph_stable: True
-            ceph_stable_rh_storage: True
-            ceph_docker_image: rhceph/rhceph-3-rhel7
-            ceph_docker_image_tag: latest
-            containerized_deployment: true
-            ceph_docker_registry: registry.access.redhat.com
-            copy_admin_key: true
-            dashboard_enabled: False
-            ceph_conf_overrides:
-                global:
-                  osd_pool_default_pg_num: 64
-                  osd_default_pool_size: 2
-                  osd_pool_default_pgp_num: 64
-                  mon_max_pg_per_osd: 1024
-                mon:
-                  mon_allow_pool_delete: true
-                client:
-                  rgw crypt require ssl: false
-                  rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
-                    testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
-            cephfs_pools:
-              - name: "cephfs_data"
-                pgs: "8"
-              - name: "cephfs_metadata"
-                pgs: "8"
-      desc: test cluster setup using ceph-ansible
-      destroy-cluster: False
-      abort-on-fail: true
 
    # Bucket Request Payer tests
 
@@ -571,56 +468,6 @@ tests:
          timeout: 500
 
    # Encryption tests
-
-   - test:
-       name: ceph ansible purge
-       polarion-id: CEPH-83571498
-       module: purge_cluster.py
-       config:
-         ansible-dir: /usr/share/ceph-ansible
-       desc: Purge ceph cluster
-
-   - test:
-      name: containerized ceph ansible
-      polarion-id: CEPH-83571503
-      module: test_ansible.py
-      config:
-        ansi_config:
-            ceph_test: True
-            ceph_origin: distro
-            ceph_stable_release: nautilus
-            ceph_repository: rhcs
-            osd_scenario: lvm
-            osd_auto_discovery: False
-            journal_size: 1024
-            ceph_stable: True
-            ceph_stable_rh_storage: True
-            ceph_docker_image: rhceph/rhceph-3-rhel7
-            ceph_docker_image_tag: latest
-            containerized_deployment: true
-            ceph_docker_registry: registry.access.redhat.com
-            copy_admin_key: true
-            dashboard_enabled: False
-            ceph_conf_overrides:
-                global:
-                  osd_pool_default_pg_num: 64
-                  osd_default_pool_size: 2
-                  osd_pool_default_pgp_num: 64
-                  mon_max_pg_per_osd: 1024
-                mon:
-                  mon_allow_pool_delete: true
-                client:
-                  rgw crypt require ssl: false
-                  rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
-                    testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
-            cephfs_pools:
-              - name: "cephfs_data"
-                pgs: "8"
-              - name: "cephfs_metadata"
-                pgs: "8"
-      desc: test cluster setup using ceph-ansible
-      destroy-cluster: False
-      abort-on-fail: true
 
    - test:
        name: Object Encryption Tests
@@ -749,7 +596,6 @@ tests:
          script-name: test_multipart_upload_cancel.py
          config-file-name: test_multipart_upload_cancel.yaml
          timeout: 300
-
    - test:
        name: Beast SSL RGW test
        desc: RGW SSL testing with Beast frontend enabled
@@ -760,7 +606,6 @@ tests:
          script-name: test_frontends_with_ssl.py
          config-file-name: test_ssl_beast.yaml
          timeout: 500
-
    - test:
        name: ceph ansible purge
        polarion-id: CEPH-83571498
@@ -769,7 +614,8 @@ tests:
          ansible-dir: /usr/share/ceph-ansible
        desc: Purge ceph cluster
 
-    # upstream s3-tests
+  # upstream s3-tests
+
    - test:
       name: containerized ceph ansible
       polarion-id: CEPH-83571503
@@ -811,7 +657,6 @@ tests:
       desc: test cluster setup using ceph-ansible
       destroy-cluster: False
       abort-on-fail: true
-
    - test:
       name: s3 tests
       module: test_s3.py
@@ -821,6 +666,7 @@ tests:
       destroy-cluster: False
 
      # User, Bucket rename, Bucket link and unlink
+
    - test:
        name: User rename
        desc: RGW User rename script
@@ -829,7 +675,6 @@ tests:
          script-name: test_user_bucket_rename.py
          config-file-name: test_user_rename.yaml
          timeout: 500
-
    - test:
        name: Bucket rename
        desc: RGW Bucket rename script
@@ -840,7 +685,6 @@ tests:
          script-name: test_user_bucket_rename.py
          config-file-name: test_bucket_rename.yaml
          timeout: 500
-
    - test:
        name: Bucket link and unlink
        desc: Bucket move between tenanted and non tenanted users
@@ -851,3 +695,4 @@ tests:
          script-name: test_user_bucket_rename.py
          config-file-name: test_bucket_link_unlink.yaml
          timeout: 500
+
