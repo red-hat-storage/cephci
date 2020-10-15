@@ -619,7 +619,7 @@ class Ceph(object):
 
     def setup_packages(self, base_url, hotfix_repo, installer_url, ubuntu_repo, build=None):
         """
-        Setup packages required for ceph-ansible istallation
+        Setup packages required for ceph-ansible installation
         Args:
             base_url (str): rhel compose url
             hotfix_repo (str): hotfix repo to use with priority
@@ -1873,6 +1873,26 @@ class CephInstaller(CephObject):
             out, rc = self.exec_command(cmd='rpm -qa | grep ceph-ansible')
         output = out.read().decode().rstrip()
         logger.info("Installed ceph-ansible: {version}".format(version=output))
+
+    def install_cephadm(self, **kw):
+        """
+        Enables tools repo and Installs cephadm
+        """
+
+
+        logger.info("Installing cephadm")
+        self.exec_command(
+                cmd = 'sudo yum install cephadm -y --nogpgcheck',
+                long_running=True)
+
+        if kw.get('upgrade'):
+            self.exec_command(sudo=True, cmd='yum update metadata')
+            self.exec_command(sudo=True, cmd='yum update -y cephadm')
+
+        out, rc = self.exec_command(cmd='rpm -qa | grep cephadm')
+        output = out.read().decode().rstrip()
+        logger.info("Installed cephadm: {version}".format(version=output))
+
 
     def add_iscsi_settings(self, test_data):
         """

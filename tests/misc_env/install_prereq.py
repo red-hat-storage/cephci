@@ -58,6 +58,8 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
         # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
         if distro_ver.startswith('8'):
             rpm_all_packages = ' '.join(rpm_packages.get('py3'))
+            if str(rhbuild).startswith('5'):
+                rpm_all_packages = rpm_all_packages + 'lvm2' + 'podman'
         else:
             rpm_all_packages = ' '.join(rpm_packages.get('py2'))
         ceph.exec_command(cmd='sudo yum install -y ' + rpm_all_packages, long_running=True)
