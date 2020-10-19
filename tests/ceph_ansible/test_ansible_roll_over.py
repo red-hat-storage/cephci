@@ -31,6 +31,7 @@ def run(ceph_cluster, **kw):
     filestore = config.get("filestore")
     hotfix_repo = config.get("hotfix_repo")
     test_data = kw.get("test_data")
+    cluster_name = config.get("cluster")
 
     ubuntu_repo = config.get("ubuntu_repo", None)
     base_url = config.get("base_url", None)
@@ -162,6 +163,9 @@ def run(ceph_cluster, **kw):
         "rhbuild": build,
     }
 
-    if ceph_cluster.check_health(build, timeout=timeout) != 0:
+    if (
+        ceph_cluster.check_health(build, timeout=timeout, cluster_name=cluster_name)
+        != 0
+    ):
         return 1
     return rc
