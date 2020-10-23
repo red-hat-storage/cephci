@@ -1878,12 +1878,10 @@ class CephInstaller(CephObject):
         """
         Enables tools repo and Installs cephadm
         """
-
-
         logger.info("Installing cephadm")
         self.exec_command(
-                cmd = 'sudo yum install cephadm -y --nogpgcheck',
-                long_running=True)
+            cmd='sudo yum install cephadm -y --nogpgcheck',
+            long_running=True)
 
         if kw.get('upgrade'):
             self.exec_command(sudo=True, cmd='yum update metadata')
@@ -1892,7 +1890,6 @@ class CephInstaller(CephObject):
         out, rc = self.exec_command(cmd='rpm -qa | grep cephadm')
         output = out.read().decode().rstrip()
         logger.info("Installed cephadm: {version}".format(version=output))
-
 
     def add_iscsi_settings(self, test_data):
         """

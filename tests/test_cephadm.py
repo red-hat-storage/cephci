@@ -1,9 +1,8 @@
-import datetime
 import logging
 from utility.utils import get_latest_container
-from ceph.utils import get_public_network
 
 log = logging.getLogger(__name__)
+
 
 def run(ceph_cluster, **kw):
     """
@@ -13,12 +12,10 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running test")
     log.info("Running cephadm test")
-    ceph_nodes = kw.get('ceph_nodes')
     config = kw.get('config')
     hotfix_repo = config.get('hotfix_repo')
     test_data = kw.get('test_data')
     base_url = config.get('base_url', None)
-    installer_url = config.get('installer_url', None)
     ceph_cluster.custom_config = test_data.get('custom-config')
     ceph_cluster.custom_config_file = test_data.get('custom-config-file')
 
@@ -42,9 +39,9 @@ def run(ceph_cluster, **kw):
     ceph_installer.exec_command(sudo=True, cmd='mkdir -p /etc/ceph')
     out, rc = ceph_installer.exec_command(sudo=True,
         cmd='cephadm --image {}/{}:{} bootstrap --mon-ip {}'.\
-            format(image['docker_registry'], image['docker_image'], image['docker_tag'],\
-                   installerNode[0].ip_address),
-        long_running=True)
+            format(image['docker_registry'], image['docker_image'], image['docker_tag'],
+            installerNode[0].ip_address),
+            long_running=True)
 
     if rc != 0:
         log.error("Failed during deployment")
