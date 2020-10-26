@@ -176,7 +176,7 @@ class CephVMNode(object):
                 break
             if datetime.datetime.now() - starttime > timeout:
                 logger.info("Failed to bring the node in running state in {timeout}s".format(timeout=timeout))
-                raise NodeErrorState("Failed to bring up the node in Running state " + self.name)
+                raise NodeErrorState("Failed to bring up the node in Running state " + name)
             sleep(30)
         new_node_list = [node for node in all_nodes if node.uuid == new_node.uuid]
         new_node = new_node_list[0]
@@ -187,7 +187,7 @@ class CephVMNode(object):
             except IndexError:
                 if datetime.datetime.now() - starttime > timeout:
                     logger.info("Failed to get host ip_address in {timeout}s".format(timeout=timeout))
-                    raise GetIPError("Unable to get IP for " + self.name)
+                    raise GetIPError("Unable to get IP for " + name)
                 else:
                     sleep(10)
                     new_node_list = [node for node in all_nodes if node.uuid == new_node.uuid]
