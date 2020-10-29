@@ -7,6 +7,10 @@ tests:
    - test:
       name: cephadm cluster bootstrap
       module: test_cephadm.py
+      polarion-id:
+      config:
+         use_cdn: false
+         using_cephadm: true
       desc: cephadm cluster bootstrap
       destroy-cluster: False
       abort-on-fail: true

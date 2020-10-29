@@ -31,7 +31,6 @@ def run(ceph_cluster, **kw):
     # enable internal repo, cdn rpm and hotfix repo yet to be implemented
     ceph_installer.exec_command(
         cmd='sudo yum-config-manager --add {}compose/Tools/x86_64/os/'.format(base_url))
-    ceph_cluster.setup_ssh_keys()
 
     installerNode = ceph_cluster.get_nodes(role="installer")
     ceph_installer.install_cephadm()
@@ -43,6 +42,8 @@ def run(ceph_cluster, **kw):
             installerNode[0].ip_address),
             long_running=True)
 
+    ceph_cluster.setup_ssh_keys()
+    ceph_installer.distribute_cephadm_gen_pub_key(ceph_cluster)
     if rc != 0:
         log.error("Failed during deployment")
 

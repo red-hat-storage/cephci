@@ -190,7 +190,7 @@ class Ceph(object):
         Args:
             device_to_add(str): To add new osd to the cluster, default None
             mixed_lvm_confs(str): To configure multiple mixed lvm configs, default None
-            filestore(bool): True for filestore usage, dafault False
+            filestore(bool): True for filestore usage, dafault Falsek
         Returns:
             str: inventory
 
@@ -1934,6 +1934,28 @@ class CephInstaller(CephObject):
         except CommandFailed as err:
             logger.error(err.args)
         return False
+
+    def read_cephadm_gen_pub_key(self):
+        """
+        Read cephadm generated public key
+        Arg:
+            Installer node
+        Returns:
+            Public Key string
+        """
+        cephPubKey, err = self.exec_command(sudo=True, cmd="cat /etc/ceph/ceph.pub")
+        return cephPubKey
+
+    def distribute_cephadm_gen_pub_key(self, ceph_cluster):
+        """
+        Distribute cephadm generated public key to all nodes
+        """
+        cephPubKey = self.read_cephadm_gen_pub_key()
+        for each_node in ceph_cluster.get_nodes():
+            keys_file = each_node.write_file(sudo=True,
+                file_name='/root/.ssh/authorized_keys', file_mode='a')
+            keys_file.write(cephPubKey)
+            keys_file.flush()
 
 
 class CephObjectFactory(object):
