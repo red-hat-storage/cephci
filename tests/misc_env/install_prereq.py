@@ -39,7 +39,7 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     log.info("cloud config to completed on " + ceph.hostname)
     # workaround ,as there is bug on cloud-init which comes with rhel7.7 deployments
     # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
-    ceph.exec_command(cmd='sudo systemctl restart NetworkManager.service')
+
     update_ca_cert(ceph, 'https://password.corp.redhat.com/RH-IT-Root-CA.crt')
     update_ca_cert(ceph, 'https://password.corp.redhat.com/legacy.crt')
     distro_info = ceph.distro_info
@@ -50,6 +50,7 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     if ceph.pkg_type == 'deb':
         ceph.exec_command(cmd='sudo apt-get install -y ' + deb_all_packages, long_running=True)
     else:
+        ceph.exec_command(cmd='sudo systemctl restart NetworkManager.service')
         if not skip_subscription:
             setup_subscription_manager(ceph)
             enable_rhel_rpms(ceph, distro_ver)

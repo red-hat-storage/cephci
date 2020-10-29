@@ -1,10 +1,12 @@
 instance:
   create:
-    image-name: xenial-latest
+    image-name: Ubuntu16.04
     vm-size: m1.medium
 
   setup: |
     #cloud-config
+
+    ssh_pwauth: True
 
     groups:
         - cephuser
@@ -24,13 +26,15 @@ instance:
     chpasswd:
       list: |
         root:passwd
-        cephuser: pass123
+        cephuser:cephuser
       expire: False
 
     runcmd:
       - touch /ceph-qa-ready
       - sudo sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
-
+      - sudo passwd -u root
+      - sudo sed -i 's/.*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - sudo systemctl restart sshd
 
     final_message: "Ready for ceph qa testing"
     # unlock root password for ubuntu images, sudo passwd root,  Then execute sudo passwd -u root
