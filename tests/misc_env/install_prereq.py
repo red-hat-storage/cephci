@@ -41,7 +41,6 @@ def install_prereq(ceph, timeout=1800, skip_subscription=False, repo=False, rhbu
     # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
 
     update_ca_cert(ceph, 'https://password.corp.redhat.com/RH-IT-Root-CA.crt')
-    update_ca_cert(ceph, 'https://password.corp.redhat.com/legacy.crt')
     distro_info = ceph.distro_info
     distro_ver = distro_info['VERSION_ID']
     log.info('distro name: {name}'.format(name=distro_info['NAME']))
