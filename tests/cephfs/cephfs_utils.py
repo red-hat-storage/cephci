@@ -1123,6 +1123,7 @@ finally:
                                 cmd="sh -c 'cd %s%s && sudo touch {%d..%d}.txt'"
                                 % (mounting_dir, dir_name, range1, range2),
                             )
+
                         self.return_counts = self.io_verify(client)
                     elif val == "fio":
                         for num in range(int(range1), int(range2)):
