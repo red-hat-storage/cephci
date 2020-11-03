@@ -124,31 +124,31 @@ def run(ceph_cluster, **kw):
                     client_info['mounting_dir'],
                     dir_name,
                     0,
-                    1000,
+                    10000,
                     iotype='touch')
                 p.spawn(
                     fs_util.stress_io,
                     client3,
                     client_info['mounting_dir'],
                     dir_name,
-                    1000,
-                    2000,
+                    10000,
+                    20000,
                     iotype='touch')
                 p.spawn(
                     fs_util.stress_io,
                     client2,
                     client_info['mounting_dir'],
                     dir_name,
-                    2000,
-                    3000,
+                    20000,
+                    30000,
                     iotype='touch')
                 p.spawn(
                     fs_util.stress_io,
                     client4,
                     client_info['mounting_dir'],
                     dir_name,
-                    3000,
-                    4000,
+                    30000,
+                    40000,
                     iotype='touch')
                 p.spawn(
                     fs_util.stress_io,
