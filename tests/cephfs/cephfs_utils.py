@@ -893,7 +893,7 @@ finally:
                                     (mounting_dir, dir_name, self.file_name))
                         else:
                             client.exec_command(
-                                cmd="sudo touch %s%s/{%d..%d}.txt" %
+                                cmd="sudo sh -c 'cd %s%s && sudo touch {%d..%d}.txt'" %
                                     (mounting_dir, dir_name, range1, range2))
                         self.return_counts = self.io_verify(client)
                     elif val == 'fio':
