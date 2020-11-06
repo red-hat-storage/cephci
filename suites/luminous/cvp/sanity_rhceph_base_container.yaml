@@ -191,25 +191,25 @@ tests:
 # basic cephfs tests
 
   - test:
-    name: cephfs-lifecycle ops
-    module: CEPH-11333.py
-    polarion-id: CEPH-11333
-    desc: Perfrom cephfs lifecycle ops like delete cephfs,recreate cephfs
-    abort-on-fail: false
+      name: cephfs-lifecycle ops
+      module: CEPH-11333.py
+      polarion-id: CEPH-11333
+      desc: Perfrom cephfs lifecycle ops like delete cephfs,recreate cephfs
+      abort-on-fail: false
 
   - test:
-    name: multi-client-rw-io
-    module: CEPH-10528_10529.py
-    polarion-id: CEPH-10528,CEPH-10529
-    desc: Single CephFS on multiple clients,performing IOs and checking file locking mechanism
-    abort-on-fail: false
+      name: multi-client-rw-io
+      module: CEPH-10528_10529.py
+      polarion-id: CEPH-10528,CEPH-10529
+      desc: Single CephFS on multiple clients,performing IOs and checking file locking mechanism
+      abort-on-fail: false
 
   - test:
-    name: cephfs-basics
-    module: cephfs_basic_tests.py
-    polarion-id: CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295
-    desc: cephfs basic operations
-    abort-on-fail: false
+      name: cephfs-basics
+      module: cephfs_basic_tests.py
+      polarion-id: CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295
+      desc: cephfs basic operations
+      abort-on-fail: false
 
   # - test:
   #    name: ceph ansible purge
