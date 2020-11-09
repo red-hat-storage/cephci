@@ -176,7 +176,7 @@ class CephVMNode(object):
                 break
             if datetime.datetime.now() - starttime > timeout:
                 logger.info("Failed to bring the node in running state in {timeout}s".format(timeout=timeout))
-                raise NodeErrorState("Failed to bring up the node in Running state " + name)
+                raise NodeErrorState('node {name} is in "{state}" state'.format(name=name, state=new_node_state[0]))
             sleep(30)
         new_node_list = [node for node in all_nodes if node.uuid == new_node.uuid]
         new_node = new_node_list[0]
