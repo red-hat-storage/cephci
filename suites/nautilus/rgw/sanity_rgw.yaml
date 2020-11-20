@@ -366,6 +366,53 @@ tests:
            config-file-name: test_tenantuser_secretkey_gen.yaml
            timeout: 300
 
+   # Bucket Listing Tests
+   - test:
+       name: Bucket Listing tests
+       desc: measure execution time for ordered listing of bucket with top level objects
+       polarion-id: CEPH-83573545
+       module: sanity_rgw.py
+       config:
+         script-name: test_bucket_listing.py
+         config-file-name: test_bucket_listing_flat_ordered.yaml
+         timeout: 300
+   - test:
+       name: Bucket Listing tests
+       desc: measure execution time for ordered listing of versionsed bucket with top level objects
+       polarion-id: CEPH-83573545
+       module: sanity_rgw.py
+       config:
+         script-name: test_bucket_listing.py
+         config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
+         timeout: 300
+   - test:
+       name: Bucket Listing tests
+       desc: measure execution time for unordered listing of bucket with top level objects
+       polarion-id: CEPH-83573545
+       module: sanity_rgw.py
+       config:
+         script-name: test_bucket_listing.py
+         config-file-name: test_bucket_listing_flat_unordered.yaml
+         timeout: 300
+   - test:
+       name: Bucket Listing tests
+       desc: measure execution time for ordered listing of bucket with pseudo directories and objects
+       polarion-id: CEPH-83573545
+       module: sanity_rgw.py
+       config:
+         script-name: test_bucket_listing.py
+         config-file-name: test_bucket_listing_pseudo_ordered.yaml
+         timeout: 300
+   - test:
+       name: Bucket Listing tests
+       desc: measure execution time for ordered listing of bucket with pseudo directories only
+       polarion-id: CEPH-83573651
+       module: sanity_rgw.py
+       config:
+         script-name: test_bucket_listing.py
+         config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
+         timeout: 300
+
    # Bucket Request Payer tests
 
    - test:
