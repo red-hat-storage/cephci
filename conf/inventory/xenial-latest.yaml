@@ -1,3 +1,5 @@
+version_id: 16.04
+id: ubuntu
 instance:
   create:
     image-name: Ubuntu16.04

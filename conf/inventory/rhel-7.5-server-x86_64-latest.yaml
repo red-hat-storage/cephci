@@ -1,3 +1,5 @@
+version_id: 7.5
+id: rhel
 instance:
   create:
     image-name: rhel-7.5-server-x86_64-latest
