@@ -1,4 +1,5 @@
 import logging
+import time
 import timeit
 import traceback
 
@@ -232,6 +233,7 @@ def run(ceph_cluster, **kw):
                 )
                 for op in p:
                     return_counts, rc = op
+            time.sleep(600)
             with parallel() as p:
                 p.spawn(
                     fs_util.pinned_dir_io_mdsfailover,
