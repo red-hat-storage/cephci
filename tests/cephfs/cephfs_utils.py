@@ -60,7 +60,7 @@ class FsUtils(object):
         # clone crefi repository
         node.exec_command(
             cmd="cd /home/cephuser/; git clone {}".format(
-                "https://github.com/vijaykumar-koppad/Crefi.git"
+                "https://github.com/yogesh-mane/Crefi.git"
             ),
             long_running=True
         )
