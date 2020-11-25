@@ -14,3 +14,41 @@ tests:
       desc: cephadm cluster bootstrap
       destroy-cluster: False
       abort-on-fail: true
+
+   - test:
+      name: Add daemons to expand cluster
+      module: test_complete_basic_cluster.py
+      polarion-id:
+      config:
+         use_cdn: false
+         using_cephadm: true
+         add:
+            - node:
+                 node-name: .*node2.*
+                 demon:
+                    - osd
+            - node:
+                 node-name: .*node3.*
+                 demon:
+                    - osd
+            - node:
+                 node-name: .*node4.*
+                 demon:
+                    - osd
+            - node:
+                 node-name: .*node5.*
+                 demon:
+                    - mds
+            - node:
+                 node-name: .*node6.*
+                 demon:
+                    - rgw
+            - node:
+                 node-name: .*node7.*
+                 demon:
+                    - rgw
+            - node:
+                 node-name: .*node8.*
+                 demon:
+                    - nfs
+                    - client

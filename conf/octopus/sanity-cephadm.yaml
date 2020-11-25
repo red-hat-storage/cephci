@@ -27,10 +27,8 @@ globals:
             - mon
             - rgw
        node7:
-         role: mds
-       node8:
          role: rgw
-       node9:
+       node8:
          role:
            - client
            - nfs

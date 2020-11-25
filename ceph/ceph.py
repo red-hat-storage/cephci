@@ -1957,6 +1957,24 @@ class CephInstaller(CephObject):
             keys_file.write(cephPubKey)
             keys_file.flush()
 
+    def orch_add_node(self, node_name):
+        """
+        Add node to the cluster
+        :param node_name:
+        :return:
+        """
+        self.exec_command(sudo = True,cmd='ceph orch host add {}'.format(node_name))
+
+    def orch_add_daemon(self, node_name, node_role):
+        """
+        Add daemons to added nodes
+
+        :param node_name:
+        :param node_role:
+        :return:
+        """
+
+    def orch_add_daemon
 
 class CephObjectFactory(object):
     DEMON_ROLES = ['mon', 'osd', 'mgr', 'rgw', 'mds', 'nfs', 'grafana']
