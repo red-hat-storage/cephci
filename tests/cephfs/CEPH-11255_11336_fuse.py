@@ -220,6 +220,7 @@ def run(ceph_cluster, **kw):
                 iotype='touch')
             for node in client_info['osd_nodes']:
                 p.spawn(fs_util.reboot, node)
+        time.sleep(900)
         with parallel() as p:
             p.spawn(
                 fs_util.stress_io,
@@ -247,6 +248,7 @@ def run(ceph_cluster, **kw):
                 iotype='touch')
             for node in client_info['osd_nodes']:
                 fs_util.network_disconnect(node)
+        time.sleep(900)
         with parallel() as p:
             p.spawn(
                 fs_util.stress_io,
@@ -275,7 +277,7 @@ def run(ceph_cluster, **kw):
             for node in client_info['osd_nodes']:
                 fs_util.pid_kill(node, 'ceph-osd')
 
-        time.sleep(180)
+        time.sleep(900)
         cluster_health_afterIO = check_ceph_healthly(
             client_info['mon_node'][0], num_of_osds, len(
                 client_info['mon_node']), build, None, 300)
