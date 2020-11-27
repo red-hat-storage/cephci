@@ -1,3 +1,4 @@
+'''adds ceph daemons on existing cluster'''
 import datetime
 import logging
 import re
@@ -10,51 +11,24 @@ log = logger
 
 def run(ceph_cluster, **kw):
     """
-    Rolls updates over existing ceph-ansible deployment
-    Args:
-        ceph_cluster (ceph.ceph.Ceph): ceph cluster object
-        **kw(dict):
-            config sample:
-                config:
-                  ansi_config:
-                      ceph_test: True
-                      ceph_origin: distro
-                      ceph_stable_release: luminous
-                      ceph_repository: rhcs
-                      osd_scenario: collocated
-                      osd_auto_discovery: False
-                      journal_size: 1024
-                      ceph_stable: True
-                      ceph_stable_rh_storage: True
-                      public_network: 172.16.0.0/12
-                      fetch_directory: ~/fetch
-                      copy_admin_key: true
-                      ceph_conf_overrides:
-                          global:
-                            osd_pool_default_pg_num: 64
-                            osd_default_pool_size: 2
-                            osd_pool_default_pgp_num: 64
-                            mon_max_pg_per_osd: 1024
-                          mon:
-                            mon_allow_pool_delete: true
-                      cephfs_pools:
-                        - name: "cephfs_data"
-                          pgs: "8"
-                        - name: "cephfs_metadata"
-                          pgs: "8"
-                  add:
-                      - node:
-                          node-name: .*node15.*
-                          demon:
-                              - mon
-    Returns:
-        int: non-zero on failure, zero on pass
+￼    Rolls updates over existing ceph-ansible deployment
+￼    Args:
+￼        ceph_cluster (ceph.ceph.Ceph): ceph cluster object
+￼        **kw(dict):
+￼            config sample:
+￼                config:
+￼                  add:
+￼                      - node:
+￼                          node-name: .*node15.*
+￼                          daemon:
+￼                             - mon
+￼    Returns:
+￼        int: non-zero on failure, zero on pass
     """
     log.info("Running test")
     log.info("Running ceph ansible test")
     config = kw.get('config')
     filestore = config.get('filestore')
-    k_and_m = config.get('ec-pool-k-m')
     hotfix_repo = config.get('hotfix_repo')
     test_data = kw.get('test_data')
 
@@ -63,17 +37,16 @@ def run(ceph_cluster, **kw):
     installer_url = config.get('installer_url', None)
     mixed_lvm_configs = config.get('is_mixed_lvm_configs', None)
     device_to_add = config.get('device', None)
-    ceph_cluster.ansible_config = config['ansi_config']
 
     ceph_cluster.use_cdn = config.get('use_cdn')
     build = config.get('build', config.get('rhbuild'))
-
+    build_starts = build[0]
     if config.get('add'):
         for added_node in config.get('add'):
             added_node = added_node.get('node')
             node_name = added_node.get('node-name')
-            demon_list = added_node.get('demon')
-            osds_required = [demon for demon in demon_list if demon == 'osd']
+            daemon_list = added_node.get('daemon')
+            osds_required = [daemon for daemon in daemon_list if daemon == 'osd']
             short_name_list = [ceph_node.shortname for ceph_node in ceph_cluster.get_nodes()]
             matcher = re.compile(node_name)
             matched_short_names = list(filter(matcher.match, short_name_list))
@@ -89,16 +62,16 @@ def run(ceph_cluster, **kw):
             free_volumes = matched_ceph_node.get_free_volumes()
             if len(osds_required) > len(free_volumes):
                 raise RuntimeError(
-                    'Insufficient volumes on the {node_name} node. Rquired: {required} - Found: {found}'.format(
+                    'Insufficient volumes on the {node_name} node. Required: {required} - Found: {found}'.format(
                         node_name=matched_ceph_node.shortname, required=len(osds_required),
                         found=len(free_volumes)))
             log.debug('osds_required: {}'.format(osds_required))
             log.debug('matched_ceph_node.shortname: {}'.format(matched_ceph_node.shortname))
             for osd in osds_required:
                 free_volumes.pop().status = NodeVolume.ALLOCATED
-            for demon in demon_list:
-                if len(matched_ceph_node.get_ceph_objects(demon)) == 0:
-                    matched_ceph_node.create_ceph_object(demon)
+            for daemon in daemon_list:
+                if len(matched_ceph_node.get_ceph_objects(daemon)) == 0:
+                    matched_ceph_node.create_ceph_object(daemon)
 
     test_data['install_version'] = build
 
@@ -121,24 +94,32 @@ def run(ceph_cluster, **kw):
     # use the provided sample file as main site.yml
     ceph_installer.setup_ansible_site_yml(build, ceph_cluster.containerized)
 
-    ceph_cluster.distribute_all_yml()
-
     # add iscsi setting if it is necessary
     if test_data.get("luns_setting", None) and test_data.get("initiator_setting", None):
         ceph_installer.add_iscsi_settings(test_data)
 
     log.info("Ceph versions " + ceph_installer.get_installed_ceph_versions())
 
-    out, rc = ceph_installer.exec_command(
-        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts site.yml '
-            '--limit {daemon}'.format(ansible_dir, daemon=demon + 's'),
-        long_running=True)
+    # Run site-x.yml by default
+    if ceph_cluster.ansible_config.get('containerized_deployment'):
+        yaml = "site-container.yml"
+    else:
+        yaml = "site.yml"
 
-    # manually handle client creation in a containerized deployment (temporary)
-    if ceph_cluster.containerized:
-        for node in ceph_cluster.get_ceph_objects('client'):
-            log.info("Manually installing client node")
-            node.exec_command(sudo=True, cmd="yum install -y ceph-common")
+    # Append "--limit" if daemon to be added is not osd
+    yaml_dict = {'3': {'mon': '%s' % yaml, 'osd': 'add-osd.yml'},
+                 '4': {'mon': 'infrastructure-playbooks/add-mon.yml',
+                       'osd': 'infrastructure-playbooks/add-osd.yml'}}
+    yaml_file = yaml_dict[build_starts].get(daemon, "%s --limit %ss" % (yaml, daemon))
+
+    if build.startswith('3'):
+        if daemon == 'osd':
+            ceph_installer.exec_command(sudo=True,
+                                        cmd='cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{yaml_file} .'
+                                        .format(ansible_dir=ansible_dir, yaml_file=yaml_file))
+
+    cmd = 'cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {}'.format(ansible_dir, yaml_file)
+    out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:
         log.error("Failed during deployment")
@@ -152,9 +133,6 @@ def run(ceph_cluster, **kw):
     num_osds = ceph_cluster.ceph_demon_stat['osd']
     num_mons = ceph_cluster.ceph_demon_stat['mon']
     test_data['ceph-ansible'] = {'num-osds': num_osds, 'num-mons': num_mons, 'rhbuild': build}
-
-    # create rbd pool used by tests/workunits
-    ceph_cluster.create_rbd_pool(k_and_m)
 
     if ceph_cluster.check_health(build, timeout=timeout) != 0:
         return 1
