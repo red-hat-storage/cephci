@@ -1796,26 +1796,21 @@ class CephInstaller(CephObject):
         Create proper site.yml from sample for containerized or non-containerized deployment
         Args:
             build(string): RHCS build
-            containerized(bool): use site-docker.yml.sample if True else site.yml.sample
+            containerized(bool): use site-container.yml.sample if True else site.yml.sample
         """
         # https://github.com/ansible/ansible/issues/11536
         self.exec_command(cmd='''echo 'export ANSIBLE_SSH_CONTROL_PATH="%(directory)s/%%C"'>> ~/.bashrc;
                                  source ~/.bashrc''')
-        if containerized:
-            file_name = "site-docker.yml"
-            if build.startswith("5"):
-                file_name = "site-container.yml"
 
-            self.exec_command(
-                sudo=True,
-                cmd='cp -R {ansible_dir}/{file_name}.sample {ansible_dir}/site.yml'.format(
-                    ansible_dir=self.ansible_dir,
-                    file_name=file_name
-                ))
-        else:
-            self.exec_command(
-                sudo=True, cmd='cp -R {ansible_dir}/site.yml.sample {ansible_dir}/site.yml'.format(
-                    ansible_dir=self.ansible_dir))
+        file_name = "site.yml"
+
+        if containerized:
+            file_name = "site-container.yml"
+
+        self.exec_command(
+            sudo=True,
+            cmd='cp -R {ansible_dir}/{file_name}.sample {ansible_dir}/{file_name}'.format(
+                ansible_dir=self.ansible_dir, file_name=file_name))
 
     def install_ceph_ansible(self, rhbuild, **kw):
         """

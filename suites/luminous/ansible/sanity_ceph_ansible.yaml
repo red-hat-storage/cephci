@@ -87,12 +87,6 @@ tests:
       config:
             ansible-dir: /usr/share/ceph-ansible
       desc: Purge ceph cluster
-#        recreate-cluster: True
-#
-#   - test:
-#       name: install ceph pre-requisites
-#       module: install_prereq.py
-#       abort-on-fail: true
 
    - test:
       name: ceph ansible
@@ -178,12 +172,6 @@ tests:
       config:
             ansible-dir: /usr/share/ceph-ansible
       desc: Purge ceph cluster
-#        recreate-cluster: True
-#
-#   - test:
-#       name: install ceph pre-requisites
-#       module: install_prereq.py
-#       abort-on-fail: true
 
    - test:
       name: ceph ansible
@@ -272,12 +260,6 @@ tests:
       config:
             ansible-dir: /usr/share/ceph-ansible
       desc: Purge ceph cluster
-#        recreate-cluster: True
-#
-#   - test:
-#       name: install ceph pre-requisites
-#       module: install_prereq.py
-#       abort-on-fail: true
 
    - test:
         name: ceph ansible
@@ -367,12 +349,6 @@ tests:
       config:
             ansible-dir: /usr/share/ceph-ansible
       desc: Purge ceph cluster
-#        recreate-cluster: True
-#
-#   - test:
-#       name: install ceph pre-requisites
-#       module: install_prereq.py
-#       abort-on-fail: true
 
    - test:
       name: ceph ansible
@@ -444,6 +420,7 @@ tests:
             cmd: ceph -s
             sudo: True
       desc: Check for ceph health debug info
+
    - test:
       name: rados_bench_test
       module: radosbench.py
@@ -459,12 +436,6 @@ tests:
       config:
             ansible-dir: /usr/share/ceph-ansible
       desc: Purge ceph cluster
-#        recreate-cluster: True
-#
-#   - test:
-#       name: install ceph pre-requisites
-#       module: install_prereq.py
-#       abort-on-fail: true
 
    - test:
       name: ceph ansible
@@ -675,35 +646,10 @@ tests:
       polarion-id: CEPH-9581
       module: test_ansible_roll_over.py
       config:
-          ansi_config:
-              ceph_test: True
-              ceph_origin: distro
-              ceph_stable_release: luminous
-              ceph_repository: rhcs
-              osd_scenario: collocated
-              osd_auto_discovery: False
-              journal_size: 1024
-              ceph_stable: True
-              ceph_stable_rh_storage: True
-              fetch_directory: ~/fetch
-              copy_admin_key: true
-              ceph_conf_overrides:
-                  global:
-                    osd_pool_default_pg_num: 64
-                    osd_default_pool_size: 2
-                    osd_pool_default_pgp_num: 64
-                    mon_max_pg_per_osd: 1024
-                  mon:
-                    mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
           add:
               - node:
                   node-name: .*node15.*
-                  demon:
+                  daemon:
                       - mon
       desc: add mon
 
@@ -712,73 +658,22 @@ tests:
       polarion-id: CEPH-9583
       module: test_ansible_roll_over.py
       config:
-          ansi_config:
-              ceph_test: True
-              ceph_origin: distro
-              ceph_stable_release: luminous
-              ceph_repository: rhcs
-              osd_scenario: collocated
-              osd_auto_discovery: False
-              journal_size: 1024
-              ceph_stable: True
-              ceph_stable_rh_storage: True
-              fetch_directory: ~/fetch
-              copy_admin_key: true
-              ceph_conf_overrides:
-                  global:
-                    osd_pool_default_pg_num: 64
-                    osd_default_pool_size: 2
-                    osd_pool_default_pgp_num: 64
-                    mon_max_pg_per_osd: 1024
-                  mon:
-                    mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
           add:
               - node:
                   node-name: .*node16.*
-                  demon:
+                  daemon:
                       - osd
       desc: add new osd node
-
 
    - test:
       name: config roll over existing osd daemon
       polarion-id: CEPH-9582
       module: test_ansible_roll_over.py
       config:
-          ansi_config:
-              ceph_test: True
-              ceph_origin: distro
-              ceph_stable_release: luminous
-              ceph_repository: rhcs
-              osd_scenario: collocated
-              osd_auto_discovery: False
-              journal_size: 1024
-              ceph_stable: True
-              ceph_stable_rh_storage: True
-              fetch_directory: ~/fetch
-              copy_admin_key: true
-              ceph_conf_overrides:
-                  global:
-                    osd_pool_default_pg_num: 64
-                    osd_default_pool_size: 2
-                    osd_pool_default_pgp_num: 64
-                    mon_max_pg_per_osd: 1024
-                  mon:
-                    mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
           add:
               - node:
                   node-name: .*node16.*
-                  demon:
+                  daemon:
                       - osd
       desc: add osd to existing node
 
@@ -787,37 +682,48 @@ tests:
       polarion-id: CEPH-83573550
       module: test_ansible_roll_over.py
       config:
-          ansi_config:
-              ceph_test: True
-              ceph_origin: distro
-              ceph_stable_release: luminous
-              ceph_repository: rhcs
-              osd_scenario: collocated
-              osd_auto_discovery: False
-              journal_size: 1024
-              ceph_stable: True
-              ceph_stable_rh_storage: True
-              fetch_directory: ~/fetch
-              copy_admin_key: true
-              ceph_conf_overrides:
-                  global:
-                    osd_pool_default_pg_num: 64
-                    osd_default_pool_size: 2
-                    osd_pool_default_pgp_num: 64
-                    mon_max_pg_per_osd: 1024
-                  mon:
-                    mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
           add:
               - node:
                   node-name: .*node15.*
-                  demon:
+                  daemon:
                       - client
       desc: add client
+   
+   - test:
+      name: config roll over rgw daemon
+      polarion-id: CEPH-83573550
+      module: test_ansible_roll_over.py
+      config:
+          add:
+              - node:
+                  node-name: .*node5.*
+                  daemon:
+                      - rgw
+      desc: add rgw
+
+   - test:
+      name: config roll over nfs daemon
+      polarion-id: CEPH-83573550
+      module: test_ansible_roll_over.py
+      config:
+          add:
+              - node:
+                  node-name: .*node6.*
+                  daemon:
+                      - nfs
+      desc: add nfs
+
+   - test:
+      name: config roll over mds daemon
+      polarion-id: CEPH-83573550
+      module: test_ansible_roll_over.py
+      config:
+          add:
+              - node:
+                  node-name: .*node16.*
+                  daemon:
+                      - mds
+      desc: add mds
 
    - test:
       name: shrink mon
