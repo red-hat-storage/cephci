@@ -1,3 +1,5 @@
+version_id: 8.2
+id: rhel
 instance:
   create:
     image-name: rhel-8.2.0-x86_64-released
