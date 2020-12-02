@@ -62,3 +62,5 @@ globals:
          role: osd
          no-of-volumes: 4
          disk-size: 15
+       node17:
+         role: grafana
