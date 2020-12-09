@@ -29,10 +29,11 @@ def run(**kw):
             break
 
     if client_node:
-        if test_data['install_version'].startswith('2'):
+        if test_data.get('install_version', "").startswith('2'):
             client_node.exec_command(sudo=True, cmd='yum install -y ceph-radosgw')
+
         setup_s3_tests(client_node, rgw_node, config, build)
-        exit_status = execute_s3_tests(client_node)
+        exit_status = execute_s3_tests(client_node, build)
         cleanup(client_node)
 
         log.info("Returning status code of {}".format(exit_status))
@@ -65,16 +66,17 @@ def setup_s3_tests(client_node, rgw_node, config, build):
     repo_url = "https://github.com/ceph/s3-tests.git"
     client_node.exec_command(cmd="git clone -b {branch} {repo_url}".format(branch=branch, repo_url=repo_url))
 
-    log.info("Running bootstrap")
     if build.startswith('4'):
+        pkgs = ["python2-virtualenv", "python2-devel", "libevent-devel", "libffi-devel", "libxml2-devel",
+                "libxslt-devel", "zlib-devel"]
         client_node.exec_command(cmd="cd s3-tests")
-        client_node.exec_command(cmd="sudo yum install -y python2-virtualenv python2-devel libevent-devel"
-                                 "libffi-devel libxml2-devel libxslt-devel zlib-devel", check_ec=False)
-        client_node.exec_command(cmd="virtualenv --no-site-packages --distribute virtualenv")
-        client_node.exec_command(cmd="./virtualenv/bin/pip install setuptools==32.3.1")
-        client_node.exec_command(cmd="./virtualenv/bin/pip install -r requirements.txt")
-        client_node.exec_command(cmd="./virtualenv/bin/python setup.py develop")
+        client_node.exec_command(cmd="sudo yum install -y {pkgs}".format(pkgs=' '.join(pkgs)), check_ec=False)
+        client_node.exec_command(cmd="virtualenv -p python2 --no-site-packages --distribute virtualenv")
+        client_node.exec_command(cmd="~/virtualenv/bin/pip install setuptools==32.3.1")
+        client_node.exec_command(cmd="~/virtualenv/bin/pip install -r s3-tests/requirements.txt")
+        client_node.exec_command(cmd="~/virtualenv/bin/python s3-tests/setup.py develop")
     else:
+        log.info("Running bootstrap")
         client_node.exec_command(cmd="cd s3-tests; ./bootstrap",)
 
     main_info = create_s3_user(client_node, 'main-user')
@@ -164,7 +166,7 @@ def create_s3_user(client_node, display_name, email=False):
     return user_info
 
 
-def execute_s3_tests(client_node):
+def execute_s3_tests(client_node, build):
     """
     Execute the s3-tests
 
@@ -177,9 +179,13 @@ def execute_s3_tests(client_node):
     """
     log.info("Executing s3-tests")
     try:
-        out, err = client_node.exec_command(
-            cmd="cd s3-tests; S3TEST_CONF=config.yaml ./virtualenv/bin/nosetests -v -a '!fails_on_rgw,!lifecycle'",
-            timeout=3600)
+        base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml ~/virtualenv/bin/nosetests -v "
+        if build.startswith('4'):
+            cmd = base_cmd
+        else:
+            extra_args = ["-a '!fails_on_rgw,!lifecycle'"]
+            cmd = base_cmd + ' '.join(extra_args)
+        out, err = client_node.exec_command(cmd=cmd, timeout=3600)
         log.info(out.read().decode())
         log.info(err.read().decode())
         return 0
@@ -200,4 +206,4 @@ def cleanup(client_node):
         None
     """
     log.info("Removing s3-tests directory")
-    client_node.exec_command(cmd="rm -r s3-tests")
+    client_node.exec_command(cmd="rm -r s3-tests virtualenv")
