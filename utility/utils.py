@@ -6,8 +6,6 @@ import smtplib
 import time
 import traceback
 import re
-import shutil
-import subprocess
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -573,8 +571,6 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
 
     if recipients:
         run_name = "cephci-run-{id}".format(id=run_id)
-        log_link = "http://magna002.ceph.redhat.com/cephci-jenkins/{run}/".format(run=run_name)
-
         msg = MIMEMultipart('alternative')
         run_status = get_run_status(results_list)
         msg['Subject'] = "[{run_status}] {suite} {compose} {run}".format(run=run_name,
@@ -583,33 +579,18 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
                                                                          run_status=run_status)
         msg['From'] = sender
         msg['To'] = ", ".join(recipients)
-
-        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        template_dir = os.path.join(project_dir, 'templates')
-
-        env = Environment(
-            loader=FileSystemLoader(template_dir),
-            autoescape=select_autoescape(['html', 'xml'])
-        )
-        template = env.get_template('result-email-template.html')
-
-        html = template.render(run_name=run_name,
-                               log_link=log_link,
-                               test_results=results_list,
-                               suite_run_time=suite_run_time,
-                               trigger_user=trigger_user)
-
+        html = create_html_file(run_name=run_name, results_list=results_list, run_time=suite_run_time,
+                                user=trigger_user, run_dir=run_dir)
         part1 = MIMEText(html, 'html')
         msg.attach(part1)
-        text_file = open("result.html", "wt")
-        text_file.write(html)
-        text_file.close()
-        shutil.copy('result.html', run_dir)
+        props_content = f"""
+run_status=\"{run_status}\"
+compose=\"{results_list[0]['compose-id']}\"
+suite=\"{results_list[0]['suite-name']}\"
+"""
         # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
-        subprocess.call('echo run_status="{}" > result.props'.format(run_status), shell=True)
-        subprocess.call('echo compose="{}" >> result.props'.format(results_list[0]['compose-id']), shell=True)
-        subprocess.call('echo suite="{}" >> result.props'.format(results_list[0]['suite-name']), shell=True)
-
+        abs_path = os.path.join(os.getcwd(), "result.props")
+        write_to_file(data=props_content.strip(), abs_path=abs_path)
         try:
             s = smtplib.SMTP('localhost')
             s.sendmail(sender, recipients, msg.as_string())
@@ -619,6 +600,57 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
         except Exception as e:
             print("\n")
             log.exception(e)
+
+
+def create_html_file(run_name, results_list, run_time, user, run_dir) -> str:
+    """
+    Creates the HTML file from the template to be sent via mail
+    Args:
+        results_list (list): test case results info
+        run_name (str): name of the test run
+        user (str): user of the node where the run is triggered from
+        run_dir (str): log directory path
+        run_time (str): suite total duration info
+    Returns: HTML file
+
+    """
+    log_link = "http://magna002.ceph.redhat.com/cephci-jenkins/{run}/".format(run=run_name)
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    template_dir = os.path.join(project_dir, 'templates')
+
+    env = Environment(
+        loader=FileSystemLoader(template_dir),
+        autoescape=select_autoescape(['html', 'xml'])
+    )
+    template = env.get_template('result-email-template.html')
+
+    html = template.render(run_name=run_name,
+                           log_link=log_link,
+                           test_results=results_list,
+                           suite_run_time=run_time,
+                           trigger_user=user)
+
+    abs_path = os.path.join(run_dir, "result.html")
+    write_to_file(data=html, abs_path=abs_path)
+    return html
+
+
+def write_to_file(data, abs_path):
+    """
+    Writes the given data into the file at the path provided
+
+    Args:
+        data: Contents of the file
+        abs_path: Path where the file needs to be created
+
+    Returns: None
+
+    """
+    try:
+        with open(abs_path, "w+") as fp:
+            fp.write(data)
+    except IOError as err:
+        log.error(f"IO error hit during opening the file. Error : {err}")
 
 
 def get_cephci_config():
@@ -647,5 +679,7 @@ def get_run_status(results_list):
     """
     for tc in results_list:
         if tc['status'] == 'Failed':
+            return "FAILED"
+        if tc['status'] == 'Not Executed':
             return "FAILED"
     return "PASSED"
