@@ -500,6 +500,7 @@ def run(args):
                     config['add-repo'] = repo
             config['docker-insecure-registry'] = docker_insecure_registry
             config['skip_version_compare'] = skip_version_compare
+            config['container_image'] = f'{docker_registry}/{docker_image}:{docker_tag}'
             if config and config.get('ansi_config'):
                 if docker_registry:
                     config.get('ansi_config')['ceph_docker_registry'] = str(docker_registry)
