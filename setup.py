@@ -13,10 +13,10 @@ setup(
     author='Vasu Kulkarni',
     author_email='vasu@redhat.com',
     install_requires=[
-        'apache-libcloud',
+        'apache-libcloud==3.2.0',
         'docopt==0.6.2',
-        'gevent==1.4.0',
-        'greenlet==0.4.16',
+        'gevent==20.12.0',
+        'greenlet==0.4.17',
         'reportportal-client==3.2.0',
         'requests==2.21.0',
         'paramiko==2.4.2',
