@@ -130,120 +130,83 @@ tests:
       abort-on-fail: true
 
    - test:
-      name: config roll over
+      name: config roll over mon
       polarion-id: CEPH-9581
       module: test_ansible_roll_over.py
       config:
           is_mixed_lvm_configs: True
-          ansi_config:
-              ceph_test: True
-              ceph_origin: distro
-              ceph_stable_release: luminous
-              ceph_repository: rhcs
-              osd_scenario: lvm
-              osd_auto_discovery: False
-              journal_size: 1024
-              ceph_stable: True
-              ceph_stable_rh_storage: True
-              fetch_directory: ~/fetch
-              copy_admin_key: true
-              ceph_conf_overrides:
-                  global:
-                    osd_pool_default_pg_num: 64
-                    osd_default_pool_size: 2
-                    osd_pool_default_pgp_num: 64
-                    mon_max_pg_per_osd: 1024
-                  mon:
-                    mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
           add:
               - node:
                   node-name: .*node10.*
-                  demon:
+                  daemon:
                       - mon
       desc: add mon
 
    - test:
-      name: config roll over
+      name: config roll over osd
       polarion-id: CEPH-9583
       module: test_ansible_roll_over.py
       config:
           is_mixed_lvm_configs: True
-          ansi_config:
-              ceph_test: True
-              ceph_origin: distro
-              ceph_stable_release: luminous
-              ceph_repository: rhcs
-              osd_scenario: lvm
-              osd_auto_discovery: False
-              journal_size: 1024
-              ceph_stable: True
-              ceph_stable_rh_storage: True
-              fetch_directory: ~/fetch
-              copy_admin_key: true
-              ceph_conf_overrides:
-                  global:
-                    osd_pool_default_pg_num: 64
-                    osd_default_pool_size: 2
-                    osd_pool_default_pgp_num: 64
-                    mon_max_pg_per_osd: 1024
-                  mon:
-                    mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
           add:
               - node:
                   node-name: .*node11.*
-                  demon:
+                  daemon:
                       - osd
       desc: add new osd node with lvm scenario
 
    - test:
-      name: config roll over
+      name: config roll over osd
       polarion-id: CEPH-9582
       module: test_ansible_roll_over.py
       config:
           is_mixed_lvm_configs: True
           device: /dev/vdc
-          ansi_config:
-              ceph_test: True
-              ceph_origin: distro
-              ceph_stable_release: luminous
-              ceph_repository: rhcs
-              osd_scenario: lvm
-              osd_auto_discovery: False
-              journal_size: 1024
-              ceph_stable: True
-              ceph_stable_rh_storage: True
-              fetch_directory: ~/fetch
-              copy_admin_key: true
-              ceph_conf_overrides:
-                  global:
-                    osd_pool_default_pg_num: 64
-                    osd_default_pool_size: 2
-                    osd_pool_default_pgp_num: 64
-                    mon_max_pg_per_osd: 1024
-                  mon:
-                    mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
           add:
               - node:
                   node-name: .*node11.*
-                  demon:
+                  daemon:
                       - osd
       desc: add osd to existing node with lvm scenario
 
+   - test:
+      name: config roll over rgw
+      polarion-id: CEPH-9581
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node12.*
+                  daemon:
+                      - rgw
+      desc: add rgw
+   
+   - test:
+      name: config roll over mds
+      polarion-id: CEPH-9581
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node13.*
+                  daemon:
+                      - mds
+      desc: add mds
+
+   - test:
+      name: config roll over nfs
+      polarion-id: CEPH-9581
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node14.*
+                  daemon:
+                      - nfs
+      desc: add nfs
 
    - test:
       name: shrink mon
@@ -269,7 +232,7 @@ tests:
       polarion-id: CEPH-83573391
       module: test_ceph_1623580.py
       config:
-        demon: osd
+        daemon: osd
       desc: prevent osd creation on existing node OS Disk with lvm scenario
 
    - test:

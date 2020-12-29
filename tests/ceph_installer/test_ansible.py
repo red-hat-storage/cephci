@@ -69,8 +69,15 @@ def run(ceph_cluster, **kw):
 
     log.info("Ceph ansible version " + ceph_installer.get_installed_ceph_versions())
 
+    # ansible playbookk based on container or bare-metal deployment
+    file_name = "site.yml"
+
+    if ceph_cluster.containerized:
+        file_name = "site-container.yml"
+
     out, rc = ceph_installer.exec_command(
-        cmd='cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts site.yml'.format(ansible_dir),
+        cmd='cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {file_name}'
+            .format(ansible_dir=ansible_dir, file_name=file_name),
         long_running=True)
 
     # manually handle client creation in a containerized deployment (temporary)
