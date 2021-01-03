@@ -69,6 +69,11 @@ class CephVMNode(object):
         # Lazy initialization
         self.subnet = None
         self.node = None
+        self.ip_address = None
+        self.hostname = None
+        self.volumes = list()
+        self.driver = None
+        self.driver_v2 = None
 
         self.driver = self.get_driver_v1()
         self.driver_v2 = self.get_driver_v2()
@@ -101,7 +106,7 @@ class CephVMNode(object):
         Returns:
             OpenStack driver
         """
-        return self.get_driver()
+        return self.get_driver() if self.driver is None else self.driver
 
     def get_driver_v2(self):
         """
@@ -113,7 +118,7 @@ class CephVMNode(object):
         Returns:
             OpenStack driver
         """
-        return self.get_driver(api_version="2.2")
+        return self.driver_v2 if self.driver_v2 else self.get_driver(api_version="2.2")
 
     def _has_free_ipv4_address(self, network: str) -> bool:
         """
@@ -169,14 +174,14 @@ class CephVMNode(object):
                     logger.debug("%s does not meet the requirements", net)
                     continue
 
-                _subnet = [s.cidr for s in self.get_driver_v2().ex_list_subnets()
+                _subnet = [s.cidr for s in self.driver_v2.ex_list_subnets()
                            if s.id in os_net.extra.get("subnets")][0]
 
                 return os_net, _subnet
             except TypeError:
-                logger.warn("%s is not accessible.", net)
+                logger.warning("%s is not accessible.", net)
             except BaseException as be:   # noqa
-                logger.warn("Something went wrong during provider network selection")
+                logger.warning("Something went wrong during provider network selection")
                 logger.info(be)
 
         raise GetIPError("No matching provider network found.")
@@ -210,6 +215,7 @@ class CephVMNode(object):
             return
         image = images[0]
 
+        new_node = None
         try:
             new_node = driver.create_node(
                 name=name, image=image, size=vm_size,
@@ -217,15 +223,17 @@ class CephVMNode(object):
                 networks=[network],
             )
         except SSLError:
-            new_node = None
             logger.error(
                 "failed to connect to provider, probably a timeout was reached")
+        except BaseException as be:     # noqa
+            logger.error(be)
 
-        if not new_node:
+        if new_node is None:
             logger.error(
                 "provider could not create node with details: %s",
                 str(kw))
             return
+
         self.node = new_node
         logger.info("created node: %s", new_node)
         # wait for the new node to become available
@@ -248,6 +256,8 @@ class CephVMNode(object):
         new_node_list = [node for node in all_nodes if node.uuid == new_node.uuid]
         new_node = new_node_list[0]
         starttime = datetime.datetime.now()
+
+        ip_address = None
         while True:
             try:
                 ip_address = str(new_node.private_ips[0])
@@ -261,6 +271,7 @@ class CephVMNode(object):
                     new_node = new_node_list[0]
             if ip_address is not None:
                 break
+
         logger.info("Attaching internal private ip %s", ip_address)
         self.ip_address = ip_address
         self.hostname = name
