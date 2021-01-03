@@ -120,7 +120,7 @@ class CephVMNode(object):
         """
         return self.driver_v2 if self.driver_v2 else self.get_driver(api_version="2.2")
 
-    def _has_free_ipv4_address(self, network: str) -> bool:
+    def _has_free_ip_address(self, network: str) -> bool:
         """
         Return True if the given network has an IPv4 Address to lease.
 
