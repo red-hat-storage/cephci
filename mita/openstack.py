@@ -48,9 +48,7 @@ class CephVMNode(object):
         self.image_name = kw['image-name']
         self.node_name = kw['node-name']
         self.vm_size = kw['vm-size']
-        self.vm_network = "provider_net_cci_8"
-        if kw.get('vm-network'):
-            self.vm_network = kw['vm-network']
+        self.vm_network = kw.get("vm-network", "provider_net_cci_8")
         self.role = kw['role']
         self.no_of_volumes = None
         if kw.get('no-of-volumes'):
@@ -67,11 +65,21 @@ class CephVMNode(object):
         self.root_login = kw['root-login']
         self.domain_name = kw['domain']
         self.tenant_domain_id = kw['tenant-domain-id']
+
+        # Lazy initialization
+        self.subnet = None
+        self.node = None
+
+        self.driver = self.get_driver_v1()
+        self.driver_v2 = self.get_driver_v2()
+
         self.create_node()
+
+        # Fixme: At some point, we should avoid sleep statements as it build's slowness
         sleep(10)
 
     def get_driver(self, **kw):
-        driver = OpenStack(
+        return OpenStack(
             self.username,
             self.password,
             api_version=kw.get("api_version", "1.1"),
@@ -82,7 +90,6 @@ class CephVMNode(object):
             ex_domain_name=self.domain_name,
             ex_tenant_domain_id=self.tenant_domain_id
         )
-        return driver
 
     def get_driver_v1(self):
         """
@@ -94,8 +101,7 @@ class CephVMNode(object):
         Returns:
             OpenStack driver
         """
-        self.driver = self.get_driver(api_version="1.1")
-        return self.driver
+        return self.get_driver()
 
     def get_driver_v2(self):
         """
@@ -109,19 +115,80 @@ class CephVMNode(object):
         """
         return self.get_driver(api_version="2.2")
 
+    def _has_free_ipv4_address(self, network: str) -> bool:
+        """
+        Return True if the given network has an IPv4 Address to lease.
+
+        Arguments:
+            network: String, The network UUID
+
+        Returns:
+            bool - True on success else False
+
+        Note: This method returns True only if the given network has more than 3
+        """
+        try:
+            resp = self.driver_v2.network_connection.request(
+                '/v2.0/network-ip-availabilities/{}'.format(network),
+            )
+        except BaseException as be:
+            logger.info(be)
+            return False
+
+        if resp.status != 200:
+            logger.debug("Failed to gather the network details.")
+            return False
+
+        _total = resp.object.get("network_ip_availability", {}).get("total_ips")
+        _used = resp.object.get("network_ip_availability", {}).get("used_ips")
+
+        return (_total - _used) > 3
+
+    def _get_provider_network(self) -> tuple:
+        """
+        Return the provider network that has more than 5 IPs to lease.
+
+        Returns:
+            A tuple containing OpenStackNetwork and CIDR - string
+        """
+        _networks = [
+            "provider_net_cci_8",
+            "provider_net_cci_7",
+            "provider_net_cci_6",
+            "provider_net_cci_5",
+            "provider_net_cci_4",
+        ]
+
+        _available_networks = self.driver_v2.ex_list_networks()
+
+        for net in _networks:
+            try:
+                os_net = [n for n in _available_networks if n.name == net][0]
+
+                if not self._has_free_ipv4_address(os_net.id):
+                    logger.debug("%s does not meet the requirements", net)
+                    continue
+
+                _subnet = [s.cidr for s in self.get_driver_v2().ex_list_subnets()
+                           if s.id in os_net.extra.get("subnets")][0]
+
+                return os_net, _subnet
+            except TypeError:
+                logger.warn("%s is not accessible.", net)
+            except BaseException as be:   # noqa
+                logger.warn("Something went wrong during provider network selection")
+                logger.info(be)
+
+        raise GetIPError("No matching provider network found.")
+
     def create_node(self, **kw):
         name = self.node_name
         driver = self.get_driver_v1()
-        driver_v2 = self.get_driver_v2()
         images = driver.list_images()
         sizes = driver.list_sizes()
-        networks = driver_v2.ex_list_networks()
-        subnets = driver_v2.ex_list_subnets()
+
         available_sizes = [s for s in sizes if s.name == self.vm_size]
-        # TO-DO: auto assign network/subnet with more than 30 IPs available
-        network = [n for n in networks if n.name == self.vm_network]
-        subnet = [s.cidr for s in subnets if s.id == network[0].extra['subnets'][0]]
-        self.subnet = subnet[0]
+        network, self.subnet = self._get_provider_network()
 
         if not available_sizes:
             logger.error(
@@ -147,7 +214,7 @@ class CephVMNode(object):
             new_node = driver.create_node(
                 name=name, image=image, size=vm_size,
                 ex_userdata=self.cloud_data,
-                networks=[network[0]],
+                networks=[network],
             )
         except SSLError:
             new_node = None
