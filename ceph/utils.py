@@ -362,6 +362,23 @@ def open_firewall_port(ceph_node, port, protocol):
 
 
 def config_ntp(ceph_node):
+    distro_info = ceph_node.distro_info
+    distro_ver = distro_info['VERSION_ID']
+
+    if distro_ver.startswith('8'):
+        ceph_node.exec_command(
+            cmd="sudo sed -i '/pool*/d;/server*/d' /etc/chrony.conf",
+            long_running=True)
+        ceph_node.exec_command(
+            cmd="sudo sed -i '1i server clock.corp.redhat.com iburst'"
+                " /etc/chrony.conf",
+            long_running=True)
+        ceph_node.exec_command(
+            cmd="sudo systemctl stop chronyd.service; sudo chronyc makestep;"
+                " sudo systemctl start chronyd.service; sudo chronyc sources",
+            long_running=True,
+        )
+        return True
     ceph_node.exec_command(
         cmd="sudo sed -i '/server*/d' /etc/ntp.conf",
         long_running=True)
