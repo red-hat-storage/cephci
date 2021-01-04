@@ -1,7 +1,7 @@
 import os
 import pytest
 
-from utility.utils import custom_ceph_config
+from utility.utils import custom_ceph_config, get_cephci_config
 
 suite_config = {'global': {'osd_pool_default_pg_num': 64,
                            'osd_default_pool_size': 2,
@@ -98,3 +98,24 @@ def test_custom_ceph_config_all(config_file):
                         'mon_osd_nearfull_ratio': .70}}
     result = custom_ceph_config(suite_config, cli_config, config_file)
     assert result == expected
+
+
+def test_get_cephi_config(monkeypatch, fixtures_dir):
+    """Test loading of cephci configuration."""
+    def mock_return(x):
+        return fixtures_dir
+
+    monkeypatch.setattr(os.path, "expanduser", mock_return)
+    ceph_cfg = get_cephci_config()
+
+    assert ceph_cfg.get("email", {}).get("address") == "cephci@redhat.com"
+
+
+def test_get_cephci_config_raises(monkeypatch):
+    """Test exception thrown when invalid file is provided."""
+    def mock_return(x):
+        return "./"
+
+    monkeypatch.setattr(os.path, "expanduser", mock_return)
+    with pytest.raises(IOError):
+        get_cephci_config()

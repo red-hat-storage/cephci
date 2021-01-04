@@ -509,7 +509,7 @@ def custom_ceph_config(suite_config, custom_config, custom_config_file):
     # retrieve custom config from file
     if custom_config_file:
         with open(custom_config_file) as f:
-            custom_config_dict = yaml.load(f)
+            custom_config_dict = yaml.safe_load(f)
             log.info("File contents: {}".format(custom_config_dict))
 
     # format cli configs into dict
@@ -633,7 +633,7 @@ def get_cephci_config():
     cfg_file = os.path.join(home_dir, ".cephci.yaml")
     try:
         with open(cfg_file, "r") as yml:
-            cfg = yaml.load(yml)
+            cfg = yaml.safe_load(yml)
     except IOError:
         log.error("Please create ~/.cephci.yaml from the cephci.yaml.template. "
                   "See README for more information.")
