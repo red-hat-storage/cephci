@@ -298,6 +298,8 @@ class CephVMNode(object):
             self.ip_address = self.get_private_ip()
 
             if self.ip_address is not None:
+                # Let's keep the ip_address as a string instead of bytes
+                self.ip_address = self.ip_address.decode("ascii", "ignore")
                 break
 
             if datetime.datetime.now() - start_time > timeout:
