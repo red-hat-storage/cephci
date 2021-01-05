@@ -1,9 +1,13 @@
+"""Module to interface with the OpenStack API."""
 import datetime
 import logging
 import socket
 from ssl import SSLError
 from time import sleep
+from typing import Optional
 
+from libcloud.compute.base import NodeImage, NodeSize
+from libcloud.compute.drivers.openstack import OpenStackNetwork
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
@@ -42,36 +46,60 @@ class GetIPError(Exception):
     pass
 
 
+class ResourceNotFound(Exception):
+    pass
+
+
+class OpenStackDriverError(Exception):
+    pass
+
+
+class VolumeAttachmentError(Exception):
+    pass
+
+
 class CephVMNode(object):
+    """OpenStack Instance object."""
 
     def __init__(self, **kw):
-        self.image_name = kw['image-name']
-        self.node_name = kw['node-name']
-        self.vm_size = kw['vm-size']
-        self.vm_network = "provider_net_cci_8"
-        if kw.get('vm-network'):
-            self.vm_network = kw['vm-network']
-        self.role = kw['role']
+        self.image_name = kw["image-name"]
+        self.node_name = kw["node-name"]
+        self.vm_size = kw["vm-size"]
+        self.vm_network = kw.get("vm-network")
+        self.role = kw["role"]
         self.no_of_volumes = None
-        if kw.get('no-of-volumes'):
-            self.no_of_volumes = kw['no-of-volumes']
-            self.size_of_disk = kw['size-of-disks']
-        self.cloud_data = kw['cloud-data']
-        self.username = kw['username']
-        self.password = kw['password']
-        self.auth_url = kw['auth-url']
-        self.auth_version = kw['auth-version']
-        self.tenant_name = kw['tenant-name']
-        self.service_region = kw['service-region']
-        self.keypair = kw['keypair']
-        self.root_login = kw['root-login']
-        self.domain_name = kw['domain']
-        self.tenant_domain_id = kw['tenant-domain-id']
+        if kw.get("no-of-volumes"):
+            self.no_of_volumes = kw["no-of-volumes"]
+            self.size_of_disk = kw["size-of-disks"]
+        self.cloud_data = kw["cloud-data"]
+        self.username = kw["username"]
+        self.password = kw["password"]
+        self.auth_url = kw["auth-url"]
+        self.auth_version = kw["auth-version"]
+        self.tenant_name = kw["tenant-name"]
+        self.service_region = kw["service-region"]
+        self.keypair = kw["keypair"]
+        self.root_login = kw["root-login"]
+        self.domain_name = kw["domain"]
+        self.tenant_domain_id = kw["tenant-domain-id"]
+
+        # Lazy initialization
+        self.node = None
+        self.hostname = self.node_name
+        self.ip_address = None
+        self.subnet = None
+        self.floating_ip = None
+        self.volumes = list()
+        self.driver = None
+        self.driver_v2 = None
+
+        self.driver = self.get_driver_v1()
+        self.driver_v2 = self.get_driver_v2()
+
         self.create_node()
-        sleep(10)
 
     def get_driver(self, **kw):
-        driver = OpenStack(
+        return OpenStack(
             self.username,
             self.password,
             api_version=kw.get("api_version", "1.1"),
@@ -80,9 +108,8 @@ class CephVMNode(object):
             ex_tenant_name=self.tenant_name,
             ex_force_service_region=self.service_region,
             ex_domain_name=self.domain_name,
-            ex_tenant_domain_id=self.tenant_domain_id
+            ex_tenant_domain_id=self.tenant_domain_id,
         )
-        return driver
 
     def get_driver_v1(self):
         """
@@ -94,8 +121,7 @@ class CephVMNode(object):
         Returns:
             OpenStack driver
         """
-        self.driver = self.get_driver(api_version="1.1")
-        return self.driver
+        return self.get_driver() if self.driver is None else self.driver
 
     def get_driver_v2(self):
         """
@@ -107,114 +133,200 @@ class CephVMNode(object):
         Returns:
             OpenStack driver
         """
-        return self.get_driver(api_version="2.2")
+        return self.driver_v2 if self.driver_v2 else self.get_driver(api_version="2.2")
 
-    def create_node(self, **kw):
-        name = self.node_name
-        driver = self.get_driver_v1()
-        driver_v2 = self.get_driver_v2()
-        images = driver.list_images()
-        sizes = driver.list_sizes()
-        networks = driver_v2.ex_list_networks()
-        subnets = driver_v2.ex_list_subnets()
-        available_sizes = [s for s in sizes if s.name == self.vm_size]
-        # TO-DO: auto assign network/subnet with more than 30 IPs available
-        network = [n for n in networks if n.name == self.vm_network]
-        subnet = [s.cidr for s in subnets if s.id == network[0].extra['subnets'][0]]
-        self.subnet = subnet[0]
-
-        if not available_sizes:
-            logger.error(
-                "provider does not have a matching 'size' for %s",
-                self.vm_size)
-            logger.error(
-                "no vm will be created. Ensure that '%s' is an available size and that it exists",
-                self.vm_size)
-            return
-        vm_size = available_sizes[0]
-        images = [i for i in images if i.name == self.image_name]
-        if not images:
-            logger.error(
-                "provider does not have a matching 'image' for %s",
-                self.image_name)
-            logger.error(
-                "no vm will be created. Ensure that '%s' is a valid image",
-                self.image_name)
-            return
-        image = images[0]
-
+    def _get_image(self) -> NodeImage:
+        """Return the glance image reference."""
         try:
-            new_node = driver.create_node(
-                name=name, image=image, size=vm_size,
-                ex_userdata=self.cloud_data,
-                networks=[network[0]],
-            )
-        except SSLError:
-            new_node = None
-            logger.error(
-                "failed to connect to provider, probably a timeout was reached")
+            return [
+                i for i in self.driver_v2.list_images() if i.name == self.image_name
+            ][0]
+        except IndexError:
+            raise ResourceNotFound("Image {} not found".format(self.image_name))
+        except BaseException as be:  # noqa
+            logger.error(be)
+            raise OpenStackDriverError("Encountered an unknown exception.")
 
-        if not new_node:
-            logger.error(
-                "provider could not create node with details: %s",
-                str(kw))
-            return
-        self.node = new_node
-        logger.info("created node: %s", new_node)
-        # wait for the new node to become available
-        logger.info("Waiting for node %s to become available", name)
-        sleep(15)
-        all_nodes = driver.list_nodes()
-        new_node_state = [node.state for node in all_nodes if node.uuid == new_node.uuid]
-        timeout = datetime.timedelta(seconds=600)
-        starttime = datetime.datetime.now()
-        while True:
-            logger.info("Waiting for node %s to become available", name)
-            all_nodes = driver.list_nodes()
-            new_node_state = [node.state for node in all_nodes if node.uuid == new_node.uuid]
-            if new_node_state[0] == 'running':
-                break
-            if datetime.datetime.now() - starttime > timeout:
-                logger.info("Failed to bring the node in running state in {timeout}s".format(timeout=timeout))
-                raise NodeErrorState('node {name} is in "{state}" state'.format(name=name, state=new_node_state[0]))
-            sleep(30)
-        new_node_list = [node for node in all_nodes if node.uuid == new_node.uuid]
-        new_node = new_node_list[0]
-        starttime = datetime.datetime.now()
-        while True:
+    def _get_flavor(self) -> NodeSize:
+        """Return the flavor reference."""
+        try:
+            return [f for f in self.driver_v2.list_sizes() if f.name == self.vm_size][0]
+        except IndexError:
+            raise ResourceNotFound("Flavor {} not found".format(self.vm_size))
+        except BaseException as be:  # noqa
+            logger.error(be)
+            raise OpenStackDriverError("Encountered an unknown exception.")
+
+    def _has_free_ip_address(self, network: str) -> bool:
+        """
+        Return True if the given network has an IPv4 Address to lease.
+
+        Arguments:
+            network: String, The network UUID
+
+        Returns:
+            bool - True on success else False
+
+        Note: This method returns True only if the given network has more than 3
+        """
+        try:
+            resp = self.driver_v2.network_connection.request(
+                "/v2.0/network-ip-availabilities/{}".format(network),
+            )
+        except BaseException as be:
+            logger.info(be)
+            return False
+
+        if resp.status != 200:
+            logger.debug("Failed to gather the network details.")
+            return False
+
+        _total = resp.object.get("network_ip_availability", {}).get("total_ips")
+        _used = resp.object.get("network_ip_availability", {}).get("used_ips")
+
+        return (_total - _used) > 3
+
+    def _get_network(self, network: Optional[str] = None) -> OpenStackNetwork:
+        """
+        Return the provider network.
+
+        Arguments:
+            network: Network to be attached to the VM
+
+        Returns:
+            An OpenStackNetwork libcloud object
+
+        Raises:
+            GetIPError when there are no suitable networks
+        """
+        _networks = (
+            [
+                "provider_net_cci_8",
+                "provider_net_cci_7",
+                "provider_net_cci_6",
+                "provider_net_cci_5",
+                "provider_net_cci_4",
+            ]
+            if network is None
+            else [network]
+        )
+
+        _available_networks = self.driver_v2.ex_list_networks()
+
+        for net in _networks:
             try:
-                ip_address = str(new_node.private_ips[0])
-            except IndexError:
-                if datetime.datetime.now() - starttime > timeout:
-                    logger.info("Failed to get host ip_address in {timeout}s".format(timeout=timeout))
-                    raise GetIPError("Unable to get IP for " + name)
-                else:
-                    sleep(10)
-                    new_node_list = [node for node in all_nodes if node.uuid == new_node.uuid]
-                    new_node = new_node_list[0]
-            if ip_address is not None:
+                os_net = [n for n in _available_networks if n.name == net][0]
+
+                if not self._has_free_ip_address(os_net.id):
+                    logger.debug("%s does not meet the requirements", net)
+                    continue
+
+                self.subnet = [
+                    s.cidr
+                    for s in self.driver_v2.ex_list_subnets()
+                    if s.id in os_net.extra.get("subnets")
+                ][0]
+
+                return os_net
+            except TypeError:
+                logger.warning("%s is not accessible.", net)
+            except BaseException as be:  # noqa
+                logger.warning("Something went wrong during network selection process.")
+                logger.info(be)
+
+        raise ResourceNotFound("No suitable network resource found.")
+
+    def _create_vm_node(self) -> bool:
+        """Create the instance using the provided data."""
+        try:
+            logger.info("Instantiating VM with name %s", self.node_name)
+            self.node = self.driver_v2.create_node(
+                name=self.node_name,
+                image=self._get_image(),
+                size=self._get_flavor(),
+                ex_userdata=self.cloud_data,
+                networks=[self._get_network(self.vm_network)],
+            )
+
+            if self.node is None:
+                logger.error("Unable to create the instance %s", self.node_name)
+                return False
+
+            logger.info("%s is created", self.node.name)
+            return True
+        except SSLError:
+            logger.error("Connection failed, probably a timeout was reached")
+        except BaseException as be:  # noqa
+            logger.error(be)
+
+        return False
+
+    def _wait_until_vm_state_running(self):
+        """Wait till the VM moves to running state."""
+        timeout = datetime.timedelta(seconds=600)
+        start_time = datetime.datetime.now()
+        while True:
+            logger.info("Waiting for %s state to be running ", self.node_name)
+            sleep(15)
+
+            _node = self.driver_v2.ex_get_node_details(self.node.id)
+
+            if _node.state == "running":
+                logger.info("%s is now in running state.", self.node.name)
                 break
-        logger.info("Attaching internal private ip %s", ip_address)
-        self.ip_address = ip_address
-        self.hostname = name
-        self.volumes = []
-        if self.no_of_volumes:
-            total_vols = self.no_of_volumes
-            size = self.size_of_disk
-            for vol in range(0, total_vols):
-                name = self.node_name + str(vol)
-                logger.info("Creating %sgb of storage for: %s", size, name)
-                new_volume = driver.create_volume(size, name)
-                # wait for the new volume to become available
-                logger.info("Waiting for volume %s to become available", name)
-                self._wait_until_volume_available(
-                    new_volume, maybe_in_use=True)
-                logger.info("Attaching volume %s...", name)
-                if driver.attach_volume(
-                        new_node, new_volume, device=None) is not True:
-                    raise RuntimeError("Could not attach volume %s" % name)
-                logger.info("Successfully attached volume %s", name)
-                self.volumes.append(new_volume)
+
+            if _node.state == "error":
+                logger.error("Failed to create %s", _node.state)
+                raise NodeErrorState(_node.extra.get("fault", {}).get("message"))
+
+            if datetime.datetime.now() - start_time > timeout:
+                logger.info("Failed to bring the node in running state in %s", timeout)
+                raise NodeErrorState(
+                    'node {name} is in "{state}" state'.format(
+                        name=self.node_name, state=_node.state
+                    )
+                )
+
+    def _wait_until_ip_is_known(self):
+        """Retrieve the IP address of the instance."""
+        timeout = datetime.timedelta(seconds=300)
+        start_time = datetime.datetime.now()
+
+        while True:
+            logger.info("Gathering VM network address")
+            sleep(10)
+            self.ip_address = self.get_private_ip()
+
+            if self.ip_address is not None:
+                break
+
+            if datetime.datetime.now() - start_time > timeout:
+                logger.info("Failed to get host ip_address in %s", timeout)
+                raise GetIPError("Unable to get IP for {}".format(self.node_name))
+
+    def _create_attach_volumes(self):
+        """Create and attach the volumes."""
+        for item in range(0, self.no_of_volumes):
+            logger.info(
+                "Creating %gb of storage for %s", self.size_of_disk, self.node_name
+            )
+            try:
+                _vol = self.driver_v2.create_volume(
+                    self.size_of_disk, "{}-vol-{}".format(self.node_name, item)
+                )
+                self.volumes.append(_vol)
+            except BaseException as be:  # noqa
+                logger.debug("Failed to create volume.")
+                logger.debug(be)
+
+        for _vol in self.volumes:
+            self._wait_until_volume_available(_vol, maybe_in_use=True)
+
+        for _vol in self.volumes:
+            if not self.driver_v2.attach_volume(self.node, _vol):
+                raise VolumeAttachmentError("Unable to attach volume %s", _vol.name)
+
+            logger.info("Successfully attached %s to %s", _vol.name, self.node_name)
 
     def _wait_until_volume_available(self, volume, maybe_in_use=False):
         """
@@ -224,11 +336,12 @@ class CephVMNode(object):
         this volume from an old node that you've very recently
         destroyed.
         """
-        ok_states = ['creating']  # it's ok to wait if the volume is in this
+        ok_states = ["creating"]  # it's ok to wait if the volume is in this
         tries = 0
         if maybe_in_use:
-            ok_states.append('in_use')
-        logger.info('Volume: %s is in state: %s', volume.name, volume.state)
+            ok_states.append("in_use")
+        logger.info("Volume: %s is in state: %s", volume.name, volume.state)
+
         while volume.state in ok_states:
             sleep(3)
             volume = self.get_volume(volume.name)
@@ -236,20 +349,20 @@ class CephVMNode(object):
             if tries > 10:
                 logger.info("Maximum amount of tries reached..")
                 break
-            if volume.state == 'notfound':
-                logger.error('no volume was found for: %s', volume.name)
+            if volume.state == "notfound":
+                logger.error("no volume was found for: %s", volume.name)
                 break
-            logger.info(' ... %s', volume.state)
-        if volume.state != 'available':
+            logger.info("%s is ... %s", volume.name, volume.state)
+
+        if volume.state != "available":
             # OVH uses a non-standard state of 3 to indicate an available
             # volume
+            logger.info("Volume %s is %s (not available)", volume.name, volume.state)
             logger.info(
-                'Volume %s is %s (not available)',
+                "The volume %s is not available, but will continue anyway...",
                 volume.name,
-                volume.state)
-            logger.info(
-                'The volume %s is not available, but will continue anyway...',
-                volume.name)
+            )
+
         return True
 
     def get_private_ip(self):
@@ -257,7 +370,7 @@ class CephVMNode(object):
         Workaround. self.node.private_ips returns empty list.
         """
         node_detail = self.driver.ex_get_node_details(self.node)
-        private_ip = node_detail.private_ips[0].encode('ascii', 'ignore')
+        private_ip = node_detail.private_ips[0].encode("ascii", "ignore")
         return private_ip
 
     def get_volume(self, name):
@@ -268,6 +381,17 @@ class CephVMNode(object):
             return [v for v in volumes if v.name == name][0]
         except IndexError:
             raise RuntimeError("Unable to get volume")
+
+    def create_node(self):
+        """Create the instance with the provided data."""
+        if not self._create_vm_node():
+            return
+
+        self._wait_until_vm_state_running()
+        self._wait_until_ip_is_known()
+
+        if self.no_of_volumes:
+            self._create_attach_volumes()
 
     def destroy_node(self):
         """
@@ -292,26 +416,25 @@ class CephVMNode(object):
             driver.destroy_volume(volume)
 
     def attach_floating_ip(self, timeout=120):
-        driver = self.driver
-        pool = driver.ex_list_floating_ip_pools()[0]
+        pool = self.driver.ex_list_floating_ip_pools()[0]
         self.floating_ip = pool.create_floating_ip()
         self.ip_address = self.floating_ip.ip_address
-        host = None
+
         timeout = datetime.timedelta(seconds=timeout)
-        starttime = datetime.datetime.now()
-        logger.info("Trying gethostbyaddr with {timeout}s timeout".format(timeout=timeout))
+        start_time = datetime.datetime.now()
+        logger.info("Gather hostname within %s seconds", timeout)
         while True:
             try:
-                host, _, _ = socket.gethostbyaddr(self.ip_address)
-            except Exception:
-                if datetime.datetime.now() - starttime > timeout:
-                    logger.info("Failed to get hostbyaddr in {timeout}s".format(timeout=timeout))
+                sleep(3)
+                _name, _, _ = socket.gethostbyaddr(self.ip_address)
+
+                if _name is not None:
+                    self.hostname = _name
+                    break
+            except Exception:  # noqa
+                if datetime.datetime.now() - start_time > timeout:
+                    logger.info("Failed to get hostname in %s", timeout)
                     raise InvalidHostName("Invalid hostname for " + self.ip_address)
-                else:
-                    sleep(1)
-            if host is not None:
-                break
-        self.hostname = host
+
         logger.info("ip: %s and hostname: %s", self.ip_address, self.hostname)
-        driver.ex_attach_floating_ip_to_node(self.node, self.floating_ip)
-        sleep(10)
+        self.driver.ex_attach_floating_ip_to_node(self.node, self.floating_ip)
