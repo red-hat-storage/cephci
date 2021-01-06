@@ -417,7 +417,8 @@ def get_ceph_versions(ceph_nodes, containerized=False):
             else:
                 if containerized:
                     containers = []
-                    if node.role == 'client':
+                    # client and grafana role not supported for ceph commands
+                    if node.role == 'client' or node.role == 'grafana':
                         pass
                     else:
                         distro_info = node.distro_info
@@ -431,17 +432,22 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                         log.info("Containers: {}".format(containers))
 
                     for container_name in containers:
-                        if distro_ver.startswith('8'):
-                            out, rc = node.exec_command(sudo=True, cmd='sudo podman exec {container} ceph --version'
-                                                                       .format(container=container_name))
-                        else:
-                            out, rc = node.exec_command(sudo=True, cmd='sudo docker exec {container} ceph --version'
-                                                                       .format(container=container_name))
+                        # node-exporter container not supported for ceph commands
+                        if container_name != 'node-exporter':
+                            if distro_ver.startswith('8'):
+                                out, rc = node.exec_command(sudo=True, cmd='sudo podman exec {container} ceph --version'
+                                                                           .format(container=container_name))
+                            else:
+                                out, rc = node.exec_command(sudo=True, cmd='sudo docker exec {container} ceph --version'
+                                                                           .format(container=container_name))
                         output = out.read().decode().rstrip()
                         log.info(output)
                         versions_dict.update({container_name: output})
 
                 else:
+                    #  client and grafana role not supported for ceph commands
+                    if node.role == 'client' or node.role == 'grafana':
+                        pass
                     out, rc = node.exec_command(cmd='ceph --version')
                     output = out.read().decode().rstrip()
                     log.info(output)
