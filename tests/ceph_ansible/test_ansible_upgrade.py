@@ -155,10 +155,12 @@ def compare_ceph_versions(pre_upgrade_versions, post_upgrade_versions):
 
     """
     for name, version in pre_upgrade_versions.items():
-        if 'installer' not in name and post_upgrade_versions[name] == version:
-            log.error("Pre upgrade version matches post upgrade version")
-            log.error("{}: {} matches".format(name, version))
-            return 1
+        # skipping node-exporter version check as it not supported
+        if name != 'node-exporter':
+            if 'installer' not in name and post_upgrade_versions[name] == version:
+                log.error("Pre upgrade version matches post upgrade version")
+                log.error("{}: {} matches".format(name, version))
+                return 1
     return 0
 
 
@@ -179,9 +181,15 @@ def get_container_counts(ceph_cluster):
         distro_ver = distro_info['VERSION_ID']
         if distro_ver.startswith('8'):
             out, rc = node.exec_command(sudo=True, cmd='podman ps | grep $(hostname) | wc -l')
+            # In ceph 4.2 onwards ceph-crash as new container got added
+            # so decreasing that count to pass compare_container_count function
+            crash, rc = node.exec_command(sudo=True, cmd='podman ps |grep ceph-crash| wc -l')
         else:
             out, rc = node.exec_command(sudo=True, cmd='docker ps | grep $(hostname) | wc -l')
+            crash, rc = node.exec_command(sudo=True, cmd='docker ps |grep ceph-crash| wc -l')
         count = int(out.read().decode().rstrip())
+        crash_count = int(crash.read().decode().rstrip())
+        count -= crash_count
         log.info("{} has {} containers running".format(node.shortname, count))
         container_counts.update({node.shortname: count})
     return container_counts
