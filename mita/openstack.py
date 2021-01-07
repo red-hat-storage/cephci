@@ -145,13 +145,11 @@ class CephVMNode(object):
 
     def _get_flavor(self) -> NodeSize:
         """Return the flavor reference."""
-        try:
-            return [f for f in self.driver_v2.list_sizes() if f.name == self.vm_size][0]
-        except IndexError:
-            raise ResourceNotFound("Flavor {} not found".format(self.vm_size))
-        except BaseException as be:  # noqa
-            logger.error(be)
-            raise OpenStackDriverError("Encountered an unknown exception.")
+        flavors = self.driver_v2.list_sizes()
+        for flavor in flavors:
+            if flavor.name == self.vm_size:
+                return flavor
+        raise ResourceNotFound("Flavor {} not found".format(self.vm_size))
 
     def _has_free_ip_address(self, network: str) -> bool:
         """
