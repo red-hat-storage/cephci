@@ -137,15 +137,11 @@ class CephVMNode(object):
 
     def _get_image(self) -> NodeImage:
         """Return the glance image reference."""
-        try:
-            return [
-                i for i in self.driver_v2.list_images() if i.name == self.image_name
-            ][0]
-        except IndexError:
-            raise ResourceNotFound("Image {} not found".format(self.image_name))
-        except BaseException as be:  # noqa
-            logger.error(be)
-            raise OpenStackDriverError("Encountered an unknown exception.")
+        images = self.driver_v2.list_images()
+        for image in images:
+            if image.name == self.image_name:
+                return image
+        raise ResourceNotFound("Image {} not found".format(self.image_name))
 
     def _get_flavor(self) -> NodeSize:
         """Return the flavor reference."""
