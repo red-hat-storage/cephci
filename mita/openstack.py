@@ -372,12 +372,11 @@ class CephVMNode(object):
 
     def get_volume(self, name):
         """ Return libcloud.compute.base.StorageVolume """
-        driver = self.driver
-        volumes = driver.list_volumes()
-        try:
-            return [v for v in volumes if v.name == name][0]
-        except IndexError:
-            raise RuntimeError("Unable to get volume")
+        volumes = self.driver.list_volumes()
+        for volume in volumes:
+            if volume.name == name:
+                return volume
+        raise ResourceNotFound("Volume {} not found".format(name))
 
     def create_node(self):
         """Create the instance with the provided data."""
