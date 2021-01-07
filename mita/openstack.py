@@ -236,7 +236,7 @@ class CephVMNode(object):
 
         raise ResourceNotFound("No suitable network resource found.")
 
-    def _create_vm_node(self) -> bool:
+    def _create_vm_node(self) -> None:
         """Create the instance using the provided data."""
         try:
             logger.info("Instantiating VM with name %s", self.node_name)
@@ -249,17 +249,18 @@ class CephVMNode(object):
             )
 
             if self.node is None:
-                logger.error("Unable to create the instance %s", self.node_name)
-                return False
+                raise NodeErrorState(
+                    "Unable to create the instance {}".format(self.node_name)
+                )
 
             logger.info("%s is created", self.node.name)
-            return True
+            return
         except SSLError:
             logger.error("Connection failed, probably a timeout was reached")
         except BaseException as be:  # noqa
             logger.error(be)
 
-        return False
+        raise NodeErrorState("Failed to create the instance {}".format(self.node_name))
 
     def _wait_until_vm_state_running(self):
         """Wait till the VM moves to running state."""
@@ -386,9 +387,7 @@ class CephVMNode(object):
 
     def create_node(self):
         """Create the instance with the provided data."""
-        if not self._create_vm_node():
-            return
-
+        self._create_vm_node()
         self._wait_until_vm_state_running()
         self._wait_until_ip_is_known()
 
