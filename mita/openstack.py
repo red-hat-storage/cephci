@@ -152,7 +152,7 @@ class CephVMNode(object):
         Return True if the given network has an IPv4 Address to lease.
 
         Arguments:
-            net_id: String, The network UUID
+            net: String, The network UUID
 
         Returns:
             bool - True on success else False
@@ -284,7 +284,7 @@ class CephVMNode(object):
         """Create and attach the volumes."""
         for item in range(0, self.no_of_volumes):
             logger.info(
-                "Creating %gb of storage for %s", self.size_of_disk, self.node_name
+                "Creating %Gib of storage for %s", self.size_of_disk, self.node_name
             )
             try:
                 _vol = self.driver.create_volume(
@@ -306,7 +306,7 @@ class CephVMNode(object):
             logger.info("Successfully attached %s to %s", _vol.name, self.node_name)
 
     def _wait_until_volume_available(self, volume) -> bool:
-        """Wait until a StorageVolume's state is "available"."""
+        """Wait until a StorageVolume's is in available state."""
         tries = 0
         while True:
             sleep(3)
@@ -327,12 +327,12 @@ class CephVMNode(object):
         return False
 
     def get_private_ip(self) -> str:
-        """Retrieve the Private IP address"""
+        """Return the first private IP address."""
         _node = self.driver.ex_get_node_details(self.node)
         return _node.private_ips[0] if _node.private_ips else ""
 
     def get_volume(self, name) -> StorageVolume:
-        """Retrieve a StorageVolume instance using the provided name."""
+        """Return the StorageVolume instance for the provided name."""
         url = f"/volumes?name={name}"
         _object = self.driver.volumev2_connection.request(url).object
 
@@ -355,28 +355,28 @@ class CephVMNode(object):
         logger.info("Successfully create VM node with name %s", self.node_name)
 
     def destroy_node(self):
-        """
-        Relies on the fact that names **should be** unique. Along the chain we
-        prevent non-unique names to be used/added.
-        TODO: raise an exception if more than one node is matched to the name, that
-        can be propagated back to the client.
-        """
+        """Remove the instance after cleaning up its resources."""
         driver = self.driver
         driver.ex_detach_floating_ip_from_node(self.node, self.floating_ip)
-        driver.destroy_node(self.node)
-        sleep(15)
+
+        if not driver.destroy_node(self.node):
+            logger.error("Failed to %s remove node.", self.node.name)
+
         for volume in self.volumes:
             driver.destroy_volume(volume)
 
     def destroy_volume(self, name):
-        driver = self.driver
-        volume = self.get_volume(name)
-        # check to see if this is a valid volume
-        if volume.state != "notfound":
-            logger.info("Destroying volume %s", name)
-            driver.destroy_volume(volume)
+        """Remove the volume."""
+        try:
+            volume = self.get_volume(name)
+
+            if not self.driver.destroy_volume(volume):
+                logger.error("Failed to remove volume: %s", volume.name)
+        except ResourceNotFound:
+            return
 
     def attach_floating_ip(self, timeout=120):
+        """Get and attach a floating IP address to the instance."""
         pool = self.driver.ex_list_floating_ip_pools()[0]
         self.floating_ip = pool.create_floating_ip()
         self.ip_address = self.floating_ip.ip_address
