@@ -220,7 +220,7 @@ class CephVMNode(object):
                 logger.debug(be)
                 continue
 
-        raise ResourceNotFound(f"No suitable network resource found.")
+        raise ResourceNotFound("No suitable network resource found.")
 
     def _create_vm_node(self) -> None:
         """Create the instance using the provided data."""
