@@ -229,29 +229,18 @@ class CephVMNode(object):
 
     def _create_vm_node(self) -> None:
         """Create the instance using the provided data."""
-        try:
-            logger.info("Instantiating VM with name %s", self.node_name)
-            self.node = self.driver.create_node(
-                name=self.node_name,
-                image=self._get_image_by_name(),
-                size=self._get_flavor_by_name(),
-                ex_userdata=self.cloud_data,
-                networks=[self._get_network(self.vm_network)],
-            )
+        logger.info("Begin %s VM instantiation process.", self.node_name)
 
-            if self.node is None:
-                raise NodeErrorState(
-                    "Unable to create the instance {}".format(self.node_name)
-                )
+        self.node = self.driver.create_node(
+            name=self.node_name,
+            image=self._get_image_by_name(),
+            size=self._get_flavor_by_name(),
+            ex_userdata=self.cloud_data,
+            networks=[self._get_network(self.vm_network)],
+        )
 
-            logger.info("%s is created", self.node.name)
-            return
-        except SSLError:
-            logger.error("Connection failed, probably a timeout was reached")
-        except BaseException as be:  # noqa
-            logger.error(be)
-
-        raise NodeErrorState("Failed to create the instance {}".format(self.node_name))
+        if self.node is None:
+            raise NodeErrorState(f"Failed to create {self.node_name}.")
 
     def _wait_until_vm_state_running(self):
         """Wait till the VM moves to running state."""
