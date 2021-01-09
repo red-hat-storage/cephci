@@ -2,7 +2,6 @@
 import datetime
 import logging
 import socket
-from ssl import SSLError
 from time import sleep
 from typing import Optional
 
@@ -47,10 +46,6 @@ class GetIPError(Exception):
 
 
 class ResourceNotFound(Exception):
-    pass
-
-
-class OpenStackDriverError(Exception):
     pass
 
 
