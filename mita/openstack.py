@@ -90,11 +90,7 @@ class CephVMNode(object):
         self.subnet = None
         self.floating_ip = None
         self.volumes = list()
-        self.driver = None
-        self.driver_v2 = None
-
-        self.driver = self.get_driver_v1()
-        self.driver_v2 = self.get_driver_v2()
+        self.driver = self.get_driver(api_version="2.2")
 
         self.create_node()
 
@@ -111,35 +107,11 @@ class CephVMNode(object):
             ex_tenant_domain_id=self.tenant_domain_id,
         )
 
-    def get_driver_v1(self):
-        """
-        Get Apache Libcloud OpenStack driver for nova version 1.1.
-
-        https://libcloud.readthedocs.io/en/latest/compute/drivers/
-        openstack.html#compute-1-0-api-version-older-installations
-
-        Returns:
-            OpenStack driver
-        """
-        return self.get_driver() if self.driver is None else self.driver
-
-    def get_driver_v2(self):
-        """
-        Get Apache Libcloud OpenStack driver for nova version 2.0.
-
-        https://libcloud.readthedocs.io/en/latest/compute/drivers/
-        openstack.html#compute-2-0-api-version-current
-
-        Returns:
-            OpenStack driver
-        """
-        return self.driver_v2 if self.driver_v2 else self.get_driver(api_version="2.2")
-
     def _get_image(self) -> NodeImage:
         """Return the glance image reference."""
         try:
             return [
-                i for i in self.driver_v2.list_images() if i.name == self.image_name
+                i for i in self.driver.list_images() if i.name == self.image_name
             ][0]
         except IndexError:
             raise ResourceNotFound("Image {} not found".format(self.image_name))
@@ -150,7 +122,7 @@ class CephVMNode(object):
     def _get_flavor(self) -> NodeSize:
         """Return the flavor reference."""
         try:
-            return [f for f in self.driver_v2.list_sizes() if f.name == self.vm_size][0]
+            return [f for f in self.driver.list_sizes() if f.name == self.vm_size][0]
         except IndexError:
             raise ResourceNotFound("Flavor {} not found".format(self.vm_size))
         except BaseException as be:  # noqa
@@ -170,7 +142,7 @@ class CephVMNode(object):
         Note: This method returns True only if the given network has more than 3
         """
         try:
-            resp = self.driver_v2.network_connection.request(
+            resp = self.driver.network_connection.request(
                 "/v2.0/network-ip-availabilities/{}".format(network),
             )
         except BaseException as be:
@@ -211,7 +183,7 @@ class CephVMNode(object):
             else [network]
         )
 
-        _available_networks = self.driver_v2.ex_list_networks()
+        _available_networks = self.driver.ex_list_networks()
 
         for net in _networks:
             try:
@@ -223,7 +195,7 @@ class CephVMNode(object):
 
                 self.subnet = [
                     s.cidr
-                    for s in self.driver_v2.ex_list_subnets()
+                    for s in self.driver.ex_list_subnets()
                     if s.id in os_net.extra.get("subnets")
                 ][0]
 
@@ -240,7 +212,7 @@ class CephVMNode(object):
         """Create the instance using the provided data."""
         try:
             logger.info("Instantiating VM with name %s", self.node_name)
-            self.node = self.driver_v2.create_node(
+            self.node = self.driver.create_node(
                 name=self.node_name,
                 image=self._get_image(),
                 size=self._get_flavor(),
@@ -270,7 +242,7 @@ class CephVMNode(object):
             logger.info("Waiting for %s state to be running ", self.node_name)
             sleep(15)
 
-            _node = self.driver_v2.ex_get_node_details(self.node.id)
+            _node = self.driver.ex_get_node_details(self.node.id)
 
             if _node.state == "running":
                 logger.info("%s is now in running state.", self.node.name)
@@ -314,7 +286,7 @@ class CephVMNode(object):
                 "Creating %gb of storage for %s", self.size_of_disk, self.node_name
             )
             try:
-                _vol = self.driver_v2.create_volume(
+                _vol = self.driver.create_volume(
                     self.size_of_disk, "{}-vol-{}".format(self.node_name, item)
                 )
                 self.volumes.append(_vol)
@@ -326,7 +298,7 @@ class CephVMNode(object):
             self._wait_until_volume_available(_vol, maybe_in_use=True)
 
         for _vol in self.volumes:
-            if not self.driver_v2.attach_volume(self.node, _vol):
+            if not self.driver.attach_volume(self.node, _vol):
                 raise VolumeAttachmentError("Unable to attach volume %s", _vol.name)
 
             logger.info("Successfully attached %s to %s", _vol.name, self.node_name)
