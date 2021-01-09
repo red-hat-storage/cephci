@@ -229,7 +229,7 @@ class CephVMNode(object):
 
     def _create_vm_node(self) -> None:
         """Create the instance using the provided data."""
-        logger.info("Begin %s VM instantiation process.", self.node_name)
+        logger.info("Starting to create VM node with name %s.", self.node_name)
 
         self.node = self.driver.create_node(
             name=self.node_name,
@@ -248,7 +248,7 @@ class CephVMNode(object):
         start_time = datetime.datetime.now()
         while True:
             logger.info("Waiting for %s state to be running ", self.node_name)
-            sleep(15)
+            sleep(5)
 
             _node = self.driver.ex_get_node_details(self.node.id)
 
@@ -275,12 +275,10 @@ class CephVMNode(object):
 
         while True:
             logger.info("Gathering VM network address")
-            sleep(10)
+            sleep(5)
             self.ip_address = self.get_private_ip()
 
-            if self.ip_address is not None:
-                # Let's keep the ip_address as a string instead of bytes
-                self.ip_address = self.ip_address.decode("ascii", "ignore")
+            if self.ip_address:
                 break
 
             if datetime.datetime.now() - start_time > timeout:
@@ -348,13 +346,10 @@ class CephVMNode(object):
 
         return True
 
-    def get_private_ip(self):
-        """
-        Workaround. self.node.private_ips returns empty list.
-        """
-        node_detail = self.driver.ex_get_node_details(self.node)
-        private_ip = node_detail.private_ips[0].encode("ascii", "ignore")
-        return private_ip
+    def get_private_ip(self) -> str:
+        """Retrieve the Private IP address"""
+        _node = self.driver.ex_get_node_details(self.node)
+        return _node.private_ips[0] if _node.private_ips else ""
 
     def get_volume(self, name):
         """ Return libcloud.compute.base.StorageVolume """
@@ -373,6 +368,8 @@ class CephVMNode(object):
 
         if self.no_of_volumes:
             self._create_attach_volumes()
+
+        logger.info("Successfully create VM node with name %s", self.node_name)
 
     def destroy_node(self):
         """
