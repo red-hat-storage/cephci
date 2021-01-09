@@ -126,14 +126,38 @@ class CephVMNode(object):
             if flavor.name == self.vm_size:
                 return flavor
 
-        raise ResourceNotFound("No matching %s flavor found.", self.vm_size)
+        raise ResourceNotFound(f"No matching {self.vm_size}flavor found.")
 
-    def _has_free_ip_address(self, network: str) -> bool:
+    def _get_network_by_name(self, name: str) -> OpenStackNetwork:
+        """
+        Return the OpenStackNetwork object.
+
+        Args:
+            name:   The name of the network to be retrieved.
+
+        Returns:
+            An instance of OpenStackNetwork object.
+
+        Raises:
+            ResourceNotFound    when the object cannot be found.
+        """
+        logger.info("Retrieving %s network details.", name)
+
+        url = f"{self.driver._networks_url_prefix}?name={name}"
+        _object = self.driver.network_connection.request(url).object
+        networks = self.driver._to_networks(_object)
+
+        if len(networks) != 1:
+            raise ResourceNotFound(f"Exact match failed for {name} network.")
+
+        return networks[0]
+
+    def _has_free_ip_address(self, net: OpenStackNetwork) -> bool:
         """
         Return True if the given network has an IPv4 Address to lease.
 
         Arguments:
-            network: String, The network UUID
+            net_id: String, The network UUID
 
         Returns:
             bool - True on success else False
@@ -141,21 +165,26 @@ class CephVMNode(object):
         Note: This method returns True only if the given network has more than 3
         """
         try:
-            resp = self.driver.network_connection.request(
-                "/v2.0/network-ip-availabilities/{}".format(network),
+            logger.info("Checking for free ip address pool in %s", net.name)
+
+            url = f"/v2.0/network-ip-availabilities/{net.id}"
+            resp = self.driver.network_connection.request(url)
+            subnets = resp.object.get("network_ip_availability", {}).get(
+                "subnet_ip_availability", []
             )
-        except BaseException as be:
-            logger.info(be)
+
+            for subnet in subnets:
+                _free_ips = subnet.get("total_ips") - subnet.get("used_ips")
+
+                if _free_ips > 3:
+                    self.subnet = subnet.get("cidr")
+                    return True
+
             return False
+        except BaseException as be:  # noqa
+            logger.warning(be)
 
-        if resp.status != 200:
-            logger.debug("Failed to gather the network details.")
-            return False
-
-        _total = resp.object.get("network_ip_availability", {}).get("total_ips")
-        _used = resp.object.get("network_ip_availability", {}).get("used_ips")
-
-        return (_total - _used) > 3
+        return False
 
     def _get_network(self, network: Optional[str] = None) -> OpenStackNetwork:
         """
@@ -182,30 +211,21 @@ class CephVMNode(object):
             else [network]
         )
 
-        _available_networks = self.driver.ex_list_networks()
-
         for net in _networks:
+            # If retrieval fails, consider it as a soft error.
             try:
-                os_net = [n for n in _available_networks if n.name == net][0]
+                os_net = self._get_network_by_name(net)
 
-                if not self._has_free_ip_address(os_net.id):
-                    logger.debug("%s does not meet the requirements", net)
+                if not self._has_free_ip_address(os_net):
+                    logger.debug("%s has no free ip addresses", os_net.name)
                     continue
 
-                self.subnet = [
-                    s.cidr
-                    for s in self.driver.ex_list_subnets()
-                    if s.id in os_net.extra.get("subnets")
-                ][0]
-
                 return os_net
-            except TypeError:
-                logger.warning("%s is not accessible.", net)
             except BaseException as be:  # noqa
-                logger.warning("Something went wrong during network selection process.")
-                logger.info(be)
+                logger.debug(be)
+                continue
 
-        raise ResourceNotFound("No suitable network resource found.")
+        raise ResourceNotFound(f"No suitable network resource found.")
 
     def _create_vm_node(self) -> None:
         """Create the instance using the provided data."""
