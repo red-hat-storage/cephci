@@ -121,7 +121,7 @@ class CephVMNode(object):
             if flavor.name == self.vm_size:
                 return flavor
 
-        raise ResourceNotFound(f"No matching {self.vm_size}flavor found.")
+        raise ResourceNotFound(f"No matching {self.vm_size} flavor found.")
 
     def _get_network_by_name(self, name: str) -> OpenStackNetwork:
         """
@@ -152,7 +152,7 @@ class CephVMNode(object):
         Return True if the given network has an IPv4 Address to lease.
 
         Arguments:
-            net: String, The network UUID
+            net: Reference to OpenStackNetwork object
 
         Returns:
             bool - True on success else False
@@ -174,8 +174,6 @@ class CephVMNode(object):
                 if _free_ips > 3:
                     self.subnet = subnet.get("cidr")
                     return True
-
-            return False
         except BaseException as be:  # noqa
             logger.warning(be)
 
@@ -306,7 +304,7 @@ class CephVMNode(object):
             logger.info("Successfully attached %s to %s", _vol.name, self.node_name)
 
     def _wait_until_volume_available(self, volume) -> bool:
-        """Wait until a StorageVolume's is in available state."""
+        """Wait until the state of the StorageVolume is available."""
         tries = 0
         while True:
             sleep(3)
