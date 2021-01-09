@@ -67,10 +67,8 @@ class CephVMNode(object):
         self.vm_size = kw["vm-size"]
         self.vm_network = kw.get("vm-network")
         self.role = kw["role"]
-        self.no_of_volumes = None
-        if kw.get("no-of-volumes"):
-            self.no_of_volumes = kw["no-of-volumes"]
-            self.size_of_disk = kw["size-of-disks"]
+        self.no_of_volumes = kw.get("no-of-volumes", 0)
+        self.size_of_disk = kw.get("size-of-disks") if self.no_of_volumes else 0
         self.cloud_data = kw["cloud-data"]
         self.username = kw["username"]
         self.password = kw["password"]
@@ -107,17 +105,18 @@ class CephVMNode(object):
             ex_tenant_domain_id=self.tenant_domain_id,
         )
 
-    def _get_image(self) -> NodeImage:
+    def _get_image_by_name(self) -> NodeImage:
         """Return the glance image reference."""
-        try:
-            return [
-                i for i in self.driver.list_images() if i.name == self.image_name
-            ][0]
-        except IndexError:
-            raise ResourceNotFound("Image {} not found".format(self.image_name))
-        except BaseException as be:  # noqa
-            logger.error(be)
-            raise OpenStackDriverError("Encountered an unknown exception.")
+        logger.info("Gathering %s reference details", self.image_name)
+
+        url = f"/v2/images?name={self.image_name}"
+        _object = self.driver.image_connection.request(url).object
+        images = self.driver._to_images(_object, ex_only_active=False)
+
+        if len(images) != 1:
+            raise ResourceNotFound(f"Exact match failed for {self.image_name}.")
+
+        return images[0]
 
     def _get_flavor(self) -> NodeSize:
         """Return the flavor reference."""
@@ -214,7 +213,7 @@ class CephVMNode(object):
             logger.info("Instantiating VM with name %s", self.node_name)
             self.node = self.driver.create_node(
                 name=self.node_name,
-                image=self._get_image(),
+                image=self._get_image_by_name(),
                 size=self._get_flavor(),
                 ex_userdata=self.cloud_data,
                 networks=[self._get_network(self.vm_network)],
