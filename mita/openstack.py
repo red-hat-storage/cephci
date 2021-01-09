@@ -107,7 +107,7 @@ class CephVMNode(object):
 
     def _get_image_by_name(self) -> NodeImage:
         """Return the glance image reference."""
-        logger.info("Gathering %s reference details", self.image_name)
+        logger.info("Gathering %s image details.", self.image_name)
 
         url = f"/v2/images?name={self.image_name}"
         _object = self.driver.image_connection.request(url).object
@@ -118,15 +118,15 @@ class CephVMNode(object):
 
         return images[0]
 
-    def _get_flavor(self) -> NodeSize:
+    def _get_flavor_by_name(self) -> NodeSize:
         """Return the flavor reference."""
-        try:
-            return [f for f in self.driver.list_sizes() if f.name == self.vm_size][0]
-        except IndexError:
-            raise ResourceNotFound("Flavor {} not found".format(self.vm_size))
-        except BaseException as be:  # noqa
-            logger.error(be)
-            raise OpenStackDriverError("Encountered an unknown exception.")
+        logger.info("Gathering %s flavor details.", self.vm_size)
+
+        for flavor in self.driver.list_sizes():
+            if flavor.name == self.vm_size:
+                return flavor
+
+        raise ResourceNotFound("No matching %s flavor found.", self.vm_size)
 
     def _has_free_ip_address(self, network: str) -> bool:
         """
@@ -214,7 +214,7 @@ class CephVMNode(object):
             self.node = self.driver.create_node(
                 name=self.node_name,
                 image=self._get_image_by_name(),
-                size=self._get_flavor(),
+                size=self._get_flavor_by_name(),
                 ex_userdata=self.cloud_data,
                 networks=[self._get_network(self.vm_network)],
             )
