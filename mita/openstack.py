@@ -7,7 +7,7 @@ from time import sleep
 from typing import Optional
 
 from libcloud.compute.base import NodeImage, NodeSize
-from libcloud.compute.drivers.openstack import OpenStackNetwork
+from libcloud.compute.drivers.openstack import OpenStackNetwork, StorageVolume
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
@@ -54,7 +54,7 @@ class OpenStackDriverError(Exception):
     pass
 
 
-class VolumeAttachmentError(Exception):
+class VolumeError(Exception):
     pass
 
 
@@ -301,64 +301,52 @@ class CephVMNode(object):
                 logger.debug(be)
 
         for _vol in self.volumes:
-            self._wait_until_volume_available(_vol, maybe_in_use=True)
+            if not self._wait_until_volume_available(_vol):
+                raise VolumeError(f"{_vol.name} state failed to be available.")
 
         for _vol in self.volumes:
             if not self.driver.attach_volume(self.node, _vol):
-                raise VolumeAttachmentError("Unable to attach volume %s", _vol.name)
+                raise VolumeError(f"Unable to attach volume {_vol.name}")
 
             logger.info("Successfully attached %s to %s", _vol.name, self.node_name)
 
-    def _wait_until_volume_available(self, volume, maybe_in_use=False):
-        """
-        Wait until a StorageVolume's state is "available".
-        Set "maybe_in_use" to True in order to wait even when the volume is
-        currently in_use. For example, set this option if you're recycling
-        this volume from an old node that you've very recently
-        destroyed.
-        """
-        ok_states = ["creating"]  # it's ok to wait if the volume is in this
+    def _wait_until_volume_available(self, volume) -> bool:
+        """Wait until a StorageVolume's state is "available"."""
         tries = 0
-        if maybe_in_use:
-            ok_states.append("in_use")
-        logger.info("Volume: %s is in state: %s", volume.name, volume.state)
-
-        while volume.state in ok_states:
+        while True:
             sleep(3)
-            volume = self.get_volume(volume.name)
             tries = tries + 1
+            volume = self.driver.ex_get_volume(volume.id)
+            logger.info("Volume: %s is in state: %s", volume.name, volume.state)
+
+            if volume.state.lower() == "available":
+                return True
+
+            if "error" in volume.state:
+                break
+
             if tries > 10:
                 logger.info("Maximum amount of tries reached..")
                 break
-            if volume.state == "notfound":
-                logger.error("no volume was found for: %s", volume.name)
-                break
-            logger.info("%s is ... %s", volume.name, volume.state)
 
-        if volume.state != "available":
-            # OVH uses a non-standard state of 3 to indicate an available
-            # volume
-            logger.info("Volume %s is %s (not available)", volume.name, volume.state)
-            logger.info(
-                "The volume %s is not available, but will continue anyway...",
-                volume.name,
-            )
-
-        return True
+        return False
 
     def get_private_ip(self) -> str:
         """Retrieve the Private IP address"""
         _node = self.driver.ex_get_node_details(self.node)
         return _node.private_ips[0] if _node.private_ips else ""
 
-    def get_volume(self, name):
-        """ Return libcloud.compute.base.StorageVolume """
-        driver = self.driver
-        volumes = driver.list_volumes()
-        try:
-            return [v for v in volumes if v.name == name][0]
-        except IndexError:
-            raise RuntimeError("Unable to get volume")
+    def get_volume(self, name) -> StorageVolume:
+        """Retrieve a StorageVolume instance using the provided name."""
+        url = f"/volumes?name={name}"
+        _object = self.driver.volumev2_connection.request(url).object
+
+        if len(_object.get("volumes", [])) != 1:
+            raise ResourceNotFound(f"Exact match failed for volume with {name}.")
+
+        volume_info = _object.get("volumes")[0]
+
+        return self.driver.ex_get_volume(volume_info.get("id"))
 
     def create_node(self):
         """Create the instance with the provided data."""
