@@ -147,15 +147,25 @@ class CephVMNode(object):
             logger.error(be)
             raise OpenStackDriverError("Encountered an unknown exception.")
 
-    def _get_flavor(self) -> NodeSize:
-        """Return the flavor reference."""
-        try:
-            return [f for f in self.driver_v2.list_sizes() if f.name == self.vm_size][0]
-        except IndexError:
-            raise ResourceNotFound("Flavor {} not found".format(self.vm_size))
-        except BaseException as be:  # noqa
-            logger.error(be)
-            raise OpenStackDriverError("Encountered an unknown exception.")
+    def _get_vm_size(self, name: Optional[str] = None) -> NodeSize:
+        """
+        Return the NodeSize instance retrieved based on the provided name or vm_size.
+
+        Args:
+            name: The OpenStack flavor (m1.small or m1.medium or m1.large) to be found.
+
+        Return:
+            Reference to NodeSize
+
+        Raises:
+            ResourceNotFound exception when none resources found.
+        """
+        name = self.vm_size if name is None else name
+        for flavor in self.driver_v2.list_sizes():
+            if flavor.name == name:
+                return flavor
+
+        raise ResourceNotFound("No flavor matched the name %s", name)
 
     def _has_free_ip_address(self, network: str) -> bool:
         """
@@ -243,7 +253,7 @@ class CephVMNode(object):
             self.node = self.driver_v2.create_node(
                 name=self.node_name,
                 image=self._get_image(),
-                size=self._get_flavor(),
+                size=self._get_vm_size(),
                 ex_userdata=self.cloud_data,
                 networks=[self._get_network(self.vm_network)],
             )
