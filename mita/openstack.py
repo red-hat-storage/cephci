@@ -7,7 +7,7 @@ from time import sleep
 from typing import Optional
 
 from libcloud.compute.base import NodeImage, NodeSize
-from libcloud.compute.drivers.openstack import OpenStackNetwork
+from libcloud.compute.drivers.openstack import OpenStackNetwork, StorageVolume
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
@@ -54,7 +54,7 @@ class OpenStackDriverError(Exception):
     pass
 
 
-class VolumeAttachmentError(Exception):
+class VolumeOpError(Exception):
     pass
 
 
@@ -309,64 +309,50 @@ class CephVMNode(object):
 
     def _create_attach_volumes(self):
         """Create and attach the volumes."""
+        logger.info(
+            "Creating %d volumes with %sGiB storage for %s",
+            self.no_of_volumes,
+            self.size_of_disk,
+            self.node_name,
+        )
+
         for item in range(0, self.no_of_volumes):
-            logger.info(
-                "Creating %gb of storage for %s", self.size_of_disk, self.node_name
-            )
-            try:
-                _vol = self.driver_v2.create_volume(
-                    self.size_of_disk, "{}-vol-{}".format(self.node_name, item)
-                )
-                self.volumes.append(_vol)
-            except BaseException as be:  # noqa
-                logger.debug("Failed to create volume.")
-                logger.debug(be)
+            vol_name = f"{self.node_name}-vol-{item}"
+            volume = self.driver_v2.create_volume(self.size_of_disk, vol_name)
+
+            if not volume:
+                raise VolumeOpError(f"Failed to create volume with name {vol_name}")
+
+            self.volumes.append(volume)
 
         for _vol in self.volumes:
-            self._wait_until_volume_available(_vol, maybe_in_use=True)
+            if not self._wait_until_volume_available(_vol):
+                raise VolumeOpError(f"{_vol.name} failed to become available.")
 
         for _vol in self.volumes:
             if not self.driver_v2.attach_volume(self.node, _vol):
-                raise VolumeAttachmentError("Unable to attach volume %s", _vol.name)
+                raise VolumeOpError("Unable to attach volume %s", _vol.name)
 
-            logger.info("Successfully attached %s to %s", _vol.name, self.node_name)
-
-    def _wait_until_volume_available(self, volume, maybe_in_use=False):
-        """
-        Wait until a StorageVolume's state is "available".
-        Set "maybe_in_use" to True in order to wait even when the volume is
-        currently in_use. For example, set this option if you're recycling
-        this volume from an old node that you've very recently
-        destroyed.
-        """
-        ok_states = ["creating"]  # it's ok to wait if the volume is in this
+    def _wait_until_volume_available(self, volume: StorageVolume) -> bool:
+        """Wait until the state of the StorageVolume is available."""
         tries = 0
-        if maybe_in_use:
-            ok_states.append("in_use")
-        logger.info("Volume: %s is in state: %s", volume.name, volume.state)
-
-        while volume.state in ok_states:
+        while True:
             sleep(3)
-            volume = self.get_volume(volume.name)
-            tries = tries + 1
+            tries += 1
+            volume = self.driver_v2.ex_get_volume(volume.id)
+
+            if volume.state.lower() == "available":
+                return True
+
+            if "error" in volume.state.lower():
+                logger.error("%s state is %s", volume.name, volume.state)
+                break
+
             if tries > 10:
-                logger.info("Maximum amount of tries reached..")
+                logger.error("Max retries for %s reached.", volume.name)
                 break
-            if volume.state == "notfound":
-                logger.error("no volume was found for: %s", volume.name)
-                break
-            logger.info("%s is ... %s", volume.name, volume.state)
 
-        if volume.state != "available":
-            # OVH uses a non-standard state of 3 to indicate an available
-            # volume
-            logger.info("Volume %s is %s (not available)", volume.name, volume.state)
-            logger.info(
-                "The volume %s is not available, but will continue anyway...",
-                volume.name,
-            )
-
-        return True
+        return False
 
     def get_private_ip(self):
         """
@@ -376,14 +362,17 @@ class CephVMNode(object):
         private_ip = node_detail.private_ips[0].encode("ascii", "ignore")
         return private_ip
 
-    def get_volume(self, name):
-        """ Return libcloud.compute.base.StorageVolume """
-        driver = self.driver
-        volumes = driver.list_volumes()
-        try:
-            return [v for v in volumes if v.name == name][0]
-        except IndexError:
-            raise RuntimeError("Unable to get volume")
+    def get_volume(self, name: str) -> StorageVolume:
+        """Retrieve the StorageVolume instance using the given name."""
+        url = f"/volumes?name={name}"
+        object_ = self.driver_v2.volumev2_connection.request(url).object
+        volumes = object_.get("volumes")
+
+        if not volumes:
+            raise ResourceNotFound(f"Failed to retrieve volume with name: {name}")
+
+        volume_info = volumes[0]
+        return self.driver_v2.ex_get_volume(volume_info.get("id"))
 
     def create_node(self):
         """Create the instance with the provided data."""
