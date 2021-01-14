@@ -135,17 +135,29 @@ class CephVMNode(object):
         """
         return self.driver_v2 if self.driver_v2 else self.get_driver(api_version="2.2")
 
-    def _get_image(self) -> NodeImage:
-        """Return the glance image reference."""
-        try:
-            return [
-                i for i in self.driver_v2.list_images() if i.name == self.image_name
-            ][0]
-        except IndexError:
-            raise ResourceNotFound("Image {} not found".format(self.image_name))
-        except BaseException as be:  # noqa
-            logger.error(be)
-            raise OpenStackDriverError("Encountered an unknown exception.")
+    def _get_image(self, name: Optional[str] = None) -> NodeImage:
+        """
+        Return a NodeImage instance using the provided name or self.image_name.
+
+        Args:
+            name: (Optional), the name of the image to be retrieved.
+
+        Return:
+            NodeImage instance that is referenced by the image name.
+
+        Raises:
+            ResourceNotFound - when the named image resource does not exist in the given
+                               OpenStack cloud.
+        """
+        name = self.image_name if name is None else name
+        url = f"/v2/images?name={name}"
+        object_ = self.driver_v2.image_connection.request(url).object
+        images = self.driver_v2._to_images(object_, ex_only_active=False)
+
+        if not images:
+            raise ResourceNotFound(f"Failed to retrieve image with name: {name}")
+
+        return images[0]
 
     def _get_flavor(self) -> NodeSize:
         """Return the flavor reference."""
