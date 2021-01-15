@@ -13,7 +13,7 @@ setup(
     author='Vasu Kulkarni',
     author_email='vasu@redhat.com',
     install_requires=[
-        'apache-libcloud',
+        'apache-libcloud>=3.3.0',
         'docopt==0.6.2',
         'gevent==1.4.0',
         'greenlet==0.4.16',
