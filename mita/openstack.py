@@ -149,23 +149,26 @@ class CephVMNode(object):
 
     def _get_vm_size(self, name: Optional[str] = None) -> NodeSize:
         """
-        Return the NodeSize instance retrieved based on the provided name or vm_size.
+        Return a NodeSize instance found using the provided name or self.vm_size.
 
         Args:
-            name: The OpenStack flavor (m1.small or m1.medium or m1.large) to be found.
+            name: (Optional), the name of the VM size to be retrieved.
+                  Example:
+                            m1.small, m1.medium or m1.large
 
         Return:
-            Reference to NodeSize
+            NodeSize instance that is referenced by the vm size name.
 
         Raises:
-            ResourceNotFound exception when none resources found.
+            ResourceNotFound - when the named vm size resource does not exist in the
+                               given OpenStack Cloud.
         """
         name = self.vm_size if name is None else name
         for flavor in self.driver_v2.list_sizes():
             if flavor.name == name:
                 return flavor
 
-        raise ResourceNotFound("No flavor matched the name %s", name)
+        raise ResourceNotFound(f"Failed to retrieve vm size with name: {name}")
 
     def _has_free_ip_address(self, network: str) -> bool:
         """
