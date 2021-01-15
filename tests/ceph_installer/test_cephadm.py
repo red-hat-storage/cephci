@@ -35,14 +35,8 @@ def run(ceph_cluster, **kw):
                         ceph_installer=ceph_installer,
                         **config)
 
-    # get cephadm image
-    cephadm.registry = True
-    if config.get('container_image'):
-        cephadm.image = config.get('container_image')
-        cephadm.registry = False
-
-    # deployment
-    # if deploy:
+    # Deployment-only
+    # if config.get('deployment'):
     #     cephadm.deploy()
     #     return 0
 

@@ -6,12 +6,12 @@ tests:
 
    - test:
       name: cephadm deployment
+      desc: cephadm cluster deployment
       module: test_cephadm.py
       polarion-id:
       config:
-         use_latest_image: false
-         use_registry: "registry.redhat.io"
-      desc: cephadm cluster deployment
+         registry: false
+         deployment: true
       destroy-cluster: false
       abort-on-fail: true
 
