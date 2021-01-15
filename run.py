@@ -219,6 +219,8 @@ def run(args):
     console_log_level = args.get('--log-level')
     log_directory = args.get('--log-dir', '/tmp')
     instances_name = args.get('--instances-name')
+    if instances_name:
+        instances_name = instances_name.replace(".", "-")
     osp_image = args.get('--osp-image')
     filestore = args.get('--filestore', False)
     ec_pool_vals = args.get('--use-ec-pool', None)
