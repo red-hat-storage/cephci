@@ -219,6 +219,8 @@ def run(args):
     console_log_level = args.get('--log-level')
     log_directory = args.get('--log-dir', '/tmp')
     instances_name = args.get('--instances-name')
+    if instances_name:
+        instances_name = instances_name.replace(".", "-")
     osp_image = args.get('--osp-image')
     filestore = args.get('--filestore', False)
     ec_pool_vals = args.get('--use-ec-pool', None)
@@ -411,8 +413,47 @@ def run(args):
                            docker_tag=docker_tag))
         service.start_launch(name=launch_name, start_time=timestamp(), description=launch_desc)
 
+    def fetch_test_details(var) -> dict:
+        """Accepts the test and then provides the parameters of that test as a list
+        :param var: the test collected from the suite file
+        :return: Returns a dictionary of the various test params
+        """
+        details = dict()
+        details['docker-containers-list'] = []
+        details['name'] = var.get('name')
+        details['desc'] = var.get('desc')
+        details['file'] = var.get('module')
+        details['polarion-id'] = var.get('polarion-id')
+        polarion_default_url = "https://polarion.engineering.redhat.com/polarion/#/project/CEPH/workitem?id="
+        details['polarion-id-link'] = "{}{}".format(polarion_default_url, details['polarion-id'])
+        details['rhbuild'] = rhbuild
+        details['ceph-version'] = ceph_version
+        details['ceph-ansible-version'] = ceph_ansible_version
+        details['compose-id'] = compose_id
+        details['distro'] = distro
+        details['suite-name'] = suite_name
+        details['suite-file'] = suite_file
+        details['conf-file'] = glb_file
+        details['ceph-version-name'] = ceph_name
+        details['duration'] = '0s'
+        details['status'] = 'Not Executed'
+        return details
+
     if reuse is None:
-        ceph_cluster_dict, clients = create_nodes(conf, inventory, osp_cred, run_id, service, instances_name)
+        try:
+            ceph_cluster_dict, clients = create_nodes(conf, inventory, osp_cred, run_id, service, instances_name)
+        except Exception as err:
+            log.error(err)
+            tests = suite.get('tests')
+            res = []
+            for test in tests:
+                test = test.get('test')
+                tmp = fetch_test_details(test)
+                res.append(tmp)
+            total_time = "0s"
+            send_to_cephci = post_results or post_to_report_portal
+            email_results(res, run_id, trigger_user, run_dir, total_time, send_to_cephci)
+            return
     else:
         ceph_store_nodes = open(reuse, 'rb')
         ceph_cluster_dict = pickle.load(ceph_store_nodes)
@@ -449,23 +490,7 @@ def run(args):
 
     for test in tests:
         test = test.get('test')
-        tc = dict()
-        tc['docker-containers-list'] = []
-        tc['name'] = test.get('name')
-        tc['desc'] = test.get('desc')
-        tc['file'] = test.get('module')
-        tc['polarion-id'] = test.get('polarion-id')
-        polarion_default_url = "https://polarion.engineering.redhat.com/polarion/#/project/CEPH/workitem?id="
-        tc['polarion-id-link'] = "{}{}".format(polarion_default_url, tc['polarion-id'])
-        tc['rhbuild'] = rhbuild
-        tc['ceph-version'] = ceph_version
-        tc['ceph-ansible-version'] = ceph_ansible_version
-        tc['compose-id'] = compose_id
-        tc['distro'] = distro
-        tc['suite-name'] = suite_name
-        tc['suite-file'] = suite_file
-        tc['conf-file'] = glb_file
-        tc['ceph-version-name'] = ceph_name
+        tc = fetch_test_details(test)
         test_file = tc['file']
         report_portal_description = tc['desc'] or ''
         unique_test_name = create_unique_test_name(tc['name'], test_names)
@@ -477,8 +502,6 @@ def run(args):
         if tc.get('log-link'):
             print("Test logfile location: {log_url}".format(log_url=tc['log-link']))
         log.info("Running test %s", test_file)
-        tc['duration'] = '0s'
-        tc['status'] = 'Not Executed'
         start = datetime.datetime.now()
         for cluster_name in test.get('clusters', ceph_cluster_dict):
             if test.get('clusters'):

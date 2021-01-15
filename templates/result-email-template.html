@@ -98,6 +98,8 @@
                     <td><a style="color: green;" href="{{ test['log-link'] }}">{{ test.status }}</a></td>
                 {% elif test.status == 'Failed' %}
                     <td><a style="color: red;" href="{{ test['log-link'] }}">{{ test.status }}</a></td>
+                {% elif test.status == 'Not Executed' %}
+                    <td>{{ test.status }}</td>
                 {% endif %}
             </tr>
         {% endfor %}
