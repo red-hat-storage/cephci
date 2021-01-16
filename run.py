@@ -260,7 +260,7 @@ def run(args):
     ceph_name = None
     rhbuild_ = None
     try:
-        ceph_name, rhbuild_ =\
+        ceph_name, rhbuild_ = \
             next(filter(
                 lambda x: x,
                 [(ceph[x]['name'], x) for x in ceph if x == rhbuild.split(".")[0]]))
@@ -450,10 +450,26 @@ def run(args):
                 test = test.get('test')
                 tmp = fetch_test_details(test)
                 res.append(tmp)
-            total_time = "0s"
+            run_end_time = datetime.datetime.now()
+            duration = divmod((run_end_time - run_start_time).total_seconds(), 60)
+            total_time = {"start": run_start_time.strftime("%d %B %Y , %I:%M:%S %p"),
+                          "end": run_end_time.strftime("%d %B %Y , %I:%M:%S %p"),
+                          "total": f"{int(duration[0])} mins, {int(duration[1])} secs"
+                          }
             send_to_cephci = post_results or post_to_report_portal
-            email_results(res, run_id, trigger_user, run_dir, total_time, send_to_cephci)
-            return
+            info = {"status": "Fail",
+                    "trace": (traceback.format_exc(limit=2)).split("\n")
+                    }
+            test_res = {"result": res,
+                        "run_id": run_id,
+                        "trigger_user": trigger_user,
+                        "run_directory": run_dir,
+                        "total_time": total_time,
+                        "info": info,
+                        "send_to_cephci": send_to_cephci
+                        }
+            email_results(test_result=test_res)
+            return 1
     else:
         ceph_store_nodes = open(reuse, 'rb')
         ceph_cluster_dict = pickle.load(ceph_store_nodes)
@@ -640,10 +656,21 @@ def run(args):
     print_results(tcs)
     send_to_cephci = post_results or post_to_report_portal
     run_end_time = datetime.datetime.now()
-    total_run_time = (datetime.datetime.now() - run_start_time)
-    total_time = """'''Start Time:''' {a} '''End Time:''' {b} '''Total duration:'''{c} \
-                 """.format(a=run_start_time, b=run_end_time, c=total_run_time)
-    email_results(tcs, run_id, trigger_user, run_dir, total_time, send_to_cephci)
+    duration = divmod((run_end_time - run_start_time).total_seconds(), 60)
+    total_time = {"start": run_start_time.strftime("%d %B %Y , %I:%M:%S %p"),
+                  "end": run_end_time.strftime("%d %B %Y , %I:%M:%S %p"),
+                  "total": f"{int(duration[0])} mins, {int(duration[1])} secs"
+                  }
+    info = {"status": "Pass"}
+    test_res = {"result": tcs,
+                "run_id": run_id,
+                "trigger_user": trigger_user,
+                "run_directory": run_dir,
+                "total_time": total_time,
+                "info": info,
+                "send_to_cephci": send_to_cephci
+                }
+    email_results(test_result=test_res)
     return jenkins_rc
 
 

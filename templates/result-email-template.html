@@ -26,10 +26,12 @@
         text-align: left;
         padding: 8px;
     }
+
+    p { margin:0 }
     </style>
 </head>
 <body>
-    <h2>General Information</h2>
+    <h2>Summary</h2>
     <table class="half-table">
         <tr>
             <th style="color: blue">Ceph Version</th>
@@ -72,13 +74,47 @@
             <td>{{ log_link }}</td>
         </tr>
         <tr>
-            <th style="color: blue">Total suite duration</th>
-            <td>{{ suite_run_time }}</td>
-        </tr>
-        </tr>
-        <tr>
             <th style="color: blue">Invoked by User</th>
             <td>{{ trigger_user }}</td>
+        </tr>
+    </table>
+    <h2>Suite Setup Details</h2>
+    <table class="half-table">
+        {% if info.status == 'Pass' %}
+            <tr>
+                <th style="color: blue">Environment SetUp</th>
+                <td><a style="color: green;" href="{{ info.link }}">PASS</a></td>
+            </tr>
+        {% else %}
+            <tr>
+                <th style="color: blue">Environment SetUp</th>
+                <td><a style="color: red;" href="{{ info.link }}">FAIL</a></td>
+            </tr>
+             <tr>
+                <th style="color: blue">Additional Information</th>
+                <td>
+                    {% markdown %}
+                        {% for line in info.trace %}
+                            <p><code>{{ line }}</code></p>
+                        {% endfor %}
+                    {% endmarkdown %}
+                </td>
+            </tr>
+        {% endif %}
+    </table>
+    <h2>Suite duration</h2>
+    <table class="half-table">
+        <tr>
+                <th style="color: blue">Start Time</th>
+                <td>{{ suite_run_time.start }}</td>
+        </tr>
+        <tr>
+                <th style="color: blue">End Time</th>
+                <td>{{ suite_run_time.end }}</td>
+        </tr>
+        <tr>
+                <th style="color: blue">Execution Duration</th>
+                <td>{{ suite_run_time.total }}</td>
         </tr>
     </table>
     <h2>Test Results</h2>
@@ -99,7 +135,7 @@
                 {% elif test.status == 'Failed' %}
                     <td><a style="color: red;" href="{{ test['log-link'] }}">{{ test.status }}</a></td>
                 {% elif test.status == 'Not Executed' %}
-                    <td>{{ test.status }}</td>
+                <td style="color: grey">{{ test.status }}</td>
                 {% endif %}
             </tr>
         {% endfor %}
