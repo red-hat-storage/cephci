@@ -2,7 +2,6 @@
 import datetime
 import logging
 import socket
-from ssl import SSLError
 from time import sleep
 from typing import Optional
 
@@ -283,53 +282,45 @@ class CephVMNode(object):
 
     def _create_vm_node(self) -> None:
         """Create the instance using the provided data."""
-        try:
-            logger.info("Instantiating VM with name %s", self.node_name)
-            self.node = self.driver_v2.create_node(
-                name=self.node_name,
-                image=self._get_image(),
-                size=self._get_vm_size(),
-                ex_userdata=self.cloud_data,
-                networks=[self._get_network(self.vm_network)],
-            )
+        logger.info("Starting to create VM with name %s", self.node_name)
 
-            if self.node is None:
-                raise NodeErrorState(
-                    "Unable to create the instance {}".format(self.node_name)
-                )
+        self.node = self.driver_v2.create_node(
+            name=self.node_name,
+            image=self._get_image(),
+            size=self._get_vm_size(),
+            ex_userdata=self.cloud_data,
+            networks=[self._get_network(self.vm_network)],
+        )
 
-            logger.info("%s is created", self.node.name)
-            return
-        except SSLError:
-            logger.error("Connection failed, probably a timeout was reached")
-        except BaseException as be:  # noqa
-            logger.error(be)
-
-        raise NodeErrorState("Failed to create the instance {}".format(self.node_name))
+        if self.node is None:
+            raise NodeErrorState(f"Failed to create {self.node_name}")
 
     def _wait_until_vm_state_running(self):
         """Wait till the VM moves to running state."""
         timeout = datetime.timedelta(seconds=600)
         start_time = datetime.datetime.now()
+
         while True:
-            logger.info("Waiting for %s state to be running ", self.node_name)
-            sleep(15)
+            sleep(5)
+            node = self.driver_v2.ex_get_node_details(self.node.id)
 
-            _node = self.driver_v2.ex_get_node_details(self.node.id)
-
-            if _node.state == "running":
-                logger.info("%s is now in running state.", self.node.name)
+            if node.state == "running":
+                end_time = datetime.datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                logger.info(
+                    "%s moved to running state in %d seconds.",
+                    self.node_name,
+                    int(duration),
+                )
                 break
 
-            if _node.state == "error":
-                logger.error("Failed to create %s", _node.state)
-                raise NodeErrorState(_node.extra.get("fault", {}).get("message"))
+            if node.state == "error":
+                raise NodeErrorState(node.extra.get("fault", {}).get("message"))
 
             if datetime.datetime.now() - start_time > timeout:
-                logger.info("Failed to bring the node in running state in %s", timeout)
                 raise NodeErrorState(
                     'node {name} is in "{state}" state'.format(
-                        name=self.node_name, state=_node.state
+                        name=self.node_name, state=node.state
                     )
                 )
 
@@ -339,8 +330,7 @@ class CephVMNode(object):
         start_time = datetime.datetime.now()
 
         while True:
-            logger.info("Gathering VM network address")
-            sleep(10)
+            sleep(5)
             self.ip_address = self.get_private_ip()
 
             if self.ip_address is not None:
@@ -349,7 +339,6 @@ class CephVMNode(object):
                 break
 
             if datetime.datetime.now() - start_time > timeout:
-                logger.info("Failed to get host ip_address in %s", timeout)
                 raise GetIPError("Unable to get IP for {}".format(self.node_name))
 
     def _create_attach_volumes(self):
