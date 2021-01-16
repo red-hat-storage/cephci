@@ -182,49 +182,78 @@ class CephVMNode(object):
 
         raise ResourceNotFound(f"Failed to retrieve vm size with name: {name}")
 
-    def _has_free_ip_address(self, network: str) -> bool:
+    def _get_network_by_name(self, name: str) -> OpenStackNetwork:
         """
-        Return True if the given network has an IPv4 Address to lease.
+        Retrieve the OpenStackNetwork instance using the provided name.
 
-        Arguments:
-            network: String, The network UUID
+        Args:
+            name:   the name of the network.
 
         Returns:
-            bool - True on success else False
-
-        Note: This method returns True only if the given network has more than 3
-        """
-        try:
-            resp = self.driver_v2.network_connection.request(
-                "/v2.0/network-ip-availabilities/{}".format(network),
-            )
-        except BaseException as be:
-            logger.info(be)
-            return False
-
-        if resp.status != 200:
-            logger.debug("Failed to gather the network details.")
-            return False
-
-        _total = resp.object.get("network_ip_availability", {}).get("total_ips")
-        _used = resp.object.get("network_ip_availability", {}).get("used_ips")
-
-        return (_total - _used) > 3
-
-    def _get_network(self, network: Optional[str] = None) -> OpenStackNetwork:
-        """
-        Return the provider network.
-
-        Arguments:
-            network: Network to be attached to the VM
-
-        Returns:
-            An OpenStackNetwork libcloud object
+            OpenStackNetwork instance referenced by the name.
 
         Raises:
-            GetIPError when there are no suitable networks
+            ResourceNotFound: when the named network resource does not exist in the
+                              given OpenStack cloud
         """
-        _networks = (
+        url = f"{self.driver_v2._networks_url_prefix}?name={name}"
+        object_ = self.driver_v2.network_connection.request(url).object
+        networks = self.driver_v2._to_networks(object_)
+
+        if not networks:
+            raise ResourceNotFound(f"No network resource with name {name} found.")
+
+        return networks[0]
+
+    def _has_free_ip_addresses(self, net: OpenStackNetwork) -> bool:
+        """
+        Return True if the given network has more than 3 free ip addresses.
+
+        This buffer of 3 free IPs is in place to avoid failures during node creation.
+        As in OpenStack, the private IP request for allocation occurs towards the end
+        of the workflow.
+
+        When a subnet with free IPs is identified then it's CIDR information is
+        assigned to self.subnet attribute on this object.
+
+        Arguments:
+            net:    The OpenStackNetwork instance to be checked for IP availability.
+
+        Returns:
+            True on success else False
+        """
+        url = f"/v2.0/network-ip-availabilities/{net.id}"
+        resp = self.driver_v2.network_connection.request(url)
+        subnets = resp.object["network_ip_availability"]["subnet_ip_availability"]
+
+        for subnet in subnets:
+            free_ips = subnet["total_ips"] - subnet["used_ips"]
+
+            if free_ips > 3:
+                self.subnet = subnet["cidr"]
+                return True
+
+        return False
+
+    def _get_network(self, name: Optional[str] = None) -> OpenStackNetwork:
+        """
+        Return the first available OpenStackNetwork with a free IP address to lease.
+
+        This method will search a preconfigured list of network names and return the
+        first one that has more than 3 IP addresses to lease. One can override the
+        preconfigured list by specifying a single network name.
+
+        Args:
+            name: (Optional), the network name to be retrieved in place of the default
+                              list of networks.
+
+        Returns:
+            OpenStackNetwork instance that has free IP addresses to lease.
+
+        Raises:
+            ResourceNotFound when there no suitable networks in the environment.
+        """
+        network_names = (
             [
                 "provider_net_cci_8",
                 "provider_net_cci_7",
@@ -232,34 +261,25 @@ class CephVMNode(object):
                 "provider_net_cci_5",
                 "provider_net_cci_4",
             ]
-            if network is None
-            else [network]
+            if name is None
+            else [name]
         )
 
-        _available_networks = self.driver_v2.ex_list_networks()
-
-        for net in _networks:
+        for net in network_names:
+            # Treating an exception as a soft error as it is possible to find another
+            # suitable network from the list.
             try:
-                os_net = [n for n in _available_networks if n.name == net][0]
+                os_net = self._get_network_by_name(name=net)
 
-                if not self._has_free_ip_address(os_net.id):
-                    logger.debug("%s does not meet the requirements", net)
+                if not self._has_free_ip_addresses(net=os_net):
                     continue
 
-                self.subnet = [
-                    s.cidr
-                    for s in self.driver_v2.ex_list_subnets()
-                    if s.id in os_net.extra.get("subnets")
-                ][0]
-
                 return os_net
-            except TypeError:
-                logger.warning("%s is not accessible.", net)
             except BaseException as be:  # noqa
-                logger.warning("Something went wrong during network selection process.")
-                logger.info(be)
+                logger.warning(be)
+                continue
 
-        raise ResourceNotFound("No suitable network resource found.")
+        raise ResourceNotFound(f"No networks had free IP addresses: {network_names}.")
 
     def _create_vm_node(self) -> None:
         """Create the instance using the provided data."""
