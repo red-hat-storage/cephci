@@ -1,23 +1,28 @@
-report-portal:
-  endpoint: http://hostname:port
-  project: project_name
-  token: user_token
+# Provide report-portal details
 
-polarion:
-  endpoint: some_url
-  username: some_user
-  password: some_password
+# report-portal:
+#  endpoint: http://<hostname>:<port>
+#  project: <project_name>
+#  token: <user_token>
+
+# Provide polarion credentials
+
+# polarion:
+#  endpoint: <polarion_url>
+#  username: <polarion_user_name>
+#  password: <polarion_password>
 
 # Provide cdn_credentials before running suites which needs
 # access to GAed container image registry i.e 'registry.redhat.io'
 
-#cdn_credentials:
-#  username: some_user
-#  password: some_password
+# cdn_credentials:
+#  username: <user_name>
+#  password: <user_password>
 
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn
 # To completely disable all email, remove the "email:" and "address:" settings
 # entirely.
-email:
-  address: cephci@redhat.com
+
+# email:
+#  address: cephci@redhat.com
