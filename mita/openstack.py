@@ -89,11 +89,7 @@ class CephVMNode(object):
         self.subnet = None
         self.floating_ip = None
         self.volumes = list()
-        self.driver = None
-        self.driver_v2 = None
-
-        self.driver = self.get_driver_v1()
-        self.driver_v2 = self.get_driver_v2()
+        self.driver = self.get_driver()
 
         self.create_node()
 
@@ -101,7 +97,7 @@ class CephVMNode(object):
         return OpenStack(
             self.username,
             self.password,
-            api_version=kw.get("api_version", "1.1"),
+            api_version=kw.get("api_version", "2.2"),
             ex_force_auth_url=self.auth_url,
             ex_force_auth_version=self.auth_version,
             ex_tenant_name=self.tenant_name,
@@ -109,30 +105,6 @@ class CephVMNode(object):
             ex_domain_name=self.domain_name,
             ex_tenant_domain_id=self.tenant_domain_id,
         )
-
-    def get_driver_v1(self):
-        """
-        Get Apache Libcloud OpenStack driver for nova version 1.1.
-
-        https://libcloud.readthedocs.io/en/latest/compute/drivers/
-        openstack.html#compute-1-0-api-version-older-installations
-
-        Returns:
-            OpenStack driver
-        """
-        return self.get_driver() if self.driver is None else self.driver
-
-    def get_driver_v2(self):
-        """
-        Get Apache Libcloud OpenStack driver for nova version 2.0.
-
-        https://libcloud.readthedocs.io/en/latest/compute/drivers/
-        openstack.html#compute-2-0-api-version-current
-
-        Returns:
-            OpenStack driver
-        """
-        return self.driver_v2 if self.driver_v2 else self.get_driver(api_version="2.2")
 
     def _get_image(self, name: Optional[str] = None) -> NodeImage:
         """
@@ -150,8 +122,8 @@ class CephVMNode(object):
         """
         name = self.image_name if name is None else name
         url = f"/v2/images?name={name}"
-        object_ = self.driver_v2.image_connection.request(url).object
-        images = self.driver_v2._to_images(object_, ex_only_active=False)
+        object_ = self.driver.image_connection.request(url).object
+        images = self.driver._to_images(object_, ex_only_active=False)
 
         if not images:
             raise ResourceNotFound(f"Failed to retrieve image with name: {name}")
@@ -175,7 +147,7 @@ class CephVMNode(object):
                                given OpenStack Cloud.
         """
         name = self.vm_size if name is None else name
-        for flavor in self.driver_v2.list_sizes():
+        for flavor in self.driver.list_sizes():
             if flavor.name == name:
                 return flavor
 
@@ -195,9 +167,9 @@ class CephVMNode(object):
             ResourceNotFound: when the named network resource does not exist in the
                               given OpenStack cloud
         """
-        url = f"{self.driver_v2._networks_url_prefix}?name={name}"
-        object_ = self.driver_v2.network_connection.request(url).object
-        networks = self.driver_v2._to_networks(object_)
+        url = f"{self.driver._networks_url_prefix}?name={name}"
+        object_ = self.driver.network_connection.request(url).object
+        networks = self.driver._to_networks(object_)
 
         if not networks:
             raise ResourceNotFound(f"No network resource with name {name} found.")
@@ -222,7 +194,7 @@ class CephVMNode(object):
             True on success else False
         """
         url = f"/v2.0/network-ip-availabilities/{net.id}"
-        resp = self.driver_v2.network_connection.request(url)
+        resp = self.driver.network_connection.request(url)
         subnets = resp.object["network_ip_availability"]["subnet_ip_availability"]
 
         for subnet in subnets:
@@ -284,7 +256,7 @@ class CephVMNode(object):
         """Create the instance using the provided data."""
         logger.info("Starting to create VM with name %s", self.node_name)
 
-        self.node = self.driver_v2.create_node(
+        self.node = self.driver.create_node(
             name=self.node_name,
             image=self._get_image(),
             size=self._get_vm_size(),
@@ -302,7 +274,7 @@ class CephVMNode(object):
 
         while True:
             sleep(5)
-            node = self.driver_v2.ex_get_node_details(self.node.id)
+            node = self.driver.ex_get_node_details(self.node.id)
 
             if node.state == "running":
                 end_time = datetime.datetime.now()
@@ -352,7 +324,7 @@ class CephVMNode(object):
 
         for item in range(0, self.no_of_volumes):
             vol_name = f"{self.node_name}-vol-{item}"
-            volume = self.driver_v2.create_volume(self.size_of_disk, vol_name)
+            volume = self.driver.create_volume(self.size_of_disk, vol_name)
 
             if not volume:
                 raise VolumeOpError(f"Failed to create volume with name {vol_name}")
@@ -364,7 +336,7 @@ class CephVMNode(object):
                 raise VolumeOpError(f"{_vol.name} failed to become available.")
 
         for _vol in self.volumes:
-            if not self.driver_v2.attach_volume(self.node, _vol):
+            if not self.driver.attach_volume(self.node, _vol):
                 raise VolumeOpError("Unable to attach volume %s", _vol.name)
 
     def _wait_until_volume_available(self, volume: StorageVolume) -> bool:
@@ -373,7 +345,7 @@ class CephVMNode(object):
         while True:
             sleep(3)
             tries += 1
-            volume = self.driver_v2.ex_get_volume(volume.id)
+            volume = self.driver.ex_get_volume(volume.id)
 
             if volume.state.lower() == "available":
                 return True
@@ -399,14 +371,14 @@ class CephVMNode(object):
     def get_volume(self, name: str) -> StorageVolume:
         """Retrieve the StorageVolume instance using the given name."""
         url = f"/volumes?name={name}"
-        object_ = self.driver_v2.volumev2_connection.request(url).object
+        object_ = self.driver.volumev2_connection.request(url).object
         volumes = object_.get("volumes")
 
         if not volumes:
             raise ResourceNotFound(f"Failed to retrieve volume with name: {name}")
 
         volume_info = volumes[0]
-        return self.driver_v2.ex_get_volume(volume_info.get("id"))
+        return self.driver.ex_get_volume(volume_info.get("id"))
 
     def create_node(self):
         """Create the instance with the provided data."""
