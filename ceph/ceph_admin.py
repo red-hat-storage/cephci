@@ -212,8 +212,8 @@ class CephAdmin:
         self.ceph_osds(self.cluster.get_nodes(role="osd"))
         self.ceph_mdss(self.cluster.get_nodes(role="mds"))
         self.ceph_rgws(self.cluster.get_nodes(role="rgw"))
+        self.ceph_iscsi(self.cluster.get_nodes(role="iscsi"))
         self.ceph_clients(self.cluster.get_nodes(role="client"))
-        # self.ceph_iscsi(self.cluster.get_nodes(role="iscsi"))
 
         # monitoring tools
         daemons = ["prometheus", "node-exporter", "alertmanager", "grafana"]
@@ -541,15 +541,89 @@ class CephAdmin:
             # todo: Handle mgr purge
             raise NotImplementedError
 
-    def ceph_iscsi(self, nodes, **kwargs):
+    def ceph_iscsi(self, nodes, op="create"):
         """
-        Manage iscsi
+        Manage Ceph ISCSI targets
+
+        - Create ISCSI targets
+            a) Creates ISCSI replicated pool
+            b) Associates pool to RBD application
+            c) Deploy ISCSI targets on nodes provided
+            d) Validates deployed ISCSI targets using
+               orchestration services list.
+
         Args:
-            nodes: iscsi node list
-            kwargs: key-value arguments
+            nodes: ISCSI node list
+            op: action (op: "create|purge", default: create)
         """
-        # todo: Handle iscsi
-        raise NotImplementedError
+        if not nodes:
+            return
+
+        nodes = nodes if isinstance(nodes, list) else [nodes]
+        if op == "create":
+            iscsis = []
+            daemons = []
+            for node in nodes:
+                logger.info("adding iscsi on %s-%s" % (node.hostname, node.ip_address))
+                iscsis.append("{host}=iscsi.{host}".format(host=node.hostname))
+                daemons.append("iscsi.{host}".format(host=node.hostname))
+
+            pool_name = "iscsi"
+
+            # create ISCSI replicated pool
+            self.shell(
+                remote=self.installer,
+                args=[
+                    "ceph",
+                    "osd",
+                    "pool",
+                    "create",
+                    pool_name,
+                    "3",
+                    "3",
+                    "replicated",
+                ],
+            )
+
+            # Associate pool to RBD application
+            self.shell(
+                remote=self.installer,
+                args=[
+                    "ceph",
+                    "osd",
+                    "pool",
+                    "application",
+                    "enable",
+                    pool_name,
+                    "rbd",
+                ],
+            )
+
+            # create ISCSI targets
+            self.shell(
+                remote=self.installer,
+                args=[
+                    "ceph",
+                    "orch",
+                    "apply",
+                    "iscsi",
+                    pool_name,
+                    "user",
+                    "password",
+                    "--placement",
+                    "'{};{}'".format(len(iscsis), ";".join(iscsis)),
+                ],
+            )
+
+            # check daemon existence
+            assert self.check_exist(
+                daemon="iscsi",
+                ids=daemons,
+                timeout=900,
+            )
+        elif op == "purge":
+            # todo: Handle iscsi purge
+            raise NotImplementedError
 
     def deploy(self):
         """
