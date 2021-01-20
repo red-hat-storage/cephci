@@ -8,11 +8,12 @@ import traceback
 import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-
 import requests
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from reportportal_client import ReportPortalServiceAsync
+from jinja_markdown import MarkdownExtension
+
 
 log = logging.getLogger(__name__)
 
@@ -533,7 +534,7 @@ def custom_ceph_config(suite_config, custom_config, custom_config_file):
     return full_custom_config
 
 
-def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, send_to_cephci=False):
+def email_results(test_result):
     """
     Email results of test run to QE
 
@@ -541,15 +542,16 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
     is a no-op.
 
     Args:
+        test_result (dict): contains all the various keyword arguments containing execution details.
+        Keyword Args :
         results_list (list): test case results info
         run_id (str): id of the test run
         trigger_user (str): user of the node where the run is triggered from
         run_dir (str): log directory path
-        suite_run_time (str): suite total duration info
-        send_to_cephci (bool): send to cephci@redhat.com as well as user email
-
+        suite_run_time (dict): suite total duration info
+        info (dict): General information about the test run.
+        send_to_cephci (optional [bool]): send to cephci@redhat.com as well as user email
     Returns: None
-
     """
     cfg = get_cephci_config().get('email')
     if not cfg:
@@ -557,6 +559,13 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
     sender = "cephci@redhat.com"
     recipients = []
     address = cfg.get('address')
+    send_to_cephci = test_result.get("send_to_cephci", False)
+    try:
+        run_id = test_result["run_id"]
+        results_list = test_result["result"]
+    except KeyError as kerr:
+        log.error(f"Key not found : {kerr}")
+        exit(1)
 
     if cfg and address:
         recipients = re.split(r",\s*", cfg['address'])
@@ -573,14 +582,14 @@ def email_results(results_list, run_id, trigger_user, run_dir, suite_run_time, s
         run_name = "cephci-run-{id}".format(id=run_id)
         msg = MIMEMultipart('alternative')
         run_status = get_run_status(results_list)
-        msg['Subject'] = "[{run_status}] {suite} {compose} {run}".format(run=run_name,
-                                                                         suite=results_list[0]['suite-name'],
-                                                                         compose=results_list[0]['compose-id'],
-                                                                         run_status=run_status)
+        msg['Subject'] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
+            suite=results_list[0]['suite-name'], compose=results_list[0]['compose-id'],
+            run_status=run_status, id=run_id)
         msg['From'] = sender
         msg['To'] = ", ".join(recipients)
-        html = create_html_file(run_name=run_name, results_list=results_list, run_time=suite_run_time,
-                                user=trigger_user, run_dir=run_dir)
+
+        test_result['run_name'] = run_name
+        html = create_html_file(test_result=test_result)
         part1 = MIMEText(html, 'html')
         msg.attach(part1)
         props_content = f"""
@@ -602,33 +611,50 @@ suite=\"{results_list[0]['suite-name']}\"
             log.exception(e)
 
 
-def create_html_file(run_name, results_list, run_time, user, run_dir) -> str:
+def create_html_file(test_result) -> str:
     """
     Creates the HTML file from the template to be sent via mail
     Args:
+        test_result (dict): contains all the various keyword arguments containing execution details.
+        Keyword Args :
         results_list (list): test case results info
         run_name (str): name of the test run
         user (str): user of the node where the run is triggered from
         run_dir (str): log directory path
-        run_time (str): suite total duration info
+        run_time (dict): suite total duration info
+        info (dict): General information about the test run
     Returns: HTML file
-
     """
+
+    try:
+        run_name = test_result['run_name']
+        trigger_user = test_result["trigger_user"]
+        run_dir = test_result["run_directory"]
+        suite_run_time = test_result['total_time']
+        info = test_result['info']
+        test_results = test_result["result"]
+    except KeyError as kerr:
+        log.error(f"Key not found : {kerr}")
+        exit(1)
+
     log_link = "http://magna002.ceph.redhat.com/cephci-jenkins/{run}/".format(run=run_name)
+    info["link"] = f"{log_link}/startup.log"
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     template_dir = os.path.join(project_dir, 'templates')
 
-    env = Environment(
-        loader=FileSystemLoader(template_dir),
-        autoescape=select_autoescape(['html', 'xml'])
-    )
-    template = env.get_template('result-email-template.html')
+    jinja_env = Environment(extensions=[MarkdownExtension],
+                            loader=FileSystemLoader(template_dir),
+                            autoescape=select_autoescape(['html', 'xml'])
+                            )
+
+    template = jinja_env.get_template('result-email-template.html')
 
     html = template.render(run_name=run_name,
                            log_link=log_link,
-                           test_results=results_list,
-                           suite_run_time=run_time,
-                           trigger_user=user)
+                           test_results=test_results,
+                           suite_run_time=suite_run_time,
+                           trigger_user=trigger_user,
+                           info=info)
 
     abs_path = os.path.join(run_dir, "result.html")
     write_to_file(data=html, abs_path=abs_path)
@@ -681,5 +707,5 @@ def get_run_status(results_list):
         if tc['status'] == 'Failed':
             return "FAILED"
         if tc['status'] == 'Not Executed':
-            return "FAILED"
+            return "SETUP-FAILURE"
     return "PASSED"

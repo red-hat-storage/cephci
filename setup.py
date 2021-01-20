@@ -21,8 +21,9 @@ setup(
         'requests==2.21.0',
         'paramiko==2.4.2',
         'pyyaml>=4.2b1',
-        'jinja2==2.10.1',
-        'junitparser==1.4.0'
+        'jinja2',
+        'junitparser==1.4.0',
+        'jinja_markdown'
     ],
     zip_safe=True,
     include_package_data=True,
