@@ -26,7 +26,22 @@ class CephAdmin:
         self.config = kwargs
         self.first_mon = self.installer.node
         self.first_mgr = self.installer.node
-        self.image = None
+        self.image = kwargs.get('container_image', None)
+        self.registry = kwargs.get('registry', None)
+
+    def get_image(self):
+        """
+        Retrieve ceph container image
+        Returns:
+            image: ceph container image
+        """
+        out, _ = self.installer.exec_command(cmd="sudo cephadm ls")
+        out = json.loads(out.read().decode().strip())
+        self.image = [
+            con["container_image_name"] for con in out if "mon" in con["name"]
+        ][-1]
+        logger.info("cluster image(default) is been used %s", self.image)
+        return self.image
 
     def image(self):
         return self.image
@@ -84,6 +99,9 @@ class CephAdmin:
         """
         if not remote:
             remote = self.installer
+
+        if not self.image:
+            self.get_image()
 
         cmd = ["sudo cephadm -v",
                "--image {}".format(self.image),
@@ -144,7 +162,7 @@ class CephAdmin:
         cdn_cred = get_cephci_config().get('cdn_credentials')
 
         cmd = 'sudo cephadm -v '
-        if self.image:
+        if not self.registry and self.image:
             cmd += '--image {image} '.format(image=self.image)
 
         cmd += 'bootstrap ' \
@@ -167,6 +185,9 @@ class CephAdmin:
 
         logger.info("Bootstrap output : %s", out.read().decode())
         logger.error("Bootstrap error: %s", err.read().decode())
+
+        if not self.image:
+            self.get_image()
 
     def manage_hosts(self, **kwargs):
         """
