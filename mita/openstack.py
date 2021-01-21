@@ -382,12 +382,20 @@ class CephVMNode(object):
 
     def create_node(self):
         """Create the instance with the provided data."""
-        self._create_vm_node()
-        self._wait_until_vm_state_running()
-        self._wait_until_ip_is_known()
+        try:
+            self._create_vm_node()
+            self._wait_until_vm_state_running()
+            self._wait_until_ip_is_known()
 
-        if self.no_of_volumes:
-            self._create_attach_volumes()
+            if self.no_of_volumes:
+                self._create_attach_volumes()
+        except (ResourceNotFound, NodeErrorState, GetIPError, VolumeOpError):
+            raise
+        except BaseException as be:  # noqa
+            logger.error(be)
+            raise NodeErrorState(
+                f"Unknown exception occurred during creation of {self.node_name}"
+            )
 
     def destroy_node(self):
         """
