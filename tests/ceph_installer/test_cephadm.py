@@ -12,28 +12,27 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running test")
     log.info("Running cephadm test")
-    config = kw.get('config')
-    test_data = kw.get('test_data')
+    config = kw.get("config")
+    test_data = kw.get("test_data")
     # base_url = config.get('base_url', None)
-    ceph_cluster.custom_config = test_data.get('custom-config')
-    ceph_cluster.custom_config_file = test_data.get('custom-config-file')
+    ceph_cluster.custom_config = test_data.get("custom-config")
+    ceph_cluster.custom_config_file = test_data.get("custom-config-file")
 
-    build = config.get('build', config.get('rhbuild'))
-    name = config.get('cluster_name', 'ceph')
+    build = config.get("build", config.get("rhbuild"))
+    name = config.get("cluster_name", "ceph")
     # deploy = config.get('deploy', False)
-    exec_shell = config.get('exec_shell', False)
+    exec_shell = config.get("exec_shell", False)
     ceph_cluster.rhcs_version = build
 
-    if config.get('skip_setup') is True:
+    if config.get("skip_setup") is True:
         log.info("Skipping setup of ceph cluster")
         return 0
 
     # get installer node
-    ceph_installer = ceph_cluster.get_ceph_object('installer')
-    cephadm = CephAdmin(name=name,
-                        ceph_cluster=ceph_cluster,
-                        ceph_installer=ceph_installer,
-                        **config)
+    ceph_installer = ceph_cluster.get_ceph_object("installer")
+    cephadm = CephAdmin(
+        name=name, ceph_cluster=ceph_cluster, ceph_installer=ceph_installer, **config
+    )
 
     # Deployment-only
     # if config.get('deployment'):
