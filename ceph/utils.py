@@ -520,3 +520,41 @@ def get_public_network(node):
         (str) public network subnet
     """
     return getattr(node, 'subnet')
+
+
+def get_disk_info(node):
+    """
+    Get node disk(s) info
+
+    Args:
+        node: remote node object
+    Returns:
+        disks: remote disk details
+    """
+    _BOOT_DISK = "findmnt -v -n -T / -o SOURCE "
+    _GET_DISKS = "lsblk -np -r -o {} "
+
+    # get boot disk
+    out, _ = node.exec_command(cmd="%s" % _BOOT_DISK)
+    out = out.read().decode().strip()
+
+    boot_disk = re.sub(r"\d", "", out)
+    log.info("Boot disk found : %s", boot_disk)
+
+    # get disk and skip boot disk
+    headers = ["name", "type"]
+    out, _ = node.exec_command(
+        cmd="{} | grep disk".format(_GET_DISKS.format(",".join(headers)))
+    )
+    disks_info = out.read().decode().strip().split("\n")
+
+    disks = []
+    for disk in list([x for x in disks_info if x]):
+        disk_info = dict(list(zip(headers, re.split(r"\s+", disk))))
+        disk_name = disk_info["name"]
+
+        if boot_disk in disk_name:
+            continue
+        disks.append(disk_name)
+
+    return disks
