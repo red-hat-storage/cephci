@@ -31,14 +31,11 @@ def run(ceph_cluster, **kw):
     ceph_cluster.custom_config = test_data.get('custom-config')
     ceph_cluster.custom_config_file = test_data.get('custom-config-file')
 
-    if config['ansi_config']['rgw_multisite'] and config['ansi_config']['rgw_zonesecondary'] is True:
+    if all(key in ceph_cluster.ansible_config for key in ('rgw_multisite', 'rgw_zonesecondary')):
         ceph_cluster_dict = kw.get('ceph_cluster_dict')
         primary_node = 'ceph-rgw1'
-        primary_node_ip = ceph_cluster_dict.get(primary_node).get_ceph_object('rgw').node.ip_address
-        config['ansi_config']['rgw_pullhost'] = primary_node_ip
-        ceph_cluster.ansible_config = config['ansi_config']
-        ceph_cluster.custom_config = test_data.get('custom-config')
-        ceph_cluster.custom_config_file = test_data.get('custom-config-file')
+        primary_rgw_node = ceph_cluster_dict.get(primary_node).get_ceph_object('rgw').node
+        config['ansi_config']['rgw_pullhost'] = primary_rgw_node.ip_address
 
     ceph_cluster.use_cdn = config.get('use_cdn')
     build = config.get('build', config.get('rhbuild'))
