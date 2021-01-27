@@ -1,8 +1,9 @@
 """
-[ CEPHADM ] Ceph Administrator module enables ceph pre-requisites
+[ CEPHADM ] Ceph Administrator module enables ceph prerequisites
 and deploys ceph cluster via cephadm tool.
 
 - Enables ceph compose tool repo
+- Install prerequisites (cephadm package)
 - SSH keys exchange between nodes
 - Bootstrap cluster
 - Add all Hosts to cluster
@@ -38,6 +39,11 @@ class CephAdmin(HostMixin, BootstrapMixin):
 
         Args:
             cluster: Ceph cluster object
+            config: test data configuration
+
+        config:
+            base_url: ceph compose URL
+            container_image: custom ceph container image
         """
         self.cluster = cluster
         self.config = config
@@ -51,7 +57,9 @@ class CephAdmin(HostMixin, BootstrapMixin):
         Returns:
             Public Key string
         """
-        ceph_pub_key, _ = self.installer.exec_command(cmd="sudo cat /etc/ceph/ceph.pub")
+        ceph_pub_key, _ = self.installer.exec_command(
+            sudo=True, cmd="cat /etc/ceph/ceph.pub"
+        )
         return ceph_pub_key.read().decode().strip()
 
     def distribute_cephadm_gen_pub_key(self, nodes=None):
@@ -68,13 +76,15 @@ class CephAdmin(HostMixin, BootstrapMixin):
         nodes = nodes if isinstance(nodes, list) else [nodes]
 
         for each_node in nodes:
-            each_node.exec_command(cmd="sudo install -d -m 0700 /root/.ssh")
+            each_node.exec_command(sudo=True, cmd="install -d -m 0700 /root/.ssh")
             keys_file = each_node.write_file(
                 sudo=True, file_name="/root/.ssh/authorized_keys", file_mode="a"
             )
             keys_file.write(ceph_pub_key)
             keys_file.flush()
-            each_node.exec_command(cmd="sudo chmod 0600 /root/.ssh/authorized_keys")
+            each_node.exec_command(
+                sudo=True, cmd="chmod 0600 /root/.ssh/authorized_keys"
+            )
 
     def check_exist(self, daemon, ids, timeout=None, interval=5):
         """
@@ -117,12 +127,25 @@ class CephAdmin(HostMixin, BootstrapMixin):
                     if daemons[_id] == "running":
                         count += 1
 
-            logger.info("%s/%s %s daemon(s) up...." % (count, len(ids), daemon))
+            logger.info(
+                "%s/%s %s daemon(s) up... Retries: %s"
+                % (count, len(ids), daemon, checks)
+            )
             if count == len(ids):
                 return True
 
-            logger.info("re-checking... %s times left", checks)
             sleep(interval)
+
+        # Checkout service events, in case of processes not-running
+        out, _ = self.shell(
+            remote=self.installer,
+            args=["ceph", "orch", "ls", "-f", "json-pretty"],
+        )
+
+        for i in json.loads(out):
+            if daemon in i.get("service_type") and i["status"].get("running") == 0:
+                logger.error("Service status(es) : %s", i)
+                logger.error("Service event(s): %s", i["events"])
 
         return False
 
@@ -142,10 +165,11 @@ class CephAdmin(HostMixin, BootstrapMixin):
         if not remote:
             remote = self.installer
 
-        cmd = ["sudo cephadm -v", "shell -- "] + args
+        cmd = ["cephadm -v", "shell -- "] + args
         [cmd.extend([k, v]) for k, v in kwargs]
 
         out, err = remote.exec_command(
+            sudo=True,
             cmd=" ".join(cmd),
             timeout=self.TIMEOUT,
         )
@@ -161,8 +185,9 @@ class CephAdmin(HostMixin, BootstrapMixin):
         """
         for node in self.cluster.get_nodes():
             node.exec_command(
-                cmd="sudo yum-config-manager --add"
-                " {}compose/Tools/x86_64/os/".format(self.config.get("base_url"))
+                sudo=True,
+                cmd="yum-config-manager --add"
+                " {}compose/Tools/x86_64/os/".format(self.config.get("base_url")),
             )
 
     def install_cephadm(self, **kw):
@@ -184,8 +209,8 @@ class CephAdmin(HostMixin, BootstrapMixin):
         )
 
         if kw.get("upgrade"):
-            self.installer.exec_command(cmd="sudo yum update metadata")
-            self.installer.exec_command(cmd="sudo yum update -y cephadm")
+            self.installer.exec_command(sudo=True, cmd="yum update metadata")
+            self.installer.exec_command(sudo=True, cmd="yum update -y cephadm")
 
         out, rc = self.installer.exec_command(cmd="rpm -qa | grep cephadm")
         output = out.read().decode().rstrip()
@@ -609,8 +634,8 @@ class CephAdmin(HostMixin, BootstrapMixin):
                     ],
                 )
 
-                client.exec_command(cmd="sudo mkdir -p /etc/ceph")
-                client.exec_command(cmd="sudo chmod 777 /etc/ceph")
+                client.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+                client.exec_command(sudo=True, cmd="chmod 777 /etc/ceph")
 
                 keyring_file = client.write_file(
                     sudo=True,
@@ -620,7 +645,7 @@ class CephAdmin(HostMixin, BootstrapMixin):
                 keyring_file.write(out)
                 keyring_file.flush()
 
-                client.exec_command(cmd=f"sudo chmod 0644 {client_keyring}")
+                client.exec_command(sudo=True, cmd=f"chmod 0644 {client_keyring}")
 
         elif op == "purge":
             # todo: Handle mgr purge

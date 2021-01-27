@@ -98,7 +98,7 @@ class HostMixin:
         """
         nodes = config.get("nodes", self.cluster.get_nodes())
         nodes = nodes if isinstance(nodes, list) else [nodes]
-        logger.info("Remove nodes : %s" % [node.ip_address for node in nodes])
+        logger.info("Remove nodes : %s", [node.ip_address for node in nodes])
 
         for node in nodes:
             # Skip Installer node and if it is already removed
@@ -130,8 +130,9 @@ class HostMixin:
         nodes = config.get("nodes", self.cluster.get_nodes())
         nodes = nodes if isinstance(nodes, list) else [nodes]
         logger.info(
-            "Attach label on this nodes : %s" % [node.ip_address for node in nodes]
+            "Attach label on this nodes : %s", [node.ip_address for node in nodes]
         )
+
         for node in nodes:
             if node.shortname not in self.fetch_host_names():
                 # Add host
@@ -169,7 +170,7 @@ class HostMixin:
         nodes = config.get("nodes", self.cluster.get_nodes())
         nodes = nodes if isinstance(nodes, list) else [nodes]
         logger.info(
-            "Remove label on this nodes : %s" % [node.ip_address for node in nodes]
+            "Remove label on this nodes : %s", [node.ip_address for node in nodes]
         )
 
         for node in nodes:
@@ -182,6 +183,7 @@ class HostMixin:
                     remote=self.installer,
                     args=["ceph", "orch", "host", "label", "rm", node.shortname, label],
                 )
+                # BZ-1920979(cephadm allows duplicate labels attachment to node)
                 # assert label not in self.fetch_labels_by_hostname(node.shortname)
 
     def set_address(self, **config):
@@ -201,7 +203,7 @@ class HostMixin:
         nodes = config.get("nodes", self.cluster.get_nodes())
         nodes = nodes if isinstance(nodes, list) else [nodes]
         logger.info(
-            "Set Address on this nodes : %s" % [node.ip_address for node in nodes]
+            "Set Address on this nodes : %s", [node.ip_address for node in nodes]
         )
         for node in nodes:
             if node.shortname not in self.fetch_host_names():

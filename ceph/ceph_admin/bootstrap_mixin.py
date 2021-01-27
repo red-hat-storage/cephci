@@ -28,8 +28,8 @@ class BootstrapMixin:
         self.install_cephadm()
 
         # Create and set permission to ceph directory
-        self.installer.exec_command(cmd="sudo mkdir -p /etc/ceph")
-        self.installer.exec_command(cmd="sudo chmod 777 /etc/ceph")
+        self.installer.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+        self.installer.exec_command(sudo=True, cmd="chmod 777 /etc/ceph")
 
         # Execute bootstrap with MON ip-address
         # Construct bootstrap command
@@ -37,7 +37,7 @@ class BootstrapMixin:
         # 2) Skip automatic dashboard provisioning
         cdn_cred = get_cephci_config().get("cdn_credentials")
 
-        cmd = "sudo cephadm -v "
+        cmd = "cephadm -v "
         if not self.config.get("registry") and self.config.get("container_image"):
             cmd += "--image {image} ".format(image=self.config.get("container_image"))
 
@@ -58,6 +58,7 @@ class BootstrapMixin:
         )
 
         out, err = self.installer.exec_command(
+            sudo=True,
             cmd=cmd,
             timeout=1800,
             check_ec=True,
