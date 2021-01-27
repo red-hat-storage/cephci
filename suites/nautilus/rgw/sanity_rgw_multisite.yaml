@@ -86,6 +86,6 @@ tests:
                 - name: "cephfs_metadata"
                   pgs: "8"
       desc: setup multisite cluster using ceph-ansible
-      destroy-cluster: false
+      destroy-cluster: true
       abort-on-fail: true
 
