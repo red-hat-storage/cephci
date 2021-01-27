@@ -64,6 +64,9 @@ def run(ceph_cluster, **kw):
     # add all hosts
     cephadm.manage_hosts()
 
+    # Add lables to the host
+    cephadm.label_host()
+
     # add all daemons
     cephadm.add_daemons()
 

@@ -224,6 +224,15 @@ class CephAdmin:
             # todo: add code for removing host
             raise NotImplementedError
 
+    def label_host(self):
+        "The function is to Add the labels to the nodes available depending on the ROLES"
+        for role in self.ROLES:
+            nodes = self.cluster.get_nodes(role=role)
+            if not nodes:
+                continue
+            for node in nodes:
+                self.shell(remote=self.installer, args=['ceph', 'orch', 'host', 'label', 'add', node.hostname, role])
+
     def add_daemons(self):
         """
         Add all demons from cluster configuration
