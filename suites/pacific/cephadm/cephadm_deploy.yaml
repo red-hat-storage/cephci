@@ -1,0 +1,30 @@
+tests:
+  - test:
+      name: install ceph pre-requisites
+      desc: installation of all pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: cephadm deployment
+      desc: cephadm cluster deployment
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        registry: false
+        deployment: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: cephadm shell execution
+      desc: cephadm commands execution
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        exec_shell:
+          - 'ceph orch ls'
+          - 'ceph orch ps'
+          - 'ceph orch host ls'
+          - 'ceph orch device ls'
+          - 'ceph status'
+      destroy-cluster: false
+      abort-on-fail: true

@@ -6,42 +6,90 @@ log = logging.getLogger(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    Runs cephadm deployment
+    Cephadm Bootstrap, Managing hosts with options and
+    full cluster deployment at single call are supported.
+
     Args:
         ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
+        kw: test data
+
+    The test data should be framed as per the below support,
+
+    - For full cluster deployment which includes below tasks and
+      returns after completion of cephadm.deploy,
+        - Enables ceph compose tool repo
+        - SSH keys exchange between nodes
+        - Bootstrap cluster
+        - Add all Hosts to cluster
+        - Add role services/daemons
+
+      for example.,
+        - test:
+            module: test_cephadm.py
+            config:
+              deployment: true
+
+    - Bootstrap cluster with default or custom image and
+      returns after cephadm.bootstrap. To use default image, set 'registry'.
+
+      for example.,
+        - test:
+            module: test_cephadm.py
+            config:
+              registry: false
+              bootstrap: true
+
+    - Manage host operations like,
+        - Add hosts with/without labels and IP address
+        - Add/Remove labels to/from existing node
+        - Set Address to node.
+        - Remove hosts
+
+        host_ops keys are definition names are defined under
+        CephAdmin.HostMixin should be used to call that respective method.
+
+        supported definition names for host_ops are host_add, attach_label,
+        remove_label, set_address and host_remove.
+
+        for example.,
+
+           - test:
+               module: test_cephadm.py
+               config:
+                 host_ops:
+                   host_add:
+                     nodes: ['node2']      # Node list
+                     add_label: true       # Set to attach labels to Node
+                     attach_address: true  # Set to attach Node address
+
     """
     log.info("Running test")
     log.info("Running cephadm test")
-    config = kw.get('config')
-    test_data = kw.get('test_data')
-    # base_url = config.get('base_url', None)
-    ceph_cluster.custom_config = test_data.get('custom-config')
-    ceph_cluster.custom_config_file = test_data.get('custom-config-file')
+    config = kw.get("config")
+    test_data = kw.get("test_data")
+    ceph_cluster.custom_config = test_data.get("custom-config")
+    ceph_cluster.custom_config_file = test_data.get("custom-config-file")
 
-    build = config.get('build', config.get('rhbuild'))
-    name = config.get('cluster_name', 'ceph')
-    # deploy = config.get('deploy', False)
-    exec_shell = config.get('exec_shell', False)
+    build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
 
-    if config.get('skip_setup') is True:
+    if config.get("skip_setup") is True:
         log.info("Skipping setup of ceph cluster")
         return 0
 
-    # get installer node
-    ceph_installer = ceph_cluster.get_ceph_object('installer')
-    cephadm = CephAdmin(name=name,
-                        ceph_cluster=ceph_cluster,
-                        ceph_installer=ceph_installer,
-                        **config)
+    # Get CephAdmin object
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
 
-    # Deployment-only
-    # if config.get('deployment'):
-    #     cephadm.deploy()
-    #     return 0
+    # Deployment-only option which deploys whole cluster
+    if config.get("deployment", False):
+        cephadm.deploy()
+        return 0
 
-    if exec_shell:
-        for cmd in exec_shell:
+    # Execute cephadm shell commands
+    if config.get("exec_shell", False):
+        commands = config.get("exec_shell")
+        ceph_installer = ceph_cluster.get_ceph_object("installer")
+        for cmd in commands:
             cmd = cmd if isinstance(cmd, list) else [cmd]
             cephadm.shell(
                 remote=ceph_installer,
@@ -49,22 +97,35 @@ def run(ceph_cluster, **kw):
             )
         return 0
 
-    # copy ssh keys to other hosts
-    ceph_cluster.setup_ssh_keys()
+    # Bootstrap cluster
+    if config.get("bootstrap", False):
+        cephadm.bootstrap()
 
-    # set tool download repository
-    cephadm.set_tool_repo()
+    # Manage hosts
+    if config.get("host_ops"):
+        host_ops = config.get("host_ops")
+        assert isinstance(host_ops, dict)
 
-    # install/download cephadm package on installer
-    cephadm.install_cephadm()
+        for op, config in host_ops.items():
 
-    # bootstrap cluster
-    cephadm.bootstrap()
+            hosts = config.pop("nodes", list())
+            hosts = hosts if isinstance(hosts, list) else [hosts]
 
-    # add all hosts
-    cephadm.manage_hosts()
+            # empty list wll pick all cluster nodes
+            if not hosts:
+                hosts = ceph_cluster.get_nodes()
+            else:
+                hosts = [
+                    node
+                    for node in ceph_cluster.get_nodes()
+                    for name in hosts
+                    if name in node.shortname
+                ]
 
-    # add all daemons
-    cephadm.add_daemons()
-
+            config["nodes"] = hosts
+            try:
+                func = getattr(cephadm, op)
+                func(**config)
+            except AttributeError:
+                raise NotImplementedError(f"Cls HostMixin Not implemented {op}")
     return 0

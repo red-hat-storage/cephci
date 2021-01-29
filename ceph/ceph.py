@@ -1912,43 +1912,6 @@ class CephInstaller(CephObject):
             logger.error(err.args)
         return False
 
-    def read_cephadm_gen_pub_key(self):
-        """
-        Read cephadm generated public key
-        Arg:
-            Installer node
-        Returns:
-            Public Key string
-        """
-        ceph_pub_key, _ = self.exec_command(cmd="sudo cat /etc/ceph/ceph.pub")
-        return ceph_pub_key.read().decode().strip()
-
-    def distribute_cephadm_gen_pub_key(self, ceph_cluster, nodes=None):
-        """
-        Distribute cephadm generated public key to all nodes in the list.
-        Args:
-            ceph_cluster: ceph cluster object
-            nodes: node list to add ceph public key(default: None)
-        """
-        ceph_pub_key = self.read_cephadm_gen_pub_key()
-
-        if nodes is None:
-            nodes = ceph_cluster.get_nodes()
-
-        nodes = nodes if isinstance(nodes, list) else [nodes]
-
-        for each_node in nodes:
-            each_node.exec_command(cmd="sudo install -d -m 0700 /root/.ssh")
-            keys_file = each_node.write_file(
-                sudo=True,
-                file_name='/root/.ssh/authorized_keys', file_mode='a'
-            )
-            keys_file.write(ceph_pub_key)
-            keys_file.flush()
-            each_node.exec_command(
-                cmd="sudo chmod 0600 /root/.ssh/authorized_keys"
-            )
-
 
 class CephObjectFactory(object):
     DEMON_ROLES = ['mon', 'osd', 'mgr', 'rgw', 'mds', 'nfs', 'grafana']
