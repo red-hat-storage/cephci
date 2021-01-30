@@ -165,6 +165,21 @@ def volume_cleanup(volume, osp_cred):
                     return 1
 
 
+def cleanup_ceph_vols(osp_cred):
+    '''
+    Added this function to cleanup stale volumes with status deleting, available, error, unknown, reserved
+    '''
+    vol_states = [ "deleting","available", "error", "unknown", "reserved" ]
+    driver = get_openstack_driver(osp_cred)
+    with parallel() as p:
+        for volume in driver.list_volumes():
+            if volume.state in vol_states:
+                log.info("volume with id:%s, name:%s has status:%s", volume.id, volume.name, volume.state)
+                p.spawn(volume_cleanup, volume, osp_cred)
+                sleep(1)
+    sleep(30)
+
+
 def keep_alive(ceph_nodes):
     for node in ceph_nodes:
         node.exec_command(cmd='uptime', check_ec=False)
