@@ -11,12 +11,14 @@ from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-from mita.openstack import CephVMNode
+from mita.v2 import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
+from utility.retry import retry
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
 
 log = logging.getLogger(__name__)
+RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 
 
 def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=None):
@@ -24,10 +26,12 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
     os_cred = osp_glbs.get("openstack-credentials")
     params = dict()
     ceph_cluster = cluster_conf.get("ceph-cluster")
+
     if ceph_cluster.get("inventory"):
         inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
         with open(inventory_path, "r") as inventory_stream:
             inventory = yaml.safe_load(inventory_stream)
+
     params["cloud-data"] = inventory.get("instance").get("setup")
     params["username"] = os_cred["username"]
     params["password"] = os_cred["password"]
@@ -46,23 +50,28 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
             params["image-name"] = (
                 inventory.get("instance").get("create").get("image-name")
             )
+
         params["cluster-name"] = ceph_cluster.get("name")
         params["vm-size"] = inventory.get("instance").get("create").get("vm-size")
         params["vm-network"] = inventory.get("instance").get("create").get("vm-network")
+
         if params.get("root-login") is False:
             params["root-login"] = False
         else:
             params["root-login"] = True
+
         with parallel() as p:
             for node in range(1, 100):
                 node = "node" + str(node)
                 if not ceph_cluster.get(node):
                     break
+
                 node_dict = ceph_cluster.get(node)
                 node_params = params.copy()
                 node_params["role"] = RolesContainer(node_dict.get("role"))
                 role = node_params["role"]
                 user = os.getlogin()
+
                 if instances_name:
                     node_params["node-name"] = "{}-{}-{}-{}-{}".format(
                         node_params.get("cluster-name", "ceph"),
@@ -79,20 +88,67 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
                         node,
                         "-".join(role),
                     )
+
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
                     node_params["size-of-disks"] = node_dict.get("disk-size")
+
                 if node_dict.get("image-name"):
                     node_params["image-name"] = node_dict.get("image-name")
+
                 if node_dict.get("cloud-data"):
                     node_params["cloud-data"] = node_dict.get("cloud-data")
+
                 p.spawn(setup_vm_node, node, ceph_nodes, **node_params)
+
     log.info("Done creating nodes")
     return ceph_nodes
 
 
+@retry(RETRY_EXCEPTIONS, tries=3, delay=10)
 def setup_vm_node(node, ceph_nodes, **params):
-    ceph_nodes[node] = CephVMNode(**params)
+    """
+    Create the VM node using OpenStack API calls.
+
+    The retry decorator will trigger a rerun when a soft error is encountered. The VM
+    node is removed in exception scope before throwing raising the exception again.
+    """
+    vm = None
+    try:
+        vm = CephVMNodeV2(
+            username=params["username"],
+            password=params["password"],
+            auth_url=params["auth-url"],
+            auth_version=params["auth-version"],
+            tenant_name=params["tenant-name"],
+            tenant_domain_id=params["tenant-domain-id"],
+            service_region=params["service-region"],
+            domain_name=params["domain"],
+        )
+
+        vm.create(
+            node_name=params["node-name"],
+            image_name=params["image-name"],
+            vm_size=params["vm-size"],
+            cloud_data=params["cloud-data"],
+            vm_network=params.get("network", None),
+            size_of_disks=params.get("size-of-disks", 0),
+            no_of_volumes=params.get("no-of-volumes", 0),
+        )
+
+        vm.role = params["role"]
+        vm.root_login = params["root-login"]
+        vm.keypair = params["keypair"]
+        ceph_nodes[node] = vm
+    except RETRY_EXCEPTIONS as retry_except:
+        log.warning(retry_except, exc_info=True)
+        if vm is not None:
+            vm.delete()
+
+        raise
+    except BaseException as be:  # noqa
+        log.error(be, exc_info=True)
+        raise
 
 
 def get_openstack_driver(yaml):
