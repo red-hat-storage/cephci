@@ -165,7 +165,7 @@ practices. We use
 
 ### black
 ```black_info
-# To install
+# Black is installed as part of cephci requirements. One can also install it
 $ python -m pip install black
 
 # formatting code with black
