@@ -16,14 +16,39 @@ import logging
 from time import sleep
 
 from ceph.ceph import CommandFailed
+from ceph.ceph_admin.alert_manager import AlertManager
 from ceph.ceph_admin.bootstrap_mixin import BootstrapMixin
+from ceph.ceph_admin.grafana import Grafana
 from ceph.ceph_admin.host_mixin import HostMixin
+from ceph.ceph_admin.iscsi import ISCSI
+from ceph.ceph_admin.manager import Manager
+from ceph.ceph_admin.metadataserver import MetaDataServer
+from ceph.ceph_admin.monitor import Monitor
+from ceph.ceph_admin.nfs import NFS
+from ceph.ceph_admin.node_exporter import NodeExporter
+from ceph.ceph_admin.osd import OSD
+from ceph.ceph_admin.prometheus import Prometheus
+from ceph.ceph_admin.radosgw import RadosGW
 from ceph.utils import get_disk_info
 
 logger = logging.getLogger(__name__)
 
 
-class CephAdmin(HostMixin, BootstrapMixin):
+class CephAdmin(
+    AlertManager,
+    BootstrapMixin,
+    Grafana,
+    HostMixin,
+    ISCSI,
+    Manager,
+    Monitor,
+    MetaDataServer,
+    NFS,
+    NodeExporter,
+    OSD,
+    Prometheus,
+    RadosGW,
+):
     """
     Ceph administrator base class which enables ceph pre-requisites
     and Inherits HostMixin and BootstrapMixin classes to support

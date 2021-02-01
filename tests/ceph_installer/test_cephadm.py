@@ -4,6 +4,42 @@ from ceph.ceph_admin import CephAdmin
 
 log = logging.getLogger(__name__)
 
+OP_MAP = {
+    "apply": {
+        "mon": "apply_mon",
+        "mgr": "apply_mgr",
+        "osd": "apply_osd",
+        "mds": "apply_mds",
+        "rgw": "apply_rgw",
+        "iscsi": "apply_iscsi",
+        "node-exporter": "apply_node_exporter",
+        "prometheus": "apply_prometheus",
+        "alert-manager": "apply_alert_manager",
+        "grafana": "apply_grafana",
+        "nfs": "apply_nfs",
+    },
+    "add": {
+        "mon": "daemon_add_mon",
+        "mgr": "daemon_add_mgr",
+        "osd": "daemon_add_osd",
+        "mds": "daemon_add_mds",
+        "rgw": "daemon_add_rgw",
+        "iscsi": "daemon_add_iscsi",
+        "node-exporter": "daemon_add_node_exporter",
+        "prometheus": "daemon_add_prometheus",
+        "alert-manager": "daemon_add_alert_manager",
+        "grafana": "daemon_add_grafana",
+        "nfs": "daemon_add_nfs",
+    },
+    "host": {
+        "add": "host_add",
+        "remove": "host_remove",
+        "add_label": "attach_label",
+        "remove_label": "remove_label",
+        "set_address": "set_address",
+    },
+}
+
 
 def run(ceph_cluster, **kw):
     """
