@@ -14,53 +14,62 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running test")
     log.info("Running ceph ansible test")
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
-    filestore = config.get('filestore', False)
-    k_and_m = config.get('ec-pool-k-m')
-    hotfix_repo = config.get('hotfix_repo')
-    test_data = kw.get('test_data')
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
+    filestore = config.get("filestore", False)
+    k_and_m = config.get("ec-pool-k-m")
+    hotfix_repo = config.get("hotfix_repo")
+    test_data = kw.get("test_data")
 
-    ubuntu_repo = config.get('ubuntu_repo', None)
-    base_url = config.get('base_url', None)
-    installer_url = config.get('installer_url', None)
-    mixed_lvm_configs = config.get('is_mixed_lvm_configs', None)
-    device_to_add = config.get('device', None)
-    config['ansi_config']['public_network'] = get_public_network(ceph_nodes[0])
-    ceph_cluster.ansible_config = config['ansi_config']
-    ceph_cluster.custom_config = test_data.get('custom-config')
-    ceph_cluster.custom_config_file = test_data.get('custom-config-file')
+    ubuntu_repo = config.get("ubuntu_repo", None)
+    base_url = config.get("base_url", None)
+    installer_url = config.get("installer_url", None)
+    mixed_lvm_configs = config.get("is_mixed_lvm_configs", None)
+    device_to_add = config.get("device", None)
+    config["ansi_config"]["public_network"] = get_public_network(ceph_nodes[0])
+    ceph_cluster.ansible_config = config["ansi_config"]
+    ceph_cluster.custom_config = test_data.get("custom-config")
+    ceph_cluster.custom_config_file = test_data.get("custom-config-file")
 
-    if all(key in ceph_cluster.ansible_config for key in ('rgw_multisite', 'rgw_zonesecondary')):
-        ceph_cluster_dict = kw.get('ceph_cluster_dict')
-        primary_node = 'ceph-rgw1'
-        primary_rgw_node = ceph_cluster_dict.get(primary_node).get_ceph_object('rgw').node
-        config['ansi_config']['rgw_pullhost'] = primary_rgw_node.ip_address
+    if all(
+        key in ceph_cluster.ansible_config
+        for key in ("rgw_multisite", "rgw_zonesecondary")
+    ):
+        ceph_cluster_dict = kw.get("ceph_cluster_dict")
+        primary_node = "ceph-rgw1"
+        primary_rgw_node = (
+            ceph_cluster_dict.get(primary_node).get_ceph_object("rgw").node
+        )
+        config["ansi_config"]["rgw_pullhost"] = primary_rgw_node.ip_address
 
-    ceph_cluster.use_cdn = config.get('use_cdn')
-    build = config.get('build', config.get('rhbuild'))
+    ceph_cluster.use_cdn = config.get("use_cdn")
+    build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
 
-    if config.get('skip_setup') is True:
+    if config.get("skip_setup") is True:
         log.info("Skipping setup of ceph cluster")
         return 0
 
-    test_data['install_version'] = build
+    test_data["install_version"] = build
 
-    ceph_installer = ceph_cluster.get_ceph_object('installer')
+    ceph_installer = ceph_cluster.get_ceph_object("installer")
     ansible_dir = ceph_installer.ansible_dir
 
     ceph_cluster.setup_ceph_firewall()
 
     ceph_cluster.setup_ssh_keys()
 
-    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo, build)
+    ceph_cluster.setup_packages(
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+    )
 
     ceph_installer.install_ceph_ansible(build)
-    hosts_file = ceph_cluster.generate_ansible_inventory(device_to_add, mixed_lvm_configs, filestore)
+    hosts_file = ceph_cluster.generate_ansible_inventory(
+        device_to_add, mixed_lvm_configs, filestore
+    )
     ceph_installer.write_inventory_file(hosts_file)
 
-    if config.get('docker-insecure-registry'):
+    if config.get("docker-insecure-registry"):
         ceph_cluster.setup_insecure_registry()
 
     # use the provided sample file as main site.yml
@@ -81,13 +90,15 @@ def run(ceph_cluster, **kw):
         file_name = "site-container.yml"
 
     out, rc = ceph_installer.exec_command(
-        cmd='cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {file_name}'
-            .format(ansible_dir=ansible_dir, file_name=file_name),
-        long_running=True)
+        cmd="cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {file_name}".format(
+            ansible_dir=ansible_dir, file_name=file_name
+        ),
+        long_running=True,
+    )
 
     # manually handle client creation in a containerized deployment (temporary)
     if ceph_cluster.containerized:
-        for node in ceph_cluster.get_ceph_objects('client'):
+        for node in ceph_cluster.get_ceph_objects("client"):
             log.info("Manually installing client node")
             node.exec_command(sudo=True, cmd="yum install -y ceph-common")
 
@@ -97,12 +108,16 @@ def run(ceph_cluster, **kw):
 
     # check if all osd's are up and in
     timeout = 300
-    if config.get('timeout'):
-        timeout = datetime.timedelta(seconds=config.get('timeout'))
+    if config.get("timeout"):
+        timeout = datetime.timedelta(seconds=config.get("timeout"))
     # add test_data for later use by upgrade test etc
-    num_osds = ceph_cluster.ceph_demon_stat['osd']
-    num_mons = ceph_cluster.ceph_demon_stat['mon']
-    test_data['ceph-ansible'] = {'num-osds': num_osds, 'num-mons': num_mons, 'rhbuild': build}
+    num_osds = ceph_cluster.ceph_demon_stat["osd"]
+    num_mons = ceph_cluster.ceph_demon_stat["mon"]
+    test_data["ceph-ansible"] = {
+        "num-osds": num_osds,
+        "num-mons": num_mons,
+        "rhbuild": build,
+    }
 
     # create rbd pool used by tests/workunits
     ceph_cluster.create_rbd_pool(k_and_m)

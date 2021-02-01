@@ -13,21 +13,21 @@ log = logger
 def run(ceph_cluster, **kw):
     try:
         start = timeit.default_timer()
-        tc = '11231'
-        dir_name = 'dir'
+        tc = "11231"
+        dir_name = "dir"
         log.info("Running cephfs %s test case" % (tc))
         fs_util = FsUtils(ceph_cluster)
-        config = kw.get('config')
-        build = config.get('build', config.get('rhbuild'))
+        config = kw.get("config")
+        build = config.get("build", config.get("rhbuild"))
         client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info("Got client info")
         else:
             raise CommandFailed("fetching client info failed")
-        client1 = [client_info['fuse_clients'][0]]
-        client2 = [client_info['fuse_clients'][1]]
-        client3 = [client_info['kernel_clients'][0]]
-        client4 = [client_info['kernel_clients'][1]]
+        client1 = [client_info["fuse_clients"][0]]
+        client2 = [client_info["fuse_clients"][1]]
+        client3 = [client_info["kernel_clients"][0]]
+        client4 = [client_info["kernel_clients"][1]]
 
         rc1 = fs_util.auth_list(client1)
         rc2 = fs_util.auth_list(client2)
@@ -39,8 +39,8 @@ def run(ceph_cluster, **kw):
         else:
             raise CommandFailed("auth list failed")
 
-        rc1 = fs_util.fuse_mount(client1, client_info['mounting_dir'])
-        rc2 = fs_util.fuse_mount(client2, client_info['mounting_dir'])
+        rc1 = fs_util.fuse_mount(client1, client_info["mounting_dir"])
+        rc2 = fs_util.fuse_mount(client2, client_info["mounting_dir"])
 
         if rc1 == 0 and rc2 == 0:
             log.info("Fuse mount passed")
@@ -48,60 +48,69 @@ def run(ceph_cluster, **kw):
             raise CommandFailed("Fuse mount failed")
 
         rc3 = fs_util.kernel_mount(
-            client3,
-            client_info['mounting_dir'],
-            client_info['mon_node_ip'])
+            client3, client_info["mounting_dir"], client_info["mon_node_ip"]
+        )
         rc4 = fs_util.kernel_mount(
-            client4,
-            client_info['mounting_dir'],
-            client_info['mon_node_ip'])
+            client4, client_info["mounting_dir"], client_info["mon_node_ip"]
+        )
         if rc3 == 0 and rc4 == 0:
             log.info("kernel mount passed")
         else:
             raise CommandFailed("kernel mount failed")
-        rc = fs_util.activate_multiple_mdss(client_info['mds_nodes'])
+        rc = fs_util.activate_multiple_mdss(client_info["mds_nodes"])
         if rc == 0:
             log.info("Activate multiple mdss successfully")
         else:
             raise CommandFailed("Activate multiple mdss failed")
         with parallel() as p:
-            p.spawn(fs_util.read_write_IO, client1,
-                    client_info['mounting_dir'], 'g', 'write')
-            p.spawn(fs_util.read_write_IO, client2,
-                    client_info['mounting_dir'], 'g', 'read')
+            p.spawn(
+                fs_util.read_write_IO,
+                client1,
+                client_info["mounting_dir"],
+                "g",
+                "write",
+            )
+            p.spawn(
+                fs_util.read_write_IO, client2, client_info["mounting_dir"], "g", "read"
+            )
             p.spawn(
                 fs_util.stress_io,
                 client2,
-                client_info['mounting_dir'],
-                '',
+                client_info["mounting_dir"],
+                "",
                 0,
                 1,
-                iotype='crefi',
+                iotype="crefi",
             )
             p.spawn(
                 fs_util.stress_io,
                 client3,
-                client_info['mounting_dir'],
+                client_info["mounting_dir"],
                 dir_name,
                 0,
                 1,
-                iotype='crefi'
+                iotype="crefi",
             )
-            p.spawn(fs_util.read_write_IO, client4,
-                    client_info['mounting_dir'], 'g', 'readwrite')
-            p.spawn(fs_util.read_write_IO, client3,
-                    client_info['mounting_dir'])
+            p.spawn(
+                fs_util.read_write_IO,
+                client4,
+                client_info["mounting_dir"],
+                "g",
+                "readwrite",
+            )
+            p.spawn(fs_util.read_write_IO, client3, client_info["mounting_dir"])
             for op in p:
                 return_counts, rc = op
-        result = fs_util.rc_verify('', return_counts)
-        if result == 'Data validation success':
+        result = fs_util.rc_verify("", return_counts)
+        if result == "Data validation success":
             print("Data validation success")
-            fs_util.activate_multiple_mdss(client_info['mds_nodes'])
+            fs_util.activate_multiple_mdss(client_info["mds_nodes"])
             log.info("Execution of Test case CEPH-%s started:" % (tc))
             for client in client1:
                 client.exec_command(
-                    cmd='sudo mkdir %s%s_{1..50}' %
-                        (client_info['mounting_dir'], dir_name))
+                    cmd="sudo mkdir %s%s_{1..50}"
+                    % (client_info["mounting_dir"], dir_name)
+                )
                 if client.node.exit_status == 0:
                     log.info("directories created succcessfully")
                 else:
@@ -112,273 +121,301 @@ def run(ceph_cluster, **kw):
                     client1,
                     1,
                     25,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
-                    0)
+                    0,
+                )
                 p.spawn(
                     fs_util.pinning,
                     client3,
                     26,
                     50,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
-                    1)
+                    1,
+                )
             with parallel() as p:
                 p.spawn(
                     fs_util.max_dir_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     1,
                     25,
-                    1000)
+                    1000,
+                )
                 p.spawn(
                     fs_util.max_dir_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     26,
                     50,
-                    1000)
+                    1000,
+                )
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio')
+                    iotype="fio",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['mon_node']:
+                    iotype="touch",
+                )
+                for node in client_info["mon_node"]:
                     p.spawn(fs_util.reboot, node)
 
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio')
+                    iotype="fio",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['mon_node']:
+                    iotype="touch",
+                )
+                for node in client_info["mon_node"]:
                     fs_util.network_disconnect(node)
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio')
+                    iotype="fio",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['mon_node']:
-                    fs_util.pid_kill(node, 'mon')
+                    iotype="touch",
+                )
+                for node in client_info["mon_node"]:
+                    fs_util.pid_kill(node, "mon")
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio')
+                    iotype="fio",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['osd_nodes']:
+                    iotype="touch",
+                )
+                for node in client_info["osd_nodes"]:
                     p.spawn(fs_util.reboot, node)
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio'),
+                    iotype="fio",
+                ),
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['osd_nodes']:
+                    iotype="touch",
+                )
+                for node in client_info["osd_nodes"]:
                     fs_util.network_disconnect(node)
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio')
+                    iotype="fio",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['osd_nodes']:
-                    fs_util.pid_kill(node, 'osd')
+                    iotype="touch",
+                )
+                for node in client_info["osd_nodes"]:
+                    fs_util.pid_kill(node, "osd")
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio'),
+                    iotype="fio",
+                ),
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['osd_nodes']:
+                    iotype="touch",
+                )
+                for node in client_info["osd_nodes"]:
                     fs_util.network_disconnect(node)
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
                     client1,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='fio')
+                    iotype="fio",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client2,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     10,
-                    iotype='dd')
+                    iotype="dd",
+                )
                 p.spawn(
                     fs_util.stress_io,
                     client3,
-                    client_info['mounting_dir'],
+                    client_info["mounting_dir"],
                     dir_name,
                     0,
                     500,
-                    iotype='touch')
-                for node in client_info['mon_node']:
-                    p.spawn(
-                        fs_util.daemon_systemctl,
-                        node,
-                        'mon',
-                        'restart')
+                    iotype="touch",
+                )
+                for node in client_info["mon_node"]:
+                    p.spawn(fs_util.daemon_systemctl, node, "mon", "restart")
             log.info("Execution of Test case CEPH-%s ended:" % (tc))
-            log.info('Cleaning up!-----')
-            if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
+            log.info("Cleaning up!-----")
+            if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
                 rc_client = fs_util.client_clean_up(
-                    client_info['fuse_clients'],
-                    client_info['kernel_clients'],
-                    client_info['mounting_dir'],
-                    'umount')
+                    client_info["fuse_clients"],
+                    client_info["kernel_clients"],
+                    client_info["mounting_dir"],
+                    "umount",
+                )
             else:
                 rc_client = fs_util.client_clean_up(
-                    client_info['fuse_clients'], '',
-                    client_info['mounting_dir'], 'umount')
-            rc_mds = fs_util.mds_cleanup(client_info['mds_nodes'], None)
+                    client_info["fuse_clients"],
+                    "",
+                    client_info["mounting_dir"],
+                    "umount",
+                )
+            rc_mds = fs_util.mds_cleanup(client_info["mds_nodes"], None)
             if rc_client == 0 and rc_mds == 0:
-                log.info('Cleaning up successfull')
+                log.info("Cleaning up successfull")
             else:
                 return 1
-            print('Script execution time:------')
+            print("Script execution time:------")
             stop = timeit.default_timer()
             total_time = stop - start
             mins, secs = divmod(total_time, 60)
@@ -389,21 +426,20 @@ def run(ceph_cluster, **kw):
     except CommandFailed as e:
         log.info(e)
         log.info(traceback.format_exc())
-        log.info('Cleaning up!-----')
-        if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
+        log.info("Cleaning up!-----")
+        if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
             rc = fs_util.client_clean_up(
-                client_info['fuse_clients'],
-                client_info['kernel_clients'],
-                client_info['mounting_dir'],
-                'umount')
+                client_info["fuse_clients"],
+                client_info["kernel_clients"],
+                client_info["mounting_dir"],
+                "umount",
+            )
         else:
             rc = fs_util.client_clean_up(
-                client_info['fuse_clients'],
-                '',
-                client_info['mounting_dir'],
-                'umount')
+                client_info["fuse_clients"], "", client_info["mounting_dir"], "umount"
+            )
         if rc == 0:
-            log.info('Cleaning up successfull')
+            log.info("Cleaning up successfull")
         return 1
 
     except Exception as e:

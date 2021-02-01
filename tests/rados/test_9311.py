@@ -42,12 +42,12 @@ def run(ceph_cluster, **kw):
     """
 
     log.info("Running test ceph-9311")
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
-    build = config.get('build', config.get('rhbuild'))
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
+    build = config.get("build", config.get("rhbuild"))
 
     mons = []
-    role = 'client'
+    role = "client"
 
     for mnode in ceph_nodes:
         if mnode.role == role:
@@ -58,26 +58,29 @@ def run(ceph_cluster, **kw):
 
     helper = RadosHelper(ctrlr, config, log)
 
-    '''Create an LRC profile'''
+    """Create an LRC profile"""
     sufix = random.randint(0, 10000)
     prof_name = "LRCprofile{suf}".format(suf=sufix)
-    if build.startswith('4'):
+    if build.startswith("4"):
         profile = "osd erasure-code-profile set {LRCprofile} plugin=lrc k=4 m=2 l=3 \
-            crush-failure-domain=osd".format(LRCprofile=prof_name)
+            crush-failure-domain=osd".format(
+            LRCprofile=prof_name
+        )
     else:
         profile = "osd erasure-code-profile set {LRCprofile} plugin=lrc k=4 m=2 l=3 \
-            ruleset-failure-domain=osd crush-failure-domain=osd".format(LRCprofile=prof_name)
+            ruleset-failure-domain=osd crush-failure-domain=osd".format(
+            LRCprofile=prof_name
+        )
     try:
         (out, err) = helper.raw_cluster_cmd(profile)
         outbuf = out.read().decode()
         log.info(outbuf)
-        log.info("created profile {LRCprofile}".format(
-            LRCprofile=prof_name))
+        log.info("created profile {LRCprofile}".format(LRCprofile=prof_name))
     except Exception:
         log.error("LRC profile creation failed")
         log.error(traceback.format_exc())
         return 1
-    '''create LRC ec pool'''
+    """create LRC ec pool"""
     pool_name = "lrcpool{suf}".format(suf=sufix)
     try:
         helper.create_pool(pool_name, 1, prof_name)
@@ -87,9 +90,9 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
 
-    ''' Bringdown 2 osds which contains a 'D' from both localities
+    """ Bringdown 2 osds which contains a 'D' from both localities
         we will be chosing osd at 2 and 7 from the given active set list
-    '''
+    """
     oname = "UNIQUEOBJECT{i}".format(i=random.randint(0, 10000))
     cmd = "osd map {pname} {obj} --format json".format(pname=pool_name, obj=oname)
     (out, err) = helper.raw_cluster_cmd(cmd)
@@ -99,33 +102,34 @@ def run(ceph_cluster, **kw):
     # targt_pg = cmdout['pgid']
     target_osds_ids = []
     for i in [2, 7]:
-        target_osds_ids.append(cmdout['up'][i])
+        target_osds_ids.append(cmdout["up"][i])
 
     # putobj = "sudo rados -p {pool} put {obj} {path}".format(
     #     pool=pool_name, obj=oname, path="/etc/hosts"
     # )
     for i in range(10):
         putobj = "sudo rados -p {pool} put {obj} {path}".format(
-            pool=pool_name, obj="{oname}{i}".format(oname=oname, i=i),
-            path="/etc/hosts"
+            pool=pool_name, obj="{oname}{i}".format(oname=oname, i=i), path="/etc/hosts"
         )
         (out, err) = ctrlr.exec_command(cmd=putobj)
-    '''Bringdown tosds'''
+    """Bringdown tosds"""
     osd_service_map_list = []
     for osd_id in target_osds_ids:
-        target_osd_hostname = ceph_cluster.get_osd_metadata(osd_id).get('hostname')
+        target_osd_hostname = ceph_cluster.get_osd_metadata(osd_id).get("hostname")
         target_osd_node = ceph_cluster.get_node_by_hostname(target_osd_hostname)
         osd_service = ceph_cluster.get_osd_service_name(osd_id)
-        osd_service_map_list.append({'osd_node': target_osd_node, 'osd_service': osd_service})
+        osd_service_map_list.append(
+            {"osd_node": target_osd_node, "osd_service": osd_service}
+        )
         helper.kill_osd(target_osd_node, osd_service)
         time.sleep(5)
 
         outbuf = "degrade"
         timeout = 10
         found = 0
-        status = '-s --format json'
+        status = "-s --format json"
         while timeout:
-            if 'active' not in outbuf:
+            if "active" not in outbuf:
                 (out, err) = helper.raw_cluster_cmd(status)
                 outbuf = out.read().decode()
                 time.sleep(1)
@@ -137,23 +141,25 @@ def run(ceph_cluster, **kw):
             log.error("cluster didn't become active+clean..timeout")
             return 1
 
-    '''check whether read/write can be done on the pool'''
+    """check whether read/write can be done on the pool"""
     for i in range(10):
         putobj = "sudo rados -p {pool} put {obj} {path}".format(
-            pool=pool_name, obj="{oname}{i}".format(oname=oname, i=i),
-            path="/etc/hosts"
+            pool=pool_name, obj="{oname}{i}".format(oname=oname, i=i), path="/etc/hosts"
         )
         (out, err) = ctrlr.exec_command(cmd=putobj)
         log.info(out.read().decode())
     for i in range(10):
         putobj = "sudo rados -p {pool} get {obj} {path}".format(
-            pool=pool_name, obj="{oname}{i}".format(oname=oname, i=i),
-            path="/tmp/{obj}{i}".format(obj=oname, i=i)
+            pool=pool_name,
+            obj="{oname}{i}".format(oname=oname, i=i),
+            path="/tmp/{obj}{i}".format(obj=oname, i=i),
         )
         (out, err) = ctrlr.exec_command(cmd=putobj)
         log.info(out.read().decode())
-    '''donewith the test ,revive osds'''
+    """donewith the test ,revive osds"""
     for osd_service_map in osd_service_map_list:
-        helper.revive_osd(osd_service_map.get('osd_node'), osd_service_map.get('osd_service'))
+        helper.revive_osd(
+            osd_service_map.get("osd_node"), osd_service_map.get("osd_service")
+        )
 
     return 0
