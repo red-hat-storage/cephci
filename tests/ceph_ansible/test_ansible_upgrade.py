@@ -12,36 +12,36 @@ log = logging.getLogger(__name__)
 
 def run(ceph_cluster, **kw):
     log.info("Running test")
-    ceph_nodes = kw.get('ceph_nodes')
+    ceph_nodes = kw.get("ceph_nodes")
     log.info("Running ceph ansible test")
-    config = kw.get('config')
-    test_data = kw.get('test_data')
-    prev_install_version = test_data['install_version']
-    skip_version_compare = config.get('skip_version_compare')
-    containerized = config.get('ansi_config').get('containerized_deployment')
-    build = config.get('build', config.get('rhbuild'))
+    config = kw.get("config")
+    test_data = kw.get("test_data")
+    prev_install_version = test_data["install_version"]
+    skip_version_compare = config.get("skip_version_compare")
+    containerized = config.get("ansi_config").get("containerized_deployment")
+    build = config.get("build", config.get("rhbuild"))
     log.info("Build for upgrade: {build}".format(build=build))
 
-    ubuntu_repo = config.get('ubuntu_repo')
-    hotfix_repo = config.get('hotfix_repo')
-    base_url = config.get('base_url')
-    installer_url = config.get('installer_url')
-    config['ansi_config']['public_network'] = get_public_network(ceph_nodes[0])
+    ubuntu_repo = config.get("ubuntu_repo")
+    hotfix_repo = config.get("hotfix_repo")
+    base_url = config.get("base_url")
+    installer_url = config.get("installer_url")
+    config["ansi_config"]["public_network"] = get_public_network(ceph_nodes[0])
 
-    ceph_cluster.ansible_config = config['ansi_config']
-    ceph_cluster.custom_config = test_data.get('custom-config')
-    ceph_cluster.custom_config_file = test_data.get('custom-config-file')
-    ceph_cluster.use_cdn = config.get('use_cdn')
+    ceph_cluster.ansible_config = config["ansi_config"]
+    ceph_cluster.custom_config = test_data.get("custom-config")
+    ceph_cluster.custom_config_file = test_data.get("custom-config-file")
+    ceph_cluster.use_cdn = config.get("use_cdn")
 
-    ceph_installer = ceph_cluster.get_ceph_object('installer')
-    ansible_dir = '/usr/share/ceph-ansible'
+    ceph_installer = ceph_cluster.get_ceph_object("installer")
+    ansible_dir = "/usr/share/ceph-ansible"
 
-    if config.get('skip_setup') is True:
+    if config.get("skip_setup") is True:
         log.info("Skipping setup of ceph cluster")
         return 0
 
     # set pre-upgrade install version
-    test_data['install_version'] = build
+    test_data["install_version"] = build
     log.info("Previous install version: {}".format(prev_install_version))
 
     # retrieve pre-upgrade versions and initialize container counts
@@ -49,36 +49,45 @@ def run(ceph_cluster, **kw):
     pre_upgrade_container_counts = {}
 
     # setup packages based on build
-    ceph_cluster.setup_packages(base_url, hotfix_repo, installer_url, ubuntu_repo, build)
+    ceph_cluster.setup_packages(
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+    )
 
     # backup existing hosts file and ansible config
-    ceph_installer.exec_command(cmd='cp {}/hosts /tmp/hosts'.format(ansible_dir))
-    ceph_installer.exec_command(cmd='cp {}/group_vars/all.yml /tmp/all.yml'.format(ansible_dir))
+    ceph_installer.exec_command(cmd="cp {}/hosts /tmp/hosts".format(ansible_dir))
+    ceph_installer.exec_command(
+        cmd="cp {}/group_vars/all.yml /tmp/all.yml".format(ansible_dir)
+    )
 
     # update ceph-ansible
     ceph_installer.install_ceph_ansible(build, upgrade=True)
 
     # restore hosts file
-    ceph_installer.exec_command(sudo=True, cmd='cp /tmp/hosts {}/hosts'.format(ansible_dir))
+    ceph_installer.exec_command(
+        sudo=True, cmd="cp /tmp/hosts {}/hosts".format(ansible_dir)
+    )
 
     # If upgrading from version 2 update hosts file with mgrs
-    if prev_install_version.startswith('2') and build.startswith('3'):
+    if prev_install_version.startswith("2") and build.startswith("3"):
         collocate_mons_with_mgrs(ceph_cluster, ansible_dir)
 
     # configure fetch directory path
-    if config.get('ansi_config').get('fetch_directory') is None:
-        config['ansi_config']['fetch_directory'] = '~/fetch/'
+    if config.get("ansi_config").get("fetch_directory") is None:
+        config["ansi_config"]["fetch_directory"] = "~/fetch/"
 
     # set the docker image tag if necessary
-    if containerized and config.get('ansi_config').get('docker-insecure-registry'):
-        config['ansi_config']['ceph_docker_image_tag'] = get_latest_container_image_tag(build)
-    log.info("gvar: {}".format(config.get('ansi_config')))
-    gvar = yaml.dump(config.get('ansi_config'), default_flow_style=False)
+    if containerized and config.get("ansi_config").get("docker-insecure-registry"):
+        config["ansi_config"]["ceph_docker_image_tag"] = get_latest_container_image_tag(
+            build
+        )
+    log.info("gvar: {}".format(config.get("ansi_config")))
+    gvar = yaml.dump(config.get("ansi_config"), default_flow_style=False)
 
     # create all.yml
     log.info("global vars {}".format(gvar))
     gvars_file = ceph_installer.write_file(
-        sudo=True, file_name='{}/group_vars/all.yml'.format(ansible_dir), file_mode='w')
+        sudo=True, file_name="{}/group_vars/all.yml".format(ansible_dir), file_mode="w"
+    )
     gvars_file.write(gvar)
     gvars_file.flush()
 
@@ -87,22 +96,32 @@ def run(ceph_cluster, **kw):
         pre_upgrade_container_counts = get_container_counts(ceph_cluster)
 
     # configure insecure registry if necessary
-    if config.get('docker-insecure-registry'):
+    if config.get("docker-insecure-registry"):
         ceph_cluster.setup_insecure_registry()
 
     # copy rolling update from infrastructure playbook
-    jewel_minor_update = build.startswith('2')
-    if build.startswith('4'):
-        cmd = 'cd {};' \
-              'ANSIBLE_STDOUT_CALLBACK=debug;' \
-              'ansible-playbook -e ireallymeanit=yes -vvvv -i'\
-              'hosts infrastructure-playbooks/rolling_update.yml'.format(ansible_dir)
+    jewel_minor_update = build.startswith("2")
+    if build.startswith("4"):
+        cmd = (
+            "cd {};"
+            "ANSIBLE_STDOUT_CALLBACK=debug;"
+            "ansible-playbook -e ireallymeanit=yes -vvvv -i"
+            "hosts infrastructure-playbooks/rolling_update.yml".format(ansible_dir)
+        )
     else:
         ceph_installer.exec_command(
-            sudo=True, cmd='cd {} ; cp infrastructure-playbooks/rolling_update.yml .'.format(ansible_dir))
-        cmd = 'cd {};' \
-              'ANSIBLE_STDOUT_CALLBACK=debug;' \
-              'ansible-playbook -e ireallymeanit=yes -vvvv -i hosts rolling_update.yml'.format(ansible_dir)
+            sudo=True,
+            cmd="cd {} ; cp infrastructure-playbooks/rolling_update.yml .".format(
+                ansible_dir
+            ),
+        )
+        cmd = (
+            "cd {};"
+            "ANSIBLE_STDOUT_CALLBACK=debug;"
+            "ansible-playbook -e ireallymeanit=yes -vvvv -i hosts rolling_update.yml".format(
+                ansible_dir
+            )
+        )
     if jewel_minor_update:
         cmd += " -e jewel_minor_update=true"
         log.info("Upgrade is jewel_minor_update, cmd: {cmd}".format(cmd=cmd))
@@ -114,13 +133,17 @@ def run(ceph_cluster, **kw):
 
     # set build to new version
     log.info("Setting install_version to {build}".format(build=build))
-    test_data['install_version'] = build
+    test_data["install_version"] = build
     ceph_cluster.rhcs_version = build
 
     # check if all mon's and osd's are in correct state
-    num_osds = ceph_cluster.ceph_demon_stat['osd']
-    num_mons = ceph_cluster.ceph_demon_stat['mon']
-    test_data['ceph-ansible'] = {'num-osds': num_osds, 'num-mons': num_mons, 'rhbuild': build}
+    num_osds = ceph_cluster.ceph_demon_stat["osd"]
+    num_mons = ceph_cluster.ceph_demon_stat["mon"]
+    test_data["ceph-ansible"] = {
+        "num-osds": num_osds,
+        "num-mons": num_mons,
+        "rhbuild": build,
+    }
 
     # compare pre and post upgrade versions
     if skip_version_compare:
@@ -128,19 +151,23 @@ def run(ceph_cluster, **kw):
     else:
         if not jewel_minor_update:
             post_upgrade_versions = get_ceph_versions(ceph_nodes, containerized)
-            version_compare_fail = compare_ceph_versions(pre_upgrade_versions, post_upgrade_versions)
+            version_compare_fail = compare_ceph_versions(
+                pre_upgrade_versions, post_upgrade_versions
+            )
             if version_compare_fail:
                 return version_compare_fail
 
     # compare pre and post upgrade container counts
     if containerized:
         post_upgrade_container_counts = get_container_counts(ceph_cluster)
-        container_count_fail = compare_container_counts(pre_upgrade_container_counts,
-                                                        post_upgrade_container_counts,
-                                                        prev_install_version)
+        container_count_fail = compare_container_counts(
+            pre_upgrade_container_counts,
+            post_upgrade_container_counts,
+            prev_install_version,
+        )
         if container_count_fail:
             return container_count_fail
-    return ceph_cluster.check_health(build, timeout=config.get('timeout', 300))
+    return ceph_cluster.check_health(build, timeout=config.get("timeout", 300))
 
 
 def compare_ceph_versions(pre_upgrade_versions, post_upgrade_versions):
@@ -156,8 +183,8 @@ def compare_ceph_versions(pre_upgrade_versions, post_upgrade_versions):
     """
     for name, version in pre_upgrade_versions.items():
         # skipping node-exporter version check as it not supported
-        if name != 'node-exporter':
-            if 'installer' not in name and post_upgrade_versions[name] == version:
+        if name != "node-exporter":
+            if "installer" not in name and post_upgrade_versions[name] == version:
                 log.error("Pre upgrade version matches post upgrade version")
                 log.error("{}: {} matches".format(name, version))
                 return 1
@@ -178,15 +205,23 @@ def get_container_counts(ceph_cluster):
     container_counts = {}
     for node in ceph_cluster.get_nodes(ignore="installer"):
         distro_info = node.distro_info
-        distro_ver = distro_info['VERSION_ID']
-        if distro_ver.startswith('8'):
-            out, rc = node.exec_command(sudo=True, cmd='podman ps | grep $(hostname) | wc -l')
+        distro_ver = distro_info["VERSION_ID"]
+        if distro_ver.startswith("8"):
+            out, rc = node.exec_command(
+                sudo=True, cmd="podman ps | grep $(hostname) | wc -l"
+            )
             # In ceph 4.2 onwards ceph-crash as new container got added
             # so decreasing that count to pass compare_container_count function
-            crash, rc = node.exec_command(sudo=True, cmd='podman ps |grep ceph-crash| wc -l')
+            crash, rc = node.exec_command(
+                sudo=True, cmd="podman ps |grep ceph-crash| wc -l"
+            )
         else:
-            out, rc = node.exec_command(sudo=True, cmd='docker ps | grep $(hostname) | wc -l')
-            crash, rc = node.exec_command(sudo=True, cmd='docker ps |grep ceph-crash| wc -l')
+            out, rc = node.exec_command(
+                sudo=True, cmd="docker ps | grep $(hostname) | wc -l"
+            )
+            crash, rc = node.exec_command(
+                sudo=True, cmd="docker ps |grep ceph-crash| wc -l"
+            )
         count = int(out.read().decode().rstrip())
         crash_count = int(crash.read().decode().rstrip())
         count -= crash_count
@@ -195,7 +230,9 @@ def get_container_counts(ceph_cluster):
     return container_counts
 
 
-def compare_container_counts(pre_upgrade_counts, post_upgrade_counts, prev_install_version):
+def compare_container_counts(
+    pre_upgrade_counts, post_upgrade_counts, prev_install_version
+):
     """
     Compare pre-upgrade and post-upgrade container counts.
 
@@ -212,9 +249,9 @@ def compare_container_counts(pre_upgrade_counts, post_upgrade_counts, prev_insta
     log.info("Post upgrade container counts: {}".format(post_upgrade_counts))
 
     for node, count in post_upgrade_counts.items():
-        if prev_install_version.startswith('2'):
+        if prev_install_version.startswith("2"):
             # subtract 1 since mgr containers are now collocated on mons
-            if '-mon' in node:
+            if "-mon" in node:
                 count -= 1
         if pre_upgrade_counts[node] != count:
             log.error("Mismatched container count post upgrade")
@@ -236,15 +273,19 @@ def collocate_mons_with_mgrs(ceph_cluster, ansible_dir):
     log.info("Adding mons as mgrs in hosts file")
     mon_nodes = [node for node in ceph_cluster.get_nodes(role="mon")]
     ceph_installer = ceph_cluster.get_nodes(role="installer")[0]
-    mgr_block = '\n[mgrs]\n'
+    mgr_block = "\n[mgrs]\n"
     for node in mon_nodes:
-        mgr_block += node.shortname + ' monitor_interface=' + node.eth_interface + '\n'
+        mgr_block += node.shortname + " monitor_interface=" + node.eth_interface + "\n"
 
-    host_file = ceph_installer.write_file(sudo=True, file_name='{}/hosts'.format(ansible_dir), file_mode='a')
+    host_file = ceph_installer.write_file(
+        sudo=True, file_name="{}/hosts".format(ansible_dir), file_mode="a"
+    )
     host_file.write(mgr_block)
     host_file.flush()
 
-    host_file = ceph_installer.write_file(sudo=True, file_name='{}/hosts'.format(ansible_dir), file_mode='r')
+    host_file = ceph_installer.write_file(
+        sudo=True, file_name="{}/hosts".format(ansible_dir), file_mode="r"
+    )
     host_contents = ""
     with host_file:
         for line in host_file:

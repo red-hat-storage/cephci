@@ -8,25 +8,24 @@ log = logging.getLogger(__name__)
 
 def run(**kw):
     log.info("Running radoslib test")
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
 
     mons = []
     osds = []
-    role = 'client'
+    role = "client"
     for mnode in ceph_nodes:
         if mnode.role == role:
             mons.append(mnode)
     for osd in ceph_nodes:
-        if osd.role == 'osd':
+        if osd.role == "osd":
             osds.append(osd)
 
     idx = 0
     mon = mons[idx]
     print(mon.hostname)
 
-    helper = RadosHelper(mon, config,
-                         log)
+    helper = RadosHelper(mon, config, log)
 
     """	try:
         Helper.create_pool("blabla1",4)

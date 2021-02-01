@@ -25,8 +25,8 @@ def create_xunit_results(suite_name, test_cases, run_dir):
     suite = TestSuite(suite_name)
 
     for tc in test_cases:
-        case = TestCase(tc['name'])
-        if tc['status'] != "Pass":
+        case = TestCase(tc["name"])
+        if tc["status"] != "Pass":
             case.result = Failure("test failed")
         suite.add_testcase(case)
 

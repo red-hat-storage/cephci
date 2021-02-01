@@ -18,14 +18,14 @@ from jinja_markdown import MarkdownExtension
 log = logging.getLogger(__name__)
 
 # variables
-mounting_dir = '/mnt/cephfs/'
+mounting_dir = "/mnt/cephfs/"
 clients = []
 md5sum_list1 = []
 md5sum_list2 = []
 fuse_clients = []
 kernel_clients = []
-mon_node = ''
-mon_node_ip = ''
+mon_node = ""
+mon_node_ip = ""
 mds_nodes = []
 md5sum_file_lock = []
 active_mdss = []
@@ -38,24 +38,32 @@ output = []
 def get_client_info(ceph_nodes, clients):
     log.info("Getting Clients")
     for node in ceph_nodes:
-        if node.role == 'client':
+        if node.role == "client":
             clients.append(node)
     # Identifying MON node
     for node in ceph_nodes:
-        if node.role == 'mon':
+        if node.role == "mon":
             mon_node = node
-            out, err = mon_node.exec_command(cmd='sudo hostname -I')
-            mon_node_ip = out.read().decode().rstrip('\n')
+            out, err = mon_node.exec_command(cmd="sudo hostname -I")
+            mon_node_ip = out.read().decode().rstrip("\n")
             break
     for node in ceph_nodes:
-        if node.role == 'mds':
+        if node.role == "mds":
             mds_nodes.append(node)
     for node in clients:
-        node.exec_command(cmd='sudo yum install -y attr')
+        node.exec_command(cmd="sudo yum install -y attr")
 
     fuse_clients = clients[0:2]  # seperating clients for fuse and kernel
     kernel_clients = clients[2:4]
-    return fuse_clients, kernel_clients, mon_node, mounting_dir, mds_nodes, md5sum_file_lock, mon_node_ip
+    return (
+        fuse_clients,
+        kernel_clients,
+        mon_node,
+        mounting_dir,
+        mds_nodes,
+        md5sum_file_lock,
+        mon_node_ip,
+    )
 
 
 # function for providing authorization to the clients from MON ndoe
@@ -64,21 +72,27 @@ def auth_list(clients, mon_node):
         log.info("Giving required permissions for clients from MON node:")
         mon_node.exec_command(
             cmd="sudo ceph auth get-or-create client.%s mon 'allow *' mds 'allow *, allow rw path=/' "
-                "osd 'allow rw pool=cephfs_data' -o /etc/ceph/ceph.client.%s.keyring" % (node.hostname, node.hostname))
+            "osd 'allow rw pool=cephfs_data' -o /etc/ceph/ceph.client.%s.keyring"
+            % (node.hostname, node.hostname)
+        )
         out, err = mon_node.exec_command(
-            sudo=True, cmd='cat /etc/ceph/ceph.client.%s.keyring' % (node.hostname))
+            sudo=True, cmd="cat /etc/ceph/ceph.client.%s.keyring" % (node.hostname)
+        )
         keyring = out.read().decode()
         key_file = node.write_file(
             sudo=True,
-            file_name='/etc/ceph/ceph.client.%s.keyring' % (node.hostname),
-            file_mode='w')
+            file_name="/etc/ceph/ceph.client.%s.keyring" % (node.hostname),
+            file_mode="w",
+        )
         key_file.write(keyring)
 
         key_file.flush()
 
-        node.exec_command(cmd="sudo chmod 644 /etc/ceph/ceph.client.%s.keyring" % (node.hostname))
+        node.exec_command(
+            cmd="sudo chmod 644 /etc/ceph/ceph.client.%s.keyring" % (node.hostname)
+        )
         # creating mounting directory
-        node.exec_command(cmd='sudo mkdir %s' % (mounting_dir))
+        node.exec_command(cmd="sudo mkdir %s" % (mounting_dir))
 
 
 # MOunting single FS with ceph-fuse
@@ -87,12 +101,14 @@ def fuse_mount(fuse_clients, mounting_dir):
         for client in fuse_clients:
             log.info("Creating mounting dir:")
             log.info("Mounting fs with ceph-fuse on client %s:" % (client.hostname))
-            client.exec_command(cmd="sudo ceph-fuse -n client.%s %s" % (client.hostname, mounting_dir))
-            out, err = client.exec_command(cmd='mount')
+            client.exec_command(
+                cmd="sudo ceph-fuse -n client.%s %s" % (client.hostname, mounting_dir)
+            )
+            out, err = client.exec_command(cmd="mount")
             mount_output = out.read().decode()
             mount_output.split()
             log.info("Checking if fuse mount is is passed of failed:")
-            if 'fuse' in mount_output:
+            if "fuse" in mount_output:
                 log.info("ceph-fuse mounting passed")
             else:
                 log.error("ceph-fuse mounting failed")
@@ -104,17 +120,20 @@ def fuse_mount(fuse_clients, mounting_dir):
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
     try:
         for client in kernel_clients:
-            out, err = client.exec_command(cmd='sudo ceph auth get-key client.%s' % (client.hostname))
-            secret_key = out.read().decode().rstrip('\n')
+            out, err = client.exec_command(
+                cmd="sudo ceph auth get-key client.%s" % (client.hostname)
+            )
+            secret_key = out.read().decode().rstrip("\n")
             mon_node_ip = mon_node_ip.replace(" ", "")
             client.exec_command(
-                cmd='sudo mount -t ceph %s:6789:/ %s -o name=%s,secret=%s' % (
-                    mon_node_ip, mounting_dir, client.hostname, secret_key))
-            out, err = client.exec_command(cmd='mount')
+                cmd="sudo mount -t ceph %s:6789:/ %s -o name=%s,secret=%s"
+                % (mon_node_ip, mounting_dir, client.hostname, secret_key)
+            )
+            out, err = client.exec_command(cmd="mount")
             mount_output = out.read().decode()
             mount_output.split()
             log.info("Checking if kernel mount is is passed of failed:")
-            if '%s:6789:/' % (mon_node_ip) in mount_output:
+            if "%s:6789:/" % (mon_node_ip) in mount_output:
                 log.info("kernel mount passed")
             else:
                 log.error("kernel mount failed")
@@ -129,9 +148,10 @@ def fuse_client_io(client, mounting_dir):
         rand_bs = random.randint(100, 300)
         log.info("Performing IOs on fuse-clients")
         client.exec_command(
-            cmd="sudo dd if=/dev/zero of=%snewfile_%s bs=%dM count=%d" %
-                (mounting_dir, client.hostname, rand_bs, rand_count),
-            long_running=True)
+            cmd="sudo dd if=/dev/zero of=%snewfile_%s bs=%dM count=%d"
+            % (mounting_dir, client.hostname, rand_bs, rand_count),
+            long_running=True,
+        )
     except Exception as e:
         log.error(e)
 
@@ -142,9 +162,10 @@ def kernel_client_io(client, mounting_dir):
         rand_bs = random.randint(100, 500)
         log.info("Performing IOs on kernel-clients")
         client.exec_command(
-            cmd="sudo dd if=/dev/zero of=%snewfile_%s bs=%dM count=%d" %
-                (mounting_dir, client.hostname, rand_bs, rand_count),
-            long_running=True)
+            cmd="sudo dd if=/dev/zero of=%snewfile_%s bs=%dM count=%d"
+            % (mounting_dir, client.hostname, rand_bs, rand_count),
+            long_running=True,
+        )
     except Exception as e:
         log.error(e)
 
@@ -154,7 +175,11 @@ def fuse_client_md5(fuse_clients, md5sum_list1):
         log.info("Calculating MD5 sums of files in fuse-clients:")
         for client in fuse_clients:
             md5sum_list1.append(
-                client.exec_command(cmd="sudo md5sum %s* | awk '{print $1}' " % (mounting_dir), long_running=True))
+                client.exec_command(
+                    cmd="sudo md5sum %s* | awk '{print $1}' " % (mounting_dir),
+                    long_running=True,
+                )
+            )
 
     except Exception as e:
         log.error(e)
@@ -165,7 +190,11 @@ def kernel_client_md5(kernel_clients, md5sum_list2):
         log.info("Calculating MD5 sums of files in kernel-clients:")
         for client in kernel_clients:
             md5sum_list2.append(
-                client.exec_command(cmd="sudo md5sum %s* | awk '{print $1}' " % (mounting_dir), long_running=True))
+                client.exec_command(
+                    cmd="sudo md5sum %s* | awk '{print $1}' " % (mounting_dir),
+                    long_running=True,
+                )
+            )
     except Exception as e:
         log.error(e)
 
@@ -189,22 +218,23 @@ finally:
     fcntl.lockf(f,fcntl.LOCK_UN)
             """
         to_lock_code = client.write_file(
-            sudo=True,
-            file_name='/home/cephuser/file_lock.py',
-            file_mode='w')
+            sudo=True, file_name="/home/cephuser/file_lock.py", file_mode="w"
+        )
         to_lock_code.write(to_lock_file)
         to_lock_code.flush()
         out, err = client.exec_command(cmd="sudo python /home/cephuser/file_lock.py")
         output = out.read().decode()
         output.split()
-        if 'Errno 11' in output:
+        if "Errno 11" in output:
             log.info("File locking achieved, data is not corrupted")
-        elif 'locking' in output:
+        elif "locking" in output:
             log.info("File locking achieved, data is not corrupted")
         else:
             log.error("Data is corrupted")
 
-        out, err = client.exec_command(cmd="sudo md5sum %sto_test_file_lock | awk '{print $1}'" % (mounting_dir))
+        out, err = client.exec_command(
+            cmd="sudo md5sum %sto_test_file_lock | awk '{print $1}'" % (mounting_dir)
+        )
 
         md5sum_file_lock.append(out.read().decode())
 
@@ -216,7 +246,9 @@ def activate_multiple_mdss(mds_nodes):
     try:
         log.info("Activating Multiple MDSs")
         for node in mds_nodes:
-            out1, err = node.exec_command(cmd="sudo ceph fs set cephfs allow_multimds true --yes-i-really-mean-it")
+            out1, err = node.exec_command(
+                cmd="sudo ceph fs set cephfs allow_multimds true --yes-i-really-mean-it"
+            )
             out2, err = node.exec_command(cmd="sudo ceph fs set cephfs max_mds 2")
             break
 
@@ -229,10 +261,14 @@ def mkdir_pinning(clients, range1, range2, dir_name, pin_val):
         log.info("Creating Directories and Pinning to MDS %s" % (pin_val))
         for client in clients:
             for num in range(range1, range2):
-                out, err = client.exec_command(cmd='sudo mkdir %s%s_%d' % (mounting_dir, dir_name, num))
-                if pin_val != '':
+                out, err = client.exec_command(
+                    cmd="sudo mkdir %s%s_%d" % (mounting_dir, dir_name, num)
+                )
+                if pin_val != "":
                     client.exec_command(
-                        cmd='sudo setfattr -n ceph.dir.pin -v %s %s%s_%d' % (pin_val, mounting_dir, dir_name, num))
+                        cmd="sudo setfattr -n ceph.dir.pin -v %s %s%s_%d"
+                        % (pin_val, mounting_dir, dir_name, num)
+                    )
                 else:
                     print("Pin val not given")
                 print(out.read().decode())
@@ -246,7 +282,7 @@ def allow_dir_fragmentation(mds_nodes):
     try:
         log.info("Allowing directorty fragmenation for splitting")
         for node in mds_nodes:
-            node.exec_command(cmd='sudo ceph fs set cephfs allow_dirfrags 1')
+            node.exec_command(cmd="sudo ceph fs set cephfs allow_dirfrags 1")
             break
     except Exception as e:
         log.error(e)
@@ -257,7 +293,7 @@ def mds_fail_over(mds_nodes):
         rand = random.randint(0, 1)
         for node in mds_nodes:
             log.info("Failing MDS %d" % (rand))
-            node.exec_command(cmd='sudo ceph mds fail %d' % (rand))
+            node.exec_command(cmd="sudo ceph mds fail %d" % (rand))
             break
 
     except Exception as e:
@@ -268,11 +304,13 @@ def pinned_dir_io(clients, mds_fail_over, num_of_files, range1, range2):
     try:
         log.info("Performing IOs and MDSfailovers on clients")
         for client in clients:
-            client.exec_command(cmd='sudo pip install crefi')
+            client.exec_command(cmd="sudo pip install crefi")
             for num in range(range1, range2):
-                if mds_fail_over != '':
+                if mds_fail_over != "":
                     mds_fail_over(mds_nodes)
-                out, err = client.exec_command(cmd='sudo crefi -n %d %sdir_%d' % (num_of_files, mounting_dir, num))
+                out, err = client.exec_command(
+                    cmd="sudo crefi -n %d %sdir_%d" % (num_of_files, mounting_dir, num)
+                )
                 rc = out.channel.recv_exit_status()
                 print(out.read().decode())
                 RC.append(rc)
@@ -325,7 +363,11 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
         URL where the log file can be viewed or None if the run_dir does not exist
     """
     if not os.path.isdir(run_dir):
-        log.error("Run directory '{run_dir}' does not exist, logs will not output to file.".format(run_dir=run_dir))
+        log.error(
+            "Run directory '{run_dir}' does not exist, logs will not output to file.".format(
+                run_dir=run_dir
+            )
+        )
         return None
     _root = logging.getLogger()
 
@@ -335,13 +377,17 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     close_and_remove_filehandlers()
     _handler = logging.FileHandler(test_logfile)
     _handler.setLevel(level)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     _handler.setFormatter(formatter)
     _root.addHandler(_handler)
 
     url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
-    run_dir_name = run_dir.split('/')[-1]
-    log_url = "{url_base}/{run_dir}/{log_name}".format(url_base=url_base, run_dir=run_dir_name, log_name=full_log_name)
+    run_dir_name = run_dir.split("/")[-1]
+    log_url = "{url_base}/{run_dir}/{log_name}".format(
+        url_base=url_base, run_dir=run_dir_name, log_name=full_log_name
+    )
 
     log.info("Completed log configuration")
     return log_url
@@ -402,10 +448,14 @@ def create_report_portal_session():
     Returns:
         The session object
     """
-    cfg = get_cephci_config()['report-portal']
+    cfg = get_cephci_config()["report-portal"]
 
     return ReportPortalServiceAsync(
-        endpoint=cfg['endpoint'], project=cfg['project'], token=cfg['token'], error_handler=error_handler)
+        endpoint=cfg["endpoint"],
+        project=cfg["project"],
+        token=cfg["token"],
+        error_handler=error_handler,
+    )
 
 
 def timestamp():
@@ -458,7 +508,7 @@ def get_latest_container_image_tag(version):
         str: Image tag of the latest compose for the given version
 
     """
-    image_tag = get_latest_container(version).get('docker_tag')
+    image_tag = get_latest_container(version).get("docker_tag")
     log.info("Found image tag: {image_tag}".format(image_tag=image_tag))
     return str(image_tag)
 
@@ -475,12 +525,17 @@ def get_latest_container(version):
         Container details dictionary with given format:
         {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
     """
-    url = 'http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json'.format(
-        version)
+    url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json".format(
+        version
+    )
     data = requests.get(url)
-    docker_registry, docker_tag = data.json()['repository'].split('/rh-osbs/rhceph:')
+    docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
     docker_image = "rh-osbs/rhceph"
-    return {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
+    return {
+        "docker_registry": docker_registry,
+        "docker_image": docker_image,
+        "docker_tag": docker_tag,
+    }
 
 
 def custom_ceph_config(suite_config, custom_config, custom_config_file):
@@ -513,14 +568,14 @@ def custom_ceph_config(suite_config, custom_config, custom_config_file):
 
     # format cli configs into dict
     if custom_config:
-        cli_config_dict = dict(item.split('=') for item in custom_config)
+        cli_config_dict = dict(item.split("=") for item in custom_config)
 
     # combine file and cli configs
     if cli_config_dict:
-        if not custom_config_dict.get('global'):
-            custom_config_dict['global'] = {}
+        if not custom_config_dict.get("global"):
+            custom_config_dict["global"] = {}
         for key, value in cli_config_dict.items():
-            custom_config_dict['global'][key] = value
+            custom_config_dict["global"][key] = value
 
     # combine file and suite configs
     for key, value in custom_config_dict.items():
@@ -553,12 +608,12 @@ def email_results(test_result):
         send_to_cephci (optional [bool]): send to cephci@redhat.com as well as user email
     Returns: None
     """
-    cfg = get_cephci_config().get('email')
+    cfg = get_cephci_config().get("email")
     if not cfg:
         return
     sender = "cephci@redhat.com"
     recipients = []
-    address = cfg.get('address')
+    address = cfg.get("address")
     send_to_cephci = test_result.get("send_to_cephci", False)
     try:
         run_id = test_result["run_id"]
@@ -568,11 +623,13 @@ def email_results(test_result):
         exit(1)
 
     if cfg and address:
-        recipients = re.split(r",\s*", cfg['address'])
+        recipients = re.split(r",\s*", cfg["address"])
     if address.count("@") != len(recipients):
-        log.warning("No email address configured in ~/.cephci.yaml."
-                    "Or please specify in this format eg., address: email1, email2.......emailn"
-                    "Please configure if you would like to receive run result emails.")
+        log.warning(
+            "No email address configured in ~/.cephci.yaml."
+            "Or please specify in this format eg., address: email1, email2.......emailn"
+            "Please configure if you would like to receive run result emails."
+        )
 
     if send_to_cephci:
         recipients.append(sender)
@@ -580,17 +637,22 @@ def email_results(test_result):
 
     if recipients:
         run_name = "cephci-run-{id}".format(id=run_id)
-        msg = MIMEMultipart('alternative')
+        msg = MIMEMultipart("alternative")
         run_status = get_run_status(results_list)
-        msg['Subject'] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
-            suite=results_list[0]['suite-name'], compose=results_list[0]['compose-id'],
-            run_status=run_status, id=run_id)
-        msg['From'] = sender
-        msg['To'] = ", ".join(recipients)
+        msg[
+            "Subject"
+        ] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
+            suite=results_list[0]["suite-name"],
+            compose=results_list[0]["compose-id"],
+            run_status=run_status,
+            id=run_id,
+        )
+        msg["From"] = sender
+        msg["To"] = ", ".join(recipients)
 
-        test_result['run_name'] = run_name
+        test_result["run_name"] = run_name
         html = create_html_file(test_result=test_result)
-        part1 = MIMEText(html, 'html')
+        part1 = MIMEText(html, "html")
         msg.attach(part1)
         props_content = f"""
 run_status=\"{run_status}\"
@@ -601,10 +663,14 @@ suite=\"{results_list[0]['suite-name']}\"
         abs_path = os.path.join(os.getcwd(), "result.props")
         write_to_file(data=props_content.strip(), abs_path=abs_path)
         try:
-            s = smtplib.SMTP('localhost')
+            s = smtplib.SMTP("localhost")
             s.sendmail(sender, recipients, msg.as_string())
             s.quit()
-            log.info("Results have been emailed to {recipients}".format(recipients=recipients))
+            log.info(
+                "Results have been emailed to {recipients}".format(
+                    recipients=recipients
+                )
+            )
 
         except Exception as e:
             print("\n")
@@ -627,34 +693,39 @@ def create_html_file(test_result) -> str:
     """
 
     try:
-        run_name = test_result['run_name']
+        run_name = test_result["run_name"]
         trigger_user = test_result["trigger_user"]
         run_dir = test_result["run_directory"]
-        suite_run_time = test_result['total_time']
-        info = test_result['info']
+        suite_run_time = test_result["total_time"]
+        info = test_result["info"]
         test_results = test_result["result"]
     except KeyError as kerr:
         log.error(f"Key not found : {kerr}")
         exit(1)
 
-    log_link = "http://magna002.ceph.redhat.com/cephci-jenkins/{run}/".format(run=run_name)
+    log_link = "http://magna002.ceph.redhat.com/cephci-jenkins/{run}/".format(
+        run=run_name
+    )
     info["link"] = f"{log_link}/startup.log"
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    template_dir = os.path.join(project_dir, 'templates')
+    template_dir = os.path.join(project_dir, "templates")
 
-    jinja_env = Environment(extensions=[MarkdownExtension],
-                            loader=FileSystemLoader(template_dir),
-                            autoescape=select_autoescape(['html', 'xml'])
-                            )
+    jinja_env = Environment(
+        extensions=[MarkdownExtension],
+        loader=FileSystemLoader(template_dir),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
 
-    template = jinja_env.get_template('result-email-template.html')
+    template = jinja_env.get_template("result-email-template.html")
 
-    html = template.render(run_name=run_name,
-                           log_link=log_link,
-                           test_results=test_results,
-                           suite_run_time=suite_run_time,
-                           trigger_user=trigger_user,
-                           info=info)
+    html = template.render(
+        run_name=run_name,
+        log_link=log_link,
+        test_results=test_results,
+        suite_run_time=suite_run_time,
+        trigger_user=trigger_user,
+        info=info,
+    )
 
     abs_path = os.path.join(run_dir, "result.html")
     write_to_file(data=html, abs_path=abs_path)
@@ -693,8 +764,10 @@ def get_cephci_config():
         with open(cfg_file, "r") as yml:
             cfg = yaml.safe_load(yml)
     except IOError:
-        log.error("Please create ~/.cephci.yaml from the cephci.yaml.template. "
-                  "See README for more information.")
+        log.error(
+            "Please create ~/.cephci.yaml from the cephci.yaml.template. "
+            "See README for more information."
+        )
         raise
     return cfg
 
@@ -704,8 +777,8 @@ def get_run_status(results_list):
     Returns overall run status either Pass or Fail.
     """
     for tc in results_list:
-        if tc['status'] == 'Failed':
+        if tc["status"] == "Failed":
             return "FAILED"
-        if tc['status'] == 'Not Executed':
+        if tc["status"] == "Not Executed":
             return "SETUP-FAILURE"
     return "PASSED"

@@ -25,11 +25,11 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running bz-1829646")
     log.info(run.__doc__)
-    ceph_nodes = kw.get('ceph_nodes')
+    ceph_nodes = kw.get("ceph_nodes")
     mons = []
     osds = []
     osd_list_dict = dict()
-    config = kw.get('config')
+    config = kw.get("config")
 
     # The OSD back filling/Recovery can take up a lot of time...
     # time the method waits for the recovery to complete
@@ -39,14 +39,14 @@ def run(ceph_cluster, **kw):
     # time interval at which the status of the cluster will be checked regularly for recovery completion
     recovery_wait_time = 60 * 3
     # number of OSD's to be brought down during test execution
-    osd_down_no = config.get('osd_count', 1)
+    osd_down_no = config.get("osd_count", 1)
     # selection for node or daemon to be brought down
-    osd_node_bring_down = config.get('non_scale_setup', True)
+    osd_node_bring_down = config.get("non_scale_setup", True)
 
     for node in ceph_nodes:
-        if node.role == 'mon':
+        if node.role == "mon":
             mons.append(node)
-        if node.role == 'osd':
+        if node.role == "osd":
             osds.append(node)
 
     controller = mons[0]
@@ -55,11 +55,15 @@ def run(ceph_cluster, **kw):
 
     # collecting the osd daemons present on the OSD node
     for node in osds:
-        osd_list_dict[node] = helper.collect_osd_daemon_ids(mon_node=controller, osd_node=node)
+        osd_list_dict[node] = helper.collect_osd_daemon_ids(
+            mon_node=controller, osd_node=node
+        )
 
     # collecting the initial size of the Mon DB and the OSD map epoch times
     mon_db_initial_size = get_mon_db_size(mon_node=controller)
-    osd_map_initial_epoch_times = get_status_from_ceph_report(mon_node=controller, operation='osdmap')
+    osd_map_initial_epoch_times = get_status_from_ceph_report(
+        mon_node=controller, operation="osdmap"
+    )
     log.info(f"Size of the MonDB before bringing down OSD's is {mon_db_initial_size}")
     log.info(f"the first and last commits to DB : {osd_map_initial_epoch_times}")
 
@@ -70,58 +74,83 @@ def run(ceph_cluster, **kw):
     if osd_node_bring_down:
         for node in random_osd_nodes:
             log.info(f"Randomly selected node : {node.hostname} ")
-            change_osd_daemon_status(osd_node=node, task='stop')
+            change_osd_daemon_status(osd_node=node, task="stop")
     else:
         for node in random_osd_nodes:
             random_osd_daemon = random.choice(osd_list_dict[node])
-            log.info(f"Randomly selected node : {node.hostname} "
-                     f"from which OSD ID :{random_osd_daemon} will be stopped")
-            change_osd_daemon_status(osd_node=node, osd_number=random_osd_daemon, task='stop')
+            log.info(
+                f"Randomly selected node : {node.hostname} "
+                f"from which OSD ID :{random_osd_daemon} will be stopped"
+            )
+            change_osd_daemon_status(
+                osd_node=node, osd_number=random_osd_daemon, task="stop"
+            )
             osd_down_dictionary[node] = random_osd_daemon
 
-    print("sleeping for 2 minutes so that OSD down is recorded and recovery process is started")
+    print(
+        "sleeping for 2 minutes so that OSD down is recorded and recovery process is started"
+    )
     time.sleep(120)
 
     recovery_start_time = time.time()
     mon_db_size_list = []
     while time_limit_for_recovery:
         # collecting the health status to check the status about the recovery process
-        ceph_health_status = get_status_from_ceph_report(mon_node=controller, operation='health')
-        recovery_tuple = ('OSD_DOWN', 'PG_AVAILABILITY', 'PG_DEGRADED')
+        ceph_health_status = get_status_from_ceph_report(
+            mon_node=controller, operation="health"
+        )
+        recovery_tuple = ("OSD_DOWN", "PG_AVAILABILITY", "PG_DEGRADED")
         mon_db_size_list.append(get_mon_db_size(mon_node=controller))
-        if not any(key in ceph_health_status['checks'].keys() for key in recovery_tuple):
+        if not any(
+            key in ceph_health_status["checks"].keys() for key in recovery_tuple
+        ):
             log.info("The recovery and back-filling of the OSD is completed")
             log.info(
-                f"Sleeping {mon_db_trim_time / 60} minutes after the recovery for trimming of the MonDB to complete")
+                f"Sleeping {mon_db_trim_time / 60} minutes after the recovery for trimming of the MonDB to complete"
+            )
             time.sleep(mon_db_trim_time)
             mon_db_size_list.append(get_mon_db_size(mon_node=controller))
             time.sleep(mon_db_trim_time)
             break
         time_limit_for_recovery -= recovery_wait_time
-        log.info(f"The recovery and back-filling of the OSD is not completed / In-progress \n"
-                 f"Time elapsed since recovery start : {(time.time() - recovery_start_time) / 60} Minutes\n"
-                 f"checking the status of cluster recovery again in {recovery_wait_time / 60} minutes\n"
-                 f"Time remaining for process completion : {time_limit_for_recovery / 60} minutes")
+        log.info(
+            f"The recovery and back-filling of the OSD is not completed / In-progress \n"
+            f"Time elapsed since recovery start : {(time.time() - recovery_start_time) / 60} Minutes\n"
+            f"checking the status of cluster recovery again in {recovery_wait_time / 60} minutes\n"
+            f"Time remaining for process completion : {time_limit_for_recovery / 60} minutes"
+        )
         time.sleep(recovery_wait_time)
 
     # collecting the final size of the Mon DB and the OSD map epoch times
     mon_db_final_size = get_mon_db_size(mon_node=controller)
-    log.info(f"the size of the cluster DB after the OSD recovery : {mon_db_final_size} ")
-    osd_map_final_epoch_times = get_status_from_ceph_report(mon_node=controller, operation='osdmap')
+    log.info(
+        f"the size of the cluster DB after the OSD recovery : {mon_db_final_size} "
+    )
+    osd_map_final_epoch_times = get_status_from_ceph_report(
+        mon_node=controller, operation="osdmap"
+    )
     max_mon_db_size_reached = max(mon_db_size_list)
-    log.info(f"the Maximum size of the cluster DB during the OSD recovery : {max_mon_db_size_reached} ")
-    log.debug(f"the first and last commits to DB after recovery: {osd_map_initial_epoch_times}")
+    log.info(
+        f"the Maximum size of the cluster DB during the OSD recovery : {max_mon_db_size_reached} "
+    )
+    log.debug(
+        f"the first and last commits to DB after recovery: {osd_map_initial_epoch_times}"
+    )
 
     # starting the stopped OSD
     if osd_node_bring_down:
         for node in random_osd_nodes:
             log.info(f"starting the OSD node {node.hostname}")
-            change_osd_daemon_status(osd_node=node, task='start')
+            change_osd_daemon_status(osd_node=node, task="start")
             time.sleep(5)
     else:
         for node in osd_down_dictionary.keys():
-            log.info(f"starting the OSD ID : {osd_down_dictionary[node]} on node {node.hostname}")
-            change_osd_daemon_status(osd_node=node, osd_number=osd_down_dictionary[node], task='start')
+            log.info(
+                f"starting the OSD ID : {osd_down_dictionary[node]} on node {node.hostname}"
+            )
+            change_osd_daemon_status(
+                osd_node=node, osd_number=osd_down_dictionary[node], task="start"
+            )
             time.sleep(5)
 
     flag_db_size = 0
@@ -129,18 +158,30 @@ def run(ceph_cluster, **kw):
     max_size_increase = abs(max_mon_db_size_reached - mon_db_initial_size)
     final_size_change = abs(mon_db_final_size - mon_db_initial_size)
     if max_size_increase > final_size_change:
-        log.info(f"The monDB map was trimmed by : {abs(max_size_increase - final_size_change)}")
+        log.info(
+            f"The monDB map was trimmed by : {abs(max_size_increase - final_size_change)}"
+        )
     else:
-        log.error(f"The monDB was not trimmed. The size is equal or more :{abs(max_size_increase - final_size_change)}")
+        log.error(
+            f"The monDB was not trimmed. The size is equal or more :{abs(max_size_increase - final_size_change)}"
+        )
         flag_db_size = 1
 
     # checking the OSD map, if the old mappings were updated.
-    initial_epoch_time_difference =\
-        osd_map_initial_epoch_times['osdmap_last_committed'] - osd_map_initial_epoch_times['osdmap_first_committed']
-    log.debug(f"The initial difference in the osd maps is : {initial_epoch_time_difference}")
-    final_epoch_time_difference = \
-        osd_map_final_epoch_times['osdmap_last_committed'] - osd_map_final_epoch_times['osdmap_first_committed']
-    log.debug(f"The Final difference in the osd maps is : {final_epoch_time_difference}")
+    initial_epoch_time_difference = (
+        osd_map_initial_epoch_times["osdmap_last_committed"]
+        - osd_map_initial_epoch_times["osdmap_first_committed"]
+    )
+    log.debug(
+        f"The initial difference in the osd maps is : {initial_epoch_time_difference}"
+    )
+    final_epoch_time_difference = (
+        osd_map_final_epoch_times["osdmap_last_committed"]
+        - osd_map_final_epoch_times["osdmap_first_committed"]
+    )
+    log.debug(
+        f"The Final difference in the osd maps is : {final_epoch_time_difference}"
+    )
 
     flag_osd_map = 1 if final_epoch_time_difference > 800 else 0
 
@@ -157,12 +198,14 @@ def get_mon_db_size(mon_node):
     """
 
     cmd = f"sudo du -ch /var/lib/ceph/mon/ceph-{mon_node.hostname}"
-    log.info(f"Collecting the size of the DB on node: {mon_node.hostname} by executing the command : {cmd}")
+    log.info(
+        f"Collecting the size of the DB on node: {mon_node.hostname} by executing the command : {cmd}"
+    )
     out, err = mon_node.exec_command(cmd=cmd)
     output = out.read().decode()
-    regex = r'\s*([\d]*)[M|G]\s+[\w\W]*store.db'
+    regex = r"\s*([\d]*)[M|G]\s+[\w\W]*store.db"
     match = re.search(regex, output)
-    size = match.groups()[0] if match else exit('could not collect the size of DB')
+    size = match.groups()[0] if match else exit("could not collect the size of DB")
     log.debug(f"the size of the cluster DB is {int(size)}")
     return int(size)
 
@@ -179,18 +222,20 @@ def get_status_from_ceph_report(mon_node, operation=None):
     """
 
     cmd = r"sudo ceph report -f=json-pretty"
-    log.info(f"Collecting the status of the cluster from node: {mon_node.hostname} by executing the command : {cmd}")
+    log.info(
+        f"Collecting the status of the cluster from node: {mon_node.hostname} by executing the command : {cmd}"
+    )
     out, err = mon_node.exec_command(cmd=cmd)
     output = out.read().decode()
     status_json = json.loads(output)
-    if operation.lower() == 'osdmap':
+    if operation.lower() == "osdmap":
         status_dict = {
             "osdmap_first_committed": status_json["osdmap_first_committed"],
             "osdmap_last_committed": status_json["osdmap_last_committed"],
         }
         log.debug(f"the OSD maps collected are : {str(status_dict)} ")
-    elif operation.lower() == 'health':
-        status_dict = status_json['health']
+    elif operation.lower() == "health":
+        status_dict = status_json["health"]
         log.debug(f"the health status of the cluster is : {str(status_dict)} ")
     else:
         status_dict = status_json
@@ -211,9 +256,13 @@ def change_osd_daemon_status(osd_node, task, osd_number=None):
     log.info(f"inside method to {task} the OSD(s) on the node : {osd_node.hostname}")
     if osd_number:
         cmd = f"sudo systemctl {task} ceph-osd@{osd_number}"
-        log.debug(f"{task}ing OSD daemon ID {osd_number} on node {osd_node.hostname} by executing the command : {cmd}")
+        log.debug(
+            f"{task}ing OSD daemon ID {osd_number} on node {osd_node.hostname} by executing the command : {cmd}"
+        )
     else:
         cmd = f"sudo systemctl {task} ceph-osd.target"
-        log.debug(f"{task}ing all OSD daemons on node {osd_node.hostname} by executing the command : {cmd}")
+        log.debug(
+            f"{task}ing all OSD daemons on node {osd_node.hostname} by executing the command : {cmd}"
+        )
     osd_node.exec_command(cmd=cmd)
     return None
