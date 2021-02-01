@@ -1,4 +1,4 @@
-''' Purges the Ceph the cluster'''
+""" Purges the Ceph the cluster"""
 
 import logging
 from time import sleep
@@ -26,18 +26,18 @@ def run(**kw):
     :return: 0 on sucess, non-zero for failures
     """
     log.info("Running test")
-    ceph_nodes = kw.get('ceph_nodes')
+    ceph_nodes = kw.get("ceph_nodes")
     iscsi_clients_node = None
     installer_node = None
-    ansible_dir = '/usr/share/ceph-ansible'
-    inventory = 'hosts'
+    ansible_dir = "/usr/share/ceph-ansible"
+    inventory = "hosts"
     playbook_command = "purge-cluster.yml --extra-vars 'ireallymeanit=yes'"
-    config = kw.get('config')
-    build = config.get('build', config.get('rhbuild'))
+    config = kw.get("config")
+    build = config.get("build", config.get("rhbuild"))
     if config:
-        ansible_dir = config.get('ansible-dir', ansible_dir)
-        inventory = config.get('inventory', inventory)
-        playbook_command = config.get('playbook-command', playbook_command)
+        ansible_dir = config.get("ansible-dir", ansible_dir)
+        inventory = config.get("inventory", inventory)
+        playbook_command = config.get("playbook-command", playbook_command)
 
     for ceph in ceph_nodes:
         if ceph.role == "installer":
@@ -51,27 +51,37 @@ def run(**kw):
     log.info("Purge Ceph cluster")
 
     if iscsi_clients_node:
-        iscsi_clients_node.exec_command(sudo=True, cmd='yum remove -y iscsi-initiator-utils')
-        iscsi_clients_node.exec_command(sudo=True, cmd='yum remove -y device-mapper-multipath')
+        iscsi_clients_node.exec_command(
+            sudo=True, cmd="yum remove -y iscsi-initiator-utils"
+        )
+        iscsi_clients_node.exec_command(
+            sudo=True, cmd="yum remove -y device-mapper-multipath"
+        )
 
-    playbook_regex = re.search('(purge-.*?\\.yml)(.*)', playbook_command)
+    playbook_regex = re.search("(purge-.*?\\.yml)(.*)", playbook_command)
     playbook = playbook_regex.group(1)
     playbook_options = playbook_regex.group(2)
 
     # Set ansible deprecation warning to false
-    installer_node.exec_command(cmd='export ANSIBLE_DEPRECATION_WARNINGS=False')
+    installer_node.exec_command(cmd="export ANSIBLE_DEPRECATION_WARNINGS=False")
 
     # Based on RHCS version choosing how purge playbook needs to be executed
-    if not build.startswith('4'):
-        installer_node.exec_command(sudo=True,
-                                    cmd='cd {ansible_dir};cp {ansible_dir}/infrastructure-playbooks/{playbook} .'
-                                    .format(ansible_dir=ansible_dir, playbook=playbook))
+    if not build.startswith("4"):
+        installer_node.exec_command(
+            sudo=True,
+            cmd="cd {ansible_dir};cp {ansible_dir}/infrastructure-playbooks/{playbook} .".format(
+                ansible_dir=ansible_dir, playbook=playbook
+            ),
+        )
     else:
         playbook = "infrastructure-playbooks/{playbook}".format(playbook=playbook)
 
     cmd = "cd {ansible_dir} ; ansible-playbook -vvvv -i {inventory} {playbook} {playbook_options}".format(
-          ansible_dir=ansible_dir, playbook=playbook.strip(), playbook_options=playbook_options.strip(),
-          inventory=inventory.strip())
+        ansible_dir=ansible_dir,
+        playbook=playbook.strip(),
+        playbook_options=playbook_options.strip(),
+        inventory=inventory.strip(),
+    )
 
     # executing the command to purge cluster
     out, err = installer_node.exec_command(cmd=cmd, long_running=True)
@@ -79,17 +89,17 @@ def run(**kw):
     # remove ceph-ansible after successful purge
     if err == 0:
         log.info("ansible-playbook purge cluster successful")
-        installer_node.exec_command(sudo=True, cmd="rm -rf {ansible_dir}".format(ansible_dir=ansible_dir))
-        if installer_node.pkg_type == 'deb':
+        installer_node.exec_command(
+            sudo=True, cmd="rm -rf {ansible_dir}".format(ansible_dir=ansible_dir)
+        )
+        if installer_node.pkg_type == "deb":
+            installer_node.exec_command(sudo=True, cmd="apt-get remove -y ceph-ansible")
             installer_node.exec_command(
-                sudo=True, cmd='apt-get remove -y ceph-ansible')
-            installer_node.exec_command(
-                sudo=True, cmd='apt-get install -y ceph-ansible')
+                sudo=True, cmd="apt-get install -y ceph-ansible"
+            )
         else:
-            installer_node.exec_command(
-                sudo=True, cmd='yum remove -y ceph-ansible')
-            installer_node.exec_command(
-                sudo=True, cmd='yum install -y ceph-ansible')
+            installer_node.exec_command(sudo=True, cmd="yum remove -y ceph-ansible")
+            installer_node.exec_command(sudo=True, cmd="yum install -y ceph-ansible")
         with parallel() as p:
             for cnode in ceph_nodes:
                 if cnode.role != "installer":
@@ -99,11 +109,12 @@ def run(**kw):
         log.info("ansible-playbook failed to purge cluster")
         return 1
 
+
 # Rebooting node after purge
 
 
 def reboot_node(ceph_node, timeout=300):
-    ceph_node.exec_command(sudo=True, cmd='reboot', check_ec=False)
+    ceph_node.exec_command(sudo=True, cmd="reboot", check_ec=False)
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
     while True:
@@ -112,7 +123,14 @@ def reboot_node(ceph_node, timeout=300):
             break
         except BaseException:
             if datetime.datetime.now() - starttime > timeout:
-                log.error('Failed to reconnect to the node {node} after reboot '.format(node=ceph_node.ip_address))
+                log.error(
+                    "Failed to reconnect to the node {node} after reboot ".format(
+                        node=ceph_node.ip_address
+                    )
+                )
                 sleep(5)
                 raise RuntimeError(
-                    'Failed to reconnect to the node {node} after reboot '.format(node=ceph_node.ip_address))
+                    "Failed to reconnect to the node {node} after reboot ".format(
+                        node=ceph_node.ip_address
+                    )
+                )

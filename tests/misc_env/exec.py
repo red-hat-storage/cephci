@@ -6,13 +6,13 @@ log = logger
 
 def run(**kw):
     log.info("Running exec test")
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
 
     clients = []
-    role = 'client'
-    if config.get('role'):
-        role = config.get('role')
+    role = "client"
+    if config.get("role"):
+        role = config.get("role")
     for cnode in ceph_nodes:
         if cnode.role == role:
             clients.append(cnode)
@@ -20,27 +20,26 @@ def run(**kw):
     idx = 0
     client = clients[idx]
 
-    if config.get('idx'):
-        idx = config['idx']
+    if config.get("idx"):
+        idx = config["idx"]
         client = clients[idx]
 
     cmd = ""
-    if config.get('cmd'):
-        cmd = config.get('cmd')
+    if config.get("cmd"):
+        cmd = config.get("cmd")
 
-    if config.get('env'):
-        env = config.get('env')
+    if config.get("env"):
+        env = config.get("env")
     else:
-        env = ''
+        env = ""
 
-    if config.get('sudo'):
-        sudo = 'sudo -E'
+    if config.get("sudo"):
+        sudo = "sudo -E"
     else:
-        sudo = ''
+        sudo = ""
 
-    cmd1 = '{env} {sudo} {cmd}'.format(env=env, sudo=sudo, cmd=cmd)
-    output, ec = client.exec_command(cmd=cmd1,
-                                     long_running=True)
+    cmd1 = "{env} {sudo} {cmd}".format(env=env, sudo=sudo, cmd=cmd)
+    output, ec = client.exec_command(cmd=cmd1, long_running=True)
     if ec == 0:
         log.info("Exec completed successfully")
     else:

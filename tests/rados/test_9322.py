@@ -26,55 +26,56 @@ def run(**kw):
     log.info("Running CEPH-9322")
     log.info(run.__doc__)
 
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
-    build = config.get('build', config.get('rhbuild'))
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
+    build = config.get("build", config.get("rhbuild"))
 
     mons = []
     osds = []
 
-    role = 'client'
+    role = "client"
     for mnode in ceph_nodes:
         if mnode.role == role:
             mons.append(mnode)
 
-    role = 'osd'
+    role = "osd"
     for osd in ceph_nodes:
         if osd.role == role:
             osds.append(osd)
 
     ctrlr = mons[0]
-    log.info("chosing mon {cmon} as ctrlrmon".format(
-        cmon=ctrlr.hostname))
+    log.info("chosing mon {cmon} as ctrlrmon".format(cmon=ctrlr.hostname))
 
     helper = RadosHelper(ctrlr, config, log)
-    '''beacause of limited machines resorting to following config'''
+    """beacause of limited machines resorting to following config"""
     lrc_config = [(4, 2, 3), (2, 1, 3), (2, 2, 2)]
 
     for conf in lrc_config:
         (k, m, l) = conf
         suffix = "{k}_{m}_{l}".format(k=k, m=m, l=l)
         prof_name = "LRCprofile{suf}".format(suf=suffix)
-        if build.startswith('4'):
+        if build.startswith("4"):
             profile = "osd erasure-code-profile set {LRC} plugin=lrc k={k} m={m} l={l} \
-                crush-failure-domain=osd".format(LRC=prof_name, k=k, m=m, l=l)
+                crush-failure-domain=osd".format(
+                LRC=prof_name, k=k, m=m, l=l
+            )
         else:
             profile = "osd erasure-code-profile set {LRC} plugin=lrc k={k} m={m} l={l} \
-                ruleset-failure-domain=osd crush-failure-domain=osd".format(LRC=prof_name, k=k, m=m, l=l)
+                ruleset-failure-domain=osd crush-failure-domain=osd".format(
+                LRC=prof_name, k=k, m=m, l=l
+            )
         try:
             (out, err) = helper.raw_cluster_cmd(profile)
             outbuf = out.read().decode()
             log.info(outbuf)
-            log.info("created profile {LRC}".format(
-                LRC=prof_name))
+            log.info("created profile {LRC}".format(LRC=prof_name))
         except Exception:
             log.error("LRC profile creation failed")
             log.error(traceback.format_exc())
             return 1
 
-        '''create LRC ec pool'''
-        pname = "lrcpool{rand}{suf}".format(
-            rand=random.randint(0, 10000), suf=suffix)
+        """create LRC ec pool"""
+        pname = "lrcpool{rand}{suf}".format(rand=random.randint(0, 10000), suf=suffix)
         try:
             helper.create_pool(pname, 1, prof_name)
             log.info("Pool {pname} created".format(pname=pname))
@@ -83,7 +84,7 @@ def run(**kw):
             log.error(traceback.format_exc())
             return 1
 
-        '''check whether pool exists'''
+        """check whether pool exists"""
         try:
             helper.get_pool_num(pname)
         except Exception:

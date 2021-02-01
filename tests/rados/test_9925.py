@@ -18,11 +18,11 @@ def run(ceph_cluster, **kw):
         2. add some omap keys and corresponding values to the object
         3. chose one of the replica and
            using ceph-objectstore-rool remove omap key or value
-        4. Run deep-scrub	> scrub should report inconsistency
+        4. Run deep-scrub - scrub should report inconsistency
         5. run rados list-inconsistent-pg <pool>
-           >should list the pg in which object is inconsistent
+           should list the pg in which object is inconsistent
         6. Run rados list-inconsistent-obj <pg>
-           >shud report omap digest mismarch error
+           shud report omap digest mismarch error
 
     Args:
         ceph_cluster (ceph.ceph.Ceph): ceph cluster
@@ -31,20 +31,19 @@ def run(ceph_cluster, **kw):
     log.info("Running CEPH-9925")
     log.info(run.__doc__)
 
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
     mons = []
-    role = 'client'
+    role = "client"
     for mnode in ceph_nodes:
         if mnode.role == role:
             mons.append(mnode)
 
     ctrlr = mons[0]
-    log.info("chosing mon {cmon} as ctrlrmon".format(
-        cmon=ctrlr.hostname))
+    log.info("chosing mon {cmon} as ctrlrmon".format(cmon=ctrlr.hostname))
     helper = RadosHelper(ctrlr, config, log)
 
-    '''create an replica pool'''
+    """create an replica pool"""
     pname0 = "replica_pool_{rand}".format(rand=random.randint(0, 10000))
     pname = pname0
     try:
@@ -54,7 +53,7 @@ def run(ceph_cluster, **kw):
         log.error("failed to create pool")
         log.error(traceback.format_exc())
         return 1
-    '''check whether pool exists'''
+    """check whether pool exists"""
     try:
         helper.get_pool_num(pname)
     except Exception:
@@ -73,60 +72,71 @@ def run(ceph_cluster, **kw):
 
     for i in range(4):
         omapcmd = "sudo rados -p {pool} setomapval {obj} {keey} {valu}".format(
-            pool=pname, obj=oname, keey="key" + str(i), valu="value" + str(i))
+            pool=pname, obj=oname, keey="key" + str(i), valu="value" + str(i)
+        )
         (out, err) = ctrlr.exec_command(cmd=omapcmd)
-        log.info("put {obj}, omap key {keey} value {valu}".format(
-            obj=oname, keey="key" + str(i), valu="value" + str(i)))
+        log.info(
+            "put {obj}, omap key {keey} value {valu}".format(
+                obj=oname, keey="key" + str(i), valu="value" + str(i)
+            )
+        )
 
-    '''
+    """
     Goto destination osd, stop the osd service and
     use ceph-objectstore-tool to remove
     omap keys
-    '''
+    """
 
-    cmd = "osd map {pname} {obj} --format json".format(
-        pname=pname, obj=oname
-    )
+    cmd = "osd map {pname} {obj} --format json".format(pname=pname, obj=oname)
     (out, err) = helper.raw_cluster_cmd(cmd)
     outbuf = out.read().decode()
     log.info(outbuf)
     cmdout = json.loads(outbuf)
-    targt_pg = cmdout['pgid']
-    '''taking pg replica on  non primary osd '''
-    targt_osd_id = cmdout['up'][1]
+    targt_pg = cmdout["pgid"]
+    """taking pg replica on  non primary osd """
+    targt_osd_id = cmdout["up"][1]
     #    target_osd = ceph_cluster.get_osd_by_id(targt_osd_id)
     #    target_osd_node = target_osd.node
-    target_osd_hostname = ceph_cluster.get_osd_metadata(targt_osd_id).get('hostname')
+    target_osd_hostname = ceph_cluster.get_osd_metadata(targt_osd_id).get("hostname")
     log.info(target_osd_hostname)
     target_osd_node = ceph_cluster.get_node_by_hostname(target_osd_hostname)
     cot_environment = target_osd_node
     osd_service = ceph_cluster.get_osd_service_name(targt_osd_id)
-    partition_path = ceph_cluster.get_osd_metadata(targt_osd_id).get('osd_data')
+    partition_path = ceph_cluster.get_osd_metadata(targt_osd_id).get("osd_data")
     helper.kill_osd(target_osd_node, osd_service)
     time.sleep(10)
     osd_metadata = ceph_cluster.get_osd_metadata(targt_osd_id)
-    osd_data = osd_metadata.get('osd_data')
-    osd_journal = osd_metadata.get('osd_journal')
+    osd_data = osd_metadata.get("osd_data")
+    osd_journal = osd_metadata.get("osd_journal")
     if ceph_cluster.containerized:
-        docker_image_string = '{docker_registry}/{docker_image}:{docker_tag}'.format(
-            docker_registry=ceph_cluster.ansible_config.get('ceph_docker_registry'),
-            docker_image=ceph_cluster.ansible_config.get('ceph_docker_image'),
-            docker_tag=ceph_cluster.ansible_config.get('ceph_docker_image_tag'))
-        cot_environment = helper.get_mgr_proxy_container(target_osd_node, docker_image_string)
+        docker_image_string = "{docker_registry}/{docker_image}:{docker_tag}".format(
+            docker_registry=ceph_cluster.ansible_config.get("ceph_docker_registry"),
+            docker_image=ceph_cluster.ansible_config.get("ceph_docker_image"),
+            docker_tag=ceph_cluster.ansible_config.get("ceph_docker_image_tag"),
+        )
+        cot_environment = helper.get_mgr_proxy_container(
+            target_osd_node, docker_image_string
+        )
         out, err = cot_environment.exec_command(
-            cmd='mount | grep "{partition_path} "'.format(partition_path=partition_path),
-            check_ec=False)
+            cmd='mount | grep "{partition_path} "'.format(
+                partition_path=partition_path
+            ),
+            check_ec=False,
+        )
         device_mount_data = out.read().decode()  # type: str
         if not device_mount_data:
             cot_environment.exec_command(
-                cmd='sudo mount {partition_path} {directory}'.format(partition_path=partition_path, directory=osd_data))
+                cmd="sudo mount {partition_path} {directory}".format(
+                    partition_path=partition_path, directory=osd_data
+                )
+            )
 
     slist_cmd = "sudo ceph-objectstore-tool --data-path \
             {osd_data} --journal-path \
             {osd_journal} \
-            --pgid {pgid} {obj} list-omap".format(osd_data=osd_data,
-                                                  osd_journal=osd_journal,
-                                                  obj=oname, pgid=targt_pg)
+            --pgid {pgid} {obj} list-omap".format(
+        osd_data=osd_data, osd_journal=osd_journal, obj=oname, pgid=targt_pg
+    )
 
     (out, err) = cot_environment.exec_command(cmd=slist_cmd)
     outbuf = out.read().decode()
@@ -135,11 +145,13 @@ def run(ceph_cluster, **kw):
     corrupt_cmd = "sudo ceph-objectstore-tool --data-path \
             {osd_data} --journal-path \
             {osd_journal} \
-            --pgid {pgid} {obj} rm-omap {outbuf}".format(osd_data=osd_data,
-                                                         osd_journal=osd_journal,
-                                                         obj=oname,
-                                                         pgid=targt_pg,
-                                                         outbuf=keylist[0])
+            --pgid {pgid} {obj} rm-omap {outbuf}".format(
+        osd_data=osd_data,
+        osd_journal=osd_journal,
+        obj=oname,
+        pgid=targt_pg,
+        outbuf=keylist[0],
+    )
     (out, err) = cot_environment.exec_command(cmd=corrupt_cmd)
     outbuf = out.read().decode()
     log.info(outbuf)
@@ -151,7 +163,7 @@ def run(ceph_cluster, **kw):
     outbuf = out.read().decode()
     log.info(outbuf)
 
-    while 'HEALTH_ERR' and 'active+clean+inconsistent' not in outbuf:
+    while "HEALTH_ERR" and "active+clean+inconsistent" not in outbuf:
         status = "-s --format json"
         (out, err) = helper.raw_cluster_cmd(status)
         outbuf = out.read().decode()
@@ -161,8 +173,7 @@ def run(ceph_cluster, **kw):
     timeout = 100
     found = 0
     while timeout:
-        incon_pg = "sudo rados list-inconsistent-pg {pname}".format(
-            pname=pname)
+        incon_pg = "sudo rados list-inconsistent-pg {pname}".format(pname=pname)
         (out, err) = ctrlr.exec_command(cmd=incon_pg)
         outbuf = out.read().decode()
         log.info(outbuf)

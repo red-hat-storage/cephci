@@ -28,18 +28,17 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running CEPH-83571452")
     log.info(run.__doc__)
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
     mons = []
 
-    role = 'client'
+    role = "client"
     for mnode in ceph_nodes:
         if mnode.role == role:
             mons.append(mnode)
 
     ctrlr = mons[0]
-    log.info("chosing mon {cmon} as ctrlrmon".format(
-        cmon=ctrlr.hostname))
+    log.info("chosing mon {cmon} as ctrlrmon".format(cmon=ctrlr.hostname))
     helper = RadosHelper(ctrlr, config, log)
 
     """create a replica pool"""
@@ -60,9 +59,9 @@ def run(ceph_cluster, **kw):
     outbuf = out.read().decode()
     log.info(outbuf)
     cmdout = json.loads(outbuf)
-    targt_pg = cmdout['pgid']
-    targt_osd_id = cmdout['up'][random.randint(1, 2)]
-    '''write data and take snaps'''
+    targt_pg = cmdout["pgid"]
+    targt_osd_id = cmdout["up"][random.randint(1, 2)]
+    """write data and take snaps"""
     putobj = "sudo rados -p {pool} put {obj} {path}".format(
         pool=pname, obj=oname, path="/etc/hosts"
     )
@@ -72,46 +71,54 @@ def run(ceph_cluster, **kw):
             pool=pname, sname="snap" + str(i)
         )
         (out, err) = ctrlr.exec_command(cmd=snapcmd)
-        log.info("put {obj}, snap {snap}".format(
-            obj=oname, snap="snap" + str(i)
-        ))
-    '''
+        log.info("put {obj}, snap {snap}".format(obj=oname, snap="snap" + str(i)))
+    """
     Goto destination osd, stop the osd
     use ceph-objectstore-tool to corrupt
     snap info
-    '''
+    """
     #    target_osd = ceph_cluster.get_osd_by_id(targt_osd_id)
     #    target_osd_node = target_osd.node
-    target_osd_hostname = ceph_cluster.get_osd_metadata(targt_osd_id).get('hostname')
+    target_osd_hostname = ceph_cluster.get_osd_metadata(targt_osd_id).get("hostname")
     log.info(target_osd_hostname)
     target_osd_node = ceph_cluster.get_node_by_hostname(target_osd_hostname)
     cot_environment = target_osd_node
     osd_service = ceph_cluster.get_osd_service_name(targt_osd_id)
-    partition_path = ceph_cluster.get_osd_metadata(targt_osd_id).get('osd_data')
+    partition_path = ceph_cluster.get_osd_metadata(targt_osd_id).get("osd_data")
     helper.kill_osd(target_osd_node, osd_service)
     time.sleep(10)
     osd_metadata = ceph_cluster.get_osd_metadata(targt_osd_id)
-    osd_data = osd_metadata.get('osd_data')
-    osd_journal = osd_metadata.get('osd_journal')
+    osd_data = osd_metadata.get("osd_data")
+    osd_journal = osd_metadata.get("osd_journal")
     if ceph_cluster.containerized:
-        docker_image_string = '{docker_registry}/{docker_image}:{docker_tag}'.format(
-            docker_registry=ceph_cluster.ansible_config.get('ceph_docker_registry'),
-            docker_image=ceph_cluster.ansible_config.get('ceph_docker_image'),
-            docker_tag=ceph_cluster.ansible_config.get('ceph_docker_image_tag'))
-        cot_environment = helper.get_mgr_proxy_container(target_osd_node, docker_image_string)
+        docker_image_string = "{docker_registry}/{docker_image}:{docker_tag}".format(
+            docker_registry=ceph_cluster.ansible_config.get("ceph_docker_registry"),
+            docker_image=ceph_cluster.ansible_config.get("ceph_docker_image"),
+            docker_tag=ceph_cluster.ansible_config.get("ceph_docker_image_tag"),
+        )
+        cot_environment = helper.get_mgr_proxy_container(
+            target_osd_node, docker_image_string
+        )
         out, err = cot_environment.exec_command(
-            cmd='mount | grep "{partition_path} "'.format(partition_path=partition_path),
-            check_ec=False)
+            cmd='mount | grep "{partition_path} "'.format(
+                partition_path=partition_path
+            ),
+            check_ec=False,
+        )
         device_mount_data = out.read().decode()  # type: str
         if not device_mount_data:
             cot_environment.exec_command(
-                cmd='sudo mount {partition_path} {directory}'.format(partition_path=partition_path, directory=osd_data))
+                cmd="sudo mount {partition_path} {directory}".format(
+                    partition_path=partition_path, directory=osd_data
+                )
+            )
 
     slist_cmd = "sudo ceph-objectstore-tool --data-path \
             {osd_data} --journal-path \
             {osd_journal} \
-            --head --op list {obj}".format(osd_data=osd_data, osd_journal=osd_journal,
-                                           obj=oname)
+            --head --op list {obj}".format(
+        osd_data=osd_data, osd_journal=osd_journal, obj=oname
+    )
     (out, err) = cot_environment.exec_command(cmd=slist_cmd)
     outbuf = out.read().decode()
     log.info(outbuf)
@@ -119,8 +126,9 @@ def run(ceph_cluster, **kw):
     corrupt_cmd = "sudo ceph-objectstore-tool --data-path \
             {osd_data} --journal-path \
             {osd_journal} \
-            {outbuf} clear-snapset corrupt".format(osd_data=osd_data, osd_journal=osd_journal,
-                                                   outbuf="'" + (outbuf) + "'")
+            {outbuf} clear-snapset corrupt".format(
+        osd_data=osd_data, osd_journal=osd_journal, outbuf="'" + (outbuf) + "'"
+    )
     (out, err) = cot_environment.exec_command(cmd=corrupt_cmd)
     outbuf = out.read().decode()
     log.info(outbuf)
@@ -132,7 +140,7 @@ def run(ceph_cluster, **kw):
     outbuf = out.read().decode()
     log.info(outbuf)
 
-    while 'HEALTH_ERR' and 'active+clean+inconsistent' not in outbuf:
+    while "HEALTH_ERR" and "active+clean+inconsistent" not in outbuf:
         status = "-s --format json"
         (out, err) = helper.raw_cluster_cmd(status)
         outbuf = out.read().decode()

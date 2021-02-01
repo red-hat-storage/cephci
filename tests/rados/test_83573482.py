@@ -62,18 +62,21 @@ def run(ceph_cluster, **kwargs):
             cmd = CONFIG_CHECK.format(HOSTNAME=mon.hostname)
             out, err = exec_cmd_status(mon, command=cmd, sudo=True)
             data = json.loads(out)
-            assert data["ms_bind_msgr2"] == "true", log.error("{} Command execution failed".format(cmd))
+            assert data["ms_bind_msgr2"] == "true", log.error(
+                "{} Command execution failed".format(cmd)
+            )
             log.info("ms_bind MSGR Version2 is enabled")
-        status, error = exec_cmd_status(mon_nodes[0],
-                                        command=CONFIG_CHECK_ALL,
-                                        sudo=True)
+        status, error = exec_cmd_status(
+            mon_nodes[0], command=CONFIG_CHECK_ALL, sudo=True
+        )
 
         for mon in mon_nodes:
             ip = mon.ip_address
             v2_check = "v2:{MON_IP}:3300".format(MON_IP=ip)
             v1_check = "v1:{MON_IP}:6789".format(MON_IP=ip)
-            assert v2_check in status and v1_check in status,\
-                "MSGR Version2 is not enabled on {}".format(ip)
+            assert (
+                v2_check in status and v1_check in status
+            ), "MSGR Version2 is not enabled on {}".format(ip)
         log.info("MSGR version2 enabled successfully")
         return 0
     except AssertionError as err:

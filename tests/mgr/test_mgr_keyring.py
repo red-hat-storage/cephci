@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger(__name__)
 log = logger
 
@@ -6,13 +7,13 @@ log = logger
 def run(**kw):
 
     log.info("Running exec test")
-    ceph_nodes = kw.get('ceph_nodes')
-    config = kw.get('config')
+    ceph_nodes = kw.get("ceph_nodes")
+    config = kw.get("config")
 
     clients = []
-    role = 'mgr'
-    if config.get('role'):
-        role = config.get('role')
+    role = "mgr"
+    if config.get("role"):
+        role = config.get("role")
     for cnode in ceph_nodes:
         if cnode.role == role:
             clients.append(cnode)

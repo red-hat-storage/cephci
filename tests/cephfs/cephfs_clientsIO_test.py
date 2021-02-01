@@ -9,9 +9,16 @@ log = logging.getLogger(__name__)
 def run(**kw):
     start = timeit.default_timer()
     log.info("Running cephfs CRITICAL test")
-    ceph_nodes = kw.get('ceph_nodes')
-    fuse_clients, kernel_clients, mon_node, mounting_dir, mds_nodes, md5sum_file_lock, mon_node_ip = \
-        utils.get_client_info(ceph_nodes, utils.clients)
+    ceph_nodes = kw.get("ceph_nodes")
+    (
+        fuse_clients,
+        kernel_clients,
+        mon_node,
+        mounting_dir,
+        mds_nodes,
+        md5sum_file_lock,
+        mon_node_ip,
+    ) = utils.get_client_info(ceph_nodes, utils.clients)
     utils.auth_list(utils.clients, mon_node)
     md5sum_list1 = utils.fuse_mount(fuse_clients, mounting_dir)
     md5sum_list2 = utils.kernel_mount(mounting_dir, mon_node_ip, kernel_clients)
@@ -52,14 +59,18 @@ def run(**kw):
 
     if md5sum_file_lock[0] == md5sum_file_lock[1]:
 
-        log.info("File Locking mechanism is working,data is not corrupted,test case CEPH-10529 passed")
+        log.info(
+            "File Locking mechanism is working,data is not corrupted,test case CEPH-10529 passed"
+        )
 
     else:
-        log.error("File Locking mechanism is failed,data is corruptedtTest case CEPH-10529 Failed")
+        log.error(
+            "File Locking mechanism is failed,data is corruptedtTest case CEPH-10529 Failed"
+        )
 
     log.info("Test completed for CEPH-10529")
 
-    print('Script execution time:------')
+    print("Script execution time:------")
 
     stop = timeit.default_timer()
     total_time = stop - start

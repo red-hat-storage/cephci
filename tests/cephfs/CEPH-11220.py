@@ -12,12 +12,12 @@ log = logger
 def run(ceph_cluster, **kw):
     try:
         start = timeit.default_timer()
-        tc = '11220'
-        dir_name = 'dir'
+        tc = "11220"
+        dir_name = "dir"
         log.info("Running cephfs %s test case" % (tc))
         fs_util = FsUtils(ceph_cluster)
-        config = kw.get('config')
-        build = config.get('build', config.get('rhbuild'))
+        config = kw.get("config")
+        build = config.get("build", config.get("rhbuild"))
         client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info("Got client info")
@@ -27,10 +27,10 @@ def run(ceph_cluster, **kw):
         client2 = []
         client3 = []
         client4 = []
-        client1.append(client_info['fuse_clients'][0])
-        client2.append(client_info['fuse_clients'][1])
-        client3.append(client_info['kernel_clients'][0])
-        client4.append(client_info['kernel_clients'][1])
+        client1.append(client_info["fuse_clients"][0])
+        client2.append(client_info["fuse_clients"][1])
+        client3.append(client_info["kernel_clients"][0])
+        client4.append(client_info["kernel_clients"][1])
         rc1 = fs_util.auth_list(client1)
         rc2 = fs_util.auth_list(client2)
         rc3 = fs_util.auth_list(client3)
@@ -41,8 +41,8 @@ def run(ceph_cluster, **kw):
         else:
             raise CommandFailed("auth list failed")
 
-        rc1 = fs_util.fuse_mount(client1, client_info['mounting_dir'])
-        rc2 = fs_util.fuse_mount(client2, client_info['mounting_dir'])
+        rc1 = fs_util.fuse_mount(client1, client_info["mounting_dir"])
+        rc2 = fs_util.fuse_mount(client2, client_info["mounting_dir"])
 
         if rc1 == 0 and rc2 == 0:
             log.info("Fuse mount passed")
@@ -50,13 +50,11 @@ def run(ceph_cluster, **kw):
             raise CommandFailed("Fuse mount failed")
 
         rc3 = fs_util.kernel_mount(
-            client3,
-            client_info['mounting_dir'],
-            client_info['mon_node_ip'])
+            client3, client_info["mounting_dir"], client_info["mon_node_ip"]
+        )
         rc4 = fs_util.kernel_mount(
-            client4,
-            client_info['mounting_dir'],
-            client_info['mon_node_ip'])
+            client4, client_info["mounting_dir"], client_info["mon_node_ip"]
+        )
         if rc3 == 0 and rc4 == 0:
             log.info("kernel mount passed")
         else:
@@ -65,37 +63,41 @@ def run(ceph_cluster, **kw):
         log.info("Creating directory:")
         for node in client1:
             out, rc = node.exec_command(
-                cmd='sudo mkdir %s%s' %
-                    (client_info['mounting_dir'], dir_name))
+                cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir_name)
+            )
             print(out.read().decode())
             break
 
         return_counts1, rc1 = fs_util.stress_io(
-            client1, client_info['mounting_dir'],
-            dir_name, 0, 1, iotype='crefi')
+            client1, client_info["mounting_dir"], dir_name, 0, 1, iotype="crefi"
+        )
         return_counts2, rc2 = fs_util.stress_io(
-            client2, client_info['mounting_dir'], dir_name, 0, 1, iotype='fio')
+            client2, client_info["mounting_dir"], dir_name, 0, 1, iotype="fio"
+        )
         return_counts3, rc3 = fs_util.read_write_IO(
-            client3, client_info['mounting_dir'], dir_name=dir_name)
+            client3, client_info["mounting_dir"], dir_name=dir_name
+        )
         if rc1 == 0 and rc2 == 0 and rc3 == 0:
             log.info("IOs on clients successfull")
             log.info("Testcase %s passed" % (tc))
-            log.info('Cleaning up!-----')
-            if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
+            log.info("Cleaning up!-----")
+            if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
                 rc = fs_util.client_clean_up(
-                    client_info['fuse_clients'],
-                    client_info['kernel_clients'],
-                    client_info['mounting_dir'],
-                    'umount')
+                    client_info["fuse_clients"],
+                    client_info["kernel_clients"],
+                    client_info["mounting_dir"],
+                    "umount",
+                )
             else:
                 rc = fs_util.client_clean_up(
-                    client_info['fuse_clients'],
-                    '',
-                    client_info['mounting_dir'],
-                    'umount')
+                    client_info["fuse_clients"],
+                    "",
+                    client_info["mounting_dir"],
+                    "umount",
+                )
             if rc == 0:
-                log.info('Cleaning up successfull')
-        print('Script execution time:------')
+                log.info("Cleaning up successfull")
+        print("Script execution time:------")
         stop = timeit.default_timer()
         total_time = stop - start
         mins, secs = divmod(total_time, 60)
@@ -108,15 +110,18 @@ def run(ceph_cluster, **kw):
     except CommandFailed as e:
         log.info(e)
         log.info(traceback.format_exc())
-        log.info('Cleaning up!-----')
-        if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
-            fs_util.client_clean_up(client_info['fuse_clients'],
-                                    client_info['kernel_clients'],
-                                    client_info['mounting_dir'], 'umount')
+        log.info("Cleaning up!-----")
+        if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
+            fs_util.client_clean_up(
+                client_info["fuse_clients"],
+                client_info["kernel_clients"],
+                client_info["mounting_dir"],
+                "umount",
+            )
         else:
-            fs_util.client_clean_up(client_info['fuse_clients'],
-                                    '',
-                                    client_info['mounting_dir'], 'umount')
+            fs_util.client_clean_up(
+                client_info["fuse_clients"], "", client_info["mounting_dir"], "umount"
+            )
         return 1
 
     except Exception as e:
