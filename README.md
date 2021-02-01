@@ -154,3 +154,27 @@ Results are posted to report portal if the `--report-portal` argument is passed 
 A result email is automatically sent to the address configured in your `~/.cephci.yaml` file.
 In addition to personally configured emails, if the `--post-results` or `--report-portal` arguments are
 passed to `run.py` an email will also be sent to `cephci@redhat.com`.
+
+## Development Guidelines
+An attempt is made to follow a set of style guidelines for clarity. As we grow
+and have more contributors, it becomes essential for us to follow some standard
+practices. We use
+
+- PEP8
+- black
+
+### black
+```black_info
+# To install
+$ python -m pip install black
+
+# formatting code with black
+$ black <filename>
+
+where `filename`
+- a relative or absolute path of the file
+- a relative or absolute path of a directory # for running for set of files
+
+# for the project
+$ black .
+```
