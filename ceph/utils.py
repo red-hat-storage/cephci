@@ -67,7 +67,7 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
                         instances_name,
                         run_id,
                         node,
-                        "+".join(role),
+                        "-".join(role),
                     )
                 else:
                     node_params["node-name"] = "{}-{}-{}-{}-{}".format(
@@ -75,7 +75,7 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
                         user,
                         run_id,
                         node,
-                        "+".join(role),
+                        "-".join(role),
                     )
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
