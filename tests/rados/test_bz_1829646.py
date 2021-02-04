@@ -1,8 +1,9 @@
 import json
 import logging
 import random
-import time
 import re
+import time
+
 from ceph.rados_utils import RadosHelper
 
 log = logging.getLogger(__name__)

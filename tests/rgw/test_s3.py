@@ -6,7 +6,7 @@ import logging
 import os
 import time
 
-from ceph.ceph import CommandFailed, CephNode
+from ceph.ceph import CephNode, CommandFailed
 from ceph.utils import open_firewall_port
 
 log = logging.getLogger(__name__)

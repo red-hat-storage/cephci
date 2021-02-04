@@ -1,17 +1,19 @@
 import datetime
 import logging
-import traceback
-import time
 import os
 import re
+import time
+import traceback
+
 import yaml
 from gevent import sleep
+from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
-from libcloud.common.exceptions import BaseHTTPError
 
-from .ceph import RolesContainer, CommandFailed, Ceph
 from mita.openstack import CephVMNode
+
+from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
 
 log = logging.getLogger(__name__)

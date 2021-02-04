@@ -1,10 +1,9 @@
 """ Purges the Ceph the cluster"""
 
-import logging
-from time import sleep
-
 import datetime
+import logging
 import re
+from time import sleep
 
 from ceph.parallel import parallel
 

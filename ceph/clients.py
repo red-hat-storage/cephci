@@ -1,7 +1,8 @@
 import logging
-import paramiko
 import string
 from time import sleep
+
+import paramiko
 
 log = logging
 

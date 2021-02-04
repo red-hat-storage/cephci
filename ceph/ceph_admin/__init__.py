@@ -13,12 +13,12 @@ and deploys ceph cluster via cephadm tool.
 
 import json
 import logging
-
-from ceph.ceph_admin.host_mixin import HostMixin
-from ceph.ceph_admin.bootstrap_mixin import BootstrapMixin
-from ceph.ceph import CommandFailed
-from ceph.utils import get_disk_info
 from time import sleep
+
+from ceph.ceph import CommandFailed
+from ceph.ceph_admin.bootstrap_mixin import BootstrapMixin
+from ceph.ceph_admin.host_mixin import HostMixin
+from ceph.utils import get_disk_info
 
 logger = logging.getLogger(__name__)
 

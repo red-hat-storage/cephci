@@ -5,8 +5,7 @@ import time
 import traceback
 
 from ceph.parallel import parallel
-from ceph.utils import config_ntp
-from ceph.utils import update_ca_cert
+from ceph.utils import config_ntp, update_ca_cert
 from utility.utils import get_cephci_config
 
 log = logging.getLogger(__name__)

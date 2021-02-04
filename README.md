@@ -162,6 +162,7 @@ practices. We use
 
 - PEP8
 - black
+- isort
 
 ### black
 ```black_info
@@ -177,4 +178,21 @@ where `filename`
 
 # for the project
 $ black .
+```
+
+### isort
+```isort_info
+# isort is installed as part of the cephci requirements. One can also install the
+# package using the below command
+$ python -m pip install isort
+
+# formatting code with isort
+$ isort <filename>
+
+where `filename`
+- a relative or absolute path of the file
+- a relative or absolute path of a directory
+
+# Example
+$ isort mita/openstack.py
 ```

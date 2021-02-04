@@ -2,18 +2,18 @@ import getpass
 import logging
 import os
 import random
+import re
 import smtplib
 import time
 import traceback
-import re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
 import requests
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from reportportal_client import ReportPortalServiceAsync
 from jinja_markdown import MarkdownExtension
-
+from reportportal_client import ReportPortalServiceAsync
 
 log = logging.getLogger(__name__)
 

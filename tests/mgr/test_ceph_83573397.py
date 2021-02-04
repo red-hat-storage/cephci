@@ -1,6 +1,6 @@
+import json
 import logging
 from time import time
-import json
 
 logger = logging.getLogger(__name__)
 log = logger

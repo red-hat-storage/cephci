@@ -2,9 +2,7 @@ import logging
 
 import yaml
 
-
-from ceph.utils import get_ceph_versions
-from ceph.utils import get_public_network
+from ceph.utils import get_ceph_versions, get_public_network
 from utility.utils import get_latest_container_image_tag
 
 log = logging.getLogger(__name__)

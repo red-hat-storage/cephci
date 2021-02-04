@@ -1,9 +1,10 @@
 import logging
 import os
-
-from tempfile import NamedTemporaryFile
 from subprocess import call
+from tempfile import NamedTemporaryFile
+
 from jinja2 import Environment, FileSystemLoader
+
 from utility.utils import get_cephci_config
 
 log = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 import logging
+import re
 import timeit
 import traceback
-import re
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel

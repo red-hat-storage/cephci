@@ -2,9 +2,9 @@ import datetime
 import logging
 import string
 import time
+from itertools import cycle
 
 from ceph.ceph import CommandFailed
-from itertools import cycle
 
 log = logging
 
