@@ -1,4 +1,5 @@
 import logging
+
 from ceph.ceph_admin import CephAdmin
 
 log = logging.getLogger(__name__)

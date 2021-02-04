@@ -1,7 +1,7 @@
 import logging
 
-from tests.rbd.rbd_utils import Rbd
 from ceph.parallel import parallel
+from tests.rbd.rbd_utils import Rbd
 
 log = logging.getLogger(__name__)
 

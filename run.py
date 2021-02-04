@@ -2,36 +2,38 @@
 from gevent import monkey
 
 monkey.patch_all()
-import traceback
-import yaml
-import sys
 import datetime
-import os
+import importlib
 import json
 import logging
-import importlib
+import os
 import pickle
-import time
 import re
-import requests
+import sys
 import textwrap
-from docopt import docopt
+import time
+import traceback
 from getpass import getuser
+
+import requests
+import yaml
+from docopt import docopt
 from libcloud.common.types import LibcloudError
-from ceph.ceph import CephNode, Ceph
+
+from ceph.ceph import Ceph, CephNode
 from ceph.clients import WinNode
-from ceph.utils import create_ceph_nodes, cleanup_ceph_nodes
+from ceph.utils import cleanup_ceph_nodes, create_ceph_nodes
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
-    timestamp,
+    close_and_remove_filehandlers,
+    configure_logger,
+    create_report_portal_session,
     create_run_dir,
     create_unique_test_name,
-    create_report_portal_session,
-    configure_logger,
-    close_and_remove_filehandlers,
-    get_latest_container,
     email_results,
+    get_latest_container,
+    timestamp,
 )
 from utility.xunit import create_xunit_results
 

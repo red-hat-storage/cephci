@@ -1,8 +1,7 @@
 import logging
 import time
 
-from ceph.utils import keep_alive, setup_deb_repos
-from ceph.utils import setup_repos, create_ceph_conf
+from ceph.utils import create_ceph_conf, keep_alive, setup_deb_repos, setup_repos
 
 logger = logging.getLogger(__name__)
 log = logger

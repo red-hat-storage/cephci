@@ -1,10 +1,10 @@
-import datetime
 import ast
-import time
+import datetime
+import json
+import logging
 import random
 import string
-import logging
-import json
+import time
 
 from ceph.ceph import CommandFailed
 

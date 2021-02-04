@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 from utility.utils import custom_ceph_config, get_cephci_config

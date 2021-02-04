@@ -3,6 +3,7 @@ Cephadm Bootstrap the ceph cluster
 """
 
 import logging
+
 from utility.utils import get_cephci_config
 
 logger = logging.getLogger(__name__)

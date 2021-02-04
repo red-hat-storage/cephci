@@ -1,7 +1,8 @@
-from utility import utils
-from ceph.parallel import parallel
-import timeit
 import logging
+import timeit
+
+from ceph.parallel import parallel
+from utility import utils
 
 log = logging.getLogger(__name__)
 

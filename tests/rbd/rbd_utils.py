@@ -1,6 +1,7 @@
+import logging
 import random
 import string
-import logging
+
 from ceph.ceph import CommandFailed
 
 log = logging.getLogger(__name__)

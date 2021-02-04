@@ -1,21 +1,21 @@
-import logging
+import datetime
 import json
+import logging
+import pickle
+import random
 import re
 from distutils.version import LooseVersion
 from select import select
 from time import sleep, time
-from ceph.parallel import parallel
 
-import datetime
-import requests
 import paramiko
+import requests
 import yaml
 from paramiko.ssh_exception import SSHException
-import pickle
-import random
 
-from utility.utils import custom_ceph_config
+from ceph.parallel import parallel
 from utility import lvm_utils
+from utility.utils import custom_ceph_config
 
 logger = logging.getLogger(__name__)
 

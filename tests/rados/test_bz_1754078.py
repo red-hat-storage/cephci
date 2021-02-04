@@ -2,8 +2,8 @@ import json
 import logging
 import time
 
-from ceph.rados_utils import RadosHelper
 from ceph.parallel import parallel
+from ceph.rados_utils import RadosHelper
 
 log = logging.getLogger(__name__)
 
