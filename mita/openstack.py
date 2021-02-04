@@ -226,6 +226,9 @@ class CephVMNode(object):
         """
         network_names = (
             [
+                "provider_net_cci_12",
+                "provider_net_cci_11",
+                "provider_net_cci_9",
                 "provider_net_cci_8",
                 "provider_net_cci_7",
                 "provider_net_cci_6",
