@@ -16,38 +16,38 @@ import logging
 from time import sleep
 
 from ceph.ceph import CommandFailed
-from ceph.ceph_admin.alert_manager import AlertManager
+from ceph.ceph_admin.alert_manager import AlertManagerRole
 from ceph.ceph_admin.bootstrap_mixin import BootstrapMixin
-from ceph.ceph_admin.grafana import Grafana
+from ceph.ceph_admin.grafana import GrafanaRole
 from ceph.ceph_admin.host_mixin import HostMixin
-from ceph.ceph_admin.iscsi import ISCSI
-from ceph.ceph_admin.manager import Manager
-from ceph.ceph_admin.metadataserver import MetaDataServer
-from ceph.ceph_admin.monitor import Monitor
-from ceph.ceph_admin.nfs import NFS
-from ceph.ceph_admin.node_exporter import NodeExporter
-from ceph.ceph_admin.osd import OSD
-from ceph.ceph_admin.prometheus import Prometheus
-from ceph.ceph_admin.radosgw import RadosGW
+from ceph.ceph_admin.iscsi import ISCSIRole
+from ceph.ceph_admin.manager import ManagerRole
+from ceph.ceph_admin.metadataserver import MetaDataServerRole
+from ceph.ceph_admin.monitor import MonitorRole
+from ceph.ceph_admin.nfs import NFSRole
+from ceph.ceph_admin.node_exporter import NodeExporterRole
+from ceph.ceph_admin.osd import OSDRole
+from ceph.ceph_admin.prometheus import PrometheusRole
+from ceph.ceph_admin.radosgw import RadosGWRole
 from ceph.utils import get_disk_info
 
 logger = logging.getLogger(__name__)
 
 
 class CephAdmin(
-    AlertManager,
+    AlertManagerRole,
     BootstrapMixin,
-    Grafana,
+    GrafanaRole,
     HostMixin,
-    ISCSI,
-    Manager,
-    Monitor,
-    MetaDataServer,
-    NFS,
-    NodeExporter,
-    OSD,
-    Prometheus,
-    RadosGW,
+    ISCSIRole,
+    ManagerRole,
+    MonitorRole,
+    MetaDataServerRole,
+    NFSRole,
+    NodeExporterRole,
+    OSDRole,
+    PrometheusRole,
+    RadosGWRole,
 ):
     """
     Ceph administrator base class which enables ceph pre-requisites
@@ -140,16 +140,12 @@ class CephAdmin(
             )
 
             out = json.loads(out)
-            daemons = dict(
-                (i["daemon_id"], i["status_desc"])
-                for i in out
-                if i.get("daemon_type") == daemon
-            )
+            daemons = [i for i in out if i.get("daemon_type") == daemon]
 
             count = 0
             for _id in ids:
-                if _id in daemons:
-                    if daemons[_id] == "running":
+                for dmn in daemons:
+                    if _id in dmn["daemon_id"] and dmn["status_desc"] == "running":
                         count += 1
 
             logger.info(

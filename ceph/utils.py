@@ -643,3 +643,31 @@ def get_disk_info(node):
         disks.append(disk_name)
 
     return disks
+
+
+def get_nodes_by_id(cluster, node_names):
+    """
+    Get node object(s) by Node Id
+
+    Returns all nodes object list if node_names is empty,
+    else node list which matched node ID(eg., 'node1')
+
+    Args:
+        cluster: ceph object
+        node_names: node name list (eg., ['node1'])
+
+    Returns:
+        node_list: list nodes
+    """
+    nodes = node_names if isinstance(node_names, list) else [node_names]
+
+    # Empty list wll pick all cluster nodes
+    if not nodes:
+        return cluster.get_nodes()
+    else:
+        return [
+            node
+            for node in cluster.get_nodes()
+            for name in nodes
+            if name in node.shortname
+        ]

@@ -14,7 +14,7 @@ OP_MAP = {
         "iscsi": "apply_iscsi",
         "node-exporter": "apply_node_exporter",
         "prometheus": "apply_prometheus",
-        "alert-manager": "apply_alert_manager",
+        "alertmanager": "apply_alert_manager",
         "grafana": "apply_grafana",
         "nfs": "apply_nfs",
     },
@@ -27,7 +27,7 @@ OP_MAP = {
         "iscsi": "daemon_add_iscsi",
         "node-exporter": "daemon_add_node_exporter",
         "prometheus": "daemon_add_prometheus",
-        "alert-manager": "daemon_add_alert_manager",
+        "alertmanager": "daemon_add_alert_manager",
         "grafana": "daemon_add_grafana",
         "nfs": "daemon_add_nfs",
     },
@@ -139,30 +139,18 @@ def run(ceph_cluster, **kw):
         cephadm.bootstrap()
 
     # Manage hosts
-    if config.get("host_ops"):
-        host_ops = config.get("host_ops")
-        assert isinstance(host_ops, dict)
-
-        for op, config in host_ops.items():
-
-            hosts = config.pop("nodes", list())
-            hosts = hosts if isinstance(hosts, list) else [hosts]
-
-            # empty list wll pick all cluster nodes
-            if not hosts:
-                hosts = ceph_cluster.get_nodes()
+    if config.get("op"):
+        func = OP_MAP[config.get("op")][config.get("service_type")]
+        try:
+            method = getattr(cephadm, func)
+            log.info(
+                "Deploy %s service using %s option"
+                % (config["service_type"], config.get("op"))
+            )
+            if config.get("extra_args"):
+                method(**config.get("extra_args"))
             else:
-                hosts = [
-                    node
-                    for node in ceph_cluster.get_nodes()
-                    for name in hosts
-                    if name in node.shortname
-                ]
-
-            config["nodes"] = hosts
-            try:
-                func = getattr(cephadm, op)
-                func(**config)
-            except AttributeError:
-                raise NotImplementedError(f"Cls HostMixin Not implemented {op}")
+                method()
+        except AttributeError:
+            raise NotImplementedError(f"Class CephADM Not implemented {func}")
     return 0
