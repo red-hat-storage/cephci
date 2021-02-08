@@ -170,13 +170,32 @@ class CephAdmin(
 
         return False
 
-    def shell(self, remote, args, **kwargs):
+    def get_role_service(self, service_name):
+        """
+        Get service info by name
+
+        Args:
+            service_name: service name
+        Returns:
+            service
+        """
+        out, _ = self.shell(
+            remote=self.installer,
+            args=["ceph", "orch", "ls", "-f", "json-pretty"],
+        )
+        for svc in json.loads(out):
+            if service_name in svc.get("service_name"):
+                return svc
+        return None
+
+    def shell(self, remote, args, check_status=True, **kwargs):
         """
         Ceph orchestrator shell interface to run ceph commands
 
         Args:
             remote: remote host
             args: list arguments
+            check_status: check command status
             kwargs: key-value arguments
 
         Returns:
@@ -193,6 +212,7 @@ class CephAdmin(
             sudo=True,
             cmd=" ".join(cmd),
             timeout=self.TIMEOUT,
+            check_ec=check_status,
         )
 
         out = out.read().decode().strip()

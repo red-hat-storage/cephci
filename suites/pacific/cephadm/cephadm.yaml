@@ -267,3 +267,87 @@ tests:
           zone: zone
       destroy-cluster: false
       abort-on-fail: false
+  - test:
+      name: Remove RGW Service
+      desc: Remove RGW service using orch remove option
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        op: apply
+        service_type: remove
+        extra_args:
+          service_name: "rgw.realm.zone"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove ISCSI Service
+      desc: Remove ISCSI service using orch remove option
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        op: apply
+        service_type: "remove"
+        extra_args:
+          service_name: "iscsi.iscsi"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove Prometheus Service
+      desc: Remove Prometheus service using orch remove option
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        op: apply
+        service_type: "remove"
+        extra_args:
+          service_name: "prometheus"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove Node-exporter Service
+      desc: Remove Node-exporter service using orch remove option
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        op: apply
+        service_type: "remove"
+        extra_args:
+          service_name: "node-exporter"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove Alert-manager Service
+      desc: Remove Alert-manager service using orch remove option
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        op: apply
+        service_type: "remove"
+        extra_args:
+          service_name: "alertmanager"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove Grafana Service
+      desc: Remove Grafana service using orch remove option
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        op: apply
+        service_type: "remove"
+        extra_args:
+          service_name: "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove MDS Service
+      desc: Remove MDS service using orch remove option
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        op: apply
+        service_type: "remove"
+        extra_args:
+          service_name: 'mds.cephfs'
+      destroy-cluster: false
+      abort-on-fail: true

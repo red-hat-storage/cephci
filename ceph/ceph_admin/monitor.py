@@ -44,7 +44,7 @@ class MonitorRole(Apply, DaemonMixin):
 
     def daemon_add_mon(self, **config):
         """
-        Deploy MON service using "orch apply" option
+        Deploy MON service using "orch daemon add" option
         Args:
             config: test arguments
         """

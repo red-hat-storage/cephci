@@ -17,6 +17,7 @@ OP_MAP = {
         "alertmanager": "apply_alert_manager",
         "grafana": "apply_grafana",
         "nfs": "apply_nfs",
+        "remove": "orch_remove",
     },
     "add": {
         "mon": "daemon_add_mon",
@@ -144,7 +145,7 @@ def run(ceph_cluster, **kw):
         try:
             method = getattr(cephadm, func)
             log.info(
-                "Deploy %s service using %s option"
+                "Executing %s service using %s option"
                 % (config["service_type"], config.get("op"))
             )
             if config.get("extra_args"):
