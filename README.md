@@ -1,9 +1,9 @@
 [![Build Status](https://github.com/red-hat-storage/cephci/workflows/tests/badge.svg)](https://github.com/red-hat-storage/cephci/actions)
 # Ceph-CI
-CEPH-CI is a framework tightly coupled with CentralCI and Red Hat Builds for
-testing Ceph downstream builds with CentralCI and Jenkins.
-
-It uses a modified version of Mita to create/destroy Ceph resources dynamically
+CEPH-CI is a framework for testing Red Hat Ceph Storage product builds. It
+dynamically creates virtual machines and storage volumes within Red Hat's
+CentralCI OpenStack enviroment, installs and tests Ceph, and then deallocates
+the resources when complete.
 
 ## Getting Started
 #### Prerequisites
