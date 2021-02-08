@@ -6,13 +6,11 @@ CentralCI OpenStack enviroment, installs and tests Ceph, and then deallocates
 the resources when complete.
 
 ## Getting Started
-#### Prerequisites
-1. Python 3.6 or newer.
 
 #### Installing
-It is recommended that you use a python virtual environment to install the necessary dependencies and execute cephci.
+Please use a Python virtual environment to install the necessary dependencies and execute cephci.
 
-1. Setup a Python 3 virtual environment.
+1. Setup a Python virtualenv (CEPH-CI requires Python 3.6 or newer).
     * `python3 -m venv <path/to/venv>`
     * `source <path/to/venv>/bin/activate`
 2. Install requirements with `pip install -r requirements.txt`
