@@ -44,6 +44,7 @@ Cluster configuration files are kept in a directory under `conf` for each ceph v
 | "Jewel"                | RH Ceph Storage 2       | `conf/jewel`    |
 | "Luminous              | RH Ceph Storage 3       | `conf/luminous` |
 | "Nautilus              | RH Ceph Storage 4       | `conf/nautilus` |
+| "Pacific"              | RH Ceph Storage 5       | `conf/pacific`  |
 
 The conf files describes the test bed configuration.
 The image-name inside globals: define what image is used to clone ceph-nodes(
