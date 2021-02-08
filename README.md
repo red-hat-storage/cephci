@@ -38,9 +38,12 @@ your own OpenStack credentials.
 
 #### Cluster Configuration
 Cluster configuration files are kept in a directory under `conf` for each ceph version.
-For jewel, configs are under `conf/jewel`.
-For luminous, configs are under `conf/luminous`.
-For nautilus, configs are under `conf/nautilus`
+
+| Ceph upstream codename | RH Ceph Storage Release | Location        |
+| ---------------------- | ----------------------- | --------------- |
+| "Jewel"                | RH Ceph Storage 2       | `conf/jewel`    |
+| "Luminous              | RH Ceph Storage 3       | `conf/luminous` |
+| "Nautilus              | RH Ceph Storage 4       | `conf/nautilus` |
 
 The conf files describes the test bed configuration.
 The image-name inside globals: define what image is used to clone ceph-nodes(
