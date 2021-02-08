@@ -5,6 +5,8 @@ Cephadm orchestration host operations
 import json
 import logging
 
+from ceph.utils import get_nodes_by_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,8 +53,7 @@ class HostMixin:
         Args:
             config
         """
-        nodes = config.get("nodes", self.cluster.get_nodes())
-        nodes = nodes if isinstance(nodes, list) else [nodes]
+        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
 
         attach_address = config.get("attach_address", True)
         add_label = config.get("add_label", True)
@@ -96,8 +97,7 @@ class HostMixin:
         Args:
             config
         """
-        nodes = config.get("nodes", self.cluster.get_nodes())
-        nodes = nodes if isinstance(nodes, list) else [nodes]
+        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
         logger.info("Remove nodes : %s", [node.ip_address for node in nodes])
 
         for node in nodes:
@@ -127,8 +127,7 @@ class HostMixin:
         Args:
             config
         """
-        nodes = config.get("nodes", self.cluster.get_nodes())
-        nodes = nodes if isinstance(nodes, list) else [nodes]
+        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
         logger.info(
             "Attach label on this nodes : %s", [node.ip_address for node in nodes]
         )
@@ -167,8 +166,7 @@ class HostMixin:
         Args:
             config
         """
-        nodes = config.get("nodes", self.cluster.get_nodes())
-        nodes = nodes if isinstance(nodes, list) else [nodes]
+        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
         logger.info(
             "Remove label on this nodes : %s", [node.ip_address for node in nodes]
         )
@@ -200,8 +198,7 @@ class HostMixin:
         Args:
             config
         """
-        nodes = config.get("nodes", self.cluster.get_nodes())
-        nodes = nodes if isinstance(nodes, list) else [nodes]
+        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
         logger.info(
             "Set Address on this nodes : %s", [node.ip_address for node in nodes]
         )

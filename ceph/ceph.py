@@ -20,6 +20,10 @@ from utility.utils import custom_ceph_config
 logger = logging.getLogger(__name__)
 
 
+class ResourcesNotFoundError(Exception):
+    pass
+
+
 class Ceph(object):
     DEFAULT_RHCS_VERSION = "3.3"
 
