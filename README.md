@@ -1,18 +1,16 @@
 [![Build Status](https://github.com/red-hat-storage/cephci/workflows/tests/badge.svg)](https://github.com/red-hat-storage/cephci/actions)
 # Ceph-CI
-CEPH-CI is a framework tightly coupled with CentralCI and Red Hat Builds for
-testing Ceph downstream builds with CentralCI and Jenkins.
-
-It uses a modified version of Mita to create/destroy Ceph resources dynamically
+CEPH-CI is a framework for testing Red Hat Ceph Storage product builds. It
+dynamically creates virtual machines and storage volumes within Red Hat's
+CentralCI OpenStack enviroment, installs and tests Ceph, and then deallocates
+the resources when complete.
 
 ## Getting Started
-#### Prerequisites
-1. Python 3.6 or newer.
 
 #### Installing
-It is recommended that you use a python virtual environment to install the necessary dependencies and execute cephci.
+Please use a Python virtual environment to install the necessary dependencies and execute cephci.
 
-1. Setup a Python 3 virtual environment.
+1. Setup a Python virtualenv (CEPH-CI requires Python 3.6 or newer).
     * `python3 -m venv <path/to/venv>`
     * `source <path/to/venv>/bin/activate`
 2. Install requirements with `pip install -r requirements.txt`
