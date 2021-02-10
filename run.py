@@ -95,8 +95,8 @@ Options:
   --reuse <file>                    use the stored vm state for rerun
   --skip-cluster                    skip cluster creation from ansible/ceph-deploy
   --skip-subscription               skip subscription manager if using beta rhel images
-  --docker-registry <registry>      Docker registry, deafult value is taken from ansible config
-  --docker-image <image>            Docker image, deafult value is taken from ansible config
+  --docker-registry <registry>      Docker registry, default value is taken from ansible config
+  --docker-image <image>            Docker image, default value is taken from ansible config
   --docker-tag <tag>                Docker tag, default value is 'latest'
   --insecure-registry               Disable security check for docker registry
   --post-results                    Post results to polarion, needs Polarion IDs
