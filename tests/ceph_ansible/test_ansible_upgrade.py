@@ -100,11 +100,11 @@ def run(ceph_cluster, **kw):
 
     # copy rolling update from infrastructure playbook
     jewel_minor_update = build.startswith("2")
-    if build.startswith("4"):
+    if build.startswith("4") or build.startswith("5"):
         cmd = (
             "cd {};"
             "ANSIBLE_STDOUT_CALLBACK=debug;"
-            "ansible-playbook -e ireallymeanit=yes -vvvv -i"
+            "ansible-playbook -e ireallymeanit=yes -vvvv -i "
             "hosts infrastructure-playbooks/rolling_update.yml".format(ansible_dir)
         )
     else:
@@ -166,8 +166,25 @@ def run(ceph_cluster, **kw):
         )
         if container_count_fail:
             return container_count_fail
+
+    client = ceph_cluster.get_ceph_object("mon")
+
+    if build.startswith("5"):
+
+        cmd = (
+            "cd {};"
+            "ANSIBLE_STDOUT_CALLBACK=debug;"
+            "ansible-playbook -e ireallymeanit=yes -vvvv -i "
+            "hosts infrastructure-playbooks/cephadm-adopt.yml".format(ansible_dir)
+        )
+        out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+        client = ceph_cluster.get_nodes("mon")[0]
+
     return ceph_cluster.check_health(
-        build, timeout=config.get("timeout", 300), cluster_name=cluster_name
+        build,
+        cluster_name=cluster_name,
+        client=client,
+        timeout=config.get("timeout", 300),
     )
 
 

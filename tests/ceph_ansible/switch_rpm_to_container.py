@@ -18,7 +18,7 @@ def run(**kw):
     for cnode in ceph_nodes:
         if cnode.role == "installer":
             installer_node = cnode
-    if not build.startswith("4"):
+    if build.startswith("3"):
         installer_node.exec_command(
             sudo=True,
             cmd="cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{playbook} .".format(
