@@ -38,6 +38,7 @@ def add_recent_rhel8_product_cert(ceph):
     )
     ceph.exec_command(
         sudo=True,
-        cmd="curl http://magna002.ceph.redhat.com/cephci-jenkins/rhceph-qe-team-files/rhpc_8_2.sh -O",
+        cmd="curl -k https://gitlab.cee.redhat.com/ceph/teuthology-configs/-"
+        "/raw/master/cephci/interop/update_certs.sh -O",
     )
-    ceph.exec_command(sudo=True, cmd="bash rhpc_8_2.sh", long_running=True)
+    ceph.exec_command(sudo=True, cmd="bash update_certs.sh")
