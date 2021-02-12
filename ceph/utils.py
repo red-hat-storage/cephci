@@ -21,7 +21,9 @@ log = logging.getLogger(__name__)
 RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 
 
-def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=None):
+def create_ceph_nodes(
+    cluster_conf, inventory, osp_cred, run_id, instances_name=None, enable_eus=False
+):
     osp_glbs = osp_cred.get("globals")
     os_cred = osp_glbs.get("openstack-credentials")
     params = dict()
@@ -43,6 +45,8 @@ def create_ceph_nodes(cluster_conf, inventory, osp_cred, run_id, instances_name=
     params["tenant-domain-id"] = os_cred["tenant-domain-id"]
     params["keypair"] = os_cred.get("keypair", None)
     ceph_nodes = dict()
+    if enable_eus and not inventory.get("instance").get("eus-supported", False):
+        raise Exception("EUS release is not supported for this distro")
     if inventory.get("instance").get("create"):
         if ceph_cluster.get("image-name"):
             params["image-name"] = ceph_cluster.get("image-name")
