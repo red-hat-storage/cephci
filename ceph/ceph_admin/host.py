@@ -1,6 +1,4 @@
-"""
-Cephadm orchestration host operations
-"""
+"""Cephadm orchestration host operations."""
 
 import json
 import logging

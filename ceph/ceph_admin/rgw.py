@@ -1,7 +1,7 @@
 """
-Module to deploy NFS service and daemon(s).
+Module to deploy RGW service and individual daemon(s).
 
-this module deploy NFS service and daemon(s) along with
+this module deploy RGW service and daemon(s) along with
 handling other prerequisites needed for deployment.
 
 """
@@ -10,32 +10,33 @@ from ceph.ceph_admin.apply import ApplyMixin
 from .orch import Orch
 
 
-class NFS(ApplyMixin, Orch):
-    SERVICE_NAME = "nfs"
+class RGW(ApplyMixin, Orch):
+    SERVICE_NAME = "rgw"
 
     def apply(self, **config):
         """
-        Deploy the NFS service.
+        Deploy the RGW service using the provided data.
 
         Args:
             config: test arguments
 
         config:
             command: apply
-            service: nfs
+            service: rgw
             prefix_args:
-                name: india
-                pool: south
+                realm: india
+                zone: south
             args:
-                label: nfs    # either label or node.
+                label: rgw_south    # either label or node.
                 nodes:
                     - node1
                 limit: 3    # no of daemons
                 sep: " "    # separator to be used for placements
         """
         prefix_args = config.pop("prefix_args")
-        name = prefix_args.get("name", "nfs1")
-        pool = prefix_args.get("pool", "nfs_pool")
 
-        config["prefix_args"] = [name, pool]
+        realm = prefix_args.get("realm", "realm")
+        zone = prefix_args.get("zone", "zone")
+
+        config[prefix_args] = [realm, zone]
         super().apply(**config)
