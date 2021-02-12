@@ -1,6 +1,8 @@
-"""
-Cephadm orchestration host operations
-"""
+"""Cephadm orchestration host operations."""
+from typing import List, Optional, Tuple
+
+from .orch import Orch
+from .typing_ import OrchProtocol
 
 import json
 import logging
@@ -10,18 +12,21 @@ from ceph.utils import get_nodes_by_id
 logger = logging.getLogger(__name__)
 
 
-class HostMixin:
-    """
-    Cephadm orchestration host operations
+class Host(Orch):
+    """Interface for executing ceph host <options> operations."""
 
-    Supported operations
-        - Host addition with ip address and labels
-            (role labels will be attached)
-        - Host removal
-        - Attach labels to existing node
-        - Set IP address to existing node
-        - Listing the host with json format
-    """
+    SERVICE_NAME = "host"
+
+    def ls(
+            self: OrchProtocol,
+            args: Optional[List[str]] = None,
+            pretty_json: bool = True,
+            base_cmd: Optional[List[str]] = None,
+    ) -> Tuple:
+        """
+        Return the list of host discovered in the cluster.
+        """
+        base_cmd = ["ceph", "orch", "host"]
 
     def host_list(self):
         """

@@ -1,21 +1,22 @@
-"""Manage the NFS service via the cephadm CLI."""
-from typing import Dict, Optional
+"""Manage MDS service via Ceph's cephadm CLI."""
+from typing import Optional, Dict
+
 from .apply import ApplyMixin
 from .orch import Orch
 
 
-class NFS(ApplyMixin, Orch):
-    """Interface to ceph orch <action> nfs."""
+class MDS(ApplyMixin, Orch):
+    """Interface to the MetaDataService."""
 
-    SERVICE_NAME = "nfs"
+    SERVICE_NAME = "mds"
 
     def apply(
             self,
             prefix_args: Optional[Dict] = None,
-            args: Optional[Dict] = None,
+            args: Optional[Dict] = None
     ) -> None:
         """
-        Deploy the NFS service.
+        Deploy the MDS service using the provided configuration.
 
         Args:
             prefix_args:    The key/value pairs to be passed to the base command.
@@ -23,19 +24,18 @@ class NFS(ApplyMixin, Orch):
 
         config:
             command: apply
-            service: nfs
+            service: mds
             prefix_args:
-                name: india
-                pool: south
+                fs_name: india
             args:
-                label: nfs    # either label or node.
+                label: mds    # either label or node.
                 nodes:
                     - node1
                 limit: 3    # no of daemons
                 sep: " "    # separator to be used for placements
         """
-        name = prefix_args.get("name", "nfs1")
-        pool = prefix_args.get("pool", "nfs_pool")
-        prefix_list = [name, pool]
+        fs_name = prefix_args.get("fs_name", "mds_fs")
+
+        prefix_list = [fs_name]
 
         super().apply(prefix_args=prefix_list, args=args)

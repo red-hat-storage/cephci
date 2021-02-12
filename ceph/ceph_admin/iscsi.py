@@ -1,53 +1,59 @@
-"""
-ISCSI module to deploy iscsi service and daemons.
+"""Module to deploy and manage Ceph's iSCSI service."""
+from typing import Dict, Optional
 
-this module deploy iscsi service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
-from ceph.ceph import ResourcesNotFoundError
-from ceph.ceph_admin.apply import Apply
-from ceph.ceph_admin.daemon_mixin import DaemonMixin
-from ceph.utils import get_nodes_by_id
+from .apply import ApplyMixin
+from .orch import Orch
 
 
-class ISCSIRole(Apply, DaemonMixin):
-    __ROLE = "iscsi"
+class ISCSI(ApplyMixin, Orch):
+    """Interface to Ceph's iSCSI service via cephadm CLI."""
 
-    def apply_iscsi(self, **config):
+    SERVICE_NAME = "iscsi"
+
+    def apply(
+            self,
+            prefix_args: Optional[Dict] = None,
+            args: Optional[Dict] = None
+    ) -> None:
         """
-        Deploy ISCSI target sing "orch apply" option
+        Deploy ISCSI client daemon using the provided arguments.
+
+        Fixme: This method does not consider the prefix args to the base command.
+
         Args:
-            config: apply config data
+            prefix_args:    Key/value pairs to be passed to the command.
+            args:           Key/value pairs to be passed as arguments to the command.
 
         config:
-            nodes: list of nodes where iscsi to be deployed
-            pool: pool_name
-            api_user: username
-            api_password: user_password
-            trusted_ip_list: [ip_addr1, ip_addr2]
+            command: apply
+            service: iscsi
+            prefix_args:
+                pool_name: india
+                pool_pg_num: 3
+                pool_pgp_num: 3
+                api_user: user
+                api_password: password
+                trusted_ip_list: list of ips
+            args:
+                label: iscsi    # either label or node.
+                nodes:
+                    - node1
+                limit: 3    # no of daemons
+                sep: " "    # separator to be used for placements
         """
-        pool = config.get("pool_name", "iscsi")
-        pg_num = config.get("pool_pg_num", 3)
-        pgp_num = config.get("pool_pgp_num", 3)
-        user = config.get("api_user", "user")
-        password = config.get("api_password", "password")
-        trusted_ip_list = config.get("trusted_ip_list", [])
+        pool = prefix_args.get("pool_name", "iscsi")
+        pg_num = prefix_args.get("pool_pg_num", 3)
+        pgp_num = prefix_args.get("pool_pgp_num", 3)
+        user = prefix_args.get("api_user", "user")
+        password = prefix_args.get("api_password", "password")
+        trusted_ip_list = prefix_args.get("trusted_ip_list", [])
 
-        cmd = Apply.apply_cmd + [self.__ROLE]
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes"))
+        prefix_list = list(
+            [pool, user, password, repr(" ".join(trusted_ip_list))]
+        )
 
-        cmd.extend([pool, user, password, repr(" ".join(trusted_ip_list))])
-
-        if not nodes:
-            raise ResourcesNotFoundError("Nodes not found: %s", config.get("nodes"))
-
-        host_placement = [node.shortname for node in nodes]
-        cmd.append("--placement '{}'".format(";".join(host_placement)))
-
-        # Create pool
+        # Execute pre-requisites
         self.shell(
-            remote=self.installer,
             args=[
                 "ceph",
                 "osd",
@@ -61,17 +67,6 @@ class ISCSIRole(Apply, DaemonMixin):
         )
 
         # Associate pool to RBD application
-        self.shell(
-            remote=self.installer,
-            args=["ceph", "osd", "pool", "application", "enable", pool, "rbd"],
-        )
+        self.shell(args=["ceph", "osd", "pool", "application", "enable", pool, "rbd"])
 
-        Apply.apply(
-            self,
-            role=self.__ROLE,
-            command=cmd,
-            placements=host_placement,
-        )
-
-    def daemon_add_iscsi(self):
-        raise NotImplementedError
+        super().apply(prefix_args=prefix_list, args=args)
