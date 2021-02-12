@@ -159,16 +159,13 @@ def enable_rhel_rpms(ceph, distro_ver):
     Args:
         distro_ver: distro version details
     """
-    repos_7x = ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"]
 
-    repos_8x = ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"]
+    repos = {
+        "7": ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"],
+        "8": ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"],
+    }
 
-    repos = None
-    if not distro_ver.startswith("8"):
-        repos = repos_7x
-    else:
-        repos = repos_8x
-    for repo in repos:
+    for repo in repos.get(distro_ver[0]):
         ceph.exec_command(
             sudo=True,
             cmd="subscription-manager repos --enable={r}".format(r=repo),
