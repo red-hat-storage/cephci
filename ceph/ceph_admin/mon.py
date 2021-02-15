@@ -27,7 +27,7 @@ class Mon(ApplyMixin, Orch):
                     input_file: <name of spec>
                 args:
                     placement:
-                        label: iscsi    # either label or node.
+                        label: mon    # either label or node.
                         nodes:
                             - node1
                         limit: 3    # no of daemons
