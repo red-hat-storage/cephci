@@ -1,10 +1,5 @@
-"""
-Module to deploy RGW service and individual daemon(s).
-
-this module deploy RGW service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
+"""Module to deploy RGW service and individual daemon(s)."""
+from typing import Dict
 from .apply import ApplyMixin
 from .orch import Orch
 
@@ -12,30 +7,34 @@ from .orch import Orch
 class RGW(ApplyMixin, Orch):
     SERVICE_NAME = "rgw"
 
-    def apply(self, **config):
+    def apply(self, config: Dict) -> None:
         """
         Deploy the RGW service using the provided data.
 
         Args:
             config: test arguments
 
-        config:
-            command: apply
-            service: rgw
-            prefix_args:
-                realm: india
-                zone: south
-            args:
-                label: rgw_south    # either label or node.
-                nodes:
-                    - node1
-                limit: 3    # no of daemons
-                sep: " "    # separator to be used for placements
+        Example:
+            config:
+                command: apply
+                service: rgw
+                base_cmd_args:              # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:                   # positional arguments
+                    - india                 # realm
+                    - south                 # zone
+                args:
+                    port: int               # port number
+                    ssl: true               # certification
+                    placement:
+                        label: rgw_south
+                        nodes:              # A list of strings that would looked up
+                            - node1
+                        limit: 3            # no of daemons
+                        sep: " "            # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        prefix_args = config.pop("prefix_args")
-
-        realm = prefix_args.get("realm", "realm")
-        zone = prefix_args.get("zone", "zone")
-
-        config[prefix_args] = [realm, zone]
-        super().apply(**config)
+        super().apply(config)
