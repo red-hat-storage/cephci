@@ -1,10 +1,11 @@
 """Module that allows QE to interface with cephadm bootstrap CLI."""
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from ceph.ceph import ResourcesNotFoundError
 from utility.utils import get_cephci_config
 
+from .common import config_dict_to_string
 from .typing_ import CephAdmProtocol
 
 logger = logging.getLogger(__name__)
@@ -13,11 +14,7 @@ logger = logging.getLogger(__name__)
 class BootstrapMixin:
     """Add bootstrap support to the child class."""
 
-    def bootstrap(
-        self: CephAdmProtocol,
-        prefix_args: Optional[Dict] = None,
-        args: Optional[Dict] = None,
-    ) -> None:
+    def bootstrap(self: CephAdmProtocol, config: Dict) -> None:
         """
         Execute cephadm bootstrap with the passed kwargs on the installer node.
 
@@ -27,16 +24,15 @@ class BootstrapMixin:
           - Execution of bootstrap command
 
         Args:
-            prefix_args:    Optional arguments to the command.
-            args:           Optional arguments to the action.
+            config: Key/value pairs passed from the test case.
 
         Example:
             config:
                 command: bootstrap
-                prefix_args:
+                base_cmd_args:
                     verbose: true
-                    image: <image_name>
                 args:
+                    custom_image: False
                     mon-ip: <node_name>
                     mgr-id: <mgr_id>
                     fsid: <id>
@@ -57,29 +53,25 @@ class BootstrapMixin:
 
         cmd = "cephadm"
 
-        for key, value in prefix_args:
-            cmd += f" --{key}"
+        if config.get("base_cmd_args"):
+            cmd += config_dict_to_string(config["base_cmd_args"])
 
-            # CLI enable/disable are the long option without any value. Support others
-            if not isinstance(value, bool):
-                cmd += f" {value}"
-
-        # Exception, custom_image is a boolean however the information about it comes
-        #            from the command line to allow frequent changes.
-        custom_image = args.pop("custom_image")
+        args = config.get("args")
+        custom_image = args.pop("custom_image", True)
 
         if custom_image:
-            custom_image_args = (
-                " --registry-url registry.redhat.io"
-                " --registry-username {user}"
-                " --registry-password {password}"
-                " --image {image}"
-            )
-            cmd += custom_image_args.format(
-                user=cdn_cred.get("username"),
-                password=cdn_cred.get("password"),
-                image=self.config["container_image"],
-            )
+            cmd += f" --image {self.config['container_image']}"
+
+        cmd += " bootstrap"
+        custom_image_args = (
+            " --registry-url registry.redhat.io"
+            " --registry-username {user}"
+            " --registry-password {password}"
+        )
+        cmd += custom_image_args.format(
+            user=cdn_cred.get("username"),
+            password=cdn_cred.get("password"),
+        )
 
         # To be generic, the mon-ip contains the global node name. Here, we replace the
         # name with the IP address. The replacement allows us to be inline with the
@@ -94,10 +86,7 @@ class BootstrapMixin:
             else:
                 raise ResourcesNotFoundError(f"Unknown {mon_node} node name.")
 
-        for key, value in args:
-            cmd += f" --{key}"
-            if not isinstance(value, bool):
-                cmd += f" {value}"
+        cmd += config_dict_to_string(args)
 
         out, err = self.installer.exec_command(
             sudo=True,

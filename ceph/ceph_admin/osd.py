@@ -28,7 +28,7 @@ class OSD(ApplyMixin, Orch):
                 args:
                     all-available-devices: true
                     placement:
-                        label: iscsi    # either label or node.
+                        label: osd    # either label or node.
                         nodes:
                             - node1
                         limit: 3    # no of daemons

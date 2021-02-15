@@ -29,7 +29,7 @@ class MDS(ApplyMixin, Orch):
                     - india             # name of the filesystem
                 args:
                     placement:
-                        label: iscsi    # either label or node.
+                        label: mds    # either label or node.
                         nodes:
                             - node1
                         limit: 3    # no of daemons

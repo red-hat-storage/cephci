@@ -31,7 +31,7 @@ class NFS(ApplyMixin, Orch):
                 args:
                     namespace: <name>       # namespace
                     placement:
-                        label: iscsi    # either label or node.
+                        label: nfs    # either label or node.
                         nodes:
                             - node1
                         limit: 3    # no of daemons

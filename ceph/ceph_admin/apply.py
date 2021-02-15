@@ -88,6 +88,9 @@ class ApplyMixin:
                 if "*" in nodes:
                     base_cmd.append('"*"')
                     node_names = [node.shortname for node in self.cluster.node_list]
+                elif "[" in nodes:
+                    base_cmd.append(nodes)
+                    verify_service = False
                 else:
                     nodes_ = get_nodes_by_id(self.cluster, nodes)
                     node_names = [node.shortname for node in nodes_]

@@ -27,7 +27,7 @@ class NodeExporter(ApplyMixin, Orch):
                     input_file: <name of spec>
                 args:
                     placement:
-                        label: iscsi    # either label or node.
+                        label: node-exporter    # either label or node.
                         nodes:
                             - node1
                         limit: 3    # no of daemons
