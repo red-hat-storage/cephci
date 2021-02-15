@@ -10,9 +10,9 @@ class NFS(ApplyMixin, Orch):
     SERVICE_NAME = "nfs"
 
     def apply(
-            self,
-            prefix_args: Optional[Dict] = None,
-            args: Optional[Dict] = None,
+        self,
+        prefix_args: Optional[Dict] = None,
+        args: Optional[Dict] = None,
     ) -> None:
         """
         Deploy the NFS service.

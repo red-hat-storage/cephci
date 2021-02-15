@@ -14,9 +14,9 @@ class BootstrapMixin:
     """Add bootstrap support to the child class."""
 
     def bootstrap(
-            self: CephAdmProtocol,
-            prefix_args: Optional[Dict] = None,
-            args: Optional[Dict] = None
+        self: CephAdmProtocol,
+        prefix_args: Optional[Dict] = None,
+        args: Optional[Dict] = None,
     ) -> None:
         """
         Execute cephadm bootstrap with the passed kwargs on the installer node.

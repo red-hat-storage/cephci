@@ -10,9 +10,7 @@ class OSD(ApplyMixin, Orch):
     SERVICE_NAME = "osd"
 
     def apply(
-            self,
-            prefix_args: Optional[Dict] = None,
-            args: Optional[Dict] = None
+        self, prefix_args: Optional[Dict] = None, args: Optional[Dict] = None
     ) -> None:
         """
         Deploy the OSD service on all available storage devices.

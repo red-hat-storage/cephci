@@ -116,6 +116,6 @@ class ApplyMixin:
             return
 
         if not self.check_service_exists(
-                service_name=self.SERVICE_NAME, ids=node_names
+            service_name=self.SERVICE_NAME, ids=node_names
         ):
             raise ServiceApplyFailure

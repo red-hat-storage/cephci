@@ -11,9 +11,7 @@ class MDS(ApplyMixin, Orch):
     SERVICE_NAME = "mds"
 
     def apply(
-            self,
-            prefix_args: Optional[Dict] = None,
-            args: Optional[Dict] = None
+        self, prefix_args: Optional[Dict] = None, args: Optional[Dict] = None
     ) -> None:
         """
         Deploy the MDS service using the provided configuration.

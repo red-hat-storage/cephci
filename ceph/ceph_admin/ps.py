@@ -8,9 +8,9 @@ class PSMixin:
     """CLI that list daemons known to orchestrator."""
 
     def ps(
-            self: OrchProtocol,
-            prefix_args: Optional[Dict] = None,
-            args: Optional[Dict] = None,
+        self: OrchProtocol,
+        prefix_args: Optional[Dict] = None,
+        args: Optional[Dict] = None,
     ) -> Tuple:
         """
         Execute the command ceph orch ps <args>.
