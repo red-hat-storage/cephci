@@ -24,7 +24,6 @@ class Host(Orch):
             json output of hosts list
         """
         out, _ = self.shell(
-            remote=self.installer,
             args=["ceph", "orch", "host", "ls", "--format=json"],
         )
         return json.loads(out)
@@ -64,7 +63,7 @@ class Host(Orch):
                 cmd += node.role.role_list
 
             # Add host
-            self.shell(remote=self.installer, args=cmd)
+            self.shell(args=cmd)
 
             # validate host existence
             assert node.shortname in self.fetch_host_names()
@@ -103,7 +102,7 @@ class Host(Orch):
                 continue
 
             cmd = ["ceph", "orch", "host", "rm", node.shortname]
-            self.shell(remote=self.installer, args=cmd)
+            self.shell(args=cmd)
 
             assert node.shortname not in self.fetch_host_names()
 
@@ -134,7 +133,6 @@ class Host(Orch):
             labels = node.role.role_list
             for label in labels:
                 self.shell(
-                    remote=self.installer,
                     args=[
                         "ceph",
                         "orch",
@@ -172,7 +170,6 @@ class Host(Orch):
             labels = node.role.role_list
             for label in labels:
                 self.shell(
-                    remote=self.installer,
                     args=["ceph", "orch", "host", "label", "rm", node.shortname, label],
                 )
                 # BZ-1920979(cephadm allows duplicate labels attachment to node)
@@ -202,7 +199,6 @@ class Host(Orch):
                 self.host_add(node)
 
             self.shell(
-                remote=self.installer,
                 args=[
                     "ceph",
                     "orch",
