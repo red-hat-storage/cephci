@@ -8,7 +8,11 @@ from .typing_ import OrchProtocol
 class LSMixin:
     """CLI that list known services to orchestrator."""
 
-    def ls(self: OrchProtocol, config: Dict, args: Optional[Dict] = None) -> Tuple:
+    def ls(
+            self: OrchProtocol,
+            config: Optional[Dict] = None,
+            args: Optional[Dict] = None
+    ) -> Tuple:
         """
         Execute the command ceph orch ls <args>.
 
@@ -36,24 +40,25 @@ class LSMixin:
         """
         cmd = ["ceph", "orch"]
 
-        if config.get("base_cmd_args"):
+        if config and config.get("base_cmd_args"):
             base_cmd_args = config_dict_to_string(config["base_cmd_args"])
             cmd.append(base_cmd_args)
 
         cmd.append("ls")
 
-        # Export key has to be dealt differently
-        export_ = args.pop("export")
-        refresh = args.pop("refresh")
+        if args:
+            # Export key has to be dealt differently
+            export_ = args.pop("export")
+            refresh = args.pop("refresh")
 
-        # Ideally, there is only one argument along
-        for key, value in args:
-            cmd.append(value)
+            # Ideally, there is only one argument along
+            for key, value in args:
+                cmd.append(value)
 
-        if export_:
-            cmd.append("--export")
+            if export_:
+                cmd.append("--export")
 
-        if refresh:
-            cmd.append("--refresh")
+            if refresh:
+                cmd.append("--refresh")
 
         return self.shell(args=cmd)
