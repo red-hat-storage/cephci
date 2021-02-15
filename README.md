@@ -13,7 +13,8 @@ Please use a Python virtual environment to install the necessary dependencies an
 1. Setup a Python virtualenv (CEPH-CI requires Python 3.6 or newer).
     * `python3 -m venv <path/to/venv>`
     * `source <path/to/venv>/bin/activate`
-2. Install requirements with `pip install -r requirements.txt`
+2. Install cephci's dependencies:
+    * `pip install -r requirements.txt`
 
 #### Initial Setup
 Configure your cephci.yaml file:
