@@ -1,20 +1,42 @@
-"""
-Module to deploy osd service and daemon(s).
+"""Manage OSD service via cephadm CLI."""
+from typing import Dict
 
-this module deploy OSD service and daemon(s) along with
-handling other prerequisites needed for deployment.
-"""
-from ceph.ceph_admin.apply import ApplyMixin
-
+from .apply import ApplyMixin
 from .orch import Orch
 
 
 class OSD(ApplyMixin, Orch):
+    """Interface to ceph orch osd."""
+
     SERVICE_NAME = "osd"
 
-    def apply(self, **config):
-        """Deploy the OSD service on all available storage devices."""
-        if not config.get("args"):
-            config["args"] = "--all-available-devices"
+    def apply(self, config: Dict) -> None:
+        """
+        Deploy the ODS service using the provided configuration.
 
-        super().apply(**config)
+        Args:
+            config: Key/value pairs provided by the test case to create the service.
+
+        Example
+            config:
+                command: apply
+                service: ods
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                args:
+                    all-available-devices: true
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
+        """
+        if not config.get("args", {}).get("all-available-devices"):
+            config["args"]["all-available-devices"] = True
+
+        super().apply(config)

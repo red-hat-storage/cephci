@@ -1,41 +1,40 @@
-"""
-Module to deploy MDS service and daemon(s).
+"""Manage MDS service via Ceph's cephadm CLI."""
+from typing import Dict
 
-this module deploy MDS service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
-from ceph.ceph_admin.apply import ApplyMixin
-
+from .apply import ApplyMixin
 from .orch import Orch
 
 
 class MDS(ApplyMixin, Orch):
+    """Interface to the MetaDataService."""
 
     SERVICE_NAME = "mds"
 
-    def apply(self, **config):
+    def apply(self, config: Dict) -> None:
         """
         Deploy the MDS service using the provided configuration.
 
         Args:
-            config: test arguments
+            config: Key/value pairs provided by the test case to create the service.
 
-        config:
-            command: apply
-            service: mds
-            prefix_args:
-                fs_name: india
-            args:
-                label: mds    # either label or node.
-                nodes:
-                    - node1
-                limit: 3    # no of daemons
-                sep: " "    # separator to be used for placements
+        Example
+            config:
+                command: apply
+                service: mds
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:
+                    - india             # name of the filesystem
+                args:
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        prefix_args = config.pop("prefix_args")
-        fs_name = prefix_args.get("fs_name", "mds_fs")
-
-        config["prefix_args"] = [fs_name]
-
-        super().apply(**config)
+        super().apply(config=config)

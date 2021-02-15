@@ -1,6 +1,6 @@
-"""Module that allows QE's to interface with cephadm bootstrap CLI."""
+"""Module that allows QE to interface with cephadm bootstrap CLI."""
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from ceph.ceph import ResourcesNotFoundError
 from utility.utils import get_cephci_config
@@ -11,9 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 class BootstrapMixin:
-    """Provide cephadm bootstrap CLI execution."""
+    """Add bootstrap support to the child class."""
 
-    def bootstrap(self: CephAdmProtocol, **kwargs: Dict):
+    def bootstrap(
+        self: CephAdmProtocol,
+        prefix_args: Optional[Dict] = None,
+        args: Optional[Dict] = None,
+    ) -> None:
         """
         Execute cephadm bootstrap with the passed kwargs on the installer node.
 
@@ -23,15 +27,22 @@ class BootstrapMixin:
           - Execution of bootstrap command
 
         Args:
-            kwargs: Key/value pairs supported in the CLI
+            prefix_args:    Optional arguments to the command.
+            args:           Optional arguments to the action.
+
+        Example:
+            config:
+                command: bootstrap
+                prefix_args:
+                    verbose: true
+                    image: <image_name>
+                args:
+                    mon-ip: <node_name>
+                    mgr-id: <mgr_id>
+                    fsid: <id>
         """
-        # copy ssh keys to other hosts
         self.cluster.setup_ssh_keys()
-
-        # set tool download repository
         self.set_tool_repo()
-
-        # install/download cephadm package on installer
         self.install()
 
         # Create and set permission to ceph directory
@@ -44,12 +55,18 @@ class BootstrapMixin:
         # 2) Skip automatic dashboard provisioning
         cdn_cred = get_cephci_config().get("cdn_credentials")
 
-        cmd = "cephadm -v bootstrap"
+        cmd = "cephadm"
+
+        for key, value in prefix_args:
+            cmd += f" --{key}"
+
+            # CLI enable/disable are the long option without any value. Support others
+            if not isinstance(value, bool):
+                cmd += f" {value}"
 
         # Exception, custom_image is a boolean however the information about it comes
         #            from the command line to allow frequent changes.
-
-        custom_image = kwargs.pop("custom_image")
+        custom_image = args.pop("custom_image")
 
         if custom_image:
             custom_image_args = (
@@ -64,9 +81,11 @@ class BootstrapMixin:
                 image=self.config["container_image"],
             )
 
-        mon_node = kwargs.pop("mon-ip")
+        # To be generic, the mon-ip contains the global node name. Here, we replace the
+        # name with the IP address. The replacement allows us to be inline with the
+        # CLI option.
+        mon_node = args.pop("mon-ip")
         if mon_node:
-            # get the node IP address
             nodes = self.cluster.get_nodes()
             for node in nodes:
                 if mon_node in node.shortname:
@@ -75,10 +94,10 @@ class BootstrapMixin:
             else:
                 raise ResourcesNotFoundError(f"Unknown {mon_node} node name.")
 
-        for arg in kwargs:
-            cmd += f" --{arg}"
-            if not isinstance(kwargs[arg], bool):
-                cmd += f" {kwargs[arg]}"
+        for key, value in args:
+            cmd += f" --{key}"
+            if not isinstance(value, bool):
+                cmd += f" {value}"
 
         out, err = self.installer.exec_command(
             sudo=True,

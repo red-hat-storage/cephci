@@ -1,41 +1,42 @@
-"""
-Module to deploy NFS service and daemon(s).
+"""Manage the NFS service via the cephadm CLI."""
+from typing import Dict
 
-this module deploy NFS service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
-from ceph.ceph_admin.apply import ApplyMixin
-
+from .apply import ApplyMixin
 from .orch import Orch
 
 
 class NFS(ApplyMixin, Orch):
+    """Interface to ceph orch <action> nfs."""
+
     SERVICE_NAME = "nfs"
 
-    def apply(self, **config):
+    def apply(self, config: Dict) -> None:
         """
-        Deploy the NFS service.
+        Deploy the NFS service using the provided configuration.
 
         Args:
-            config: test arguments
+            config: Key/value pairs provided by the test case to create the service.
 
-        config:
-            command: apply
-            service: nfs
-            prefix_args:
-                name: india
-                pool: south
-            args:
-                label: nfs    # either label or node.
-                nodes:
-                    - node1
-                limit: 3    # no of daemons
-                sep: " "    # separator to be used for placements
+        Example
+            config:
+                command: apply
+                service: nfs
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:
+                    - india             # service identity
+                    - southpool         # name of the pool
+                args:
+                    namespace: <name>       # namespace
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        prefix_args = config.pop("prefix_args")
-        name = prefix_args.get("name", "nfs1")
-        pool = prefix_args.get("pool", "nfs_pool")
-
-        config["prefix_args"] = [name, pool]
-        super().apply(**config)
+        super().apply(config=config)

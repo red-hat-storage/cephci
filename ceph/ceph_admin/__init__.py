@@ -45,9 +45,11 @@ class CephAdmin(BootstrapMixin, ShellMixin):
 
     def read_cephadm_gen_pub_key(self):
         """
-        Read cephadm generated public key
+        Read cephadm generated public key.
+
         Arg:
             Installer node
+
         Returns:
             Public Key string
         """
@@ -59,6 +61,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
     def distribute_cephadm_gen_pub_key(self, nodes=None):
         """
         Distribute cephadm generated public key to all nodes in the list.
+
         Args:
             nodes: node list to add ceph public key(default: None)
         """
@@ -81,13 +84,11 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             )
 
     def set_tool_repo(self):
-        """
-        Enable Ceph tool repo on every cluster node
-        """
+        """Add the given repo on every node part of the cluster."""
         for node in self.cluster.get_nodes():
             node.exec_command(
                 sudo=True,
-                cmd="yum-config-manager --add"
+                cmd="yum-config-manager --add-repo"
                 " {}compose/Tools/x86_64/os/".format(self.config.get("base_url")),
             )
 

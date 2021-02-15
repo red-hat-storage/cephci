@@ -1,19 +1,19 @@
 """
+Represent the ceph orch CLI action 'apply'.
+
 Module to deploy ceph role service(s) using orchestration command
 "ceph orch apply <role> [options] --placement '<placements>' "
 
-this module inherited where service deployed using "apply" operation.
-and also validation using orchestration process list response
+This module inherited where service deployed using "apply" operation and also
+validation using orchestration process list response
 """
-import logging
-from copy import deepcopy
-from typing import Any, List, Optional
+from typing import Dict
 
 from ceph.utils import get_nodes_by_id
 
+from .common import config_dict_to_string
 from .typing_ import ServiceProtocol
 
-logger = logging.getLogger(__name__)
 BASE_CMD = ["ceph", "orch", "apply"]
 
 
@@ -22,112 +22,100 @@ class ServiceApplyFailure(Exception):
 
 
 class ApplyMixin:
-    """Interact with ceph orch apply CLI."""
+    """Add apply support to the base class."""
 
-    def placement(
-        self: ServiceProtocol,
-        nodes: List[str],
-        prefix_args: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-        sep: Any = " ",
-    ) -> None:
+    def apply(self: ServiceProtocol, config: Dict) -> None:
         """
-        Execute ceph orch apply <service> --placement command with the provided inputs.
+        Execute the apply method using the object's service name and provided input.
 
         Args:
-            nodes:  The list of the nodes participating in this operation
-            prefix_args:    The list of additional arguments to be added
-            limit:  The number of daemons to be deployed
-            sep:    The command supports blank space, ; & , as separators
+            config:     Key/value pairs passed from the test suite.
+                        base_cmd_args   - key/value pairs to set for base command
+                        pos_args        - List to be added as positional params
+                        args            - Key/value pairs as optional arguments.
 
-        Raises:
-            ServiceApplyFailure when the service cannot be initiated
+        Example:
+            config:
+                command: apply
+                service: rgw
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:               # positional arguments
+                    - india             # realm
+                    - south             # zone
+                args:
+                    placement:
+                        label: rgw_south
+                        nodes:              # A list of strings that would looked up
+                            - node1
+                        limit: 3            # no of daemons
+                        sep: " "            # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        cmd = deepcopy(BASE_CMD)
-        cmd.append(self.SERVICE_NAME)
+        base_cmd = ["ceph", "orch"]
 
-        if prefix_args:
-            cmd += prefix_args
+        if config.get("base_cmd_args"):
+            base_cmd_args_str = config_dict_to_string(config.get("base_cmd_args"))
+            base_cmd.append(base_cmd_args_str)
 
-        cmd.append("--placement=")
+        base_cmd.append("apply")
+        base_cmd.append(self.SERVICE_NAME)
 
-        # * refers to deploy the service on all discovered nodes
-        if "*" in nodes:
-            cmd += nodes
-            node_names = [node.shortname for node in self.cluster.node_list]
-        else:
-            nodes_ = get_nodes_by_id(self.cluster, nodes)
-            node_names = [node.shortname for node in nodes_]
+        pos_args = config.get("pos_args")
+        if pos_args:
+            base_cmd += pos_args
 
-            item = ""
-            if limit is not None:
-                item = f"{limit} "
+        args = config.get("args")
 
-            item += f"{sep}".join(node_names)
-            cmd.append(item)
+        node_names = None
+        verify_service = False
+        placement = args.pop("placement")
 
-        self.shell(args=cmd)
+        if placement:
+            placement_str = "--placement="
+
+            if "label" in placement:
+                placement_str += f'"label:{placement["label"]}"'
+                base_cmd.append(placement_str)
+
+            if "nodes" in placement:
+                verify_service = True
+                nodes = placement.get("nodes")
+
+                if "*" in nodes:
+                    base_cmd.append('"*"')
+                    node_names = [node.shortname for node in self.cluster.node_list]
+                else:
+                    nodes_ = get_nodes_by_id(self.cluster, nodes)
+                    node_names = [node.shortname for node in nodes_]
+
+                    sep = placement.get("sep", " ")
+                    node_str = f"{sep}".join(node_names)
+
+                    limit = placement.pop("limit")
+                    if limit:
+                        placement_str += f"'{limit} {node_str}'"
+                    else:
+                        placement_str += f"'{node_str}'"
+
+                base_cmd.append(placement_str)
+
+            # Odd scenario when limit is specified but without nodes
+            if "limit" in placement:
+                base_cmd.append(f"--placement={placement.get('limit')}")
+
+        # At this junction, optional arguments are left in dict
+        if args:
+            base_cmd.append(config_dict_to_string(args))
+
+        self.shell(args=base_cmd)
+        if not verify_service:
+            return
 
         if not self.check_service_exists(
             service_name=self.SERVICE_NAME, ids=node_names
         ):
             raise ServiceApplyFailure
-
-    def label(
-        self: ServiceProtocol, label: str, prefix_args: Optional[List[str]] = None
-    ) -> None:
-        """
-        Execute the command ceph orch apply label.
-
-        Args:
-            label:          The name of the label to be applied.
-            prefix_args:    The list of additional arguments to be added.
-        """
-        cmd = deepcopy(BASE_CMD)
-        cmd.append(self.SERVICE_NAME)
-
-        if prefix_args:
-            cmd += prefix_args
-
-        cmd.append("label:")
-        cmd.append(label)
-
-        self.shell(args=cmd)
-
-    def apply(self, **config):
-        """
-        Execute the apply method using the object's service name and passed kwargs.
-
-        Args:
-            config: Below mentioned keys are supported.
-
-        Keys: The keys supported by the service with apply. It can contain
-            prefix_args:    The list of arguments to be passed to the service.
-
-                            For example rgw
-                            config:
-                                command: apply
-                                service: rgw
-                                prefix_args:
-                                    realm: india
-                                    zone: south
-                                args:
-                                    label: rgw_south    # either label or node.
-                                    nodes:
-                                        - node1
-                                    limit: 3    # no of daemons
-                                    sep: " "    # separator to be used for placements
-
-        """
-        args = config["args"]
-
-        if "label" in config:
-            self.label(label=args["label"], prefix_args=config.get("prefix_args"))
-
-        if "nodes" in config:
-            self.placement(
-                nodes=args["nodes"],
-                prefix_args=config.get("prefix_args"),
-                limit=args.get("limit"),
-                sep=args.get("sep", " "),
-            )

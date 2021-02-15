@@ -1,25 +1,20 @@
 """Cephadm orchestration host operations."""
+# from typing import List, Optional, Tuple
 
 import json
 import logging
 
 from ceph.utils import get_nodes_by_id
 
+from .orch import Orch
+
 logger = logging.getLogger(__name__)
 
 
-class HostMixin:
-    """
-    Cephadm orchestration host operations
+class Host(Orch):
+    """Interface for executing ceph host <options> operations."""
 
-    Supported operations
-        - Host addition with ip address and labels
-            (role labels will be attached)
-        - Host removal
-        - Attach labels to existing node
-        - Set IP address to existing node
-        - Listing the host with json format
-    """
+    SERVICE_NAME = "host"
 
     def host_list(self):
         """
@@ -28,7 +23,6 @@ class HostMixin:
             json output of hosts list
         """
         out, _ = self.shell(
-            remote=self.installer,
             args=["ceph", "orch", "host", "ls", "--format=json"],
         )
         return json.loads(out)
@@ -68,7 +62,7 @@ class HostMixin:
                 cmd += node.role.role_list
 
             # Add host
-            self.shell(remote=self.installer, args=cmd)
+            self.shell(args=cmd)
 
             # validate host existence
             assert node.shortname in self.fetch_host_names()
@@ -107,7 +101,7 @@ class HostMixin:
                 continue
 
             cmd = ["ceph", "orch", "host", "rm", node.shortname]
-            self.shell(remote=self.installer, args=cmd)
+            self.shell(args=cmd)
 
             assert node.shortname not in self.fetch_host_names()
 
@@ -138,7 +132,6 @@ class HostMixin:
             labels = node.role.role_list
             for label in labels:
                 self.shell(
-                    remote=self.installer,
                     args=[
                         "ceph",
                         "orch",
@@ -176,7 +169,6 @@ class HostMixin:
             labels = node.role.role_list
             for label in labels:
                 self.shell(
-                    remote=self.installer,
                     args=["ceph", "orch", "host", "label", "rm", node.shortname, label],
                 )
                 # BZ-1920979(cephadm allows duplicate labels attachment to node)
@@ -206,7 +198,6 @@ class HostMixin:
                 self.host_add(node)
 
             self.shell(
-                remote=self.installer,
                 args=[
                     "ceph",
                     "orch",

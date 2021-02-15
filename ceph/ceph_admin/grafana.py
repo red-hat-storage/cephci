@@ -1,14 +1,38 @@
-"""
-Module to deploy Grafana service and individual daemon(s).
+"""Manage the Ceph Grafana service via cephadm CLI."""
+from typing import Dict
 
-this module deploy Grafana service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
-from ceph.ceph_admin.apply import ApplyMixin
-
+from .apply import ApplyMixin
 from .orch import Orch
 
 
 class Grafana(ApplyMixin, Orch):
+    """Interface to Ceph service Grafana via CLI."""
+
     SERVICE_NAME = "grafana"
+
+    def apply(self, config: Dict) -> None:
+        """
+        Deploy the grafana service using the provided configuration.
+
+        Args:
+            config: Key/value pairs provided by the test case to create the service.
+
+        Example
+            config:
+                command: apply
+                service: grafana
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                args:
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
+        """
+        super().apply(config=config)

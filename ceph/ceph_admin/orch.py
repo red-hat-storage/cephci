@@ -74,7 +74,7 @@ class Orch(LSMixin, PSMixin, CephAdmin):
 
     def get_role_service(self, service_name: str) -> str:
         """
-        Get service info by name
+        Get service info by name.
 
         Args:
             service_name: service name
