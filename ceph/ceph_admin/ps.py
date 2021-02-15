@@ -1,36 +1,33 @@
 """Module that interfaces with ceph orch ps CLI."""
 from typing import Dict, Optional, Tuple
 
+from .common import config_dict_to_string
 from .typing_ import OrchProtocol
 
 
 class PSMixin:
     """CLI that list daemons known to orchestrator."""
 
-    def ps(
-        self: OrchProtocol,
-        prefix_args: Optional[Dict] = None,
-        args: Optional[Dict] = None,
-    ) -> Tuple:
+    def ps(self: OrchProtocol, config: Optional[Dict] = None) -> Tuple:
         """
         Execute the command ceph orch ps <args>.
 
         Args:
-            prefix_args:    The key/value pairs to be passed to the base command.
-            args:           the key/value pairs to be passed to the command.
+            config: The key/value pairs passed from the test case.
 
         Example:
             Testing ceph orch ps
 
             config:
                 command: ps
-                prefix_args:
+                base_cmd_args:
                     verbose: true
                     format: json | json-pretty | xml | xml-pretty | plain | yaml
                 args:
                     host: <hostname>
-                    service_type: <type of service>
-                    service_name: <name of the service>
+                    service_name: <name of service>
+                    daemon_type: <type of daemon>
+                    daemon_id: <id of the daemon>
                     refresh: true
 
         Returns:
@@ -38,25 +35,25 @@ class PSMixin:
         """
         cmd = ["ceph", "orch"]
 
-        for key, value in prefix_args:
-            if len(key) == 1:
-                cmd.append(f"-{key}")
-                continue
-
-            cmd.append(f"--{key}")
-            if not isinstance(value, bool):
-                cmd.append(value)
+        if config and config.get("base_cmd_args"):
+            base_cmd_args = config_dict_to_string(config["base_cmd_args"])
+            cmd.append(base_cmd_args)
 
         cmd.append("ps")
 
-        # Refresh key has to be dealt differently
-        refresh = args.pop("refresh")
+        args = None
+        if config and config.get("args"):
+            args = config.get("args")
 
-        # Ideally, there is only one argument along
-        for key, value in args:
-            cmd.append(value)
+        if args:
+            # Export key has to be dealt differently
+            refresh = args.pop("refresh")
 
-        if refresh:
-            cmd.append("--refresh")
+            # Ideally, there is only one argument along
+            for key, value in args:
+                cmd.append(value)
+
+            if refresh:
+                cmd.append("--refresh")
 
         return self.shell(args=cmd)
