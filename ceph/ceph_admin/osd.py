@@ -1,5 +1,6 @@
 """Manage OSD service via cephadm CLI."""
-from typing import Dict, Optional
+from typing import Dict
+
 from .apply import ApplyMixin
 from .orch import Orch
 
@@ -9,26 +10,33 @@ class OSD(ApplyMixin, Orch):
 
     SERVICE_NAME = "osd"
 
-    def apply(
-        self, prefix_args: Optional[Dict] = None, args: Optional[Dict] = None
-    ) -> None:
+    def apply(self, config: Dict) -> None:
         """
-        Deploy the OSD service on all available storage devices.
+        Deploy the ODS service using the provided configuration.
 
         Args:
-            prefix_args:    Key/value pairs to be passed to the base command.
-            args:           Key/value pairs to be passed to the command.
+            config: Key/value pairs provided by the test case to create the service.
 
-        Example:
-
+        Example
             config:
-                command: osd
-                prefix_args:    # Not supported
+                command: apply
+                service: ods
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
                 args:
-
+                    all-available-devices: true
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
+        if not config.get("args", {}).get("all-available-devices"):
+            config["args"]["all-available-devices"] = True
 
-        if not config.get("args"):
-            config["args"] = "--all-available-devices"
-
-        super().apply(**config)
+        super().apply(config)
