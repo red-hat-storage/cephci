@@ -12,7 +12,7 @@ class Grafana(ApplyMixin, Orch):
 
     def apply(self, config: Dict) -> None:
         """
-        Deploy the MDS service using the provided configuration.
+        Deploy the grafana service using the provided configuration.
 
         Args:
             config: Key/value pairs provided by the test case to create the service.

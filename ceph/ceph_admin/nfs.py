@@ -9,33 +9,33 @@ class NFS(ApplyMixin, Orch):
 
     SERVICE_NAME = "nfs"
 
-    def apply(
-        self,
-        prefix_args: Optional[Dict] = None,
-        args: Optional[Dict] = None,
-    ) -> None:
+    def apply(self, config: Dict) -> None:
         """
-        Deploy the NFS service.
+        Deploy the NFS service using the provided configuration.
 
         Args:
-            prefix_args:    The key/value pairs to be passed to the base command.
-            args:           The key/value pairs to be passed to the command.
+            config: Key/value pairs provided by the test case to create the service.
 
-        config:
-            command: apply
-            service: nfs
-            prefix_args:
-                name: india
-                pool: south
-            args:
-                label: nfs    # either label or node.
-                nodes:
-                    - node1
-                limit: 3    # no of daemons
-                sep: " "    # separator to be used for placements
+        Example
+            config:
+                command: apply
+                service: nfs
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:
+                    - india             # service identity
+                    - southpool         # name of the pool
+                args:
+                    namespace: <name>       # namespace
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        name = prefix_args.get("name", "nfs1")
-        pool = prefix_args.get("pool", "nfs_pool")
-        prefix_list = [name, pool]
-
-        super().apply(prefix_args=prefix_list, args=args)
+        super().apply(config=config)
