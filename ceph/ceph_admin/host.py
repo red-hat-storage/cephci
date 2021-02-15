@@ -17,17 +17,6 @@ class Host(Orch):
 
     SERVICE_NAME = "host"
 
-    def ls(
-        self: OrchProtocol,
-        args: Optional[List[str]] = None,
-        pretty_json: bool = True,
-        base_cmd: Optional[List[str]] = None,
-    ) -> Tuple:
-        """
-        Return the list of host discovered in the cluster.
-        """
-        base_cmd = ["ceph", "orch", "host"]
-
     def host_list(self):
         """
         List the cluster hosts

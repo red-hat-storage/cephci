@@ -15,6 +15,8 @@ class RGW(ApplyMixin, Orch):
             config: test arguments
 
         Example:
+            <adm_shell> ceph orch apply rgw realm zone --placement="label:rgw"
+
             config:
                 command: apply
                 service: rgw
