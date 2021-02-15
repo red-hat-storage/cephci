@@ -10,15 +10,15 @@ from time import sleep
 from typing import List
 
 from ceph.ceph import ResourcesNotFoundError
-from ceph.ceph_admin import CephAdmin
 
 from .ls import LSMixin
 from .ps import PSMixin
+from .ceph import CephCLI
 
 LOG = logging.getLogger()
 
 
-class Orch(LSMixin, PSMixin, CephAdmin):
+class Orch(LSMixin, PSMixin, CephCLI):
     """Represent ceph orch command."""
 
     direct_calls = ["ls", "ps"]
