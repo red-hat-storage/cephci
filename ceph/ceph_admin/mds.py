@@ -1,5 +1,5 @@
 """Manage MDS service via Ceph's cephadm CLI."""
-from typing import Optional, Dict
+from typing import Dict
 
 from .apply import ApplyMixin
 from .orch import Orch
@@ -10,30 +10,31 @@ class MDS(ApplyMixin, Orch):
 
     SERVICE_NAME = "mds"
 
-    def apply(
-        self, prefix_args: Optional[Dict] = None, args: Optional[Dict] = None
-    ) -> None:
+    def apply(self, config: Dict) -> None:
         """
         Deploy the MDS service using the provided configuration.
 
         Args:
-            prefix_args:    The key/value pairs to be passed to the base command.
-            args:           The key/value pairs to be passed to the command.
+            config: Key/value pairs provided by the test case to create the service.
 
-        config:
-            command: apply
-            service: mds
-            prefix_args:
-                fs_name: india
-            args:
-                label: mds    # either label or node.
-                nodes:
-                    - node1
-                limit: 3    # no of daemons
-                sep: " "    # separator to be used for placements
+        Example
+            config:
+                command: apply
+                service: mds
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:
+                    - india             # name of the filesystem
+                args:
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        fs_name = prefix_args.get("fs_name", "mds_fs")
-
-        prefix_list = [fs_name]
-
-        super().apply(prefix_args=prefix_list, args=args)
+        super().apply(config=config)
