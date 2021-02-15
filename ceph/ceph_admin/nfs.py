@@ -1,5 +1,6 @@
 """Manage the NFS service via the cephadm CLI."""
-from typing import Dict, Optional
+from typing import Dict
+
 from .apply import ApplyMixin
 from .orch import Orch
 

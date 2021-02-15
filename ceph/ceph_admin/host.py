@@ -1,13 +1,12 @@
 """Cephadm orchestration host operations."""
-from typing import List, Optional, Tuple
-
-from .orch import Orch
-from .typing_ import OrchProtocol
+# from typing import List, Optional, Tuple
 
 import json
 import logging
 
 from ceph.utils import get_nodes_by_id
+
+from .orch import Orch
 
 logger = logging.getLogger(__name__)
 
