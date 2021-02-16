@@ -47,6 +47,15 @@ class OrchProtocol(CephAdmProtocol, Protocol):
     ) -> bool:
         ...
 
+    def check_service(
+        self,
+        service_name: str,
+        timeout: int = 300,
+        interval: int = 5,
+        exist: bool = True,
+    ) -> bool:
+        ...
+
 
 class ServiceProtocol(OrchProtocol, Protocol):
     """Base service protocol for supporting static duck typing hints."""

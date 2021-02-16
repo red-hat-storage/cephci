@@ -546,6 +546,7 @@ def run(args):
 
     sys.path.append(os.path.abspath("tests"))
     sys.path.append(os.path.abspath("tests/rados"))
+    sys.path.append(os.path.abspath("tests/cephadm"))
     sys.path.append(os.path.abspath("tests/rbd"))
     sys.path.append(os.path.abspath("tests/rbd_mirror"))
     sys.path.append(os.path.abspath("tests/cephfs"))

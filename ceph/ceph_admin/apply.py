@@ -14,8 +14,6 @@ from ceph.utils import get_nodes_by_id
 from .common import config_dict_to_string
 from .typing_ import ServiceProtocol
 
-BASE_CMD = ["ceph", "orch", "apply"]
-
 
 class ServiceApplyFailure(Exception):
     pass
@@ -72,7 +70,7 @@ class ApplyMixin:
 
         node_names = None
         verify_service = False
-        placement = args.pop("placement")
+        placement = args.pop("placement", {})
 
         if placement:
             placement_str = "--placement="
@@ -86,10 +84,10 @@ class ApplyMixin:
                 nodes = placement.get("nodes")
 
                 if "*" in nodes:
-                    base_cmd.append('"*"')
+                    placement_str += '"*"'
                     node_names = [node.shortname for node in self.cluster.node_list]
                 elif "[" in nodes:
-                    base_cmd.append(nodes)
+                    placement_str += '"%s"' % nodes
                     verify_service = False
                 else:
                     nodes_ = get_nodes_by_id(self.cluster, nodes)
@@ -98,9 +96,9 @@ class ApplyMixin:
                     sep = placement.get("sep", " ")
                     node_str = f"{sep}".join(node_names)
 
-                    limit = placement.pop("limit")
+                    limit = placement.pop("limit", None)
                     if limit:
-                        placement_str += f"'{limit} {node_str}'"
+                        placement_str += f"'{limit}{sep}{node_str}'"
                     else:
                         placement_str += f"'{node_str}'"
 
@@ -122,3 +120,34 @@ class ApplyMixin:
             service_name=self.SERVICE_NAME, ids=node_names
         ):
             raise ServiceApplyFailure
+
+    def remove(self: ServiceProtocol, config: Dict) -> None:
+        """
+        Execute the remove method using the object's service name.
+
+        Args:
+            config:     Key/value pairs passed from the test suite.
+                        pos_args        - List to be added as positional params
+
+        Example:
+            config:
+                command: remove
+                service: rgw
+                base_cmd_args:
+                    service_name: rgw.realm.zone
+                    verify: true
+        """
+        base_cmd = ["ceph", "orch", "rm"]
+        cmd_args = config.pop("base_cmd_args")
+        service_name = cmd_args.pop("service_name")
+        base_cmd.append(service_name)
+
+        self.shell(args=base_cmd)
+
+        verify = cmd_args.pop("verify", True)
+
+        if verify:
+            self.check_service(
+                service_name=service_name,
+                exist=False,
+            )

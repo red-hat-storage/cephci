@@ -1,12 +1,9 @@
 """Cephadm orchestration host operations."""
-# from typing import List, Optional, Tuple
-
-import json
 import logging
 
-from ceph.utils import get_nodes_by_id
+from ceph.utils import get_node_by_id, get_nodes_by_id
 
-from .orch import Orch
+from .orch import Orch, ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -16,18 +13,17 @@ class Host(Orch):
 
     SERVICE_NAME = "host"
 
-    def host_list(self):
+    def list(self):
         """
         List the cluster hosts
         Returns:
             json output of hosts list
         """
-        out, _ = self.shell(
+        return self.shell(
             args=["ceph", "orch", "host", "ls", "--format=json"],
         )
-        return json.loads(out)
 
-    def host_add(self, **config):
+    def add(self, config):
         """
         Add host(s) to cluster
 
@@ -45,21 +41,29 @@ class Host(Orch):
         Args:
             config
         """
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
+        base_cmd_args = config.get("base_cmd_args")
+        nodes = get_nodes_by_id(self.cluster, base_cmd_args.get("nodes", []))
 
-        attach_address = config.get("attach_address", True)
-        add_label = config.get("add_label", True)
+        attach_address = base_cmd_args.get("attach_address", True)
         logger.info(
-            "Adding nodes %s, (attach_address: %s, add_label: %s)"
-            % ([node.ip_address for node in nodes], attach_address, add_label)
+            "Adding nodes %s, (attach_address: %s, labels: %s)"
+            % (
+                [node.ip_address for node in nodes],
+                attach_address,
+                base_cmd_args.get("labels"),
+            )
         )
 
         for node in nodes:
             cmd = ["ceph", "orch", "host", "add", node.shortname]
             if attach_address:
                 cmd += [node.ip_address]
-            if add_label:
-                cmd += node.role.role_list
+
+            _labels = base_cmd_args.get("labels", [])
+            if isinstance(_labels, str) and _labels in "node_role_list":
+                _labels = node.role.role_list
+
+            cmd += _labels
 
             # Add host
             self.shell(args=cmd)
@@ -70,12 +74,12 @@ class Host(Orch):
             if attach_address:
                 assert node.ip_address in self.get_addr_by_name(node.shortname)
 
-            if add_label:
+            if _labels:
                 assert sorted(self.fetch_labels_by_hostname(node.shortname)) == sorted(
-                    node.role.role_list
+                    _labels
                 )
 
-    def host_remove(self, **config):
+    def remove(self, config):
         """
         Remove host(s) from cluster
 
@@ -89,7 +93,8 @@ class Host(Orch):
         Args:
             config
         """
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
+        base_cmd_args = config.get("base_cmd_args")
+        nodes = get_nodes_by_id(self.cluster, base_cmd_args.get("nodes", []))
         logger.info("Remove nodes : %s", [node.ip_address for node in nodes])
 
         for node in nodes:
@@ -105,7 +110,7 @@ class Host(Orch):
 
             assert node.shortname not in self.fetch_host_names()
 
-    def attach_label(self, **config):
+    def label_add(self, config):
         """
         Add/Attach label to nodes
 
@@ -114,37 +119,38 @@ class Host(Orch):
         - roles defined to each node used as labels( eg., [mon, mgr])
 
         config:
-            nodes: [node1.obj, node2.obj, ...]
-
+            node: node1
+            labels:
+                - mon
+                - osd
         Args:
             config
         """
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
-        logger.info(
-            "Attach label on this nodes : %s", [node.ip_address for node in nodes]
-        )
+        base_cmd_args = config.get("base_cmd_args")
+        node = get_node_by_id(self.cluster, base_cmd_args.get("node"))
+        if not node:
+            raise ResourceNotFoundError("%s Node not found" % node.shortname)
 
-        for node in nodes:
-            if node.shortname not in self.fetch_host_names():
-                # Add host
-                self.host_add(node)
+        _labels = base_cmd_args.get("labels")
+        if isinstance(_labels, str) and _labels in "node_role_list":
+            _labels = node.role.role_list
 
-            labels = node.role.role_list
-            for label in labels:
-                self.shell(
-                    args=[
-                        "ceph",
-                        "orch",
-                        "host",
-                        "label",
-                        "add",
-                        node.shortname,
-                        label,
-                    ],
-                )
-                assert label in self.fetch_labels_by_hostname(node.shortname)
+        logger.info("Add label(s) %s on node %s" % (_labels, node.ip_address))
+        for label in _labels:
+            self.shell(
+                args=[
+                    "ceph",
+                    "orch",
+                    "host",
+                    "label",
+                    "add",
+                    node.shortname,
+                    label,
+                ],
+            )
+            assert label in self.fetch_labels_by_hostname(node.shortname)
 
-    def remove_label(self, **config):
+    def label_remove(self, config):
         """
         Removes label from nodes
 
@@ -152,29 +158,37 @@ class Host(Orch):
         - if nodes are empty, all cluster nodes are considered
 
         config:
-            nodes: [node1.obj, node2.obj, ...]
+            node: node1
+            labels:
+                - mon
+                - osd
 
         Args:
             config
         """
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
-        logger.info(
-            "Remove label on this nodes : %s", [node.ip_address for node in nodes]
-        )
+        base_cmd_args = config.get("base_cmd_args")
+        node = get_node_by_id(self.cluster, base_cmd_args.get("node"))
+        if not node:
+            raise ResourceNotFoundError("%s Node not found" % node.shortname)
 
-        for node in nodes:
-            if node.shortname not in self.fetch_host_names():
-                continue
+        _labels = base_cmd_args.get("labels")
 
-            labels = node.role.role_list
-            for label in labels:
-                self.shell(
-                    args=["ceph", "orch", "host", "label", "rm", node.shortname, label],
-                )
-                # BZ-1920979(cephadm allows duplicate labels attachment to node)
-                # assert label not in self.fetch_labels_by_hostname(node.shortname)
+        logger.info("Remove label(s) %s on node %s" % (_labels, node.ip_address))
 
-    def set_address(self, **config):
+        if isinstance(_labels, str) and _labels in "node_role_list":
+            _labels = node.role.role_list
+
+        if not _labels:
+            raise ResourceNotFoundError("labels not found/provided")
+
+        for label in _labels:
+            self.shell(
+                args=["ceph", "orch", "host", "label", "rm", node.shortname, label],
+            )
+            # BZ-1920979(cephadm allows duplicate labels attachment to node)
+            # assert label not in self.fetch_labels_by_hostname(node.shortname)
+
+    def set_address(self, config):
         """
         Set Ip address to node
 
@@ -188,15 +202,13 @@ class Host(Orch):
         Args:
             config
         """
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes", []))
+        base_cmd_args = config.get("base_cmd_args")
+        nodes = get_nodes_by_id(self.cluster, base_cmd_args.get("nodes", []))
+
         logger.info(
             "Set Address on this nodes : %s", [node.ip_address for node in nodes]
         )
         for node in nodes:
-            if node.shortname not in self.fetch_host_names():
-                # Add host
-                self.host_add(node)
-
             self.shell(
                 args=[
                     "ceph",
@@ -215,7 +227,7 @@ class Host(Orch):
         Returns:
             labels: list of labels
         """
-        nodes = self.host_list()
+        nodes = self.list()
         for node in nodes:
             if node_name in node["hostname"]:
                 return node["labels"]
@@ -227,7 +239,7 @@ class Host(Orch):
         Returns:
             list of host names
         """
-        return [i["hostname"] for i in self.host_list()]
+        return [i["hostname"] for i in self.list()]
 
     def get_addrs(self):
         """
@@ -235,7 +247,7 @@ class Host(Orch):
         Returns:
             list of IP addresses
         """
-        return [i["addr"] for i in self.host_list()]
+        return [i["addr"] for i in self.list()]
 
     def get_addr_by_name(self, node_name):
         """
@@ -244,7 +256,7 @@ class Host(Orch):
         Returns:
             ip_address: IP address of host name
         """
-        for node in self.host_list():
+        for node in self.list():
             if node_name in node["hostname"]:
                 return node["addr"]
         return None

@@ -9,11 +9,11 @@ from json import loads
 from time import sleep
 from typing import List
 
-from ceph.ceph import ResourcesNotFoundError
+from ceph.ceph import ResourceNotFoundError
 
+from .ceph import CephCLI
 from .ls import LSMixin
 from .ps import PSMixin
-from .ceph import CephCLI
 
 LOG = logging.getLogger()
 
@@ -42,7 +42,7 @@ class Orch(LSMixin, PSMixin, CephCLI):
 
         while end_time > datetime.now():
             sleep(interval)
-            out, err = self.ls()
+            out, err = self.ps({"base_cmd_args": {"format": "json"}})
             out = loads(out)
             daemons = [d for d in out if d.get("daemon_type") == service_name]
 
@@ -55,7 +55,7 @@ class Orch(LSMixin, PSMixin, CephCLI):
                     ):
                         count += 1
 
-            LOG.info("%s/%S %s daemon(s) up... retrying", count, len(ids), service_name)
+            LOG.info("%s/%s %s daemon(s) up... retrying", count, len(ids), service_name)
 
             if count == len(ids):
                 return True
@@ -91,4 +91,38 @@ class Orch(LSMixin, PSMixin, CephCLI):
             if service_name in svc.get("service_name"):
                 return svc
 
-        raise ResourcesNotFoundError(f"No service names matched {service_name}")
+        raise ResourceNotFoundError(f"No service names matched {service_name}")
+
+    def check_service(
+        self, service_name: str, timeout: int = 300, interval: int = 5, exist=True
+    ) -> bool:
+        """
+        check service existence based on the exist parameter
+
+        if exist is set, then validate its presence.
+        otherwise, for its removal.
+
+        Args:
+            service_name: service name
+            timeout: timeout in seconds
+            interval: interval in seconds
+            exist: boolean
+        Returns:
+            service
+
+        """
+        end_time = datetime.now() + timedelta(seconds=timeout)
+
+        while end_time > datetime.now():
+            sleep(interval)
+            out, err = self.ls({"base_cmd_args": {"format": "json"}})
+            out = loads(out)
+            service = [d for d in out if d.get("service_name") == service_name]
+
+            if service_name not in service and not exist:
+                return True
+            elif service_name in service and exist:
+                return True
+            LOG.info("[%s] check for existence: %s, retrying" % (service_name, exist))
+
+        return False

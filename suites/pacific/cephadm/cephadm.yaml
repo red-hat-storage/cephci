@@ -10,8 +10,15 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        registry: false
-        bootstrap: true
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: "node1"
+          orphan-initial-daemons: true
+          skip-monitoring-stack: true
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -20,10 +27,11 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "add"
-        extra_args:
-          nodes: ['node2']
+        command: host
+        service: add
+        base_cmd_args:          # arguments to ceph orch
+          nodes:
+            - node2
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -32,10 +40,11 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "add"
-        extra_args:
-          nodes: ['node3']
+        command: host
+        service: add
+        base_cmd_args:
+          nodes:
+            - "node3"
           attach_address: true
           add_label: false
       destroy-cluster: false
@@ -46,12 +55,15 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "add"
-        extra_args:
-          nodes: ['node4']
+        command: host
+        service: add
+        base_cmd_args:
+          nodes:
+            - node4
           attach_address: true
-          add_label: true
+          labels:
+            - osd
+            - node-exporter
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -60,10 +72,26 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "remove_label"
-        extra_args:
-          nodes: ['node4']
+        command: host
+        service: label_remove
+        base_cmd_args:
+          node: node4
+          labels:
+            - osd
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove Host label
+      desc: Remove host label(s) from existing node
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        command: host
+        service: label_remove
+        base_cmd_args:
+          node: node4
+          labels:
+            - node-exporter
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -72,10 +100,13 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "add_label"
-        extra_args:
-          nodes: ['node2']
+        command: host
+        service: label_add
+        base_cmd_args:
+          node: node4
+          labels:
+            - mon
+            - osd
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -84,10 +115,11 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "add_label"
-        extra_args:
-          nodes: ['node1']
+        command: host
+        service: label_add
+        base_cmd_args:
+          node: node1
+          labels: node_role_list
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -96,9 +128,9 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "set_address"
-        extra_args:
+        command: host
+        service: set_address
+        base_cmd_args:
           nodes: ['node1']
       destroy-cluster: false
       abort-on-fail: true
@@ -108,10 +140,12 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "remove"
-        extra_args:
-          nodes: ['node2']
+        command: host
+        service: remove
+        base_cmd_args:
+          nodes:
+            - node2
+            - node3
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -120,9 +154,9 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "remove"
-        extra_args:
+        command: host
+        service: remove
+        base_cmd_args:
           nodes: []
       destroy-cluster: false
       abort-on-fail: true
@@ -132,222 +166,404 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        op: host
-        service_type: "add"
-        extra_args:
+        command: host
+        service: add
+        base_cmd_args:
           nodes: []
           attach_address: true
-          add_label: true
+          labels: node_role_list
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: Apply Monitor Service
-      desc: Apply monitor service on all mon nodes
-      module: test_cephadm.py
+      name: Apply Monitor with placement and limit
+      desc: Apply monitor service with placement and limit
+      module: test_mon.py
       polarion-id:
       config:
-        op: apply
-        service_type: "mon"
-        extra_args:
-            nodes: ["node1", "node2", "node6"]
-      destroy-cluster: false
-      abort-on-fail: true
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+                - node1
+                - node2
+                - node6
+            limit: 3    # no of daemons
+            sep: " "    # separator to be used for placements
   - test:
-      name: Apply Manager Service
-      desc: Apply manager service on all mgr nodes
-      module: test_cephadm.py
+      name: Apply Monitor with placement
+      desc: Apply monitor with placement only
+      module: test_mon.py
       polarion-id:
       config:
-        op: apply
-        service_type: "mgr"
-        extra_args:
-          nodes: ["node1"]
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+                - node1
+                - node2
+                - node6
+            sep: ";"
+  - test:
+      name: Apply Monitor using label
+      desc: Apply monitor using label mon
+      module: test_mon.py
+      polarion-id:
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            label: mon
+  - test:
+      name: Apply Manager service
+      desc: Apply manager service with placement option
+      module: test_mgr.py
+      polarion-id:
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+            sep: " "
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply OSD Service
       desc: Apply OSD service with all available devices
+      module: test_osd.py
+      polarion-id:
+      config:
+        command: apply
+        service: osd
+        base_cmd_args:
+          verbose: true
+        args:
+          all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Add cephfs file system volume
+      desc: Add file system for MDS service
       module: test_cephadm.py
       polarion-id:
       config:
-        op: apply
-        service_type: "osd"
+        command: shell
+        args:          # arguments to ceph orch
+          - ceph
+          - fs
+          - volume
+          - create
+          - cephfs
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply MDS Service
       desc: Apply MDS service on all mds nodes
+      module: test_mds.py
+      polarion-id:
+      config:
+        command: apply
+        service: mds
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:
+          - cephfs              # name of the filesystem
+        args:
+          placement:
+            nodes:
+              - node2
+            limit: 1            # no of daemons
+            sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Create replicated pool
+      desc: Add pool for ISCSI service
       module: test_cephadm.py
       polarion-id:
       config:
-        op: apply
-        service_type: "mds"
-        extra_args:
-          nodes: ["node2"]
-          file_system: 'cephfs'
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - iscsi
+          - "3"
+          - "3"
+          - replicated
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable rbd application on pool
+      desc: enable rbd on iscsi pool
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - iscsi
+          - rbd
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply ISCSI Service
       desc: Apply ISCSI target service on iscsi role nodes
-      module: test_cephadm.py
+      module: test_iscsi.py
       polarion-id:
       config:
-        op: apply
-        service_type: "iscsi"
-        extra_args:
-          nodes: ["node8"]
-          pool_name: "iscsi"
-          pool_pg_num: 3
-          pool_pgp_num: 3
-          api_user: "User1"
-          api_password: "passWord"
-          trusted_ip_list: ["1.1.1.1", "2.2.2.2"]
+        command: apply
+        service: iscsi
+        base_cmd_args:            # arguments to ceph orch
+            verbose: true
+        pos_args:
+          - iscsi                 # name of the pool
+          - api_user              # name of the API user
+          - api_pass              # password of the api_user.
+          - ["1.1.1.1", "2.2.2.2"]    # space separate list of IPs
+        args:
+          placement:
+            label: iscsi          # either label or node.
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Apply ISCSI Service
+      desc: Apply ISCSI target service on iscsi role nodes
+      module: test_iscsi.py
+      polarion-id:
+      config:
+        command: apply
+        service: iscsi
+        base_cmd_args:            # arguments to ceph orch
+          verbose: true
+        pos_args:
+          - iscsi                 # name of the pool
+          - api_user              # name of the API user
+          - api_pass              # password of the api_user.
+        args:
+          placement:
+            nodes:
+              - node8          # either label or node.
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply Prometheus Service
       desc: Apply Prometheus service on role nodes
-      module: test_cephadm.py
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "prometheus"
-        extra_args:
-          nodes: ["node1"]
+        command: apply
+        service: prometheus
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply Node-exporter Service
       desc: Apply Node-exporter service on role nodes
-      module: test_cephadm.py
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "node-exporter"
-        extra_args:
-          nodes: []
+        command: apply
+        service: node-exporter
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes: "*"
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply Alert-manager Service
-      desc: Apply Alert-manager service on alertmanager role nodes
-      module: test_cephadm.py
+      desc: Apply Alert-manager service on role nodes
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "alertmanager"
-        extra_args:
-          nodes: ["node1", "node2"]
+        command: apply
+        service: alertmanager
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node2
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply Grafana Service
       desc: Apply Grafana service on role nodes
-      module: test_cephadm.py
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "grafana"
-        extra_args:
-          nodes: ["node1"]
+        command: apply
+        service: grafana
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Apply RGW Service
       desc: Apply RGW service on all rgw nodes
-      module: test_cephadm.py
+      module: test_rgw.py
       polarion-id:
       config:
-        op: apply
-        service_type: "rgw"
-        extra_args:
-          nodes: ["node6", "node7"]
-          realm: realm
-          zone: zone
+        command: apply
+        service: rgw
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:               # positional arguments
+          - india             # realm
+          - south             # zone
+        args:
+          placement:
+            nodes:              # A list of strings that would looked up
+                - node6
+                - node7
+            limit: 2            # no of daemons
+            sep: ";"            # separator to be used for placements
       destroy-cluster: false
       abort-on-fail: false
   - test:
       name: Remove RGW Service
       desc: Remove RGW service using orch remove option
-      module: test_cephadm.py
+      module: test_rgw.py
       polarion-id:
       config:
-        op: apply
-        service_type: remove
-        extra_args:
-          service_name: "rgw.realm.zone"
+        command: remove
+        service: rgw
+        base_cmd_args:
+            service_name: rgw.india.south
+            verify: true
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Remove ISCSI Service
       desc: Remove ISCSI service using orch remove option
-      module: test_cephadm.py
+      module: test_iscsi.py
       polarion-id:
       config:
-        op: apply
-        service_type: "remove"
-        extra_args:
-          service_name: "iscsi.iscsi"
+        command: remove
+        service: iscsi
+        base_cmd_args:
+            service_name: iscsi.iscsi
+            verify: true
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Remove Prometheus Service
       desc: Remove Prometheus service using orch remove option
-      module: test_cephadm.py
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "remove"
-        extra_args:
-          service_name: "prometheus"
+        command: remove
+        service: prometheus
+        base_cmd_args:
+          service_name: prometheus
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Remove Node-exporter Service
       desc: Remove Node-exporter service using orch remove option
-      module: test_cephadm.py
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "remove"
-        extra_args:
-          service_name: "node-exporter"
+        command: remove
+        service: node-exporter
+        base_cmd_args:
+          service_name: node-exporter
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Remove Alert-manager Service
       desc: Remove Alert-manager service using orch remove option
-      module: test_cephadm.py
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "remove"
-        extra_args:
-          service_name: "alertmanager"
+        command: remove
+        service: alertmanager
+        base_cmd_args:
+          service_name: alertmanager
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Remove Grafana Service
       desc: Remove Grafana service using orch remove option
-      module: test_cephadm.py
+      module: test_monitoring.py
       polarion-id:
       config:
-        op: apply
-        service_type: "remove"
-        extra_args:
-          service_name: "grafana"
+        command: remove
+        service: grafana
+        base_cmd_args:
+          service_name: grafana
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Remove MDS Service
       desc: Remove MDS service using orch remove option
+      module: test_mds.py
+      polarion-id:
+      config:
+        command: remove
+        service: mds
+        base_cmd_args:
+          service_name: 'mds.cephfs'
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: set mon_allow_pool_delete
+      desc: set mon_allow_pool_delete to true
       module: test_cephadm.py
       polarion-id:
       config:
-        op: apply
-        service_type: "remove"
-        extra_args:
-          service_name: 'mds.cephfs'
+        command: shell
+        args:
+          - ceph
+          - config
+          - set
+          - mon
+          - mon_allow_pool_delete
+          - true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: remove cephfs file system volume
+      desc: remove file system
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        command: shell
+        args:
+          - ceph
+          - fs
+          - volume
+          - rm
+          - cephfs
+          - "--yes-i-really-mean-it"
       destroy-cluster: false
       abort-on-fail: true

@@ -2,7 +2,7 @@
 import logging
 from typing import Dict
 
-from ceph.ceph import ResourcesNotFoundError
+from ceph.ceph import ResourceNotFoundError
 from utility.utils import get_cephci_config
 
 from .common import config_dict_to_string
@@ -32,7 +32,7 @@ class BootstrapMixin:
                 base_cmd_args:
                     verbose: true
                 args:
-                    custom_image: False
+                    custom_image: true | false
                     mon-ip: <node_name>
                     mgr-id: <mgr_id>
                     fsid: <id>
@@ -78,13 +78,12 @@ class BootstrapMixin:
         # CLI option.
         mon_node = args.pop("mon-ip")
         if mon_node:
-            nodes = self.cluster.get_nodes()
-            for node in nodes:
+            for node in self.cluster.get_nodes():
                 if mon_node in node.shortname:
                     cmd += f" --mon-ip {node.ip_address}"
                     break
             else:
-                raise ResourcesNotFoundError(f"Unknown {mon_node} node name.")
+                raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
 
         cmd += config_dict_to_string(args)
 

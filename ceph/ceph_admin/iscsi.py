@@ -43,27 +43,11 @@ class ISCSI(ApplyMixin, Orch):
                     pool_pg_num: <count>
                     pool_pgp_num: <count>
         """
-        # Temp workaround that needs to be removed
-        pool = config["ps_args"][0]
-        temp_args = config.pop("temp_args", {})
-        pg_num = temp_args.get("pool_pg_num", 3)
-        pgp_num = temp_args.get("pool_pgp_num", 3)
+        pos_args = config.pop("pos_args")
 
-        # Execute pre-requisites
-        self.shell(
-            args=[
-                "ceph",
-                "osd",
-                "pool",
-                "create",
-                pool,
-                str(pg_num),
-                str(pgp_num),
-                "replicated",
-            ],
-        )
-
-        # Associate pool to RBD application
-        self.shell(args=["ceph", "osd", "pool", "application", "enable", pool, "rbd"])
+        if isinstance(pos_args[-1], list):
+            trusted_list = repr(" ".join(pos_args.pop()))
+            pos_args.append(trusted_list)
+        config["pos_args"] = pos_args
 
         super().apply(config=config)
