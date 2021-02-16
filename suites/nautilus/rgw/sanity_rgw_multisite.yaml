@@ -1,11 +1,11 @@
 tests:
-   - test:
+  - test:
       name: pre-req
       module: install_prereq.py
       abort-on-fail: true
       desc: install ceph pre requisites
 
-   - test:
+  - test:
       name: ceph ansible
       module: test_ansible.py
       clusters:
@@ -86,6 +86,27 @@ tests:
                 - name: "cephfs_metadata"
                   pgs: "8"
       desc: setup multisite cluster using ceph-ansible
-      destroy-cluster: true
       abort-on-fail: true
+
+  - test:
+      name: create user
+      desc: create tenanted user
+      module: sanity_rgw_multisite.py
+      config:
+        set-env: true
+        test-site: ceph-rgw1
+        script-name: user_create.py
+        config-file-name: tenanted_user.yaml
+        copy-user-info-to-site: ceph-rgw2
+        timeout: 300
+
+  - test:
+      name: Buckets and Objects test
+      desc: create buckets and objects test
+      module: sanity_rgw_multisite.py
+      config:
+        test-site: ceph-rgw2
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+        timeout: 300
 
