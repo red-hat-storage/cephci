@@ -43,8 +43,8 @@ A simple test suite wrapper that executes tests based on yaml test configuration
  Usage:
   run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE
         [--osp-cred <file>]
-        [--rhs-con-repo <repo> --rhs-ceph-repo <repo>]
-        [ --ubuntu-repo <repo>]
+        [--rhs-ceph-repo <repo>]
+        [--ubuntu-repo <repo>]
         [--add-repo <repo>]
         [--kernel-repo <repo>]
         [--store]
@@ -84,8 +84,6 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --rhs-con-repo <repo>             location of rhs console repo
-                                    Top level location of console compose
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
                                     Top level location of compose
   --add-repo <repo>                 Any additional repo's need to be enabled
