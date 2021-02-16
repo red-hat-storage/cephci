@@ -34,7 +34,7 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
-      - yum --setopt=skip_missing_names_on_install=False install -y wget git redhat-lsb
+      - yum --setopt=skip_missing_names_on_install=False install -y wget git
       - systemctl stop firewalld
       - sudo yum clean metadata
       - sudo yum clean all

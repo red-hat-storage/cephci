@@ -36,7 +36,6 @@ instance:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - yum install -y wget
       - yum install -y git
-      - yum install -y redhat-lsb
       - systemctl stop firewalld
       - sudo yum clean metadata
       - sudo yum clean all
