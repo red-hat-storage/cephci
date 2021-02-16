@@ -1,77 +1,53 @@
-"""
-ISCSI module to deploy iscsi service and daemons.
+"""Module to deploy and manage Ceph's iSCSI service."""
+from typing import Dict
 
-this module deploy iscsi service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
-from ceph.ceph import ResourcesNotFoundError
-from ceph.ceph_admin.apply import Apply
-from ceph.ceph_admin.daemon_mixin import DaemonMixin
-from ceph.utils import get_nodes_by_id
+from .apply import ApplyMixin
+from .orch import Orch
 
 
-class ISCSIRole(Apply, DaemonMixin):
-    __ROLE = "iscsi"
+class ISCSI(ApplyMixin, Orch):
+    """Interface to Ceph's iSCSI service via cephadm CLI."""
 
-    def apply_iscsi(self, **config):
+    SERVICE_NAME = "iscsi"
+
+    def apply(self, config: Dict) -> None:
         """
-        Deploy ISCSI target sing "orch apply" option
+        Deploy ISCSI client daemon using the provided arguments.
+
         Args:
-            config: apply config data
+            config: Key/value pairs provided from the test scenario
 
-        config:
-            nodes: list of nodes where iscsi to be deployed
-            pool: pool_name
-            api_user: username
-            api_password: user_password
-            trusted_ip_list: [ip_addr1, ip_addr2]
+        Example:
+            config:
+                command: apply
+                service: iscsi
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:
+                    - india             # name of the pool
+                    - api_user          # name of the API user
+                    - api_pass          # password of the api_user.
+                    - trusted_ip_list   # space separate list of IPs
+                args:
+                    placement:
+                        label: iscsi    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
+                temp_args:              # In place till OSD object is implemented.
+                    pool_pg_num: <count>
+                    pool_pgp_num: <count>
         """
-        pool = config.get("pool_name", "iscsi")
-        pg_num = config.get("pool_pg_num", 3)
-        pgp_num = config.get("pool_pgp_num", 3)
-        user = config.get("api_user", "user")
-        password = config.get("api_password", "password")
-        trusted_ip_list = config.get("trusted_ip_list", [])
+        pos_args = config.pop("pos_args")
 
-        cmd = Apply.apply_cmd + [self.__ROLE]
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes"))
+        if isinstance(pos_args[-1], list):
+            trusted_list = repr(" ".join(pos_args.pop()))
+            pos_args.append(trusted_list)
+        config["pos_args"] = pos_args
 
-        cmd.extend([pool, user, password, repr(" ".join(trusted_ip_list))])
-
-        if not nodes:
-            raise ResourcesNotFoundError("Nodes not found: %s", config.get("nodes"))
-
-        host_placement = [node.shortname for node in nodes]
-        cmd.append("--placement '{}'".format(";".join(host_placement)))
-
-        # Create pool
-        self.shell(
-            remote=self.installer,
-            args=[
-                "ceph",
-                "osd",
-                "pool",
-                "create",
-                pool,
-                str(pg_num),
-                str(pgp_num),
-                "replicated",
-            ],
-        )
-
-        # Associate pool to RBD application
-        self.shell(
-            remote=self.installer,
-            args=["ceph", "osd", "pool", "application", "enable", pool, "rbd"],
-        )
-
-        Apply.apply(
-            self,
-            role=self.__ROLE,
-            command=cmd,
-            placements=host_placement,
-        )
-
-    def daemon_add_iscsi(self):
-        raise NotImplementedError
+        super().apply(config=config)
