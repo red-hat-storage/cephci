@@ -7,7 +7,6 @@ from gevent import monkey, sleep
 
 monkey.patch_all()
 import sys
-from datetime import datetime
 
 import yaml
 from docopt import docopt
@@ -63,23 +62,12 @@ def volume_cleanup(volume, driver):
     Detach and delete a particular volume
     """
     print("Removing volume", volume.name)
-    errors = {}
-    timeout = datetime.timedelta(seconds=200)
-    starttime = datetime.datetime.now()
-    while True:
-        try:
-            volobj = driver.ex_get_volume(volume.id)
-            driver.detach_volume(volobj)
-            driver.destroy_volume(volobj)
-            break
-        except BaseHTTPError as e:
-            print(e)
-            errors.update({volume.name: e.message})
-            if errors:
-                if datetime.datetime.now() - starttime > timeout:
-                    for vol, err in errors.items():
-                        print("Error destroying", vol, ":", err)
-                    return 1
+    try:
+        volobj = driver.ex_get_volume(volume.id)
+        driver.detach_volume(volobj)
+        driver.destroy_volume(volobj)
+    except BaseHTTPError as e:
+        print(e)
 
 
 def cleanup_ceph_vols(osp_cred):
@@ -91,8 +79,9 @@ def cleanup_ceph_vols(osp_cred):
     with parallel() as p:
         for volume in driver.list_volumes():
             if volume.state in vol_states:
-                p.spawn(volume_cleanup, volume, driver)
-                sleep(1)
+                if volume.name.startswith("ceph-"):
+                    p.spawn(volume_cleanup, volume, driver)
+                    sleep(1)
     sleep(10)
 
 
@@ -105,8 +94,8 @@ def list_available_volumes(osp_cred):
     avail_size = 0
     for volume in driver.list_volumes():
         if volume.state in "available":
-            avail_count = +1
-            avail_size = +volume.size
+            avail_count += 1
+            avail_size += volume.size
             c_date = volume.extra["created_at"][:10]
             print(
                 volume.name,
@@ -124,7 +113,6 @@ def list_available_volumes(osp_cred):
             avail_size,
             "GB",
         )
-    return 0
 
 
 @retry(LibcloudError, tries=5, delay=15)

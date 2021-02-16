@@ -66,7 +66,7 @@ tests:
               rgw_realm: USA
               rgw_zonemaster: false
               rgw_zonesecondary: true
-              rgw_zonegroupmaster: true
+              rgw_zonegroupmaster: false
               rgw_zone_user: synchronization-user
               rgw_zone_user_display_name: "Synchronization User"
               system_access_key: 86nBoQOGpQgKxh4BLMyq
