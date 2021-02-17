@@ -1,30 +1,62 @@
+# Test suite to deploy a minimal RHCS Ceph Storage Cluster which can then be used to
+# build out the environment.
 tests:
   - test:
-      name: install ceph pre-requisites
-      desc: installation of all pre-requisites
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
   - test:
-      name: cephadm deployment
-      desc: cephadm cluster deployment
-      module: test_cephadm.py
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_deployment.py
       polarion-id:
       config:
-        registry: false
-        deployment: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: cephadm shell execution
-      desc: cephadm commands execution
-      module: test_cephadm.py
+      name: verify ceph storage cluster
+      desc: Verifies the health of the storage cluster
+      module: test_deployment.py
       polarion-id:
       config:
-        exec_shell:
-          - 'ceph orch ls'
-          - 'ceph orch ps'
-          - 'ceph orch host ls'
-          - 'ceph orch device ls'
-          - 'ceph status'
+        steps:
+          - config:
+              command: shell
+              service: cephadm
+              args: ["ceph", "status"]
       destroy-cluster: false
       abort-on-fail: true

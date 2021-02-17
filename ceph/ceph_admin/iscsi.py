@@ -39,15 +39,13 @@ class ISCSI(ApplyMixin, Orch):
                         sep: " "    # separator to be used for placements
                     dry-run: true
                     unmanaged: true
-                temp_args:              # In place till OSD object is implemented.
-                    pool_pg_num: <count>
-                    pool_pgp_num: <count>
         """
         pos_args = config.pop("pos_args")
 
         if isinstance(pos_args[-1], list):
             trusted_list = repr(" ".join(pos_args.pop()))
             pos_args.append(trusted_list)
+
         config["pos_args"] = pos_args
 
         super().apply(config=config)

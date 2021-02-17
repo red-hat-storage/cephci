@@ -26,8 +26,10 @@ class OSD(ApplyMixin, Orch):
     def device_list(self):
         """
         Fetch all available devices using "orch device ls" command
+
         Returns:
             device_list: list of nodes with available devices
+
         device_list:
             node1: ["/dev/sda", "/dev/sdb"]
             node2: ["/dev/sda"]
@@ -70,6 +72,7 @@ class OSD(ApplyMixin, Orch):
                     unmanaged: true
         """
         node_device_list = self.device_list()
+
         if not node_device_list:
             raise DevicesNotFound("No devices available to create OSD(s)")
 
@@ -86,10 +89,7 @@ class OSD(ApplyMixin, Orch):
         while checks:
             checks -= 1
 
-            out, _ = self.shell(
-                args=["ceph", "orch", "ps", "-f", "json-pretty"],
-            )
-
+            out, _ = self.ps(config={"base_cmd_args": {"format": "json-pretty"}})
             out = json.loads(out)
             daemons = [i for i in out if i.get("daemon_type") == "osd"]
 
@@ -109,6 +109,7 @@ class OSD(ApplyMixin, Orch):
 
             if deployed == len(node_device_list):
                 return
+
             sleep(interval)
 
         raise OSDServiceFailure("OSDs are not up and running in hosts")

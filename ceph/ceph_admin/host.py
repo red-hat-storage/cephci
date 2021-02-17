@@ -1,22 +1,30 @@
 """Cephadm orchestration host operations."""
 import json
 import logging
+from copy import deepcopy
+from typing import Dict
 
 from ceph.utils import get_node_by_id, get_nodes_by_id
 
+from .common import config_dict_to_string
 from .orch import Orch, ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
 
 
+class NodeOperationFailed(Exception):
+    pass
+
+
 class Host(Orch):
-    """Interface for executing ceph host <options> operations."""
+    """Interface for executing ceph host CLI."""
 
     SERVICE_NAME = "host"
 
     def list(self):
         """
-        List the cluster hosts
+        Return the list of hosts known ceph.
+
         Returns:
             json output of hosts list
         """
@@ -24,9 +32,9 @@ class Host(Orch):
             args=["ceph", "orch", "host", "ls", "--format=json"],
         )
 
-    def add(self, config):
+    def add(self, config: Dict) -> None:
         """
-        Add host(s) to cluster
+        Add host(s) to cluster.
 
         - Attach host to cluster
         - if nodes are empty, all nodes in cluster are considered
@@ -34,55 +42,82 @@ class Host(Orch):
         - attach_address: host added with ip address(host ip address used)
         - by default add_label and attach_address are set to True
 
-        config:
-            nodes: [node1.obj, node2.obj, ...]
-            add_label: boolean
-            attach_address: boolean
-
         Args:
-            config
-        """
-        base_cmd_args = config.get("base_cmd_args")
-        nodes = get_nodes_by_id(self.cluster, base_cmd_args.get("nodes", []))
+            config: Key/value pairs passed from the test case.
 
-        attach_address = base_cmd_args.get("attach_address", True)
-        logger.info(
-            "Adding nodes %s, (attach_address: %s, labels: %s)"
-            % (
-                [node.ip_address for node in nodes],
-                attach_address,
-                base_cmd_args.get("labels"),
-            )
-        )
+        Example:
+            config:
+                command: add
+                service: host
+                base_cmd_args:
+                    concise: true
+                    block: true
+                args:
+                    nodes:
+                        - node1
+                        - node2
+                    attach_ip_address: true
+                    labels: apply-all-labels      # To apply all the labels associated
+        """
+        cmd = ["ceph", "orch", "host"]
+
+        if config.get("base_cmd_args"):
+            base_cmd_args = config_dict_to_string(config["base_cmd_args"])
+            cmd.append(base_cmd_args)
+
+        args = config["args"]
+        attach_address = args.get("attach_ip_address", True)
+
+        if args.get("nodes"):
+            nodes = get_nodes_by_id(self.cluster, args["nodes"])
+        else:
+            nodes = self.cluster.get_nodes()
+
+        cmd.append("add")
 
         for node in nodes:
-            cmd = ["ceph", "orch", "host", "add", node.shortname]
+            _cmd = deepcopy(cmd)
+            _cmd.append(node.shortname)
+
             if attach_address:
-                cmd += [node.ip_address]
+                _cmd.append(node.ip_address)
 
-            _labels = base_cmd_args.get("labels", [])
-            if isinstance(_labels, str) and _labels in "node_role_list":
-                _labels = node.role.role_list
+            _labels = args.get("labels", [])
+            if _labels:
+                # second position args to command must be empty if no ip address
+                if not attach_address:
+                    _cmd.append("")
 
-            cmd += _labels
+                if isinstance(_labels, str) and _labels == "apply-all-labels":
+                    # create a unique list of tags... mainly OSD
+                    label_set = set(node.role.role_list)
+                    _labels = list(label_set)
 
-            # Add host
-            self.shell(args=cmd)
+                _cmd += _labels
+
+            self.shell(args=_cmd)
 
             # validate host existence
-            assert node.shortname in self.fetch_host_names()
+            if node.shortname not in self.fetch_host_names():
+                raise NodeOperationFailed(f"Failed to add host: {node.shortname}")
 
             if attach_address:
-                assert node.ip_address in self.get_addr_by_name(node.shortname)
+                if node.ip_address not in self.get_addr_by_name(node.shortname):
+                    raise NodeOperationFailed(
+                        f"Failed to add {node.ip_address} to host {node.shortname}."
+                    )
 
             if _labels:
-                assert sorted(self.fetch_labels_by_hostname(node.shortname)) == sorted(
+                if sorted(self.fetch_labels_by_hostname(node.shortname)) == sorted(
                     _labels
-                )
+                ):
+                    raise NodeOperationFailed(
+                        f"Failed to apply labels to {node.shortname}"
+                    )
 
     def remove(self, config):
         """
-        Remove host(s) from cluster
+        Remove host(s) from cluster.
 
         - Removal of hosts from cluster with provided nodes
         - if nodes are empty, all cluster nodes are considered
@@ -232,6 +267,7 @@ class Host(Orch):
         for node in json.loads(nodes):
             if node_name in node["hostname"]:
                 return node["labels"]
+
         return []
 
     def fetch_host_names(self):
@@ -263,4 +299,5 @@ class Host(Orch):
         for node in json.loads(out):
             if node_name in node["hostname"]:
                 return node["addr"]
+
         return None
