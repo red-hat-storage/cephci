@@ -20,7 +20,7 @@ from utility.utils import custom_ceph_config
 logger = logging.getLogger(__name__)
 
 
-class ResourcesNotFoundError(Exception):
+class ResourceNotFoundError(Exception):
     pass
 
 

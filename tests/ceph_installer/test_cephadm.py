@@ -1,45 +1,10 @@
 import logging
 
 from ceph.ceph_admin import CephAdmin
+from ceph.ceph_admin.common import fetch_method
+from ceph.ceph_admin.host import Host
 
 log = logging.getLogger(__name__)
-
-OP_MAP = {
-    "apply": {
-        "mon": "apply_mon",
-        "mgr": "apply_mgr",
-        "osd": "apply_osd",
-        "mds": "apply_mds",
-        "rgw": "apply_rgw",
-        "iscsi": "apply_iscsi",
-        "node-exporter": "apply_node_exporter",
-        "prometheus": "apply_prometheus",
-        "alertmanager": "apply_alert_manager",
-        "grafana": "apply_grafana",
-        "nfs": "apply_nfs",
-        "remove": "orch_remove",
-    },
-    "add": {
-        "mon": "daemon_add_mon",
-        "mgr": "daemon_add_mgr",
-        "osd": "daemon_add_osd",
-        "mds": "daemon_add_mds",
-        "rgw": "daemon_add_rgw",
-        "iscsi": "daemon_add_iscsi",
-        "node-exporter": "daemon_add_node_exporter",
-        "prometheus": "daemon_add_prometheus",
-        "alertmanager": "daemon_add_alert_manager",
-        "grafana": "daemon_add_grafana",
-        "nfs": "daemon_add_nfs",
-    },
-    "host": {
-        "add": "host_add",
-        "remove": "host_remove",
-        "add_label": "attach_label",
-        "remove_label": "remove_label",
-        "set_address": "set_address",
-    },
-}
 
 
 def run(ceph_cluster, **kw):
@@ -53,29 +18,19 @@ def run(ceph_cluster, **kw):
 
     The test data should be framed as per the below support,
 
-    - For full cluster deployment which includes below tasks and
-      returns after completion of cephadm.deploy,
-        - Enables ceph compose tool repo
-        - SSH keys exchange between nodes
-        - Bootstrap cluster
-        - Add all Hosts to cluster
-        - Add role services/daemons
-
-      for example.,
-        - test:
-            module: test_cephadm.py
-            config:
-              deployment: true
-
     - Bootstrap cluster with default or custom image and
       returns after cephadm.bootstrap. To use default image, set 'registry'.
 
-      for example.,
-        - test:
-            module: test_cephadm.py
+        Example:
             config:
-              registry: false
-              bootstrap: true
+                command: bootstrap
+                base_cmd_args:
+                    verbose: true
+                args:
+                    custom_image: true | false
+                    mon-ip: <node_name>
+                    mgr-id: <mgr_id>
+                    fsid: <id>
 
     - Manage host operations like,
         - Add hosts with/without labels and IP address
@@ -90,23 +45,22 @@ def run(ceph_cluster, **kw):
         remove_label, set_address and host_remove.
 
         for example.,
-
-           - test:
-               module: test_cephadm.py
-               config:
-                 host_ops:
-                   host_add:
-                     nodes: ['node2']      # Node list
-                     add_label: true       # Set to attach labels to Node
-                     attach_address: true  # Set to attach Node address
+        - test:
+            name: Add host
+            desc: Add new host node with IP address
+            module: test_cephadm.py
+            config:
+                command: host
+                service: add | remove | label_add | label_remove | set_address
+                base_cmd_args:
+                  nodes:
+                    - "node3"
+                  attach_address: true
+                  add_label: false
 
     """
-    log.info("Running test")
     log.info("Running cephadm test")
     config = kw.get("config")
-    test_data = kw.get("test_data")
-    ceph_cluster.custom_config = test_data.get("custom-config")
-    ceph_cluster.custom_config_file = test_data.get("custom-config-file")
 
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
@@ -115,43 +69,24 @@ def run(ceph_cluster, **kw):
         log.info("Skipping setup of ceph cluster")
         return 0
 
-    # Get CephAdmin object
-    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    # Manage Ceph using ceph-admin orchestration
+    command = config.pop("command")
+    log.info("Executing %s service" % command)
 
-    # Deployment-only option which deploys whole cluster
-    if config.get("deployment", False):
-        cephadm.deploy()
-        return 0
+    if command in CephAdmin.direct_calls:
+        cephadm = CephAdmin(cluster=ceph_cluster, **config)
+        method = fetch_method(cephadm, command)
+    elif command in Host.SERVICE_NAME:
+        service = config.pop("service")
+        log.info("calling %s operation" % service)
+        host = Host(cluster=ceph_cluster, **config)
+        method = fetch_method(host, service)
+    else:
+        raise NotImplementedError
 
-    # Execute cephadm shell commands
-    if config.get("exec_shell", False):
-        commands = config.get("exec_shell")
-        ceph_installer = ceph_cluster.get_ceph_object("installer")
-        for cmd in commands:
-            cmd = cmd if isinstance(cmd, list) else [cmd]
-            cephadm.shell(
-                remote=ceph_installer,
-                args=cmd,
-            )
-        return 0
+    if "shell" in command:
+        method(args=config["args"])
+    else:
+        method(config)
 
-    # Bootstrap cluster
-    if config.get("bootstrap", False):
-        cephadm.bootstrap()
-
-    # Manage hosts
-    if config.get("op"):
-        func = OP_MAP[config.get("op")][config.get("service_type")]
-        try:
-            method = getattr(cephadm, func)
-            log.info(
-                "Executing %s service using %s option"
-                % (config["service_type"], config.get("op"))
-            )
-            if config.get("extra_args"):
-                method(**config.get("extra_args"))
-            else:
-                method()
-        except AttributeError:
-            raise NotImplementedError(f"Class CephADM Not implemented {func}")
     return 0

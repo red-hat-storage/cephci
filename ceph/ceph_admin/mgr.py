@@ -1,18 +1,18 @@
-"""Deploy the alert manager service in the cluster via cephadm CLI."""
+"""Manage the Manager service via Ceph's cephadm CLI."""
 from typing import Dict
 
 from .apply import ApplyMixin
 from .orch import Orch
 
 
-class AlertManager(ApplyMixin, Orch):
-    """Manage the alert-manager service."""
+class Mgr(ApplyMixin, Orch):
+    """Manager interface for ceph orch <action> mgr"""
 
-    SERVICE_NAME = "alertmanager"
+    SERVICE_NAME = "mgr"
 
     def apply(self, config: Dict) -> None:
         """
-        Deploy the alert manager service using the provided configuration.
+        Deploy the Manager service using the provided configuration.
 
         Args:
             config: Key/value pairs provided by the test case to create the service.
@@ -20,14 +20,16 @@ class AlertManager(ApplyMixin, Orch):
         Example
             config:
                 command: apply
-                service: alertmanager
+                service: mgr
                 base_cmd_args:          # arguments to ceph orch
                     concise: true
                     verbose: true
                     input_file: <name of spec>
+                pos_args:
+                    - india             # name of the filesystem
                 args:
                     placement:
-                        label: alertmanager    # either label or node.
+                        label: mgr    # either label or node.
                         nodes:
                             - node1
                         limit: 3    # no of daemons

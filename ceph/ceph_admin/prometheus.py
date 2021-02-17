@@ -1,48 +1,36 @@
-"""
-Module to deploy Prometheus service and individual daemon(s).
+"""Module to deploy Prometheus service and individual daemon(s)."""
+from typing import Dict
 
-this module deploy Prometheus service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
-from ceph.ceph import ResourcesNotFoundError
-from ceph.ceph_admin.apply import Apply
-from ceph.ceph_admin.daemon_mixin import DaemonMixin
-from ceph.utils import get_nodes_by_id
+from .apply import ApplyMixin
+from .orch import Orch
 
 
-class PrometheusRole(Apply, DaemonMixin):
-    __ROLE = "prometheus"
+class Prometheus(ApplyMixin, Orch):
+    SERVICE_NAME = "prometheus"
 
-    def apply_prometheus(self, **config):
+    def apply(self, config: Dict) -> None:
         """
-        Deploy prometheus service using "orch apply" option
+        Deploy the Prometheus service using the provided configuration.
+
         Args:
-            config: test arguments
+            config: Key/value pairs provided by the test case to create the service.
 
-        config:
-            nodes: ['node1', 'node2']
+        Example
+            config:
+                command: apply
+                service: prometheus
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                args:
+                    placement:
+                        label: prometheus    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        cmd = Apply.apply_cmd + [self.__ROLE]
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes"))
-
-        if not nodes:
-            raise ResourcesNotFoundError("Nodes not found: %s", config.get("nodes"))
-
-        host_placement = [node.shortname for node in nodes]
-        cmd.append("--placement '{}'".format(";".join(host_placement)))
-
-        Apply.apply(
-            self,
-            role=self.__ROLE,
-            command=cmd,
-            placements=host_placement,
-        )
-
-    def daemon_add_prometheus(self, **config):
-        """
-        Deploy prometheus service using "orch daemon" option
-        Args:
-            config: test arguments
-        """
-        raise NotImplementedError
+        super().apply(config=config)
