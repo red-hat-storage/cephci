@@ -14,11 +14,12 @@ from ceph.ceph import ResourceNotFoundError
 from .ceph import CephCLI
 from .ls import LSMixin
 from .ps import PSMixin
+from .remove import RemoveMixin
 
 LOG = logging.getLogger()
 
 
-class Orch(LSMixin, PSMixin, CephCLI):
+class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
     """Represent ceph orch command."""
 
     direct_calls = ["ls", "ps"]

@@ -27,11 +27,10 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: add
+        service: host
+        command: add
         base_cmd_args:          # arguments to ceph orch
-          nodes:
-            - node2
+          node: node2
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -40,11 +39,10 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: add
+        service: host
+        command: add
         base_cmd_args:
-          nodes:
-            - "node3"
+          node: node3
           attach_address: true
           add_label: false
       destroy-cluster: false
@@ -55,11 +53,10 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: add
+        service: host
+        command: add
         base_cmd_args:
-          nodes:
-            - node4
+          node: node4
           attach_address: true
           labels:
             - osd
@@ -68,12 +65,12 @@ tests:
       abort-on-fail: true
   - test:
       name: Remove Host label
-      desc: Remove host label(s) from existing node
+      desc: Remove host label osd from node3
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: label_remove
+        service: host
+        command: label_remove
         base_cmd_args:
           node: node4
           labels:
@@ -82,12 +79,12 @@ tests:
       abort-on-fail: true
   - test:
       name: Remove Host label
-      desc: Remove host label(s) from existing node
+      desc: Remove host label node-exporter from node4
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: label_remove
+        service: host
+        command: label_remove
         base_cmd_args:
           node: node4
           labels:
@@ -96,12 +93,12 @@ tests:
       abort-on-fail: true
   - test:
       name: Add Host label
-      desc: Add host label(s) to existing node
+      desc: Add host label mon,osd to existing node
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: label_add
+        service: host
+        command: label_add
         base_cmd_args:
           node: node4
           labels:
@@ -115,11 +112,11 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: label_add
+        service: host
+        command: label_add
         base_cmd_args:
           node: node1
-          labels: node_role_list
+          labels: apply-all-labels
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -128,10 +125,10 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: set_address
+        service: host
+        command: set_address
         base_cmd_args:
-          nodes: ['node1']
+          node: node1
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -140,22 +137,20 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: remove
+        service: host
+        command: remove
         base_cmd_args:
-          nodes:
-            - node2
-            - node3
+          node: node4
       destroy-cluster: false
       abort-on-fail: true
   - test:
       name: Remove Hosts
-      desc: Remove node from cluster
+      desc: Remove nodes from cluster
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: remove
+        service: host
+        command: remove_hosts
         base_cmd_args:
           nodes: []
       destroy-cluster: false
@@ -166,12 +161,12 @@ tests:
       module: test_cephadm.py
       polarion-id:
       config:
-        command: host
-        service: add
+        service: host
+        command: add_hosts
         base_cmd_args:
           nodes: []
           attach_address: true
-          labels: node_role_list
+          labels: apply-all-labels
       destroy-cluster: false
       abort-on-fail: true
   - test:
