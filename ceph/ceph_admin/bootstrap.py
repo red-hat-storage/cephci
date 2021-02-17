@@ -41,16 +41,7 @@ class BootstrapMixin:
         self.set_tool_repo()
         self.install()
 
-        # Create and set permission to ceph directory
-        self.installer.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
-        self.installer.exec_command(sudo=True, cmd="chmod 777 /etc/ceph")
-
-        # Execute bootstrap with MON ip-address
-        # Construct bootstrap command
-        # 1) Skip default mon, mgr & crash specs
-        # 2) Skip automatic dashboard provisioning
         cdn_cred = get_cephci_config().get("cdn_credentials")
-
         cmd = "cephadm"
 
         if config.get("base_cmd_args"):

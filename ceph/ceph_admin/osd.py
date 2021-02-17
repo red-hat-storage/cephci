@@ -25,21 +25,22 @@ class OSD(ApplyMixin, Orch):
 
     def device_list(self):
         """
-        Fetch all available devices using "orch device ls" command
+        Return all available devices using "orch device ls" command.
+
         Returns:
             device_list: list of nodes with available devices
+
         device_list:
             node1: ["/dev/sda", "/dev/sdb"]
             node2: ["/dev/sda"]
         """
-        out, _ = self.shell(
-            args=["ceph", "orch", "device", "ls", "-f", "json"],
-        )
+        out, _ = self.ps(config={"base_cmd_args": {"format": "json"}})
 
         node_device_list = dict()
         for node in json.loads(out):
             if not node.get("devices"):
                 continue
+
             devices = []
             for device in node.get("devices"):
                 if device["available"] is True:
@@ -109,6 +110,7 @@ class OSD(ApplyMixin, Orch):
 
             if deployed == len(node_device_list):
                 return
+
             sleep(interval)
 
         raise OSDServiceFailure("OSDs are not up and running in hosts")
