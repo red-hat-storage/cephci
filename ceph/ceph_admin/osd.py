@@ -23,9 +23,12 @@ class OSD(ApplyMixin, Orch):
 
     SERVICE_NAME = "osd"
 
-    def device_list(self):
+    def device_list(self, refresh=False):
         """
         Return all available devices using "orch device ls" command.
+
+        Args:
+            refresh:    Perform refresh before retrieving the device list.
 
         Returns:
             device_list: list of nodes with available devices
@@ -34,22 +37,32 @@ class OSD(ApplyMixin, Orch):
             node1: ["/dev/sda", "/dev/sdb"]
             node2: ["/dev/sda"]
         """
-        out, _ = self.ps(config={"base_cmd_args": {"format": "json"}})
+        cmd = ["ceph orch device ls -f json"]
 
-        node_device_list = dict()
+        if refresh:
+            # Device discovery has to be forced before we can pull the information
+            self.shell(args=["ceph orch device ls --refresh"])
+
+            # Fixme: blindly sleeping is not going to help
+            logging.info("Sleeping for 60 seconds for disks to be discovered")
+            sleep(60)
+
+        out, _ = self.shell(args=cmd)
+
+        node_device_dict = dict()
         for node in json.loads(out):
             if not node.get("devices"):
                 continue
 
-            devices = []
+            devices = list()
             for device in node.get("devices"):
-                if device["available"] is True:
+                if device["available"]:
                     devices.append(device["path"])
 
             if devices:
-                node_device_list.update({node["addr"]: devices})
+                node_device_dict.update({node["addr"]: devices})
 
-        return node_device_list
+        return node_device_dict
 
     def apply(self, config: Dict) -> None:
         """
@@ -70,7 +83,7 @@ class OSD(ApplyMixin, Orch):
                     dry-run: true
                     unmanaged: true
         """
-        node_device_list = self.device_list()
+        node_device_list = self.device_list(refresh=True)
         if not node_device_list:
             raise DevicesNotFound("No devices available to create OSD(s)")
 

@@ -70,7 +70,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         args:
                             mon-ip: node1
                     - config:
-                        command: add
+                        command: add_hosts
                         service: host
                         args:
                             attach_ip_address: true
@@ -117,5 +117,5 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         return 0
     except BaseException as be:  # noqa
-        LOG.error(be)
+        LOG.error(be, exc_info=True)
         return 1
