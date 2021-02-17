@@ -102,7 +102,7 @@ class CephAdmin(
 
         for each_node in nodes:
             each_node.exec_command(sudo=True, cmd="install -d -m 0700 /root/.ssh")
-            keys_file = each_node.write_file(
+            keys_file = each_node.remote_file(
                 sudo=True, file_name="/root/.ssh/authorized_keys", file_mode="a"
             )
             keys_file.write(ceph_pub_key)
@@ -678,7 +678,7 @@ class CephAdmin(
                 client.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
                 client.exec_command(sudo=True, cmd="chmod 777 /etc/ceph")
 
-                keyring_file = client.write_file(
+                keyring_file = client.remote_file(
                     sudo=True,
                     file_name=client_keyring,
                     file_mode="w",

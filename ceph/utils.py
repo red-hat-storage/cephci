@@ -195,7 +195,7 @@ def keep_alive(ceph_nodes):
 def setup_repos(ceph, base_url, installer_url=None):
     repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
     base_repo = generate_repo_file(base_url, repos)
-    base_file = ceph.write_file(
+    base_file = ceph.remote_file(
         sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
     )
     base_file.write(base_repo)
@@ -204,7 +204,7 @@ def setup_repos(ceph, base_url, installer_url=None):
         installer_repos = ["Agent", "Main", "Installer"]
         inst_repo = generate_repo_file(installer_url, installer_repos)
         log.info("Setting up repo on %s", ceph.hostname)
-        inst_file = ceph.write_file(
+        inst_file = ceph.remote_file(
             sudo=True, file_name="/etc/yum.repos.d/rh_ceph_inst.repo", file_mode="w"
         )
         inst_file.write(inst_repo)

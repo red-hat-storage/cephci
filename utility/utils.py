@@ -79,7 +79,7 @@ def auth_list(clients, mon_node):
             sudo=True, cmd="cat /etc/ceph/ceph.client.%s.keyring" % (node.hostname)
         )
         keyring = out.read().decode()
-        key_file = node.write_file(
+        key_file = node.remote_file(
             sudo=True,
             file_name="/etc/ceph/ceph.client.%s.keyring" % (node.hostname),
             file_mode="w",
@@ -217,7 +217,7 @@ finally:
     print "Unlocking file:------------------------------"
     fcntl.lockf(f,fcntl.LOCK_UN)
             """
-        to_lock_code = client.write_file(
+        to_lock_code = client.remote_file(
             sudo=True, file_name="/home/cephuser/file_lock.py", file_mode="w"
         )
         to_lock_code.write(to_lock_file)

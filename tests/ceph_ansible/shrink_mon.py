@@ -94,7 +94,7 @@ def run(ceph_cluster, **kw):
     modified_inventory = "\n".join(inventory)
     log.info("\nInventory after shrink-mon playbook\n")
     log.info(modified_inventory)
-    hosts_file = ceph_installer.write_file(
+    hosts_file = ceph_installer.remote_file(
         sudo=True, file_name="{}/hosts".format(ansible_dir), file_mode="w"
     )
     hosts_file.write(modified_inventory)

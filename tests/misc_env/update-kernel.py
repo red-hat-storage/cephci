@@ -41,7 +41,7 @@ enabled=1
 """.format(
         base_url=repo_url
     )
-    kernel_repo = client.write_file(
+    kernel_repo = client.remote_file(
         sudo=True, file_name="/etc/yum.repos.d/rh_kernel.repo", file_mode="w"
     )
     kernel_repo.write(kernel_repo_file)

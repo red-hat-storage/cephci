@@ -181,7 +181,7 @@ trusted_ip_list = {0}
             trusted_ips
         )
         for gw in gw_list:
-            conf_file = gw.write_file(
+            conf_file = gw.remote_file(
                 sudo=True, file_name="/etc/ceph/iscsi-gateway.cfg", file_mode="w"
             )
             conf_file.write(iscsi_gateway_cfg)
@@ -365,7 +365,7 @@ devices {
         iscsi_initiators.exec_command(
             sudo=True, cmd="mpathconf --enable --with_multipathd y"
         )
-        multipath_file = iscsi_initiators.write_file(
+        multipath_file = iscsi_initiators.remote_file(
             sudo=True, file_name="/etc/multipath.conf", file_mode="w"
         )
         multipath_file.write(multipath)
@@ -404,7 +404,7 @@ node.session.scan = auto
     """.format(
             username=iscsi_name
         )
-        multipath_file = iscsi_initiators.write_file(
+        multipath_file = iscsi_initiators.remote_file(
             sudo=True, file_name="/etc/iscsi/iscsid.conf", file_mode="w"
         )
         multipath_file.write(iscsid)

@@ -252,7 +252,7 @@ class FsUtils(object):
                     )
                     self.rc_list.append(mon.node.exit_status)
                     keyring = out.read().decode()
-                    key_file = client.write_file(
+                    key_file = client.remote_file(
                         sudo=True,
                         file_name="/etc/ceph/ceph.client.%s_%s.keyring"
                         % (client.node.hostname, self.path),
@@ -302,7 +302,7 @@ class FsUtils(object):
                     )
                     self.rc_list.append(mon.node.exit_status)
                     keyring = out.read().decode()
-                    key_file = client.write_file(
+                    key_file = client.remote_file(
                         sudo=True,
                         file_name="/etc/ceph/ceph.client.%s.keyring"
                         % (client.node.hostname),
@@ -405,7 +405,7 @@ class FsUtils(object):
                         cmd="sudo ceph auth get-key client.%s" % (new_client_hostname)
                     )
                     secret_key = out.read().decode().rstrip("\n")
-                    key_file = client.write_file(
+                    key_file = client.remote_file(
                         sudo=True,
                         file_name="/etc/ceph/%s.secret" % (new_client_hostname),
                         file_mode="w",
@@ -469,7 +469,7 @@ class FsUtils(object):
                         cmd="sudo ceph auth get-key client.%s" % (client.node.hostname)
                     )
                     secret_key = out.read().decode().rstrip("\n")
-                    key_file = client.write_file(
+                    key_file = client.remote_file(
                         sudo=True,
                         file_name="/etc/ceph/%s.secret" % (client.node.hostname),
                         file_mode="w",
@@ -564,7 +564,7 @@ class FsUtils(object):
             nfs_client_name,
             secret_key,
         )
-        conf_file = node.write_file(
+        conf_file = node.remote_file(
             sudo=True, file_name="/etc/ganesha/ganesha.conf", file_mode="w"
         )
         conf_file.write(conf)
@@ -847,7 +847,7 @@ finally:
                 mounting_dir,
                 mounting_dir,
             )
-            to_lock_code = client.write_file(
+            to_lock_code = client.remote_file(
                 sudo=True, file_name="/home/cephuser/file_lock.py", file_mode="w"
             )
             to_lock_code.write(to_lock_file)
@@ -1264,7 +1264,7 @@ ceph.conf=/etc/ceph/ceph.conf,_netdev,defaults  0 0
                             mounting_dir=mounting_dir,
                             client_hostname=client.node.hostname,
                         )
-                        fstab = client.write_file(
+                        fstab = client.remote_file(
                             sudo=True, file_name="/etc/fstab", file_mode="w"
                         )
                         fstab.write(fuse_fstab)
@@ -1298,7 +1298,7 @@ secretfile={secret_key},_netdev,noatime 00
                             client_hostname=client.node.hostname,
                             secret_key="/etc/ceph/%s.secret" % client.node.hostname,
                         )
-                        fstab = client.write_file(
+                        fstab = client.remote_file(
                             sudo=True, file_name="/etc/fstab", file_mode="w"
                         )
                         fstab.write(kernel_fstab)
@@ -1325,7 +1325,7 @@ time.sleep(20)
 os.system('sudo systemctl start  network')
 """
         node = ceph_object.node
-        nw_disconnect = node.write_file(
+        nw_disconnect = node.remote_file(
             sudo=True, file_name="/home/cephuser/nw_disconnect.py", file_mode="w"
         )
         nw_disconnect.write(script)
@@ -1447,7 +1447,7 @@ mds standby for rank = 1
                     )
                     out, rc = mds.exec_command(sudo=True, cmd="cat /etc/ceph/ceph.conf")
                     mds_conf_file = out.read().decode()
-                    key_file = mds.write_file(
+                    key_file = mds.remote_file(
                         sudo=True, file_name="/etc/ceph/ceph.conf", file_mode="w"
                     )
                     key_file.write(mds_conf_file)
@@ -1464,7 +1464,7 @@ mds standby for rank = 1
                     )
                     out, rc = mon.exec_command(sudo=True, cmd="cat /etc/ceph/ceph.conf")
                     mon_conf_file = out.read().decode()
-                    key_file = mon.write_file(
+                    key_file = mon.remote_file(
                         sudo=True, file_name="/etc/ceph/ceph.conf", file_mode="w"
                     )
                     key_file.write(mon_conf_file)

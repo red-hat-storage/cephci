@@ -51,12 +51,12 @@ def run(**kw):
         )
 
     for ceph in ceph_nodes:
-        keys_file = ceph.write_file(file_name=".ssh/authorized_keys", file_mode="a")
-        hosts_file = ceph.write_file(sudo=True, file_name="/etc/hosts", file_mode="a")
+        keys_file = ceph.remote_file(file_name=".ssh/authorized_keys", file_mode="a")
+        hosts_file = ceph.remote_file(sudo=True, file_name="/etc/hosts", file_mode="a")
         ceph.exec_command(
             cmd="[ -f ~/.ssh/config ] && chmod 700 ~/.ssh/config", check_ec=False
         )
-        ssh_config = ceph.write_file(file_name=".ssh/config", file_mode="w")
+        ssh_config = ceph.remote_file(file_name=".ssh/config", file_mode="w")
         keys_file.write(keys)
         hosts_file.write(hosts)
         ssh_config.write(hostkeycheck)
@@ -83,7 +83,7 @@ def run(**kw):
     ceph1.exec_command(cmd="mkdir cd")
     ceph1.exec_command(sudo=True, cmd="cd cd; yum install -y ceph-deploy")
     ceph1.exec_command(cmd="cd cd; ceph-deploy new {mons}".format(mons=mon_names))
-    cc = ceph1.write_file(file_name="cd/ceph.conf", file_mode="w")
+    cc = ceph1.remote_file(file_name="cd/ceph.conf", file_mode="w")
     cc.write(ceph_conf)
     cc.flush()
     out, err = ceph1.exec_command(
