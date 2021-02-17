@@ -1,18 +1,13 @@
-"""
-Module to deploy osd service and daemon(s).
-
-this module deploy OSD service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
+"""Manage OSD service via cephadm CLI."""
 import json
 import logging
 from time import sleep
+from typing import Dict
 
-from ceph.ceph_admin.apply import Apply
-from ceph.ceph_admin.daemon_mixin import DaemonMixin
+from .apply import ApplyMixin
+from .orch import Orch
 
-logger = logging.getLogger(__name__)
+LOG = logging.getLogger()
 
 
 class OSDServiceFailure(Exception):
@@ -23,22 +18,21 @@ class DevicesNotFound(Exception):
     pass
 
 
-class OSDRole(Apply, DaemonMixin):
-    __ROLE = "osd"
+class OSD(ApplyMixin, Orch):
+    """Interface to ceph orch osd."""
 
-    def __get_available_devices(self):
+    SERVICE_NAME = "osd"
+
+    def device_list(self):
         """
         Fetch all available devices using "orch device ls" command
-
         Returns:
             device_list: list of nodes with available devices
-
         device_list:
             node1: ["/dev/sda", "/dev/sdb"]
             node2: ["/dev/sda"]
         """
         out, _ = self.shell(
-            remote=self.installer,
             args=["ceph", "orch", "device", "ls", "-f", "json"],
         )
 
@@ -56,26 +50,33 @@ class OSDRole(Apply, DaemonMixin):
 
         return node_device_list
 
-    def apply_osd(self):
+    def apply(self, config: Dict) -> None:
         """
-        Deploy all available OSDs in the ceph cluster using
-        "ceph orch apply osd --all-available-devices"
+        Deploy the ODS service using the provided configuration.
 
+        Args:
+            config: Key/value pairs provided by the test case to create the service.
+
+        Example
+            config:
+                command: apply
+                service: osd
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                args:
+                    all-available-devices: true
+                    dry-run: true
+                    unmanaged: true
         """
-        node_device_list = self.__get_available_devices()
-
+        node_device_list = self.device_list()
         if not node_device_list:
             raise DevicesNotFound("No devices available to create OSD(s)")
 
-        cmd = Apply.apply_cmd + [self.__ROLE]
-        cmd.append("--all-available-devices")
+        if not config.get("args", {}).get("all-available-devices"):
+            config["args"]["all-available-devices"] = True
 
-        Apply.apply(
-            self,
-            role=self.__ROLE,
-            command=cmd,
-            placements=[],
-        )
+        super().apply(config)
 
         # validate of osd(s)
         interval = 5
@@ -86,7 +87,6 @@ class OSDRole(Apply, DaemonMixin):
             checks -= 1
 
             out, _ = self.shell(
-                remote=self.installer,
                 args=["ceph", "orch", "ps", "-f", "json-pretty"],
             )
 
@@ -100,7 +100,7 @@ class OSDRole(Apply, DaemonMixin):
                     if dmn["hostname"] == node and dmn["status_desc"] == "running":
                         count += 1
 
-                logger.info(
+                LOG.info(
                     "%s %s/%s osd daemon(s) up... Retries: %s"
                     % (node, count, len(devices), checks)
                 )
@@ -108,10 +108,7 @@ class OSDRole(Apply, DaemonMixin):
                     deployed += 1
 
             if deployed == len(node_device_list):
-                return True
+                return
             sleep(interval)
 
         raise OSDServiceFailure("OSDs are not up and running in hosts")
-
-    def daemon_add_osd(self):
-        raise NotImplementedError
