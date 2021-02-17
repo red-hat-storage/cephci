@@ -4,5 +4,3 @@ from ceph.ceph_admin import CephAdmin
 
 class CephCLI(CephAdmin):
     """Interface to the ceph CLI."""
-
-    direct_calls = ["orch"]

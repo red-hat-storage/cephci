@@ -10,6 +10,10 @@ from .orch import Orch, ResourceNotFoundError
 logger = logging.getLogger(__name__)
 
 
+class HostOpFailure(Exception):
+    pass
+
+
 class Host(Orch):
     """Interface for executing ceph host <options> operations."""
 
@@ -59,7 +63,8 @@ class Host(Orch):
         _labels = base_cmd_args.get("labels")
 
         if isinstance(_labels, str) and _labels in "apply-all-labels":
-            _labels = node.role.role_list
+            label_set = set(node.role.role_list)
+            _labels = list(label_set)
 
         logger.info(
             "Adding node %s, (attach_address: %s, labels: %s)"
@@ -69,22 +74,27 @@ class Host(Orch):
         cmd = ["ceph", "orch", "host", "add", node.shortname]
 
         if attach_address:
-            cmd += [node.ip_address]
+            cmd.append(node.ip_address)
 
         if _labels:
             # To fill mandate <address> argument, In case attach_address is False
             if not attach_address:
-                cmd += '""'
+                cmd.append("''")
+
             cmd += _labels
 
         # Add host
         self.shell(args=cmd)
 
         # validate host existence
-        assert node.shortname in self.fetch_host_names()
+        if node.shortname != self.fetch_host_names():
+            raise HostOpFailure(f"Hostname verify failure. Expected {node.shortname}")
 
         if attach_address:
-            assert node.ip_address in self.get_addr_by_name(node.shortname)
+            if node.ip_address != self.get_addr_by_name(node.shortname):
+                raise HostOpFailure(
+                    f"IP address verify failed. Expected {node.ip_address}"
+                )
 
         if _labels:
             assert sorted(self.fetch_labels_by_hostname(node.shortname)) == sorted(
@@ -93,7 +103,7 @@ class Host(Orch):
 
     def add_hosts(self, config):
         """
-        Add host(s) to cluster
+        Add host(s) to cluster.
 
         - Attach host to cluster
         - if nodes are empty, all nodes in cluster are considered
