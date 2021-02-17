@@ -1,4 +1,5 @@
 """Cephadm orchestration host operations."""
+import json
 import logging
 
 from ceph.utils import get_node_by_id, get_nodes_by_id
@@ -227,8 +228,8 @@ class Host(Orch):
         Returns:
             labels: list of labels
         """
-        nodes = self.list()
-        for node in nodes:
+        nodes, _ = self.list()
+        for node in json.loads(nodes):
             if node_name in node["hostname"]:
                 return node["labels"]
         return []
@@ -239,7 +240,8 @@ class Host(Orch):
         Returns:
             list of host names
         """
-        return [i["hostname"] for i in self.list()]
+        out, _ = self.list()
+        return [i["hostname"] for i in json.loads(out)]
 
     def get_addrs(self):
         """
@@ -247,7 +249,8 @@ class Host(Orch):
         Returns:
             list of IP addresses
         """
-        return [i["addr"] for i in self.list()]
+        out, _ = self.list()
+        return [i["addr"] for i in json.loads(out)]
 
     def get_addr_by_name(self, node_name):
         """
@@ -256,7 +259,8 @@ class Host(Orch):
         Returns:
             ip_address: IP address of host name
         """
-        for node in self.list():
+        out, _ = self.list()
+        for node in json.loads(out):
             if node_name in node["hostname"]:
                 return node["addr"]
         return None

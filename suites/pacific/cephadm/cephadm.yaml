@@ -548,7 +548,7 @@ tests:
           - set
           - mon
           - mon_allow_pool_delete
-          - true
+          - "true"
       destroy-cluster: false
       abort-on-fail: true
   - test:
