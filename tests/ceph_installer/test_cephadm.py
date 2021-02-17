@@ -71,16 +71,16 @@ def run(ceph_cluster, **kw):
 
     # Manage Ceph using ceph-admin orchestration
     command = config.pop("command")
-    log.info("Executing %s service" % command)
+    service = config.pop("service", "")
+
+    log.info("Executing %s %s" % (service, command))
 
     if command in CephAdmin.direct_calls:
         cephadm = CephAdmin(cluster=ceph_cluster, **config)
         method = fetch_method(cephadm, command)
-    elif command in Host.SERVICE_NAME:
-        service = config.pop("service")
-        log.info("calling %s operation" % service)
+    elif service in Host.SERVICE_NAME:
         host = Host(cluster=ceph_cluster, **config)
-        method = fetch_method(host, service)
+        method = fetch_method(host, command)
     else:
         raise NotImplementedError
 
