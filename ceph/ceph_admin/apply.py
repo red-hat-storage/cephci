@@ -4,8 +4,7 @@ Represent the ceph orch CLI action 'apply'.
 Module to deploy ceph role service(s) using orchestration command
 "ceph orch apply <role> [options] --placement '<placements>' "
 
-This module inherited where service deployed using "apply" operation and also
-validation using orchestration process list response
+This is a mixin object and can be applied to the supported service classes.
 """
 from typing import Dict
 
@@ -15,12 +14,12 @@ from .common import config_dict_to_string
 from .typing_ import ServiceProtocol
 
 
-class ServiceApplyFailure(Exception):
+class OrchApplyServiceFailure(Exception):
     pass
 
 
 class ApplyMixin:
-    """Add apply support to the base class."""
+    """Add apply command support to child object."""
 
     def apply(self: ServiceProtocol, config: Dict) -> None:
         """
@@ -119,4 +118,4 @@ class ApplyMixin:
         if not self.check_service_exists(
             service_name=self.SERVICE_NAME, ids=node_names
         ):
-            raise ServiceApplyFailure
+            raise OrchApplyServiceFailure

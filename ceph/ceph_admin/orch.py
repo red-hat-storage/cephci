@@ -62,7 +62,7 @@ class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
                 return True
 
         # Identify the failure
-        out, err = self.ls()
+        out, err = self.ls({"base_cmd_args": {"format": "json"}})
         for item in loads(out):
             if (
                 service_name in item.get("service_type")

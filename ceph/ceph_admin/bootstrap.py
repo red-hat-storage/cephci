@@ -67,7 +67,10 @@ class BootstrapMixin:
         # To be generic, the mon-ip contains the global node name. Here, we replace the
         # name with the IP address. The replacement allows us to be inline with the
         # CLI option.
-        mon_node = args.pop("mon-ip")
+
+        # Todo: need to switch installer node on any other node name provided
+        #       other than installer node
+        mon_node = args.pop("mon-ip", self.installer.node.shortname)
         if mon_node:
             for node in self.cluster.get_nodes():
                 if mon_node in node.shortname:

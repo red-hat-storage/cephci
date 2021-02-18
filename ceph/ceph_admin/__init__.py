@@ -74,7 +74,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
 
         for each_node in nodes:
             each_node.exec_command(sudo=True, cmd="install -d -m 0700 /root/.ssh")
-            keys_file = each_node.write_file(
+            keys_file = each_node.remote_file(
                 sudo=True, file_name="/root/.ssh/authorized_keys", file_mode="a"
             )
             keys_file.write(ceph_pub_key)

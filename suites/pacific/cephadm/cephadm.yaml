@@ -29,7 +29,7 @@ tests:
       config:
         service: host
         command: add
-        base_cmd_args:          # arguments to ceph orch
+        args:                     # arguments to ceph orch
           node: node2
       destroy-cluster: false
       abort-on-fail: true
@@ -42,8 +42,10 @@ tests:
         service: host
         command: add
         base_cmd_args:
+          verbose: true
+        args:
           node: node3
-          attach_address: true
+          attach_ip_address: true
           add_label: false
       destroy-cluster: false
       abort-on-fail: true
@@ -55,12 +57,13 @@ tests:
       config:
         service: host
         command: add
-        base_cmd_args:
+        args:
           node: node4
-          attach_address: true
+          attach_ip_address: true
           labels:
             - osd
             - node-exporter
+            - mon
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -71,10 +74,11 @@ tests:
       config:
         service: host
         command: label_remove
-        base_cmd_args:
+        args:
           node: node4
           labels:
             - osd
+            - mon
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -86,6 +90,8 @@ tests:
         service: host
         command: label_remove
         base_cmd_args:
+          verbose: true
+        args:
           node: node4
           labels:
             - node-exporter
@@ -100,6 +106,8 @@ tests:
         service: host
         command: label_add
         base_cmd_args:
+          verbose: true
+        args:
           node: node4
           labels:
             - mon
@@ -115,6 +123,8 @@ tests:
         service: host
         command: label_add
         base_cmd_args:
+          verbose: true
+        args:
           node: node1
           labels: apply-all-labels
       destroy-cluster: false
@@ -128,6 +138,8 @@ tests:
         service: host
         command: set_address
         base_cmd_args:
+          verbose: true
+        args:
           node: node1
       destroy-cluster: false
       abort-on-fail: true
@@ -140,32 +152,78 @@ tests:
         service: host
         command: remove
         base_cmd_args:
+          verbose: true
+        args:
           node: node4
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: Remove Hosts
-      desc: Remove nodes from cluster
+      name: Remove host
+      desc: Remove node from cluster
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        service: host
+        command: remove
+        args:
+          node: node3
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Add hosts to ceph cluster
+      desc: Add host node(s) with IP address and labels
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes:
+            - node5
+            - node6
+            - node7
+            - node8
+          attach_ip_address: false
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove Hosts from cluster
+      desc: Remove nodes from cluster execpt installer
       module: test_cephadm.py
       polarion-id:
       config:
         service: host
         command: remove_hosts
-        base_cmd_args:
+        args:
+          nodes:
+            - node5
+            - node6
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove all Hosts
+      desc: Remove all nodes from cluster execpt installer
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        service: host
+        command: remove_hosts
+        args:
           nodes: []
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: Add host
+      name: Add all hosts to ceph cluster
       desc: Add all host node with IP address and labels
       module: test_cephadm.py
       polarion-id:
       config:
         service: host
         command: add_hosts
-        base_cmd_args:
+        args:
           nodes: []
-          attach_address: true
+          attach_ip_address: true
           labels: apply-all-labels
       destroy-cluster: false
       abort-on-fail: true
@@ -453,6 +511,8 @@ tests:
         command: remove
         service: rgw
         base_cmd_args:
+          verbose: true
+        args:
             service_name: rgw.india.south
             verify: true
       destroy-cluster: false
@@ -465,7 +525,7 @@ tests:
       config:
         command: remove
         service: iscsi
-        base_cmd_args:
+        args:
             service_name: iscsi.iscsi
             verify: true
       destroy-cluster: false
@@ -479,6 +539,8 @@ tests:
         command: remove
         service: prometheus
         base_cmd_args:
+          verbose: true
+        args:
           service_name: prometheus
       destroy-cluster: false
       abort-on-fail: true
@@ -490,7 +552,7 @@ tests:
       config:
         command: remove
         service: node-exporter
-        base_cmd_args:
+        args:
           service_name: node-exporter
       destroy-cluster: false
       abort-on-fail: true
@@ -502,7 +564,7 @@ tests:
       config:
         command: remove
         service: alertmanager
-        base_cmd_args:
+        args:
           service_name: alertmanager
       destroy-cluster: false
       abort-on-fail: true
@@ -514,7 +576,7 @@ tests:
       config:
         command: remove
         service: grafana
-        base_cmd_args:
+        args:
           service_name: grafana
       destroy-cluster: false
       abort-on-fail: true
@@ -527,6 +589,8 @@ tests:
         command: remove
         service: mds
         base_cmd_args:
+          verbose: true
+        args:
           service_name: 'mds.cephfs'
       destroy-cluster: false
       abort-on-fail: true

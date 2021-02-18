@@ -8,6 +8,7 @@ This module inherited where service deleted using "remove" operation.
 """
 from typing import Dict
 
+from .common import config_dict_to_string
 from .typing_ import ServiceProtocol
 
 
@@ -27,17 +28,23 @@ class RemoveMixin:
                 command: remove
                 service: rgw
                 base_cmd_args:
+                    verbose: true
+                args:
                     service_name: rgw.realm.zone
                     verify: true
         """
-        base_cmd = ["ceph", "orch", "rm"]
-        cmd_args = config.pop("base_cmd_args")
-        service_name = cmd_args.pop("service_name")
-        base_cmd.append(service_name)
+        cmd = ["ceph", "orch"]
+        if config.get("base_cmd_args"):
+            cmd.append(config_dict_to_string(config["base_cmd_args"]))
 
-        self.shell(args=base_cmd)
+        args = config["args"]
 
-        verify = cmd_args.pop("verify", True)
+        service_name = args.pop("service_name")
+        cmd.extend(["rm", service_name])
+
+        self.shell(args=cmd)
+
+        verify = args.pop("verify", True)
 
         if verify:
             self.check_service(

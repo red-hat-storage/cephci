@@ -36,8 +36,7 @@ class LSMixin:
         cmd = ["ceph", "orch"]
 
         if config and config.get("base_cmd_args"):
-            base_cmd_args = config_dict_to_string(config["base_cmd_args"])
-            cmd.append(base_cmd_args)
+            cmd.append(config_dict_to_string(config["base_cmd_args"]))
 
         cmd.append("ls")
 
