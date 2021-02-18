@@ -83,7 +83,7 @@ def run(ceph_cluster, **kw):
 
     # create all.yml
     log.info("global vars {}".format(gvar))
-    gvars_file = ceph_installer.write_file(
+    gvars_file = ceph_installer.remote_file(
         sudo=True, file_name="{}/group_vars/all.yml".format(ansible_dir), file_mode="w"
     )
     gvars_file.write(gvar)
@@ -275,13 +275,13 @@ def collocate_mons_with_mgrs(ceph_cluster, ansible_dir):
     for node in mon_nodes:
         mgr_block += node.shortname + " monitor_interface=" + node.eth_interface + "\n"
 
-    host_file = ceph_installer.write_file(
+    host_file = ceph_installer.remote_file(
         sudo=True, file_name="{}/hosts".format(ansible_dir), file_mode="a"
     )
     host_file.write(mgr_block)
     host_file.flush()
 
-    host_file = ceph_installer.write_file(
+    host_file = ceph_installer.remote_file(
         sudo=True, file_name="{}/hosts".format(ansible_dir), file_mode="r"
     )
     host_contents = ""

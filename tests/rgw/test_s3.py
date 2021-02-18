@@ -158,7 +158,7 @@ secret_key = {tenant_secret_key}
     )
 
     log.info("s3-tests configuration: {s3_config}".format(s3_config=s3_config))
-    config_file = client_node.write_file(
+    config_file = client_node.remote_file(
         file_name="s3-tests/config.yaml", file_mode="w"
     )
     config_file.write(s3_config)

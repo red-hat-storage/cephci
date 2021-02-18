@@ -186,14 +186,16 @@ class Ceph(object):
                 + "\n"
             )
         for ceph in self.get_nodes():
-            keys_file = ceph.write_file(file_name=".ssh/authorized_keys", file_mode="a")
-            hosts_file = ceph.write_file(
+            keys_file = ceph.remote_file(
+                file_name=".ssh/authorized_keys", file_mode="a"
+            )
+            hosts_file = ceph.remote_file(
                 sudo=True, file_name="/etc/hosts", file_mode="a"
             )
             ceph.exec_command(
                 cmd="[ -f ~/.ssh/config ] && chmod 700 ~/.ssh/config", check_ec=False
             )
-            ssh_config = ceph.write_file(file_name=".ssh/config", file_mode="a")
+            ssh_config = ceph.remote_file(file_name=".ssh/config", file_mode="a")
             keys_file.write(keys)
             hosts_file.write(hosts)
             ssh_config.write(hostkeycheck)
@@ -1372,7 +1374,7 @@ class CephNode(object):
         else:
             return stdout, stderr
 
-    def write_file(self, **kw):
+    def remote_file(self, **kw):
         if kw.get("sudo"):
             client = self.rssh
         else:
@@ -1662,7 +1664,7 @@ class CephNode(object):
         """
         repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
         base_repo = Ceph.generate_repository_file(base_url, repos)
-        base_file = self.write_file(
+        base_file = self.remote_file(
             sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
         )
         base_file.write(base_repo)
@@ -1671,7 +1673,7 @@ class CephNode(object):
             installer_repos = ["Agent", "Main", "Installer"]
             inst_repo = Ceph.generate_repository_file(installer_url, installer_repos)
             logger.info("Setting up repo on %s", self.hostname)
-            inst_file = self.write_file(
+            inst_file = self.remote_file(
                 sudo=True, file_name="/etc/yum.repos.d/rh_ceph_inst.repo", file_mode="w"
             )
             inst_file.write(inst_repo)
@@ -1851,16 +1853,16 @@ class CephObject(object):
         """
         return self.node.exec_command(cmd=cmd, **kw)
 
-    def write_file(self, **kw):
+    def remote_file(self, **kw):
         """
         Proxy to node's write file
         Args:
             **kw: options
 
         Returns:
-            node's write_file result
+            node's remote_file result
         """
-        return self.node.write_file(**kw)
+        return self.node.remote_file(**kw)
 
 
 class CephDemon(CephObject):
@@ -1992,7 +1994,7 @@ class CephInstaller(CephObject):
         Args:
             content(str): all.yml config as yml string
         """
-        all_yml_file = self.write_file(
+        all_yml_file = self.remote_file(
             sudo=True,
             file_name="{}/group_vars/all.yml".format(self.ansible_dir),
             file_mode="a",
@@ -2035,7 +2037,7 @@ class CephInstaller(CephObject):
             inventory_config(str):inventory config compatible with ceph-ansible
             file_name(str): custom inventory file name. (default : "hosts")
         """
-        host_file = self.write_file(
+        host_file = self.remote_file(
             sudo=True,
             file_mode="w",
             file_name="{ansible_dir}/{inventory_file}".format(
@@ -2055,7 +2057,7 @@ class CephInstaller(CephObject):
         out = out.read().decode().rstrip("\n")
         out = re.sub(r"\]+", "]", out)
         out = re.sub(r"\[+", "[", out)
-        host_file = self.write_file(
+        host_file = self.remote_file(
             sudo=True,
             file_mode="w",
             file_name="{ansible_dir}/{inventory_file}".format(
@@ -2158,7 +2160,7 @@ class CephInstaller(CephObject):
         Args:
             test_data: test data dict
         """
-        iscsi_file = self.write_file(
+        iscsi_file = self.remote_file(
             sudo=True,
             file_name="{}/group_vars/iscsigws.yml".format(self.ansible_dir),
             file_mode="a",

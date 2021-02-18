@@ -26,7 +26,7 @@ def prepare_sdata(mon):
 
     try:
 
-        sfd = mon.write_file(file_name=sdata, file_mode="w+")
+        sfd = mon.remote_file(file_name=sdata, file_mode="w+")
         sfd.write(dbuf)
         sfd.flush()
     except Exception:
@@ -94,7 +94,7 @@ def do_rados_get(mon, pool, niter):
             except Exception:
                 log.error("rados get failed for {obj}".format(obj=obj))
                 log.error(traceback.format_exc)
-            dfd = mon.write_file(file_name=file_name, file_mode="r")
+            dfd = mon.remote_file(file_name=file_name, file_mode="r")
             dcsum = hashlib.md5(dfd.read()).hexdigest()
             log.info("csum of obj {objname}={dcsum}".format(objname=obj, dcsum=dcsum))
             print(type(fcsum))

@@ -96,7 +96,7 @@ def run(ceph_cluster, **kw):
         PASSWORD=cred["password"],
     )
 
-    script_file = ceph_installer.write_file(
+    script_file = ceph_installer.remote_file(
         sudo=True, file_name=file_name, file_mode="w"
     )
     script_file.write(script)

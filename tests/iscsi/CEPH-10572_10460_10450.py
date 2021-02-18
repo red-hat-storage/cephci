@@ -46,7 +46,7 @@ def run(**kw):
             "\nUUID=" + uuid[i] + "\t/mnt/" + device_list[i] + "/\text4\t_netdev\t0 0"
         )
         fstab += temp
-    fstab_file = iscsi_initiators.write_file(
+    fstab_file = iscsi_initiators.remote_file(
         sudo=True, file_name="/etc/fstab", file_mode="w"
     )
     fstab_file.write(fstab)

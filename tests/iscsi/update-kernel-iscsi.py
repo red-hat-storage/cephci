@@ -60,7 +60,7 @@ enabled=1
         cmd="sudo wget -O /etc/yum.repos.d/rh_7_nightly.repo "
         "http://file.rdu.redhat.com/~kdreyer/repos/rhel-7-nightly.repo"
     )
-    kernel_repo = client.write_file(
+    kernel_repo = client.remote_file(
         sudo=True, file_name="/etc/yum.repos.d/rh_kernel.repo", file_mode="w"
     )
     kernel_repo.write(kernel_repo_file)
