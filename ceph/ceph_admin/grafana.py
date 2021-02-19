@@ -1,48 +1,38 @@
-"""
-Module to deploy Grafana service and individual daemon(s).
+"""Manage the Ceph Grafana service via cephadm CLI."""
+from typing import Dict
 
-this module deploy Grafana service and daemon(s) along with
-handling other prerequisites needed for deployment.
-
-"""
-from ceph.ceph import ResourcesNotFoundError
-from ceph.ceph_admin.apply import Apply
-from ceph.ceph_admin.daemon_mixin import DaemonMixin
-from ceph.utils import get_nodes_by_id
+from .apply import ApplyMixin
+from .orch import Orch
 
 
-class GrafanaRole(Apply, DaemonMixin):
-    __ROLE = "grafana"
+class Grafana(ApplyMixin, Orch):
+    """Interface to Ceph service Grafana via CLI."""
 
-    def apply_grafana(self, **config):
+    SERVICE_NAME = "grafana"
+
+    def apply(self, config: Dict) -> None:
         """
-        Deploy grafana service using "orch apply" option
+        Deploy the grafana service using the provided configuration.
+
         Args:
-            config: apply config arguments
+            config: Key/value pairs provided by the test case to create the service.
 
-        config:
-            nodes: ['node1']
+        Example
+            config:
+                command: apply
+                service: grafana
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                args:
+                    placement:
+                        label: grafana    # either label or node.
+                        nodes:
+                            - node1
+                        limit: 3    # no of daemons
+                        sep: " "    # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        cmd = Apply.apply_cmd + [self.__ROLE]
-        nodes = get_nodes_by_id(self.cluster, config.get("nodes"))
-
-        if not nodes:
-            raise ResourcesNotFoundError("Nodes not found: %s", config.get("nodes"))
-
-        host_placement = [node.shortname for node in nodes]
-        cmd.append("--placement '{}'".format(";".join(host_placement)))
-
-        Apply.apply(
-            self,
-            role=self.__ROLE,
-            command=cmd,
-            placements=host_placement,
-        )
-
-    def daemon_add_grafana(self, **config):
-        """
-        Deploy grafana service using "orch apply" option
-        Args:
-            config: daemon add arguments
-        """
-        raise NotImplementedError
+        super().apply(config=config)

@@ -1,85 +1,121 @@
 """
+Represent the ceph orch CLI action 'apply'.
+
 Module to deploy ceph role service(s) using orchestration command
 "ceph orch apply <role> [options] --placement '<placements>' "
 
-this module inherited where service deployed using "apply" operation.
-and also validation using orchestration process list response
+This is a mixin object and can be applied to the supported service classes.
 """
-import logging
-from time import sleep
+from typing import Dict
 
-from ceph.ceph import ResourcesNotFoundError
+from ceph.utils import get_nodes_by_id
 
-logger = logging.getLogger(__name__)
+from .common import config_dict_to_string
+from .typing_ import ServiceProtocol
 
 
-class ServiceRemoveFailure(Exception):
+class OrchApplyServiceFailure(Exception):
     pass
 
 
-class Apply:
+class ApplyMixin:
+    """Add apply command support to child object."""
 
-    apply_cmd = ["ceph", "orch", "apply"]
-    remove_cmd = ["ceph", "orch", "rm"]
-
-    def apply(self, role, command, placements):
+    def apply(self: ServiceProtocol, config: Dict) -> None:
         """
-        Cephadm service deployment using apply command
+        Execute the apply method using the object's service name and provided input.
 
         Args:
-            role: daemon name
-            command: command to be executed
-            placements: hosts/ID(s)
+            config:     Key/value pairs passed from the test suite.
+                        base_cmd_args   - key/value pairs to set for base command
+                        pos_args        - List to be added as positional params
+                        args            - Key/value pairs as optional arguments.
+
+        Example:
+            config:
+                command: apply
+                service: rgw
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                    input_file: <name of spec>
+                pos_args:               # positional arguments
+                    - india             # realm
+                    - south             # zone
+                args:
+                    placement:
+                        label: rgw_south
+                        nodes:              # A list of strings that would looked up
+                            - node1
+                        limit: 3            # no of daemons
+                        sep: " "            # separator to be used for placements
+                    dry-run: true
+                    unmanaged: true
         """
-        self.shell(
-            remote=self.installer,
-            args=command,
-        )
+        base_cmd = ["ceph", "orch"]
 
-        if placements:
-            assert self.check_exist(
-                daemon=role,
-                ids=placements,
-            )
+        if config.get("base_cmd_args"):
+            base_cmd_args_str = config_dict_to_string(config.get("base_cmd_args"))
+            base_cmd.append(base_cmd_args_str)
 
-    def orch_remove(self, service_name, check_status=True):
-        """
-        Remove service using "ceph orch rm <svc-id>" command
-        Args:
-            service_name: service name
-            check_status: check command status
-        """
-        # check service existence
-        if not self.get_role_service(service_name=service_name):
-            raise ResourcesNotFoundError(
-                f"Service {service_name} not found in services or Not provided"
-            )
+        base_cmd.append("apply")
+        base_cmd.append(self.SERVICE_NAME)
 
-        # Remove service
-        logger.info("Removing %s service", service_name)
+        pos_args = config.get("pos_args")
+        if pos_args:
+            base_cmd += pos_args
 
-        cmd = self.remove_cmd + [service_name]
-        out, err = self.shell(
-            remote=self.installer,
-            args=cmd,
-            check_status=check_status,
-        )
+        args = config.get("args")
 
-        # Todo: need to validate expected response from mon, mgr
-        if not check_status:
-            return out, err
+        node_names = None
+        verify_service = False
+        placement = args.pop("placement", {})
 
-        interval = 5
-        timeout = self.TIMEOUT
-        checks = timeout / interval
+        if placement:
+            placement_str = "--placement="
 
-        while checks:
-            checks -= 1
-            if not self.get_role_service(service_name):
-                return True
-            logger.info(
-                "%s service is still up... Retries: %s" % (service_name, checks)
-            )
-            sleep(interval)
+            if "label" in placement:
+                placement_str += f'"label:{placement["label"]}"'
+                base_cmd.append(placement_str)
 
-        raise ServiceRemoveFailure(f"{service_name} service did not get removed")
+            if "nodes" in placement:
+                verify_service = True
+                nodes = placement.get("nodes")
+
+                if "*" in nodes:
+                    placement_str += '"*"'
+                    node_names = [node.shortname for node in self.cluster.node_list]
+                elif "[" in nodes:
+                    placement_str += '"%s"' % nodes
+                    verify_service = False
+                else:
+                    nodes_ = get_nodes_by_id(self.cluster, nodes)
+                    node_names = [node.shortname for node in nodes_]
+
+                    sep = placement.get("sep", " ")
+                    node_str = f"{sep}".join(node_names)
+
+                    limit = placement.pop("limit", None)
+                    if limit:
+                        placement_str += f"'{limit}{sep}{node_str}'"
+                    else:
+                        placement_str += f"'{node_str}'"
+
+                base_cmd.append(placement_str)
+
+            # Odd scenario when limit is specified but without nodes
+            if "limit" in placement:
+                base_cmd.append(f"--placement={placement.get('limit')}")
+
+        # At this junction, optional arguments are left in dict
+        if args:
+            base_cmd.append(config_dict_to_string(args))
+
+        self.shell(args=base_cmd)
+        if not verify_service:
+            return
+
+        if not self.check_service_exists(
+            service_name=self.SERVICE_NAME, ids=node_names
+        ):
+            raise OrchApplyServiceFailure
