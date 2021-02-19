@@ -16,6 +16,10 @@ def run(**kw):
     log.info("Running test")
     clusters = kw.get("ceph_cluster_dict")
     config = kw.get("config")
+    test_site = kw.get("ceph_cluster")
+    log.info(f"test site: {test_site.name}")
+    test_site_node = test_site.get_ceph_object("rgw").node
+
     # adding sleep for 60 seconds before another test starts, sync needs to complete
     time.sleep(60)
     verify_io_on_sites = config.get("verify-io-on-sites", [])
@@ -24,9 +28,6 @@ def run(**kw):
     secondary_cluster = clusters.get("ceph-rgw2")
     primary_rgw_node = primary_cluster.get_ceph_object("rgw").node
     secondary_rgw_node = secondary_cluster.get_ceph_object("rgw").node
-    log.info(f'test_site: {config.get("test-site")}')
-    test_site = clusters.get(config.get("test-site"))
-    test_site_node = test_site.get_ceph_object("rgw").node
 
     test_folder = "rgw-ms-tests"
     test_folder_path = f"/home/cephuser/{test_folder}"
