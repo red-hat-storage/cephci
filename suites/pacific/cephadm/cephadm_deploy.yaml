@@ -19,6 +19,7 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
+                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
