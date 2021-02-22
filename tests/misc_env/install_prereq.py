@@ -108,7 +108,7 @@ def install_prereq(
             setup_addition_repo(ceph, repo)
         # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
         if distro_ver.startswith("8"):
-            rpm_all_packages = rpm_packages.get("py3") + ["net-tools"]
+            rpm_all_packages = rpm_packages.get("py3")
             if str(rhbuild).startswith("5"):
                 rpm_all_packages = rpm_packages.get("py3") + ["lvm2", "podman"]
             rpm_all_packages = " ".join(rpm_all_packages)
@@ -146,21 +146,21 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
         try:
             command = "sudo subscription-manager --force register --username={username} --password={password} "
             if is_production:
-                credential = get_cephci_config().get("cdn_credentials")
+                credential = get_cephci_config("cdn_credentials")
                 command = command.format(
-                    username=credential.get("username"),
-                    password=credential.get("password"),
+                    username=credential["cdn_credentials"]["username"],
+                    password=credential["cdn_credentials"]["password"],
                 )
 
             else:
-                credential = get_cephci_config().get("stage_credentials")
+                credential = get_cephci_config("stage_credentials")
                 command += (
                     "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription "
                     "--baseurl=https://cdn.redhat.com "
                 )
                 command = command.format(
-                    username=credential.get("username"),
-                    password=credential.get("password"),
+                    username=credential["stage_credentials"]["username"],
+                    password=credential["stage_credentials"]["password"],
                 )
 
             ceph.exec_command(cmd=command, timeout=720)
@@ -170,6 +170,9 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
                 timeout=720,
             )
             break
+
+        except SystemExit:
+            raise
         except BaseException:
             if datetime.datetime.now() - starttime > timeout:
                 try:
