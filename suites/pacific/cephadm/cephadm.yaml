@@ -504,6 +504,76 @@ tests:
       destroy-cluster: false
       abort-on-fail: false
   - test:
+      name: Create replicated pool for NFS
+      desc: Add pool for NFS Ganesha service
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        command: shell
+        args:                     # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - nfs-ganesha-pool
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable rgw application on nfs-ganesha pool
+      desc: enable rgw on nfs-ganesha pool
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - nfs-ganesha-pool
+          - rgw
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Apply NFS Service
+      desc: Apply NFS-Ganesha service on role nodes
+      module: test_nfs.py
+      polarion-id:
+      config:
+        command: apply
+        service: nfs
+        base_cmd_args:
+            verbose: true
+        pos_args:
+          - mynfs                         # nfs service ID
+          - nfs-ganesha-pool              # name of the pool
+        args:
+          namespace: mynfs-ns             # specify namespace
+          placement:
+            nodes:
+              - node8
+              - node6
+            limit: 2
+            sep: ";"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove NFS-Ganesha Service
+      desc: Remove NFS-Ganesha service using orch remove option
+      module: test_nfs.py
+      polarion-id:
+      config:
+        command: remove
+        service: nfs
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: nfs.mynfs
+          verify: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
       name: Remove RGW Service
       desc: Remove RGW service using orch remove option
       module: test_rgw.py
