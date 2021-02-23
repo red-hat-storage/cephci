@@ -55,6 +55,20 @@ def construct_registry(cls, registry: str, json_file: bool = False):
 class BootstrapMixin:
     """Add bootstrap support to the child class."""
 
+    def get_method(self, key):
+        """
+        Fetch method using the Key
+        Args:
+            key: fsid
+
+        Returns: Returns the method based on the Key
+
+        """
+        verify_map = {
+            "fsid": self.validate_fsid,
+        }
+        return verify_map.get(key)
+
     def bootstrap(self: CephAdmProtocol, config: Dict) -> None:
         """
         Execute cephadm bootstrap with the passed kwargs on the installer node.
@@ -133,3 +147,25 @@ class BootstrapMixin:
         logger.error("Bootstrap error: %s", err.read().decode())
 
         self.distribute_cephadm_gen_pub_key()
+
+        # Verification of arguments
+
+        args = self.config.get("args", {})
+        for key, value in args.items():
+            func = self.get_method(key)
+            if not func:
+                continue
+            if not func(value):
+                raise AssertionError
+
+    def validate_fsid(self, fsid) -> bool:
+        """
+        Method is used to validate fsid
+        Args:
+            fsid: <ID>
+
+        Returns: Boolean value whether fsid is valid
+
+        """
+        out, err = self.shell(args=["ceph", "fsid"])
+        return out == fsid
