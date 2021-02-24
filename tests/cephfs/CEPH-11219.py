@@ -236,7 +236,7 @@ def run(ceph_cluster, **kw):
                     fs_util.stress_io,
                     client4,
                     client_info['mounting_dir'],
-                    dirs[0],
+                    dirs[1],
                     0,
                     1,
                     iotype='smallfile')
@@ -248,7 +248,7 @@ def run(ceph_cluster, **kw):
                     client_info['mounting_dir'],
                     'g',
                     'read',
-                    dir_name=dirs[0])
+                    dir_name=dirs[2])
                 p.spawn(
                     fs_util.read_write_IO,
                     client2,
