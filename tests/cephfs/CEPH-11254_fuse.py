@@ -144,10 +144,8 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 1,
-
                 iotype="smallfile",
             )
-
             p.spawn(fs_util.reboot, client1[0])
 
         with parallel() as p:
