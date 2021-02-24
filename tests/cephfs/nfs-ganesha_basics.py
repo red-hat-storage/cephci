@@ -107,8 +107,10 @@ def run(ceph_cluster, **kw):
                 dirs[1],
                 0,
                 1,
+
                 iotype="smallfile",
             )
+
             p.spawn(
                 fs_util.stress_io,
                 nfs_client,

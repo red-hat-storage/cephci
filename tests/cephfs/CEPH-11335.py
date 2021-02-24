@@ -182,6 +182,7 @@ def run(ceph_cluster, **kw):
                 "",
                 0,
                 1,
+
                 iotype="smallfile",
             )
             p.spawn(
@@ -190,6 +191,7 @@ def run(ceph_cluster, **kw):
                 client_info["mounting_dir"],
                 "m",
                 "readwrite",
+
             )
             for op in p:
                 return_counts, rc = op
@@ -278,6 +280,7 @@ def run(ceph_cluster, **kw):
                 "",
                 0,
                 1,
+
                 iotype="smallfile",
             )
             p.spawn(
@@ -286,6 +289,7 @@ def run(ceph_cluster, **kw):
                 client_info["mounting_dir"],
                 "m",
                 "readwrite",
+
             )
             for op in p:
                 return_counts, rc = op

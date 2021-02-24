@@ -98,6 +98,7 @@ def run(ceph_cluster, **kw):
                 source_dir,
                 "%s%s" % (client_info["mounting_dir"], target_dir),
             )
+
             p.spawn(
                 fs_util.rsync,
                 client4,

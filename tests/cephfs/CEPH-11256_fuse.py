@@ -107,8 +107,10 @@ def run(ceph_cluster, **kw):
                 dirs[0],
                 0,
                 1,
+
                 iotype="smallfile",
             )
+
             p.spawn(
                 fs_util.stress_io,
                 client3,
@@ -148,8 +150,10 @@ def run(ceph_cluster, **kw):
                 dirs[0],
                 0,
                 1,
+
                 iotype="smallfile",
             )
+
             p.spawn(
                 fs_util.stress_io,
                 client3,
@@ -206,8 +210,10 @@ def run(ceph_cluster, **kw):
                 dirs[0],
                 0,
                 1,
+
                 iotype="smallfile",
             )
+
             p.spawn(
                 fs_util.stress_io,
                 client3,
@@ -250,8 +256,8 @@ def run(ceph_cluster, **kw):
                 dirs[1],
                 0,
                 1,
-                iotype="smallfile",
-            )
+                iotype='smallfile')
+
             p.spawn(
                 fs_util.stress_io,
                 client3,

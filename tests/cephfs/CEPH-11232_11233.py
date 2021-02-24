@@ -133,59 +133,36 @@ def run(ceph_cluster, **kw):
                     client_info["mounting_dir"],
                     dir_name,
                     0,
-<<<<<<< HEAD
                     1000,
                     iotype="touch",
                 )
-=======
-                    10000,
-                    iotype='touch')
->>>>>>> ffc0001... increasing no. of files to create to verify testcase
                 p.spawn(
                     fs_util.stress_io,
                     client3,
                     client_info["mounting_dir"],
                     dir_name,
-<<<<<<< HEAD
                     1000,
                     2000,
                     iotype="touch",
                 )
-=======
-                    10000,
-                    20000,
-                    iotype='touch')
->>>>>>> ffc0001... increasing no. of files to create to verify testcase
                 p.spawn(
                     fs_util.stress_io,
                     client2,
                     client_info["mounting_dir"],
                     dir_name,
-<<<<<<< HEAD
                     2000,
                     3000,
                     iotype="touch",
                 )
-=======
-                    20000,
-                    30000,
-                    iotype='touch')
->>>>>>> ffc0001... increasing no. of files to create to verify testcase
                 p.spawn(
                     fs_util.stress_io,
                     client4,
                     client_info["mounting_dir"],
                     dir_name,
-<<<<<<< HEAD
                     3000,
                     4000,
                     iotype="touch",
                 )
-=======
-                    30000,
-                    40000,
-                    iotype='touch')
->>>>>>> ffc0001... increasing no. of files to create to verify testcase
                 p.spawn(
                     fs_util.stress_io,
                     client3,
