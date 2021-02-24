@@ -968,6 +968,25 @@ finally:
                                 long_running=True, timeout=300)
                             self.return_counts = self.io_verify(client)
 
+                    elif val == 'smallfile':
+                    # Crefi equivalent command for file creation using smallfile tool
+                        for i in range(0, 5):
+                            ops = [
+                                'create',
+                                'setxattr',
+                                'getxattr',
+                                'chmod',
+                                'rename']
+                            client.exec_command(
+                                cmd='sudo python3 smallfile/smallfile_cli.py '
+                                    '--operation %s --threads 10 '
+                                    '--file-size 4 --files 1000 '
+                                    '--files-per-dir 10 --dirs-per-dir 2'
+                                    ' --top %s%s' %
+                                    (ops[i],mounting_dir, dir_name),
+                                long_running=True, timeout=300)
+                            self.return_counts = self.io_verify(client)
+
                     elif val == 'smallfile_create':
                         client.exec_command(
                             cmd='sudo python3 /home/cephuser/smallfile/'
@@ -1021,13 +1040,17 @@ finally:
         for client in clients:
             rc = self.check_mount_exists(client)
             if rc == 0:
-                for num in range(int(range1), int(range2)):
-                    client.exec_command(
-                        cmd='sudo %s -n %d %s%s_%d' %
-                            ("python3 /home/cephuser/Crefi/crefi.py",
-                             num_of_files, mounting_dir, dir_name, num),
-                        long_running=True, timeout=300)
-                    self.return_counts = self.io_verify(client)
+                range_diff = range2 - range1
+                total_of_files = range_diff * num_of_files
+                client.exec_command(
+                    cmd='sudo python3 smallfile/smallfile_cli.py '
+                        '--operation create --threads 1 '
+                        '--file-size 4 --files %d '
+                        '--files-per-dir %d --top %s%s' %
+                        (total_of_files, total_of_files,
+                         mounting_dir, dir_name),
+                    long_running=True, timeout=300)
+                self.return_counts = self.io_verify(client)
         return self.return_counts, 0
 
     def pinned_dir_io_mdsfailover(
@@ -1045,11 +1068,20 @@ finally:
             rc = self.check_mount_exists(client)
             if rc == 0:
                 for num in range(int(range1), int(range2)):
+                    working_dir = dir_name + "_" + str(num)
+                    out, rc = client.exec_command('sudo ls %s' %
+                        (mounting_dir))
+                    output = out.read().strip().decode()
+                    if working_dir not in output:
+                        client.exec_command(cmd='mkdir %s%s_%d' %
+                            (mounting_dir, dir_name, num))
                     log.info("Performing MDS failover:")
                     mds_fail_over(mds_nodes)
                     client.exec_command(
-                        cmd='sudo %s -n %d %s%s_%d' %
-                            ("python3 /home/cephuser/Crefi/crefi.py",
+                        cmd='sudo python3 %s --operation create '
+                            '--threads 1 --file-size 100 --files %d'
+                            ' --top %s%s_%d' %
+                            ("/home/cephuser/smallfile/smallfile_cli.py",
                              num_of_files, mounting_dir, dir_name, num),
                         long_running=True, timeout=300)
                     self.return_counts = self.io_verify(client)
