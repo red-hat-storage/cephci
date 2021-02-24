@@ -1457,12 +1457,19 @@ os.system('sudo systemctl start  network')
         )
         nw_disconnect.write(script)
         nw_disconnect.flush()
-
+<<<<<<< HEAD
         log.info("Stopping the network..")
         node.exec_command(cmd="sudo yum install -y python3")
         node.exec_command(sudo=True, cmd="python3 /home/cephuser/nw_disconnect.py")
         log.info("Starting the network..")
-
+=======
+        log.info('Stopping the network..')
+        node.exec_command(cmd='sudo yum install -y python3')
+        node.exec_command(
+            cmd="sudo python3 /home/cephuser/nw_disconnect.py")
+        log.info('Starting the network..')
+>>>>>>> 55923da... adding py3 dependency for rhel 7
+        return 0
 
     def reboot_node(self, ceph_demon):
         node = ceph_demon.node
