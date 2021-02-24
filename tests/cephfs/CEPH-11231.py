@@ -215,6 +215,8 @@ def run(ceph_cluster, **kw):
                     500,
                     iotype="touch",
                 )
+                for node in client_info["mon_node"]:
+                    fs_util.network_disconnect(node)
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -303,6 +305,8 @@ def run(ceph_cluster, **kw):
                     500,
                     iotype="touch",
                 )
+                for node in client_info["osd_nodes"]:
+                    fs_util.network_disconnect(node)
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -362,7 +366,7 @@ def run(ceph_cluster, **kw):
                     iotype="touch",
                 )
                 for node in client_info["osd_nodes"]:
-                    p.spawn(fs_util.reboot, node)
+                    fs_util.network_disconnect(node)
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
