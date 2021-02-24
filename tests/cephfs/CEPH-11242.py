@@ -94,6 +94,7 @@ def run(ceph_cluster, **kw):
                 client_info["mounting_dir"],
                 "g",
                 "readwrite",
+                iotype='smallfile'
             )
             p.spawn(fs_util.read_write_IO, client3, client_info["mounting_dir"])
             for op in p:

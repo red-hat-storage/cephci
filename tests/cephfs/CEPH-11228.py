@@ -93,7 +93,7 @@ def run(ceph_cluster, **kw):
                 0,
                 1,
                 iotype="smallfile",
-            )
+)
             p.spawn(
                 fs_util.stress_io,
                 client3,
