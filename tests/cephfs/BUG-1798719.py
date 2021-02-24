@@ -42,7 +42,7 @@ def run(ceph_cluster, **kw):
                 cmd='sudo ceph auth get-key client.%s' %
                     (user_name))
             secret_key = out.read().decode().rstrip('\n')
-            key_file = client.write_file(
+            key_file = client.remote_file(
                 sudo=True, file_name='/etc/ceph/%s.secret' %
                 (user_name), file_mode='w')
             key_file.write(secret_key)
