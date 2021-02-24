@@ -81,20 +81,19 @@ def run(ceph_cluster, **kw):
         dir1 = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
         )
-        for client in client_info['clients']:
+        for client in client_info["clients"]:
             log.info("Creating directory:")
             client.exec_command(
-                cmd='sudo mkdir %s%s' %
-                    (client_info['mounting_dir'], dir1))
+                cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir1)
+            )
             log.info("Creating directories with breadth and depth:")
             out, rc = client.exec_command(
-                cmd='sudo python3 smallfile/smallfile_cli.py '
-                    '--operation create  --threads 10 '
-                    ' --file-size 4 --files 1000 '
-                    '--files-per-dir 10 --dirs-per-dir 2'
-                    ' --top %s%s' %
-                    (client_info['mounting_dir'], dir1),
-                long_running=True, timeout=300)
+                sudo=True,
+                cmd=f"python3 smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 --files 1000 "
+                f"--files-per-dir 10 --dirs-per-dir 2 --top {client_info['mounting_dir']}{dir1}",
+                long_running=True,
+                timeout=300,
+            )
             return_counts = fs_util.io_verify(client)
             result = fs_util.rc_verify("", return_counts)
             print(result)
@@ -149,28 +148,32 @@ def run(ceph_cluster, **kw):
             )
             break
 
-        for client in client_info['clients']:
+        for client in client_info["clients"]:
             log.info("Creating directories with breadth and depth:")
             out, rc = client.exec_command(
-                cmd='sudo python3 smallfile/smallfile_cli.py '
-                    '--operation create --threads 10 '
-                    ' --file-size 4 --files 1000 '
-                    '--files-per-dir 10 --dirs-per-dir 2'
-                    ' --top %s%s' %
-                    (client_info['mounting_dir'], dir1),
-                long_running=True, timeout=300)
+                sudo=True,
+                cmd="python3 smallfile/smallfile_cli.py "
+                "--operation create --threads 10 "
+                " --file-size 4 --files 1000 "
+                "--files-per-dir 10 --dirs-per-dir 2"
+                " --top %s%s" % (client_info["mounting_dir"], dir1),
+                long_running=True,
+                timeout=300,
+            )
             return_counts = fs_util.io_verify(client)
             result = fs_util.rc_verify("", return_counts)
             print(result)
             log.info("Renaming the dirs:")
             out, rc = client.exec_command(
-                cmd='sudo python3 smallfile/smallfile_cli.py '
-                    '--operation rename --threads 10 --file-size 4'
-                    ' --file-size 4 --files 1000 '
-                    '--files-per-dir 10 --dirs-per-dir 2'
-                    ' --top %s%s' %
-                    (client_info['mounting_dir'], dir1),
-                long_running=True, timeout=300)
+                sudo=True,
+                cmd="python3 smallfile/smallfile_cli.py "
+                "--operation rename --threads 10 --file-size 4"
+                " --file-size 4 --files 1000 "
+                "--files-per-dir 10 --dirs-per-dir 2"
+                " --top %s%s" % (client_info["mounting_dir"], dir1),
+                long_running=True,
+                timeout=300,
+            )
             return_counts = fs_util.io_verify(client)
             result = fs_util.rc_verify("", return_counts)
             print(result)

@@ -107,7 +107,6 @@ def run(ceph_cluster, **kw):
                 dirs[1],
                 0,
                 1,
-
                 iotype="smallfile",
             )
 

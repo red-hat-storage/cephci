@@ -67,7 +67,7 @@ def run(ceph_cluster, **kw):
         else:
             raise CommandFailed("Activate multiple mdss failed")
         client1[0].exec_command(
-            cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir_name)
+            sudo=True, cmd="mkdir %s%s" % (client_info["mounting_dir"], dir_name)
         )
         with parallel() as p:
             p.spawn(
@@ -96,7 +96,6 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 1,
-
                 iotype="smallfile",
             )
             p.spawn(
@@ -105,7 +104,7 @@ def run(ceph_cluster, **kw):
                 client_info["mounting_dir"],
                 "g",
                 "readwrite",
-                iotype='smallfile'
+                iotype="smallfile",
             )
             p.spawn(fs_util.read_write_IO, client3, client_info["mounting_dir"])
             for op in p:

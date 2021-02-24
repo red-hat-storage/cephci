@@ -296,23 +296,17 @@ def run(ceph_cluster, **kw):
                     % (client_info["mounting_dir"], dir_name, file_name)
                 )
         for num in range(0, 5):
-            for client in client_info['fuse_clients']:
-                for i in range(0, 5):
-                    ops = [
-                        'create',
-                        'setxattr',
-                        'getxattr',
-                        'chmod',
-                        'rename']
+            for client in client_info["fuse_clients"]:
+                ops = ["create", "setxattr", "getxattr", "chmod", "rename"]
+                for op in ops:
                     client.exec_command(
-                        cmd='sudo python3 smallfile/smallfile_cli.py '
-                            '--operation %s --threads 10 --file-size 4'
-                            '--files 1000 '
-                            '--files-per-dir 10 --dirs-per-dir 2'
-                            ' --top %s%s' %
-                            (ops[i], client_info['mounting_dir'],
-                             dir_name),
-                        long_running=True, timeout=300)
+                        sudo=True,
+                        cmd=f"python3 smallfile/smallfile_cli.py --operation {op} --threads 10 --file-size 4 "
+                        f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
+                        f"{client_info['mounting_dir']}{dir_name}",
+                        long_running=True,
+                        timeout=300,
+                    )
         log.info("Cleaning up!-----")
         if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
             rc = fs_util.client_clean_up(
