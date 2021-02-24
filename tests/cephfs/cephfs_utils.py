@@ -95,13 +95,30 @@ class FsUtils(object):
         for client in self.clients:
             node = client.node
             if node.pkg_type == 'rpm':
-                out, rc = node.exec_command(cmd='sudo rpm -qa | grep -w attr')
+                out, rc = node.exec_command(cmd="sudo rpm -qa | grep -w 'attr\|xattr'")
                 output = out.read().decode()
                 output.split()
                 if 'attr' not in output:
                     node.exec_command(cmd='sudo yum install -y attr')
                 node.exec_command(cmd='sudo yum install -y gcc python3-devel',
                                   check_ec=False)
+
+                if 'xattr' not in output:
+                    if (build.endswith('7') or build.startswith('3')):
+                        node.exec_command(cmd="sudo subscription-manager repos --enable"
+                                              " rhel-7-server-optional-rpms --enable"
+                                              " rhel-server-rhscl-7-rpms", long_running=True)
+                        node.exec_command(cmd="sudo yum -y install @development",
+                                          long_running=True)
+                        node.exec_command(cmd="sudo yum -y install rh-python36",
+                                          long_running=True)
+                        node.exec_command(cmd="sudo yum -y install rh-python36-numpy"
+                                              "rh-python36-scipy", long_running=True)
+                        node.exec_command(cmd="sudo yum -y install rh-python36-python-tools"
+                                              " rh-python36-python-six", long_running=True)
+                        node.exec_command(cmd="sudo yum install -y libffi libffi-devel")
+
+                    node.exec_command(sudo=True, cmd="pip3 install xattr", long_running=True)
 
                 out, rc = node.exec_command(cmd="sudo ls /home/cephuser")
                 output = out.read().decode()
