@@ -72,7 +72,7 @@ def run(ceph_cluster, **kw):
 
         return_counts1, rc1 = fs_util.stress_io(
             client1, client_info['mounting_dir'],
-            dir_name, 0, 1, iotype='crefi')
+            dir_name, 0, 1, iotype='smallfile')
         return_counts2, rc2 = fs_util.stress_io(
             client2, client_info['mounting_dir'], dir_name, 0, 1, iotype='fio')
         return_counts3, rc3 = fs_util.read_write_IO(

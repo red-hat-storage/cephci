@@ -84,11 +84,17 @@ def run(ceph_cluster, **kw):
                     (client_info['mounting_dir'], dir1))
             log.info("Creating directories with breadth and depth:")
             out, rc = client.exec_command(
-                cmd='sudo %s %s%s --fop create --multi -b 10 -d 10 '
-                    '--random --min=1K --max=10K' %
-                    ("python3 /home/cephuser/Crefi/crefi.py",
-                     client_info['mounting_dir'], dir1))
-            print(out.read().decode())
+                cmd='sudo python3 smallfile/smallfile_cli.py '
+                    '--operation create  --threads 10 '
+                    ' --file-size 4 --files 1000 '
+                    '--files-per-dir 10 --dirs-per-dir 2'
+                    ' --top %s%s' %
+                    (client_info['mounting_dir'],dir1),
+                long_running=True, timeout=300)
+            return_counts = fs_util.io_verify(client)
+            result = fs_util.rc_verify("", return_counts)
+            print(result)
+
             break
 
         with parallel() as p:
@@ -123,7 +129,7 @@ def run(ceph_cluster, **kw):
                 dir1,
                 0,
                 5,
-                iotype='crefi')
+                iotype='smallfile')
             for op in p:
                 return_counts, rc = op
         result1 = fs_util.rc_verify('', return_counts)
@@ -138,19 +144,28 @@ def run(ceph_cluster, **kw):
         for client in client_info['clients']:
             log.info("Creating directories with breadth and depth:")
             out, rc = client.exec_command(
-                cmd='sudo %s %s%s --fop create --multi -b 10 -d 10 '
-                    '--random --min=1K --max=10K' %
-                    ("python3 /home/cephuser/Crefi/crefi.py",
-                     client_info['mounting_dir'], dir1))
-            print(out.read().decode())
+                cmd='sudo python3 smallfile/smallfile_cli.py '
+                    '--operation create --threads 10 '
+                    ' --file-size 4 --files 1000 '
+                    '--files-per-dir 10 --dirs-per-dir 2'
+                    ' --top %s%s' %
+                    (client_info['mounting_dir'], dir1),
+                long_running=True, timeout=300)
+            return_counts = fs_util.io_verify(client)
+            result = fs_util.rc_verify("", return_counts)
+            print(result)
             log.info("Renaming the dirs:")
             out, rc = client.exec_command(
-                cmd='sudo %s '
-                    '%s%s --fop rename --multi -b 10 -d 10 --random '
-                    '--min=1K --max=10K' %
-                    ("python3 /home/cephuser/Crefi/crefi.py",
-                     client_info['mounting_dir'], dir1))
-            print(out.read().decode())
+                cmd='sudo python3 smallfile/smallfile_cli.py '
+                    '--operation rename --threads 10 --file-size 4'
+                    ' --file-size 4 --files 1000 '
+                    '--files-per-dir 10 --dirs-per-dir 2'
+                    ' --top %s%s' %
+                    (client_info['mounting_dir'], dir1),
+                long_running=True, timeout=300)
+            return_counts = fs_util.io_verify(client)
+            result = fs_util.rc_verify("", return_counts)
+            print(result)
 
             break
         with parallel() as p:
@@ -185,7 +200,7 @@ def run(ceph_cluster, **kw):
                 dir1,
                 0,
                 5,
-                iotype='crefi')
+                iotype='smallfile')
             for op in p:
                 return_counts, rc = op
         result2 = fs_util.rc_verify('', return_counts)
@@ -242,7 +257,7 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 5,
-                iotype='crefi')
+                iotype='smallfile')
             for op in p:
                 return_counts, rc = op
         result = fs_util.rc_verify('11223', return_counts)

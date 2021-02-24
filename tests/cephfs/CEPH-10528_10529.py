@@ -73,7 +73,7 @@ def run(ceph_cluster, **kw):
                 '',
                 0,
                 2,
-                iotype='crefi',
+                iotype='smallfile'
             )
             p.spawn(
                 fs_util.stress_io,
@@ -82,7 +82,7 @@ def run(ceph_cluster, **kw):
                 '',
                 0,
                 2,
-                iotype='crefi',
+                iotype='smallfile'
             )
             p.spawn(fs_util.read_write_IO, client4,
                     client_info['mounting_dir'], 'g', 'readwrite')

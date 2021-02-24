@@ -98,7 +98,7 @@ def run(ceph_cluster, **kw):
                 '',
                 0,
                 10,
-                iotype='crefi')
+                iotype='smallfile')
             p.spawn(
                 fs_util.stress_io,
                 client4,

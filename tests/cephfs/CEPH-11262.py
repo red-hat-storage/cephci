@@ -88,7 +88,7 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 1,
-                iotype='crefi')
+                iotype='smallfile')
         for node in client_info['mds_nodes']:
             rc = fs_util.heartbeat_map(node)
             if rc == 0:
@@ -125,7 +125,7 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 1,
-                iotype='crefi')
+                iotype='smallfile')
         log.info('Test completed for CEPH-11262')
         log.info('Cleaning up!-----')
         if client3[0].pkg_type != 'deb' and client4[0].pkg_type != 'deb':
