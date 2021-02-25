@@ -16,7 +16,7 @@ def run(ceph_cluster, **kw):
 
     check ceph.ceph_admin.nfs for test config
     """
-    log.info("Running Ceph-admin Rados-GW( RGW ) test")
+    log.info("Running Ceph-admin NFS-Ganesha test")
     config = kw.get("config")
 
     build = config.get("build", config.get("rhbuild"))

@@ -19,6 +19,8 @@ tests:
           mon-ip: "node1"
           orphan-initial-daemons: true
           skip-monitoring-stack: true
+          initial-dashboard-user: admin123
+          initial-dashboard-password: admin123
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
       destroy-cluster: false
       abort-on-fail: true

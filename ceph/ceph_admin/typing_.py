@@ -25,6 +25,14 @@ class CephAdmProtocol(Protocol):
     def install(self, **kwargs: Dict) -> None:
         ...
 
+    def shell(
+        self,
+        args: List[str],
+        check_status: bool = True,
+        timeout: int = 300,
+    ):
+        ...
+
 
 class OrchProtocol(CephAdmProtocol, Protocol):
     """Orch protocol object for supporting static duck typing hints."""
