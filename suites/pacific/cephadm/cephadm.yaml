@@ -561,6 +561,21 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
+      name: Apply Crash Service
+      desc: Apply Crash service on all nodes
+      module: test_crash.py
+      polarion-id:
+      config:
+        command: apply
+        service: crash
+        base_cmd_args:
+            verbose: true
+        args:
+          placement:
+            nodes: "*"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
       name: Remove NFS-Ganesha Service
       desc: Remove NFS-Ganesha service using orch remove option
       module: test_nfs.py
@@ -697,5 +712,19 @@ tests:
           - rm
           - cephfs
           - "--yes-i-really-mean-it"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove Crash Service
+      desc: Remove Crash service using orch remove option
+      module: test_crash.py
+      polarion-id:
+      config:
+        command: remove
+        service: crash
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: crash
       destroy-cluster: false
       abort-on-fail: true

@@ -67,6 +67,9 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         """
         ceph_pub_key = self.read_cephadm_gen_pub_key()
 
+        # Add with new line, so avoiding append to earlier entry
+        ceph_pub_key = f"\n{ceph_pub_key}"
+
         if nodes is None:
             nodes = self.cluster.get_nodes()
 
