@@ -212,8 +212,7 @@ def run(ceph_cluster, **kw):
     except Exception:
         log.error("killing osd failed")
         log.error(traceback.format_exc())
-    time.sleep(10)
-    if helper.is_up(pri_osd_id):
+    if helper.check_osd_up(pri_osd_id):
         log.error("unexpected! osd is still up")
         return 1
     time.sleep(5)
@@ -227,8 +226,7 @@ def run(ceph_cluster, **kw):
         log.error("revive failed")
         log.error(traceback.format_exc())
         return 1
-    time.sleep(10)
-    if helper.is_up(pri_osd_id):
+    if helper.check_osd_up(pri_osd_id):
         log.info("osd is UP")
     else:
         log.error("osd is DOWN")
@@ -252,8 +250,7 @@ def run(ceph_cluster, **kw):
     except Exception:
         log.error("killing osd failed")
         log.error(traceback.format_exc())
-    time.sleep(10)
-    if helper.is_up(rand_osd_id):
+    if helper.check_osd_up(rand_osd_id):
         log.error("unexpected! osd is still up")
         return 1
     time.sleep(5)
@@ -266,8 +263,7 @@ def run(ceph_cluster, **kw):
         log.error("revive failed")
         log.error(traceback.format_exc())
         return 1
-    time.sleep(30)
-    if helper.is_up(pri_osd_id):
+    if helper.check_osd_up(pri_osd_id):
         log.info("osd is UP")
     else:
         log.error("osd is DOWN")

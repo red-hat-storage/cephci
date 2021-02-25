@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import random
@@ -206,6 +207,23 @@ class RadosHelper:
         for osd in jbuf["osds"]:
             if osd_id == osd["osd"]:
                 return osd["up"]
+
+    def check_osd_up(self, osd_id):
+        """
+        Checks if the given osd is up and if the osd is down waits for 120 seconds for the same to come up
+        Args:
+            osd_id: ID of the osd to be checked
+
+        Returns: 1 if up, 0 if down
+
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=120)
+        while end_time > datetime.datetime.now():
+            status = self.is_up(osd_id)
+            if status:
+                return 1
+            time.sleep(5)
+        return 0
 
     def revive_osd(self, osd_node, osd_service):
         """
