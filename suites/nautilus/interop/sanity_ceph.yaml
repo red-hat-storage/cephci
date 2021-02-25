@@ -128,7 +128,7 @@ tests:
           add:
               - node:
                   node-name: .*node10.*
-                  demon:
+                  daemon:
                       - mon
       desc: add mon
 
@@ -169,7 +169,7 @@ tests:
           add:
               - node:
                   node-name: .*node11.*
-                  demon:
+                  daemon:
                       - osd
       desc: add new osd node with lvm scenario
 
@@ -211,7 +211,7 @@ tests:
           add:
               - node:
                   node-name: .*node11.*
-                  demon:
+                  daemon:
                       - osd
       desc: add osd to existing node with lvm scenario
 

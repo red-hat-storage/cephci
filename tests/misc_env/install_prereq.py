@@ -77,7 +77,7 @@ def install_prereq(
             setup_addition_repo(ceph, repo)
         # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
         if distro_ver.startswith("8"):
-            rpm_all_packages = rpm_packages.get("py3")
+            rpm_all_packages = rpm_packages.get("py3") + ["net-tools"]
             if str(rhbuild).startswith("5"):
                 rpm_all_packages = rpm_packages.get("py3") + ["lvm2", "podman"]
             rpm_all_packages = " ".join(rpm_all_packages)
