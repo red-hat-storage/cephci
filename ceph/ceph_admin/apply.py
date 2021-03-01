@@ -73,13 +73,17 @@ class ApplyMixin:
 
         if placement:
             placement_str = "--placement="
+            verify_service = True
 
             if "label" in placement:
-                placement_str += f'"label:{placement["label"]}"'
+                label = placement["label"]
+                node_names = [
+                    node["hostname"] for node in self.get_hosts_by_label(label)
+                ]
+                placement_str += f'"label:{label}"'
                 base_cmd.append(placement_str)
 
             if "nodes" in placement:
-                verify_service = True
                 nodes = placement.get("nodes")
 
                 if "*" in nodes:
@@ -116,6 +120,7 @@ class ApplyMixin:
             return
 
         if not self.check_service_exists(
-            service_name=self.SERVICE_NAME, ids=node_names
+            service_name=self.SERVICE_NAME,
+            ids=node_names,
         ):
             raise OrchApplyServiceFailure(self.SERVICE_NAME)

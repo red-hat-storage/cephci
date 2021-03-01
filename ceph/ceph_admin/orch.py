@@ -24,6 +24,21 @@ class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
 
     direct_calls = ["ls", "ps"]
 
+    def get_hosts_by_label(self, label: str):
+        """
+        Fetch host object by label attached to it.
+        Args:
+            label: name of the label
+        Returns:
+            hosts
+        """
+        out, _ = self.shell(args=["ceph", "orch", "host", "ls", "--format=json"])
+        hosts = list()
+        for node in loads(out):
+            if label in node.get("labels"):
+                hosts.append(node)
+        return hosts
+
     def check_service_exists(
         self, service_name: str, ids: List[str], timeout: int = 300, interval: int = 5
     ) -> bool:

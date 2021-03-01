@@ -50,6 +50,9 @@ class OrchProtocol(CephAdmProtocol, Protocol):
     def get_role_service(self, service_name: str) -> str:
         ...
 
+    def get_hosts_by_label(self, label: str) -> List:
+        ...
+
     def check_service_exists(
         self, service_name: str, ids: List[str], timeout: int = 300, interval: int = 5
     ) -> bool:

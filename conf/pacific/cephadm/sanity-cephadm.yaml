@@ -10,28 +10,33 @@ globals:
           - alertmanager
           - grafana
           - prometheus
+          - crash
       node2:
         role:
           - mon
           - mds
           - node-exporter
           - alertmanager
+          - crash
       node3:
         role:
           - osd
           - node-exporter
+          - crash
         no-of-volumes: 4
         disk-size: 15
       node4:
         role:
           - osd
           - node-exporter
+          - crash
         no-of-volumes: 4
         disk-size: 15
       node5:
         role:
           - osd
           - node-exporter
+          - crash
         no-of-volumes: 4
         disk-size: 15
       node6:
@@ -39,13 +44,16 @@ globals:
           - mon
           - rgw
           - node-exporter
+          - crash
       node7:
         role:
           - rgw
           - node-exporter
+          - crash
       node8:
         role:
           - client
           - nfs
           - node-exporter
           - iscsi
+          - crash
