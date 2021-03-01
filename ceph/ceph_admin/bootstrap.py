@@ -70,6 +70,27 @@ def validate_fsid(cls, fsid: str, out: str) -> bool:
     return out == fsid
 
 
+def validate_skip_monitoring_stack(cls, stack, out: str) -> bool:
+    """
+    Method to validate monitoring service(s) has been skipped during bootstrap
+    monitoring services - grafana, prometheus, alertmanager, node-exporter
+
+    Args:
+        cls: class object
+        stack: skip monitoring stack
+        out: bootstrap response logs
+
+    Returns: Boolean
+
+    """
+    out, _ = cls.shell(args=["ceph", "orch", "ls", "-f json"])
+    monitoring = ["prometheus", "grafana", "alertmanager", "node-exporter"]
+    for svc in json.loads(out):
+        if svc["service_type"] in monitoring:
+            return False
+    return True
+
+
 def validate_dashboard(cls, out, user=None, password=None):
     """
     Method to validate dashboard login using provided user/password
@@ -168,6 +189,7 @@ def fetch_method(key: str):
         "fsid": validate_fsid,
         "initial-dashboard-user": validate_dashboard_user,
         "initial-dashboard-password": validate_dashboard_passwd,
+        "skip-monitoring-stack": validate_skip_monitoring_stack,
     }
     return verify_map.get(key)
 
