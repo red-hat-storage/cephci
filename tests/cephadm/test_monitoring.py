@@ -40,4 +40,6 @@ def run(ceph_cluster, **kw):
     monitoring = _monitoring(cluster=ceph_cluster, **config)
     method = fetch_method(monitoring, command)
     method(config)
+    if "get_cluster_details" in config:
+        monitoring.get_cluster_state(config["get_cluster_details"])
     return 0

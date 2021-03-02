@@ -28,4 +28,8 @@ def run(ceph_cluster, **kw):
     mds = MDS(cluster=ceph_cluster, **config)
     method = fetch_method(mds, command)
     method(config)
+
+    if "get_cluster_details" in config:
+        mds.get_cluster_state(config["get_cluster_details"])
+
     return 0

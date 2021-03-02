@@ -29,4 +29,6 @@ def run(ceph_cluster, **kw):
     nfs = NFS(cluster=ceph_cluster, **config)
     method = fetch_method(nfs, command)
     method(config)
+    if "get_cluster_details" in config:
+        nfs.get_cluster_state(config["get_cluster_details"])
     return 0

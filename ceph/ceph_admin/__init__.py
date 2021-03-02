@@ -124,3 +124,14 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             self.installer.exec_command(sudo=True, cmd="yum update -y cephadm")
 
         self.installer.exec_command(cmd="rpm -qa | grep cephadm")
+
+    def get_cluster_state(self, commands):
+        """
+        Display cluster state by executing commands provided
+        Just used for sanity.
+        """
+        for cmd in commands:
+            out, err = self.shell(args=[cmd])
+            logger.info(out)
+            if err:
+                logger.error(err)

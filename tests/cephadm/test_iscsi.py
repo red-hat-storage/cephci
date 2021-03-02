@@ -28,4 +28,8 @@ def run(ceph_cluster, **kw):
     iscsi = ISCSI(cluster=ceph_cluster, **config)
     method = fetch_method(iscsi, command)
     method(config)
+
+    if "get_cluster_details" in config:
+        iscsi.get_cluster_state(config["get_cluster_details"])
+
     return 0

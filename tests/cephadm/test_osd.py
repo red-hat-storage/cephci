@@ -28,4 +28,6 @@ def run(ceph_cluster, **kw):
     osd = OSD(cluster=ceph_cluster, **config)
     method = fetch_method(osd, command)
     method(config)
+    if "get_cluster_details" in config:
+        osd.get_cluster_state(config["get_cluster_details"])
     return 0

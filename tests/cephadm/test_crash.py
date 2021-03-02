@@ -28,4 +28,8 @@ def run(ceph_cluster, **kw):
     crash = Crash(cluster=ceph_cluster, **config)
     method = fetch_method(crash, command)
     method(config)
+
+    if "get_cluster_details" in config:
+        crash.get_cluster_state(config["get_cluster_details"])
+
     return 0
