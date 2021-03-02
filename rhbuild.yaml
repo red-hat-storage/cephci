@@ -4,16 +4,16 @@ ceph:
     name: jewel
     composes:
       'latest':
-        base_url: 'http://download.eng.bos.redhat.com/composes/auto/ceph-2-rhel-7/latest-RHCEPH-2-RHEL-7/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-7/rel-eng/RHCEPH-2/RHCEPH-2.5-RHEL-7-RC-2.0/'
         ubuntu_repo: 'http://download-node-02.eng.bos.redhat.com/rcm-guest/ceph-drops/2/latest-Ceph-2-Ubuntu/'
   '3':
     name: luminous
     composes:
       '3.1':
-        base_url: 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.1-rhel-7/latest-RHCEPH-3-RHEL-7/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-7/rel-eng/RHCEPH-3/RHCEPH-3.1-RHEL-7-20181101.0/'
         ubuntu_repo: 'http://download.engineering.redhat.com/rcm-guest/ceph-drops/3.1/latest-RHCEPH-3.1-Ubuntu/'
       '3.2':
-        base_url: 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.2-rhel-7/latest-RHCEPH-3-RHEL-7/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-7/rel-eng/RHCEPH-3.2-RHEL-7-Update-0.2/'
         ubuntu_repo: 'http://download.eng.bos.redhat.com/rcm-guest/ceph-drops/3.2/latest-RHCEPH-3.2-Ubuntu/'
       '3.3':
         base_url: 'http://download.eng.bos.redhat.com/composes/auto/ceph-3.3-rhel-7/latest-RHCEPH-3-RHEL-7/'
@@ -25,13 +25,13 @@ ceph:
     name: nautilus
     composes:
       '4.0-rhel-7':
-        base_url: 'http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.0-rhel-7/latest-RHCEPH-4-RHEL-7/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-7/rel-eng/RHCEPH-4.0-RHEL-7-RC-1.0/'
       '4.0-rhel-8':
-        base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.0-rhel-8/latest-RHCEPH-4-RHEL-8/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-8/rel-eng/RHCEPH-4/RHCEPH-4.0-RHEL-8-RC-0.2/'
       '4.1-rhel-7':
-        base_url: 'http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.1-rhel-7/latest-RHCEPH-4-RHEL-7/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-7/rel-eng/RHCEPH-4/RHCEPH-4.1-RHEL-7-RC-5.0/'
       '4.1-rhel-8':
-        base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.1-rhel-8/latest-RHCEPH-4-RHEL-8/'
+        base_url: 'http://download.eng.bos.redhat.com/rhel-8/rel-eng/RHCEPH-4/RHCEPH-4.1-RHEL-8-RC-5.0/'
       '4.2-rhel-7':
         base_url: 'http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.2-rhel-7/latest-RHCEPH-4-RHEL-7/'
       '4.2-rhel-8':
@@ -41,7 +41,7 @@ ceph:
   '5':
     name: pacific
     composes:
-      '5.0':
+      '5.0-rhel-8':
         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.0-rhel-8/latest-RHCEPH-5-RHEL-8/'
       'latest':
         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.0-rhel-8/latest-RHCEPH-5-RHEL-8/'
