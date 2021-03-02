@@ -121,8 +121,7 @@ def setup_subscription_manager(ceph, timeout=1800):
             )
 
             ceph.exec_command(
-                cmd="sudo subscription-manager attach "
-                "--pool $(sudo subscription-manager list --all --available --pool-only | head -1)",
+                cmd="sudo subscription-manager attach --pool 8a99f9a471e63f73017212730c2c4fb6",
                 timeout=720,
             )
             break
