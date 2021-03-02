@@ -69,6 +69,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--custom-config <key>=<value>]...
         [--custom-config-file <file>]
         [--xunit-results]
+        [--enable-eus]
   run.py --cleanup=name [--osp-cred <file>]
         [--log-level <LEVEL>]
 
@@ -112,6 +113,7 @@ Options:
   -c --custom-config <name>=<value> Add a custom config key/value to ceph_conf_overrides
   --custom-config-file <file>       Add custom config yaml to ceph_conf_overrides
   --xunit-results                   Create xUnit result file for test suite run [default: false]
+  --enable-eus                      Enables EUS rpms on EUS suppored distro [default: false]
 """
 log = logging.getLogger(__name__)
 root = logging.getLogger()
@@ -129,7 +131,13 @@ test_names = []
 
 @retry(LibcloudError, tries=5, delay=15)
 def create_nodes(
-    conf, inventory, osp_cred, run_id, report_portal_session=None, instances_name=None
+    conf,
+    inventory,
+    osp_cred,
+    run_id,
+    report_portal_session=None,
+    instances_name=None,
+    enable_eus=False,
 ):
     if report_portal_session:
         name = create_unique_test_name("ceph node creation", test_names)
@@ -144,7 +152,7 @@ def create_nodes(
     log.info("Creating osp instances")
     for cluster in conf.get("globals"):
         ceph_vmnodes = create_ceph_nodes(
-            cluster, inventory, osp_cred, run_id, instances_name
+            cluster, inventory, osp_cred, run_id, instances_name, enable_eus=enable_eus
         )
         ceph_nodes = []
         clients = []
@@ -245,6 +253,7 @@ def run(args):
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
     xunit_results = args.get("--xunit-results", False)
+    enable_eus = args.get("--enable-eus", False)
 
     # Set log directory and get absolute path
     run_id = timestamp()
@@ -496,7 +505,13 @@ def run(args):
     if reuse is None:
         try:
             ceph_cluster_dict, clients = create_nodes(
-                conf, inventory, osp_cred, run_id, service, instances_name
+                conf,
+                inventory,
+                osp_cred,
+                run_id,
+                service,
+                instances_name,
+                enable_eus=enable_eus,
             )
         except Exception as err:
             log.error(err)
@@ -597,6 +612,7 @@ def run(args):
                 repo = args.get("--add-repo")
                 if repo.startswith("http"):
                     config["add-repo"] = repo
+            config["enable_eus"] = enable_eus
             config["docker-insecure-registry"] = docker_insecure_registry
             config["skip_version_compare"] = skip_version_compare
             config["container_image"] = None
@@ -760,7 +776,13 @@ def run(args):
             cleanup_ceph_nodes(osp_cred, instances_name)
         if test.get("recreate-cluster") is True:
             ceph_cluster_dict, clients = create_nodes(
-                conf, inventory, osp_cred, run_id, service, instances_name
+                conf,
+                inventory,
+                osp_cred,
+                run_id,
+                service,
+                instances_name,
+                enable_eus=enable_eus,
             )
         tcs.append(tc)
     url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"

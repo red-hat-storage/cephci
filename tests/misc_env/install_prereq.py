@@ -37,18 +37,26 @@ def run(**kw):
     # skip subscription manager if testing beta RHEL
     config = kw.get("config")
     skip_subscription = config.get("skip_subscription", False)
+    enable_eus = config.get("enable_eus", False)
     repo = config.get("add-repo", False)
     rhbuild = config.get("rhbuild")
 
     with parallel() as p:
         for ceph in ceph_nodes:
-            p.spawn(install_prereq, ceph, 1800, skip_subscription, repo, rhbuild)
+            p.spawn(
+                install_prereq, ceph, 1800, skip_subscription, repo, rhbuild, enable_eus
+            )
             time.sleep(20)
     return 0
 
 
 def install_prereq(
-    ceph, timeout=1800, skip_subscription=False, repo=False, rhbuild=None
+    ceph,
+    timeout=1800,
+    skip_subscription=False,
+    repo=False,
+    rhbuild=None,
+    enable_eus=False,
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
@@ -72,7 +80,10 @@ def install_prereq(
         ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
         if not skip_subscription:
             setup_subscription_manager(ceph)
-            enable_rhel_rpms(ceph, distro_ver)
+            if enable_eus:
+                enable_rhel_eus_rpms(ceph, distro_ver)
+            else:
+                enable_rhel_rpms(ceph, distro_ver)
         if repo:
             setup_addition_repo(ceph, repo)
         # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
@@ -168,6 +179,53 @@ def enable_rhel_rpms(ceph, distro_ver):
             cmd="subscription-manager repos --enable={r}".format(r=repo),
             long_running=True,
         )
+
+
+def enable_rhel_eus_rpms(ceph, distro_ver):
+    """
+    Setup cdn repositories for rhel systems
+    reference: http://wiki.test.redhat.com/CEPH/SubscriptionManager
+    Args:
+        distro_ver: distro version - example: 7.7
+        ceph: ceph object
+    """
+
+    eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
+
+    ceph.exec_command(
+        sudo=True,
+        cmd="subscription-manager attach --pool 8a99f9ad77a7d7290177ce3852fc0c44",
+        timeout=720,
+    )
+
+    ceph.exec_command(
+        sudo=True, cmd="subscription-manager repos --disable=*", long_running=True
+    )
+
+    for repo in eus_repos.get(distro_ver[0]):
+        ceph.exec_command(
+            sudo=True,
+            cmd="subscription-manager repos --enable={r}".format(r=repo),
+            long_running=True,
+        )
+
+    rhel_major_version = distro_ver[0]
+
+    if rhel_major_version == "7":
+        # We only support one EUS release for RHEL 7:
+        release = "7.7"
+    else:
+        raise NotImplementedError("cannot set EUS repos for %s", rhel_major_version)
+
+    cmd = f"subscription-manager release --set={release}"
+
+    ceph.exec_command(
+        sudo=True,
+        cmd=cmd,
+        long_running=True,
+    )
+
+    ceph.exec_command(sudo=True, cmd="yum clean all", long_running=True)
 
 
 def registry_login(ceph, distro_ver):
