@@ -88,12 +88,13 @@ class CephAdmin(BootstrapMixin, ShellMixin):
 
     def set_tool_repo(self):
         """Add the given repo on every node part of the cluster."""
-        base_url = self.config.get("base_url")
-        if not base_url.endswith("/"):
-            base_url += "/"
-        cmd = f"yum-config-manager --add-repo {base_url}compose/Tools/x86_64/os/"
-        for node in self.cluster.get_nodes():
-            node.exec_command(sudo=True, cmd=cmd)
+        if not self.config.get("hotfix_repo"):
+            base_url = self.config.get("base_url")
+            if not base_url.endswith("/"):
+                base_url += "/"
+            cmd = f"yum-config-manager --add-repo {base_url}compose/Tools/x86_64/os/"
+            for node in self.cluster.get_nodes():
+                node.exec_command(sudo=True, cmd=cmd)
 
     def install(self, **kwargs: Dict) -> None:
         """
