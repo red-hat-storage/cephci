@@ -118,4 +118,4 @@ class ApplyMixin:
         if not self.check_service_exists(
             service_name=self.SERVICE_NAME, ids=node_names
         ):
-            raise OrchApplyServiceFailure
+            raise OrchApplyServiceFailure(self.SERVICE_NAME)
