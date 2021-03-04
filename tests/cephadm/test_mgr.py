@@ -28,4 +28,6 @@ def run(ceph_cluster, **kw):
     manager = Mgr(cluster=ceph_cluster, **config)
     method = fetch_method(manager, command)
     method(config)
+    if "get_cluster_details" in config:
+        manager.get_cluster_state(config["get_cluster_details"])
     return 0

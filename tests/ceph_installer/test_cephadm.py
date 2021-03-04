@@ -76,11 +76,11 @@ def run(ceph_cluster, **kw):
     log.info("Executing %s %s" % (service, command))
 
     if command in CephAdmin.direct_calls:
-        cephadm = CephAdmin(cluster=ceph_cluster, **config)
-        method = fetch_method(cephadm, command)
+        instance = CephAdmin(cluster=ceph_cluster, **config)
+        method = fetch_method(instance, command)
     elif service in Host.SERVICE_NAME:
-        host = Host(cluster=ceph_cluster, **config)
-        method = fetch_method(host, command)
+        instance = Host(cluster=ceph_cluster, **config)
+        method = fetch_method(instance, command)
     else:
         raise NotImplementedError
 
@@ -88,5 +88,8 @@ def run(ceph_cluster, **kw):
         method(args=config["args"])
     else:
         method(config)
+
+    if "get_cluster_details" in config:
+        instance.get_cluster_state(config["get_cluster_details"])
 
     return 0

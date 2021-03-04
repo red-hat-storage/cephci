@@ -24,6 +24,17 @@ class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
 
     direct_calls = ["ls", "ps"]
 
+    def get_hosts_by_label(self, label: str):
+        """
+        Fetch host object by label attached to it.
+        Args:
+            label: name of the label
+        Returns:
+            hosts
+        """
+        out, _ = self.shell(args=["ceph", "orch", "host", "ls", "--format=json"])
+        return [node for node in loads(out) if label in node.get("labels")]
+
     def check_service_exists(
         self, service_name: str, ids: List[str], timeout: int = 300, interval: int = 5
     ) -> bool:
@@ -64,10 +75,7 @@ class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
         # Identify the failure
         out, err = self.ls({"base_cmd_args": {"format": "json"}})
         for item in loads(out):
-            if (
-                service_name in item.get("service_type")
-                and item["status"].get("running") == 0
-            ):
+            if service_name in item.get("service_type"):
                 LOG.error("Service status(es): %s", item)
                 LOG.error("Service event(s): %s", item["events"])
 

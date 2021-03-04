@@ -22,6 +22,11 @@ tests:
           initial-dashboard-user: admin123
           initial-dashboard-password: admin123
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+        get_cluster_details:                    # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls -f yaml"
+          - "ceph orch ps -f yaml"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -34,6 +39,10 @@ tests:
         command: add
         args:                     # arguments to ceph orch
           node: node2
+        get_cluster_details:                    # to view ceph status only
+          - "ceph status"
+          - "ceph orch host ls -f yaml"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -144,6 +153,10 @@ tests:
           verbose: true
         args:
           node: node1
+        get_cluster_details:                     # to view ceph status only
+          - "ceph status"
+          - "ceph orch host ls -f yaml"
+          - "ceph health detail"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -188,6 +201,10 @@ tests:
             - node8
           attach_ip_address: false
           labels: apply-all-labels
+        get_cluster_details:                        # to view ceph status only
+          - "ceph status"
+          - "ceph orch host ls -f yaml"
+          - "ceph health detail"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -202,6 +219,10 @@ tests:
           nodes:
             - node5
             - node6
+        get_cluster_details:                    # to view ceph status only
+          - "ceph status"
+          - "ceph orch host ls -f yaml"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -214,6 +235,10 @@ tests:
         command: remove_hosts
         args:
           nodes: []
+        get_cluster_details:                    # to view ceph status only
+          - "ceph status"
+          - "ceph orch host ls -f yaml"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -228,6 +253,10 @@ tests:
           nodes: []
           attach_ip_address: true
           labels: apply-all-labels
+        get_cluster_details:                      # to view ceph status only
+          - "ceph status"
+          - "ceph orch host ls -f yaml"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -248,6 +277,11 @@ tests:
                 - node6
             limit: 3    # no of daemons
             sep: " "    # separator to be used for placements
+        get_cluster_details:                        # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls mon -f json-pretty"
+          - "ceph orch ps '' mon -f json-pretty"
+          - "ceph health detail -f yaml"
   - test:
       name: Apply Monitor with placement
       desc: Apply monitor with placement only
@@ -265,6 +299,11 @@ tests:
                 - node2
                 - node6
             sep: ";"
+        get_cluster_details:                          # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls mon -f json-pretty"
+          - "ceph orch ps '' mon -f json-pretty"
+          - "ceph health detail -f yaml"
   - test:
       name: Apply Monitor using label
       desc: Apply monitor using label mon
@@ -278,6 +317,11 @@ tests:
         args:
           placement:
             label: mon
+        get_cluster_details:                          # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls mon -f json-pretty"
+          - "ceph orch ps '' mon -f json-pretty"
+          - "ceph health detail -f yaml"
   - test:
       name: Apply Manager service
       desc: Apply manager service with placement option
@@ -293,6 +337,11 @@ tests:
             nodes:
               - node1
             sep: " "
+        get_cluster_details:                        # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls mgr -f json-pretty"
+          - "ceph orch ps '' mgr -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -307,6 +356,13 @@ tests:
           verbose: true
         args:
           all-available-devices: true
+        get_cluster_details:                        # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls osd -f json-pretty"
+          - "ceph orch ps '' osd.all-available-devices -f json-pretty"
+          - "ceph osd df"
+          - "ceph osd tree"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -340,8 +396,14 @@ tests:
           placement:
             nodes:
               - node2
-            limit: 1            # no of daemons
+              - node8
+            limit: 2            # no of daemons
             sep: " "            # separator to be used for placements
+        get_cluster_details:                        # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls mds -f json-pretty"
+          - "ceph orch ps '' mds.cephfs -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -397,6 +459,11 @@ tests:
         args:
           placement:
             label: iscsi          # either label or node.
+        get_cluster_details:            # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls iscsi -f json-pretty"
+          - "ceph orch ps '' iscsi.iscsi -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -417,6 +484,11 @@ tests:
           placement:
             nodes:
               - node8          # either label or node.
+        get_cluster_details:              # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls iscsi -f json-pretty"
+          - "ceph orch ps '' iscsi.iscsi -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -433,6 +505,11 @@ tests:
           placement:
             nodes:
               - node1
+        get_cluster_details:              # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls prometheus -f json-pretty"
+          - "ceph orch ps '' prometheus -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -448,6 +525,11 @@ tests:
         args:
           placement:
             nodes: "*"
+        get_cluster_details:            # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls node-exporter -f json-pretty"
+          - "ceph orch ps '' node-exporter -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -465,6 +547,11 @@ tests:
             nodes:
               - node1
               - node2
+        get_cluster_details:            # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls alertmanager -f json-pretty"
+          - "ceph orch ps '' alertmanager -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -481,6 +568,11 @@ tests:
           placement:
             nodes:
               - node1
+        get_cluster_details:            # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls grafana -f json-pretty"
+          - "ceph orch ps '' grafana -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -503,8 +595,13 @@ tests:
                 - node7
             limit: 2            # no of daemons
             sep: ";"            # separator to be used for placements
+        get_cluster_details:          # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls rgw -f json-pretty"
+          - "ceph orch ps '' rgw.india.south -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
-      abort-on-fail: false
+      abort-on-fail: true
   - test:
       name: Create replicated pool for NFS
       desc: Add pool for NFS Ganesha service
@@ -558,6 +655,11 @@ tests:
               - node6
             limit: 2
             sep: ";"
+        get_cluster_details:              # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls nfs -f json-pretty"
+          - "ceph orch ps '' nfs.mynfs -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -573,6 +675,11 @@ tests:
         args:
           placement:
             nodes: "*"
+        get_cluster_details:              # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls crash -f json-pretty"
+          - "ceph orch ps '' crash -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -726,5 +833,10 @@ tests:
           verbose: true
         args:
           service_name: crash
+        get_cluster_details:              # to view ceph status only
+          - "ceph status"
+          - "ceph orch ls -f json-pretty"
+          - "ceph orch ps -f json-pretty"
+          - "ceph health detail -f yaml"
       destroy-cluster: false
       abort-on-fail: true
