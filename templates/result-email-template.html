@@ -140,5 +140,16 @@
             </tr>
         {% endfor %}
     </table>
+
+    <!-- todo: The below code part for displaying the CLI for the run can be removed at later. -->
+    <!-- Keeping this section here as it will facilitate easy copying of the CLI and rerun the same run by anyone-->
+    <h4>CLI Arguments</h4>
+    <table class="half-table">
+        <tr>
+            <td>
+                    <p><code>{{ test_results[0]['cli_arguments'] }}</code></p>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>

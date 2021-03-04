@@ -278,6 +278,8 @@ def run(args):
         cleanup_ceph_nodes(osp_cred, cleanup_name)
         return 0
 
+    cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
+    log.info(f"The CLI for the current run :\n{cli_arguments}\n")
     # Get ceph cluster version name
     with open("rhbuild.yaml") as fd:
         rhbuild_file = yaml.safe_load(fd)
@@ -484,6 +486,7 @@ def run(args):
         details["name"] = var.get("name")
         details["desc"] = var.get("desc")
         details["file"] = var.get("module")
+        details["cli_arguments"] = cli_arguments
         details["polarion-id"] = var.get("polarion-id")
         polarion_default_url = "https://polarion.engineering.redhat.com/polarion/#/project/CEPH/workitem?id="
         details["polarion-id-link"] = "{}{}".format(
