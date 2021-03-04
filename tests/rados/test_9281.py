@@ -212,7 +212,7 @@ def run(ceph_cluster, **kw):
     except Exception:
         log.error("killing osd failed")
         log.error(traceback.format_exc())
-    if helper.check_osd_up(pri_osd_id):
+    if not helper.wait_until_osd_state(osd_id=pri_osd_id, down=True):
         log.error("unexpected! osd is still up")
         return 1
     time.sleep(5)
@@ -226,11 +226,10 @@ def run(ceph_cluster, **kw):
         log.error("revive failed")
         log.error(traceback.format_exc())
         return 1
-    if helper.check_osd_up(pri_osd_id):
-        log.info("osd is UP")
-    else:
+    if not helper.wait_until_osd_state(pri_osd_id):
         log.error("osd is DOWN")
         return 1
+    log.info(f"Revival of Primary OSD : {pri_osd_id} is complete\n Killing random OSD")
 
     time.sleep(10)
     try:
@@ -250,7 +249,7 @@ def run(ceph_cluster, **kw):
     except Exception:
         log.error("killing osd failed")
         log.error(traceback.format_exc())
-    if helper.check_osd_up(rand_osd_id):
+    if not helper.wait_until_osd_state(osd_id=rand_osd_id, down=True):
         log.error("unexpected! osd is still up")
         return 1
     time.sleep(5)
@@ -263,10 +262,8 @@ def run(ceph_cluster, **kw):
         log.error("revive failed")
         log.error(traceback.format_exc())
         return 1
-    if helper.check_osd_up(pri_osd_id):
-        log.info("osd is UP")
-    else:
+    if not helper.wait_until_osd_state(rand_osd_id):
         log.error("osd is DOWN")
         return 1
-
+    log.info(f"Revival of Random OSD : {rand_osd_id} is complete")
     return 0
