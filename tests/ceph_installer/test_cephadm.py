@@ -1,95 +1,123 @@
+"""
+Test suite that verifies the deployment of RedHat Ceph Storage via the cephadm CLI.
+
+The intent of the suite is to simulate a standard operating procedure expected by a
+customer.
+"""
 import logging
 
+from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
+from ceph.ceph_admin.alert_manager import AlertManager
 from ceph.ceph_admin.common import fetch_method
+from ceph.ceph_admin.crash import Crash
+from ceph.ceph_admin.grafana import Grafana
 from ceph.ceph_admin.host import Host
+from ceph.ceph_admin.iscsi import ISCSI
+from ceph.ceph_admin.mds import MDS
+from ceph.ceph_admin.mgr import Mgr
+from ceph.ceph_admin.mon import Mon
+from ceph.ceph_admin.nfs import NFS
+from ceph.ceph_admin.node_exporter import NodeExporter
+from ceph.ceph_admin.osd import OSD
+from ceph.ceph_admin.prometheus import Prometheus
+from ceph.ceph_admin.rgw import RGW
 
-log = logging.getLogger(__name__)
+LOG = logging.getLogger()
+SERVICE_MAP = dict(
+    {
+        "alertmanager": AlertManager,
+        "cephadm": CephAdmin,
+        "crash": Crash,
+        "grafana": Grafana,
+        "host": Host,
+        "iscsi": ISCSI,
+        "mds": MDS,
+        "mgr": Mgr,
+        "mon": Mon,
+        "nfs": NFS,
+        "node-exporter": NodeExporter,
+        "osd": OSD,
+        "prometheus": Prometheus,
+        "rgw": RGW,
+    }
+)
 
 
-def run(ceph_cluster, **kw):
+def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
-    Cephadm Bootstrap, Managing hosts with options and
-    full cluster deployment at single call are supported.
+    Return the status of the test execution run with the provided keyword arguments.
+
+    Unlike other test suites, "steps" has been introduced to support workflow style
+    execution along with customization.
 
     Args:
-        ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
-        kw: test data
+        ceph_cluster: Ceph cluster object
+        kwargs:     Key/value pairs of configuration information to be used in the test.
 
-    The test data should be framed as per the below support,
+    Returns:
+        int - 0 when the execution is successful else 1 (for failure).
 
-    - Bootstrap cluster with default or custom image and
-      returns after cephadm.bootstrap. To use default image, set 'registry'.
-
-        Example:
-            config:
-                command: bootstrap
-                base_cmd_args:
-                    verbose: true
-                args:
-                    custom_image: true | false
-                    mon-ip: <node_name>
-                    mgr-id: <mgr_id>
-                    fsid: <id>
-
-    - Manage host operations like,
-        - Add hosts with/without labels and IP address
-        - Add/Remove labels to/from existing node
-        - Set Address to node.
-        - Remove hosts
-
-        host_ops keys are definition names are defined under
-        CephAdmin.HostMixin should be used to call that respective method.
-
-        supported definition names for host_ops are host_add, attach_label,
-        remove_label, set_address and host_remove.
-
-        for example.,
+    Example:
         - test:
-            name: Add host
-            desc: Add new host node with IP address
-            module: test_cephadm.py
+            name: cluster deployment
+            desc: Deploy a minimal cluster
             config:
-                command: host
-                service: add | remove | label_add | label_remove | set_address
-                base_cmd_args:
-                  nodes:
-                    - "node3"
-                  attach_address: true
-                  add_label: false
-
+                steps:
+                    - config:
+                        command: bootstrap
+                        service: cephadm
+                        base_cmd_args:
+                        verbose: true
+                        args:
+                            mon-ip: node1
+                    - config:
+                        command: add_hosts
+                        service: host
+                        args:
+                            attach_ip_address: true
+                            labels: apply-all-labels
+                    - config:
+                        command: mon
+                        service: mon
+                        args:
+                            placement:
+                                label: mon
+                    - config:
+                        command: mgr
+                        service: mgr
+                        args:
+                            placement:
+                                label: mgr
+                    - config:
+                        command: apply
+                        service: osd
+                        args:
+                            all-available-devices: true
+                    - config:
+                        command: shell
+                        args:
+                            - ceph osd pool create <pool_name> 3 3 replicated
     """
-    log.info("Running cephadm test")
-    config = kw.get("config")
+    LOG.info("Starting Ceph cluster deployment.")
 
-    build = config.get("build", config.get("rhbuild"))
-    ceph_cluster.rhcs_version = build
+    try:
+        config = kwargs["config"]
+        cephadm = CephAdmin(cluster=ceph_cluster, **config)
+        steps = config.get("steps")
 
-    if config.get("skip_setup") is True:
-        log.info("Skipping setup of ceph cluster")
+        for step in steps:
+            cfg = step["config"]
+
+            if cfg["command"] == "shell":
+                cephadm.shell(args=cfg["args"])
+                continue
+
+            obj = SERVICE_MAP[cfg["service"]](cluster=ceph_cluster, **config)
+            func = fetch_method(obj, cfg["command"])
+            func(cfg)
+
         return 0
-
-    # Manage Ceph using ceph-admin orchestration
-    command = config.pop("command")
-    service = config.pop("service", "")
-
-    log.info("Executing %s %s" % (service, command))
-
-    if command in CephAdmin.direct_calls:
-        instance = CephAdmin(cluster=ceph_cluster, **config)
-        method = fetch_method(instance, command)
-    elif service in Host.SERVICE_NAME:
-        instance = Host(cluster=ceph_cluster, **config)
-        method = fetch_method(instance, command)
-    else:
-        raise NotImplementedError
-
-    if "shell" in command:
-        method(args=config["args"])
-    else:
-        method(config)
-
-    if "get_cluster_details" in config:
-        instance.get_cluster_state(config["get_cluster_details"])
-
-    return 0
+    except BaseException as be:  # noqa
+        LOG.error(be, exc_info=True)
+        return 1

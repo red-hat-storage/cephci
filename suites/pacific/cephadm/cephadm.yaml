@@ -7,7 +7,7 @@ tests:
   - test:
       name: Cephadm Bootstrap
       desc: cephadm cluster bootstrap
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: bootstrap
@@ -22,7 +22,7 @@ tests:
           initial-dashboard-user: admin123
           initial-dashboard-password: admin123
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
-        get_cluster_details:                    # to view ceph status only
+        get_cluster_details:           # to view ceph status only
           - "ceph status"
           - "ceph orch ls -f yaml"
           - "ceph orch ps -f yaml"
@@ -32,7 +32,7 @@ tests:
   - test:
       name: Add Host
       desc: Add host to Bootstrapped Cluster
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -48,7 +48,7 @@ tests:
   - test:
       name: Add host
       desc: Add new host node with IP address
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -64,7 +64,7 @@ tests:
   - test:
       name: Add host
       desc: Add new host node with IP address and labels
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -81,7 +81,7 @@ tests:
   - test:
       name: Remove Host label
       desc: Remove host label osd from node3
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -96,7 +96,7 @@ tests:
   - test:
       name: Remove Host label
       desc: Remove host label node-exporter from node4
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -112,7 +112,7 @@ tests:
   - test:
       name: Add Host label
       desc: Add host label mon,osd to existing node
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -129,7 +129,7 @@ tests:
   - test:
       name: Attach Host label to installer
       desc: Add host label(s) to existing installer node
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -144,7 +144,7 @@ tests:
   - test:
       name: Set Host address
       desc: Set IP address to a existing node
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -162,7 +162,7 @@ tests:
   - test:
       name: Remove host
       desc: Remove node from cluster
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -176,7 +176,7 @@ tests:
   - test:
       name: Remove host
       desc: Remove node from cluster
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -188,7 +188,7 @@ tests:
   - test:
       name: Add hosts to ceph cluster
       desc: Add host node(s) with IP address and labels
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -210,7 +210,7 @@ tests:
   - test:
       name: Remove Hosts from cluster
       desc: Remove nodes from cluster execpt installer
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -228,7 +228,7 @@ tests:
   - test:
       name: Remove all Hosts
       desc: Remove all nodes from cluster execpt installer
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -244,7 +244,7 @@ tests:
   - test:
       name: Add all hosts to ceph cluster
       desc: Add all host node with IP address and labels
-      module: test_cephadm.py
+      module: test_host.py
       polarion-id:
       config:
         service: host
@@ -368,7 +368,7 @@ tests:
   - test:
       name: Add cephfs file system volume
       desc: Add file system for MDS service
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: shell
@@ -409,7 +409,7 @@ tests:
   - test:
       name: Create replicated pool
       desc: Add pool for ISCSI service
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: shell
@@ -427,7 +427,7 @@ tests:
   - test:
       name: Enable rbd application on pool
       desc: enable rbd on iscsi pool
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: shell
@@ -605,7 +605,7 @@ tests:
   - test:
       name: Create replicated pool for NFS
       desc: Add pool for NFS Ganesha service
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: shell
@@ -620,7 +620,7 @@ tests:
   - test:
       name: Enable rgw application on nfs-ganesha pool
       desc: enable rgw on nfs-ganesha pool
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: shell
@@ -792,7 +792,7 @@ tests:
   - test:
       name: set mon_allow_pool_delete
       desc: set mon_allow_pool_delete to true
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: shell
@@ -808,7 +808,7 @@ tests:
   - test:
       name: remove cephfs file system volume
       desc: remove file system
-      module: test_cephadm.py
+      module: test_bootstrap.py
       polarion-id:
       config:
         command: shell
