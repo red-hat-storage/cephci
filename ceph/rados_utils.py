@@ -208,22 +208,26 @@ class RadosHelper:
             if osd_id == osd["osd"]:
                 return osd["up"]
 
-    def check_osd_up(self, osd_id):
+    def wait_until_osd_state(self, osd_id, down=False) -> bool:
         """
-        Checks if the given osd is up and if the osd is down waits for 120 seconds for the same to come up
+        Checks the state of given osd and waits for 120 seconds for the same state to be achieved
         Args:
             osd_id: ID of the osd to be checked
+            down: If True, Specifies that the OSD should be down
 
-        Returns: 1 if up, 0 if down
+        Returns: True -> Pass, False -> Fail
 
         """
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=120)
         while end_time > datetime.datetime.now():
-            status = self.is_up(osd_id)
-            if status:
-                return 1
             time.sleep(5)
-        return 0
+            osd_is_up = self.is_up(osd_id)
+            if osd_is_up and not down:
+                return True
+            if down and not osd_is_up:
+                return True
+        print("Desired OSD state not achieved after 120 seconds")
+        return False
 
     def revive_osd(self, osd_node, osd_service):
         """
