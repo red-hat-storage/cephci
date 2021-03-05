@@ -382,13 +382,11 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     )
     _handler.setFormatter(formatter)
     _root.addHandler(_handler)
-
     url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
     run_dir_name = run_dir.split("/")[-1]
     log_url = "{url_base}/{run_dir}/{log_name}".format(
         url_base=url_base, run_dir=run_dir_name, log_name=full_log_name
     )
-
     log.info("Completed log configuration")
     return log_url
 
@@ -725,10 +723,25 @@ def create_html_file(test_result) -> str:
         suite_run_time=suite_run_time,
         trigger_user=trigger_user,
         info=info,
+        use_abs_log_link=True,
+    )
+
+    # Rendering the result.html with only relative paths for log file links
+    # This is to aviod hard coding of base url in result.html
+    # This way base_url gets fetched from the current page of result.html and log file name gets appended to base_url
+
+    result_html = template.render(
+        run_name=run_name,
+        log_link=log_link,
+        test_results=test_results,
+        suite_run_time=suite_run_time,
+        trigger_user=trigger_user,
+        info=info,
+        use_abs_log_link=False,
     )
 
     abs_path = os.path.join(run_dir, "result.html")
-    write_to_file(data=html, abs_path=abs_path)
+    write_to_file(data=result_html, abs_path=abs_path)
     return html
 
 
