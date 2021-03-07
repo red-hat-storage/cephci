@@ -9,7 +9,7 @@ tests:
   - test:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
-      module: test_deployment.py
+      module: test_cephadm.py
       polarion-id:
       config:
         steps:
