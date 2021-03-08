@@ -32,6 +32,7 @@ active_mdss = []
 RC = []
 failure = {}
 output = []
+magna_url = "http://magna002.ceph.redhat.com/cephci-jenkins"
 
 
 # function for getting the clients
@@ -382,11 +383,12 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     )
     _handler.setFormatter(formatter)
     _root.addHandler(_handler)
-    url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
+    url_base = magna_url if "/ceph/cephci-jenkins" in run_dir else run_dir
     run_dir_name = run_dir.split("/")[-1]
     log_url = "{url_base}/{run_dir}/{log_name}".format(
         url_base=url_base, run_dir=run_dir_name, log_name=full_log_name
     )
+
     log.info("Completed log configuration")
     return log_url
 
@@ -701,8 +703,9 @@ def create_html_file(test_result) -> str:
         log.error(f"Key not found : {kerr}")
         exit(1)
 
-    log_link = "http://magna002.ceph.redhat.com/cephci-jenkins/{run}/".format(
-        run=run_name
+    # we are checking for /ceph/cephci-jenkins to see if the magna is already mounted on system we are executing
+    log_link = (
+        f"{magna_url}/{run_name}/" if "/ceph/cephci-jenkins" in run_dir else run_dir
     )
     info["link"] = f"{log_link}/startup.log"
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -726,9 +729,9 @@ def create_html_file(test_result) -> str:
         use_abs_log_link=True,
     )
 
-    # Rendering the result.html with only relative paths for log file links
-    # This is to aviod hard coding of base url in result.html
-    # This way base_url gets fetched from the current page of result.html and log file name gets appended to base_url
+    # Result.html file is stored in the folder containing the log files.
+    # Moving to relative path facilitate the copying of the
+    # files to a different location without breaking the hyperlinks in result.html.
 
     result_html = template.render(
         run_name=run_name,
