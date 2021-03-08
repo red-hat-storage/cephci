@@ -8,7 +8,7 @@ tests:
       name: Cephadm Bootstrap
       desc: cephadm cluster bootstrap
       module: test_bootstrap.py
-      polarion-id:
+      polarion-id: CEPH-83573719,CEPH-83573720
       config:
         command: bootstrap
         base_cmd_args:
@@ -65,7 +65,7 @@ tests:
       name: Add host
       desc: Add new host node with IP address and labels
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573729
       config:
         service: host
         command: add
@@ -82,7 +82,7 @@ tests:
       name: Remove Host label
       desc: Remove host label osd from node3
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573882
       config:
         service: host
         command: label_remove
@@ -97,7 +97,7 @@ tests:
       name: Remove Host label
       desc: Remove host label node-exporter from node4
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573882
       config:
         service: host
         command: label_remove
@@ -113,7 +113,7 @@ tests:
       name: Add Host label
       desc: Add host label mon,osd to existing node
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573881
       config:
         service: host
         command: label_add
@@ -130,7 +130,7 @@ tests:
       name: Attach Host label to installer
       desc: Add host label(s) to existing installer node
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573881
       config:
         service: host
         command: label_add
@@ -145,7 +145,7 @@ tests:
       name: Set Host address
       desc: Set IP address to a existing node
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573880
       config:
         service: host
         command: set_address
@@ -163,7 +163,7 @@ tests:
       name: Remove host
       desc: Remove node from cluster
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573747
       config:
         service: host
         command: remove
@@ -263,7 +263,7 @@ tests:
       name: Apply Monitor with placement and limit
       desc: Apply monitor service with placement and limit
       module: test_mon.py
-      polarion-id:
+      polarion-id: CEPH-83573732
       config:
         command: apply
         service: mon
@@ -308,7 +308,7 @@ tests:
       name: Apply Monitor using label
       desc: Apply monitor using label mon
       module: test_mon.py
-      polarion-id:
+      polarion-id: CEPH-83573883,CEPH-83573772
       config:
         command: apply
         service: mon
@@ -326,7 +326,7 @@ tests:
       name: Apply Manager service
       desc: Apply manager service with placement option
       module: test_mgr.py
-      polarion-id:
+      polarion-id: CEPH-83573734
       config:
         command: apply
         service: mgr
@@ -348,7 +348,7 @@ tests:
       name: Apply OSD Service
       desc: Apply OSD service with all available devices
       module: test_osd.py
-      polarion-id:
+      polarion-id: CEPH-83573735,CEPH-83573771
       config:
         command: apply
         service: osd
@@ -384,7 +384,7 @@ tests:
       name: Apply MDS Service
       desc: Apply MDS service on all mds nodes
       module: test_mds.py
-      polarion-id:
+      polarion-id: CEPH-83573737
       config:
         command: apply
         service: mds
@@ -445,7 +445,7 @@ tests:
       name: Apply ISCSI Service
       desc: Apply ISCSI target service on iscsi role nodes
       module: test_iscsi.py
-      polarion-id:
+      polarion-id: CEPH-83573756
       config:
         command: apply
         service: iscsi
@@ -470,7 +470,7 @@ tests:
       name: Apply ISCSI Service
       desc: Apply ISCSI target service on iscsi role nodes
       module: test_iscsi.py
-      polarion-id:
+      polarion-id: CEPH-83573728
       config:
         command: apply
         service: iscsi
@@ -495,7 +495,7 @@ tests:
       name: Apply Prometheus Service
       desc: Apply Prometheus service on role nodes
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573738
       config:
         command: apply
         service: prometheus
@@ -516,7 +516,7 @@ tests:
       name: Apply Node-exporter Service
       desc: Apply Node-exporter service on role nodes
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573884
       config:
         command: apply
         service: node-exporter
@@ -536,7 +536,7 @@ tests:
       name: Apply Alert-manager Service
       desc: Apply Alert-manager service on role nodes
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573885
       config:
         command: apply
         service: alertmanager
@@ -558,7 +558,7 @@ tests:
       name: Apply Grafana Service
       desc: Apply Grafana service on role nodes
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573886
       config:
         command: apply
         service: grafana
@@ -579,7 +579,7 @@ tests:
       name: Apply RGW Service
       desc: Apply RGW service on all rgw nodes
       module: test_rgw.py
-      polarion-id:
+      polarion-id: CEPH-83573739
       config:
         command: apply
         service: rgw
@@ -638,7 +638,7 @@ tests:
       name: Apply NFS Service
       desc: Apply NFS-Ganesha service on role nodes
       module: test_nfs.py
-      polarion-id:
+      polarion-id: CEPH-83573749,CEPH-83573750
       config:
         command: apply
         service: nfs
@@ -666,7 +666,7 @@ tests:
       name: Apply Crash Service
       desc: Apply Crash service on all nodes
       module: test_crash.py
-      polarion-id:
+      polarion-id: CEPH-83573887
       config:
         command: apply
         service: crash
@@ -686,7 +686,7 @@ tests:
       name: Remove NFS-Ganesha Service
       desc: Remove NFS-Ganesha service using orch remove option
       module: test_nfs.py
-      polarion-id:
+      polarion-id: CEPH-83573784
       config:
         command: remove
         service: nfs
@@ -716,7 +716,7 @@ tests:
       name: Remove ISCSI Service
       desc: Remove ISCSI service using orch remove option
       module: test_iscsi.py
-      polarion-id:
+      polarion-id: CEPH-83573757
       config:
         command: remove
         service: iscsi
@@ -729,9 +729,9 @@ tests:
       name: Remove Prometheus Service
       desc: Remove Prometheus service using orch remove option
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573738
       config:
-        command: remove
+        command: removess
         service: prometheus
         base_cmd_args:
           verbose: true
@@ -743,7 +743,7 @@ tests:
       name: Remove Node-exporter Service
       desc: Remove Node-exporter service using orch remove option
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573884
       config:
         command: remove
         service: node-exporter
@@ -755,7 +755,7 @@ tests:
       name: Remove Alert-manager Service
       desc: Remove Alert-manager service using orch remove option
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573885
       config:
         command: remove
         service: alertmanager
@@ -767,7 +767,7 @@ tests:
       name: Remove Grafana Service
       desc: Remove Grafana service using orch remove option
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573886
       config:
         command: remove
         service: grafana
@@ -779,7 +779,7 @@ tests:
       name: Remove MDS Service
       desc: Remove MDS service using orch remove option
       module: test_mds.py
-      polarion-id:
+      polarion-id: CEPH-83573748
       config:
         command: remove
         service: mds
@@ -825,7 +825,7 @@ tests:
       name: Remove Crash Service
       desc: Remove Crash service using orch remove option
       module: test_crash.py
-      polarion-id:
+      polarion-id: CEPH-83573887
       config:
         command: remove
         service: crash
