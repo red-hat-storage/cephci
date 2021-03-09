@@ -29,7 +29,7 @@ def run(ceph_cluster, **kw):
     alert_list = ["MON_DISK_BIG", "OSDMAP_FLAGS"]
     if all_alerts["active_alerts"]:
         log.info(
-            f"There are health alerts generated on the cluster. Alerts : {all_alerts['active_alerts']}"
+            f"There are health alerts generated on the cluster. Alerts : {all_alerts}"
         )
     else:
         log.info("Cluster Health is ok. \n Generating a alert to verify feature")
@@ -94,7 +94,7 @@ def verify_alert_with_ttl(node: CephAdmin, alert: str, ttl: int, **kwargs) -> bo
 
     # The alert is muted for ttl minutes, after which it will be auto un-muted.
     # Sleeping for ttl minutes to verify the auto un-mute after TTL
-    time.sleep(ttl * 60)
+    time.sleep((ttl * 60) + 2)
     all_alerts = get_alerts(node)
     if alert not in all_alerts["active_alerts"] and alert in all_alerts["muted_alerts"]:
         log.error(f"Alert : {alert} is still Muted")
@@ -221,10 +221,10 @@ def get_alerts(node: CephAdmin) -> dict:
     cmd = "ceph health detail"
     all_alerts = {}
     out, err = node.shell([cmd])
-    regex_active = r"\s*[^(MUTED)]\s+\[\w{3}\]\s([\w_]*):"
-    regex_muted = r"\s*[(MUTED)]\s+\[\w{3}\]\s([\w_]*):"
-    all_alerts["active_alerts"] = re.findall(regex_active, out)
-    all_alerts["muted_alerts"] = re.findall(regex_muted, out)
+    regex = r"(\(MUTED[\w\s,-]*\))?\s*\[\w{3}\]\s([\w_]*):"
+    alerts = re.findall(regex, out)
+    all_alerts["active_alerts"] = [alert[1] for alert in alerts if not alert[0]]
+    all_alerts["muted_alerts"] = [alert[1] for alert in alerts if alert[0]]
     return all_alerts
 
 
@@ -260,8 +260,8 @@ def mute_health_alert(
         cmd += " --sticky"
     node.shell([cmd])
 
-    # Sleeping for 2 sec for the alert to be logged
-    time.sleep(2)
+    # Sleeping for 5 sec for the alert to be logged
+    time.sleep(5)
     all_alerts = get_alerts(node)
     log.info(
         f"Muted the alert : {alert}. All the muted alerts : {all_alerts['muted_alerts']}"
