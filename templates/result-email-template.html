@@ -131,9 +131,9 @@
                 <td>{{ test.desc }}</td>
                 <td>{{ test.duration }}</td>
                 {% if test.status == 'Pass' %}
-                    <td><a style="color: green;" href="{{ test['log-link'] }}">{{ test.status }}</a></td>
+                    <td><a style="color: green;" href="{{ test['log-link'] if  use_abs_log_link else test['log-link'].split("/")[-1] }}">{{ test.status }}</a></td>
                 {% elif test.status == 'Failed' %}
-                    <td><a style="color: red;" href="{{ test['log-link'] }}">{{ test.status }}</a></td>
+                    <td><a style="color: red;" href="{{ test['log-link'] if use_abs_log_link else test['log-link'].split("/")[-1] }}">{{ test.status }}</a></td>
                 {% elif test.status == 'Not Executed' %}
                 <td style="color: grey">{{ test.status }}</td>
                 {% endif %}

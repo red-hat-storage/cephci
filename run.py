@@ -33,6 +33,7 @@ from utility.utils import (
     create_unique_test_name,
     email_results,
     get_latest_container,
+    magna_url,
     timestamp,
 )
 from utility.xunit import create_xunit_results
@@ -788,7 +789,7 @@ def run(args):
                 enable_eus=enable_eus,
             )
         tcs.append(tc)
-    url_base = "http://magna002.ceph.redhat.com/cephci-jenkins"
+    url_base = magna_url if "/ceph/cephci-jenkins" in run_dir else run_dir
     run_dir_name = run_dir.split("/")[-1]
     log.info(
         "\nAll test logs located here: {base}/{dir}".format(
