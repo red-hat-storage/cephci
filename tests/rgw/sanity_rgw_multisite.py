@@ -22,7 +22,6 @@ def run(**kw):
 
     # adding sleep for 60 seconds before another test starts, sync needs to complete
     time.sleep(60)
-    verify_io_on_sites = config.get("verify-io-on-sites", [])
     set_env = config.get("set-env", False)
     primary_cluster = clusters.get("ceph-rgw1")
     secondary_cluster = clusters.get("ceph-rgw2")
@@ -31,7 +30,7 @@ def run(**kw):
 
     test_folder = "rgw-ms-tests"
     test_folder_path = f"/home/cephuser/{test_folder}"
-
+    home_dir_path = "/home/cephuser/"
     config["test_folder"] = test_folder
     config["test_folder_path"] = test_folder_path
 
@@ -74,12 +73,22 @@ def run(**kw):
         copy_file_from_node_to_node(
             user_details_file, test_site_node, copy_user_to_site_node, user_details_file
         )
-
-    for site in verify_io_on_sites:
-        # todo: need to implement verify io section
-        log.info(f"verification IO on {site}")
-        raise NotImplementedError("verify IO still pending")
-
+    verify_io_on_sites = config.get("verify-io-on-site", [])
+    if verify_io_on_sites:
+        io_info = home_dir_path + "io_info.yaml"
+        for site in verify_io_on_sites:
+            verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
+            log.info(f"verification IO on {site}")
+            if test_site != site:
+                copy_file_from_node_to_node(
+                    io_info, test_site_node, verify_io_on_site_node, io_info
+                )
+            verify_out, err = verify_io_on_site_node.exec_command(
+                cmd="sudo python3 " + test_folder_path + lib_dir + "read_io_info.py",
+                timeout=timeout,
+            )
+            log.info(verify_out.read().decode())
+            log.error(verify_out.read().decode())
     return 0
 
 

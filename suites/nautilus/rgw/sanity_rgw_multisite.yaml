@@ -87,6 +87,245 @@ tests:
                   pgs: "8"
       desc: setup multisite cluster using ceph-ansible
       abort-on-fail: true
+  - test:
+      name: create user
+      desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw1:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-rgw2
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects.yaml
+            verify-io-on-site: ["ceph-rgw1"]
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects_compression on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects_aws4 on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects_delete on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects_download on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects_enc on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects_multipart on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets_with_Nobjects_sharding on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
+            timeout: 300
+  - test:
+      name: Buckets and Objects test
+      desc: test_Mbuckets on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets.yaml
+            timeout: 300
+  - test:
+      name: Bucket listing test
+      desc: test_bucket_listing_flat_ordered_versionsing on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
+            timeout: 300
+
+
+  - test:
+      name: Bucket listing test
+      desc: test_bucket_listing_flat_ordered on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered.yaml
+            timeout: 300
+  - test:
+      name: Bucket listing test
+      desc: test_bucket_listing_flat_unordered.yaml on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_unordered.yaml
+            timeout: 300
+  - test:
+      name: Bucket listing test
+      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
+            timeout: 300
+  - test:
+      name: Bucket listing test
+      desc: test_bucket_listing_flat_ordered_versionsing on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
+            timeout: 300
+  - test:
+      name: Buckets Versioning test
+      desc: test_versioning_copy_objects on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_versioning_copy_objects.py
+            config-file-name: test_versioning_copy_objects.yaml
+            timeout: 300
+  - test:
+      name: Buckets Versioning test
+      desc: test_versioning_enable on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_enable.yaml
+            verify-io-on-site: ["ceph-rgw1"]
+            timeout: 300
+  - test:
+      name: Buckets Versioning test
+      desc: test_versioning_objects_acls on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_acls.yaml
+            verify-io-on-site: ["ceph-rgw1"]
+            timeout: 300
+  - test:
+      name: Buckets Versioning test
+      desc: test_versioning_objects_copy on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_copy.yaml
+            timeout: 300
+  - test:
+      name: Buckets Versioning test
+      desc: test_versioning_objects_delete on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_delete.yaml
+            timeout: 300
+  - test:
+      name: Buckets Versioning test
+      desc: test_versioning_objects_enable on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_enable.yaml
+            verify-io-on-site: ["ceph-rgw1"]
+            timeout: 300
+  - test:
+      name: Buckets Versioning test
+      desc: test_versioning_objects_suspend on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_suspend.yaml
+            verify-io-on-site: ["ceph-rgw1"]
+            timeout: 300
+  - test:
+      name: LargeObjGet_GC test
+      desc: test_LargeObjGet_GC on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_LargeObjGet_GC.py
+            config-file-name: test_LargeObjGet_GC.yaml
+            timeout: 300
 
   - test:
       name: create user
@@ -102,14 +341,36 @@ tests:
             timeout: 300
 
   - test:
-      name: Buckets and Objects test
-      desc: create buckets and objects test
+      name: Bucket policy tests
+      desc: test_bucket_policy_modify.yaml on secondary
       module: sanity_rgw_multisite.py
       clusters:
         ceph-rgw2:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects.yaml
+            script-name: test_bucket_policy_ops.py
+            config-file-name: test_bucket_policy_modify.yaml
+            verify-io-on-site: ["ceph-rgw1"]
+            timeout: 300
+  - test:
+      name: Bucket policy tests
+      desc: test_bucket_policy_delete.yaml on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_bucket_policy_ops.py
+            config-file-name: test_bucket_policy_delete.yaml
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
 
-
+  - test:
+      name: Bucket policy tests
+      desc: test_bucket_policy_replace on secondary
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name: test_bucket_policy_ops.py
+            config-file-name: test_bucket_policy_replace.yaml
+            verify-io-on-site: ["ceph-rgw1"]
+            timeout: 300
