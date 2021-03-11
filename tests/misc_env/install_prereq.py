@@ -36,34 +36,17 @@ def run(**kw):
     ceph_nodes = kw.get("ceph_nodes")
     # skip subscription manager if testing beta RHEL
     config = kw.get("config")
-    ceph_cluster = kw.get("ceph_cluster")
     skip_subscription = config.get("skip_subscription", False)
     enable_eus = config.get("enable_eus", False)
     repo = config.get("add-repo", False)
-    hotfix_repo = config.get("hotfix_repo", False)
     rhbuild = config.get("rhbuild")
-    ubuntu_repo = config.get("ubuntu_repo", None)
-    base_url = config.get("base_url", None)
-    installer_url = config.get("installer_url", None)
 
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
-                install_prereq,
-                ceph,
-                1800,
-                skip_subscription,
-                repo,
-                rhbuild,
-                enable_eus,
+                install_prereq, ceph, 1800, skip_subscription, repo, rhbuild, enable_eus
             )
             time.sleep(20)
-
-    ceph_cluster.ansible_config = dict(dedicated_devices=[])
-    ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, rhbuild
-    )
-
     return 0
 
 
