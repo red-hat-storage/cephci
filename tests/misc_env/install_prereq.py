@@ -46,6 +46,7 @@ def run(**kw):
     base_url = config.get("base_url", None)
     installer_url = config.get("installer_url", None)
 
+    is_production = config.get("is_production", False)
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
@@ -56,6 +57,7 @@ def run(**kw):
                 repo,
                 rhbuild,
                 enable_eus,
+                is_production,
             )
             time.sleep(20)
 
@@ -73,6 +75,7 @@ def install_prereq(
     skip_subscription=False,
     repo=False,
     rhbuild=None,
+    is_production=False,
     enable_eus=False,
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
@@ -96,7 +99,7 @@ def install_prereq(
         # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
         ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
         if not skip_subscription:
-            setup_subscription_manager(ceph)
+            setup_subscription_manager(ceph, is_production)
             if enable_eus:
                 enable_rhel_eus_rpms(ceph, distro_ver)
             else:
@@ -105,7 +108,7 @@ def install_prereq(
             setup_addition_repo(ceph, repo)
         # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
         if distro_ver.startswith("8"):
-            rpm_all_packages = rpm_packages.get("py3") + ["net-tools"]
+            rpm_all_packages = rpm_packages.get("py3")
             if str(rhbuild).startswith("5"):
                 rpm_all_packages = rpm_packages.get("py3") + ["lvm2", "podman"]
             rpm_all_packages = " ".join(rpm_all_packages)
@@ -131,7 +134,7 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
-def setup_subscription_manager(ceph, timeout=1800):
+def setup_subscription_manager(ceph, is_production=False, timeout=1800):
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
     log.info(
@@ -141,18 +144,35 @@ def setup_subscription_manager(ceph, timeout=1800):
     )
     while True:
         try:
-            ceph.exec_command(
-                cmd="sudo subscription-manager --force register  "
-                "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription  "
-                "--baseurl=https://cdn.redhat.com --username=rhcsuser --password=rhcsuser",
-                timeout=720,
-            )
+            command = "sudo subscription-manager --force register --username={username} --password={password} "
+            if is_production:
+                credential = get_cephci_config("cdn_credentials")
+                command = command.format(
+                    username=credential["cdn_credentials"]["username"],
+                    password=credential["cdn_credentials"]["password"],
+                )
+
+            else:
+                credential = get_cephci_config("stage_credentials")
+                command += (
+                    "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription "
+                    "--baseurl=https://cdn.redhat.com "
+                )
+                command = command.format(
+                    username=credential["stage_credentials"]["username"],
+                    password=credential["stage_credentials"]["password"],
+                )
+
+            ceph.exec_command(cmd=command, timeout=720)
 
             ceph.exec_command(
                 cmd="sudo subscription-manager attach --pool 8a99f9a471e63f73017212730c2c4fb6",
                 timeout=720,
             )
             break
+
+        except SystemExit:
+            raise
         except BaseException:
             if datetime.datetime.now() - starttime > timeout:
                 try:

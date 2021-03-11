@@ -766,10 +766,12 @@ def write_to_file(data, abs_path):
         log.error(f"IO error hit during opening the file. Error : {err}")
 
 
-def get_cephci_config():
+def get_cephci_config(*required_credentials):
     """
     Receives the data from ~/.cephci.yaml.
 
+    Args:
+        required_credential: Credentials to be returned (example: stage_credentials, cdn_credentials.
     Returns:
         (dict) configuration from ~/.cephci.yaml
 
@@ -785,6 +787,23 @@ def get_cephci_config():
             "See README for more information."
         )
         raise
+    if required_credentials:
+        required_cfg = {}
+        for each_cred in required_credentials:
+            try:
+                required_cfg[each_cred] = cfg[each_cred]
+            except KeyError:
+                err_message = (
+                    "Required credentials are not available in ~/.cephci.yaml, "
+                    "please refer cephci/cephci.yaml.template and mention relevant details"
+                )
+                log.error(err_message)
+                import sys
+
+                sys.exit()
+
+        return required_cfg
+
     return cfg
 
 
