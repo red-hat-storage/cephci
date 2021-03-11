@@ -40,11 +40,19 @@ def run(**kw):
     enable_eus = config.get("enable_eus", False)
     repo = config.get("add-repo", False)
     rhbuild = config.get("rhbuild")
+    skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
 
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
-                install_prereq, ceph, 1800, skip_subscription, repo, rhbuild, enable_eus
+                install_prereq,
+                ceph,
+                1800,
+                skip_subscription,
+                repo,
+                rhbuild,
+                enable_eus,
+                skip_enabling_rhel_rpms,
             )
             time.sleep(20)
     return 0
@@ -57,11 +65,11 @@ def install_prereq(
     repo=False,
     rhbuild=None,
     enable_eus=False,
+    skip_enabling_rhel_rpms=False,
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
     log.info("cloud config to completed on " + ceph.hostname)
-
     update_ca_cert(ceph, "https://password.corp.redhat.com/RH-IT-Root-CA.crt")
     distro_info = ceph.distro_info
     distro_ver = distro_info["VERSION_ID"]
@@ -80,10 +88,13 @@ def install_prereq(
         ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
         if not skip_subscription:
             setup_subscription_manager(ceph)
-            if enable_eus:
-                enable_rhel_eus_rpms(ceph, distro_ver)
+            if not skip_enabling_rhel_rpms:
+                if enable_eus:
+                    enable_rhel_eus_rpms(ceph, distro_ver)
+                else:
+                    enable_rhel_rpms(ceph, distro_ver)
             else:
-                enable_rhel_rpms(ceph, distro_ver)
+                log.info("Skipped enabling the RHEL RPM's provided by Subscription")
         if repo:
             setup_addition_repo(ceph, repo)
         # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
