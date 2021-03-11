@@ -63,6 +63,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             name: cluster deployment
             desc: Deploy a minimal cluster
             config:
+                verify_cluster_health: true | false
                 steps:
                     - config:
                         command: bootstrap
@@ -104,7 +105,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     try:
         config = kwargs["config"]
         cephadm = CephAdmin(cluster=ceph_cluster, **config)
-        steps = config.get("steps")
+        steps = config.get("steps", [])
 
         for step in steps:
             cfg = step["config"]
@@ -117,7 +118,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             func = fetch_method(obj, cfg["command"])
             func(cfg)
 
-        return 0
+        if config.get("verify_cluster_health"):
+            cephadm.cluster.check_health(
+                rhbuild=config.get("rhbuild"), client=cephadm.installer
+            )
+
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)
         return 1
+    return 0

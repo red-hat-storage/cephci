@@ -607,9 +607,22 @@ class Ceph(object):
                 return metadata
         return None
 
-    def osd_check(self, client):
+    def osd_check(self, client, rhbuild=None):
+        """
+        Check OSD status
+        Args:
+            client: client node to get OSD details
+            rhbuild: ceph build version
 
-        out, err = client.exec_command(cmd="sudo ceph -s -f json")
+        Returns:
+            0 - Successful
+            1 - failure
+        """
+        cmd = "ceph -s -f json"
+        if rhbuild and rhbuild.startswith("5"):
+            cmd = f"cephadm shell -- {cmd}"
+
+        out, err = client.exec_command(cmd=cmd, sudo=True)
         out_json = out.read().decode()
         ceph_status_json = json.loads(out_json)
 
@@ -647,7 +660,7 @@ class Ceph(object):
         Returns:
            int: return 0 when ceph is in healthy state, else 1
         """
-
+        pacific = True if (rhbuild and rhbuild.startswith("5")) else False
         if not client:
             client = (
                 self.get_ceph_object("client")
@@ -662,7 +675,11 @@ class Ceph(object):
         valid_states = ["active+clean"]
 
         while datetime.datetime.now() - starttime <= timeout:
-            out, err = client.exec_command(cmd="sudo ceph -s")
+            cmd = "ceph -s"
+            if pacific:
+                cmd = f"cephadm shell -- {cmd}"
+
+            out, err = client.exec_command(cmd=cmd, sudo=True)
             lines = out.read().decode()
 
             if not any(state in lines for state in pending_states):
@@ -674,18 +691,19 @@ class Ceph(object):
             logger.error("Valid States are not found in the health check")
             return 1
 
-        self.osd_check(client)
+        self.osd_check(client, rhbuild=rhbuild)
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
-        match = re.search(r"(\d+) daemons, quorum", lines)
-        if not match:
-            match = re.search(r"(\d+) mons at", lines)
-        all_mons = int(match.group(1))
-        logger.info(all_mons)
-        logger.info(self.ceph_demon_stat["mon"])
-        if all_mons != self.ceph_demon_stat["mon"]:
-            logger.error("Not all monitors are in cluster")
-            return 1
+        if not pacific:
+            match = re.search(r"(\d+) daemons, quorum", lines)
+            if not match:
+                match = re.search(r"(\d+) mons at", lines)
+            all_mons = int(match.group(1))
+            logger.info(all_mons)
+            logger.info(self.ceph_demon_stat["mon"])
+            if all_mons != self.ceph_demon_stat["mon"]:
+                logger.error("Not all monitors are in cluster")
+                return 1
         if "HEALTH_ERR" in lines:
             logger.error("HEALTH in ERROR STATE")
             return 1
