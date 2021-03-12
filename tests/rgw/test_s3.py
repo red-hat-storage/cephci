@@ -81,20 +81,17 @@ def setup_s3_tests(client_node, rgw_node, config, build):
             "libxslt-devel",
             "zlib-devel",
         ]
-        client_node.exec_command(cmd="cd s3-tests")
         client_node.exec_command(
             cmd="sudo yum install -y {pkgs}".format(pkgs=" ".join(pkgs)), check_ec=False
         )
-        client_node.exec_command(
-            cmd="virtualenv -p python2 --no-site-packages --distribute virtualenv"
-        )
-        client_node.exec_command(cmd="~/virtualenv/bin/pip install setuptools==32.3.1")
-        client_node.exec_command(
-            cmd="~/virtualenv/bin/pip install -r s3-tests/requirements.txt"
-        )
-        client_node.exec_command(
-            cmd="~/virtualenv/bin/python s3-tests/setup.py develop"
-        )
+        commands = [
+            "virtualenv -p python2 --no-site-packages --distribute virtualenv",
+            "~/virtualenv/bin/pip install --upgrade pip setuptools",
+            "~/virtualenv/bin/pip install -r s3-tests/requirements.txt",
+            "~/virtualenv/bin/python s3-tests/setup.py develop",
+        ]
+        for cmd in commands:
+            client_node.exec_command(cmd=cmd)
     else:
         log.info("Running bootstrap")
         client_node.exec_command(
