@@ -793,24 +793,19 @@ def run(args):
                 enable_eus=enable_eus,
             )
         tcs.append(tc)
-    url_base = magna_url if "/ceph/cephci-jenkins" in run_dir else run_dir
-    run_dir_name = run_dir.split("/")[-1]
-    log.info(
-        "\nAll test logs located here: {base}/{dir}".format(
-            base=url_base, dir=run_dir_name
-        )
+    url_base = (
+        magna_url + run_dir.split("/")[-1]
+        if "/ceph/cephci-jenkins" in run_dir
+        else run_dir
     )
+    log.info("\nAll test logs located here: {base}".format(base=url_base))
     close_and_remove_filehandlers()
     if post_to_report_portal:
         service.finish_launch(end_time=timestamp())
         service.terminate()
     if xunit_results:
         create_xunit_results(suite_name, tcs, run_dir)
-    print(
-        "\nAll test logs located here: {base}/{dir}".format(
-            base=url_base, dir=run_dir_name
-        )
-    )
+    print("\nAll test logs located here: {base}".format(base=url_base))
     print_results(tcs)
     send_to_cephci = post_results or post_to_report_portal
     run_end_time = datetime.datetime.now()
