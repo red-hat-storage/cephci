@@ -25,7 +25,7 @@ def validate_fsid(cls, fsid: str):
     out, err = cls.shell(args=["ceph", "fsid"])
     log.info("custom fsid provided for bootstrap: %s" % fsid)
     log.info("cluster fsid : %s" % out)
-    if out != fsid:
+    if out.strip() != fsid:
         raise BootStrapValidationFailure("FSID verification failed")
 
 

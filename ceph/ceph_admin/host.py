@@ -63,6 +63,13 @@ class Host(Orch):
         node = args.pop("node")
         ceph_node = get_node_by_id(self.cluster, node_name=node)
 
+        # Skipping client node, if only client label is attached
+        if (
+            len(ceph_node.role.role_list) == 1
+            and ["client"] == ceph_node.role.role_list
+        ):
+            return
+
         if not ceph_node:
             raise ResourceNotFoundError(f"No matching resource found: {node}")
 

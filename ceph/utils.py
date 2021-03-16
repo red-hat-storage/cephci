@@ -740,9 +740,9 @@ def get_node_by_id(cluster, node_name):
     else node list which matched node ID(eg., 'node1')
     Args:
         cluster: ceph object
-        node_names: node name list (eg., ['node1'])
+        node_name: node name list (eg., 'node1')
     Returns:
-        node_list: list nodes
+        node
     """
     for node in cluster.get_nodes():
         if node_name in node.shortname:

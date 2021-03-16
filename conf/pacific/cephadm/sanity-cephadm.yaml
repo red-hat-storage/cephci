@@ -52,9 +52,11 @@ globals:
           - crash
       node8:
         role:
-          - client
           - nfs
           - node-exporter
           - iscsi
           - crash
           - mds
+      node9:
+        role:
+          - client

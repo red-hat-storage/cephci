@@ -366,6 +366,35 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
+      name: Configure client
+      desc: Configure client on node9
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node9                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+  - test:
+      name: Remove client
+      desc: remove client on node9
+      module: test_client.py
+      polarion-id:
+      config:
+        command: remove
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node9                       # client node
+        remove_packages:
+          - ceph-common                   # Remove ceph common packages
+        remove_admin_keyring: true        # Copy admin keyring to node
+  - test:
       name: Add cephfs file system volume
       desc: Add file system for MDS service
       module: test_bootstrap.py
