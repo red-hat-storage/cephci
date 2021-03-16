@@ -6,6 +6,7 @@ tests:
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
+
   - test:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
@@ -48,6 +49,34 @@ tests:
                 all-available-devices: true
       destroy-cluster: false
       abort-on-fail: true
+
+  - test:
+      name: Enable email alerts
+      module: rados_prep.py
+      config:
+        email_alerts:
+          smtp_host: smtp.corp.redhat.com
+          smtp_sender: ceph-iad2-c01-lab.mgr@redhat.com
+          smtp_port: 25
+          interval: 10
+          smtp_destination:
+            - pdhiran@redhat.com
+          smtp_from_name: Rados Sanity Cluster Alerts
+      desc: Enable email alerts
+
+  - test:
+      name: Testbed setup for RADOS
+      module: rados_prep.py
+      config:
+        ec_pool:
+          create: true
+#          pool_name: test_ecpool
+#          crush_rule: stretch_rule
+        replicated_pool:
+          create: true
+          pool_name: test_repool
+        log_to_file: true
+      desc: General testbed setup for rados
 
   - test:
        name: Mute ceph health alerts
