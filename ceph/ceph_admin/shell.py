@@ -38,7 +38,7 @@ class ShellMixin:
             check_ec=check_status,
         )
 
-        out = out.read().decode().strip()
-        err = err.read().decode().strip()
+        out = out.read().decode()
+        err = err.read().decode()
         LOG.debug(out)
         return out, err

@@ -88,7 +88,14 @@ class ApplyMixin:
 
                 if "*" in nodes:
                     placement_str += '"*"'
-                    node_names = [node.shortname for node in self.cluster.node_list]
+                    node_names = list()
+                    for node in self.cluster.node_list:
+                        if (
+                            len(node.role.role_list) == 1
+                            and ["client"] == node.role.role_list
+                        ):
+                            continue
+                        node_names.append(node.shortname)
                 elif "[" in nodes:
                     placement_str += '"%s"' % nodes
                     verify_service = False
