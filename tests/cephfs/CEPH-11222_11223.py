@@ -79,7 +79,7 @@ def run(ceph_cluster, **kw):
         )
 
         dir1 = "".join(
-            random.choice(string.ascii_lowercase + +string.digits) for _ in range(10)
+            random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
         )
         for client in client_info["clients"]:
             log.info("Creating directory:")
