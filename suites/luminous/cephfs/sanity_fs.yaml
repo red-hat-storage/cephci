@@ -214,7 +214,7 @@ tests:
        polarion-id: CEPH-11221
        desc: Mount CephFS on multiple clients and perform IO ,fill cluster upto 30%
        abort-on-fail: false
-  - test:
+   - test:
        name: kcephfs mount with long user name
        module: BUG-1798719.py
        polarion-id: BUG-1798719
