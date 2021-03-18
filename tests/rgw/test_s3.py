@@ -16,10 +16,10 @@ def run(**kw):
     log.info("Running s3-tests")
     ceph_nodes = kw.get("ceph_nodes")
     config = kw.get("config")
-    build = config.get("build", config.get("rhbuild"))
-    test_data = kw.get("test_data")
+
     client_node = None
     rgw_node = None
+
     for node in ceph_nodes:
         if node.role == "client":
             client_node = node
@@ -30,24 +30,20 @@ def run(**kw):
             rgw_node = node
             break
 
-    if client_node:
-        if test_data.get("install_version", "").startswith("2"):
-            client_node.exec_command(sudo=True, cmd="yum install -y ceph-radosgw")
-
-        setup_s3_tests(client_node, rgw_node, config, build)
-        exit_status = execute_s3_tests(client_node, build)
-        cleanup(client_node)
-        teardown_rgw_conf(rgw_node)
-
-        log.info("Returning status code of {}".format(exit_status))
-        return exit_status
-
-    else:
+    if not client_node:
         log.warning("No client node in cluster, skipping s3 tests.")
         return 0
 
+    setup_s3_tests(client_node, rgw_node, config)
+    exit_status = execute_s3_tests(client_node)
+    cleanup(client_node)
+    teardown_rgw_conf(rgw_node)
 
-def setup_s3_tests(client_node, rgw_node, config, build):
+    log.info("Returning status code of {}".format(exit_status))
+    return exit_status
+
+
+def setup_s3_tests(client_node, rgw_node, config):
     """
     Performs initial setup and configuration for s3 tests on client node.
 
@@ -55,7 +51,6 @@ def setup_s3_tests(client_node, rgw_node, config, build):
         client_node: The node configured with 'client'
         rgw_node: The node configured with 'radosgw'
         config: test configuration
-        build: rhcs4 build version
 
     Returns:
         None
@@ -71,34 +66,19 @@ def setup_s3_tests(client_node, rgw_node, config, build):
         cmd="git clone -b {branch} {repo_url}".format(branch=branch, repo_url=repo_url)
     )
 
-    if build.startswith("4"):
-        pkgs = [
-            "python2-virtualenv",
-            "python2-devel",
-            "libevent-devel",
-            "libffi-devel",
-            "libxml2-devel",
-            "libxslt-devel",
-            "zlib-devel",
-        ]
-        client_node.exec_command(
-            cmd="sudo yum install -y {pkgs}".format(pkgs=" ".join(pkgs)), check_ec=False
-        )
-        commands = [
-            "virtualenv -p python2 --no-site-packages --distribute virtualenv",
-            "~/virtualenv/bin/pip install --upgrade pip setuptools",
-            "~/virtualenv/bin/pip install -r s3-tests/requirements.txt",
-            "~/virtualenv/bin/python s3-tests/setup.py develop",
-        ]
-        for cmd in commands:
-            client_node.exec_command(cmd=cmd)
+    out, err = client_node.exec_command(
+        cmd="grep -i 'release 8' /etc/redhat-release",
+        check_ec=False,
+    )
+    out = out.read().decode()
+    if branch == "ceph-nautilus" and out:
+        _install_s3test_prereq(client_node)
     else:
         log.info("Running bootstrap")
-        client_node.exec_command(
-            cmd="cd s3-tests; ./bootstrap",
-        )
+        client_node.exec_command(cmd="cd s3-tests; ./bootstrap")
 
     setup_rgw_conf(rgw_node)
+
     main_info = create_s3_user(client_node, "main-user")
     alt_info = create_s3_user(client_node, "alt-user", email=True)
     tenant_info = create_s3_user(client_node, "tenant", email=True)
@@ -192,13 +172,12 @@ def create_s3_user(client_node, display_name, email=False):
     return user_info
 
 
-def execute_s3_tests(client_node, build):
+def execute_s3_tests(client_node):
     """
     Return the result of S3 test run.
 
     Args:
         client_node: node to execute tests from
-        build: the RH build version
 
     Returns:
         0 - Success
@@ -206,22 +185,20 @@ def execute_s3_tests(client_node, build):
     """
     log.info("Executing s3-tests")
     try:
-        base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml ~/virtualenv/bin/nosetests -v "
-        if build.startswith("4"):
-            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
-            cmd = base_cmd + extra_args
-        else:
-            extra_args = ["-a '!fails_on_rgw,!lifecycle'"]
-            cmd = base_cmd + " ".join(extra_args)
+        base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml virtualenv/bin/nosetests -v"
+        extra_args = " -a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
+        cmd = base_cmd + extra_args
+
         out, err = client_node.exec_command(cmd=cmd, timeout=3600)
         log.info(out.read().decode())
-        log.info(err.read().decode())
-        return 0
+        log.error(err.read().decode())
     except CommandFailed as e:
         log.warning("Received CommandFailed")
         log.warning(e)
         time.sleep(30)
         return 1
+
+    return 0
 
 
 def setup_rgw_conf(node: CephNode) -> None:
@@ -291,4 +268,34 @@ def cleanup(client_node):
         None
     """
     log.info("Removing s3-tests directory")
-    client_node.exec_command(cmd="rm -r s3-tests virtualenv")
+    client_node.exec_command(cmd="rm -r s3-tests")
+
+
+def _install_s3test_prereq(client_node):
+    """
+    Install S3test pre-requisites.
+
+    Due to package mismatch on ceph-nautilus branch, we cannot use bootstrap. Hence,
+    installing all the required packages manually and virtualenv creation.
+    """
+    pkgs = [
+        "python2-virtualenv",
+        "python2-devel",
+        "libevent-devel",
+        "libffi-devel",
+        "libxml2-devel",
+        "libxslt-devel",
+        "zlib-devel",
+    ]
+    client_node.exec_command(
+        sudo=True, cmd=f"yum install -y --nogpgcheck {' '.join(pkgs)}"
+    )
+    commands = [
+        "virtualenv -p python2 --no-site-packages --distribute s3-tests/virtualenv",
+        "s3-tests/virtualenv/bin/pip install --upgrade pip setuptools",
+        "s3-tests/virtualenv/bin/pip install -r s3-tests/requirements.txt",
+        "s3-tests/virtualenv/bin/python s3-tests/setup.py develop",
+    ]
+
+    for cmd in commands:
+        client_node.exec_command(cmd=cmd)
