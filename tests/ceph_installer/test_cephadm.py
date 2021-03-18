@@ -12,6 +12,7 @@ from ceph.ceph_admin.alert_manager import AlertManager
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.crash import Crash
 from ceph.ceph_admin.grafana import Grafana
+from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.host import Host
 from ceph.ceph_admin.iscsi import ISCSI
 from ceph.ceph_admin.mds import MDS
@@ -102,11 +103,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
     LOG.info("Starting Ceph cluster deployment.")
 
-    try:
-        config = kwargs["config"]
-        cephadm = CephAdmin(cluster=ceph_cluster, **config)
-        steps = config.get("steps", [])
+    config = kwargs["config"]
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
 
+    try:
+        steps = config.get("steps", [])
         for step in steps:
             cfg = step["config"]
 
@@ -126,4 +127,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)
         return 1
+    finally:
+        # Get cluster state
+        get_cluster_state(cephadm)
     return 0

@@ -1,6 +1,7 @@
 import logging
 
 from ceph.ceph_admin.common import fetch_method
+from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.mds import MDS
 
 log = logging.getLogger(__name__)
@@ -26,10 +27,10 @@ def run(ceph_cluster, **kw):
     command = config.pop("command")
     log.info("Executing MDS %s service" % command)
     mds = MDS(cluster=ceph_cluster, **config)
-    method = fetch_method(mds, command)
-    method(config)
-
-    if "get_cluster_details" in config:
-        mds.get_cluster_state(config["get_cluster_details"])
-
+    try:
+        method = fetch_method(mds, command)
+        method(config)
+    finally:
+        # Get cluster state
+        get_cluster_state(mds)
     return 0

@@ -3,6 +3,7 @@ import logging
 from ceph.ceph_admin.alert_manager import AlertManager
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.grafana import Grafana
+from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.node_exporter import NodeExporter
 from ceph.ceph_admin.prometheus import Prometheus
 
@@ -38,8 +39,10 @@ def run(ceph_cluster, **kw):
     _monitoring = MONITORING[service]
     log.info("Executing %s %s service" % (service, command))
     monitoring = _monitoring(cluster=ceph_cluster, **config)
-    method = fetch_method(monitoring, command)
-    method(config)
-    if "get_cluster_details" in config:
-        monitoring.get_cluster_state(config["get_cluster_details"])
+    try:
+        method = fetch_method(monitoring, command)
+        method(config)
+    finally:
+        # Get cluster state
+        get_cluster_state(monitoring)
     return 0

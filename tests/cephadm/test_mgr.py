@@ -1,6 +1,7 @@
 import logging
 
 from ceph.ceph_admin.common import fetch_method
+from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.mgr import Mgr
 
 log = logging.getLogger(__name__)
@@ -26,8 +27,11 @@ def run(ceph_cluster, **kw):
     command = config.pop("command")
     log.info("Executing MGR %s service" % command)
     manager = Mgr(cluster=ceph_cluster, **config)
-    method = fetch_method(manager, command)
-    method(config)
-    if "get_cluster_details" in config:
-        manager.get_cluster_state(config["get_cluster_details"])
+
+    try:
+        method = fetch_method(manager, command)
+        method(config)
+    finally:
+        # Get cluster state
+        get_cluster_state(manager)
     return 0
