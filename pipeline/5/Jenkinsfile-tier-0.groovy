@@ -10,7 +10,6 @@ def testStages = ['deploy': {
                     stage('Deployment suite') {
                         script {
                             withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
                                 "testSuite=suites/${cephVersion}/cephadm/cephadm_deploy.yaml",
                                 "addnArgs=--post-results --log-level DEBUG"

@@ -37,7 +37,6 @@ def runTestSuite() {
     cmd += " --instances-name ${instanceName}"
 
     // Append test suite specific
-    cmd += " --inventory ${env.sutVMConf}"
     cmd += " --global-conf ${env.sutConf}"
     cmd += " --suite ${env.testSuite}"
 
@@ -57,7 +56,13 @@ def runTestSuite() {
 
         // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
         env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
-
+        
+        if (env.composeId.indexOf('RHEL-8') >= 0){
+            cmd += " --inventory conf/inventory/rhel-8.3-server-x86_64.yaml"
+        }
+        else if(env.composeId.indexOf('RHEL-7') >= 0){
+            cmd += " --inventory conf/inventory/rhel-7.9-server-x86_64.yaml"
+        }
         cmd += " --docker-registry ${dockerDTR}"
         cmd += " --docker-image ${dockerImage}"
         cmd += " --docker-tag ${dockerTag}"

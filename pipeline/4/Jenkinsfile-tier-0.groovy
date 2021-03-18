@@ -2,7 +2,6 @@
     Pipeline script for executing Tier 0 test suites for RH Ceph 4.x.
 */
 // Global variables section
-
 def nodeName = "centos-7"
 def cephVersion = "nautilus"
 def sharedLib
@@ -10,7 +9,6 @@ def testStages = ['sanity_rpm': {
                     stage('RPM Sanity suite') {
                         script {
                             withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
                                 "testSuite=suites/${cephVersion}/ansible/sanity_ceph_ansible.yaml",
                                 "addnArgs=--post-results --log-level DEBUG"
@@ -23,9 +21,8 @@ def testStages = ['sanity_rpm': {
                     stage('Containerized Sanity suite') {
                         script {
                             withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/sanity_ceph_ansible.yaml",
+                                "testSuite=suites/${cephVersion}/ansible/sanity_containerized_ceph_ansible.yaml",
                                 "addnArgs=--post-results --log-level DEBUG"
                             ]) {
                                 sharedLib.runTestSuite()
@@ -36,14 +33,13 @@ def testStages = ['sanity_rpm': {
                  ]
 
 // Pipeline script entry point
-
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: '*/4.x_build']],
                 doGenerateSubmoduleConfigurations: false,
                 extensions: [[
                     $class: 'SubmoduleOption',
@@ -54,11 +50,9 @@ node(nodeName) {
                     trackingSubmodules: false
                 ]],
                 submoduleCfg: [],
-                userRemoteConfigs: [[url: 'https://github.com/red-hat-storage/cephci.git']]
+                userRemoteConfigs: [[url: 'https://github.com/manasagowri/cephci.git']]
             ])
             script {
-                echo 'CI Message'
-                echo params.CI_MESSAGE
                 sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
                 sharedLib.prepareNode()
             }
