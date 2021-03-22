@@ -122,12 +122,14 @@ def postLatestCompose() {
     /*
         Store the latest compose in ressi for QE usage.
     */
-    def msgPath = "/ceph/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-${env.rhcephVersion}.json"
+    def latestJson = "/ceph/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-${env.rhcephVersion}.json"
     def ciMsgFlag = "${params.CI_MESSAGE}" ?: ""
+
     if (ciMsgFlag?.trim()) {
-        sh(script: "echo ${params.CI_MESSAGE} > ${msgPath}")
+        sh """
+            echo '${params.CI_MESSAGE}' > ${latestJson}
+        """
     }
 }
 
 return this;
-
