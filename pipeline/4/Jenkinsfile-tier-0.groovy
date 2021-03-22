@@ -50,7 +50,7 @@ node(nodeName) {
                     trackingSubmodules: false
                 ]],
                 submoduleCfg: [],
-                userRemoteConfigs: [[url: 'https://github.com/manasagowri/cephci.git']]
+                userRemoteConfigs: [[url: 'https://github.com/red-hat-storage/cephci.git']]
             ])
             script {
                 sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
@@ -70,4 +70,3 @@ node(nodeName) {
         }
     }
 }
-
