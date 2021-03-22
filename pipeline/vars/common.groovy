@@ -34,6 +34,7 @@ def runTestSuite() {
     // Build the CLI options
     def cmd = "${env.WORKSPACE}/.venv/bin/python run.py"
     cmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
+    cmd += " --report-portal"
     cmd += " --instances-name ${instanceName}"
 
     // Append test suite specific
