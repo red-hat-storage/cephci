@@ -524,8 +524,7 @@ tests:
         base_cmd_args:          # arguments to ceph orch
           verbose: true
         pos_args:               # positional arguments
-          - india             # realm
-          - south             # zone
+          - foo                 # service id
         args:
           placement:
             nodes:              # A list of strings that would looked up
@@ -631,7 +630,7 @@ tests:
         base_cmd_args:
           verbose: true
         args:
-            service_name: rgw.india.south
+            service_name: rgw.foo
             verify: true
       destroy-cluster: false
       abort-on-fail: true

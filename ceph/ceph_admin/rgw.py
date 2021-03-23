@@ -26,9 +26,10 @@ class RGW(ApplyMixin, Orch):
                     verbose: true
                     input_file: <name of spec>
                 pos_args:                   # positional arguments
-                    - india                 # realm
-                    - south                 # zone
+                    - my_rgw                # service id
                 args:
+                    rgw-realm: realm        # realm name in case of multi-site
+                    rgw-zone: zone          # zone name in case of multi-site
                     port: int               # port number
                     ssl: true               # certification
                     placement:

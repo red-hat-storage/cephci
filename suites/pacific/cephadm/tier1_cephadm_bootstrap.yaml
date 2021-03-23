@@ -114,8 +114,7 @@ tests:
               base_cmd_args:                    # arguments to ceph orch
                 verbose: true
               pos_args:                         # positional arguments
-                - india                         # realm
-                - south                         # zone
+                - myrgw
               args:
                 placement:
                   label: rgw                    # label
