@@ -1,9 +1,13 @@
 import logging
 
 from ceph.ceph_admin.common import fetch_method
+from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.host import Host
 
 log = logging.getLogger(__name__)
+
+
+CLUSTER_STATE = ["ceph orch host ls -f yaml"]
 
 
 def run(ceph_cluster, **kw):
@@ -55,10 +59,11 @@ def run(ceph_cluster, **kw):
     log.info("Executing %s %s" % (service, command))
 
     host = Host(cluster=ceph_cluster, **config)
-    method = fetch_method(host, command)
-    method(config)
-
-    if "get_cluster_details" in config:
-        host.get_cluster_state(config["get_cluster_details"])
+    try:
+        method = fetch_method(host, command)
+        method(config)
+    finally:
+        # Get cluster state
+        get_cluster_state(host, CLUSTER_STATE)
 
     return 0
