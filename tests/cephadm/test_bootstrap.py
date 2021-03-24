@@ -63,7 +63,7 @@ def validate_skip_monitoring_stack(cls, flag):
     log.info("skip-monitoring-stack validation is successful")
 
 
-def validate_dashboard(cls, out, user=None, password=None):
+def validate_dashboard(cls, out, user=None, password=None, port=None):
     """
     Method to validate dashboard login using provided user/password
     and Also validates user/passwd in bootstrap console output
@@ -73,6 +73,7 @@ def validate_dashboard(cls, out, user=None, password=None):
         out: bootstrap response log
         user: dashboard user
         password: dashboard password
+        port: SSL dashboard port number
     """
     _, _, db_log_part = out.partition("Ceph Dashboard is now available at:")
 
@@ -96,7 +97,15 @@ def validate_dashboard(cls, out, user=None, password=None):
         if password != passwd_:
             raise BootStrapValidationFailure(f"password {password} did not match")
 
-    host_ = re.search(r"https?:[/]{2}(.*):", host).group(1)
+    groups = re.search(r"https?:[/]{2}(.*):(\d+)", host)
+    host_ = groups.group(1)
+    port_ = groups.group(2)
+
+    if port:
+        log.info("expected port : %s, configured port: %s" % (port, port_))
+        if port_ != port:
+            raise BootStrapValidationFailure("SSL dashboard port did not match")
+
     for node in cls.cluster.get_nodes():
         if host_ in node.hostname:
             host = host.replace(host_, node.ip_address)
@@ -118,6 +127,7 @@ def validate_dashboard(cls, out, user=None, password=None):
         raise BootStrapValidationFailure(
             f"Status code: {resp.status_code}\nResponse: {resp.text}"
         )
+    log.info("Dashboard API login is successful, status code : %s" % resp.status_code)
 
 
 def validate_dashboard_user(cls, user: str, out: str):
@@ -142,6 +152,19 @@ def validate_dashboard_passwd(cls, password: str, out: str):
 
     """
     validate_dashboard(cls, out, password=password)
+
+
+def validate_ssl_dashboard_port(cls, out: str, port: str = None):
+    """
+    Method is used to validate port number
+    Args:
+        cls: class object
+        port: dashboard port number
+        out: bootstrap console response
+
+    """
+    port = str(port) if port else "8443"
+    validate_dashboard(cls, out, port=port)
 
 
 def validate_orphan_intial_daemons(cls, flag):
@@ -221,6 +244,7 @@ def verify_bootstrap(cls, args, response):
         validate_dashboard_passwd(cls, args.get("initial-dashboard-password"), response)
     validate_skip_monitoring_stack(cls, args.get("skip-monitoring-stack"))
     validate_orphan_intial_daemons(cls, args.get("orphan-initial-daemons"))
+    validate_ssl_dashboard_port(cls, response, args.get("ssl-dashboard-port"))
 
 
 def run(ceph_cluster, **kw):
