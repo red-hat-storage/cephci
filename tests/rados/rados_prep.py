@@ -34,19 +34,19 @@ def run(ceph_cluster, **kw):
 
     if config.get("ec_pool"):
         ec_config = config.get("ec_pool")
-        pool_name = ec_config.setdefault("pool_name", f"ecpool_{uuid}")
+        ec_config.setdefault("pool_name", f"ecpool_{uuid}")
         if not create_erasure_pool(node=cephadm, name=uuid, **ec_config):
             log.error("Failed to create the EC Pool")
             return 1
-        if not run_rados_bench_write(node=cephadm, pool_name=pool_name):
+        if not run_rados_bench_write(node=cephadm, **ec_config):
             log.error("Failed to write objects into the EC Pool")
             return 1
-        run_rados_bench_read(node=cephadm, pool_name=pool_name)
+        run_rados_bench_read(node=cephadm, **ec_config)
         log.info("Created the EC Pool, Finished writing data into the pool")
 
     if config.get("replicated_pool"):
         rep_config = config.get("replicated_pool")
-        pool_name = rep_config.setdefault("pool_name", f"repool_{uuid}")
+        rep_config.setdefault("pool_name", f"repool_{uuid}")
         if not create_pool(
             node=cephadm,
             disable_pg_autoscale=True,
@@ -54,10 +54,10 @@ def run(ceph_cluster, **kw):
         ):
             log.error("Failed to create the replicated Pool")
             return 1
-        if not run_rados_bench_write(node=cephadm, pool_name=pool_name):
+        if not run_rados_bench_write(node=cephadm, **rep_config):
             log.error("Failed to write objects into the EC Pool")
             return 1
-        run_rados_bench_read(node=cephadm, pool_name=pool_name)
+        run_rados_bench_read(node=cephadm, **rep_config)
         log.info("Created the replicated Pool, Finished writing data into the pool")
 
     if config.get("email_alerts"):
@@ -73,8 +73,52 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("Logging to file configured")
 
+    if config.get("cluster_configuration_checks"):
+        cls_config = config.get("cluster_configuration_checks")
+        if not set_cluster_configuration_checks(node=cephadm, **cls_config):
+            log.error("Error while setting Cluster config checks")
+            return 1
+        log.info("Set up cluster configuration checks")
+
     log.info("All Pre-requisites completed to run Rados suite")
     return 0
+
+
+def set_cluster_configuration_checks(node: CephAdmin, **kwargs) -> bool:
+    """
+    Sets up Cephadm to periodically scan each of the hosts in the cluster, and to understand the state of the OS,
+     disks, NICs etc
+     ref doc : https://docs.ceph.com/en/latest/cephadm/operations/#cluster-configuration-checks
+    Args:
+        node: Cephadm node where the commands need to be executed
+        kwargs: Any other param that needs to passed
+
+    Returns: True -> pass, False -> fail
+
+    """
+    cmd = "ceph config set mgr mgr/cephadm/config_checks_enabled true"
+    node.shell([cmd])
+
+    # Checking if the checks are enabled on cluster
+    cmd = "ceph cephadm config-check status"
+    out, err = node.shell([cmd])
+    if not re.search("Enabled", out):
+        log.error("Cluster config checks no t enabled")
+        return False
+
+    if kwargs.get("disable_check_list"):
+        for check in kwargs.get("disable_check_list"):
+            cmd = f"ceph cephadm config-check disable {check}"
+            node.shell([cmd])
+
+    if kwargs.get("enable_check_list"):
+        for check in kwargs.get("enable_check_list"):
+            cmd = f"ceph cephadm config-check enable {check}"
+            node.shell([cmd])
+
+    cmd = "ceph cephadm config-check ls"
+    log.info(node.shell([cmd]))
+    return True
 
 
 def run_rados_bench_write(node: CephAdmin, pool_name: str, **kwargs) -> bool:
@@ -88,7 +132,7 @@ def run_rados_bench_write(node: CephAdmin, pool_name: str, **kwargs) -> bool:
     Returns: True -> pass, False -> fail
 
     """
-    duration = kwargs.get("duration", 200)
+    duration = kwargs.get("rados_write_duration", 200)
     byte_size = kwargs.get("byte_size", 4096)
     cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write --no-cleanup"
     try:
@@ -111,7 +155,7 @@ def run_rados_bench_read(node: CephAdmin, pool_name: str, **kwargs) -> bool:
     Returns: True -> pass, False -> fail
 
     """
-    duration = kwargs.get("duration", 200)
+    duration = kwargs.get("rados_read_duration", 80)
     try:
         cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} seq"
         node.shell([cmd])

@@ -6,13 +6,13 @@ tests:
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
-
   - test:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
       module: test_cephadm.py
       polarion-id:
       config:
+        verify_cluster_health: true
         steps:
           - config:
               command: bootstrap
@@ -23,7 +23,6 @@ tests:
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
-                skip-monitoring-stack: true
           - config:
               command: add_hosts
               service: host
@@ -47,11 +46,33 @@ tests:
               service: osd
               args:
                 all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
       destroy-cluster: false
       abort-on-fail: true
 
   - test:
-      name: Enable email alerts
+      name: Enable Cluster Monitoring and Alerts
       module: rados_prep.py
       config:
         email_alerts:
@@ -62,21 +83,61 @@ tests:
           smtp_destination:
             - pdhiran@redhat.com
           smtp_from_name: Rados Sanity Cluster Alerts
-      desc: Enable email alerts
+        cluster_configuration_checks:
+          configure: true
+          disable_check_list:
+            - osd_linkspeed
+            - osd_mtu_size
+      desc: Enable Cluster Configuration checks and ceph health email Alerts
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node8                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
 
   - test:
       name: Testbed setup for RADOS
       module: rados_prep.py
       config:
-        ec_pool:
-          create: true
-#          pool_name: test_ecpool
-#          crush_rule: stretch_rule
         replicated_pool:
           create: true
-          pool_name: test_repool
+          rados_write_duration: 80
         log_to_file: true
-      desc: General testbed setup for rados
+      desc: Enable logging to file and create a test pool with data
+
+  - test:
+      name: Deploy stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573621
+      config:
+        perform_add_capacity: true
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+
+  - test:
+      name: Replicated pool with stretch rule
+      module: rados_prep.py
+      config:
+        replicated_pool:
+          create: true
+          crush_rule: stretch_rule
+          rados_write_duration: 100
+          rados_read_duration: 200
+        log_to_file: true
+      desc: Replicated pool creation with stretch rule and writing data
 
   - test:
        name: Mute ceph health alerts

@@ -5,31 +5,71 @@ globals:
         role:
           - mon
           - installer
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
       node2:
         role:
-          - osd
-        no-of-volumes: 4
-        disk-size: 15
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
       node3:
         role:
           - osd
-        no-of-volumes: 4
-        disk-size: 15
+          - node-exporter
+          - crash
+        no-of-volumes: 7
+        disk-size: 12
       node4:
         role:
           - osd
-        no-of-volumes: 4
-        disk-size: 15
+          - node-exporter
+          - crash
+        no-of-volumes: 3
+        disk-size: 20
       node5:
         role:
           - osd
+          - node-exporter
+          - crash
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 10
       node6:
         role:
           - mon
           - mgr
+          - mds
+          - node-exporter
+          - crash
       node7:
         role:
           - mon
-          - mgr
+          - node-exporter
+          - crash
+      node8:
+        role:
+          - client
+      node9:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 3
+        disk-size: 15
+      node10:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 4
+        disk-size: 15
+      node11:
+        role:
+          - mon
+          - node-exporter
+          - crash
