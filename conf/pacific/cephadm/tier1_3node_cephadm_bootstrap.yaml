@@ -32,6 +32,7 @@ globals:
           - node-exporter
           - crash
           - rgw
+          - mds
         no-of-volumes: 4
         disk-size: 15
       node4:
