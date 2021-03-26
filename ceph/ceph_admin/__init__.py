@@ -43,29 +43,29 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         self.config = config
         self.installer = self.cluster.get_ceph_object("installer")
 
-    def read_cephadm_gen_pub_key(self):
+    def read_cephadm_gen_pub_key(self, ssh_key_path=None):
         """
         Read cephadm generated public key.
 
         Arg:
-            Installer node
+            ssh_key_path: custom ssh public key path
 
         Returns:
             Public Key string
         """
-        ceph_pub_key, _ = self.installer.exec_command(
-            sudo=True, cmd="cat /etc/ceph/ceph.pub"
-        )
+        path = ssh_key_path if ssh_key_path else "/etc/ceph/ceph.pub"
+        ceph_pub_key, _ = self.installer.exec_command(sudo=True, cmd=f"cat {path}")
         return ceph_pub_key.read().decode().strip()
 
-    def distribute_cephadm_gen_pub_key(self, nodes=None):
+    def distribute_cephadm_gen_pub_key(self, ssh_key_path=None, nodes=None):
         """
         Distribute cephadm generated public key to all nodes in the list.
 
         Args:
+            ssh_key_path: custom SSH ceph public key path(default: None)
             nodes: node list to add ceph public key(default: None)
         """
-        ceph_pub_key = self.read_cephadm_gen_pub_key()
+        ceph_pub_key = self.read_cephadm_gen_pub_key(ssh_key_path)
 
         # Add with new line, so avoiding append to earlier entry
         ceph_pub_key = f"\n{ceph_pub_key}"

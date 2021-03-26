@@ -4,11 +4,17 @@ import re
 
 import requests
 
+from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
 
 log = logging.getLogger(__name__)
+
+__DEFAULT_CEPH_DIR = "/etc/ceph"
+__DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"
+__DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
+__DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
 class BootStrapValidationFailure(Exception):
@@ -228,6 +234,171 @@ def validate_orphan_intial_daemons(cls, flag):
     log.info("orphan-initial-daemons validation is successful")
 
 
+def file_or_path_exists(node, file_or_path):
+    """
+    Method to check abs path exists
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+
+    Returns:
+        boolean
+    """
+    try:
+        out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
+        log.info("Output : %s" % out.read().decode())
+    except CommandFailed as err:
+        log.error("Error: %s" % err)
+        return False
+    return True
+
+
+def copy_ceph_configuration_files(cls, ceph_conf_args):
+    """
+    Copy ceph configuration files to ceph default "/etc/ceph" path.
+
+     we can eliminate this definition when we have support to access
+     ceph cli via custom ceph config files.
+
+    Args:
+        ceph_conf_args: bootstrap arguments
+        cls: cephadm instance
+
+    ceph_conf_args:
+          output-dir: "/root/ceph"
+          output-keyring : "/root/ceph/ceph.client.admin.keyring"
+          output-config : "/root/ceph/ceph.conf"
+          output-pub-ssh-key : "/root/ceph/ceph.pub"
+    """
+    ceph_dir = ceph_conf_args.get("output-dir")
+    if ceph_dir:
+        cls.installer.exec_command(cmd=f"mkdir -p {__DEFAULT_CEPH_DIR}", sudo=True)
+
+    def copy_file(node, src, destination):
+        node.exec_command(cmd=f"cp {src} {destination}", sudo=True)
+
+    ceph_files = {
+        "output-keyring": __DEFAULT_KEYRING_PATH,
+        "output-config": __DEFAULT_CONF_PATH,
+        "output-pub-ssh-key": __DEFAULT_SSH_PATH,
+    }
+
+    for arg, default_path in ceph_files.items():
+        if ceph_conf_args.get(arg):
+            copy_file(cls.installer, ceph_conf_args.get(arg), default_path)
+
+
+def verify_ceph_config_location(cls, ceph_conf_directory):
+    """
+    Verify ceph configuration output directory
+        - check ceph config directory exists
+    Args:
+        cls: cephadm instance object
+        ceph_conf_directory: ceph configuration directory
+    """
+    _dir = ceph_conf_directory if ceph_conf_directory else __DEFAULT_CEPH_DIR
+
+    log.info(
+        "Ceph configuration directory - default: %s , configured: %s"
+        % (__DEFAULT_CEPH_DIR, ceph_conf_directory)
+    )
+
+    if not file_or_path_exists(cls.installer, _dir):
+        raise BootStrapValidationFailure("ceph configuration directory not found")
+    log.info("Ceph Configuration Directory found")
+
+
+def verify_ceph_admin_keyring_file(cls, keyring_path):
+    """
+    Verify ceph configuration output directory
+        - check ceph.keyring file exists
+    Args:
+        cls: cephadm instance object
+        keyring_path: ceph configuration directory
+    """
+    keyring = keyring_path if keyring_path else __DEFAULT_KEYRING_PATH
+
+    log.info(
+        "Ceph keyring - default: %s , configured: %s"
+        % (__DEFAULT_KEYRING_PATH, keyring_path)
+    )
+
+    if not file_or_path_exists(cls.installer, keyring):
+        raise BootStrapValidationFailure("Ceph keyring not found")
+
+    log.info("Ceph Keyring found")
+
+
+def verify_ceph_configuration_file(cls, config_path):
+    """
+    Verify ceph configuration file
+        - check ceph.conf file exists
+    Args:
+        cls: cephadm instance object
+        config_path: ceph configuration directory
+    """
+    ceph_conf = config_path if config_path else __DEFAULT_CONF_PATH
+
+    log.info(
+        "Ceph configuration file - default: %s , configured: %s"
+        % (__DEFAULT_CONF_PATH, config_path)
+    )
+
+    if not file_or_path_exists(cls.installer, ceph_conf):
+        raise BootStrapValidationFailure("Ceph configuration file not found")
+
+    log.info("Ceph configuration file found")
+
+
+def verify_ceph_public_ssh_key(cls, ssh_key_path):
+    """
+    Verify ceph configuration file
+        - check ssh ceph.pub file exists
+    Args:
+        cls: cephadm instance object
+        ssh_key_path: ceph configuration directory
+    """
+    ssh_key = ssh_key_path if ssh_key_path else __DEFAULT_SSH_PATH
+
+    log.info(
+        "Ceph SSH public key file - default: %s , configured: %s"
+        % (__DEFAULT_SSH_PATH, ssh_key_path)
+    )
+
+    if not file_or_path_exists(cls.installer, ssh_key):
+        raise BootStrapValidationFailure("Ceph SSH public key file not found")
+
+    log.info("Ceph SSH public key file found")
+
+
+def validate_skip_dashboard(cls, flag, response):
+    """
+    Method to validate skip dashboard
+    flag:
+        False - mgr dashboard plugin should be enabled
+        True  - mgr dashboard plugin be disabled
+    Args:
+        cls: cephadm instance
+        flag: skip-dashboard bootstrap option
+        response: bootstrap command response
+    """
+    out, _ = cls.shell(args=["ceph", "mgr", "module", "ls"])
+    dashboard = "dashboard" in json.loads(out)["enabled_modules"]
+    log.info(
+        "skip-dashboard Enabled : %s, Dashboard configured: %s" % (flag, dashboard)
+    )
+
+    # skip-dashboard = True , dashboard = False(should be), flag == dashboard >> False
+    # skip-dashboard = False, dashboard = True(should be) , flag == dashboard >> False
+    # If (flag == dashboard) >> True, then skip dashboard failed.
+    if flag == dashboard:
+        raise BootStrapValidationFailure("skip dashboard validation failed")
+
+    if not flag:
+        validate_dashboard(cls, response)
+    log.info("skip-dashboard validation is successful")
+
+
 def verify_bootstrap(cls, args, response):
     """
     Verify bootstrap based on the parameter(s) provided.
@@ -236,15 +407,21 @@ def verify_bootstrap(cls, args, response):
         args: bootstrap args options
         response: console output of bootstrap
     """
-    if args.get("fsid"):
-        validate_fsid(cls, args.get("fsid"))
-    if args.get("initial-dashboard-user"):
-        validate_dashboard_user(cls, args.get("initial-dashboard-user"), response)
-    if args.get("initial-dashboard-password"):
-        validate_dashboard_passwd(cls, args.get("initial-dashboard-password"), response)
+    verify_ceph_config_location(cls, args.get("output-dir"))
+    verify_ceph_admin_keyring_file(cls, args.get("output-keyring"))
+    verify_ceph_configuration_file(cls, args.get("output-config"))
+    verify_ceph_public_ssh_key(cls, args.get("output-pub-ssh-key"))
     validate_skip_monitoring_stack(cls, args.get("skip-monitoring-stack"))
     validate_orphan_intial_daemons(cls, args.get("orphan-initial-daemons"))
-    validate_ssl_dashboard_port(cls, response, args.get("ssl-dashboard-port"))
+    if args.get("fsid"):
+        validate_fsid(cls, args.get("fsid"))
+
+    # Dashboard validations
+    validate_skip_dashboard(cls, args.get("skip-dashboard", False), response)
+    if not args.get("skip-dashboard"):
+        validate_ssl_dashboard_port(cls, response, args.get("ssl-dashboard-port"))
+        validate_dashboard_user(cls, args.get("initial-dashboard-user"), response)
+        validate_dashboard_passwd(cls, args.get("initial-dashboard-password"), response)
 
 
 def run(ceph_cluster, **kw):
@@ -290,6 +467,7 @@ def run(ceph_cluster, **kw):
         # bootstrap response through stdout & stderr are combined here
         # currently console response coming through stderr.
         args = config.get("args", {})
+        copy_ceph_configuration_files(instance, args)
         verify_bootstrap(instance, args, out + err)
     finally:
         # Get cluster state

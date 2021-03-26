@@ -18,6 +18,7 @@ globals:
         role:
           - osd
           - mon
+          - mgr
           - mds
           - node-exporter
           - alertmanager
