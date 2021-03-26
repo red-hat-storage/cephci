@@ -38,7 +38,7 @@ def add(cls, config: Dict) -> None:
 
     # Create client
     cmd = ["ceph", "auth", "get-or-create", f"{id_}"]
-    [cmd.append(f"{k} '{v}'") for k, v in config.get("caps").items()]
+    [cmd.append(f"{k} '{v}'") for k, v in config.get("caps", {}).items()]
     cnt_key, err = cls.shell(args=cmd)
 
     # Copy the keyring to client
