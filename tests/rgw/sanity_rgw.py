@@ -1,6 +1,6 @@
 import logging
 
-# from ceph.ceph import Ceph
+from utility.utils import setup_cluster_access
 
 log = logging.getLogger(__name__)
 
@@ -24,31 +24,50 @@ def run(ceph_cluster, **kw):
     Args:
         ceph_cluster (ceph.ceph.Ceph): ceph cluster
     """
-    log.info("Running test")
     config = kw.get("config")
-    log.info("Running rgw tests %s" % config.get("test-version", "v2"))
+    log.info("Running RGW test version: %s", config.get("test-version", "v2"))
+
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     run_io_verify = config.get("run_io_verify", False)
-    git_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
-    branch = " -b master"
-    git_clone = "sudo git clone " + git_url + branch
     rgw_node = rgw_ceph_object.node
-    # cleanup any existing stale test dir
-    log.info("flushing iptables")
+
+    log.info("Flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
+
     test_folder = "rgw-tests"
-    test_folder_path = "~/{test_folder}".format(test_folder=test_folder)
-    rgw_node.exec_command(cmd="sudo yum install python3 -y", check_ec=False)
-    rgw_node.exec_command(cmd="sudo rm -rf " + test_folder)
-    rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
-    rgw_node.exec_command(cmd="cd " + test_folder + " ; " + git_clone)
-    if ceph_cluster.containerized:
-        rgw_node.exec_command(cmd="sudo yum install ceph-radosgw -y")
+    test_folder_path = f"~/{test_folder}"
+    git_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+    git_clone = f"git clone {git_url} -b master"
     rgw_node.exec_command(
-        cmd="sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt".format(
-            test_folder=test_folder
-        )
+        cmd=f"sudo rm -rf {test_folder}"
+        + f" && mkdir {test_folder}"
+        + f" && cd {test_folder}"
+        + f" && {git_clone}"
     )
+
+    # Clone the repository once for the entire test suite
+    pip_cmd = "venv/bin/pip"
+    python_cmd = "venv/bin/python"
+    out, err = rgw_node.exec_command(cmd="ls -l venv", check_ec=False)
+
+    if not out.read().decode():
+        rgw_node.exec_command(
+            cmd="yum install python3 -y --nogpgcheck", check_ec=False, sudo=True
+        )
+        rgw_node.exec_command(cmd="python3 -m venv venv")
+        rgw_node.exec_command(cmd=f"{pip_cmd} install --upgrade pip")
+
+        rgw_node.exec_command(
+            cmd=f"{pip_cmd} install "
+            + f"-r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
+        )
+
+        if ceph_cluster.rhcs_version == "5.0" or ceph_cluster.containerized:
+            setup_cluster_access(ceph_cluster, rgw_node)
+            rgw_node.exec_command(
+                sudo=True, cmd="dnf install -y ceph-radosgw --nogpgcheck"
+            )
+
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
     test_version = config.get("test-version", "v2")
@@ -56,8 +75,9 @@ def run(ceph_cluster, **kw):
     config_dir = DIR[test_version]["config"]
     lib_dir = DIR[test_version]["lib"]
     timeout = config.get("timeout", 300)
+
     out, err = rgw_node.exec_command(
-        cmd="sudo python3 "
+        cmd=f"sudo {python_cmd} "
         + test_folder_path
         + script_dir
         + script_name
@@ -73,7 +93,7 @@ def run(ceph_cluster, **kw):
     if run_io_verify:
         log.info("running io verify script")
         verify_out, err = rgw_node.exec_command(
-            cmd="sudo python3 " + test_folder_path + lib_dir + "read_io_info.py",
+            cmd=f"sudo {python_cmd} " + test_folder_path + lib_dir + "read_io_info.py",
             timeout=timeout,
         )
         log.info(verify_out.read().decode())
