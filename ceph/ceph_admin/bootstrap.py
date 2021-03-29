@@ -135,5 +135,5 @@ class BootstrapMixin:
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
 
-        self.distribute_cephadm_gen_pub_key()
+        self.distribute_cephadm_gen_pub_key(args.get("output-pub-ssh-key"))
         return out, err

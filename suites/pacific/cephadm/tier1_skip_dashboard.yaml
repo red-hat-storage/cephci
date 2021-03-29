@@ -10,31 +10,31 @@
 #
 # TIER1:
 # -------
-# (1) Bootstrap cluster with options,
-#     - skip-monitoring-stack
-#     - orphan-initial-daemons
-#     - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
-#     - initial-dashboard-user: admin123
-#     - initial-dashboard-password: admin@123,
-#     - registry-json: registry.json
-#     - ssl-dashboard-port: <port-number>.
-# (2) Copy SSH keys to nodes ad Add it to cluster with address and role labels attached to it.
-# (3) Deploy services using apply option,
-#     - 3 Mon on node1, node2, node3 using placement "label:mon"
-#     - deploy MGR on node1, node2 using host placement.
+#(1) Bootstrap cluster with options,
+#     for example.,
+#     - output-dir : /root/ceph
+#     - output-keyring : /root/ceph/ceph.client.admin.keyring
+#     - output-config : /root/ceph/ceph.conf
+#     - output-pub-ssh-key : /root/ceph/ceph.pub
+#     - skip-dashboard
+#(2) Copy SSH keys to nodes ad Add it to cluster with address and role labels attached to it.
+#(3) Deploy services using apply option,
+#     - Deploy Dashboard service and verify its working.
+#     - 3 Mon on node1, node2, node3 using host placements.
+#     - MGR using placement using label(mgr).
 #     - addition of OSD's using "all-avialable-devices" option.
-#     - create FS volume 'cephfs' and MDS service on node2, node3 using label "mds".
-#     - rgw on node2, node3 with service using hosts placement.
+#     - create FS volume 'cephfs' and MDS service on node2, node3 using host placement.
+#     - RGW on node2, node3 with service Id  using label(rgw) placement.
 #     - alertmanager on node1, node2 using label "alert-manager".
 #     - grafana and prometheus on node1 using host placement with limit.
 #     - crash and node-exporter on all nodes using placement="*".
-# (4) Configure client node by adding ceph.conf and keying to node.
-# (5) Setup S3cmd tool and prepare for RGW IO on client Node.     - TODO
-# (6) Run IOs from S3cmd tool for 20 mins.                        - TODO
-# (7) Kernel Mount:                                               - TODO
-#    - Create /mnt/cephfs directory and Mount cephfs on client node.
-#       sudo mount -t ceph 10.8.128.110:6789:/ /mnt/cephfs -o name=client.0,secret=<key>
-#    - using dd command create files on /mnt/cephfs directory.
+#(4) Configure client node by adding ceph.conf and keying to node.
+#(5) Setup S3cmd tool and prepare for RGW IO on client Node.
+#(6) Run IOs from S3cmd tool for 20 mins.
+#(7) Kernel Mount:
+#     - Create /mnt/cephfs directory and Mount cephfs on client node.
+#       sudo mount -t ceph 10.8.128.110:6789:/ /mnt/cephfs -o name=client.0,secret=<secret-id>
+#     - using dd command create files on /mnt/cephfs directory.
 #===============================================================================================
 tests:
   - test:
@@ -43,8 +43,8 @@ tests:
       module: install_prereq.py
       abort-on-fail: true
   - test:
-      name: Cephadm Bootstrap with ssl-dashboard-port
-      desc: cephadm cluster bootstrap
+      name: Cephadm Bootstrap with skip-dashboard
+      desc: cephadm bootstrap with skip dashboard, output configuration files
       module: test_bootstrap.py
       polarion-id:
       config:
@@ -58,9 +58,11 @@ tests:
           initial-dashboard-user: admin123
           initial-dashboard-password: admin@123
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
-          skip-monitoring-stack: true
-          orphan-initial-daemons: true
-          ssl-dashboard-port: "8445"
+          skip-dashboard: true
+          output-dir: "/root/ceph"
+          output-keyring : "/root/ceph/ceph.client.admin.keyring"
+          output-config : "/root/ceph/ceph.conf"
+          output-pub-ssh-key : "/root/ceph/ceph.pub"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -82,15 +84,16 @@ tests:
               service: mon
               args:
                 placement:
-                  label: mon
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
           - config:
               command: apply
               service: mgr
               args:
                 placement:
-                  nodes:
-                    - node1
-                    - node2
+                  label: mgr
           - config:
               command: apply
               service: osd
@@ -113,7 +116,9 @@ tests:
                 - cephfs                        # name of the filesystem
               args:
                 placement:
-                  label: mds
+                  nodes:
+                    - node2
+                    - node3
           - config:
               command: apply
               service: rgw
@@ -123,9 +128,7 @@ tests:
                 - myrgw
               args:
                 placement:
-                  nodes:
-                    - node2
-                    - node3
+                  label: rgw
           - config:
               command: apply
               service: prometheus

@@ -13,10 +13,10 @@ class CephAdmProtocol(Protocol):
     config: Dict
     installer: CephInstaller
 
-    def read_cephadm_gen_pub_key(self):
+    def read_cephadm_gen_pub_key(self, ssh_key_path=None):
         ...
 
-    def distribute_cephadm_gen_pub_key(self, nodes=None):
+    def distribute_cephadm_gen_pub_key(self, ssh_key_path=None, nodes=None):
         ...
 
     def set_tool_repo(self):
