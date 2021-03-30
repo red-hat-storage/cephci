@@ -19,12 +19,20 @@ def testStages = ['deploy': {
                             }
                         }
                     }
-                 }, 'upgrade': {
-
-                    stage('Upgrade suite') {
-                        println "Work in progress"
+                 }, 'object': {
+                    stage('Object suite') {
+                        sleep(10)
+                        script {
+                            withEnv([
+                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                                "sutConf=conf/${cephVersion}/rgw/sanity_rgw.yaml",
+                                "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
+                                "addnArgs=--post-results --log-level debug"
+                            ]) {
+                                sharedLib.runTestSuite()
+                            }
+                        }
                     }
-
                  }]
 
 // Pipeline script entry point
