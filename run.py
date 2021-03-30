@@ -149,16 +149,19 @@ def create_nodes(
         report_portal_session.start_test_item(
             name=name, description=desc, start_time=timestamp(), item_type="STEP"
         )
+
     log.info("Destroying existing osp instances..")
     cleanup_ceph_nodes(osp_cred, instances_name)
     ceph_cluster_dict = {}
+
     log.info("Creating osp instances")
+    clients = []
     for cluster in conf.get("globals"):
         ceph_vmnodes = create_ceph_nodes(
             cluster, inventory, osp_cred, run_id, instances_name, enable_eus=enable_eus
         )
+
         ceph_nodes = []
-        clients = []
         for node in ceph_vmnodes.values():
             if node.role == "win-iscsi-clients":
                 clients.append(
@@ -181,13 +184,16 @@ def create_nodes(
                     ceph_vmnode=node,
                 )
                 ceph_nodes.append(ceph)
+
         cluster_name = cluster.get("ceph-cluster").get("name", "ceph")
         ceph_cluster_dict[cluster_name] = Ceph(cluster_name, ceph_nodes)
+
     # TODO: refactor cluster dict to cluster list
     log.info("Done creating osp instances")
     log.info("Waiting for Floating IPs to be available")
     log.info("Sleeping 15 Seconds")
     time.sleep(15)
+
     for cluster_name, cluster in ceph_cluster_dict.items():
         for instance in cluster:
             try:
@@ -198,8 +204,10 @@ def create_nodes(
                         end_time=timestamp(), status="FAILED"
                     )
                 raise
+
     if report_portal_session:
         report_portal_session.finish_test_item(end_time=timestamp(), status="PASSED")
+
     return ceph_cluster_dict, clients
 
 
@@ -221,23 +229,31 @@ def print_results(tc):
 
 
 def run(args):
+
     import urllib3
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    # Mandatory arguments
     glb_file = args["--global-conf"]
     inventory_file = args["--inventory"]
     osp_cred_file = args["--osp-cred"]
     suite_file = args["--suite"]
+
     store = args.get("--store", False)
     reuse = args.get("--reuse", None)
+
     base_url = args.get("--rhs-ceph-repo", None)
     ubuntu_repo = args.get("--ubuntu-repo", None)
     kernel_repo = args.get("--kernel-repo", None)
+
     rhbuild = args.get("--rhbuild")
+
     docker_registry = args.get("--docker-registry", None)
     docker_image = args.get("--docker-image", None)
     docker_tag = args.get("--docker-tag", None)
     docker_insecure_registry = args.get("--insecure-registry", False)
+
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster", False)
     skip_subscription = args.get("--skip-subscription", False)
@@ -245,9 +261,11 @@ def run(args):
     post_to_report_portal = args.get("--report-portal", False)
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir", "/tmp")
+
     instances_name = args.get("--instances-name")
     if instances_name:
         instances_name = instances_name.replace(".", "-")
+
     osp_image = args.get("--osp-image")
     filestore = args.get("--filestore", False)
     ec_pool_vals = args.get("--use-ec-pool", None)
@@ -256,6 +274,7 @@ def run(args):
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
     xunit_results = args.get("--xunit-results", False)
+
     enable_eus = args.get("--enable-eus", False)
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms", False)
 
@@ -284,12 +303,15 @@ def run(args):
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
+
     # Get ceph cluster version name
     with open("rhbuild.yaml") as fd:
         rhbuild_file = yaml.safe_load(fd)
+
     ceph = rhbuild_file["ceph"]
     ceph_name = None
     rhbuild_ = None
+
     try:
         ceph_name, rhbuild_ = next(
             filter(
@@ -343,6 +365,7 @@ def run(args):
         product_name = ci_message.get("product_name", None)
         product_version = ci_message.get("product_version", None)
         log.info("COMPOSE_URL = %s ", compose_url)
+
         if os.environ["TOOL"] == "pungi":
             # is a rhel compose
             log.info("trigger on CI RHEL Compose")
@@ -365,6 +388,7 @@ def run(args):
             )
             log.warning("Using Docker insecure registry setting")
             docker_insecure_registry = True
+
         if product_name == "ceph":
             # is a rhceph compose
             base_url = compose_url
@@ -375,8 +399,10 @@ def run(args):
     ceph_ansible_version = []
     distro = []
     clients = []
+
     if inventory.get("instance").get("create"):
         distro.append(inventory.get("instance").get("create").get("image-name"))
+
     for cluster in conf.get("globals"):
         if cluster.get("ceph-cluster").get("inventory"):
             cluster_inventory_path = os.path.abspath(
@@ -388,9 +414,11 @@ def run(args):
                 cluster_inventory.get("instance").get("create").get("image-name")
             )
             distro.append(image_name.replace(".iso", ""))
+
         # get COMPOSE ID and ceph version
         id = requests.get(base_url + "/COMPOSE_ID")
         compose_id = id.text
+
         if "rhel" in image_name.lower():
             ceph_pkgs = requests.get(base_url + "/compose/Tools/x86_64/os/Packages/")
             m = re.search(r"ceph-common-(.*?).x86", ceph_pkgs.text)
@@ -481,7 +509,9 @@ def run(args):
         )
 
     def fetch_test_details(var) -> dict:
-        """Accepts the test and then provides the parameters of that test as a list
+        """
+        Accepts the test and then provides the parameters of that test as a list.
+
         :param var: the test collected from the suite file
         :return: Returns a dictionary of the various test params
         """
@@ -597,8 +627,10 @@ def run(args):
         mod_file_name = os.path.splitext(test_file)[0]
         test_mod = importlib.import_module(mod_file_name)
         print("\nRunning test: {test_name}".format(test_name=tc["name"]))
+
         if tc.get("log-link"):
             print("Test logfile location: {log_url}".format(log_url=tc["log-link"]))
+
         log.info("Running test %s", test_file)
         start = datetime.datetime.now()
         for cluster_name in test.get("clusters", ceph_cluster_dict):
@@ -606,24 +638,31 @@ def run(args):
                 config = test.get("clusters").get(cluster_name).get("config", {})
             else:
                 config = test.get("config", {})
+
             if not config.get("base_url"):
                 config["base_url"] = base_url
+
             config["rhbuild"] = rhbuild
             if "ubuntu_repo" in locals():
                 config["ubuntu_repo"] = ubuntu_repo
+
             if skip_setup is True:
                 config["skip_setup"] = True
+
             if skip_subscription is True:
                 config["skip_subscription"] = True
+
             if args.get("--add-repo"):
                 repo = args.get("--add-repo")
                 if repo.startswith("http"):
                     config["add-repo"] = repo
+
             config["enable_eus"] = enable_eus
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry
             config["skip_version_compare"] = skip_version_compare
             config["container_image"] = None
+
             if ignore_latest_nightly_container:
                 config["container_image"] = "%s/%s:%s" % (
                     docker_registry,
@@ -651,8 +690,10 @@ def run(args):
                     config.get("ansi_config")["ceph_docker_registry"] = str(
                         docker_registry
                     )
+
                 if docker_image:
                     config.get("ansi_config")["ceph_docker_image"] = str(docker_image)
+
                 if docker_tag:
                     config.get("ansi_config")["ceph_docker_image_tag"] = str(docker_tag)
                 cluster_docker_registry = config.get("ansi_config").get(
@@ -664,6 +705,7 @@ def run(args):
                 cluster_docker_tag = config.get("ansi_config").get(
                     "ceph_docker_image_tag"
                 )
+
                 if cluster_docker_registry:
                     cluster_docker_registry = config.get("ansi_config").get(
                         "ceph_docker_registry"
@@ -674,6 +716,7 @@ def run(args):
                             docker_registry=cluster_docker_registry
                         )
                     )
+
                 if cluster_docker_image:
                     cluster_docker_image = config.get("ansi_config").get(
                         "ceph_docker_image"
@@ -684,6 +727,7 @@ def run(args):
                             docker_image=cluster_docker_image
                         )
                     )
+
                 if cluster_docker_tag:
                     cluster_docker_tag = config.get("ansi_config").get(
                         "ceph_docker_image_tag"
@@ -704,16 +748,21 @@ def run(args):
                     )
             if filestore:
                 config["filestore"] = filestore
+
             if ec_pool_vals:
                 config["ec-pool-k-m"] = ec_pool_vals
+
             if args.get("--hotfix-repo"):
                 hotfix_repo = args.get("--hotfix-repo")
                 if hotfix_repo.startswith("http"):
                     config["hotfix_repo"] = hotfix_repo
+
             if kernel_repo is not None:
                 config["kernel-repo"] = kernel_repo
+
             if osp_cred:
                 config["osp_cred"] = osp_cred
+
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
@@ -735,6 +784,13 @@ def run(args):
                         message="Polarion ID: {}".format(tc["polarion-id"]),
                         level="INFO",
                     )
+
+                # Initialize the cluster with the expected rhcs_version hence the
+                # precedence would be from test suite.
+                # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
+                _rhcs_version = test.get("ceph_rhcs_version", rhbuild[:3])
+                ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
+
                 rc = test_mod.run(
                     ceph_cluster=ceph_cluster_dict[cluster_name],
                     ceph_nodes=ceph_cluster_dict[cluster_name],
@@ -755,6 +811,7 @@ def run(args):
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
             if rc != 0:
                 break
+
         elapsed = datetime.datetime.now() - start
         tc["duration"] = elapsed
         if rc == 0:
@@ -762,8 +819,10 @@ def run(args):
             msg = "Test {} passed".format(test_mod)
             log.info(msg)
             print(msg)
+
             if post_to_report_portal:
                 service.finish_test_item(end_time=timestamp(), status="PASSED")
+
             if post_results:
                 post_to_polarion(tc=tc)
         else:
@@ -772,16 +831,21 @@ def run(args):
             log.info(msg)
             print(msg)
             jenkins_rc = 1
+
             if post_to_report_portal:
                 service.finish_test_item(end_time=timestamp(), status="FAILED")
+
             if post_results:
                 post_to_polarion(tc=tc)
+
             if test.get("abort-on-fail", False):
                 log.info("Aborting on test failure")
                 tcs.append(tc)
                 break
+
         if test.get("destroy-cluster") is True:
             cleanup_ceph_nodes(osp_cred, instances_name)
+
         if test.get("recreate-cluster") is True:
             ceph_cluster_dict, clients = create_nodes(
                 conf,
@@ -793,6 +857,7 @@ def run(args):
                 enable_eus=enable_eus,
             )
         tcs.append(tc)
+
     url_base = (
         magna_url + run_dir.split("/")[-1]
         if "/ceph/cephci-jenkins" in run_dir
@@ -800,11 +865,14 @@ def run(args):
     )
     log.info("\nAll test logs located here: {base}".format(base=url_base))
     close_and_remove_filehandlers()
+
     if post_to_report_portal:
         service.finish_launch(end_time=timestamp())
         service.terminate()
+
     if xunit_results:
         create_xunit_results(suite_name, tcs, run_dir)
+
     print("\nAll test logs located here: {base}".format(base=url_base))
     print_results(tcs)
     send_to_cephci = post_results or post_to_report_portal
@@ -825,7 +893,9 @@ def run(args):
         "info": info,
         "send_to_cephci": send_to_cephci,
     }
+
     email_results(test_result=test_res)
+
     return jenkins_rc
 
 

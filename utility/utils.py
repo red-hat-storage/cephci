@@ -799,3 +799,42 @@ def get_run_status(results_list):
         if tc["status"] == "Not Executed":
             return "SETUP-FAILURE"
     return "PASSED"
+
+
+def setup_cluster_access(cluster, target) -> None:
+    """
+    Configures the target to communicate with the Ceph cluster.
+
+    The admin keyring and minimal cluster configuration is copied to the target node
+    to enable it to communicate with the provided cluster. This enables testers to use
+    a target for all communications.
+
+    Note: This is not a replacement to the client role
+
+    Args:
+        cluster:    The cluster participating in the test
+        target:     The node that needs to interact with the cluster.
+
+    Returns:
+        None
+
+    Raises:
+        CommandException    when a remote command fails to execute.
+
+    """
+    node_commands = ["yum install -y ceph-common --nogpgcheck", "mkdir -p /etc/ceph"]
+    for command in node_commands:
+        target.exec_command(sudo=True, cmd=command)
+
+    installer_node = cluster.get_nodes(role="installer")[0]
+    commands = [
+        ("cephadm shell -- ceph auth get client.admin", "/etc/ceph/ceph.keyring"),
+        ("cephadm shell -- ceph config generate-minimal-conf", "/etc/ceph/ceph.conf"),
+    ]
+
+    for command, out_file in commands:
+        out, err = installer_node.exec_command(sudo=True, cmd=command)
+        file_ = out.read().decode()
+        fh = target.remote_file(file_name=out_file, file_mode="w", sudo=True)
+        fh.write(file_)
+        fh.flush()
