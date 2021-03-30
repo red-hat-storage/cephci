@@ -56,6 +56,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--docker-image <image>]
         [--docker-tag <tag>]
         [--insecure-registry]
+        [--grafana-image]
         [--post-results]
         [--report-portal]
         [--log-level <LEVEL>]
@@ -100,6 +101,8 @@ Options:
   --docker-image <image>            Docker image, default value is taken from ansible config
   --docker-tag <tag>                Docker tag, default value is 'latest'
   --insecure-registry               Disable security check for docker registry
+  --grafana-image                   Grafana container image, Please use this option to test grafana
+                                    deployment with custom image in cephadm, or it must be avoided.
   --post-results                    Post results to polarion, needs Polarion IDs
                                     in test suite yamls. Requires config file, see README.
   --report-portal                   Post results to report portal. Requires config file, see README.
@@ -253,6 +256,7 @@ def run(args):
     docker_image = args.get("--docker-image", None)
     docker_tag = args.get("--docker-tag", None)
     docker_insecure_registry = args.get("--insecure-registry", False)
+    grafana_image = args.get("--grafana-image", None)
 
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster", False)
@@ -662,6 +666,7 @@ def run(args):
             config["docker-insecure-registry"] = docker_insecure_registry
             config["skip_version_compare"] = skip_version_compare
             config["container_image"] = None
+            config["grafana_image"] = grafana_image
 
             if ignore_latest_nightly_container:
                 config["container_image"] = "%s/%s:%s" % (

@@ -140,7 +140,20 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             self.installer.exec_command(sudo=True, cmd="yum update metadata")
             self.installer.exec_command(sudo=True, cmd="yum update -y cephadm")
 
-        self.installer.exec_command(cmd="rpm -qa | grep cephadm")
+        fp, _ = self.installer.exec_command(cmd="which cephadm")
+
+        def update_source_code(node, file, image, search_str):
+            cmd_ = f"sed -i 's/^{search_str}.*=.*/{search_str} = \"{image}\"/' {file}"
+            node.exec_command(cmd=cmd_, sudo=True)
+
+        # On custom grafana image, update cephadm source code
+        if self.config.get("grafana_image"):
+            update_source_code(
+                self.installer,
+                fp.read().decode().strip(),
+                self.config["grafana_image"],
+                "DEFAULT_GRAFANA_IMAGE",
+            )
 
     def get_cluster_state(self, commands):
         """
