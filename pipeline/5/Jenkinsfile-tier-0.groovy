@@ -6,13 +6,13 @@
 def nodeName = "centos-7"
 def cephVersion = "pacific"
 def sharedLib
-def testStages = ['deploy': {
+def testStages = ['cephadm': {
                     stage('Deployment suite') {
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
-                                "testSuite=suites/${cephVersion}/cephadm/cephadm_deploy.yaml",
+                                "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
                                 "addnArgs=--post-results --log-level DEBUG"
                             ]) {
                                 sharedLib.runTestSuite()
