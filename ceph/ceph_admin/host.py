@@ -63,15 +63,15 @@ class Host(Orch):
         node = args.pop("node")
         ceph_node = get_node_by_id(self.cluster, node_name=node)
 
+        if not ceph_node:
+            raise ResourceNotFoundError(f"No matching resource found: {node}")
+
         # Skipping client node, if only client label is attached
         if (
             len(ceph_node.role.role_list) == 1
             and ["client"] == ceph_node.role.role_list
         ):
             return
-
-        if not ceph_node:
-            raise ResourceNotFoundError(f"No matching resource found: {node}")
 
         attach_address = args.get("attach_ip_address")
         _labels = args.get("labels")
