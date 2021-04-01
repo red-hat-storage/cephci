@@ -72,6 +72,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--xunit-results]
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
+        [--grafana-image <image-name>]
   run.py --cleanup=name [--osp-cred <file>]
         [--log-level <LEVEL>]
 
@@ -96,27 +97,39 @@ Options:
   --reuse <file>                    use the stored vm state for rerun
   --skip-cluster                    skip cluster creation from ansible/ceph-deploy
   --skip-subscription               skip subscription manager if using beta rhel images
-  --docker-registry <registry>      Docker registry, default value is taken from ansible config
-  --docker-image <image>            Docker image, default value is taken from ansible config
+  --docker-registry <registry>      Docker registry, default value is taken from ansible
+                                    config
+  --docker-image <image>            Docker image, default value is taken from ansible
+                                    config
   --docker-tag <tag>                Docker tag, default value is 'latest'
   --insecure-registry               Disable security check for docker registry
   --post-results                    Post results to polarion, needs Polarion IDs
-                                    in test suite yamls. Requires config file, see README.
-  --report-portal                   Post results to report portal. Requires config file, see README.
+                                    in test suite yamls. Requires config file, see
+                                    README.
+  --report-portal                   Post results to report portal. Requires config file,
+                                    see README.
   --log-level <LEVEL>               Set logging level
   --log-dir <LEVEL>                 Set log directory [default: /tmp]
   --instances-name <name>           Name that will be used for instances creation
-  --osp-image <image>               Image for osp instances, default value is taken from conf file
+  --osp-image <image>               Image for osp instances, default value is taken from
+                                    conf file
   --filestore                       To specify filestore as osd object store
   --use-ec-pool <k,m>               To use ec pools instead of replicated pools
   --hotfix-repo <repo>              To run sanity on hotfix build
   --ignore-latest-container         Skip getting latest nightly container
-  --skip-version-compare            Skip verification that ceph versions change post upgrade
+  --skip-version-compare            Skip verification that ceph versions change post
+                                    upgrade
   -c --custom-config <name>=<value> Add a custom config key/value to ceph_conf_overrides
   --custom-config-file <file>       Add custom config yaml to ceph_conf_overrides
-  --xunit-results                   Create xUnit result file for test suite run [default: false]
-  --enable-eus                      Enables EUS rpms on EUS suppored distro [default: false]
-  --skip-enabling-rhel-rpms         skip adding rpms from subscription if using beta rhel images for Interop runs
+  --xunit-results                   Create xUnit result file for test suite run
+                                    [default: false]
+  --enable-eus                      Enables EUS rpms on EUS suppored distro
+                                    [default: false]
+  --skip-enabling-rhel-rpms         skip adding rpms from subscription if using beta
+                                    rhel images for Interop runs
+  --grafana-image <image_name>      Development purpose - provide custom grafana image
+                                    in conjunction with --skip-monitoring-stack during
+                                    cluster bootstrap via CephADM
 """
 log = logging.getLogger(__name__)
 root = logging.getLogger()
@@ -253,6 +266,7 @@ def run(args):
     docker_image = args.get("--docker-image", None)
     docker_tag = args.get("--docker-tag", None)
     docker_insecure_registry = args.get("--insecure-registry", False)
+    custom_grafana_image = args.get("--grafana-image", None)
 
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster", False)
@@ -762,6 +776,9 @@ def run(args):
 
             if osp_cred:
                 config["osp_cred"] = osp_cred
+
+            if custom_grafana_image:
+                config["grafana_image"] = custom_grafana_image
 
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:

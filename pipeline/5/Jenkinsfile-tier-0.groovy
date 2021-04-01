@@ -6,14 +6,14 @@
 def nodeName = "centos-7"
 def cephVersion = "pacific"
 def sharedLib
-def testStages = ['deploy': {
+def testStages = ['cephadm': {
                     stage('Deployment suite') {
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
-                                "testSuite=suites/${cephVersion}/cephadm/cephadm_deploy.yaml",
-                                "addnArgs=--post-results --log-level DEBUG"
+                                "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
+                                "addnArgs=--post-results --log-level DEBUG --grafana-image registry.redhat.io/rhceph-alpha/rhceph-5-dashboard-rhel8:latest"
                             ]) {
                                 sharedLib.runTestSuite()
                             }
@@ -21,7 +21,7 @@ def testStages = ['deploy': {
                     }
                  }, 'object': {
                     stage('Object suite') {
-                        sleep(10)
+                        sleep(180)
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
@@ -63,7 +63,7 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "MINUTES", time: 60) {
+    timeout(unit: "MINUTES", time: 120) {
         parallel testStages
     }
 

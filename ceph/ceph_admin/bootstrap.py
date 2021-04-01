@@ -136,4 +136,13 @@ class BootstrapMixin:
         logger.error("Bootstrap error: %s", err)
 
         self.distribute_cephadm_gen_pub_key(args.get("output-pub-ssh-key"))
+
+        # The provided image is used by Grafana service only when
+        # --skip-monitoring-stack is set to True during bootstrap.
+        if self.config.get("grafana_image"):
+            cmd = "cephadm shell --"
+            cmd += " ceph config set mgr mgr/cephadm/container_image_grafana"
+            cmd += f" {self.config['grafana_image']}"
+            self.installer.exec_command(sudo=True, cmd=cmd)
+
         return out, err

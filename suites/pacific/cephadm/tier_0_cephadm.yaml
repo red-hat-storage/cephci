@@ -33,6 +33,7 @@ tests:
         service: host
         command: add
         args:                     # arguments to ceph orch
+          attach_ip_address: true
           node: node2
       destroy-cluster: false
       abort-on-fail: true
@@ -186,7 +187,7 @@ tests:
             - node6
             - node7
             - node8
-          attach_ip_address: false
+          attach_ip_address: true
           labels: apply-all-labels
       destroy-cluster: false
       abort-on-fail: true
