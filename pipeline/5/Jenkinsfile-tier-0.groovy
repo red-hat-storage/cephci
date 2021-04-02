@@ -33,6 +33,20 @@ def testStages = ['cephadm': {
                             }
                         }
                     }
+                 }, 'block': {
+                    stage('Block suite') {
+                        sleep(360)
+                        script {
+                            withEnv([
+                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                                "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
+                                "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
+                                "addnArgs=--post-results --log-level debug"
+                            ]) {
+                                sharedLib.runTestSuite()
+                            }
+                        }
+                    }
                  }]
 
 // Pipeline script entry point
@@ -75,4 +89,3 @@ node(nodeName) {
     }
 
 }
-

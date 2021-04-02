@@ -1,58 +1,84 @@
+"""
+Entry module for executing RBD test scripts from ceph-qe-scripts.
+
+This acts as a wrapper around the automation scripts in ceph-qe-scripts for cephci. The
+following things are done
+
+- Call the appropriate test script
+- Return the status code of the script.
+"""
 import logging as log
 
 
 def run(**kw):
+    """
+    Execute the test script.
+
+    Args:
+        kw: Supports the below keys
+            ceph_cluster:   Ceph object
+            config:         User configuration provided in the test suite.
+    """
     log.info("Running rbd tests")
-    ceph_nodes = kw.get("ceph_nodes")
-    rgw_client_nodes = []
-    for node in ceph_nodes:
-        if node.role == "client":
-            rgw_client_nodes.append(node)
-    git_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
-    git_clone = "git clone " + git_url
-    client_node = rgw_client_nodes[0]
-    # cleanup any existing stale test dir
+
+    ceph_cluster = kw["ceph_cluster"]
+    client_nodes = ceph_cluster.get_nodes(role="client")
+    client_node = client_nodes[0]
+
+    if not client_node:
+        log.error("Require a client node to execute the tests.")
+        return 1
+
+    # function constants
     test_folder = "rbd-tests"
-    client_node.exec_command(cmd="sudo yum -y install python3")
-    create_virtual_env = "python3 -m venv env ; source env/bin/activate"
-    del_add_folder = "sudo rm -rf " + test_folder + " ; " + "mkdir " + test_folder
-    clone_folder = "cd " + test_folder + " ; " + git_clone
-    config = kw.get("config")
-    script_name = config.get("test_name")
+    script_folder = "ceph-qe-scripts/rbd/system"
+    venv_folder = "venv"
+    python_cmd = "venv/bin/python"
+
+    git_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+    git_clone = f"git clone {git_url}"
+
+    # Cleaning up the cloned repo to avoid test residues
+    client_node.exec_command(
+        cmd=f"sudo rm -rf {test_folder}"
+        + f" ; mkdir {test_folder}"
+        + f" ; cd {test_folder}"
+        + f" ; {git_clone}"
+    )
+
+    # Optimizing the installation of prerequisites so that they are executed once
+    check_venv, err = client_node.exec_command(cmd="ls -l venv", check_ec=False)
+    if not check_venv.read().decode():
+        commands = ["sudo yum install -y python3", f"python3 -m venv {venv_folder}"]
+
+        for command in commands:
+            client_node.exec_command(cmd=command)
+
+    config = kw["config"]
+    script_name = config["test_name"]
     timeout = config.get("timeout", 1800)
+
     if config.get("ec-pool-k-m", None):
-        ec_pool_arg = " --ec-pool-k-m " + config.get("ec-pool-k-m")
+        ec_pool_arg = "--ec-pool-k-m " + config.get("ec-pool-k-m")
     else:
         ec_pool_arg = ""
-    command = (
-        "sudo python3 ~/"
-        + test_folder
-        + "/ceph-qe-scripts/rbd/system/"
-        + script_name
-        + ec_pool_arg
-    )
-    commands = (
-        create_virtual_env
-        + ";"
-        + del_add_folder
-        + ";"
-        + clone_folder
-        + ";"
-        + command
-        + "; deactivate"
-    )
-    stdout, stderr = client_node.exec_command(
-        cmd=commands, timeout=timeout, check_ec=False
-    )
-    output = stdout.read().decode()
-    if output:
-        log.info(output)
-    output = stderr.read().decode()
-    if output:
-        log.error(output)
-    ec = client_node.exit_status
-    if ec == 0:
-        log.info("{command} completed successfully".format(command=command))
+
+    command = f"{python_cmd} {test_folder}/{script_folder}/{script_name} {ec_pool_arg}"
+    out, err = client_node.exec_command(cmd=command, check_ec=False, timeout=timeout)
+
+    out = out.read().decode()
+    err = err.read().decode()
+
+    if out:
+        log.info(out)
+
+    if err:
+        log.error(err)
+
+    rc = client_node.exit_status
+    if rc == 0:
+        log.info("%s completed successfully", command)
     else:
-        log.error("{command} has failed".format(command=command))
-    return ec
+        log.error("%s has failed", command)
+
+    return rc
