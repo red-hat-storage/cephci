@@ -1378,7 +1378,7 @@ class CephNode(object):
             if exit_status == 0:
                 logger.info("Command completed successfully")
             else:
-                logger.error("Error during cmd %s, timeout %d", exit_status, timeout)
+                logger.error("Error %s during cmd, timeout %d", exit_status, timeout)
                 raise CommandFailed(
                     kw["cmd"]
                     + " Error:  "
