@@ -25,6 +25,7 @@ setup(
         "jinja2",
         "junitparser==1.4.0",
         "jinja_markdown",
+        "htmllistparse==0.5.2",
     ],
     zip_safe=True,
     include_package_data=True,

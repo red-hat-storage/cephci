@@ -86,7 +86,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
                 sudo=True, cmd="chmod 0600 /root/.ssh/authorized_keys"
             )
 
-    def set_tool_repo(self):
+    def set_tool_repo(self, repo=None):
         """Add the given repo on every node part of the cluster."""
         hotfix_repo = self.config.get("hotfix_repo")
         if hotfix_repo:
@@ -108,7 +108,11 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             base_url = self.config["base_url"]
             if not base_url.endswith("/"):
                 base_url += "/"
-            cmd = f"yum-config-manager --add-repo {base_url}compose/Tools/x86_64/os/"
+            base_url += "compose/Tools/x86_64/os/"
+            if repo:
+                # provide whole path till "/x86_64/os/"
+                base_url = repo
+            cmd = f"yum-config-manager --add-repo {base_url}"
             for node in self.cluster.get_nodes():
                 node.exec_command(sudo=True, cmd=cmd)
 

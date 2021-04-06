@@ -4,9 +4,12 @@ import os
 import re
 import time
 import traceback
+from time import mktime
 
+import requests
 import yaml
 from gevent import sleep
+from htmllistparse import fetch_listing
 from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
@@ -19,6 +22,7 @@ from .parallel import parallel
 
 log = logging.getLogger(__name__)
 RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
+DEFAULT_OSBS_SERVER = "http://file.rdu.redhat.com/~kdreyer/osbs/"
 
 
 def create_ceph_nodes(
@@ -763,3 +767,65 @@ def get_nodes_by_ids(cluster, node_names):
         if node:
             nodes.append(node)
     return nodes
+
+
+def fetch_image_builds(version):
+    """
+    Fetch ceph container image builds
+
+        1) Search Share path for ceph image under DEFAULT_OSBS_SERVER
+        2) look for particular RHCS version json files.
+        3) Sort builds based on timestamp and return builds.
+
+    todo: Fix when upgrade scenario needs image from source path
+    """
+    try:
+        cwd, c_list = fetch_listing(DEFAULT_OSBS_SERVER, timeout=60)
+        assert c_list, "Container file(s) not found"
+        c_list = [i for i in c_list if i.endswith("json")]
+
+        builds = dict()
+        for comp in c_list:
+            if version in comp.name:
+                dt = datetime.datetime.fromtimestamp(mktime(comp.modified)).timestamp()
+                builds.update({dt: comp})
+
+        builds = [builds[k] for k in sorted(builds)]
+
+        return builds
+    except AssertionError as err:
+        logging.warning(err)
+        raise AssertionError(f"Ceph Image builds not found : {DEFAULT_OSBS_SERVER}")
+
+
+def fetch_build(version, custom_build):
+    """
+    Fetch build details based on the custom build
+    Args:
+        version: rhceph version
+        custom_build:
+
+    Returns:
+        ceph image and compose
+
+    custom_build:
+        latest_build: latest ceph image to be considered
+        last_previous_build: last but one ceph image(n-1)
+
+    todo: Fix when upgrade scenario needs image from source path
+    """
+    builds = fetch_image_builds(version)
+
+    def get_build_details(build):
+        build = requests.get(f"{DEFAULT_OSBS_SERVER}{build.name}").json()
+        return build.get("compose_url"), build.get("repository")
+
+    # To fetch (N-1) ceph image and build compose
+    if custom_build == "last_previous_build":
+        if len(builds) < 2:
+            raise AssertionError("Only one Ceph Image build found, needed N-1")
+        return get_build_details(builds[-2])
+    elif custom_build == "latest_build":
+        return get_build_details(builds[-1])
+    else:
+        raise NotImplementedError

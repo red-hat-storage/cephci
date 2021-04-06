@@ -19,7 +19,7 @@ class CephAdmProtocol(Protocol):
     def distribute_cephadm_gen_pub_key(self, ssh_key_path=None, nodes=None):
         ...
 
-    def set_tool_repo(self):
+    def set_tool_repo(self, repo=None):
         ...
 
     def install(self, **kwargs: Dict) -> None:
