@@ -735,12 +735,13 @@ def get_nodes_by_id(cluster, node_names):
 
 def get_node_by_id(cluster, node_name):
     """
-    Get node object(s) by Node Id
-    Returns all nodes object list if node_names is empty,
-    else node list which matched node ID(eg., 'node1')
+    Search cluster for the first node object that matches node_name.
+
+    If this cluster has no nodes with this shortname, return None.
+
     Args:
         cluster: ceph object
-        node_name: node name list (eg., 'node1')
+        node_name: node shortname, eg., 'node1'
     Returns:
         node
     """
