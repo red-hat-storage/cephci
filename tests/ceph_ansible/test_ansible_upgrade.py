@@ -181,11 +181,24 @@ def compare_ceph_versions(pre_upgrade_versions, post_upgrade_versions):
     """
     for name, version in pre_upgrade_versions.items():
         # skipping node-exporter version check as it not supported
-        if name != "node-exporter":
-            if "installer" not in name and post_upgrade_versions[name] == version:
-                log.error("Pre upgrade version matches post upgrade version")
-                log.error("{}: {} matches".format(name, version))
-                return 1
+        if name == "node-exporter":
+            continue
+
+        # for handling rgw conatiner names during 3.x 'some-rgw' but in 4.x 'some-rgw-rgw0'
+        if version.startswith("ceph version 12") and "rgw" in name:
+            for rgw_name in post_upgrade_versions.keys():
+                if "rgw" in rgw_name and rgw_name.startswith(name):
+                    if post_upgrade_versions[rgw_name] == version:
+                        log.error("Pre upgrade version matches post upgrade version")
+                        log.error("{}: {} matches".format(name, version))
+                        return 1
+                    break
+            continue
+
+        if "installer" not in name and post_upgrade_versions[name] == version:
+            log.error("Pre upgrade version matches post upgrade version")
+            log.error("{}: {} matches".format(name, version))
+            return 1
     return 0
 
 
