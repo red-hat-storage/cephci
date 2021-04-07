@@ -1371,16 +1371,16 @@ class CephNode(object):
         try:
             stdin, stdout, stderr = ssh().exec_command(kw["cmd"], timeout=timeout)
         except SSHException as e:
-            logger.error("Exception during cmd %s", str(e))
-            if "Timeout openning channel" in str(e):
-                logger.error("channel reset error")
-        exit_status = stdout.channel.recv_exit_status()
+            logger.error("SSHException during cmd: %s", str(e))
+        exit_status = None
+        if stdout is not None:
+            exit_status = stdout.channel.recv_exit_status()
         self.exit_status = exit_status
         if kw.get("check_ec", True):
             if exit_status == 0:
                 logger.info("Command completed successfully")
             else:
-                logger.error("Error during cmd %s, timeout %d", exit_status, timeout)
+                logger.error("Error %s during cmd, timeout %d", exit_status, timeout)
                 raise CommandFailed(
                     kw["cmd"]
                     + " Error:  "
