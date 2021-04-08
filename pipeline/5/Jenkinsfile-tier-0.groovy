@@ -3,7 +3,7 @@
 */
 // Global variables section
 
-def nodeName = "centos-7"
+def nodeName = "rhel-8-medium"
 def cephVersion = "pacific"
 def sharedLib
 def testStages = ['cephadm': {

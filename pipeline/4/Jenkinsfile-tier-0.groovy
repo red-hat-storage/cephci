@@ -2,7 +2,7 @@
     Pipeline script for executing Tier 0 test suites for RH Ceph 4.x.
 */
 // Global variables section
-def nodeName = "centos-7"
+def nodeName = "rhel-8-medium"
 def cephVersion = "nautilus"
 def sharedLib
 def testStages = ['sanity_rpm': {
