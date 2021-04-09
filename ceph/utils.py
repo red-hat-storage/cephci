@@ -707,15 +707,32 @@ def get_disk_info(node):
 
 def get_node_by_id(cluster, node_name):
     """
-    Search cluster for the first node object that matches node_name.
+    Fetch node using provided node substring
 
-    If this cluster has no nodes with this shortname, return None.
+    As per the naming convention used at VM creation, where each node.shortname
+    is framed with hyphen("-") separated string as below, please refer
+    ceph.utils.create_ceph_nodes definition
+        "ceph-<name>-node1-<roles>"
+
+        name: RHOS-D username or provided --instances-name
+        roles: roles attached to node in inventory file
+
+    In this method we use hyphen("-") appended to node_name string to try fetch exact node.
+    for example,
+        "node1" ----> "node1-"
+
+    Note: But however if node_name doesn't follow naming convention as mentioned in
+    inventory, the first searched node will be returned.
+    for example,
+        "node" ----> it might return any node which matched first, like node11.
+
+    return None, If this cluster has no nodes with this substring.
 
     Args:
         cluster: ceph object
-        node_name: node shortname, eg., 'node1'
+        node_name: node1        # try to use node<Id>
     Returns:
-        node
+        node instance (CephVMNode)
     """
     # Append "-" as per naming convention used at instance creation
     if not node_name.endswith("-"):
@@ -728,19 +745,18 @@ def get_node_by_id(cluster, node_name):
 
 def get_nodes_by_ids(cluster, node_names):
     """
-    Get node object(s) by Node Id
+    Fetch nodes using provided substring of nodes
 
-    Returns all nodes object list if node_names is empty,
-    else node list which matched node ID(eg., 'node1')
+    Returns node list which matched node ID(eg., 'node1')
+    else all nodes object list if node_names is empty.
 
     Args:
         cluster: ceph object
         node_names: node name list (eg., ['node1'])
 
     Returns:
-        node_list: list nodes
+        node_list: list of nodes
     """
-    # Empty list wll pick all cluster nodes
     if not node_names:
         return cluster.get_nodes()
 
