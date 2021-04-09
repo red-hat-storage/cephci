@@ -705,7 +705,24 @@ def get_disk_info(node):
     return disks
 
 
-def get_nodes_by_id(cluster, node_names):
+def get_node_by_id(cluster, node_name):
+    """
+    Search cluster for the first node object that matches node_name.
+
+    If this cluster has no nodes with this shortname, return None.
+
+    Args:
+        cluster: ceph object
+        node_name: node shortname, eg., 'node1'
+    Returns:
+        node
+    """
+    for node in cluster.get_nodes():
+        if node_name in node.shortname:
+            return node
+
+
+def get_nodes_by_ids(cluster, node_names):
     """
     Get node object(s) by Node Id
 
@@ -731,20 +748,3 @@ def get_nodes_by_id(cluster, node_names):
             for name in nodes
             if name in node.shortname
         ]
-
-
-def get_node_by_id(cluster, node_name):
-    """
-    Search cluster for the first node object that matches node_name.
-
-    If this cluster has no nodes with this shortname, return None.
-
-    Args:
-        cluster: ceph object
-        node_name: node shortname, eg., 'node1'
-    Returns:
-        node
-    """
-    for node in cluster.get_nodes():
-        if node_name in node.shortname:
-            return node
