@@ -717,6 +717,10 @@ def get_node_by_id(cluster, node_name):
     Returns:
         node
     """
+    # Append "-" as per naming convention used at instance creation
+    if not node_name.endswith("-"):
+        node_name += "-"
+
     for node in cluster.get_nodes():
         if node_name in node.shortname:
             return node
@@ -736,15 +740,13 @@ def get_nodes_by_ids(cluster, node_names):
     Returns:
         node_list: list nodes
     """
-    nodes = node_names if isinstance(node_names, list) else [node_names]
-
     # Empty list wll pick all cluster nodes
-    if not nodes:
+    if not node_names:
         return cluster.get_nodes()
-    else:
-        return [
-            node
-            for node in cluster.get_nodes()
-            for name in nodes
-            if name in node.shortname
-        ]
+
+    nodes = []
+    for name in node_names:
+        node = get_node_by_id(cluster, name)
+        if node:
+            nodes.append(node)
+    return nodes
