@@ -8,7 +8,7 @@ This is a mixin object and can be applied to the supported service classes.
 """
 from typing import Dict
 
-from ceph.utils import get_nodes_by_id
+from ceph.utils import get_nodes_by_ids
 
 from .common import config_dict_to_string
 from .typing_ import ServiceProtocol
@@ -100,7 +100,7 @@ class ApplyMixin:
                     placement_str += '"%s"' % nodes
                     verify_service = False
                 else:
-                    nodes_ = get_nodes_by_id(self.cluster, nodes)
+                    nodes_ = get_nodes_by_ids(self.cluster, nodes)
                     node_names = [node.shortname for node in nodes_]
 
                     sep = placement.get("sep", " ")
