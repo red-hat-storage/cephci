@@ -734,12 +734,8 @@ def get_node_by_id(cluster, node_name):
     Returns:
         node instance (CephVMNode)
     """
-    # Append "-" as per naming convention used at instance creation
-    if not node_name.endswith("-"):
-        node_name += "-"
-
     for node in cluster.get_nodes():
-        if node_name in node.shortname:
+        if node_name == node.shortname or f"{node_name}-" in node.shortname:
             return node
 
 
