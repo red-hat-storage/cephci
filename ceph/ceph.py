@@ -1120,7 +1120,7 @@ class SSHConnectionManager(object):
                 )
                 break
             except Exception as e:
-                logger.warning("Connection outage: \n{error}".format(error=e))
+                logger.warning(f"Connection outage to {self.ip_address}: \n{e}")
                 if not self.__outage_start_time:
                     self.__outage_start_time = datetime.datetime.now()
                 if (
