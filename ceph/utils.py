@@ -66,6 +66,7 @@ def create_ceph_nodes(
 
         with parallel() as p:
             for node in range(1, 100):
+                sleep(5 * node)
                 node = "node" + str(node)
                 if not ceph_cluster.get(node):
                     break

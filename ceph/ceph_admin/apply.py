@@ -122,12 +122,16 @@ class ApplyMixin:
         if args:
             base_cmd.append(config_dict_to_string(args))
 
-        self.shell(args=base_cmd)
+        out, err = self.shell(args=base_cmd)
+
+        if not out:
+            raise OrchApplyServiceFailure(self.SERVICE_NAME)
+
+        # out value is "Scheduled <service_name> update..."
+        service_name = out.split()[1]
+
         if not verify_service:
             return
 
-        if not self.check_service_exists(
-            service_name=self.SERVICE_NAME,
-            ids=node_names,
-        ):
+        if not self.check_service_exists(service_name=service_name):
             raise OrchApplyServiceFailure(self.SERVICE_NAME)

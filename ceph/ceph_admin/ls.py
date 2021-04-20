@@ -40,23 +40,8 @@ class LSMixin:
 
         cmd.append("ls")
 
-        args = None
         if config and config.get("args"):
             args = config.get("args")
-
-        if args:
-            # Export key has to be dealt differently
-            export_ = args.pop("export")
-            refresh = args.pop("refresh")
-
-            # Ideally, there is only one argument along
-            for key, value in args:
-                cmd.append(value)
-
-            if export_:
-                cmd.append("--export")
-
-            if refresh:
-                cmd.append("--refresh")
+            cmd.append(config_dict_to_string(args))
 
         return self.shell(args=cmd)

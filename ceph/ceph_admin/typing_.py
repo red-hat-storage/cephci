@@ -54,7 +54,7 @@ class OrchProtocol(CephAdmProtocol, Protocol):
         ...
 
     def check_service_exists(
-        self, service_name: str, ids: List[str], timeout: int = 300, interval: int = 5
+        self, service_name: str, timeout: int = 300, interval: int = 5
     ) -> bool:
         ...
 

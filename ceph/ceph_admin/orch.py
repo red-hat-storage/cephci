@@ -7,7 +7,6 @@ import logging
 from datetime import datetime, timedelta
 from json import loads
 from time import sleep
-from typing import List
 
 from ceph.ceph import ResourceNotFoundError
 
@@ -36,14 +35,13 @@ class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
         return [node for node in loads(out) if label in node.get("labels")]
 
     def check_service_exists(
-        self, service_name: str, ids: List[str], timeout: int = 300, interval: int = 5
+        self, service_name: str, timeout: int = 300, interval: int = 5
     ) -> bool:
         """
         Verify the provided service is running for the given list of ids.
 
         Args:
             service_name:   The name of the service to be checked.
-            ids:            The list of daemons to be checked for that service.
             timeout:        In seconds, the maximum allowed time. By default 5 minutes
             interval:      In seconds, the polling interval time.
 
@@ -51,33 +49,26 @@ class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
             True if the service and the list of daemons are running else False.
         """
         end_time = datetime.now() + timedelta(seconds=timeout)
+        check_status_dict = {
+            "base_cmd_args": {"format": "json"},
+            "args": {"service_name": service_name, "refresh": True},
+        }
 
         while end_time > datetime.now():
             sleep(interval)
-            out, err = self.ps({"base_cmd_args": {"format": "json"}})
-            out = loads(out)
-            daemons = [d for d in out if d.get("daemon_type") == service_name]
+            out, err = self.ls(check_status_dict)
+            out = loads(out)[0]
+            running = out["status"]["running"]
+            count = out["status"]["size"]
 
-            count = 0
-            for _id in ids:
-                for daemon in daemons:
-                    if (
-                        _id in daemon["daemon_id"]
-                        and daemon["status_desc"] == "running"
-                    ):
-                        count += 1
+            LOG.info("%s/%s %s daemon(s) up... retrying", running, count, service_name)
 
-            LOG.info("%s/%s %s daemon(s) up... retrying", count, len(ids), service_name)
-
-            if count == len(ids):
+            if count == running:
                 return True
 
         # Identify the failure
-        out, err = self.ls({"base_cmd_args": {"format": "json"}})
-        for item in loads(out):
-            if service_name in item.get("service_type"):
-                LOG.error("Service status(es): %s", item)
-                LOG.error("Service event(s): %s", item["events"])
+        out, err = self.ls(check_status_dict)
+        LOG.error(f"{service_name} failed with \n{out[0]['events']}")
 
         return False
 
