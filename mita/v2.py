@@ -176,6 +176,7 @@ class CephVMNodeV2:
                 image=image,
                 size=vm_size,
                 ex_userdata=cloud_data,
+                ex_config_drive=True,
                 networks=vm_network,
             )
 
