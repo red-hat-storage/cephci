@@ -6,6 +6,7 @@ Module to deploy ceph role service(s) using orchestration command
 
 This is a mixin object and can be applied to the supported service classes.
 """
+import re
 from typing import Dict
 
 from ceph.utils import get_nodes_by_ids
@@ -128,7 +129,7 @@ class ApplyMixin:
             raise OrchApplyServiceFailure(self.SERVICE_NAME)
 
         # out value is "Scheduled <service_name> update..."
-        service_name = out.split()[1]
+        service_name = re.search(r"Scheduled\s(.*)\supdate", out).group(1)
 
         if not verify_service:
             return
