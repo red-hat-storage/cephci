@@ -29,7 +29,21 @@ def run(ceph_cluster, **kw):
 
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     run_io_verify = config.get("run_io_verify", False)
+    extra_pkgs = config.get("extra-pkgs")
     rgw_node = rgw_ceph_object.node
+    distro_version_id = rgw_node.distro_info["VERSION_ID"]
+
+    # install extra package which are test specific
+    if extra_pkgs:
+        log.info(f"got extra pkgs: {extra_pkgs}")
+        if isinstance(extra_pkgs, dict):
+            _pkgs = extra_pkgs.get(int(distro_version_id[0]))
+            pkgs = " ".join(_pkgs)
+        else:
+            pkgs = " ".join(extra_pkgs)
+        rgw_node.exec_command(
+            sudo=True, cmd=f"dnf install -y {pkgs}", long_running=True
+        )
 
     log.info("Flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
