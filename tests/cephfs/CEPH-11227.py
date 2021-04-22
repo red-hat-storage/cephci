@@ -63,6 +63,9 @@ def run(ceph_cluster, **kw):
             log.info("Activate multiple mdss successfully")
         else:
             raise CommandFailed("Activate multiple mdss failed")
+        client1[0].exec_command(
+            sudo=True, cmd="mkdir %s%s" % (client_info["mounting_dir"], dir_name)
+        )
         with parallel() as p:
             p.spawn(
                 fs_util.read_write_IO,
@@ -81,7 +84,7 @@ def run(ceph_cluster, **kw):
                 "",
                 0,
                 2,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(
                 fs_util.stress_io,
@@ -90,7 +93,7 @@ def run(ceph_cluster, **kw):
                 "",
                 0,
                 2,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(
                 fs_util.read_write_IO,

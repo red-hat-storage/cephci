@@ -182,7 +182,7 @@ def run(ceph_cluster, **kw):
                 "",
                 0,
                 1,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(
                 fs_util.read_write_IO,
@@ -278,7 +278,7 @@ def run(ceph_cluster, **kw):
                 "",
                 0,
                 1,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(
                 fs_util.read_write_IO,

@@ -96,9 +96,11 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 1,
-                iotype="crefi",
+                iotype="smallfile",
             )
+
         for node in client_info["mds_nodes"]:
+
             rc = fs_util.heartbeat_map(node)
             if rc == 0:
                 log.info("heartbeat_map entry not found")
@@ -144,8 +146,9 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 1,
-                iotype="crefi",
+                iotype="smallfile",
             )
+
         log.info("Test completed for CEPH-11262")
         log.info("Cleaning up!-----")
         if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
@@ -155,6 +158,7 @@ def run(ceph_cluster, **kw):
                 client_info["mounting_dir"],
                 "umount",
             )
+
         else:
             rc = fs_util.client_clean_up(
                 client_info["fuse_clients"], "", client_info["mounting_dir"], "umount"

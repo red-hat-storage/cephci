@@ -76,6 +76,10 @@ def run(ceph_cluster, **kw):
         else:
             log.error("Activate multiple mdss failed")
             return 1
+        client1[0].exec_command(
+            sudo=True,
+            cmd=f"mkdir {client_info['mounting_dir']}{dir_name}",
+        )
         with parallel() as p:
             p.spawn(
                 fs_util.read_write_IO,
@@ -94,7 +98,7 @@ def run(ceph_cluster, **kw):
                 dir_name,
                 0,
                 2,
-                iotype="crefi",
+                iotype="smallfile",
             )
             p.spawn(
                 fs_util.read_write_IO,
@@ -153,7 +157,7 @@ def run(ceph_cluster, **kw):
                     dirs[2],
                     0,
                     1,
-                    iotype="crefi",
+                    iotype="smallfile",
                 )
                 for op in p:
                     return_counts, rc = op
@@ -242,7 +246,7 @@ def run(ceph_cluster, **kw):
             result = fs_util.rc_verify(tc, return_counts)
             if cluster_health_beforeIO == cluster_health_afterIO:
                 print(result)
-            print("-----------------------------------------")
+
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -280,9 +284,9 @@ def run(ceph_cluster, **kw):
                     dirs[0],
                     0,
                     1,
-                    iotype="crefi",
+                    iotype="smallfile",
                 )
-            print("-------------------------------------------------------")
+
             with parallel() as p:
                 p.spawn(
                     fs_util.read_write_IO,
@@ -290,7 +294,7 @@ def run(ceph_cluster, **kw):
                     client_info["mounting_dir"],
                     "g",
                     "read",
-                    dir_name=dirs[0],
+                    dir_name=dirs[2],
                 )
                 p.spawn(
                     fs_util.read_write_IO,
@@ -300,7 +304,7 @@ def run(ceph_cluster, **kw):
                     "read",
                     dir_name=dirs[0],
                 )
-            print("-------------------------------------------------------")
+
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -338,9 +342,9 @@ def run(ceph_cluster, **kw):
                     dirs[0],
                     0,
                     1,
-                    iotype="crefi",
+                    iotype="smallfile",
                 )
-            print("-------------------------------------------------------")
+
             with parallel() as p:
                 p.spawn(
                     fs_util.read_write_IO,
@@ -358,7 +362,7 @@ def run(ceph_cluster, **kw):
                     "read",
                     dir_name=dirs[0],
                 )
-            print("-------------------------------------------------------")
+
             log.info("Cleaning up!-----")
             if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
                 rc = fs_util.client_clean_up(
