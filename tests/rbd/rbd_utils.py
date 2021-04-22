@@ -1,6 +1,7 @@
 import logging
 import random
 import string
+from time import sleep
 
 from ceph.ceph import CommandFailed
 
@@ -88,10 +89,20 @@ class Rbd:
     def clean_up(self, **kw):
         if kw.get("dir_name"):
             self.exec_cmd(cmd="rm -rf {}".format(kw.get("dir_name")))
+
         if kw.get("pools"):
             pool_list = kw.get("pools")
             if self.datapool:
                 pool_list.append(self.datapool)
+
+            # mon_allow_pool_delete must be True for removing pool
+            if self.ceph_version == 5:
+                self.exec_cmd(cmd="ceph config set mon mon_allow_pool_delete true")
+                self.exec_cmd(cmd="ceph orch restart mon")
+
+                # ToDo: Unable to confirm service restart
+                sleep(60)
+
             for pool in pool_list:
                 self.exec_cmd(
                     cmd="ceph osd pool delete {pool} {pool} "
