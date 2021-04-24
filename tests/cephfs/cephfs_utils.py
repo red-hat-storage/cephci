@@ -148,7 +148,9 @@ class FsUtils(object):
                 if "fuse-2" not in output:
                     node.exec_command(sudo=True, cmd="yum install -y fuse")
                 if "ceph-fuse" not in output:
-                    node.exec_command(sudo=True, cmd="yum install -y ceph-fuse")
+                    node.exec_command(
+                        sudo=True, cmd="yum install -y --nogpgcheck ceph-fuse"
+                    )
 
             elif node.pkg_type == "deb":
                 node.exec_command(sudo=True, cmd="pip3 install --upgrade pip3")
