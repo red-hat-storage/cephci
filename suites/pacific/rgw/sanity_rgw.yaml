@@ -1,4 +1,46 @@
 # RHCS 5.0 sanity test suite for RGW daemon.
+
+# Runs the Object Gateway tests from https://github.com/red-hat-storage/ceph-qe-scripts/tree/master/rgw
+# each script under the above repo has a yaml ( config defined ) which is actually a test
+# We are calling the script and associated yaml here.
+#
+# examples:
+# config:
+#    script-name: test_Mbuckets_with_Nobjects.py
+#    config-file-name: test_Mbuckets_with_Nobjects.yaml
+#    timeout: 300
+#
+# some of the other config option for this yamls are
+#
+# 1. To run verification of io generated.
+#  config:
+#    < script-name >
+#    < config-file-name >
+#    run_io_verify: true or false - to run
+#
+#  ---------------
+# 2. To specify any external packages to be installed for a particular test
+#  a. distro specific packages
+#  config:
+#    <script-name>
+#    <config-file-name>
+#    extra-pkgs:
+#      7:
+#        - pkg1
+#        - pkg2
+#      8:
+#        - pkg1
+#        - pkg2
+#
+#
+#  b. just list of packages which are not distro dependent
+#  config:
+#    <script-name>
+#    <config-file-name>
+#    extra-pkgs:
+#      - pkg1
+#      - pkg2
+
 tests:
   - test:
       abort-on-fail: true
@@ -54,7 +96,7 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
-  
+
   # Basic Bucket Operation Tests
   - test:
       name: Mbuckets
@@ -62,9 +104,9 @@ tests:
       polarion-id: CEPH-9789
       module: sanity_rgw.py
       config:
-          script-name: test_Mbuckets_with_Nobjects.py
-          config-file-name: test_Mbuckets.yaml
-          timeout: 300
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets.yaml
+        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects
@@ -72,9 +114,9 @@ tests:
       polarion-id: CEPH-9789
       module: sanity_rgw.py
       config:
-          script-name: test_Mbuckets_with_Nobjects.py
-          config-file-name: test_Mbuckets_with_Nobjects.yaml
-          timeout: 300
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects
@@ -91,9 +133,9 @@ tests:
       module: sanity_rgw.py
       polarion-id: CEPH-14237
       config:
-          script-name: test_Mbuckets_with_Nobjects.py
-          config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
-          timeout: 300
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects_download
@@ -101,9 +143,9 @@ tests:
       module: sanity_rgw.py
       polarion-id: CEPH-14237
       config:
-          script-name: test_Mbuckets_with_Nobjects.py
-          config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-          timeout: 300
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects with sharing enabled
@@ -111,9 +153,9 @@ tests:
       module: sanity_rgw.py
       polarion-id: CEPH-9245
       config:
-          script-name: test_Mbuckets_with_Nobjects.py
-          config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
-          timeout: 300
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
+        timeout: 300
 
   # REST API test
   - test:
@@ -134,9 +176,9 @@ tests:
       polarion-id: CEPH-11019
       module: sanity_rgw.py
       config:
-          script-name: test_swift_basic_ops.py
-          config-file-name: test_swift_basic_ops.yaml
-          timeout: 300
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+        timeout: 300
 
   # multipart test
   - test:
@@ -165,9 +207,9 @@ tests:
       polarion-id: CEPH-14264  # also applies to [CEPH-10646]
       module: sanity_rgw.py
       config:
-          script-name: test_versioning_with_objects.py
-          config-file-name: test_versioning_objects_copy.yaml
-          timeout: 300
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_copy.yaml
+        timeout: 300
 
   - test:
       name: Versioning Tests
@@ -175,9 +217,9 @@ tests:
       polarion-id: CEPH-14261, CEPH-9222  # also applies to CEPH-10652
       module: sanity_rgw.py
       config:
-          script-name: test_versioning_with_objects.py
-          config-file-name: test_versioning_objects_enable.yaml
-          timeout: 300
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_enable.yaml
+        timeout: 300
 
   - test:
       name: Versioning Tests
@@ -185,9 +227,9 @@ tests:
       polarion-id: CEPH-14263
       module: sanity_rgw.py
       config:
-          script-name: test_versioning_with_objects.py
-          config-file-name: test_versioning_objects_suspend.yaml
-          timeout: 300
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspend.yaml
+        timeout: 300
 
   - test:
       name: Versioning Tests
@@ -195,9 +237,9 @@ tests:
       polarion-id: CEPH-14262
       module: sanity_rgw.py
       config:
-          script-name: test_versioning_with_objects.py
-          config-file-name: test_versioning_objects_delete.yaml
-          timeout: 300
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_delete.yaml
+        timeout: 300
 
   - test:
       name: Versioning Tests
@@ -205,9 +247,9 @@ tests:
       polarion-id: CEPH-9199,CEPH-9223
       module: sanity_rgw.py
       config:
-          script-name: test_versioning_with_objects.py
-          config-file-name: test_versioning_objects_suspend_re-upload.yaml
-          timeout: 300
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspend_re-upload.yaml
+        timeout: 300
 
   - test:
       name: Versioning Tests
@@ -233,9 +275,9 @@ tests:
       polarion-id: CEPH-9190
       module: sanity_rgw.py
       config:
-          script-name: test_versioning_with_objects.py
-          config-file-name: test_versioning_objects_acls.yaml
-          timeout: 300
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_acls.yaml
+        timeout: 300
 
   - test:
       name: Versioning Tests
@@ -264,9 +306,9 @@ tests:
       polarion-id: CEPH-11215
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_policy_ops.py
-          config-file-name: test_bucket_policy_replace.yaml
-          timeout: 300
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_replace.yaml
+        timeout: 300
 
   - test:
       name: Bucket Policy Tests
@@ -274,9 +316,9 @@ tests:
       polarion-id: CEPH-11213
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_policy_ops.py
-          config-file-name: test_bucket_policy_delete.yaml
-          timeout: 300
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_delete.yaml
+        timeout: 300
 
   - test:
       name: Bucket Policy Tests
@@ -284,9 +326,9 @@ tests:
       polarion-id: CEPH-11214
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_policy_ops.py
-          config-file-name: test_bucket_policy_modify.yaml
-          timeout: 300
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_modify.yaml
+        timeout: 300
 
   # Bucket Lifecycle Tests
 
@@ -296,9 +338,9 @@ tests:
       polarion-id: CEPH-11177, CEPH-11182, CEPH-11188, CEPH-11187
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_lifecycle_object_expiration.py
-          config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
-          timeout: 300
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
+        timeout: 300
 
   - test:
       name: Bucket Lifecycle Object_expiration_tests
@@ -306,9 +348,9 @@ tests:
       polarion-id: CEPH-11179, CEPH-11180
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_lifecycle_object_expiration.py
-          config-file-name: test_lc_rule_prefix_and_tag.yaml
-          timeout: 300
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        timeout: 300
 
   - test:
       name: Bucket Lifecycle Object_expiration_tests
@@ -316,9 +358,9 @@ tests:
       polarion-id: CEPH-11185
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_lifecycle_object_expiration.py
-          config-file-name: test_lc_date.yaml
-          timeout: 300
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_date.yaml
+        timeout: 300
 
   - test:
       name: Bucket Lifecycle Object_expiration_tests
@@ -326,9 +368,9 @@ tests:
       polarion-id: CEPH-11189
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_lifecycle_object_expiration.py
-          config-file-name: test_lc_rule_delete_marker.yaml
-          timeout: 300
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_delete_marker.yaml
+        timeout: 300
 
   - test:
       name: Bucket Lifecycle Object_expiration_tests
@@ -336,9 +378,9 @@ tests:
       polarion-id: CEPH-11190
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_lifecycle_object_expiration.py
-          config-file-name: test_lc_rule_prefix_non_current_days.yaml
-          timeout: 300
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_non_current_days.yaml
+        timeout: 300
 
   - test:
       name: Bucket Lifecycle Configuration Tests
@@ -346,9 +388,9 @@ tests:
       polarion-id: CEPH-11181
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_lifecycle_config_ops.py
-          config-file-name: test_bucket_lifecycle_config_read.yaml
-          timeout: 300
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lifecycle_config_read.yaml
+        timeout: 300
 
   - test:
       name: Bucket Lifecycle Configuration Tests
@@ -388,9 +430,9 @@ tests:
       polarion-id: CEPH-9740,CEPH-9741
       module: sanity_rgw.py
       config:
-          script-name: test_multitenant_user_access.py
-          config-file-name: test_multitenant_access.yaml
-          timeout: 300
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
 
   - test:
       name: Multi Tenancy Tests
@@ -398,9 +440,9 @@ tests:
       polarion-id: CEPH-9739
       module: sanity_rgw.py
       config:
-          script-name: test_tenant_user_secret_key.py
-          config-file-name: test_tenantuser_secretkey_gen.yaml
-          timeout: 300
+        script-name: test_tenant_user_secret_key.py
+        config-file-name: test_tenantuser_secretkey_gen.yaml
+        timeout: 300
 
   # Bucket Listing Tests
   - test:
@@ -461,9 +503,9 @@ tests:
       polarion-id: CEPH-10344,CEPH-10346,CEPH-10351
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_request_payer.py
-          config-file-name: test_bucket_request_payer.yaml
-          timeout: 300
+        script-name: test_bucket_request_payer.py
+        config-file-name: test_bucket_request_payer.yaml
+        timeout: 300
 
   - test:
       name: Bucket Request Payer Tests
@@ -471,10 +513,10 @@ tests:
       polarion-id: CEPH-10347
       module: sanity_rgw.py
       config:
-          script-name: test_bucket_request_payer.py
-          config-file-name: test_bucket_request_payer_download.yaml
-          timeout: 300
-  
+        script-name: test_bucket_request_payer.py
+        config-file-name: test_bucket_request_payer_download.yaml
+        timeout: 300
+
   #resharding tests
   - test:
       name: Resharding tests
