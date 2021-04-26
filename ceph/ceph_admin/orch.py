@@ -14,11 +14,12 @@ from .ceph import CephCLI
 from .ls import LSMixin
 from .ps import PSMixin
 from .remove import RemoveMixin
+from .upgrade import UpgradeMixin
 
 LOG = logging.getLogger()
 
 
-class Orch(LSMixin, PSMixin, RemoveMixin, CephCLI):
+class Orch(LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI):
     """Represent ceph orch command."""
 
     direct_calls = ["ls", "ps"]

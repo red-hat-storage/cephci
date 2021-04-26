@@ -675,14 +675,11 @@ def run(args):
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry
             config["skip_version_compare"] = skip_version_compare
-            config["container_image"] = None
-
-            if ignore_latest_nightly_container:
-                config["container_image"] = "%s/%s:%s" % (
-                    docker_registry,
-                    docker_image,
-                    docker_tag,
-                )
+            config["container_image"] = "%s/%s:%s" % (
+                docker_registry,
+                docker_image,
+                docker_tag,
+            )
             # For cdn container installation provide GAed container parameters
             # in test suite file as below, In case cdn is not enabled the latest
             # container details will be considered.

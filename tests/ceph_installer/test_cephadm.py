@@ -102,10 +102,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                             - ceph osd pool create <pool_name> 3 3 replicated
     """
     LOG.info("Starting Ceph cluster deployment.")
-
     config = kwargs["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
-
     try:
         steps = config.get("steps", [])
         for step in steps:

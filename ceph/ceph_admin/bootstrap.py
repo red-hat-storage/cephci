@@ -73,7 +73,7 @@ class BootstrapMixin:
                 base_cmd_args:
                     verbose: true
                 args:
-                    custom_image: true | false
+                    custom_image: <image path> or <boolean>
                     mon-ip: <node_name>
                     mgr-id: <mgr_id>
                     fsid: <id>
@@ -81,21 +81,37 @@ class BootstrapMixin:
                     registry-json: <registry.url.name>
                     initial-dashboard-user: <admin123>
                     initial-dashboard-password: <admin123>
+
+        custom_image:
+          image path: compose path for example alpha build,
+            ftp://partners.redhat.com/d960e6f2052ade028fa16dfc24a827f5/rhel-8/Tools/x86_64/os/
+          boolean:
+            True: use latest image from test config
+            False: do not use latest image from test config,
+                   and also indicates usage of default image from cephadm source-code.
+
         """
         self.cluster.setup_ssh_keys()
-        self.set_tool_repo()
+        args = config.get("args")
+        custom_repo = args.pop("custom_repo", None)
+        custom_image = args.pop("custom_image", True)
+
+        if custom_repo:
+            self.set_tool_repo(repo=custom_repo)
+        else:
+            self.set_tool_repo()
+
         self.install()
 
         cmd = "cephadm"
-
         if config.get("base_cmd_args"):
             cmd += config_dict_to_string(config["base_cmd_args"])
 
-        args = config.get("args")
-        custom_image = args.pop("custom_image", True)
-
         if custom_image:
-            cmd += f" --image {self.config['container_image']}"
+            if isinstance(custom_image, str):
+                cmd += f" --image {custom_image}"
+            else:
+                cmd += f" --image {self.config['container_image']}"
 
         cmd += " bootstrap"
 
