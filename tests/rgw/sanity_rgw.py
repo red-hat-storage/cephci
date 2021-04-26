@@ -62,8 +62,12 @@ def run(ceph_cluster, **kw):
             + f"-r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
         )
 
+        # Ceph object's containerized attribute is not initialized and bound to err
+        # as a workaround for 5.x, checking if the environment is 5.0
         if ceph_cluster.rhcs_version == "5.0" or ceph_cluster.containerized:
-            setup_cluster_access(ceph_cluster, rgw_node)
+            if ceph_cluster.rhcs_version == "5.0":
+                setup_cluster_access(ceph_cluster, rgw_node)
+
             rgw_node.exec_command(
                 sudo=True, cmd="dnf install -y ceph-radosgw --nogpgcheck"
             )
