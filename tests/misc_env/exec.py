@@ -4,6 +4,8 @@ import logging
 import re
 from typing import Any, Tuple
 
+from paramiko.channel import ChannelFile
+
 from ceph.utils import get_node_by_id
 
 LOG = logging.getLogger(__name__)
@@ -27,7 +29,10 @@ def exec_command(node, **kwargs: Any) -> Tuple:
         CommandFailed   when there is an execution failure
     """
     out, err = node.exec_command(**kwargs)
-    return out.read().decode(), err.read().decode()
+
+    out = out.read().decode() if isinstance(out, ChannelFile) else out
+    err = err.read().decode() if isinstance(err, ChannelFile) else err
+    return out, err
 
 
 def translate_to_hostname(cluster, string: str) -> str:
