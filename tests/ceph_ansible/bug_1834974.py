@@ -1,22 +1,28 @@
 import logging
 import time
 
-logger = logging.getLogger(__name__)
-log = logger
+LOG = logging.getLogger(__name__)
 
 
 def run(**kw):
-    log.info("Bug 1834974")
+    LOG.info("Executing test case: Bug 1834974 verification")
     ceph_nodes = kw.get("ceph_nodes")
+
     time.sleep(180)
+
     for cnode in ceph_nodes:
         out, err = cnode.exec_command(
-            cmd="sudo df -h | grep -v shm | grep -i containers | wc -l",
-            long_running=True,
+            sudo=True,
+            cmd="df -h | grep -v shm | grep -i containers | wc -l",
         )
-        if int(out) == 0:
-            log.info("No old container directories found")
-        else:
-            log.error("Old container directories found which are consuming space")
+        out = out.read().decode()
+        err = err.read().decode()
+
+        if int(out) != 0:
+            LOG.debug(err)
+            LOG.error("Old container directories found which are consuming space")
             return 1
+
+        LOG.info("No old container directories found.")
+
     return 0
