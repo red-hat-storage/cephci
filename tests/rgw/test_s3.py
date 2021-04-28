@@ -199,8 +199,12 @@ def rgw_frontend_port(cluster: Ceph, build: str) -> str:
         cmd2 = "cut -d '=' -f 2 | cut -d ' ' -f 1"
         command = f"{cmd1} | {cmd2}"
     else:
+        # To determine the configured port, the line must start with rgw frontends
+        # in ceph.conf. An example is given below,
+        #
+        # rgw frontends = civetweb port=192.168.122.199:8080 num_threads=100
         cmd1 = "grep -e '^rgw frontends' /etc/ceph/ceph.conf"
-        cmd2 = "cut -d ':' -f 2"
+        cmd2 = "cut -d ':' -f 2 | cut -d ' ' -f 1"
         command = f"{cmd1} | {cmd2}"
 
     out, _ = node.exec_command(sudo=True, cmd=command)
