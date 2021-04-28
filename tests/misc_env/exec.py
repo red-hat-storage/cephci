@@ -35,6 +35,36 @@ def exec_command(node, **kwargs: Any) -> Tuple:
     return out, err
 
 
+def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
+    """
+    Return the string after replacing ip: <node> pattern with the IP address of <node>.
+
+    In this method, the pattern {ip:<cluster>#<node>} would be replaced with the value
+    of node.ipaddress.
+
+    Args:
+        clusters:       Ceph cluster instance
+        cluster_name:   Name of the cluster under test.
+        string:         String that needs to be searched
+
+    Return:
+        String with node IDs replaced with IP addresses
+    """
+    replaced_string = string
+    node_list = re.findall("{node_ip:(.+?)}", string)
+
+    for node in node_list:
+        node_ = node
+        if "#" in node:
+            cluster_name, node = node.split("#")
+
+        node_ip = get_node_by_id(clusters[cluster_name], node).ip_address
+        replacement_pattern = "{node_ip:" + node_ + "}"
+        replaced_string = re.sub(replacement_pattern, node_ip, replaced_string)
+
+    return replaced_string
+
+
 def translate_to_hostname(cluster, string: str) -> str:
     """
     Return the string with node ID replaced with shortname.
@@ -181,7 +211,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
 
     check_status = config.get("check_status", True)
     sudo = config.get("sudo", False)
-    long_running = True
+    long_running = config.get("long_running", False)
 
     role = kwargs.get("role", "client")
     if cephadm:
@@ -193,6 +223,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     for cmd in commands:
         # Reconstruct user values into dynamic values based on run instance
         cmd = translate_to_hostname(ceph_cluster, cmd)
+        cmd = translate_to_ip(kwargs["ceph_cluster_dict"], ceph_cluster.name, cmd)
 
         if cephadm:
             cmd = f"cephadm shell -- {cmd}"
