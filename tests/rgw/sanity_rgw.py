@@ -41,8 +41,9 @@ def run(ceph_cluster, **kw):
             pkgs = " ".join(_pkgs)
         else:
             pkgs = " ".join(extra_pkgs)
+
         rgw_node.exec_command(
-            sudo=True, cmd=f"dnf install -y {pkgs}", long_running=True
+            sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
         )
 
     log.info("Flushing iptables")
@@ -83,7 +84,7 @@ def run(ceph_cluster, **kw):
                 setup_cluster_access(ceph_cluster, rgw_node)
 
             rgw_node.exec_command(
-                sudo=True, cmd="dnf install -y ceph-radosgw --nogpgcheck"
+                sudo=True, cmd="yum install -y ceph-radosgw --nogpgcheck"
             )
 
     script_name = config.get("script-name")
