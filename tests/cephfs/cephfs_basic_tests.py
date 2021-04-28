@@ -87,9 +87,10 @@ def run(ceph_cluster, **kw):
             )
             log.info("Execution of testcase %s started" % tc1)
             out, rc = client.exec_command(
-                cmd="sudo crefi %s%s --fop create --multi -b 1000 -d 1000 "
-                "-n 1 -T 5 --random --min=1K --max=10K"
-                % (client_info["mounting_dir"], dir1),
+                sudo=True,
+                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
+                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
+                f"{client_info['mounting_dir']}{dir1}",
                 long_running=True,
             )
             log.info("Execution of testcase %s ended" % tc1)

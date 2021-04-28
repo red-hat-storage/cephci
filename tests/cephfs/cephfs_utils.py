@@ -84,7 +84,7 @@ class FsUtils(object):
                 + self.mon_node_ip[-1].strip("/0")
             )
             self.mon_node_ip = self.mon_node_ip.split(" ")
-            if build.startswith("4"):
+            if build.startswith("4") or build.startswith("5"):
                 self.mon_node_ip[0] = re.search(
                     r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
                     self.mon_node_ip[0],
@@ -562,7 +562,9 @@ class FsUtils(object):
     @staticmethod
     def nfs_ganesha_install(ceph_demon):
         if ceph_demon.pkg_type == "rpm":
-            ceph_demon.exec_command(sudo=True, cmd="yum install nfs-ganesha-ceph -y")
+            ceph_demon.exec_command(
+                sudo=True, cmd="yum install --nogpgcheck nfs-ganesha-ceph -y"
+            )
             ceph_demon.exec_command(sudo=True, cmd="systemctl start rpcbind")
             ceph_demon.exec_command(sudo=True, cmd="systemctl stop nfs-server.service")
             ceph_demon.exec_command(

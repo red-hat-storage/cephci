@@ -47,7 +47,20 @@ def testStages = ['cephadm': {
                             }
                         }
                     }
-                 }]
+                 }, 'cephfs': {
+                    stage('Cephfs Suite') {
+                        sleep(540)
+                        script {
+                            withEnv([
+                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                                "sutConf=conf/${cephVersion}/rbd/tier_0_fs.yaml",
+                                "testSuite=suites/${cephVersion}/rbd/tier_0_fs.yaml",
+                                "addnArgs=--post-results --log-level debug"
+                            ]) {
+                                sharedLib.runTestSuite()
+                            }
+                        }
+                    }]
 
 // Pipeline script entry point
 
