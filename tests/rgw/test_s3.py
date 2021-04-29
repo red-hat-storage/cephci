@@ -131,10 +131,10 @@ def execute_teardown(cluster: Ceph, build: str) -> None:
     """
     Execute the test teardown phase.
     """
-    command = "rm -r s3-tests"
+    command = "rm -rf s3-tests"
 
     node = cluster.get_nodes(role="client")[0]
-    node.exec_command(cmd=command)
+    node.exec_command(sudo=True, cmd=command)
 
     del_lc_debug(cluster, build)
 
@@ -145,7 +145,7 @@ def execute_teardown(cluster: Ceph, build: str) -> None:
 def clone_s3_tests(node: CephNode, branch="ceph-luminous") -> None:
     """Clone the S3 repository on the given node."""
     repo_url = "https://github.com/ceph/s3-tests.git"
-    node.exec_command(cmd="if test -d s3-tests; then rm -r s3-tests; fi")
+    node.exec_command(sudo=True, cmd="if test -d s3-tests; then rm -r s3-tests; fi")
     node.exec_command(cmd=f"git clone -b {branch} {repo_url}")
 
 
@@ -362,7 +362,7 @@ def del_lc_debug(cluster: Ceph, build: str) -> None:
     """
     node = cluster.get_nodes(role="rgw")[0]
     commands = [
-        "sed -i -e '$argw_lc_debug_interval = 10' /etc/ceph/ceph.conf",
+        "sed -i '/rgw_lc_debug_interval/d' /etc/ceph/ceph.conf",
         "systemctl restart ceph-radosgw.target",
     ]
 
