@@ -13,7 +13,7 @@ def testStages = ['cephadm': {
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
                                 "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
-                                "addnArgs=--post-results --log-level DEBUG --grafana-image registry.redhat.io/rhceph-alpha/rhceph-5-dashboard-rhel8:latest"
+                                "addnArgs=--post-results --log-level DEBUG --grafana-image registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest"
                             ]) {
                                 sharedLib.runTestSuite()
                             }
