@@ -60,7 +60,8 @@ def testStages = ['cephadm': {
                                 sharedLib.runTestSuite()
                             }
                         }
-                    }]
+                    }
+                 }]
 
 // Pipeline script entry point
 
