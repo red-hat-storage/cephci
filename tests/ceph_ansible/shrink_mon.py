@@ -21,6 +21,7 @@ def run(ceph_cluster, **kw):
     build = config.get("build", config.get("rhbuild"))
     mon_to_kill_list = config.get("mon-to-kill")
     mon_to_kill = None
+    cluster_name = config.get("cluster")
     playbook = "shrink-mon.yml"
     # list available monitors
     mon_short_name_list = [
@@ -100,4 +101,4 @@ def run(ceph_cluster, **kw):
     hosts_file.write(modified_inventory)
     hosts_file.flush()
 
-    return ceph_cluster.check_health(build)
+    return ceph_cluster.check_health(build, cluster_name=cluster_name)

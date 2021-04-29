@@ -25,6 +25,7 @@ def run(ceph_cluster, **kw):
     build = config.get("build", config.get("rhbuild"))
     osd_to_kill_list = config.get("osd-to-kill")
     osd_to_kill = ",".join((str(osd) for osd in osd_to_kill_list))
+    cluster_name = config.get("cluster")
 
     for osd_id in osd_to_kill_list:
         osd_host = ceph_cluster.get_osd_metadata(osd_id).get("hostname")
@@ -84,4 +85,4 @@ def run(ceph_cluster, **kw):
         log.error("Failed during ansible playbook run")
         return err
 
-    return ceph_cluster.check_health(build)
+    return ceph_cluster.check_health(build, cluster_name=cluster_name)

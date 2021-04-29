@@ -607,7 +607,7 @@ class Ceph(object):
                 return metadata
         return None
 
-    def osd_check(self, client, rhbuild=None):
+    def osd_check(self, client, cluster_name=None, rhbuild=None):
         """
         Check OSD status
         Args:
@@ -619,6 +619,9 @@ class Ceph(object):
             1 - failure
         """
         cmd = "ceph -s -f json"
+        if cluster_name is not None:
+            cmd += f" --cluster {cluster_name}"
+
         if rhbuild and rhbuild.startswith("5"):
             cmd = f"cephadm shell -- {cmd}"
 
@@ -649,7 +652,7 @@ class Ceph(object):
             logger.info("All osds are up and in")
             return 0
 
-    def check_health(self, rhbuild, client=None, timeout=300):
+    def check_health(self, rhbuild, cluster_name=None, client=None, timeout=300):
         """
         Check if ceph is in healthy state
 
@@ -676,9 +679,10 @@ class Ceph(object):
 
         while datetime.datetime.now() - starttime <= timeout:
             cmd = "ceph -s"
+            if cluster_name is not None:
+                cmd += f" --cluster {cluster_name}"
             if pacific:
                 cmd = f"cephadm shell -- {cmd}"
-
             out, err = client.exec_command(cmd=cmd, sudo=True)
             lines = out.read().decode()
 
@@ -691,7 +695,7 @@ class Ceph(object):
             logger.error("Valid States are not found in the health check")
             return 1
 
-        self.osd_check(client, rhbuild=rhbuild)
+        self.osd_check(client, rhbuild=rhbuild, cluster_name=cluster_name)
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
         if not pacific:
@@ -816,39 +820,35 @@ class Ceph(object):
                     )
                 sleep(10)
 
-    def create_rbd_pool(self, k_and_m):
+    def create_rbd_pool(self, k_and_m, cluster_name=None):
         """
         Generate pools for later testing use
         Args:
             k_and_m(bool): ec-pool-k-m settings
         """
         ceph_mon = self.get_ceph_object("mon")
+
         if self.rhcs_version >= "3":
             if k_and_m:
                 pool_name = "rbd"
-                ceph_mon.exec_command(
-                    cmd="sudo ceph osd erasure-code-profile set %s k=%s m=%s"
-                    % ("ec_profile", k_and_m[0], k_and_m[2])
-                )
-                ceph_mon.exec_command(
-                    cmd="sudo ceph osd pool create %s 64 64 erasure ec_profile"
-                    % pool_name
-                )
-                ceph_mon.exec_command(
-                    cmd="sudo ceph osd pool set %s allow_ec_overwrites true"
-                    % (pool_name)
-                )
-                ceph_mon.exec_command(
-                    sudo=True,
-                    cmd="ceph osd pool application enable %s rbd --yes-i-really-mean-it"
-                    % pool_name,
-                )
+                commands = [
+                    f"ceph osd erasure-code-profile set ec_profile k={k_and_m[0]} m={k_and_m[2]}",
+                    f"ceph osd pool create {pool_name} 64 64 erasure ec_profile",
+                    f"ceph osd pool set {pool_name} allow_ec_overwrites true",
+                    f"ceph osd pool application enable {pool_name} rbd --yes-i-really-mean-it",
+                ]
+
             else:
-                ceph_mon.exec_command(sudo=True, cmd="ceph osd pool create rbd 64 64 ")
-                ceph_mon.exec_command(
-                    sudo=True,
-                    cmd="ceph osd pool application enable rbd rbd --yes-i-really-mean-it",
-                )
+                commands = [
+                    "ceph osd pool create rbd 64 64",
+                    "ceph osd pool application enable rbd rbd --yes-i-really-mean-it",
+                ]
+            if cluster_name is not None:
+                commands = [
+                    f"{command} --cluster {cluster_name}" for command in commands
+                ]
+            for command in commands:
+                ceph_mon.exec_command(sudo=True, cmd=command)
 
     @staticmethod
     def get_iso_file_url(base_url):

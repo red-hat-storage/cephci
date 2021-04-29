@@ -30,6 +30,7 @@ def run(ceph_cluster, **kw):
     ceph_cluster.ansible_config = config["ansi_config"]
     ceph_cluster.custom_config = test_data.get("custom-config")
     ceph_cluster.custom_config_file = test_data.get("custom-config-file")
+    cluster_name = config.get("ansi_config").get("cluster")
 
     if all(
         key in ceph_cluster.ansible_config
@@ -120,8 +121,11 @@ def run(ceph_cluster, **kw):
     }
 
     # create rbd pool used by tests/workunits
-    ceph_cluster.create_rbd_pool(k_and_m)
+    ceph_cluster.create_rbd_pool(k_and_m, cluster_name)
 
-    if ceph_cluster.check_health(build, timeout=timeout) != 0:
+    if (
+        ceph_cluster.check_health(build, timeout=timeout, cluster_name=cluster_name)
+        != 0
+    ):
         return 1
     return rc
