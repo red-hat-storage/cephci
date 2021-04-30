@@ -8,7 +8,14 @@ def check_entries(peercluster, imagespec):
     out = peercluster.wait_for_status(
         imagespec=imagespec, description_pattern="entries"
     )
-    return int(out.split("=")[-1])
+    if "entries_behind_primary" in out:
+        out1 = out.split('entries_behind_primary":')
+        out2 = out1[1].split(",")
+        if isinstance(int(out2[0]), int):
+            return out2[0]
+    else:
+        if int(out.split("=")[-1]) == 0:
+            return 0
 
 
 def check_replication_start(peercluster, imagespec, prev_entries):
