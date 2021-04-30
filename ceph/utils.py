@@ -37,7 +37,7 @@ def create_ceph_nodes(
         inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
         with open(inventory_path, "r") as inventory_stream:
             inventory = yaml.safe_load(inventory_stream)
-
+    node_count = 0
     params["cloud-data"] = inventory.get("instance").get("setup")
     params["username"] = os_cred["username"]
     params["password"] = os_cred["password"]
@@ -107,8 +107,15 @@ def create_ceph_nodes(
 
                 if node_dict.get("cloud-data"):
                     node_params["cloud-data"] = node_dict.get("cloud-data")
-
+                node_count += 1
                 p.spawn(setup_vm_node, node, ceph_nodes, **node_params)
+
+    if len(ceph_nodes) != node_count:
+        log.error(
+            f"Mismatch error in number of VMs spawned. "
+            f"Expected: {len(ceph_nodes)} \t Actual: {node_count}"
+        )
+        raise NodeError("Required number of nodes not created")
 
     log.info("Done creating nodes")
     return ceph_nodes
