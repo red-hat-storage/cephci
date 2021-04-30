@@ -21,7 +21,7 @@ def testStages = ['cephadm': {
                     }
                  }, 'object': {
                     stage('Object suite') {
-                        sleep(180)
+                        sleep(60)
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
@@ -35,7 +35,7 @@ def testStages = ['cephadm': {
                     }
                  }, 'block': {
                     stage('Block suite') {
-                        sleep(360)
+                        sleep(120)
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
@@ -49,7 +49,7 @@ def testStages = ['cephadm': {
                     }
                  }, 'cephfs': {
                     stage('Cephfs Suite') {
-                        sleep(540)
+                        sleep(180)
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
