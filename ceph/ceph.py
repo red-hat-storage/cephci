@@ -2255,7 +2255,9 @@ class CephObjectFactory(object):
             if len(free_volume_list) > 0:
                 free_volume_list[0].status = NodeVolume.ALLOCATED
             else:
-                raise RuntimeError("Insufficient of free volumes")
+                raise RuntimeError(
+                    f"{self.node.vmname} does not have 'no-of-volumes' key defined in the inventory file"
+                )
             return CephOsd(self.node)
         if role in self.DEMON_ROLES:
             return CephDemon(role, self.node)
