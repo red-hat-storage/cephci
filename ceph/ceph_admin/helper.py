@@ -9,7 +9,7 @@ from jinja2 import Template
 
 from ceph.utils import get_node_by_id
 
-LOG = logging.getLogger()
+LOG = logging.getLogger(__name__)
 
 
 class UnknownSpecFound(Exception):
@@ -183,6 +183,7 @@ class GenerateServiceSpec:
                 raise UnknownSpecFound(f"unknown spec found - {spec}")
             spec_content += method(spec=spec)
 
+        LOG.info(f"Spec yaml file content:\n{spec_content}")
         # Create spec yaml file
         temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
         spec_file = self.node.node.remote_file(
