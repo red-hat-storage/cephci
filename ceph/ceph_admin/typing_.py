@@ -28,6 +28,7 @@ class CephAdmProtocol(Protocol):
     def shell(
         self,
         args: List[str],
+        base_cmd_args: Dict = None,
         check_status: bool = True,
         timeout: int = 300,
     ):
@@ -42,6 +43,7 @@ class OrchProtocol(CephAdmProtocol, Protocol):
     def shell(
         self: CephAdmProtocol,
         args: List[str],
+        base_cmd_args: Dict = None,
         check_status: bool = True,
         timeout: int = 300,
     ):

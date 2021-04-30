@@ -20,6 +20,7 @@ from ceph.ceph_admin.mgr import Mgr
 from ceph.ceph_admin.mon import Mon
 from ceph.ceph_admin.nfs import NFS
 from ceph.ceph_admin.node_exporter import NodeExporter
+from ceph.ceph_admin.orch import Orch
 from ceph.ceph_admin.osd import OSD
 from ceph.ceph_admin.prometheus import Prometheus
 from ceph.ceph_admin.rgw import RGW
@@ -41,6 +42,7 @@ SERVICE_MAP = dict(
         "osd": OSD,
         "prometheus": Prometheus,
         "rgw": RGW,
+        "orch": Orch,
     }
 )
 
@@ -110,7 +112,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             cfg = step["config"]
 
             if cfg["command"] == "shell":
-                cephadm.shell(args=cfg["args"])
+                cephadm.shell(base_cmd_args=cfg.get("base_cmd_args"), args=cfg["args"])
                 continue
 
             obj = SERVICE_MAP[cfg["service"]](cluster=ceph_cluster, **config)
