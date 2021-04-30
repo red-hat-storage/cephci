@@ -13,7 +13,7 @@ def testStages = ['cephadm': {
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
                                 "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
-                                "addnArgs=--post-results --log-level debug --grafana-image registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest --report-portal"
+                                "addnArgs=--post-results --log-level DEBUG --grafana-image registry.redhat.io/rhceph-alpha/rhceph-5-dashboard-rhel8:latest"
                             ]) {
                                 sharedLib.runTestSuite()
                             }
@@ -27,7 +27,7 @@ def testStages = ['cephadm': {
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
                                 "sutConf=conf/${cephVersion}/rgw/sanity_rgw.yaml",
                                 "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
-                                "addnArgs=--post-results --log-level debug --report-portal"
+                                "addnArgs=--post-results --log-level debug"
                             ]) {
                                 sharedLib.runTestSuite()
                             }
@@ -41,7 +41,7 @@ def testStages = ['cephadm': {
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
                                 "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
                                 "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
-                                "addnArgs=--post-results --log-level debug --report-portal"
+                                "addnArgs=--post-results --log-level debug"
                             ]) {
                                 sharedLib.runTestSuite()
                             }
@@ -55,7 +55,7 @@ def testStages = ['cephadm': {
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
                                 "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
                                 "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
-                                "addnArgs=--post-results --log-level debug --report-portal"
+                                "addnArgs=--post-results --log-level debug"
                             ]) {
                                 sharedLib.runTestSuite()
                             }
