@@ -463,19 +463,31 @@ def setup_deb_cdn_repo(node, build=None):
     node.exec_command(sudo=True, cmd="apt-get update")
 
 
-def update_ca_cert(node, cert_url, timeout=120):
+def update_ca_cert(node, cert_url, out_file, timeout=120):
+    """
+    Update CA cert in the nodes.
+      by default options picked for RHEL platforms
+
+    Args:
+        node: node object
+        cert_url: path to download certificate
+        out_file: output file name
+        timeout: timeout in seconds
+    """
+    output_dir = "/etc/pki/ca-trust/source/anchors/"
+    update_cmd = "update-ca-trust extract"
+
     if node.pkg_type == "deb":
-        cmd = "cd /usr/local/share/ca-certificates/ && {{ sudo curl -O {url} ; cd -; }}".format(
-            url=cert_url
+        output_dir = "/usr/local/share/ca-certificates/"
+        update_cmd = "update-ca-certificates"
+
+    download_cmd = f"curl --fail {cert_url} -o {output_dir}{out_file}"
+    for cmd in [download_cmd, update_cmd]:
+        node.exec_command(
+            sudo=True,
+            cmd=cmd,
+            timeout=timeout,
         )
-        node.exec_command(cmd=cmd, timeout=timeout)
-        node.exec_command(cmd="sudo update-ca-certificates", timeout=timeout)
-    else:
-        cmd = "cd /etc/pki/ca-trust/source/anchors && {{ sudo curl -O {url} ; cd -; }}".format(
-            url=cert_url
-        )
-        node.exec_command(cmd=cmd, timeout=timeout)
-        node.exec_command(cmd="sudo update-ca-trust extract", timeout=timeout)
 
 
 def search_ethernet_interface(ceph_node, ceph_node_list):
