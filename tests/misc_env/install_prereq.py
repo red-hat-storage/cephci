@@ -70,7 +70,13 @@ def install_prereq(
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
     log.info("cloud config to completed on " + ceph.hostname)
-    update_ca_cert(ceph, "https://password.corp.redhat.com/RH-IT-Root-CA.crt")
+
+    # Update certs
+    update_ca_cert(
+        node=ceph,
+        cert_url="https://password.corp.redhat.com/RH-IT-Root-CA.crt",
+        out_file="RH-IT-Root-CA.crt",
+    )
     distro_info = ceph.distro_info
     distro_ver = distro_info["VERSION_ID"]
     log.info("distro name: {name}".format(name=distro_info["NAME"]))
