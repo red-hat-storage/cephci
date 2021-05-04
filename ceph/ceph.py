@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import os.path
 import pickle
 import random
 import re
@@ -881,7 +882,7 @@ class Ceph(object):
         """
         repo_file = ""
         for repo in repos:
-            repo_to_use = base_url + "compose/" + repo + "/x86_64/os/"
+            repo_to_use = os.path.join(base_url, "compose", repo, "x86_64/os/")
             r = requests.get(repo_to_use, timeout=10)
             logger.info("Checking %s", repo_to_use)
             if r.status_code == 200:
