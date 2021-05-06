@@ -1,6 +1,8 @@
 import logging
 import time
 
+from utility.utils import setup_cluster_access
+
 log = logging.getLogger(__name__)
 
 TEST_DIR = {
@@ -23,8 +25,8 @@ def run(**kw):
     # adding sleep for 60 seconds before another test starts, sync needs to complete
     time.sleep(60)
     set_env = config.get("set-env", False)
-    primary_cluster = clusters.get("ceph-rgw1")
-    secondary_cluster = clusters.get("ceph-rgw2")
+    primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
+    secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
     primary_rgw_node = primary_cluster.get_ceph_object("rgw").node
     secondary_rgw_node = secondary_cluster.get_ceph_object("rgw").node
 
@@ -37,6 +39,10 @@ def run(**kw):
     if set_env:
         set_test_env(config, primary_rgw_node)
         set_test_env(config, secondary_rgw_node)
+
+        if primary_cluster.rhcs_version == "5.0":
+            setup_cluster_access(primary_cluster, primary_rgw_node)
+            setup_cluster_access(secondary_cluster, secondary_rgw_node)
 
     # run the test
     script_name = config.get("script-name")
@@ -73,6 +79,7 @@ def run(**kw):
         copy_file_from_node_to_node(
             user_details_file, test_site_node, copy_user_to_site_node, user_details_file
         )
+
     verify_io_on_sites = config.get("verify-io-on-site", [])
     if verify_io_on_sites:
         io_info = home_dir_path + "io_info.yaml"
@@ -83,12 +90,14 @@ def run(**kw):
                 copy_file_from_node_to_node(
                     io_info, test_site_node, verify_io_on_site_node, io_info
                 )
+
             verify_out, err = verify_io_on_site_node.exec_command(
                 cmd="sudo python3 " + test_folder_path + lib_dir + "read_io_info.py",
                 timeout=timeout,
             )
             log.info(verify_out.read().decode())
             log.error(verify_out.read().decode())
+
     return 0
 
 
@@ -114,9 +123,7 @@ def set_test_env(config, rgw_node):
     clone_the_repo(config, rgw_node, test_folder_path)
 
     rgw_node.exec_command(
-        cmd=f"sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt".format(
-            test_folder=test_folder
-        )
+        cmd=f"sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
     )
 
 
@@ -188,4 +195,4 @@ def clone_the_repo(config, node, path_to_clone):
     )
     log.info(f"repo_url: {repo_url}")
     git_clone_cmd = f"sudo git clone {repo_url} -b {branch}"
-    node.exec_command(cmd="cd " + path_to_clone + " ; " + git_clone_cmd)
+    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
