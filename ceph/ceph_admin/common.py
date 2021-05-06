@@ -14,6 +14,9 @@ def config_dict_to_string(data: Dict) -> str:
     """
     rtn = ""
     for key, value in data.items():
+        if isinstance(value, bool) and value is False:
+            continue
+
         rtn += f" -{key}" if len(key) == 1 else f" --{key}"
 
         if not isinstance(value, bool):
