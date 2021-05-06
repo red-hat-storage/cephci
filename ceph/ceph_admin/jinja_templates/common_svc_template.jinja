@@ -1,0 +1,12 @@
+{%- set nlt = "\n  " -%}
+{%- set newline = "\n" -%}
+---
+service_type: {{ spec['service_type'] }}
+service_name: {{ spec['service_type'] }}
+{%+ if spec['unmanaged'] -%}unmanaged: {{ spec['unmanaged'] }}
+{% endif -%}
+placement:
+{%- if spec['placement']['count'] -%}{{ nlt }}count: {{ spec['placement']['count'] }}{%- endif -%}
+{%- if spec['placement']['hosts'] -%}{{ nlt }}hosts: {{ spec['placement']['hosts'] }}{%- endif -%}
+{%- if spec['placement']['label'] -%}{{ nlt }}label: {{ spec['placement']['label'] }}{%- endif -%}
+{%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif -%}{{ newline }}

@@ -7,7 +7,7 @@ from os.path import dirname
 
 from jinja2 import Template
 
-from ceph.utils import get_node_by_id
+from ceph.utils import get_node_by_id, get_nodes_by_ids
 
 LOG = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ class UnknownSpecFound(Exception):
 
 
 class GenerateServiceSpec:
-    """prepare spec file based on provided config"""
+    """Creates the spec yaml file for deploying services and daemons using cephadm."""
 
     COMMON_SERVICES = [
         "mon",
@@ -31,7 +31,7 @@ class GenerateServiceSpec:
 
     def __init__(self, node, cluster, specs):
         """
-        Initialize the PrepareSpec
+        Initialize the GenerateServiceSpec
 
         Args:
             node: ceph node where spec file to be created
@@ -99,7 +99,7 @@ class GenerateServiceSpec:
             template = fd.read()
         return Template(template)
 
-    def render_hosts(self, spec):
+    def generate_host_spec(self, spec):
         """
         Return hosts spec content based on host config
         args:
@@ -131,23 +131,43 @@ class GenerateServiceSpec:
 
         return template.render(hosts=hosts)
 
-    def render_common_services(self, spec):
+    def generate_generic_spec(self, spec):
         """
-        prepare spec content for common services
-         which is mentioned in COMMON_SERVICES
+        Return spec content for common services
+        which is mentioned in COMMON_SERVICES
+         - mon
+         - mgr
+         - alertmanager
+         - crash
+         - grafana
+         - node-exporter
+         - prometheus
 
         Args:
             spec: common service spec config
 
         spec:
           - service_type: mon
+            unmanaged: boolean    # true or false
             placement:
+              count: 2
+              label: "mon"
+              host_pattern: "*"   # either hosts or host_pattern
               nodes:
                 - node2
                 - node3
         Returns:
+            service_spec
         """
-        raise NotImplementedError
+        template = self._get_template("common_svc_template")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = []
+            nodes = get_nodes_by_ids(self.cluster, node_names)
+            for node in nodes:
+                spec["placement"]["hosts"].append(node.shortname)
+
+        return template.render(spec=spec)
 
     def _get_render_method(self, service_type):
         """
@@ -158,18 +178,17 @@ class GenerateServiceSpec:
             method
         """
         render_definitions = {
-            "host": self.render_hosts,
+            "host": self.generate_host_spec,
         }
 
         try:
             if service_type in self.COMMON_SERVICES:
-                return self.render_common_services
-            elif service_type in render_definitions:
-                return render_definitions[service_type]
-        except (KeyError, NotImplementedError):
+                return self.generate_generic_spec
+            return render_definitions[service_type]
+        except KeyError:
             raise NotImplementedError
 
-    def generate(self):
+    def create_spec_file(self):
         """
         start to generate spec file based on spec config
 
@@ -212,6 +231,7 @@ def get_cluster_state(cls, commands=[]):
     """
     __CLUSTER_STATE_COMMANDS = [
         "ceph status",
+        "ceph orch host ls",
         "ceph orch ls -f yaml",
         "ceph orch ps -f json-pretty",
         "ceph health detail -f yaml",

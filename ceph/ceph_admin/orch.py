@@ -165,7 +165,7 @@ class Orch(LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI):
         spec_cls = GenerateServiceSpec(
             node=self.installer, cluster=self.cluster, specs=config["specs"]
         )
-        spec_filename = spec_cls.generate()
+        spec_filename = spec_cls.create_spec_file()
         base_cmd.append(spec_filename)
 
         out, err = self.shell(
