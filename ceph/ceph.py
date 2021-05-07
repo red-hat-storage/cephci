@@ -683,6 +683,7 @@ class Ceph(object):
                 cmd += f" --cluster {cluster_name}"
             if pacific:
                 cmd = f"cephadm shell -- {cmd}"
+
             out, err = client.exec_command(cmd=cmd, sudo=True)
             lines = out.read().decode()
 
