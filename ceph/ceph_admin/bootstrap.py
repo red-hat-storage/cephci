@@ -8,6 +8,7 @@ from ceph.ceph import ResourceNotFoundError
 from utility.utils import get_cephci_config
 
 from .common import config_dict_to_string
+from .helper import GenerateServiceSpec
 from .typing_ import CephAdmProtocol
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,14 @@ class BootstrapMixin:
                     break
             else:
                 raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
+
+        # apply-spec
+        specs = args.get("apply-spec")
+        if specs:
+            spec_cls = GenerateServiceSpec(
+                node=self.installer, cluster=self.cluster, specs=specs
+            )
+            args["apply-spec"] = spec_cls.create_spec_file()
 
         cmd += config_dict_to_string(args)
         out, err = self.installer.exec_command(
