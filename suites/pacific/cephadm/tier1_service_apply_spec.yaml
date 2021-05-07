@@ -1,0 +1,95 @@
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap
+      desc: cephadm cluster bootstrap
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          skip-monitoring-stack: true
+          orphan-initial-daemons: true
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Host addition with spec file
+      desc: add hosts using spec file.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+        - config:
+            service: host
+            command: set_address
+            args:
+              node: node1
+        - config:
+            service: host
+            command: label_add
+            args:
+              node: node1
+              labels: apply-all-labels
+        - config:
+            command: apply_spec
+            service: orch
+            specs:
+             - service_type: host
+               address: true
+               labels: apply-all-labels
+               nodes:
+                 - node2
+                 - node3
+             - service_type: host
+               address: true
+               labels: apply-all-labels
+               nodes:
+                 - node4
+  - test:
+      name: Service deployment with spec file
+      desc: Add services using spec file.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+              - service_type: mon
+                placement:
+                  nodes:
+                  - node2
+                  - node3
+              - service_type: mgr
+                placement:
+                  label: mgr
+              - service_type: prometheus
+                placement:
+                  count: 1
+                  nodes:
+                    - node1
+              - service_type: grafana
+                placement:
+                  nodes:
+                    - node1
+              - service_type: alertmanager
+                placement:
+                  count: 2
+                  label: alertmanager
+              - service_type: node-exporter
+                placement:
+                  host_pattern: "*"
+              - service_type: crash
+                placement:
+                  host_pattern: "*"

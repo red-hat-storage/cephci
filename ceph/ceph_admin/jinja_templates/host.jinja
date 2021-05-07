@@ -1,0 +1,8 @@
+{% for host in hosts %}---
+service_type: host
+hostname: {{ host['hostname'] }}
+{%+ if host['address'] -%}addr: {{ host['address'] }}
+{% endif %}
+{%- if host['labels'] -%}labels: {{ host['labels'] }}
+{% endif -%}
+{% endfor %}

@@ -11,6 +11,8 @@ from time import sleep
 from ceph.ceph import ResourceNotFoundError
 
 from .ceph import CephCLI
+from .common import config_dict_to_string
+from .helper import GenerateServiceSpec
 from .ls import LSMixin
 from .ps import PSMixin
 from .remove import RemoveMixin
@@ -127,3 +129,49 @@ class Orch(LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI):
             LOG.info("[%s] check for existence: %s, retrying" % (service_name, exist))
 
         return False
+
+    def apply_spec(self, config) -> None:
+        """
+        Execute the apply_spec method using the object's service name and provided input.
+
+        Args:
+            config:     Key/value pairs passed from the test suite.
+                        base_cmd_args   - key/value pairs to set for base command
+                        specs           - service specifications.
+
+        Example:
+            config:
+                command: apply_spec
+                service: orch
+                base_cmd_args:          # arguments to ceph orch
+                    concise: true
+                    verbose: true
+                specs:
+                 - service_type: host
+                   attach_ip_address: true
+                   labels: apply-all-labels
+                   nodes:
+                     - node2
+                     - node3
+        """
+        base_cmd = ["ceph", "orch"]
+
+        if config.get("base_cmd_args"):
+            base_cmd_args_str = config_dict_to_string(config.get("base_cmd_args"))
+            base_cmd.append(base_cmd_args_str)
+
+        base_cmd.append("apply -i")
+
+        spec_cls = GenerateServiceSpec(
+            node=self.installer, cluster=self.cluster, specs=config["specs"]
+        )
+        spec_filename = spec_cls.create_spec_file()
+        base_cmd.append(spec_filename)
+
+        out, err = self.shell(
+            args=base_cmd,
+            base_cmd_args={"mount": "/tmp:/tmp"},
+        )
+
+        LOG.info(f"apply-spec command response :\n{out}")
+        # todo: add verification part
