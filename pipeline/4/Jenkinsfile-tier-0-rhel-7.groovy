@@ -33,13 +33,13 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "HOURS", time: 6) {
-	    stage('RPM Sanity') {
-                try {
+    timeout(unit: "HOURS", time: 4) {
+  	    stage('RPM Sanity') {
+                try { 
 		script {
 		    withEnv([
-			"osVersion=RHEL-8",
-			"sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+			"osVersion=RHEL-7",
+			"sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
 			"sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
 			"testSuite=suites/${cephVersion}/ansible/sanity_ceph_ansible.yaml",
 			"containerized=false",
@@ -49,30 +49,11 @@ node(nodeName) {
 		    }
 		}
                 }
-                catch(Exception ex){ 
-                     echo 'Exception occured' 
-                     echo ex.getMessage() 
-                } 
-	    }
-	    stage('Image Sanity') {
-                try {
-		script {
-		    withEnv([
-			"osVersion=RHEL-8",
-			"sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
-			"sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
-			"testSuite=suites/${cephVersion}/ansible/sanity_containerized_ceph_ansible.yaml",
-			"addnArgs=--post-results --log-level DEBUG"
-		    ]) {
-			sharedLib.runTestSuite()
-		    }
-		}
+                catch(Exception ex){
+                     echo 'Exception occured'
+                     echo ex.getMessage()
                 }
-                catch(Exception ex){ 
-                     echo 'Exception occured' 
-                     echo ex.getMessage() 
-                } 
-	  }
+	    }
     }
 
     stage('Publish Results') {
