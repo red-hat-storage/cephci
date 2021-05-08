@@ -411,8 +411,11 @@ def verify_bootstrap(cls, args, response):
     verify_ceph_admin_keyring_file(cls, args.get("output-keyring"))
     verify_ceph_configuration_file(cls, args.get("output-config"))
     verify_ceph_public_ssh_key(cls, args.get("output-pub-ssh-key"))
-    validate_skip_monitoring_stack(cls, args.get("skip-monitoring-stack"))
-    validate_orphan_intial_daemons(cls, args.get("orphan-initial-daemons"))
+
+    # spec service could be deployed using apply-spec
+    if not args.get("apply-spec"):
+        validate_skip_monitoring_stack(cls, args.get("skip-monitoring-stack"))
+        validate_orphan_intial_daemons(cls, args.get("orphan-initial-daemons"))
     if args.get("fsid"):
         validate_fsid(cls, args.get("fsid"))
 
