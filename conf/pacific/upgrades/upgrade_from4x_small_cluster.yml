@@ -6,6 +6,7 @@ globals:
          - mon
          - mgr
          - osd
+         - installer
        no-of-volumes: 1
        disk-size: 40  
      node2:
@@ -38,5 +39,4 @@ globals:
      node6:
        role:
          - nfs
-         - installer
 
