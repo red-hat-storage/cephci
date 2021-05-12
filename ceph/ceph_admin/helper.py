@@ -86,6 +86,18 @@ class GenerateServiceSpec:
     def get_labels(node):
         return node.role.role_list
 
+    def get_hostnames(self, node_names):
+        """
+        Return list of hostnames
+        Args:
+            node_names: node names
+
+        Returns:
+            list of hostanmes
+        """
+        nodes = get_nodes_by_ids(self.cluster, node_names)
+        return [node.shortname for node in nodes]
+
     def _get_template(self, service_type):
         """
         Return Jinja template based on the service_type
@@ -162,10 +174,7 @@ class GenerateServiceSpec:
         template = self._get_template("common_svc_template")
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
-            spec["placement"]["hosts"] = []
-            nodes = get_nodes_by_ids(self.cluster, node_names)
-            for node in nodes:
-                spec["placement"]["hosts"].append(node.shortname)
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
         return template.render(spec=spec)
 
@@ -193,10 +202,7 @@ class GenerateServiceSpec:
         template = self._get_template("osd")
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
-            spec["placement"]["hosts"] = []
-            nodes = get_nodes_by_ids(self.cluster, node_names)
-            for node in nodes:
-                spec["placement"]["hosts"].append(node.shortname)
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
         return template.render(spec=spec)
 
@@ -225,10 +231,39 @@ class GenerateServiceSpec:
         template = self._get_template("mds")
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
-            spec["placement"]["hosts"] = []
-            nodes = get_nodes_by_ids(self.cluster, node_names)
-            for node in nodes:
-                spec["placement"]["hosts"].append(node.shortname)
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        return template.render(spec=spec)
+
+    def generate_nfs_spec(self, spec):
+        """
+        Return spec content for nfs service
+
+        Note: make sure pool is already created.
+
+        Args:
+            spec: mds service spec config
+
+        spec:
+          - service_type: nfs
+            service_id: nfs-name
+            unmanaged: boolean    # true or false
+            placement:
+              host_pattern: "*"   # either hosts or host_pattern
+              nodes:
+                - node2
+                - node3
+              label: nfs
+            spec:
+              pool: pool-name
+              namespace: namespace-name
+        Returns:
+            service_spec
+        """
+        template = self._get_template("nfs")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
         return template.render(spec=spec)
 
@@ -244,6 +279,7 @@ class GenerateServiceSpec:
             "host": self.generate_host_spec,
             "osd": self.generate_osd_spec,
             "mds": self.generate_mds_spec,
+            "nfs": self.generate_nfs_spec,
         }
 
         try:
