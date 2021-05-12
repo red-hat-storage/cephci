@@ -169,6 +169,37 @@ class GenerateServiceSpec:
 
         return template.render(spec=spec)
 
+    def generate_osd_spec(self, spec):
+        """
+        Return spec content for osd service
+
+        Args:
+            spec: osd service spec config
+
+        spec:
+          - service_type: osd
+            unmanaged: boolean    # true or false
+            placement:
+              host_pattern: "*"   # either hosts or host_pattern
+              nodes:
+                - node2
+                - node3
+            data_devices:
+                all: boolean      # true or false
+            encrypted: boolean    # true or false
+        Returns:
+            service_spec
+        """
+        template = self._get_template("osd")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = []
+            nodes = get_nodes_by_ids(self.cluster, node_names)
+            for node in nodes:
+                spec["placement"]["hosts"].append(node.shortname)
+
+        return template.render(spec=spec)
+
     def _get_render_method(self, service_type):
         """
         Return render definition based on service_type
@@ -179,6 +210,7 @@ class GenerateServiceSpec:
         """
         render_definitions = {
             "host": self.generate_host_spec,
+            "osd": self.generate_osd_spec,
         }
 
         try:
