@@ -102,6 +102,34 @@ tests:
                 all: true
         - config:
             command: shell
-            args:          # sleep to get all services deployed
+            args:                 # sleep to get all services deployed
               - sleep
               - "300"
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          - config:
+              command: shell
+              args:              # sleep to get all services deployed
+                - sleep
+                - "120"
