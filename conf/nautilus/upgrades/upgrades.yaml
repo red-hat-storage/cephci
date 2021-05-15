@@ -22,7 +22,9 @@ globals:
      node7:
        role: mgr
      node8:
-       role: installer
+       role: 
+         - installer
+         - grafana
      node9:
        role: rgw
      node10:
