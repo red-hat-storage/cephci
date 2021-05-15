@@ -13,36 +13,16 @@ def prepareNode() {
     sh(script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
 }
 
-def runTestSuite() {
+def getCLIArgsFromMessage(){
     /*
-        Execute the test suite by processing CI_MESSAGE for container
-        information along with the environment variables. The required
-        variables are
-            - sutVMConf
-            - sutConf
-            - testSuite
-            - addnArgs
+        Returns the arguments required for CLI after processing the CI message
     */
-    println "Begin Test Suite execution"
-
-    // generate random instance name
-    def sec = sh(script: "echo \$(date +%s)", returnStdout: true).trim()
-    def instanceName = "psi${sec}"
-
     env.rhcephVersion = "5.0-rhel-8"
-
-    // Build the CLI options
-    def cmd = "${env.WORKSPACE}/.venv/bin/python run.py"
-    cmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
-    cmd += " --report-portal"
-    cmd += " --instances-name ${instanceName}"
-
-    // Append test suite specific
-    cmd += " --global-conf ${env.sutConf}"
-    cmd += " --suite ${env.testSuite}"
 
     // Processing CI_MESSAGE parameter, it can be empty
     def ciMessage = "${params.CI_MESSAGE}" ?: ""
+    def cmd = ""
+
     if (ciMessage?.trim()) {
         // Process the CI Message
         def jsonParser = new JsonSlurper()
@@ -57,51 +37,54 @@ def runTestSuite() {
 
         // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
         env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
-        
-        if (!env.sutVMConf?.trim()) {
-            if (env.composeId.indexOf('RHEL-8') >= 0){
-                cmd += " --inventory conf/inventory/rhel-8.3-server-x86_64.yaml"
-            }
-            else if(env.composeId.indexOf('RHEL-7') >= 0){
-                cmd += " --inventory conf/inventory/rhel-7.9-server-x86_64.yaml"
-            }
+        // get rhbuild value based on OS version
+        if ("${env.osVersion}" == 'RHEL-7'){
+            env.rhcephVersion = env.rhcephVersion.substring(0,env.rhcephVersion.length() - 1) + '7'
+            cmd += " --rhs-ceph-repo ${composeUrl}"
+            cmd += " --ignore-latest-container"
         }
         else{
-            cmd += " --inventory ${env.sutVMConf}"
+            cmd += " --rhs-ceph-repo ${composeUrl}"
+            cmd += " --ignore-latest-container"
         }
-        cmd += " --docker-registry ${dockerDTR}"
-        cmd += " --docker-image ${dockerImage}"
-        cmd += " --docker-tag ${dockerTag}"
+
+        if(!env.containerized || (env.containerized && "${env.containerized}" == "true")){  
+            cmd += " --docker-registry ${dockerDTR}"
+            cmd += " --docker-image ${dockerImage}"
+            cmd += " --docker-tag ${dockerTag}"
+            if ("${dockerDTR}".indexOf('registry-proxy')>=0){
+                cmd += " --insecure-registry"
+            }
+        }
 
         cmd += " --rhbuild ${env.rhcephVersion}"
-        cmd += " --rhs-ceph-repo ${composeUrl}"
-        cmd += " --insecure-registry"
-        cmd += " --ignore-latest-container"
-
+        
     } else {
         cmd += " --rhbuild ${env.rhcephVersion}"
-        if (env.sutVMConf?.trim()) {
-            cmd += " --inventory ${env.sutVMConf}"
-        }
     }
 
-    // Check for additional arguments
-    def addnArgFlag = "${env.addnArgs}" ?: ""
-    if (addnArgFlag?.trim()) {
-        cmd += " ${env.addnArgs}"
-    }
+    return cmd
+}
 
-    // test suite execution
-    def rc = 0
+def executeTest(def cmd){
+   /*
+        Executes the cephci suite using the CLI input given
+   */
+   def rc = 0
     try {
         rc = sh(script: "PYTHONUNBUFFERED=1 ${cmd}", returnStatus: true)
     } catch(Exception ex) {
         rc = 1
         echo "Encountered an error"
     }
+    return rc   
+}
 
-    // Forcing cleanup
-    try {
+def cleanUp(def instanceName){
+   /*
+       Destroys the created instances and volumes with the given instanceName from rhos-d 
+   */
+   try {
         cleanup_cmd = "PYTHONUNBUFFERED=1 ${env.WORKSPACE}/.venv/bin/python"
         cleanup_cmd += " run.py --cleanup ${instanceName}"
         cleanup_cmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
@@ -112,6 +95,50 @@ def runTestSuite() {
         echo "WARNING: Encountered an error during cleanup."
         echo "Please manually verify the test artifacts are removed."
     }
+}
+
+def runTestSuite() {
+    /*
+        Execute the test suite by processing CI_MESSAGE for container
+        information along with the environment variables. The required
+        variables are
+            - sutVMConf
+            - sutConf
+            - testSuite
+            - addnArgs
+    */
+    println "Begin Test Suite execution"
+
+    // generate random instance name
+    def instanceName = "psi" + org.apache.commons.lang.RandomStringUtils.random(5, true, true)
+
+    env.rhcephVersion = "5.0-rhel-8"
+
+    // Build the CLI options
+    def cmd = "${env.WORKSPACE}/.venv/bin/python run.py"
+    cmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
+    cmd += " --report-portal"
+    cmd += " --instances-name ${instanceName}"
+
+    // Append test suite specific
+    cmd += " --global-conf ${env.sutConf}"
+    cmd += " --suite ${env.testSuite}"
+    cmd += " --inventory ${env.sutVMConf}"
+
+    // Processing CI_MESSAGE parameter, it can be empty
+    cmd += getCLIArgsFromMessage()
+
+    // Check for additional arguments
+    def addnArgFlag = "${env.addnArgs}" ?: ""
+    if (addnArgFlag?.trim()) {
+        cmd += " ${env.addnArgs}"
+    }
+
+    // test suite execution
+    def rc = executeTest(cmd)    
+
+    // Forcing cleanup
+    cleanUp(instanceName)
 
     if (rc != 0) {
         error("Test execution has failed.")
@@ -125,7 +152,7 @@ def sendEMail(def subjectPrefix) {
     */
     emailext(
         subject: "${subjectPrefix} test suite execution summary of ${env.composeId}",
-        body: "Console logs are available at ${env.BUILD_URL}/console",
+        body: "Console logs are available at ${env.BUILD_URL}",
         from: "cephci@redhat.com",
         to: "cephci@redhat.com"
     )
