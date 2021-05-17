@@ -102,6 +102,76 @@ tests:
                 all: true
         - config:
             command: shell
-            args:          # sleep to get all services deployed
+            args:                 # sleep to get all services deployed
               - sleep
               - "300"
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          - config:
+              command: shell
+              args:              # sleep to get all services deployed
+                - sleep
+                - "120"
+  - test:
+      name: NFS Service deployment with spec
+      desc: Add NFS services using spec file
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+          - config:
+              command: shell
+              args:                     # create pool
+                - ceph
+                - osd
+                - pool
+                - create
+                - nfs-rgw-pool
+          - config:
+              command: shell
+              args:                     # enable application on pool
+                - ceph
+                - osd
+                - pool
+                - application
+                - enable
+                - nfs-rgw-pool
+                - rgw
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: nfs
+                  service_id: nfs-rgw-service
+                  placement:
+                    nodes:
+                      - node4
+                  spec:
+                    pool: nfs-rgw-pool
+                    namespace: nfs-rgw-namespace
+          - config:
+              command: shell
+              args:              # sleep to get all services deployed
+                - sleep
+                - "120"
