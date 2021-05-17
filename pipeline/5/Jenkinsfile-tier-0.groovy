@@ -6,6 +6,7 @@
 def nodeName = "centos-7"
 def cephVersion = "pacific"
 def sharedLib
+def test_results = [:]
 def testStages = ['cephadm': {
                     stage('Deployment suite') {
                         script {
@@ -15,7 +16,8 @@ def testStages = ['cephadm': {
                                 "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
                                 "addnArgs=--post-results --log-level debug --grafana-image registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest"
                             ]) {
-                                sharedLib.runTestSuite()
+                                rc = sharedLib.runTestSuite()
+                                test_results["cephadm"] = rc
                             }
                         }
                     }
@@ -29,7 +31,8 @@ def testStages = ['cephadm': {
                                 "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
                                 "addnArgs=--post-results --log-level debug"
                             ]) {
-                                sharedLib.runTestSuite()
+                                rc = sharedLib.runTestSuite()
+                                test_results["object"] = rc
                             }
                         }
                     }
@@ -43,7 +46,8 @@ def testStages = ['cephadm': {
                                 "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
                                 "addnArgs=--post-results --log-level debug"
                             ]) {
-                                sharedLib.runTestSuite()
+                                rc = sharedLib.runTestSuite()
+                                test_results["block"] = rc
                             }
                         }
                     }
@@ -57,12 +61,12 @@ def testStages = ['cephadm': {
                                 "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
                                 "addnArgs=--post-results --log-level debug"
                             ]) {
-                                sharedLib.runTestSuite()
+                                rc = sharedLib.runTestSuite()
+                                test_results["cephfs"] = rc
                             }
                         }
                     }
                  }]
-
 // Pipeline script entry point
 
 node(nodeName) {
@@ -97,7 +101,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("Tier-0")
+            sharedLib.sendEMail("Tier-0",test_results)
             sharedLib.postLatestCompose()
         }
     }
