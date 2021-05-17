@@ -1,42 +1,49 @@
 #===============================================================================================
-# Cluster configuration: cephci/conf/pacific/cephadm/tier1_3node_cephadm_bootstrap
-# --------------------
-# 4-Node cluster(RHEL-8.3 and above)
-# 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
-#   Node1- Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
-#   Node2- Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
-#   Node3- Mon, OSD, MDS, RGW, node-exporter
-#   Node4- Client
+# Tier-level: 1
+# Test-Suite: tier1_ssl_dashboard_port.yaml
+# Test-Case:
+#      Bootstrap cluster with custom ssl-dashboard-port, ssh-user
+#       and apply-spec options.
 #
-# TIER1:
-# -------
-# (1) Bootstrap cluster with options,
-#     - skip-monitoring-stack
-#     - orphan-initial-daemons
-#     - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
-#     - initial-dashboard-user: admin123
-#     - initial-dashboard-password: admin@123,
-#     - registry-json: registry.json
-#     - ssl-dashboard-port: <port-number>.
-#     - apply-spec: true
-#     - ssh-user: <ssh user name>
-# (2) Copy SSH keys to nodes ad Add it to cluster with address and role labels attached to it.
-# (3) Deploy services using apply option,
-#     - 3 Mon on node1, node2, node3 using placement "label:mon"
-#     - deploy MGR on node1, node2 using host placement.
-#     - addition of OSD's using "all-avialable-devices" option.
-#     - create FS volume 'cephfs' and MDS service on node2, node3 using label "mds".
-#     - rgw on node2, node3 with service using hosts placement.
-#     - alertmanager on node1, node2 using label "alert-manager".
-#     - grafana and prometheus on node1 using host placement with limit.
-#     - crash and node-exporter on all nodes using placement="*".
-# (4) Configure client node by adding ceph.conf and keying to node.
-# (5) Setup S3cmd tool and prepare for RGW IO on client Node.     - TODO
-# (6) Run IOs from S3cmd tool for 20 mins.                        - TODO
-# (7) Kernel Mount:                                               - TODO
-#    - Create /mnt/cephfs directory and Mount cephfs on client node.
-#       sudo mount -t ceph 10.8.128.110:6789:/ /mnt/cephfs -o name=client.0,secret=<key>
-#    - using dd command create files on /mnt/cephfs directory.
+# Cluster Configuration:
+#   cephci/conf/pacific/cephadm/tier1_3node_cephadm_bootstrap.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+#
+# Test steps:
+#   (1) Bootstrap cluster with options,
+#       - skip-monitoring-stack
+#       - orphan-initial-daemons
+#       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
+#       - initial-dashboard-user: admin123
+#       - initial-dashboard-password: admin@123,
+#       - registry-json: registry.json
+#       - ssl-dashboard-port: <port-number>.
+#       - apply-spec: <list of service specification>
+#       - ssh-user: <ssh user name>
+#       - mon-ip: <monitor IP address: Required>
+#   (2) Copy SSH keys to nodes ad Add it to cluster with address and role labels attached to it.
+#   (3) Deploy services using apply option,
+#       - 3 Mon on node1, node2, node3 using placement "label:mon"
+#       - deploy MGR on node1, node2 using host placement.
+#       - addition of OSD's using "all-avialable-devices" option.
+#       - create FS volume 'cephfs' and MDS service on node2, node3 using label "mds".
+#       - rgw on node2, node3 with service using hosts placement.
+#       - alertmanager on node1, node2 using label "alert-manager".
+#       - grafana and prometheus on node1 using host placement with limit.
+#       - crash and node-exporter on all nodes using placement="*".
+#   (4) Configure client node by adding ceph.conf and keying to node.
+#   (5) Setup S3cmd tool and prepare for RGW IO on client Node.     - TODO
+#   (6) Run IOs from S3cmd tool for 20 mins.                        - TODO
+#   (7) Kernel Mount:                                               - TODO
+#       - Create /mnt/cephfs directory and Mount cephfs on client node.
+#         sudo mount -t ceph 10.8.128.110:6789:/ /mnt/cephfs -o name=client.0,secret=<key>
+#       - using dd command create files on /mnt/cephfs directory.
 #===============================================================================================
 tests:
   - test:
