@@ -13,9 +13,8 @@ def run(**kw):
     ansible_dir = "/usr/share/ceph-ansible"
     playbook = "filestore-to-bluestore.yml"
     replace_objectstore = "sed -i 's/osd_objectstore: filestore/osd_objectstore: bluestore/g' group_vars/all.yml"
+    installer_node = kw["ceph_cluster"].get_nodes(role="installer")[0]
     for cnode in ceph_nodes:
-        if cnode.role == "installer":
-            installer_node = cnode
         if cnode.role == "osd":
             out, err = installer_node.exec_command(
                 cmd="cd {ansible_dir};ansible-playbook -vvvv"
