@@ -121,6 +121,16 @@ tests:
            config-file-name: test_swift_basic_ops.yaml
            timeout: 300
 
+   - test:
+       name: Swift based tests
+       desc: Swift bulk delete operation
+       polarion-id: CEPH-9753
+       module: sanity_rgw.py
+       config:
+           script-name: test_swift_bulk_delete.py
+           config-file-name: test_swift_bulk_delete.yaml
+           timeout: 300
+
    # multipart test
 
    - test:
