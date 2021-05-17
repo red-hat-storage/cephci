@@ -1,27 +1,30 @@
 #===============================================================================================
-# Cluster configuration:
-# --------------------
-# 4-Node cluster(RHEL-8.3 and above)
-# 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
-#   Node1- Mon, Mgr, Installer, OSD
-#   Node2- Mon, OSD, MDS, RGW
-#   Node3- Mon, OSD, MDS, RGW
-#   Node4- Client
+# Tier-level: 1
+# Test-Suite: tier1_cephadm_upgrade.yaml
+# Test-Case: Upgrade ceph cluster from Build-to-Build (B2B)
 #
-# TIER1:
-# -------
-# Upgrade ceph cluster from Build-to-Build (B2B)
+# Cluster Configuration:
+#    cephci/conf/pacific/cephadm/tier1_3node_cephadm_bootstrap.yaml
 #
-# (1) Bootstrap cluster using N-1 (currently alpha) ceph image version with below options,
-#     - skip-monitoring stack
-#     - orphan-initial-daemons options.
-# (2) Copy SSH keys to nodes and Add it to cluster with address and role labels attached to it.
-# (3) Deploy services using apply option,
-#     - 3 Mon on node1, node2, Node3
-#     - addition of OSD's using "all-available-devices" option.
-#     - RGW on node2, node3 with india.south(realm.zone) using label.
-#     - MDS on node2, node3 with host placements.
-# (4) Upgrade to latest provided(N) Ceph image version.
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+
+# Test Steps:
+#   (1) Bootstrap cluster using N-1 (currently alpha) ceph image version with below options,
+#       - skip-monitoring stack
+#       - registry-url: <registry-URL>
+#       - mon-ip: <monitor address, Required>
+#   (2) Copy SSH keys to nodes and Add it to cluster with address and role labels attached to it.
+#   (3) Deploy services using apply option,
+#       - 3 Mon on node1, node2, Node3
+#       - addition of OSD's using "all-available-devices" option.
+#       - RGW on node2, node3 with india.south(realm.zone) using label.
+#       - MDS on node2, node3 with host placements.
+#   (4) Upgrade to latest provided(N) Ceph image version.
 #===============================================================================================
 tests:
   - test:
