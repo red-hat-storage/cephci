@@ -48,7 +48,7 @@ def getCLIArgsFromMessage(){
             cmd += " --ignore-latest-container"
         }
 
-        if(!env.containerized || (env.containerized && "${env.containerized}" == "true")){  
+        if(!env.containerized || (env.containerized && "${env.containerized}" == "true")){
             cmd += " --docker-registry ${dockerDTR}"
             cmd += " --docker-image ${dockerImage}"
             cmd += " --docker-tag ${dockerTag}"
@@ -58,7 +58,7 @@ def getCLIArgsFromMessage(){
         }
 
         cmd += " --rhbuild ${env.rhcephVersion}"
-        
+
     } else {
         cmd += " --rhbuild ${env.rhcephVersion}"
     }
@@ -77,12 +77,12 @@ def executeTest(def cmd){
         rc = 1
         echo "Encountered an error"
     }
-    return rc   
+    return rc
 }
 
 def cleanUp(def instanceName){
    /*
-       Destroys the created instances and volumes with the given instanceName from rhos-d 
+       Destroys the created instances and volumes with the given instanceName from rhos-d
    */
    try {
         cleanup_cmd = "PYTHONUNBUFFERED=1 ${env.WORKSPACE}/.venv/bin/python"
@@ -135,7 +135,7 @@ def runTestSuite() {
     }
 
     // test suite execution
-    def rc = executeTest(cmd)    
+    def rc = executeTest(cmd)
 
     // Forcing cleanup
     cleanUp(instanceName)
@@ -143,18 +143,33 @@ def runTestSuite() {
     if (rc != 0) {
         error("Test execution has failed.")
     }
+    return rc
+
 
 }
 
-def sendEMail(def subjectPrefix) {
+def sendEMail(def subjectPrefix,def test_results) {
     /*
         Send an email notification.
     */
+    def body = readFile(file: "pipeline/vars/emailable-report.html")
+    body += "<body><u><h3>Test Summary</h3></u><br />"
+    body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
+    body += "<table><tr><th>Test Suite</th><th>Result</th>"
+    for (test in test_results){
+    def res
+    if (test.value == 0){res = "PASS"} else {res = "FAIL"}
+    body += "<tr><td>${test.key}</td><td>${res}</td></tr>"
+    }
+    body +="</table> </body> </html>"
+    def to_list
+    if (1 in test_results.values()){to_list = "cephci@redhat.com"}else{to_list = "ceph-qe-list@redhat.com"}
     emailext(
+        mimeType: 'text/html',
         subject: "${subjectPrefix} test suite execution summary of ${env.composeId}",
-        body: "Console logs are available at ${env.BUILD_URL}",
+        body: "${body}",
         from: "cephci@redhat.com",
-        to: "cephci@redhat.com"
+        to: "${to_list}"
     )
 }
 

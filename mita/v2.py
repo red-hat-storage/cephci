@@ -415,7 +415,7 @@ class CephVMNodeV2:
     def _wait_until_vm_state_running(self):
         """Wait till the VM moves to running state."""
         start_time = datetime.now()
-        end_time = start_time + timedelta(seconds=600)
+        end_time = start_time + timedelta(seconds=1200)
 
         node = None
         while end_time > datetime.now():
