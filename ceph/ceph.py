@@ -882,7 +882,8 @@ class Ceph(object):
         """
         repo_file = ""
         for repo in repos:
-            repo_to_use = base_url + "compose/" + repo + "/x86_64/os/"
+            base_url = base_url.rstrip("/")
+            repo_to_use = f"{base_url}/compose/{repo}/x86_64/os"
             r = requests.get(repo_to_use, timeout=10)
             logger.info("Checking %s", repo_to_use)
             if r.status_code == 200:
