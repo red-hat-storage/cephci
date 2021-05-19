@@ -21,6 +21,7 @@ def getCLIArgsFromMessage(){
 
     // Processing CI_MESSAGE parameter, it can be empty
     def ciMessage = "${params.CI_MESSAGE}" ?: ""
+    println "ciMessage : " + ciMessage
     def cmd = ""
 
     if (ciMessage?.trim()) {
@@ -30,10 +31,6 @@ def getCLIArgsFromMessage(){
 
         env.composeId = jsonCIMsg.compose_id
         def composeUrl = jsonCIMsg.compose_url
-
-        def (dockerDTR, dockerImage1, dockerImage2Tag) = (jsonCIMsg.repository).split('/')
-        def (dockerImage2, dockerTag) = dockerImage2Tag.split(':')
-        def dockerImage = "${dockerImage1}/${dockerImage2}"
 
         // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
         env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
@@ -49,6 +46,9 @@ def getCLIArgsFromMessage(){
         }
 
         if(!env.containerized || (env.containerized && "${env.containerized}" == "true")){
+            def (dockerDTR, dockerImage1, dockerImage2Tag) = (jsonCIMsg.repository).split('/')
+            def (dockerImage2, dockerTag) = dockerImage2Tag.split(':')
+            def dockerImage = "${dockerImage1}/${dockerImage2}"
             cmd += " --docker-registry ${dockerDTR}"
             cmd += " --docker-image ${dockerImage}"
             cmd += " --docker-tag ${dockerTag}"
@@ -140,12 +140,7 @@ def runTestSuite() {
     // Forcing cleanup
     cleanUp(instanceName)
 
-    if (rc != 0) {
-        error("Test execution has failed.")
-    }
     return rc
-
-
 }
 
 def sendEMail(def subjectPrefix,def test_results) {
