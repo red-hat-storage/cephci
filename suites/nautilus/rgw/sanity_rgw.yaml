@@ -704,3 +704,16 @@ tests:
          script-name: test_user_bucket_rename.py
          config-file-name: test_bucket_link_unlink.yaml
          timeout: 500
+
+   # indexless buckets
+   - test:
+       name: Indexless buckets
+       desc: Indexless (blind) buckets
+       polarion-id: CEPH-10354, CEPH-10357
+       module: sanity_rgw.py
+       config:
+         test-version: v2
+         script-name: test_indexless_buckets.py
+         config-file-name: test_indexless_buckets_s3.yaml
+         timeout: 300
+ 
