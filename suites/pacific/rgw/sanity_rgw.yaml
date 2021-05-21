@@ -148,7 +148,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Mbuckets_with_Nobjects with sharing enabled
+      name: Mbuckets_with_Nobjects with sharding enabled
       desc: test to perform bucket ops with sharding operations
       module: sanity_rgw.py
       polarion-id: CEPH-9245
@@ -636,6 +636,7 @@ tests:
         config-file-name: test_bucket_link_unlink.yaml
         timeout: 500
 
+
   # STS Test case
 
   - test:
@@ -648,6 +649,18 @@ tests:
         script-name: test_sts_using_boto.py
         config-file-name: test_sts_using_boto.yaml
         timeout: 500
+
+  # indexless buckets
+  - test:
+      name: Indexless buckets
+      desc: Indexless (blind) buckets
+      polarion-id: CEPH-10354, CEPH-10357
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_indexless_buckets.py
+        config-file-name: test_indexless_buckets_s3.yaml
+        timeout: 300
 
   - test:
       abort-on-fail: true
