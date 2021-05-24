@@ -5,6 +5,7 @@
 def nodeName = "centos-7"
 def cephVersion = "nautilus"
 def sharedLib
+def test_results = [:]
 
 // Pipeline script entry point
 node(nodeName) {
@@ -35,7 +36,6 @@ node(nodeName) {
 
     timeout(unit: "HOURS", time: 4) {
   	    stage('RPM Sanity') {
-                try { 
 		script {
 		    withEnv([
 			"osVersion=RHEL-7",
@@ -45,20 +45,16 @@ node(nodeName) {
 			"containerized=false",
 			"addnArgs=--post-results --log-level DEBUG"
 		    ]) {
-			sharedLib.runTestSuite()
+			rc = sharedLib.runTestSuite()
+			test_results['rpm_sanity'] = rc
 		    }
 		}
-                }
-                catch(Exception ex){
-                     echo 'Exception occured'
-                     echo ex.getMessage()
-                }
 	    }
     }
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("Tier-0")
+            sharedLib.sendEMail("Tier-0", test_results)
             sharedLib.postLatestCompose()
         }
     }
