@@ -57,4 +57,10 @@ node(nodeName) {
         parallel testStages
     }
 
+    stage('Publish Results') {
+        script {
+            sharedLib.sendEMail("Object-Tier-1",test_results)
+        }
+    }
+
 }
