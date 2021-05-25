@@ -23,7 +23,7 @@ def testStages = ['cephadm': {
                     }
                  }, 'object': {
                     stage('Object suite') {
-                        sleep(60)
+                        sleep(180)
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
@@ -38,7 +38,7 @@ def testStages = ['cephadm': {
                     }
                  }, 'block': {
                     stage('Block suite') {
-                        sleep(120)
+                        sleep(360)
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
@@ -53,7 +53,7 @@ def testStages = ['cephadm': {
                     }
                  }, 'cephfs': {
                     stage('Cephfs Suite') {
-                        sleep(180)
+                        sleep(480)
                         script {
                             withEnv([
                                 "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
@@ -101,7 +101,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("Tier-0",test_results)
+            sharedLib.sendEMail("Tier-0", test_results)
             sharedLib.postLatestCompose()
         }
     }
