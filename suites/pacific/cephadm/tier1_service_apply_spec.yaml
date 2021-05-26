@@ -215,3 +215,46 @@ tests:
               args:              # sleep to get all services deployed
                 - sleep
                 - "120"
+  - test:
+      name: RGW Service deployment with spec
+      desc: Add RGW services using spec file
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:                # create realm, zone group and zone
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin realm create --rgw-realm=east --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin zonegroup create --rgw-zonegroup=asia --master --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin zone create --rgw-zonegroup=asia --rgw-zone=india --master --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin period update --rgw-realm=east --commit"
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: my-rgw
+                  placement:
+                    count_per_host: 2
+                    nodes:
+                      - node4
+                      - node3
+                  spec:
+                    rgw_frontend_port: 8080
+                    rgw_realm: east
+                    rgw_zone: india
+          - config:
+              command: shell
+              args:              # sleep to get all services deployed
+                - sleep
+                - "120"

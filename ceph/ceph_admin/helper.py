@@ -267,6 +267,39 @@ class GenerateServiceSpec:
 
         return template.render(spec=spec)
 
+    def generate_rgw_spec(self, spec):
+        """
+        Return spec content for rgw service
+
+        Note: make sure realm, zone group and zone is already created.
+
+        Args:
+            spec: rgw service spec config
+
+        spec:
+          - service_type: rgw
+            service_id: my-rgw
+            unmanaged: boolean    # true or false
+            placement:
+              host_pattern: "*"   # either hosts or host_pattern
+              nodes:
+                - node2
+                - node3
+              label: rgw
+            spec:
+              rgw_frontend_port: 8080
+              rgw_realm: east
+              rgw_zone: india
+        Returns:
+            service_spec
+        """
+        template = self._get_template("rgw")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        return template.render(spec=spec)
+
     def _get_render_method(self, service_type):
         """
         Return render definition based on service_type
@@ -280,6 +313,7 @@ class GenerateServiceSpec:
             "osd": self.generate_osd_spec,
             "mds": self.generate_mds_spec,
             "nfs": self.generate_nfs_spec,
+            "rgw": self.generate_rgw_spec,
         }
 
         try:
