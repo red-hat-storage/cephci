@@ -110,7 +110,8 @@ def runTestSuite() {
     println "Begin Test Suite execution"
 
     // generate random instance name
-    def instanceName = "psi" + org.apache.commons.lang.RandomStringUtils.random(5, true, true)
+    def randString = sh(script: "cat /dev/urandom | tr -cd 'a-f0-9' | head -c 5", returnStdout: true).trim()
+    def instanceName = "psi${randString}"
 
     env.rhcephVersion = "5.0-rhel-8"
 
