@@ -744,7 +744,7 @@ def create_html_file(test_result) -> str:
         use_abs_log_link=False,
     )
 
-    abs_path = os.path.join(run_dir, "result.html")
+    abs_path = os.path.join(run_dir, "index.html")
     write_to_file(data=result_html, abs_path=abs_path)
     return html
 
