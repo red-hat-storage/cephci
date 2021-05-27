@@ -30,18 +30,18 @@ def getCLIArgsFromMessage(){
         def jsonCIMsg = jsonParser.parseText("${params.CI_MESSAGE}")
 
         env.composeId = jsonCIMsg.compose_id
-        def composeUrl = jsonCIMsg.compose_url
+        env.composeUrl = jsonCIMsg.compose_url
 
         // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
         env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
         // get rhbuild value based on OS version
         if ("${env.osVersion}" == 'RHEL-7'){
             env.rhcephVersion = env.rhcephVersion.substring(0,env.rhcephVersion.length() - 1) + '7'
-            cmd += " --rhs-ceph-repo ${composeUrl}"
+            cmd += " --rhs-ceph-repo ${env.composeUrl}"
             cmd += " --ignore-latest-container"
         }
         else{
-            cmd += " --rhs-ceph-repo ${composeUrl}"
+            cmd += " --rhs-ceph-repo ${env.composeUrl}"
             cmd += " --ignore-latest-container"
         }
 
@@ -49,6 +49,7 @@ def getCLIArgsFromMessage(){
             def (dockerDTR, dockerImage1, dockerImage2Tag) = (jsonCIMsg.repository).split('/')
             def (dockerImage2, dockerTag) = dockerImage2Tag.split(':')
             def dockerImage = "${dockerImage1}/${dockerImage2}"
+            env.repository = jsonCIMsg.repository
             cmd += " --docker-registry ${dockerDTR}"
             cmd += " --docker-image ${dockerImage}"
             cmd += " --docker-tag ${dockerTag}"
@@ -174,13 +175,40 @@ def postLatestCompose() {
         Store the latest compose in ressi for QE usage.
     */
     def latestJson = "/ceph/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-${env.rhcephVersion}.json"
+    def tier0Json = "/ceph/cephci-jenkins/latest-rhceph-container-info/RHCEPH-${env.rhcephVersion}-tier0.json"
     def ciMsgFlag = "${params.CI_MESSAGE}" ?: ""
 
     if (ciMsgFlag?.trim()) {
         sh """
-            echo '${params.CI_MESSAGE}' > ${latestJson}
+            echo '${params.CI_MESSAGE}' > ${latestJson};
+            echo '${params.CI_MESSAGE}' > ${tier0Json};
         """
     }
+}
+
+def sendUMBMessage(){
+    /*
+        Trigger a UMB message for successful tier completion
+    */
+    messageType = 'Tier0TestingDone'
+    def messageContent = ''' "compose_id" : ''' + "${env.composeId}"
+    messageContent += ''' , "repository" : ''' + "${env.repository}"
+    messageContent += ''' , "compose_url" : ''' + "${env.composeUrl}"
+
+    def messageProperties = ''' CI_STATUS = PASS
+    TOOL = cephci
+    COMPOSE_ID = ''' + "${env.composeId}"
+    messageProperties += '''
+    REPOSITORY = ''' + "${env.repository}"
+    messageProperties += '''
+    COMPOSE_URL = ''' + "${env.composeUrl}"
+
+    def sendResult = sendCIMessage \
+        providerName: 'Red Hat UMB', \
+        messageContent: messageContent, \
+        messageProperties: messageProperties, \
+        messageType: messageType
+    return sendResult
 }
 
 return this;
