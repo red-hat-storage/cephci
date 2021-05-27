@@ -85,10 +85,10 @@ def run(ceph_cluster, **kwargs) -> int:
     for node in nodes:
         one_time_setup(node, branch=branch)
 
-        cmd = f"cd ceph/{script_dir}; bash {script}"
+        cmd = f"cd ceph/{script_dir}; sudo bash {script}"
         if script == "*":
-            cmd = f"cd ceph/{script_dir}; for test in $(ls); do bash $test; done"
+            cmd = f"cd ceph/{script_dir}; for test in $(ls); do sudo bash $test; done"
 
-        node.exec_command(cmd=cmd, long_running=True)
+        node.exec_command(cmd=cmd, check_ec=True, timeout=1200)
 
     return 0
