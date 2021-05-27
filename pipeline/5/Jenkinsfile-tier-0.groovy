@@ -56,7 +56,7 @@ def testStages = ['cephadm': {
                         sleep(480)
                         script {
                             withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
                                 "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
                                 "addnArgs=--post-results --log-level debug"
