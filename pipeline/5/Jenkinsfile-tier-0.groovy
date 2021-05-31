@@ -102,11 +102,10 @@ node(nodeName) {
     stage('Publish Results') {
         script {
                sharedLib.sendEMail("Tier-0",test_results)
-               if (!(1 in test_results.values())){
+               if ( ! (1 in test_results.values()) ){
                    sharedLib.postLatestCompose()
                    sharedLib.sendUMBMessage()
                }
-            }
         }
     }
 
