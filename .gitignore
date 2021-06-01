@@ -3,7 +3,6 @@
 *.pyc
 .tox
 __pycache__
-rerun
 ven*
 *egg*
 .idea
@@ -13,3 +12,10 @@ config.yaml
 *.bak
 result.html
 result.props
+
+# ignore Logs
+*.log
+
+# ignore cephci execution residues
+*osd_scenarios_ceph*-osd
+rerun
