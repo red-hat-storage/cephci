@@ -48,8 +48,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--ubuntu-repo <repo>]
         [--add-repo <repo>]
         [--kernel-repo <repo>]
-        [--store]
-        [--reuse <file>]
+        [--store | --reuse <file>]
         [--skip-cluster]
         [--skip-subscription]
         [--docker-registry <registry>]
@@ -603,7 +602,7 @@ def run(args):
             for node in cluster:
                 node.reconnect()
     if store:
-        ceph_clusters_file = "rerun/ceph-snapshot-" + timestamp()
+        ceph_clusters_file = f"rerun/{instances_name}-{run_id}"
         if not os.path.exists(os.path.dirname(ceph_clusters_file)):
             os.makedirs(os.path.dirname(ceph_clusters_file))
         store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
