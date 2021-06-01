@@ -112,8 +112,8 @@ def create_ceph_nodes(
 
     if len(ceph_nodes) != node_count:
         log.error(
-            f"Mismatch error in number of VMs spawned. "
-            f"Expected: {len(ceph_nodes)} \t Actual: {node_count}"
+            f"Mismatch error in number of VMs creation. "
+            f"Initiated: {node_count}  \tSpawned: {len(ceph_nodes)}"
         )
         raise NodeError("Required number of nodes not created")
 
