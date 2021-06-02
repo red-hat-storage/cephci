@@ -7,23 +7,6 @@ def nodeName = "centos-7"
 def cephVersion = "pacific"
 def sharedLib
 def testResults = [:]
-def testStages = [
-    'Object_versioning_and_dynamic_resharding': {
-        stage('Object suite - Basic versioning, dynamic resharding and lifecycle tests') {
-            script {
-                withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
-                    "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_cephadm.yaml",
-                    "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
-                    "addnArgs=--post-results --log-level DEBUG"
-                ]) {
-                    rc = sharedLib.runTestSuite()
-                    testResults['Object_basic_versioning_and_resharding'] = rc
-                }
-            }
-        }
-    }
-]
 
 // Pipeline script entry point
 
@@ -54,13 +37,40 @@ node(nodeName) {
     }
 
     timeout(unit: "MINUTES", time: 120) {
-        parallel testStages
+        stage('Single-site') {
+            script {
+                withEnv([
+                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_cephadm.yaml",
+                    "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
+                    "addnArgs=--post-results --log-level DEBUG"
+                ]) {
+                    rc = sharedLib.runTestSuite()
+                    testResults['Single_Site'] = rc
+                }
+            }
+        }
+    }
+
+    timeout(unit: "MINUTES", time: 120) {
+        stage('Multi-site') {
+            script {
+                withEnv([
+                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutConf=conf/${cephVersion}/rgw/rgw_mutlisite.yaml",
+                    "testSuite=suites/${cephVersion}/rgw/rgw_multisite.yaml",
+                    "addnArgs=--post-results --log-level DEBUG"
+                ]) {
+                    rc = sharedLib.runTestSuite()
+                    testResults['Multi_Site_Buckets_tests'] = rc
+                }
+            }
+        }
     }
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("Object-Tier-1",test_results)
+            sharedLib.sendEMail("Object-Tier-1",testResults)
         }
     }
-
 }
