@@ -2,7 +2,7 @@ version_id: 8.4
 id: rhel
 instance:
   create:
-    image-name: rhel-8.4-server-x86_64-released
+    image-name: rhel-8.4.0-x86_64-released
     vm-size: m1.medium
 
   setup: |
