@@ -34,7 +34,7 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "HOURS", time: 4) {
+    timeout(unit: "HOURS", time: 7) {
   	    stage('RPM Sanity') {
 		script {
 		    withEnv([
