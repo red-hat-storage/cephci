@@ -21,6 +21,13 @@
 #  username: <user_name>
 #  password: <user_password>
 
+# Provide stage_credentials before running suites which needs
+# access to rhel and ceph repos that are configured on the staging CDN.
+
+# stage_credentials:
+#  username: <user_name>
+#  password: <user_password>
+
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn
 # To completely disable all email, remove the "email:" and "address:" settings

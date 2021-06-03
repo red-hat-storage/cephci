@@ -41,7 +41,7 @@ def run(**kw):
     repo = config.get("add-repo", False)
     rhbuild = config.get("rhbuild")
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
-
+    is_production = config.get("is_production", False)
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
@@ -53,6 +53,7 @@ def run(**kw):
                 rhbuild,
                 enable_eus,
                 skip_enabling_rhel_rpms,
+                is_production,
             )
             time.sleep(20)
     return 0
@@ -66,6 +67,7 @@ def install_prereq(
     rhbuild=None,
     enable_eus=False,
     skip_enabling_rhel_rpms=False,
+    is_production=False,
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
@@ -93,7 +95,7 @@ def install_prereq(
         # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
         ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
         if not skip_subscription:
-            setup_subscription_manager(ceph)
+            setup_subscription_manager(ceph, is_production)
             if not skip_enabling_rhel_rpms:
                 if enable_eus:
                     enable_rhel_eus_rpms(ceph, distro_ver)
@@ -131,7 +133,7 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
-def setup_subscription_manager(ceph, timeout=1800):
+def setup_subscription_manager(ceph, is_production=False, timeout=1800):
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
     log.info(
@@ -141,10 +143,26 @@ def setup_subscription_manager(ceph, timeout=1800):
     )
     while True:
         try:
+            config_ = get_cephci_config()
+            command = "sudo subscription-manager --force register "
+            if is_production:
+                command += "--serverurl=subscription.rhsm.redhat.com:443/subscription "
+
+                username_ = config_["cdn_credentials"]["username"]
+                password_ = config_["cdn_credentials"]["password"]
+
+            else:
+                command += (
+                    "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription "
+                )
+
+                username_ = config_["stage_credentials"]["username"]
+                password_ = config_["stage_credentials"]["password"]
+
+            command += f"--baseurl=https://cdn.redhat.com --username={username_} --password={password_}"
+
             ceph.exec_command(
-                cmd="sudo subscription-manager --force register  "
-                "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription  "
-                "--baseurl=https://cdn.redhat.com --username=rhcsuser --password=rhcsuser",
+                cmd=command,
                 timeout=720,
             )
 
@@ -153,6 +171,13 @@ def setup_subscription_manager(ceph, timeout=1800):
                 timeout=720,
             )
             break
+        except (KeyError, AttributeError):
+            raise RuntimeError(
+                "Require the {} to be set in .cephci.yaml, Please refer cephci.yaml.template".format(
+                    "cdn_credentials" if is_production else "stage_credentails"
+                )
+            )
+
         except BaseException:
             if datetime.datetime.now() - starttime > timeout:
                 try:
