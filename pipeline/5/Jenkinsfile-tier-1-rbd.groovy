@@ -54,7 +54,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("RBD-Tier-1", test_results)
+            sharedLib.sendEMail("RBD-Tier-1", testResults)
         }
     }
 
