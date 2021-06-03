@@ -153,6 +153,7 @@ def sendEMail(def subjectPrefix,def test_results) {
     body += "<body><u><h3>Test Summary</h3></u><br />"
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
     body += "<table><tr><th>Test Suite</th><th>Result</th>"
+    def status = 'PASS'
     for (test in test_results){
     def res
     if (test.value == 0){res = "PASS"} else {res = "FAIL"}
@@ -160,10 +161,10 @@ def sendEMail(def subjectPrefix,def test_results) {
     }
     body +="</table> </body> </html>"
     def to_list
-    if (1 in test_results.values()){to_list = "cephci@redhat.com"}else{to_list = "ceph-qe-list@redhat.com"}
+    if (1 in test_results.values()){to_list = "cephci@redhat.com"; status = 'FAIL'}else{to_list = "ceph-qe-list@redhat.com"}
     emailext(
         mimeType: 'text/html',
-        subject: "${subjectPrefix} test suite execution summary of ${env.composeId}",
+        subject: "${env.composeId}: ${subjectPrefix} test execution status is ${status}",
         body: "${body}",
         from: "cephci@redhat.com",
         to: "${to_list}"
