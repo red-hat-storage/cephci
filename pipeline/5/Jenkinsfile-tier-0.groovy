@@ -11,7 +11,7 @@ def testStages = ['cephadm': {
                     stage('Deployment suite') {
                         script {
                             withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
                                 "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
                                 "addnArgs=--post-results --log-level debug --grafana-image registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest"
@@ -26,7 +26,7 @@ def testStages = ['cephadm': {
                         sleep(180)
                         script {
                             withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
                                 "sutConf=conf/${cephVersion}/rgw/sanity_rgw.yaml",
                                 "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
                                 "addnArgs=--post-results --log-level debug"
@@ -41,7 +41,7 @@ def testStages = ['cephadm': {
                         sleep(360)
                         script {
                             withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
                                 "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
                                 "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
                                 "addnArgs=--post-results --log-level debug"
