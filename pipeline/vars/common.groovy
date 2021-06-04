@@ -67,20 +67,6 @@ def getCLIArgsFromMessage(){
     return cmd
 }
 
-def executeTest(def cmd){
-   /*
-        Executes the cephci suite using the CLI input given
-   */
-   def rc = 0
-    try {
-        rc = sh(script: "PYTHONUNBUFFERED=1 ${cmd}", returnStatus: true)
-    } catch(Exception ex) {
-        rc = 1
-        echo "Encountered an error"
-    }
-    return rc
-}
-
 def cleanUp(def instanceName){
    /*
        Destroys the created instances and volumes with the given instanceName from rhos-d
@@ -96,6 +82,25 @@ def cleanUp(def instanceName){
         echo "WARNING: Encountered an error during cleanup."
         echo "Please manually verify the test artifacts are removed."
     }
+}
+
+def executeTest(def cmd, def instanceName){
+   /*
+        Executes the cephci suite using the CLI input given
+   */
+    def rc = 0
+    catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
+        try {
+            sh(script: "PYTHONUNBUFFERED=1 ${cmd}", returnStatus: true)
+        } catch(Exception ex) {
+            rc = 1
+            echo err.getMessage()
+            error "Encountered an error"
+        } finally {
+            cleanUp(instanceName)
+        }
+    }
+    return rc
 }
 
 def runTestSuite() {
@@ -137,12 +142,8 @@ def runTestSuite() {
     }
 
     // test suite execution
-    def rc = executeTest(cmd)
-
-    // Forcing cleanup
-    cleanUp(instanceName)
-
-    return rc
+    echo cmd
+    return executeTest(cmd, instanceName)
 }
 
 def sendEMail(def subjectPrefix,def test_results) {
