@@ -92,7 +92,7 @@ def executeTest(def cmd, def instanceName) {
     def rc = 0
     catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
         try {
-            sh(script: "PYTHONUNBUFFERED=1 ${cmd}", returnStatus: true)
+            sh(script: "PYTHONUNBUFFERED=1 ${cmd}")
         } catch(Exception ex) {
             rc = 1
             echo err.getMessage()
