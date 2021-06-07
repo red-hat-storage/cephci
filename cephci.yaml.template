@@ -12,8 +12,9 @@
 #  username: <polarion_user_name>
 #  password: <polarion_password>
 
-# Some test suites require a CDN login in order to pull GA'd images from
-# registry.redhat.io. For example, cephadm requires the prometheus images from
+# Some test suites require a CDN login in order to pull packages from CDN
+# and also to pull GA'd images from registry.redhat.io.
+# For example, cephadm requires the prometheus images from
 # registry.redhat.io, so you must fill out the cdn_credentials section to run
 # the cephadm suites:
 
