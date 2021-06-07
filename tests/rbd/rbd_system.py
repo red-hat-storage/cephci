@@ -33,7 +33,7 @@ def run(**kw):
     test_folder = "rbd-tests"
     script_folder = "ceph-qe-scripts/rbd/system"
     venv_folder = "venv"
-    python_cmd = "venv/bin/python"
+    python_cmd = "sudo venv/bin/python"
 
     git_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
     git_clone = f"git clone {git_url}"
@@ -59,7 +59,7 @@ def run(**kw):
     timeout = config.get("timeout", 1800)
 
     if config.get("ec-pool-k-m", None):
-        ec_pool_arg = "--ec-pool-k-m " + config.get("ec-pool-k-m")
+        ec_pool_arg = " --ec-pool-k-m " + config.get("ec-pool-k-m")
     else:
         ec_pool_arg = ""
 
