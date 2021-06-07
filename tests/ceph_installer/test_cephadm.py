@@ -23,6 +23,7 @@ from ceph.ceph_admin.node_exporter import NodeExporter
 from ceph.ceph_admin.orch import Orch
 from ceph.ceph_admin.osd import OSD
 from ceph.ceph_admin.prometheus import Prometheus
+from ceph.ceph_admin.rbd_mirror import RbdMirror
 from ceph.ceph_admin.rgw import RGW
 
 LOG = logging.getLogger()
@@ -43,6 +44,7 @@ SERVICE_MAP = dict(
         "prometheus": Prometheus,
         "rgw": RGW,
         "orch": Orch,
+        "rbd-mirror": RbdMirror,
     }
 )
 
