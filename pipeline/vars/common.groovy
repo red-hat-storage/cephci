@@ -93,7 +93,7 @@ def executeTest(def cmd, def instanceName) {
     catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
         try {
             sh(script: "PYTHONUNBUFFERED=1 ${cmd}")
-        } catch(Exception ex) {
+        } catch(Exception err) {
             rc = 1
             echo err.getMessage()
             error "Encountered an error"
