@@ -22,6 +22,7 @@ def getCLIArgsFromMessage(){
     // Processing CI_MESSAGE parameter, it can be empty
     def ciMessage = "${params.CI_MESSAGE}" ?: ""
     println "ciMessage : " + ciMessage
+
     def cmd = ""
 
     if (ciMessage?.trim()) {
@@ -34,18 +35,18 @@ def getCLIArgsFromMessage(){
 
         // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
         env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
+
         // get rhbuild value based on OS version
-        if ("${env.osVersion}" == 'RHEL-7'){
+        if ("${env.osVersion}" == 'RHEL-7') {
             env.rhcephVersion = env.rhcephVersion.substring(0,env.rhcephVersion.length() - 1) + '7'
             cmd += " --rhs-ceph-repo ${env.composeUrl}"
             cmd += " --ignore-latest-container"
-        }
-        else{
+        } else {
             cmd += " --rhs-ceph-repo ${env.composeUrl}"
             cmd += " --ignore-latest-container"
         }
 
-        if(!env.containerized || (env.containerized && "${env.containerized}" == "true")){
+        if (!env.containerized || (env.containerized && "${env.containerized}" == "true")) {
             def (dockerDTR, dockerImage1, dockerImage2Tag) = (jsonCIMsg.repository).split('/')
             def (dockerImage2, dockerTag) = dockerImage2Tag.split(':')
             def dockerImage = "${dockerImage1}/${dockerImage2}"
@@ -53,7 +54,7 @@ def getCLIArgsFromMessage(){
             cmd += " --docker-registry ${dockerDTR}"
             cmd += " --docker-image ${dockerImage}"
             cmd += " --docker-tag ${dockerTag}"
-            if ("${dockerDTR}".indexOf('registry-proxy')>=0){
+            if ("${dockerDTR}".indexOf('registry-proxy') >= 0) {
                 cmd += " --insecure-registry"
             }
         }
@@ -84,7 +85,7 @@ def cleanUp(def instanceName){
     }
 }
 
-def executeTest(def cmd, def instanceName){
+def executeTest(def cmd, def instanceName) {
    /*
         Executes the cephci suite using the CLI input given
    */
@@ -100,6 +101,7 @@ def executeTest(def cmd, def instanceName){
             cleanUp(instanceName)
         }
     }
+
     return rc
 }
 
@@ -154,18 +156,28 @@ def sendEMail(def subjectPrefix,def test_results) {
     body += "<body><u><h3>Test Summary</h3></u><br />"
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
     body += "<table><tr><th>Test Suite</th><th>Result</th>"
-    def status = 'PASS'
-    for (test in test_results){
-    def res
-    if (test.value == 0){res = "PASS"} else {res = "FAIL"}
-    body += "<tr><td>${test.key}</td><td>${res}</td></tr>"
+
+    for (test in test_results) {
+        def res = "PASS"
+        if (test.value != 0) {
+            res = "FAIL"
+        }
+
+        body += "<tr><td>${test.key}</td><td>${res}</td></tr>"
     }
     body +="</table> </body> </html>"
-    def to_list
-    if (1 in test_results.values()){to_list = "cephci@redhat.com"; status = 'FAIL'}else{to_list = "ceph-qe-list@redhat.com"}
+
+    def to_list = "ceph-qe-list@redhat.com"
+    def jobStatus = "stable"
+
+    if (1 in test_results.values()) {
+        to_list = "cephci@redhat.com"
+        jobStatus = 'unstable'
+    }
+
     emailext(
         mimeType: 'text/html',
-        subject: "${env.composeId}: ${subjectPrefix} test execution status is ${status}",
+        subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
         body: "${body}",
         from: "cephci@redhat.com",
         to: "${to_list}"
@@ -176,8 +188,9 @@ def postLatestCompose() {
     /*
         Store the latest compose in ressi for QE usage.
     */
-    def latestJson = "/ceph/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-${env.rhcephVersion}.json"
-    def tier0Json = "/ceph/cephci-jenkins/latest-rhceph-container-info/RHCEPH-${env.rhcephVersion}-tier0.json"
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+    def latestJson = "${defaultFileDir}/latest-RHCEPH-${env.rhcephVersion}.json"
+    def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
     def ciMsgFlag = "${params.CI_MESSAGE}" ?: ""
 
     if (ciMsgFlag?.trim()) {
@@ -188,28 +201,39 @@ def postLatestCompose() {
     }
 }
 
-def sendUMBMessage(){
+def sendUMBMessage(def msgType){
     /*
         Trigger a UMB message for successful tier completion
     */
-    messageType = 'Tier0TestingDone'
-    def messageContent = ''' "compose_id" : ''' + "${env.composeId}"
-    messageContent += ''' , "repository" : ''' + "${env.repository}"
-    messageContent += ''' , "compose_url" : ''' + "${env.composeUrl}"
+    def msgContent = """
+    {
+        "BUILD_URL": "${env.BUILD_URL}",
+        "CI_STATUS": "PASS",
+        "COMPOSE_ID": "${env.composeId}",
+        "COMPOSE_URL": "${env.composeUrl}",
+        "PRODUCT": "Red Hat Ceph Storage",
+        "REPOSITORY": "${env.repository}",
+        "TOOL": "cephci"
+    }
+    """
 
-    def messageProperties = ''' CI_STATUS = PASS
-    TOOL = cephci
-    COMPOSE_ID = ''' + "${env.composeId}"
-    messageProperties += '''
-    REPOSITORY = ''' + "${env.repository}"
-    messageProperties += '''
-    COMPOSE_URL = ''' + "${env.composeUrl}"
+    def msgProperties = """ BUILD_URL = ${env.BUILD_URL}
+        CI_STATUS = PASS
+        COMPOSE_ID = ${env.composeId}
+        COMPOSE_URL = ${env.composeUrl}
+        PRODUCT = Red Hat Ceph Storage
+        REPOSITORY = ${env.repository}
+        TOOL = cephci
+    """
 
     def sendResult = sendCIMessage \
         providerName: 'Red Hat UMB', \
-        messageContent: messageContent, \
-        messageProperties: messageProperties, \
-        messageType: messageType
+        overrides: [topic: 'VirtualTopic.qe.ci.jenkins'], \
+        messageContent: "${msgContent}", \
+        messageProperties: msgProperties, \
+        messageType: msgType, \
+        failOnError: true
+
     return sendResult
 }
 
