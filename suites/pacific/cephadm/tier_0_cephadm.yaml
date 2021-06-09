@@ -235,6 +235,7 @@ tests:
       name: Apply Monitor with placement and limit
       desc: Apply monitor service with placement and limit
       module: test_mon.py
+      abort-on-fail: true
       polarion-id:
       config:
         command: apply
@@ -253,6 +254,7 @@ tests:
       name: Apply Monitor with placement
       desc: Apply monitor with placement only
       module: test_mon.py
+      abort-on-fail: true
       polarion-id:
       config:
         command: apply
@@ -269,6 +271,7 @@ tests:
   - test:
       name: Apply Monitor using label
       desc: Apply monitor using label mon
+      abort-on-fail: true
       module: test_mon.py
       polarion-id:
       config:
