@@ -71,6 +71,7 @@ class Orch(LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI):
 
         # Identify the failure
         out, err = self.ls(check_status_dict)
+        out = loads(out)
         LOG.error(f"{service_name} failed with \n{out[0]['events']}")
 
         return False
