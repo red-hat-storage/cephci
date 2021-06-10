@@ -1,10 +1,36 @@
 import logging
 import traceback
+from datetime import datetime, timedelta
+from time import sleep
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utils import FsUtils
 
 log = logging.getLogger(__name__)
+
+
+def wait_for_process(client, process_name, timeout=180, interval=5, ispresent=True):
+    """
+    Checks for the proccess and returns the status based on ispresent
+    :param client:
+    :param process_name:
+    :param timeout:
+    :param interval:
+    :param ispresent:
+    :return:
+    """
+    end_time = datetime.now() + timedelta(seconds=timeout)
+    log.info("Wait for the process to start or stop")
+    while end_time > datetime.now():
+        client.exec_command(
+            sudo=True, cmd=f"ceph orch ps | grep {process_name}", check_ec=False
+        )
+        if client.node.exit_status == 0 and ispresent:
+            return True
+        if client.node.exit_status == 1 and not ispresent:
+            return True
+        sleep(interval)
+    return False
 
 
 def run(ceph_cluster, **kw):
@@ -30,12 +56,6 @@ def run(ceph_cluster, **kw):
         else:
             raise CommandFailed("fetching client info failed")
         client1 = client_info["fuse_clients"][0]
-        rc1 = fs_util.auth_list([client1])
-        log.info(rc1)
-        if rc1 == 0:
-            log.info("got auth keys")
-        else:
-            raise CommandFailed("auth list failed")
         results = []
         tc1 = "83573446"
         log.info(f"Execution of testcase {tc1} started")
@@ -44,26 +64,29 @@ def run(ceph_cluster, **kw):
             "ceph fs volume create cephfs_new",
             "ceph fs ls | grep cephfs_new",
             "ceph osd lspools | grep cephfs.cephfs_new",
-            "ceph orch ps | grep cephfs_new",
             "ceph fs volume ls | grep cephfs_new",
+        ]
+        for command in commands:
+            client1.exec_command(sudo=True, cmd=command)
+            results.append(f"{command} successfully executed")
+        wait_for_process(client1, "cephfs_new")
+        commands = [
             "ceph config set mon mon_allow_pool_delete true",
             "ceph fs volume rm cephfs_new --yes-i-really-mean-it",
         ]
         for command in commands:
-            out, rc = client1.exec_command(sudo=True, cmd=command)
-            if client1.node.exit_status == 0:
-                results.append(f"{command} successfully executed")
+            client1.exec_command(sudo=True, cmd=command)
+            results.append(f"{command} successfully executed")
 
         verifyremove_command = [
             "ceph fs ls | grep cephfs_new",
             "ceph osd lspools | grep cephfs.cephfs_new",
-            "ceph orch ps | grep cephfs_new",
         ]
         for command in verifyremove_command:
-            out, rc = client1.exec_command(sudo=True, cmd=command, check_ec=False)
+            client1.exec_command(sudo=True, cmd=command, check_ec=False)
             if client1.node.exit_status == 1:
                 results.append(f"{command} successfully executed")
-
+        wait_for_process(client1, "cephfs_new", ispresent=False)
         log.info(f"Execution of testcase {tc1} ended")
         log.info("Testcase Results:")
         for res in results:
