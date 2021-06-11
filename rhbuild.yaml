@@ -41,7 +41,7 @@ ceph:
   '5':
     name: pacific
     composes:
-      '5.0':
+      '5.0-rhel-8':
         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.0-rhel-8/latest-RHCEPH-5-RHEL-8/'
       'latest':
         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.0-rhel-8/latest-RHCEPH-5-RHEL-8/'

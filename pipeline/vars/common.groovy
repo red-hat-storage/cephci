@@ -148,33 +148,55 @@ def runTestSuite() {
     return executeTest(cmd, instanceName)
 }
 
-def sendEMail(def subjectPrefix,def test_results) {
+def fetchEmailBodyAndReceiver(def test_results, def isStage) {
+    def to_list = "ceph-qe-list@redhat.com"
+    def jobStatus = "stable"
+    def failureCount = 0
+    
+    def body = ""
+
+    if(isStage){
+        body += "<table><tr><th>Test Suite</th><th>Result</th>"
+        for (test in test_results) {
+            def res = "PASS"
+            if (test.value != 0) {
+                res = "FAIL"
+                failureCount += 1
+            } 
+
+            body += "<tr><td>${test.key}</td><td>${res}</td></tr>"
+        }
+    }
+    else{
+        body += "<table><tr><th>Jenkins Job Name</th><th>Result</th>"
+        for (test in test_results) {
+            if (test.value != "SUCCESS") {
+                failureCount += 1
+            }
+
+            body += "<tr><td>${test.key}</td><td>${test.value}</td></tr>"
+        }
+    }
+    body +="</table> </body> </html>"
+
+    if (failureCount > 0) {
+        to_list = "cephci@redhat.com"
+        jobStatus = 'unstable'
+    }
+    return ["to_list" : to_list, "jobStatus" : jobStatus, "body" : body]
+}
+
+def sendEMail(def subjectPrefix,def test_results,def isStage=true) {
     /*
         Send an email notification.
     */
     def body = readFile(file: "pipeline/vars/emailable-report.html")
     body += "<body><u><h3>Test Summary</h3></u><br />"
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
-    body += "<table><tr><th>Test Suite</th><th>Result</th>"
-
-    for (test in test_results) {
-        def res = "PASS"
-        if (test.value != 0) {
-            res = "FAIL"
-        }
-
-        body += "<tr><td>${test.key}</td><td>${res}</td></tr>"
-    }
-    body +="</table> </body> </html>"
-
-    def to_list = "ceph-qe-list@redhat.com"
-    def jobStatus = "stable"
-
-    if (1 in test_results.values()) {
-        to_list = "cephci@redhat.com"
-        jobStatus = 'unstable'
-    }
-
+    def params = fetchEmailBodyAndReceiver(test_results, isStage)
+    body += params["body"]
+    def to_list = params["to_list"]
+    def jobStatus = params["jobStatus"]
     emailext(
         mimeType: 'text/html',
         subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
@@ -235,6 +257,61 @@ def sendUMBMessage(def msgType){
         failOnError: true
 
     return sendResult
+}
+
+def fetchTier1Compose(){
+    /*
+       Fetch the compose to be tested for tier1, is there is one
+    */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+    def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
+    def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
+    def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
+
+    def tier0Compose = sh(returnStdout: true, script: """ cat '${tier0Json}' """).trim()
+    if(tier1FileExists != 0){
+        return tier0Compose
+    }
+    def tier1Compose = sh(returnStdout: true, script: """ cat '${tier1Json}' """).trim()
+    def jsonParser = new JsonSlurper()
+    def jsonCIMsgTier0 = jsonParser.parseText("${tier0Compose}")
+    def tier0composeId = jsonCIMsgTier0.compose_id
+    def jsonCIMsgTier1 = jsonParser.parseText("${tier1Compose}")
+    def tier1composeId = jsonCIMsgTier1.latest.compose_id
+    if (tier0composeId == tier1composeId){
+        return null
+    }
+    else{
+        return tier0Compose
+    }
+}
+
+def postTier1Compose(def test_results, def composeInfo) {
+    /*
+        Store the latest compose in ressi for QE usage.
+    */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+    def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
+    def ciMsgFlag = "${composeInfo}" ?: ""
+
+    if (ciMsgFlag?.trim()) {
+        def jsonContent = """{"latest" : "${composeInfo}", "pass" : "${composeInfo}"}"""
+        if (1 in test_results.values()) {
+           jsonContent = """{"latest" : "${composeInfo}", "pass" : ""}"""
+        }
+        sh """
+            echo '${jsonContent}' > ${tier1Json};
+        """
+    }
+}
+
+def fetchComposeInfo(def composeInfo){
+    def jsonParser = new JsonSlurper()
+    def jsonCIMsg = jsonParser.parseText("${composeInfo}") 
+    def composeId = jsonCIMsg.compose_id
+    def composeUrl = jsonCIMsg.compose_url
+    def repository = jsonCIMsg.repository
+    return ["composeId" : composeId, "composeUrl" : composeUrl, "repository" : repository]
 }
 
 return this;
