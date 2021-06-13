@@ -13,7 +13,7 @@ def prepareNode() {
     sh(script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
 }
 
-def getCLIArgsFromMessage(){
+def getCLIArgsFromMessage() {
     /*
         Returns the arguments required for CLI after processing the CI message
     */
@@ -68,7 +68,7 @@ def getCLIArgsFromMessage(){
     return cmd
 }
 
-def cleanUp(def instanceName){
+def cleanUp(def instanceName) {
    /*
        Destroys the created instances and volumes with the given instanceName from rhos-d
    */
@@ -80,8 +80,8 @@ def cleanUp(def instanceName){
 
         sh(script: "${cleanup_cmd}")
     } catch(Exception ex) {
-        echo "WARNING: Encountered an error during cleanup."
-        echo "Please manually verify the test artifacts are removed."
+        println "WARNING: Encountered an error during cleanup."
+        println "Please manually verify the test artifacts are removed."
     }
 }
 
@@ -95,7 +95,7 @@ def executeTest(def cmd, def instanceName) {
             sh(script: "PYTHONUNBUFFERED=1 ${cmd}")
         } catch(Exception err) {
             rc = 1
-            echo err.getMessage()
+            println err.getMessage()
             error "Encountered an error"
         } finally {
             cleanUp(instanceName)
@@ -118,7 +118,10 @@ def runTestSuite() {
     println "Begin Test Suite execution"
 
     // generate random instance name
-    def randString = sh(script: "cat /dev/urandom | tr -cd 'a-f0-9' | head -c 5", returnStdout: true).trim()
+    def randString = sh(
+                            script: "cat /dev/urandom | tr -cd 'a-f0-9' | head -c 5",
+                            returnStdout: true
+                        ).trim()
     def instanceName = "psi${randString}"
 
     env.rhcephVersion = "5.0-rhel-8"
@@ -153,10 +156,10 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
     def jobStatus = "stable"
     def failureCount = 0
     
-    def body = ""
+    def body = "<table>"
 
-    if(isStage){
-        body += "<table><tr><th>Test Suite</th><th>Result</th>"
+    if(isStage) {
+        body += "<tr><th>Test Suite</th><th>Result</th>"
         for (test in test_results) {
             def res = "PASS"
             if (test.value != 0) {
@@ -167,8 +170,8 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
             body += "<tr><td>${test.key}</td><td>${res}</td></tr>"
         }
     }
-    else{
-        body += "<table><tr><th>Jenkins Job Name</th><th>Result</th>"
+    else {
+        body += "<tr><th>Jenkins Job Name</th><th>Result</th>"
         for (test in test_results) {
             if (test.value != "SUCCESS") {
                 failureCount += 1
@@ -177,6 +180,7 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
             body += "<tr><td>${test.key}</td><td>${test.value}</td></tr>"
         }
     }
+
     body +="</table> </body> </html>"
 
     if (failureCount > 0) {
@@ -193,10 +197,13 @@ def sendEMail(def subjectPrefix,def test_results,def isStage=true) {
     def body = readFile(file: "pipeline/vars/emailable-report.html")
     body += "<body><u><h3>Test Summary</h3></u><br />"
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
+
     def params = fetchEmailBodyAndReceiver(test_results, isStage)
     body += params["body"]
+
     def to_list = params["to_list"]
     def jobStatus = params["jobStatus"]
+
     emailext(
         mimeType: 'text/html',
         subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
@@ -223,7 +230,7 @@ def postLatestCompose() {
     }
 }
 
-def sendUMBMessage(def msgType){
+def sendUMBMessage(def msgType) {
     /*
         Trigger a UMB message for successful tier completion
     */
@@ -259,31 +266,41 @@ def sendUMBMessage(def msgType){
     return sendResult
 }
 
-def fetchTier1Compose(){
+def fetchTier1Compose() {
     /*
        Fetch the compose to be tested for tier1, is there is one
     */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
     def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
-    def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
 
-    def tier0Compose = sh(returnStdout: true, script: """ cat '${tier0Json}' """).trim()
-    if(tier1FileExists != 0){
-        return tier0Compose
-    }
-    def tier1Compose = sh(returnStdout: true, script: """ cat '${tier1Json}' """).trim()
-    def jsonParser = new JsonSlurper()
-    def jsonCIMsgTier0 = jsonParser.parseText("${tier0Compose}")
-    def tier0composeId = jsonCIMsgTier0.compose_id
-    def jsonCIMsgTier1 = jsonParser.parseText("${tier1Compose}")
-    def tier1composeId = jsonCIMsgTier1.latest.compose_id
-    if (tier0composeId == tier1composeId){
+    def tier0FileExists = sh(returnStatus: true, script: """ls -l '${tier0Json}'""")
+    if (tier0FileExists != 0) {
+        println "RHCEPH-${env.rhcephVersion}-tier0.json does not exist."
         return null
     }
-    else{
+    def tier0Compose = sh(returnStdout: true, script: """ cat '${tier0Json}' """).trim()
+
+    def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
+    if (tier1FileExists != 0) {
         return tier0Compose
     }
+
+    def tier1Compose = sh(returnStdout: true, script: """ cat '${tier1Json}' """).trim()
+    def jsonParser = new JsonSlurper()
+
+    def jsonCIMsgTier0 = jsonParser.parseText("${tier0Compose}")
+    def tier0composeId = jsonCIMsgTier0.compose_id
+
+    def jsonCIMsgTier1 = jsonParser.parseText("${tier1Compose}")
+    def tier1composeId = jsonCIMsgTier1.latest.compose_id
+
+    if (tier0composeId != tier1composeId) {
+        return tier0Compose
+    }
+
+    println "There are no new stable build."
+    return null
 }
 
 def postTier1Compose(def test_results, def composeInfo) {
@@ -292,26 +309,46 @@ def postTier1Compose(def test_results, def composeInfo) {
     */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
-    def ciMsgFlag = "${composeInfo}" ?: ""
+    def jsonContent = """{ "latest" : ${composeInfo}, "pass" : ${composeInfo} }"""
 
-    if (ciMsgFlag?.trim()) {
-        def jsonContent = """{"latest" : "${composeInfo}", "pass" : "${composeInfo}"}"""
-        if (1 in test_results.values()) {
-           jsonContent = """{"latest" : "${composeInfo}", "pass" : ""}"""
+    if (1 in test_results.values()) {
+        def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
+        if ( tier1FileExists != 0) {
+            jsonContent = """ {"latest" : ${composeInfo}, "pass" : ""} """
+        } else {
+            def jsonParser = new JsonSlurper()
+            def tier1Compose = sh(
+                                    returnStdout: true,
+                                    script: """cat ${tier1Json}"""
+                               ).trim()
+            def tier1JsonContent = jsonParser.parseText("${tier1Compose}")
+            jsonContent = """
+                {
+                    "latest": ${composeInfo},
+                    "pass": ${tier1JsonContent.pass}
+                }
+            """
         }
-        sh """
-            echo '${jsonContent}' > ${tier1Json};
-        """
     }
+
+    sh """
+        echo '${jsonContent}' > ${tier1Json};
+    """
+
 }
 
-def fetchComposeInfo(def composeInfo){
+def fetchComposeInfo(def composeInfo) {
+    /*
+        Return a map after processing the passed information.
+    */
     def jsonParser = new JsonSlurper()
     def jsonCIMsg = jsonParser.parseText("${composeInfo}") 
-    def composeId = jsonCIMsg.compose_id
-    def composeUrl = jsonCIMsg.compose_url
-    def repository = jsonCIMsg.repository
-    return ["composeId" : composeId, "composeUrl" : composeUrl, "repository" : repository]
+
+    return [
+                "composeId" : jsonCIMsg.compose_id,
+                "composeUrl" : jsonCIMsg.compose_url,
+                "repository" : jsonCIMsg.repository
+           ]
 }
 
 return this;
