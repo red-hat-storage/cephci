@@ -2549,3 +2549,37 @@ mds standby for rank = 1
             break
         time.sleep(120)
         return 0
+
+    def create_file_data(self, client, directory, no_of_files, file_name, data):
+        """
+        This function will write files to the directory with the data given
+        :param client:
+        :param directory:
+        :param no_of_files:
+        :param file_name:
+        :param data:
+        :return:
+        """
+        files = [f"{file_name}_{i}" for i in range(0, no_of_files)]
+        client.exec_command(
+            sudo=True,
+            cmd=f"cd {directory};echo {data * random.randint(100, 500)} | tee {' '.join(files)}",
+        )
+
+    def get_files_and_checksum(self, client, directory):
+        """
+        This will collect the filenames and their respective checksums and returns the dictionary
+        :param client:
+        :param directory:
+        :return:
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"cd {directory};ls -lrt |  awk {{'print $9'}}"
+        )
+        file_list = out.read().decode().strip().split()
+        file_dict = {}
+        for file in file_list:
+            out, rc = client.exec_command(sudo=True, cmd=f"md5sum {directory}/{file}")
+            md5sum = out.read().decode().strip().split()
+            file_dict[file] = md5sum[0]
+        return file_dict
