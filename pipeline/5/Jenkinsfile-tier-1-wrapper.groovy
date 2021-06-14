@@ -62,8 +62,8 @@ node(nodeName) {
 					def jobResult = build propagate: false, \
 							job: jobName, \
 							parameters: [[
-								$class: 'StringParameterValue', 
-								name: 'CI_MESSAGE', 
+								$class: 'StringParameterValue',
+								name: 'CI_MESSAGE',
 								value: composeInfo
 							]]
 					println "The job ${jobName} completed with status ${jobResult.result}"
@@ -89,9 +89,9 @@ node(nodeName) {
 				sharedLib.sendEMail("Tier-1", test_results, false)
 				def result_set = test_results.values().toSet()
 				if ( result_set.size() == 1 && ("SUCCESS" in test_results.values()) ){
-					sharedLib.postTier1Compose(test_results, composeInfo)
 					sharedLib.sendUMBMessage("Tier1TestingDone")
 				}
+				sharedLib.postTier1Compose(test_results, composeInfo)
 			}
 		}
 	}
