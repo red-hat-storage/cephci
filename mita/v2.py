@@ -433,7 +433,12 @@ class CephVMNodeV2:
                 return
 
             if node.state == "error":
-                raise NodeError(node.extra.get("fault", {}).get("message"))
+                msg = (
+                    "Unknown Error"
+                    if not node.extra
+                    else node.extra.get("fault").get("message")
+                )
+                raise NodeError(msg)
 
         raise NodeError(f"{node.name} is in {node.state} state.")
 
