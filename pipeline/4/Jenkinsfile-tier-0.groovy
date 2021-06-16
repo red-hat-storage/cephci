@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 0 test suites for RH Ceph 4.x.
+    Pipeline script for executing Tier 0 test suites for RH Ceph 4.x images.
 */
 // Global variables section
 def nodeName = "centos-7"
@@ -25,7 +25,9 @@ node(nodeName) {
                     trackingSubmodules: false
                 ]],
                 submoduleCfg: [],
-                userRemoteConfigs: [[url: 'https://github.com/red-hat-storage/cephci.git']]
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
             ])
             script {
                 sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
@@ -36,40 +38,44 @@ node(nodeName) {
 
     timeout(unit: "HOURS", time: 9) {
 	    stage('RPM Sanity') {
-		script {
-		    withEnv([
-			"osVersion=RHEL-8",
-			"sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
-			"sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
-			"testSuite=suites/${cephVersion}/ansible/sanity_ceph_ansible.yaml",
-			"containerized=false",
-			"addnArgs=--post-results --log-level DEBUG"
-		    ]) {
-			rc = sharedLib.runTestSuite()
-			test_results['rpm_sanity'] = rc
-		    }
-		}
+            script {
+                withEnv([
+                    "osVersion=RHEL-8",
+                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
+                    "testSuite=suites/${cephVersion}/ansible/sanity_ceph_ansible.yaml",
+                    "containerized=false",
+                    "addnArgs=--post-results --log-level DEBUG"
+                ]) {
+                    rc = sharedLib.runTestSuite()
+                    test_results['rpm_sanity'] = rc
+                }
+            }
 	    }
+
 	    stage('Image Sanity') {
-		script {
-		    withEnv([
-			"osVersion=RHEL-8",
-			"sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
-			"sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
-			"testSuite=suites/${cephVersion}/ansible/sanity_containerized_ceph_ansible.yaml",
-			"addnArgs=--post-results --log-level DEBUG"
-		    ]) {
-			rc = sharedLib.runTestSuite()
-			test_results['image_sanity'] = rc
-		    }
-		}
-	  }
+            script {
+                withEnv([
+                    "osVersion=RHEL-8",
+                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
+                    "testSuite=suites/${cephVersion}/ansible/sanity_containerized_ceph_ansible.yaml",
+                    "addnArgs=--post-results --log-level DEBUG"
+                ]) {
+                    rc = sharedLib.runTestSuite()
+                    test_results['image_sanity'] = rc
+                }
+            }
+	    }
     }
 
     stage('Publish Results') {
         script {
             sharedLib.sendEMail("Tier-0", test_results)
-            sharedLib.postLatestCompose()
+            if ( ! (1 in test_results.values()) ) {
+                sharedLib.postLatestCompose()
+                sharedLib.sendUMBMessage("Tier0TestingDone")
+            }
         }
     }
 }
