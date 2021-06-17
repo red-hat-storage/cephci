@@ -106,3 +106,13 @@ tests:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_version_copy_op.yaml
         timeout: 500
+  - test:
+      name: swift object expire tests
+      desc: object expire in swift
+      polarion-id: CEPH-9718
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_object_expire_op.yaml
+        timeout: 500
+        
