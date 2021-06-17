@@ -11,7 +11,8 @@ def composeInfo = ""
 def tier1Jobs = [
                     "rhceph-5-tier-1-deploy",
                     "rhceph-5-tier-1-object",
-                    "rhceph-5-tier-1-rbd"
+                    "rhceph-5-tier-1-rbd",
+                    "rhceph-5-tier-1-cephfs"
                 ]
 
 // Pipeline script entry point
