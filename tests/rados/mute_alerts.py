@@ -63,7 +63,7 @@ def run(ceph_cluster, **kw):
     # Scenario 4 : Verify the unmute command with sticky
     log.info("Scenario 4 : Verify the unmute command")
     alert = alert_list[0]
-    if not verify_unmute_cli(node=cephadm, alert=alert):
+    if not verify_unmute_cli(node=cephadm, alert=alert, sticky=True):
         log.error(f"Scenario 4 for alert : {alert} has failed")
         return 1
 

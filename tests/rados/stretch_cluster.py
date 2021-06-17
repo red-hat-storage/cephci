@@ -7,7 +7,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
 from tests.rados.mute_alerts import get_alerts
-from tests.rados.rados_prep import create_pool
+from tests.rados.rados_prep import create_pool, run_ceph_command
 from tests.rados.test_9281 import do_rados_get, do_rados_put
 
 log = logging.getLogger(__name__)
@@ -26,6 +26,10 @@ def run(ceph_cluster, **kw):
     7. Create a test pool, write some data and perform add capacity. ( add osd nodes into two sites )
     8. Check for the bump in election epochs throughout.
     9. Check the acting set in PG for 4 OSD's. 2 from each site.
+
+    Verifies bugs:
+    [1]. https://bugzilla.redhat.com/show_bug.cgi?id=1937088
+    [2]. https://bugzilla.redhat.com/show_bug.cgi?id=1952763
     Args:
         ceph_cluster (ceph.ceph.Ceph): ceph cluster
     """
@@ -58,6 +62,9 @@ def run(ceph_cluster, **kw):
     cmd = "ceph config set osd osd_crush_update_on_start false"
     cephadm.shell([cmd])
 
+    site1 = config.get("site1", "site1")
+    site2 = config.get("site2", "site2")
+
     # Collecting osd details and split them into Sita A and Site B
     sorted_osds = sort_osd_sites(all_osd_details=osd_details)
     site_a_osds = sorted_osds[0]
@@ -69,7 +76,7 @@ def run(ceph_cluster, **kw):
     if not set_osd_sites(
         node=cephadm,
         osds=site_a_osds,
-        site=1,
+        site=site1,
         all_osd_details=osd_details,
     ):
         log.error("Failed to move the OSD's into sites")
@@ -78,7 +85,7 @@ def run(ceph_cluster, **kw):
     if not set_osd_sites(
         node=cephadm,
         osds=site_b_osds,
-        site=2,
+        site=site2,
         all_osd_details=osd_details,
     ):
         log.error("Failed to move the OSD's into sites")
@@ -86,7 +93,9 @@ def run(ceph_cluster, **kw):
 
     # collecting mon map to be compared after strtech cluster deployment
     stretch_rule_name = "stretch_rule"
-    if not setup_crush_rule(node=client_node, rule_name=stretch_rule_name):
+    if not setup_crush_rule(
+        node=client_node, rule_name=stretch_rule_name, site1=site1, site2=site2
+    ):
         log.error("Failed to Add crush rules in the crush map")
         return 1
 
@@ -112,7 +121,9 @@ def run(ceph_cluster, **kw):
     log.info("Enabled connectivity mode on the cluster")
 
     log.info(f"selecting mon : {tiebreaker_node} as tie breaker monitor on site 3")
-    if not set_mon_sites(node=cephadm, tiebreaker_node=tiebreaker_node):
+    if not set_mon_sites(
+        node=cephadm, tiebreaker_node=tiebreaker_node, site1=site1, site2=site2
+    ):
         log.error("Failed to ad monitors into respective sites")
         return 1
 
@@ -149,7 +160,10 @@ def run(ceph_cluster, **kw):
         ):
             log.error("Failed to create the replicated Pool")
             return 1
-        do_rados_put(mon=client_node, pool=pool_name, nobj=100)
+        do_rados_put(mon=client_node, pool=pool_name, nobj=1000)
+
+        # Increasing backfill/rebalance threads so that cluster will re-balance it faster after add capacity
+        change_recover_threads(node=cephadm, config=config, action="set")
 
         log.info("Performing add Capacity after the deployment of stretch cluster")
         site_a_osds = [osd for osd in sorted_osds[0] if osd not in site_a_osds]
@@ -158,7 +172,7 @@ def run(ceph_cluster, **kw):
         if not set_osd_sites(
             node=cephadm,
             osds=site_a_osds,
-            site=1,
+            site=site1,
             all_osd_details=osd_details,
         ):
             log.error("Failed to move the OSD's into sites")
@@ -166,14 +180,55 @@ def run(ceph_cluster, **kw):
         if not set_osd_sites(
             node=cephadm,
             osds=site_b_osds,
-            site=2,
+            site=site2,
             all_osd_details=osd_details,
         ):
             log.error("Failed to move the OSD's into sites")
             return 1
 
-        # Sleeping for 10 seconds after adding OSD's for the PG re-balancing to start and begin rados get
-        time.sleep(10)
+        # Waiting for up to 2.5 hours for the PG's to enter active + Clean state after add capacity
+        # Automation for bug : [1] & [2]
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
+        flag = True
+        while end_time > datetime.datetime.now():
+            status_report = run_ceph_command(node=cephadm, cmd="ceph report")
+
+            # Proceeding to check if all PG's are in active + clean
+            for entry in status_report["num_pg_by_state"]:
+                rec = (
+                    "remapped",
+                    "backfilling",
+                    "degraded",
+                    "incomplete",
+                    "peering",
+                    "recovering",
+                    "recovery_wait",
+                    "peering",
+                    "undersized",
+                    "backfilling_wait",
+                )
+                flag = (
+                    False
+                    if any(key in rec for key in entry["state"].split("+"))
+                    else True
+                )
+
+            if flag:
+                log.info("The recovery and back-filling of the OSD is completed")
+                break
+            log.info(
+                f"Waiting for active + clean. Active aletrs: {status_report['health']['checks'].keys()},"
+                f"PG States : {status_report['num_pg_by_state']}"
+                f" checking status again in 2 minutes"
+            )
+            time.sleep(120)
+        change_recover_threads(node=cephadm, config=config, action="rm")
+        if not flag:
+            log.error(
+                "The cluster did not reach active + Clean state after add capacity"
+            )
+            return 1
+
         with parallel() as p:
             p.spawn(do_rados_get, client_node, pool_name, 10)
             for res in p:
@@ -189,6 +244,30 @@ def run(ceph_cluster, **kw):
     log.info(f"Acting set : {acting_set} Consists of 4 OSD's per PG")
     log.info("Stretch rule with arbiter monitor node set up successfully")
     return 0
+
+
+def change_recover_threads(node: CephAdmin, config: dict, action: str):
+    """
+    increases or decreases the recovery threads based on the action sent
+    Args:
+        node: Cephadm node where the commands need to be executed
+        config: Config from the suite file for the run
+        action: Set or remove increase the backfill / recovery threads
+            Values : "set" -> set the threads to specified value
+                     "rm" -> remove the config changes made
+
+    """
+
+    cfg_map = {
+        "osd_max_backfills": f"ceph config {action} osd osd_max_backfills",
+        "osd_recovery_max_active": f"ceph config {action} osd osd_recovery_max_active",
+    }
+    for cmd in cfg_map:
+        if action == "set":
+            command = f"{cfg_map[cmd]} {config.get(cmd, 8)}"
+        else:
+            command = cfg_map[cmd]
+        node.shell([command])
 
 
 def get_pg_acting_set(node: CephAdmin, pool_name: str) -> list:
@@ -218,24 +297,26 @@ def get_pg_acting_set(node: CephAdmin, pool_name: str) -> list:
     return res["up"]
 
 
-def setup_crush_rule(node, rule_name: str) -> bool:
+def setup_crush_rule(node, rule_name: str, site1: str, site2: str) -> bool:
     """
     Adds the crush rule required for stretch cluster into crush map
     Args:
         node: ceph client node where the commands need to be executed
         rule_name: Name of the crush rule to add
+        site1: Name the 1st site
+        site2: Name of the 2nd site
     Returns: True -> pass, False -> fail
 
     """
     rule = rule_name
-    rules = """id 111
+    rules = f"""id 111
 type replicated
 min_size 1
 max_size 10
-step take site1
+step take {site1}
 step chooseleaf firstn 2 type host
 step emit
-step take site2
+step take {site2}
 step chooseleaf firstn 2 type host
 step emit"""
     if not add_crush_rules(node=node, rule_name=rule, rules=rules):
@@ -334,14 +415,14 @@ def sort_osd_sites(all_osd_details: dict) -> tuple:
 
 
 def set_osd_sites(
-    node: CephAdmin, osds: list, site: int, all_osd_details: dict
+    node: CephAdmin, osds: list, site: str, all_osd_details: dict
 ) -> bool:
     """
     Collects all the details about the OSD's present on the cluster and distrubutes them among the two sites
     Args:
         node: Cephadm node where the commands need to be executed
         osds: list of OSD's to be added to the given site
-        site: 1 or 2, where the OSD needs to be moved
+        site: the name of the site.
         all_osd_details: dictionary of OSD's containing the details
             eg : {'2': {'weight': 0.01459, 'state': 'up', 'name': 'osd.2'},
                 '7': {'weight': 0.01459, 'state': 'up', 'name': 'osd.7'}}
@@ -349,12 +430,14 @@ def set_osd_sites(
     Returns: True -> pass, False -> fail
     """
     # adding the identified OSD's into the respective sites
-    if site != 1 or site != 2:
-        log.error("Site Values can only be either 1 or 2")
+    sites = set()
+    sites.add(site)
+    if len(sites) > 2:
+        log.error("There can only be 2 Sites with stretch cluster at present")
         return False
     try:
         for osd in osds:
-            cmd = f"ceph osd crush move {all_osd_details[osd]['name']} host=host{site}-{osd} datacenter=site{site}"
+            cmd = f"ceph osd crush move {all_osd_details[osd]['name']} host=host-{site}-{osd} datacenter={site}"
             node.shell([cmd])
             # sleeping for 20 seconds for osd to be moved
             time.sleep(20)
@@ -420,13 +503,14 @@ def get_mon_details(node: CephAdmin) -> dict:
     return mon_details
 
 
-def set_mon_sites(node: CephAdmin, tiebreaker_node) -> bool:
+def set_mon_sites(node: CephAdmin, tiebreaker_node, site1: str, site2: str) -> bool:
     """
     Adds the mon daemons into the two sites with arbiter node at site 3 as a tie breaker
     Args:
         node: Cephadm node where the commands need to be executed
         tiebreaker_node: name of the monitor to be added as tie breaker( site 3 )
-
+        site1: Name the 1st site
+        site2: Name of the 2nd site
     Returns: True -> pass, False -> fail
 
     """
@@ -435,11 +519,11 @@ def set_mon_sites(node: CephAdmin, tiebreaker_node) -> bool:
     monitors = list(mon_state["monitors"])
     monitors.remove(tiebreaker_node.hostname)
     commands = [
-        f"/bin/ceph mon set_location {tiebreaker_node.hostname} datacenter=site3",
-        f"/bin/ceph mon set_location {monitors[0]} datacenter=site1",
-        f"/bin/ceph mon set_location {monitors[1]} datacenter=site1",
-        f"/bin/ceph mon set_location {monitors[2]} datacenter=site2",
-        f"/bin/ceph mon set_location {monitors[3]} datacenter=site2",
+        f"/bin/ceph mon set_location {tiebreaker_node.hostname} datacenter=arbiter",
+        f"/bin/ceph mon set_location {monitors[0]} datacenter={site1}",
+        f"/bin/ceph mon set_location {monitors[1]} datacenter={site1}",
+        f"/bin/ceph mon set_location {monitors[2]} datacenter={site2}",
+        f"/bin/ceph mon set_location {monitors[3]} datacenter={site2}",
     ]
     for cmd in commands:
         try:
