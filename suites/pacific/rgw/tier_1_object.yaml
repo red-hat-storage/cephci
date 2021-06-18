@@ -98,6 +98,15 @@ tests:
         config-file-name: test_dynamic_resharding.yaml
         timeout: 500
   - test:
+      name: swift versioning tests
+      desc: Test versioned object in swift
+      polarion-id: CEPH-10640
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_versioning.yaml
+        timeout: 500
+  - test:
       name: swift versioning copy tests
       desc: restore versioned object in swift
       polarion-id: CEPH-10646
