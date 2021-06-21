@@ -2,7 +2,7 @@
 # Tier-level: 1
 # Test-Suite: tier1_ssl_dashboard_port.yaml
 # Test-Case:
-#      Bootstrap cluster with custom ssl-dashboard-port, ssh-user
+#      Bootstrap cluster with custom ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key
 #       and apply-spec options.
 #
 # Cluster Configuration:
@@ -26,8 +26,10 @@
 #       - ssl-dashboard-port: <port-number>.
 #       - apply-spec: <list of service specification>
 #       - ssh-user: <ssh user name>
+#       - ssh-public-key: <path to the custom ssh public key file>
+#       - ssh-private-key: <path to the custom ssh private key file>
 #       - mon-ip: <monitor IP address: Required>
-#   (2) Copy SSH keys to nodes ad Add it to cluster with address and role labels attached to it.
+#   (2) Copy the provided SSH keys to nodes and Add it to cluster with address and role labels attached to it.
 #   (3) Deploy services using apply option,
 #       - 3 Mon on node1, node2, node3 using placement "label:mon"
 #       - deploy MGR on node1, node2 using host placement.
@@ -52,8 +54,8 @@ tests:
       module: install_prereq.py
       abort-on-fail: true
   - test:
-      name: Cephadm Bootstrap with ssl-dashboard-port
-      desc: bootstrap with ssl-dashboard-port and apply-spec option.
+      name: Cephadm Bootstrap with ssl-dashboard-port, ssh options
+      desc: bootstrap with ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key and apply-spec option.
       module: test_bootstrap.py
       polarion-id:
       config:
@@ -71,6 +73,8 @@ tests:
           orphan-initial-daemons: true
           ssl-dashboard-port: "8445"
           ssh-user: cephuser
+          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide
+          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
           apply-spec:
             - service_type: host
               address: true

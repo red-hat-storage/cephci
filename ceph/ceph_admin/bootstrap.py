@@ -160,7 +160,12 @@ class BootstrapMixin:
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
 
-        self.distribute_cephadm_gen_pub_key(args.get("output-pub-ssh-key"))
+        # The path to ssh public key mentioned in either output-pub-ssh-key or ssh-public-key options
+        # will be considered for distributing the ssh public key, if these are not specified,
+        # then the default ssh key path /etc/ceph/ceph.pub will be considered.
+        self.distribute_cephadm_gen_pub_key(
+            args.get("output-pub-ssh-key") or args.get("ssh-public-key")
+        )
 
         # The provided image is used by Grafana service only when
         # --skip-monitoring-stack is set to True during bootstrap.
