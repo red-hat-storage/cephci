@@ -662,6 +662,49 @@ tests:
         config-file-name: test_indexless_buckets_s3.yaml
         timeout: 500
 
+  # Multifactor Authentication tests
+  - test:
+      name: MFA deletes
+      desc: test versioned object deletion with mfa token
+      polarion-id: CEPH-83574054
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_rgw_mfa.py
+        config-file-name: test_rgw_mfa.yaml
+        extra-pkgs:
+          8:
+            - https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/o/oathtool-2.6.2-3.el8.x86_64.rpm
+        timeout: 500
+
+  - test:
+      name: MFA deletes
+      desc: test multipart versioned object deletion with mfa token
+      polarion-id: CEPH-83574411
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_rgw_mfa.py
+        config-file-name: test_rgw_mfa_multipart.yaml
+        extra-pkgs:
+          8:
+            - https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/o/oathtool-2.6.2-3.el8.x86_64.rpm
+        timeout: 500
+
+  - test:
+      name: MFA deletes
+      desc: test with incorrect syntax for mfa resync commnad appropriate usage message is displayed
+      polarion-id: CEPH-83574412
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_rgw_mfa.py
+        config-file-name: test_rgw_mfa_incorrect_syntax.yaml
+        extra-pkgs:
+          8:
+            - https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/o/oathtool-2.6.2-3.el8.x86_64.rpm
+        timeout: 500
+
   - test:
       abort-on-fail: true
       config:
