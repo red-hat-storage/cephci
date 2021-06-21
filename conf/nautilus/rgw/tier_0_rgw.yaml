@@ -39,3 +39,4 @@ globals:
       node6:
         role:
           - client
+
