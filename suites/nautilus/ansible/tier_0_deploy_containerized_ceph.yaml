@@ -1,0 +1,69 @@
+tests:
+   - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+   - test:
+      name: containerized ceph ansible
+      polarion-id: CEPH-83571503
+      module: test_ansible.py
+      config:
+        ansi_config:
+            ceph_test: True
+            ceph_origin: distro
+            ceph_stable_release: nautilus
+            ceph_repository: rhcs
+            osd_scenario: collocated
+            osd_auto_discovery: False
+            journal_size: 1024
+            ceph_stable: True
+            ceph_stable_rh_storage: True
+            ceph_docker_image: rhceph/rhceph-4-rhel8
+            ceph_docker_image_tag: latest
+            containerized_deployment: true
+            ceph_docker_registry: registry.redhat.io
+            copy_admin_key: true
+            dashboard_enabled: True
+            dashboard_admin_user: admin
+            dashboard_admin_password: p@ssw0rd
+            grafana_admin_user: admin
+            grafana_admin_password: p@ssw0rd
+            node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+            grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+            prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+            alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+            ceph_conf_overrides:
+                global:
+                  osd_pool_default_pg_num: 64
+                  osd_default_pool_size: 2
+                  osd_pool_default_pgp_num: 64
+                  mon_max_pg_per_osd: 1024
+                mon:
+                  mon_allow_pool_delete: true
+                client:
+                  rgw crypt require ssl: false
+                  rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                    testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+            cephfs_pools:
+              - name: "cephfs_data"
+                pgs: "8"
+              - name: "cephfs_metadata"
+                pgs: "8"
+      desc: ceph deployment using site.yaml(container) playbook
+      destroy-cluster: False
+      abort-on-fail: true
+   - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+            cmd: ceph -s
+            sudo: True
+      desc: Check for ceph health debug info
+   - test:
+      name: ceph ansible purge
+      polarion-id: CEPH-83571493
+      module: purge_cluster.py
+      config:
+           ansible-dir: /usr/share/ceph-ansible
+           playbook-command: purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes
+      desc: Purge ceph cluster
