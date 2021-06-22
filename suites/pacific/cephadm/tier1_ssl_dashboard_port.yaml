@@ -154,6 +154,7 @@ tests:
                 - myrgw
               args:
                 placement:
+                  count-per-host: 2
                   nodes:
                     - node2
                     - node3
