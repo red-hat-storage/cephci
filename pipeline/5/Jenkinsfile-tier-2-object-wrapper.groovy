@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 1 object test suites for RH Ceph 5.0.
+    Pipeline script for executing Tier 2 object test suites for RH Ceph 5.0.
 */
 // Global variables section
 
@@ -54,7 +54,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("Object-Tier-2", testResults)
+            sharedLib.sendEMail("Tier-2-Object", testResults)
         }
     }
 
