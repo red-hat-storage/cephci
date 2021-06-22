@@ -677,12 +677,12 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
-    name: s3 tests
-    module: test_s3.py
-    config:
-      branch: ceph-nautilus
-    desc: execution of s3 tests against radosgw
-    destroy-cluster: False
+      name: s3 tests
+      module: test_s3.py
+      config:
+        branch: ceph-nautilus
+      desc: execution of s3 tests against radosgw
+      destroy-cluster: False
 
   # User, Bucket rename, Bucket link and unlink
 
