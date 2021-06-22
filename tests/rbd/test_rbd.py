@@ -43,8 +43,6 @@ def one_time_setup(node, branch: str) -> None:
             "cmd": "dnf install -y xmlstarlet rbd-nbd qemu-img cryptsetup --nogpgcheck",
             "sudo": True,
         },
-        {"cmd": "ceph config set mon mon_allow_pool_delete true"},
-        {"cmd": "ceph orch restart mon"},
     ]
     for command in commands:
         node.exec_command(**command)
@@ -75,12 +73,28 @@ def run(ceph_cluster, **kwargs) -> int:
 
     branch = config.get("branch", "pacific")
     nodes = config.get("nodes", [])
+    rhbuild = config.get("rhbuild")
 
     if nodes:
         nodes = get_nodes_by_ids(ceph_cluster, nodes)
     else:
         # By default, tests would be executed on a single client node
         nodes = [ceph_cluster.get_nodes(role="client")[0]]
+
+    if "5." in rhbuild:
+        nodes[0].exec_command("ceph config set mon mon_allow_pool_delete true")
+        nodes[0].exec_command("ceph orch restart mon")
+    else:
+        nodes[0].exec_command(
+            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+        )
+        mon_nodes = ceph_cluster.get_nodes(role="mon")
+        for ceph_mon in mon_nodes:
+            ceph_mon.exec_command(
+                sudo=True,
+                cmd=f"systemctl restart ceph-mon@{ceph_mon.hostname}",
+                long_running=True,
+            )
 
     for node in nodes:
         one_time_setup(node, branch=branch)
