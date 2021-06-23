@@ -5,45 +5,34 @@ globals:
         role:
           - mon
           - mgr
-          - client
           - installer
       node2:
         role:
           - mon
           - mgr
-          - mds
-          - client
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
       node3:
         role:
           - osd
           - mon
-          - mds
-          - client
         no-of-volumes: 4
         disk-size: 15
       node4:
         role:
-          - osd
+          - nfs
           - mds
-        no-of-volumes: 4
-        disk-size: 15
       node5:
         role:
           - osd
           - mds
-          - client
         no-of-volumes: 4
         disk-size: 15
       node6:
         role:
-          - osd
           - nfs
-        no-of-volumes: 4
-        disk-size: 15
+          - mds
       node7:
         role:
-          - osd
-          - nfs
-        no-of-volumes: 4
-        disk-size: 15
-
+          - client
