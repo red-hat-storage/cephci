@@ -105,6 +105,13 @@ class ApplyMixin:
                     node_names = [node.shortname for node in nodes_]
 
                     sep = placement.get("sep", " ")
+
+                    # Support RGW count-per-host placement option
+                    if placement.get("count-per-host") and self.SERVICE_NAME == "rgw":
+                        node_names.append(
+                            f"count-per-host:{placement['count-per-host']}"
+                        )
+
                     node_str = f"{sep}".join(node_names)
 
                     limit = placement.pop("limit", None)
