@@ -40,7 +40,7 @@ node(nodeName) {
         stage('Cephfs Extended Suite') {
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
                     "sutConf=conf/${cephVersion}/cephfs/tier_1_fs.yaml",
                     "testSuite=suites/${cephVersion}/cephfs/tier_1_fs.yaml",
                     "addnArgs=--post-results --log-level info"
