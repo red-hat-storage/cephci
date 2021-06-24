@@ -82,8 +82,8 @@ def run(ceph_cluster, **kwargs) -> int:
         nodes = [ceph_cluster.get_nodes(role="client")[0]]
 
     if "5." in rhbuild:
-        nodes[0].exec_command("ceph config set mon mon_allow_pool_delete true")
-        nodes[0].exec_command("ceph orch restart mon")
+        nodes[0].exec_command(cmd="ceph config set mon mon_allow_pool_delete true")
+        nodes[0].exec_command(cmd="ceph orch restart mon")
     else:
         nodes[0].exec_command(
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
