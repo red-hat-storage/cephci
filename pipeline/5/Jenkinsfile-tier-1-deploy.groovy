@@ -21,7 +21,7 @@ def testStages0 = [
         stage('Upgrade suite - 4x RPM to 5x containerized version') {
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/upgrades/upgrade_from4x_big_cluster.yml",
                     "testSuite=suites/${cephVersion}/upgrades/tier-1-upgrade_4x_to_5_x_baremetal.yaml",
                     "addnArgs=--post-results --log-level debug"
@@ -37,7 +37,7 @@ def testStages0 = [
             sleep(300)
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/upgrades/upgrade_from4x_small_cluster.yml",
                     "testSuite=suites/${cephVersion}/upgrades/tier-1-upgrade_4x_to_5_x_containerized.yaml",
                     "addnArgs=--post-results --log-level debug"
@@ -55,7 +55,7 @@ def testStages1 = [
         stage('Bootstrap suite - custom SSL Dashboard port and apply-spec') {
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/cephadm/tier1_3node_cephadm_bootstrap.yaml",
                     "testSuite=suites/${cephVersion}/cephadm/tier1_ssl_dashboard_port.yaml",
                     "addnArgs=--post-results --log-level debug"
@@ -71,7 +71,7 @@ def testStages1 = [
             sleep(180)
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/cephadm/tier1_3node_cephadm_bootstrap.yaml",
                     "testSuite=suites/${cephVersion}/cephadm/tier1_skip_dashboard.yaml",
                     "addnArgs=--post-results --log-level debug"
@@ -87,7 +87,7 @@ def testStages1 = [
             sleep(360)
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/cephadm/tier1_3node_cephadm_bootstrap.yaml",
                     "testSuite=suites/${cephVersion}/cephadm/tier1_service_apply_spec.yaml",
                     "addnArgs=--post-results --log-level debug"
@@ -103,7 +103,7 @@ def testStages1 = [
             sleep(360)
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/cephadm/tier1_3node_cephadm_bootstrap.yaml",
                     "testSuite=suites/${cephVersion}/cephadm/tier1_cephadm_upgrade.yaml",
                     "addnArgs=--post-results --log-level debug"

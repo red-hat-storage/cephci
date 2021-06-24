@@ -40,7 +40,7 @@ node(nodeName) {
         stage('RBD Extended Suite') {
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64-medlarge.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
                     "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
                     "testSuite=suites/${cephVersion}/rbd/tier_1_rbd.yaml",
                     "addnArgs=--post-results --log-level info"

@@ -40,7 +40,7 @@ node(nodeName) {
         stage('Single-site') {
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_cephadm.yaml",
                     "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
                     "addnArgs=--post-results --log-level DEBUG"
@@ -56,7 +56,7 @@ node(nodeName) {
         stage('Multi-site') {
             script {
                 withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.3-server-x86_64.yaml",
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                     "sutConf=conf/${cephVersion}/rgw/rgw_mutlisite.yaml",
                     "testSuite=suites/${cephVersion}/rgw/rgw_multisite.yaml",
                     "addnArgs=--post-results --log-level DEBUG"
