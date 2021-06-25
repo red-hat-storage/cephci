@@ -253,6 +253,25 @@ def file_or_path_exists(node, file_or_path):
     return True
 
 
+def fetch_file_content(node, file):
+    """
+    Method to fetch file content
+    Args:
+        node: node object where file exists
+        file: ceph file path
+
+    Returns:
+        string
+    """
+    try:
+        out, _ = node.exec_command(cmd=f"cat {file}", sudo=True)
+        log.info("Output : %s" % out.read().decode())
+        return out.read().decode()
+    except CommandFailed as err:
+        log.error("Error: %s" % err)
+        return None
+
+
 def copy_ceph_configuration_files(cls, ceph_conf_args):
     """
     Copy ceph configuration files to ceph default "/etc/ceph" path.
@@ -269,6 +288,7 @@ def copy_ceph_configuration_files(cls, ceph_conf_args):
           output-keyring : "/root/ceph/ceph.client.admin.keyring"
           output-config : "/root/ceph/ceph.conf"
           output-pub-ssh-key : "/root/ceph/ceph.pub"
+          ssh-public-key : "/root/ceph/ceph.pub"
     """
     ceph_dir = ceph_conf_args.get("output-dir")
     if ceph_dir:
@@ -281,6 +301,7 @@ def copy_ceph_configuration_files(cls, ceph_conf_args):
         "output-keyring": __DEFAULT_KEYRING_PATH,
         "output-config": __DEFAULT_CONF_PATH,
         "output-pub-ssh-key": __DEFAULT_SSH_PATH,
+        "ssh-public-key": __DEFAULT_SSH_PATH,
     }
 
     for arg, default_path in ceph_files.items():
@@ -399,6 +420,74 @@ def validate_skip_dashboard(cls, flag, response):
     log.info("skip-dashboard validation is successful")
 
 
+def validate_ssh_public_key(cls, ssh_public_key):
+    """
+    Method to validate ssh public key
+    ssh_public_key:
+        if specified, then the specified public key should be configured for the cluster
+    Args:
+        cls: cephadm instance
+        ssh_public_key: ssh-public-key bootstrap option
+        response: bootstrap command response
+    """
+    out, _ = cls.shell(args=["ceph", "cephadm", "get-pub-key"])
+
+    log.info(f"Ceph SSH public key file - configured: {ssh_public_key}")
+
+    if not file_or_path_exists(cls.installer, ssh_public_key):
+        raise BootStrapValidationFailure("Ceph SSH public key file not found")
+
+    pub_key = fetch_file_content(cls.installer, ssh_public_key)
+
+    log.info(
+        f"ssh-public-key configured: {out}, ssh-public-key used in cluster: {pub_key}"
+    )
+
+    # if pub_key found and out == pub_key, configured and used keys are same. Valid
+    # if pub_key found and out != pub_key, configured and used keys are different, not Valid
+    if pub_key and out != pub_key:
+        raise BootStrapValidationFailure(
+            "ssh public key provided in the configuration is not used in the cluster"
+        )
+
+    log.info("ssh-public-key validation is successful")
+
+
+def validate_ssh_private_key(cls, ssh_private_key):
+    """
+    Method to validate ssh public key
+    ssh_public_key:
+        if specified, then the specified public key should be configured for the cluster
+    Args:
+        cls: cephadm instance
+        ssh_private_key: ssh-private-key bootstrap option
+        response: bootstrap command response
+    """
+    out, _ = cls.shell(
+        args=["ceph", "config-key", "get", "mgr/cephadm/ssh_identity_key"]
+    )
+
+    log.info(f"Ceph SSH private key file - configured: {ssh_private_key}")
+
+    if not file_or_path_exists(cls.installer, ssh_private_key):
+        raise BootStrapValidationFailure("Ceph SSH private key file not found")
+
+    pri_key = fetch_file_content(cls.installer, ssh_private_key)
+
+    log.info(
+        f"ssh-private-key configured: {out}, ssh-private-key used in cluster: {pri_key}"
+    )
+
+    # if pri_key found and out == pri_key, configured and used keys are same. Valid
+    # if pri_key found and out != pri_key, configured and used keys are different, not Valid
+    if pri_key and out != pri_key:
+        raise BootStrapValidationFailure(
+            "ssh private key provided in the configuration is not used in the cluster"
+        )
+
+    log.info("ssh-private-key validation is successful")
+
+
 def verify_bootstrap(cls, args, response):
     """
     Verify bootstrap based on the parameter(s) provided.
@@ -425,6 +514,14 @@ def verify_bootstrap(cls, args, response):
         validate_ssl_dashboard_port(cls, response, args.get("ssl-dashboard-port"))
         validate_dashboard_user(cls, args.get("initial-dashboard-user"), response)
         validate_dashboard_passwd(cls, args.get("initial-dashboard-password"), response)
+
+    # Public Key validations
+    if args.get("ssh-public-key"):
+        validate_ssh_public_key(cls, args.get("ssh-public-key"))
+
+    # Private Key validations
+    if args.get("ssh-private-key"):
+        validate_ssh_private_key(cls, args.get("ssh-private-key"))
 
 
 def run(ceph_cluster, **kw):
