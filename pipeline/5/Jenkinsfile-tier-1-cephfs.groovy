@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 1 RBD test suites for RH Ceph 5.0.
+    Pipeline script for executing Tier 1 Cephfs test suites for RH Ceph 5.0.
 */
 // Global variables section
 
@@ -37,12 +37,12 @@ node(nodeName) {
     }
 
     timeout(unit: "MINUTES", time: 360) {
-        stage('RBD Extended Suite') {
+        stage('Cephfs Extended Suite') {
             script {
                 withEnv([
                     "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                    "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-                    "testSuite=suites/${cephVersion}/rbd/tier_1_rbd.yaml",
+                    "sutConf=conf/${cephVersion}/cephfs/tier_1_fs.yaml",
+                    "testSuite=suites/${cephVersion}/cephfs/tier_1_fs.yaml",
                     "addnArgs=--post-results --log-level info"
                 ]) {
                     rc = sharedLib.runTestSuite()
@@ -54,8 +54,10 @@ node(nodeName) {
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("RBD-Tier-1", testResults)
+            sharedLib.sendEMail("Tier-1-Cephfs", testResults)
         }
     }
 
 }
+
+

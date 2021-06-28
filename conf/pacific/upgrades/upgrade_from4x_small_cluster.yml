@@ -36,7 +36,7 @@ globals:
          - iscsi-gw
          - client
 
-     node6:
-       role:
-         - nfs
-
+           #     node6:
+           #       role:
+           #         - nfs
+           #     nfs upgrade is blocked till 5.1

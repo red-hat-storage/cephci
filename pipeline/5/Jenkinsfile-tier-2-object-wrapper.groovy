@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 1 RBD test suites for RH Ceph 5.0.
+    Pipeline script for executing Tier 2 object test suites for RH Ceph 5.0.
 */
 // Global variables section
 
@@ -13,7 +13,7 @@ def testResults = [:]
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
+        stage('Configure node') {
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],
@@ -36,17 +36,17 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "MINUTES", time: 360) {
-        stage('RBD Extended Suite') {
+    timeout(unit: "HOURS", time: 4) {
+        stage('Regression') {
             script {
                 withEnv([
                     "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                    "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-                    "testSuite=suites/${cephVersion}/rbd/tier_1_rbd.yaml",
-                    "addnArgs=--post-results --log-level info"
+                    "sutConf=conf/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+                    "testSuite=suites/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+                    "addnArgs=--post-results --log-level DEBUG"
                 ]) {
                     rc = sharedLib.runTestSuite()
-                    testResults['Extended test'] = rc
+                    testResults['Regression'] = rc
                 }
             }
         }
@@ -54,7 +54,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         script {
-            sharedLib.sendEMail("RBD-Tier-1", testResults)
+            sharedLib.sendEMail("Tier-2-Object", testResults)
         }
     }
 
