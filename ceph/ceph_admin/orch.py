@@ -15,20 +15,35 @@ from .common import config_dict_to_string
 from .helper import GenerateServiceSpec
 from .ls import LSMixin
 from .ps import PSMixin
+from .reconfig import ReconfigMixin
+from .redeploy import RedeployMixin
 from .remove import RemoveMixin
-from .service_ops import ServiceOpsMixin
+from .restart import RestartMixin
+from .start import StartMixin
+from .stop import StopMixin
 from .upgrade import UpgradeMixin
 
 LOG = logging.getLogger()
 
 
-class Orch(ServiceOpsMixin, LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI):
+class Orch(
+    LSMixin,
+    PSMixin,
+    ReconfigMixin,
+    RedeployMixin,
+    RemoveMixin,
+    RestartMixin,
+    StartMixin,
+    StopMixin,
+    UpgradeMixin,
+    CephCLI,
+):
+
     """Represent ceph orch command."""
 
     direct_calls = ["ls", "ps"]
 
     def get_hosts_by_label(self, label: str):
-
         """
         Fetch host object by label attached to it.
         Args:
@@ -38,6 +53,26 @@ class Orch(ServiceOpsMixin, LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI
         """
         out, _ = self.shell(args=["ceph", "orch", "host", "ls", "--format=json"])
         return [node for node in loads(out) if label in node.get("labels")]
+
+    def remove(self, config):
+        cmd = ["ceph", "orch"]
+        if config.get("base_cmd_args"):
+            cmd.append(config_dict_to_string(config["base_cmd_args"]))
+
+        args = config["args"]
+
+        service_name = args.pop("service_name")
+        cmd.extend(["rm", service_name])
+
+        self.shell(args=cmd)
+
+        verify = args.pop("verify", True)
+
+        if verify:
+            self.check_service(
+                service_name=service_name,
+                exist=False,
+            )
 
     def check_service_exists(
         self, service_name: str, timeout: int = 300, interval: int = 5
@@ -178,3 +213,36 @@ class Orch(ServiceOpsMixin, LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI
 
         LOG.info(f"apply-spec command response :\n{out}")
         # todo: add verification part
+
+    def op(self, op, config):
+        """
+        Execute the command ceph orch <start|stop|restart|reconfigure|redeploy> <service>.
+        Args:
+            config: command and service are passed from the test case.
+            op: operation parameters ex: restart|start|stop|reconfigure|redeploy
+        Example:
+            Testing ceph orch restart mon
+        config:
+          command: restart
+          service: mon
+        Returns:
+          output, error   returned by the command.
+
+        example
+            config:
+                command: start
+                base_cmd_args:
+                    verbose: true
+                pos_args:
+                    - service_name
+
+        """
+
+        base_cmd = ["ceph", "orch"]
+        if config.get("base_cmd_args"):
+            base_cmd.append(config_dict_to_string(config["base_cmd_args"]))
+        base_cmd.append(op)
+
+        base_cmd.extend(config.get("pos_args"))
+
+        return self.shell(args=base_cmd)

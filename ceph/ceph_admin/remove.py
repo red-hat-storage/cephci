@@ -1,9 +1,7 @@
 """
 Represent the ceph orch CLI action 'remove'.
-
 Module to remove ceph role service(s) using orchestration command
 "ceph orch remove service.name "
-
 This module inherited where service deleted using "remove" operation.
 """
 from typing import Dict
@@ -18,11 +16,9 @@ class RemoveMixin:
     def remove(self: ServiceProtocol, config: Dict) -> None:
         """
         Execute the remove method using the object's service name.
-
         Args:
             config:     Key/value pairs passed from the test suite.
                         pos_args        - List to be added as positional params
-
         Example:
             config:
                 command: remove

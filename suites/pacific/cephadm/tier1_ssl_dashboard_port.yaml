@@ -120,6 +120,35 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
+      name: Zap osd on single device
+      desc: Zap osd on single device
+      module: test_device.py
+      polarion-id:
+      config:
+        command: zap
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "node3"
+          - "/dev/vdb"
+        args:
+          force: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Add osd on single device
+      desc: Add osd on single device
+      module: test_daemon.py
+      polarion-id:
+      config:
+        command: add
+        service: osd
+        pos_args:
+          - "node3"
+          - "/dev/vdb"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
       name: Apply OSD, MDS, RGW Service deployment
       desc: OSD, MDS, RGW service deployment using apply.
       module: test_cephadm.py
@@ -189,18 +218,8 @@ tests:
           mgr: "allow *"
       destroy-cluster: false
       abort-on-fail: true
-  - test:
-      name: Restarting a ceph service using cephadm
-      desc: Apply Ceph orch restart service for all the daemons
-      module: test_orch.py
-      polarion-id:
-      config:
-        service: mon
-        command: restart
-        base_cmd_args:
-          verbose: true
-      destroy-cluster: false
-      abort-on-fail: true
+
+
 
 
 
