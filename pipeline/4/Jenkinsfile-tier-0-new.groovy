@@ -8,7 +8,7 @@ def cephVersion = "nautilus"
 def sharedLib
 def test_results = [:]
 def rpmStages = ['deployRhel7': {
-                    stage('RHEL7 RPM) {
+                    stage('RHEL7 RPM') {
                         script {
                             withEnv([
                                 "osVersion=RHEL-7",
@@ -25,7 +25,7 @@ def rpmStages = ['deployRhel7': {
                         }
                     }
                  }, 'deployRhel8': {
-                    stage('RHEL8 RPM ') {
+                    stage('RHEL8 RPM') {
                         script {
                             withEnv([
                                 "osVersion=RHEL-8",
@@ -112,7 +112,7 @@ def containerStages = ['deployContainerRhel7': {
                         }
                     }
                  }, 'deployContainerRhel8': {
-                    stage('RHEL8 Container'') {
+                    stage('RHEL8 Container') {
                         script {
                             withEnv([
                                 "osVersion=RHEL-8",
