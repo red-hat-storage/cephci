@@ -157,11 +157,11 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "MINUTES", time: 120) {
+    timeout(unit: "MINUTES", time: 140) {
         parallel rpmStages
     }
 
-    timeout(unit: "MINUTES", time: 120) {
+    timeout(unit: "MINUTES", time: 100) {
         parallel containerStages
     }
 
