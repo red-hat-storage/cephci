@@ -81,12 +81,12 @@ tests:
   
   - test:
       clusters:
-        ceph-pri:
+        ceph-rgw1:
           config:
             set-env: true
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
-            copy-user-info-to-site: ceph-sec
+            copy-user-info-to-site: ceph-rgw2
             timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
@@ -94,12 +94,12 @@ tests:
 
   - test:
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             config-file-name: test_Mbuckets_with_Nobjects.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             timeout: 300
-            verify-io-on-site: [ "ceph-pri" ]
+            verify-io-on-site: [ "ceph-rgw1" ]
       desc: Execute M buckets with N objects on secondary cluster
       module: sanity_rgw_multisite.py
       name: m buckets with n objects
@@ -108,10 +108,10 @@ tests:
       desc: test_Mbuckets_with_Nobjects_compression on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
             timeout: 300
   - test:
@@ -119,10 +119,10 @@ tests:
       desc: test_Mbuckets_with_Nobjects_aws4 on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
             timeout: 300
   - test:
@@ -130,7 +130,7 @@ tests:
       desc: test_Mbuckets_with_Nobjects_delete on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
@@ -140,10 +140,10 @@ tests:
       desc: test_Mbuckets_with_Nobjects_download on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
             timeout: 300
   - test:
@@ -151,10 +151,10 @@ tests:
       desc: test_Mbuckets_with_Nobjects_enc on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
             timeout: 300
   - test:
@@ -162,10 +162,10 @@ tests:
       desc: test_Mbuckets_with_Nobjects_multipart on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             timeout: 300
   - test:
@@ -173,7 +173,7 @@ tests:
       desc: test_Mbuckets_with_Nobjects_sharding on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
@@ -183,10 +183,10 @@ tests:
       desc: test_Mbuckets on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             config-file-name: test_Mbuckets.yaml
             timeout: 300
   - test:
@@ -194,7 +194,7 @@ tests:
       desc: test_bucket_listing_flat_ordered_versionsing on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
@@ -206,7 +206,7 @@ tests:
       desc: test_bucket_listing_flat_ordered on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
@@ -216,7 +216,7 @@ tests:
       desc: test_bucket_listing_flat_unordered.yaml on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
@@ -226,7 +226,7 @@ tests:
       desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
@@ -236,7 +236,7 @@ tests:
       desc: test_bucket_listing_flat_ordered_versionsing on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
@@ -246,7 +246,7 @@ tests:
       desc: test_versioning_copy_objects on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_versioning_copy_objects.py
             config-file-name: test_versioning_copy_objects.yaml
@@ -256,29 +256,29 @@ tests:
       desc: test_versioning_enable on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_acls on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_acls.yaml
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_copy on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_copy.yaml
@@ -288,7 +288,7 @@ tests:
       desc: test_versioning_objects_delete on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_delete.yaml
@@ -298,29 +298,29 @@ tests:
       desc: test_versioning_objects_enable on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_suspend on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_suspend.yaml
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
   - test:
       name: LargeObjGet_GC test
       desc: test_LargeObjGet_GC on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_LargeObjGet_GC.py
             config-file-name: test_LargeObjGet_GC.yaml
@@ -331,12 +331,12 @@ tests:
       desc: create tenanted user
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-pri:
+        ceph-rgw1:
           config:
             set-env: true
             script-name: user_create.py
             config-file-name: tenanted_user.yaml
-            copy-user-info-to-site: ceph-sec
+            copy-user-info-to-site: ceph-rgw2
             timeout: 300
 
   - test:
@@ -344,22 +344,22 @@ tests:
       desc: test_bucket_policy_modify.yaml on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_modify.yaml
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
   - test:
       name: Bucket policy tests
       desc: test_bucket_policy_delete.yaml on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_delete.yaml
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
 
   - test:
@@ -367,9 +367,9 @@ tests:
       desc: test_bucket_policy_replace on secondary
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-rgw2:
           config:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_replace.yaml
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
