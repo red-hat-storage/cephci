@@ -17,7 +17,7 @@ def rpmStages = ['deployRhel7': {
                                 "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_rpm_ceph.yaml",
                                 "containerized=false",
                                 "addnArgs=--post-results --log-level DEBUG",
-                                "composeUrl=https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/%60"
+                                "composeUrl=https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
                             ]) {
                                 rc = sharedLib.runTestSuite()
                                 test_results["deployRhel7"] = rc
@@ -53,7 +53,7 @@ def containerStages = ['deployContainerRhel7': {
                                 "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_rpm_ceph.yaml",
                                 "containerized=false",
                                 "addnArgs=--post-results --log-level DEBUG",
-                                "composeUrl=https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/%60"
+                                "composeUrl=https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
                             ]) {
                                 rc = sharedLib.runTestSuite()
                                 test_results["deployContainerRhel7"] = rc
