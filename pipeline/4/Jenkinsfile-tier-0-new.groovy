@@ -7,36 +7,34 @@ def nodeName = "centos-7"
 def cephVersion = "nautilus"
 def sharedLib
 def test_results = [:]
-def rpmStages = ['deployRhel7': {
-                    stage('RHEL7 RPM Deployment suite') {
+def containerStages = ['deployContainerRhel7': {
+                        stage('RHEL7 Container Deployment suite') {
                         script {
                             withEnv([
                                 "osVersion=RHEL-7",
                                 "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_rpm_ceph.yaml",
-                                "containerized=false",
+                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
                                 "addnArgs=--post-results --log-level DEBUG",
                                 "composeUrl=http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
                             ]) {
                                 rc = sharedLib.runTestSuite()
-                                test_results["deployRhel7"] = rc
+                                test_results["deployContainerRhel7"] = rc
                             }
                         }
                     }
-                 }, 'deployRhel8': {
-                    stage('RHEL8 RPM Deployment suite') {
+                 }, 'deployContainerRhel8': {
+                    stage('RHEL8 Container Deployment suite') {
                         script {
                             withEnv([
                                 "osVersion=RHEL-8",
                                 "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_rpm_ceph.yaml",
-                                "containerized=false",
+                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
                                 "addnArgs=--post-results --log-level DEBUG"
                             ]) {
                                 rc = sharedLib.runTestSuite()
-                                test_results["deployRhel8"] = rc
+                                test_results["deployContainerRhel8"] = rc
                             }
                         }
                     }
@@ -73,7 +71,7 @@ node(nodeName) {
     }
 
     timeout(unit: "MINUTES", time: 120) {
-        parallel rpmStages
+        parallel containerStages
     }
 
 
