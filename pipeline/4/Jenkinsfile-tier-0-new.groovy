@@ -40,58 +40,6 @@ def rpmStages = ['deployRhel7': {
                             }
                         }
                     }
-                 }, 'object': {
-                    stage('Object suite') {
-                        sleep(180)
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-8",
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                                "sutConf=conf/${cephVersion}/rgw/tier_0_rgw.yaml",
-                                "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level DEBUG"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["object"] = rc
-                            }
-                        }
-                    }
-                 }, 'block': {
-                    stage('Block suite') {
-                        sleep(360)
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-8",
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                                "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-                                "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level DEBUG"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["block"] = rc
-                            }
-                        }
-                    }
-                 }, 'cephfs': {
-                    stage('Cephfs Suite') {
-                        sleep(480)
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-7",
-                                "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
-                                "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level debug"
-                                "composeUrl=https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/%60"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["cephfs"] = rc
-                            }
-                        }
-                    }
                  }]
 
 
