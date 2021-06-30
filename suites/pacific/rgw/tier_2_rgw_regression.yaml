@@ -160,6 +160,26 @@ tests:
            script-name: test_swift_bulk_delete.py
            config-file-name: test_swift_bulk_delete.yaml
            timeout: 300
+  
+  - test:
+      name: swift upload large object tests
+      desc: upload large object in swift
+      polarion-id: CEPH-9808
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_upload.yaml
+        timeout: 300
+  
+  - test:
+      name: swift download large object tests
+      desc: download large object in swift
+      polarion-id: CEPH-9809
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_download.yaml
+        timeout: 300
 
   # multipart test
   - test:
