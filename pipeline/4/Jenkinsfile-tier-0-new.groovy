@@ -102,9 +102,8 @@ def containerStages = ['deployContainerRhel7': {
                                 "osVersion=RHEL-7",
                                 "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
                                 "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_rpm_ceph.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level DEBUG"
+                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
+                                "addnArgs=--post-results --log-level DEBUG",
                                 "composeUrl=http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
                             ]) {
                                 rc = sharedLib.runTestSuite()
@@ -113,7 +112,7 @@ def containerStages = ['deployContainerRhel7': {
                         }
                     }
                  }, 'deployContainerRhel8': {
-                    stage('RHEL8 RPM') {
+                    stage('RHEL8 Container'') {
                         script {
                             withEnv([
                                 "osVersion=RHEL-8",
