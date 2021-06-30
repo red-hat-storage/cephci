@@ -43,40 +43,6 @@ def rpmStages = ['deployRhel7': {
                  }]
 
 
-def containerStages = ['deployContainerRhel7': {
-                        stage('RHEL7 Container Deployment suite') {
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-7",
-                                "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_rpm_ceph.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level DEBUG",
-                                "composeUrl=https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["deployContainerRhel7"] = rc
-                            }
-                        }
-                    }
-                 }, 'deployContainerRhel8': {
-                    stage('RHEL8 RPM Deployment suite') {
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-8",
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
-                                "addnArgs=--post-results --log-level DEBUG"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["deployContainerRhel8"] = rc
-                            }
-                        }
-                    }
-                 }]
-
 
 // Pipeline script entry point
 
@@ -110,9 +76,6 @@ node(nodeName) {
         parallel rpmStages
     }
 
-    timeout(unit: "MINUTES", time: 120) {
-        parallel containerStages
-    }
 
     stage('Publish Results') {
         script {
