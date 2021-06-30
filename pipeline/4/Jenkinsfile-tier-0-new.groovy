@@ -84,7 +84,7 @@ def rpmStages = ['deployRhel7': {
                                 "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
                                 "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
                                 "containerized=false",
-                                "addnArgs=--post-results --log-level debug"
+                                "addnArgs=--post-results --log-level debug",
                                 "composeUrl=http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
                             ]) {
                                 rc = sharedLib.runTestSuite()
