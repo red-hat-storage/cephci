@@ -31,7 +31,9 @@ def getCLIArgsFromMessage() {
         def jsonCIMsg = jsonParser.parseText("${params.CI_MESSAGE}")
 
         env.composeId = jsonCIMsg.compose_id
-        env.composeUrl = jsonCIMsg.compose_url
+        if not env.composeUrl {
+            env.composeUrl = jsonCIMsg.compose_url
+        }
 
         // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
         env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
