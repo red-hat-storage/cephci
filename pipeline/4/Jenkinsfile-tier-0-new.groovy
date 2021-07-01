@@ -24,7 +24,8 @@ def rpmStages = ['deployRpmRhel7': {
                             }
                         }
                     }
-                 }, 'deployRpmRhel8': {
+                 },
+                 'deployRpmRhel8': {
                     stage('RHEL8 RPM') {
                         script {
                             withEnv([
@@ -45,88 +46,91 @@ def rpmStages = ['deployRpmRhel7': {
 
 def containerStages = ['deployContainerRhel7': {
                         stage('RHEL7 Container') {
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-7",
-                                "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
-                                "addnArgs=--post-results --log-level DEBUG",
-                                "composeUrl=http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["deployContainerRhel7"] = rc
+                            script {
+                                withEnv([
+                                    "osVersion=RHEL-7",
+                                    "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
+                                    "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
+                                    "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
+                                    "addnArgs=--post-results --log-level DEBUG",
+                                    "composeUrl=http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
+                                ]) {
+                                    rc = sharedLib.runTestSuite()
+                                    test_results["deployContainerRhel7"] = rc
+                                }
                             }
                         }
-                    }
-                 }, 'deployContainerRhel8': {
-                    stage('RHEL8 Container') {
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-8",
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
-                                "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
-                                "addnArgs=--post-results --log-level DEBUG"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["deployContainerRhel8"] = rc
+                    },
+                    'deployContainerRhel8': {
+                        stage('RHEL8 Container') {
+                            script {
+                                withEnv([
+                                    "osVersion=RHEL-8",
+                                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
+                                    "sutConf=conf/${cephVersion}/ansible/tier_0_deploy.yaml",
+                                    "testSuite=suites/${cephVersion}/ansible/tier_0_deploy_containerized_ceph.yaml",
+                                    "addnArgs=--post-results --log-level DEBUG"
+                                ]) {
+                                    rc = sharedLib.runTestSuite()
+                                    test_results["deployContainerRhel8"] = rc
+                                }
                             }
                         }
-                    }
-                 }]
+                    }]
 
 
 def functionalityStages = [ 'object': {
-                        stage('Object suite') {
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-8",
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                                "sutConf=conf/${cephVersion}/rgw/tier_0_rgw.yaml",
-                                "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level DEBUG"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["object"] = rc
+                            stage('Object suite') {
+                                script {
+                                    withEnv([
+                                        "osVersion=RHEL-8",
+                                        "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+                                        "sutConf=conf/${cephVersion}/rgw/tier_0_rgw.yaml",
+                                        "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
+                                        "containerized=false",
+                                        "addnArgs=--post-results --log-level DEBUG"
+                                    ]) {
+                                        rc = sharedLib.runTestSuite()
+                                        test_results["object"] = rc
+                                    }
+                                }
                             }
-                        }
-                    }
-                 }, 'block': {
-                    stage('Block suite') {
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-8",
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                                "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-                                "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level DEBUG"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["block"] = rc
+                        },
+                        'block': {
+                            stage('Block suite') {
+                                script {
+                                    withEnv([
+                                        "osVersion=RHEL-8",
+                                        "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+                                        "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
+                                        "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
+                                        "containerized=false",
+                                        "addnArgs=--post-results --log-level DEBUG"
+                                    ]) {
+                                        rc = sharedLib.runTestSuite()
+                                        test_results["block"] = rc
+                                    }
+                                }
                             }
-                        }
-                    }
-                 }, 'cephfs': {
-                    stage('Cephfs Suite') {
-                        script {
-                            withEnv([
-                                "osVersion=RHEL-7",
-                                "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
-                                "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
-                                "containerized=false",
-                                "addnArgs=--post-results --log-level debug",
-                                "composeUrl=http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["cephfs"] = rc
+                        },
+                        'cephfs': {
+                            stage('Cephfs Suite') {
+                                script {
+                                    withEnv([
+                                        "osVersion=RHEL-7",
+                                        "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
+                                        "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
+                                        "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
+                                        "containerized=false",
+                                        "addnArgs=--post-results --log-level debug",
+                                        "composeUrl=http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/"
+                                    ]) {
+                                        rc = sharedLib.runTestSuite()
+                                        test_results["cephfs"] = rc
+                                    }
+                                }
                             }
-                        }
-                    }
-                 }]
+                        }]
 
 // Pipeline script entry point
 
