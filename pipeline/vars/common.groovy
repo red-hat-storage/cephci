@@ -31,7 +31,7 @@ def getCLIArgsFromMessage() {
         def jsonCIMsg = jsonParser.parseText("${params.CI_MESSAGE}")
 
         env.composeId = jsonCIMsg.compose_id
-        if (! "${env.composeUrl}" ) {
+        if (! env.composeUrl ) {
             env.composeUrl = jsonCIMsg.compose_url
         }
 
