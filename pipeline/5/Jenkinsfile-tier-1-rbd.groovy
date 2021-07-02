@@ -1,4 +1,4 @@
-/*
+    /*
     Pipeline script for executing Tier 1 RBD test suites for RH Ceph 5.0.
 */
 // Global variables section
@@ -47,6 +47,22 @@ node(nodeName) {
                 ]) {
                     rc = sharedLib.runTestSuite()
                     testResults['Extended test'] = rc
+                }
+            }
+        }
+    }
+
+    timeout(unit: "MINUTES", time: 480) {
+        stage('RBD Mirror Suite') {
+            script {
+                withEnv([
+                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+                    "sutConf=conf/${cephVersion}/rbd/tier_1_rbd_mirror.yaml",
+                    "testSuite=suites/${cephVersion}/rbd/tier_1_rbd_mirror.yaml",
+                    "addnArgs=--post-results --log-level info"
+                ]) {
+                    rc = sharedLib.runTestSuite()
+                    testResults['RBD Mirror test'] = rc
                 }
             }
         }
