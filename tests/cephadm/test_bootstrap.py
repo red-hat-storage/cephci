@@ -272,43 +272,6 @@ def fetch_file_content(node, file):
         return None
 
 
-def copy_ceph_configuration_files(cls, ceph_conf_args):
-    """
-    Copy ceph configuration files to ceph default "/etc/ceph" path.
-
-     we can eliminate this definition when we have support to access
-     ceph cli via custom ceph config files.
-
-    Args:
-        ceph_conf_args: bootstrap arguments
-        cls: cephadm instance
-
-    ceph_conf_args:
-          output-dir: "/root/ceph"
-          output-keyring : "/root/ceph/ceph.client.admin.keyring"
-          output-config : "/root/ceph/ceph.conf"
-          output-pub-ssh-key : "/root/ceph/ceph.pub"
-          ssh-public-key : "/root/ceph/ceph.pub"
-    """
-    ceph_dir = ceph_conf_args.get("output-dir")
-    if ceph_dir:
-        cls.installer.exec_command(cmd=f"mkdir -p {__DEFAULT_CEPH_DIR}", sudo=True)
-
-    def copy_file(node, src, destination):
-        node.exec_command(cmd=f"cp {src} {destination}", sudo=True)
-
-    ceph_files = {
-        "output-keyring": __DEFAULT_KEYRING_PATH,
-        "output-config": __DEFAULT_CONF_PATH,
-        "output-pub-ssh-key": __DEFAULT_SSH_PATH,
-        "ssh-public-key": __DEFAULT_SSH_PATH,
-    }
-
-    for arg, default_path in ceph_files.items():
-        if ceph_conf_args.get(arg):
-            copy_file(cls.installer, ceph_conf_args.get(arg), default_path)
-
-
 def verify_ceph_config_location(cls, ceph_conf_directory):
     """
     Verify ceph configuration output directory
@@ -567,7 +530,6 @@ def run(ceph_cluster, **kw):
         # bootstrap response through stdout & stderr are combined here
         # currently console response coming through stderr.
         args = config.get("args", {})
-        copy_ceph_configuration_files(instance, args)
         verify_bootstrap(instance, args, out + err)
     finally:
         # Get cluster state
