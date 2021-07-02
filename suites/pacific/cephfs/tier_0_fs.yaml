@@ -47,7 +47,7 @@ tests:
                 all-available-devices: true
           - config:
               command: shell
-              args:          # arguments to ceph orch
+              args:
                 - ceph
                 - fs
                 - volume
@@ -56,10 +56,10 @@ tests:
           - config:
               command: apply
               service: mds
-              base_cmd_args:          # arguments to ceph orch
+              base_cmd_args:
                 verbose: true
               pos_args:
-                - cephfs              # name of the filesystem
+                - cephfs
               args:
                 placement:
                   label: mds
@@ -82,55 +82,15 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
-        abort-on-fail: true
-        config:
-            command: add
-            id: client.1
-            node: node2
-            install_packages:
-                - ceph-common
-            copy_admin_keyring: true
-        desc: Configure the Cephfs client system 1
-        destroy-cluster: false
-        module: test_client.py
-        name: configure client
-  - test:
       abort-on-fail: true
       config:
         command: add
-        id: client.2
-        node: node3
+        id: client.1
+        node: node7
         install_packages:
           - ceph-common
         copy_admin_keyring: true
-      desc: Configure the Cephfs client system 2
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.3
-        node: node1
-        install_packages:
-          - ceph-common
-        copy_admin_keyring: true
-      desc: Configure the Cephfs client system 3
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.4
-        node: node5
-        install_packages:
-          - ceph-common
-        copy_admin_keyring: true
-      desc: Configure the Cephfs client system 4
+      desc: Configure the Cephfs client system 1
       destroy-cluster: false
       module: test_client.py
       name: configure client
@@ -140,9 +100,3 @@ tests:
         polarion-id: CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295
         desc: cephfs basic operations
         abort-on-fail: false
-  - test:
-        name: nfs-ganesha_with_cephfs
-        module: nfs-ganesha_basics.py
-        desc: Mount cephfs on clients,configure nfs-ganesha on nfs server,do mount on any client and do IOs
-        abort-on-fail: false
-

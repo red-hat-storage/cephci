@@ -1,11 +1,10 @@
 import logging
 import random
 import string
-import timeit
 import traceback
 
 from ceph.ceph import CommandFailed
-from tests.cephfs.cephfs_utils import FsUtils
+from tests.cephfs.cephfs_utilsV1 import FsUtils
 
 logger = logging.getLogger(__name__)
 log = logger
@@ -13,52 +12,57 @@ log = logger
 
 def run(ceph_cluster, **kw):
     try:
-        start = timeit.default_timer()
-
         fs_util = FsUtils(ceph_cluster)
+
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
-        client_info, rc = fs_util.get_clients(build)
-        if rc == 0:
-            log.info("Got client info")
-        else:
-            raise CommandFailed("fetching client info failed")
-        client1 = []
-        client2 = []
-        client3 = []
-        client4 = []
-        client1.append(client_info["fuse_clients"][0])
-        client2.append(client_info["fuse_clients"][1])
-        client3.append(client_info["kernel_clients"][0])
-        client4.append(client_info["kernel_clients"][1])
-        rc1 = fs_util.auth_list(client1)
-        rc2 = fs_util.auth_list(client2)
-        rc3 = fs_util.auth_list(client3)
-        rc4 = fs_util.auth_list(client4)
-        print(rc1, rc2, rc3, rc4)
-        if rc1 == 0 and rc2 == 0 and rc3 == 0 and rc4 == 0:
-            log.info("got auth keys")
-        else:
-            raise CommandFailed("auth list failed")
-
-        rc1 = fs_util.fuse_mount(client1, client_info["mounting_dir"])
-        rc2 = fs_util.fuse_mount(client2, client_info["mounting_dir"])
-
-        if rc1 == 0 and rc2 == 0:
-            log.info("Fuse mount passed")
-        else:
-            raise CommandFailed("Fuse mount failed")
-
-        rc3 = fs_util.kernel_mount(
-            client3, client_info["mounting_dir"], client_info["mon_node_ip"]
+        clients = ceph_cluster.get_ceph_objects("client")
+        fs_util.prepare_clients(clients, build)
+        fs_util.auth_list(clients)
+        mounting_dir = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(10))
         )
-        rc4 = fs_util.kernel_mount(
-            client4, client_info["mounting_dir"], client_info["mon_node_ip"]
+        fuse_mounting_dir = f"/mnt/cephfs_fuse{mounting_dir}/"
+        fs_util.fuse_mount(clients, fuse_mounting_dir)
+
+        mount_test_case(clients, fuse_mounting_dir)
+
+        kernel_mounting_dir = f"/mnt/cephfs_kernel{mounting_dir}/"
+        mon_node_ips = fs_util.get_mon_node_ips()
+        fs_util.kernel_mount(clients, kernel_mounting_dir, ",".join(mon_node_ips))
+
+        mount_test_case(clients, kernel_mounting_dir)
+        log.info("Cleaning up!-----")
+        rc = fs_util.client_clean_up(
+            [],
+            clients,
+            kernel_mounting_dir,
+            "umount",
         )
-        if rc3 == 0 and rc4 == 0:
-            log.info("kernel mount passed")
-        else:
-            raise CommandFailed("kernel mount failed")
+        if rc != 0:
+            raise CommandFailed("fuse clients cleanup failed")
+        log.info("Fuse clients cleaned up successfully")
+
+        rc = fs_util.client_clean_up(
+            clients,
+            [],
+            fuse_mounting_dir,
+            "umount",
+        )
+        if rc != 0:
+            raise CommandFailed("kernel clients cleanup failed")
+        log.info("kernel clients cleaned up successfully")
+        return 0
+
+    except Exception as e:
+        log.info(e)
+        log.info(traceback.format_exc())
+        return 1
+
+
+def mount_test_case(clients, mounting_dir):
+    try:
         tc1 = "11293"
         tc2 = "11296"
         tc3 = "11297"
@@ -75,70 +79,55 @@ def run(ceph_cluster, **kw):
         results = []
         return_counts = []
         log.info("Create files and directories of 1000 depth and 1000 breadth")
-        for client in client_info["fuse_clients"]:
+        for client in clients:
             client.exec_command(
-                cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir1)
+                cmd=f"sudo mkdir -p {mounting_dir}{dir1} {mounting_dir}{dir2} {mounting_dir}{dir3}"
             )
-            client.exec_command(
-                cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir2)
-            )
-            client.exec_command(
-                cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir3)
-            )
-            log.info("Execution of testcase %s started" % tc1)
+            log.info(f"Execution of testcase {tc1} started")
             out, rc = client.exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
-                f"{client_info['mounting_dir']}{dir1}",
+                f"{mounting_dir}{dir1}",
                 long_running=True,
             )
-            log.info("Execution of testcase %s ended" % tc1)
-            if client.node.exit_status == 0:
-                results.append("TC %s passed" % tc1)
+            log.info(f"Execution of testcase {tc1} ended")
+            results.append(f"TC {tc1} passed")
 
-            log.info("Execution of testcase %s started" % tc2)
+            log.info(f"Execution of testcase {tc2} started")
             client.exec_command(
-                cmd="sudo cp -r  %s%s/* %s%s/"
-                % (client_info["mounting_dir"], dir1, client_info["mounting_dir"], dir2)
+                cmd=f"sudo cp -r  {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
             )
             client.exec_command(
-                cmd="diff -qr  %s%s %s%s/"
-                % (client_info["mounting_dir"], dir1, client_info["mounting_dir"], dir2)
+                cmd=f"diff -qr  {mounting_dir}{dir1} {mounting_dir}{dir2}/"
             )
-            log.info("Execution of testcase %s ended" % tc2)
-            if client.node.exit_status == 0:
-                results.append("TC %s passed" % tc2)
+            log.info(f"Execution of testcase {tc2} ended")
+            results.append(f"TC {tc2} passed")
 
-            log.info("Execution of testcase %s started" % tc3)
-            out, rc = client.exec_command(
-                cmd="sudo mv  %s%s/* %s%s/"
-                % (client_info["mounting_dir"], dir1, client_info["mounting_dir"], dir3)
+            log.info(f"Execution of testcase {tc3} started")
+            client.exec_command(
+                cmd=f"sudo mv  -t {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
             )
-            log.info("Execution of testcase %s ended" % tc3)
-            if client.node.exit_status == 0:
-                results.append("TC %s passed" % tc3)
-            log.info("Execution of testcase %s started" % tc4)
-            for client in client_info["clients"]:
+            log.info(f"Execution of testcase {tc3} ended")
+            results.append(f"TC {tc3} passed")
+            log.info(f"Execution of testcase {tc4} started")
+            for client in clients:
                 if client.pkg_type != "deb":
                     client.exec_command(
-                        cmd="sudo dd if=/dev/zero of=%s%s.txt bs=100M "
-                        "count=5" % (client_info["mounting_dir"], client.node.hostname)
+                        cmd=f"sudo dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=100M "
+                        "count=5"
                     )
                     out1, rc1 = client.exec_command(
-                        cmd="sudo  ls -c -ltd -- %s%s.*"
-                        % (client_info["mounting_dir"], client.node.hostname)
+                        cmd=f"sudo  ls -c -ltd -- {mounting_dir}{client.node.hostname}.*"
                     )
                     client.exec_command(
-                        cmd="sudo dd if=/dev/zero of=%s%s.txt bs=200M "
-                        "count=5" % (client_info["mounting_dir"], client.node.hostname)
+                        cmd=f"sudo dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=200M "
+                        "count=5"
                     )
                     out2, rc2 = client.exec_command(
-                        cmd="sudo  ls -c -ltd -- %s%s.*"
-                        % (client_info["mounting_dir"], client.node.hostname)
+                        cmd=f"sudo  ls -c -ltd -- {mounting_dir}{client.node.hostname}.*"
                     )
                     a = out1.read().decode()
-                    print("------------")
                     b = out2.read().decode()
                     if a != b:
                         return_counts.append(out1.channel.recv_exit_status())
@@ -146,60 +135,15 @@ def run(ceph_cluster, **kw):
                     else:
                         raise CommandFailed("Metadata info command failed")
                     break
-            log.info("Execution of testcase %s ended" % tc4)
-            print(return_counts)
+            log.info(f"Execution of testcase {tc4} ended")
+            log.info(return_counts)
             rc_set = set(return_counts)
             if len(rc_set) == 1:
-                results.append("TC %s passed" % tc4)
-
-            print("Testcase Results:")
+                results.append(f"TC {tc4} passed")
+            log.info("Testcase Results:")
             for res in results:
-                print(res)
+                log.info(res)
             break
-        log.info("Cleaning up!-----")
-        if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
-            rc = fs_util.client_clean_up(
-                client_info["fuse_clients"],
-                client_info["kernel_clients"],
-                client_info["mounting_dir"],
-                "umount",
-            )
-        else:
-            rc = fs_util.client_clean_up(
-                client_info["fuse_clients"], "", client_info["mounting_dir"], "umount"
-            )
-        if rc == 0:
-            log.info("Cleaning up successfull")
-        else:
-            return 1
-        print("Script execution time:------")
-        stop = timeit.default_timer()
-        total_time = stop - start
-        mins, secs = divmod(total_time, 60)
-        hours, mins = divmod(mins, 60)
-        print("Hours:%d Minutes:%d Seconds:%f" % (hours, mins, secs))
-
-        return 0
     except CommandFailed as e:
         log.info(e)
         log.info(traceback.format_exc())
-        log.info("Cleaning up!-----")
-        if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
-            rc = fs_util.client_clean_up(
-                client_info["fuse_clients"],
-                client_info["kernel_clients"],
-                client_info["mounting_dir"],
-                "umount",
-            )
-        else:
-            rc = fs_util.client_clean_up(
-                client_info["fuse_clients"], "", client_info["mounting_dir"], "umount"
-            )
-        if rc == 0:
-            log.info("Cleaning up successfull")
-        return 1
-
-    except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
-        return 1
