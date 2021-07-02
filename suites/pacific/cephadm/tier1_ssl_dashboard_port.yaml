@@ -22,6 +22,9 @@
 #       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
 #       - initial-dashboard-user: admin123
 #       - initial-dashboard-password: admin@123,
+#       - dashboard-password-noupdate
+#       - dashboard-key: <path for dashboard.key>
+#       - dashboard-crt: <path for dashboard.crt>
 #       - registry-json: registry.json
 #       - ssl-dashboard-port: <port-number>.
 #       - apply-spec: <list of service specification>
@@ -68,6 +71,9 @@ tests:
           mon-ip: node1
           initial-dashboard-user: admin123
           initial-dashboard-password: admin@123
+          dashboard-password-noupdate: true
+          dashboard-key: /home/cephuser/dashboard.key
+          dashboard-crt: /home/cephuser/dashboard.crt
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
           skip-monitoring-stack: true
           orphan-initial-daemons: true
