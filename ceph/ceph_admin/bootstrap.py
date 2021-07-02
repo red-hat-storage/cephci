@@ -58,6 +58,31 @@ def construct_registry(cls, registry: str, json_file: bool = False):
     return config_dict_to_string(reg_args)
 
 
+def construct_key_cert(cls):
+    """
+    Construct dashboard key and certificate files for bootstrapping cluster
+    with dashboard custom key and certificate files for ssl
+
+    Args:
+        cls: class object
+    """
+
+    # Installing openssl package needed for ssl
+    cls.installer.exec_command(
+        sudo=True,
+        cmd="yum install -y openssl",
+    )
+
+    # Generating key and cert using openssl in /home/cephuser
+    cls.installer.exec_command(
+        sudo=True,
+        cmd='openssl req -new -nodes -x509 \
+            -subj "/O=IT/CN=ceph-mgr-dashboard" -days 3650 \
+            -keyout /home/cephuser/dashboard.key \
+            -out /home/cephuser/dashboard.crt -extensions v3_ca',
+    )
+
+
 def copy_ceph_configuration_files(cls, ceph_conf_args):
     """
     Copy ceph configuration files to ceph default "/etc/ceph" path.
@@ -166,6 +191,10 @@ class BootstrapMixin:
         registry_json = args.pop("registry-json", None)
         if registry_json:
             cmd += construct_registry(self, registry_json, json_file=True)
+
+        # Construct dashboard cert and key if bootstrap cli have this options
+        if all(key in args for key in ("dashboard-key", "dashboard-crt")):
+            construct_key_cert(self)
 
         # To be generic, the mon-ip contains the global node name. Here, we replace the
         # name with the IP address. The replacement allows us to be inline with the
