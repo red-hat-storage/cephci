@@ -91,16 +91,18 @@ def executeTest(def cmd, def instanceName) {
    /*
         Executes the cephci suite using the CLI input given
    */
-    def rc = 0
+    def rc = 1
     catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
         try {
-            sh(script: "PYTHONUNBUFFERED=1 ${cmd}")
+//             sh(script: "PYTHONUNBUFFERED=1 ${cmd}")
+                assert rc == 0
         } catch(Exception err) {
             rc = 1
             println err.getMessage()
             error "Encountered an error"
         } finally {
-            cleanUp(instanceName)
+//             cleanUp(instanceName)
+                println "do nothing"
         }
     }
 
@@ -313,17 +315,21 @@ def postTier1Compose(def test_results, def composeInfo) {
     def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
     def jsonContent = """{ "latest" : ${composeInfo}, "pass" : ${composeInfo} }"""
 
-    if (1 in test_results.values()) {
-        def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
+    if ("FAILURE" in test_results.values() || "ABORTED" in test_results.values()) {
+        def tier1FileExists = sh(returnStatus: true, script: """ls -l ${tier1Json}""")
         if ( tier1FileExists != 0) {
             jsonContent = """ {"latest" : ${composeInfo}, "pass" : ""} """
         } else {
-            def jsonParser = new JsonSlurper()
+//             def jsonParser = new JsonSlurper()
             def tier1Compose = sh(
                                     returnStdout: true,
                                     script: """cat ${tier1Json}"""
                                ).trim()
-            def tier1JsonContent = jsonParser.parseText("${tier1Compose}")
+            println "sur2 : tier1Compose : " + tier1Compose
+            println "sur2 : tier1Compose1 : ${tier1Compose}"
+            def tier1JsonContent = new JsonSlurper().parseText(tier1Compose)
+
+            println "tier1JsonContent : " + tier1JsonContent
             jsonContent = """
                 {
                     "latest": ${composeInfo},
