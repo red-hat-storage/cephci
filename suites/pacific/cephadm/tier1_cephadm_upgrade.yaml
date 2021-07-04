@@ -105,6 +105,10 @@ tests:
                     - node1
                   limit: 1
                   sep: ";"
+          - config:             # Set custom grafana image BZ-1975887 work-around until GA
+              command: shell
+              args:
+                - "ceph config set mgr mgr/cephadm/container_image_grafana registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest"
           - config:
               command: apply
               service: grafana
