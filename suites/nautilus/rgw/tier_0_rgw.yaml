@@ -1,46 +1,46 @@
 tests:
-   - test:
-       name: install ceph pre-requisities
-       module: install_prereq.py
-       abort-on-fail: true
+  - test:
+      name: install ceph pre-requisities
+      module: install_prereq.py
+      abort-on-fail: true
 
-   - test:
+  - test:
       name: ceph ansible
       module: test_ansible.py
       config:
         ansi_config:
-            ceph_test: True
-            ceph_origin: distro
-            ceph_repository: rhcs
-            osd_scenario: lvm
-            osd_auto_discovery: False
-            journal_size: 1024
-            ceph_stable: True
-            ceph_stable_rh_storage: True
-            fetch_directory: ~/fetch
-            copy_admin_key: true
-            dashboard_enabled: False
-            ceph_conf_overrides:
-                global:
-                  osd_pool_default_pg_num: 64
-                  osd_default_pool_size: 2
-                  osd_pool_default_pgp_num: 64
-                  mon_max_pg_per_osd: 1024
+          ceph_test: True
+          ceph_origin: distro
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          journal_size: 1024
+          ceph_stable: True
+          ceph_stable_rh_storage: True
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          dashboard_enabled: False
+          ceph_conf_overrides:
+            global:
+              osd_pool_default_pg_num: 64
+              osd_default_pool_size: 2
+              osd_pool_default_pgp_num: 64
+              mon_max_pg_per_osd: 1024
       desc: test cluster setup using ceph-ansible
       destroy-cluster: false
       abort-on-fail: true
 
-   - test:
+  - test:
       name: check-ceph-health
       module: exec.py
       config:
-            cmd: ceph -s
-            sudo: True
+        cmd: ceph -s
+        sudo: True
       desc: Check for ceph health debug info
 
   # Testing stage
 
-   - test:
+  - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects.yaml
@@ -50,7 +50,7 @@ tests:
       name: Test M buckets with N objects
       polarion-id: CEPH-9789
 
-   - test:
+  - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
@@ -60,7 +60,7 @@ tests:
       name: Test delete using M buckets with N objects
       polarion-id: CEPH-14237
 
-   - test:
+  - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
@@ -70,7 +70,7 @@ tests:
       name: Test download with M buckets with N objects
       polarion-id: CEPH-14237
 
-   - test:
+  - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
@@ -79,7 +79,7 @@ tests:
       module: sanity_rgw.py
       name: Test multipart upload of M buckets with N objects
 
-   - test:
+  - test:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_basic_ops.yaml
@@ -89,8 +89,7 @@ tests:
       name: Swift based tests
       polarion-id: CEPH-11019
 
-   - test:
-       name: generate sosreport
-       module: sosreport.py
-       desc: generate sosreport
-
+  - test:
+      name: generate sosreport
+      module: sosreport.py
+      desc: generate sosreport
