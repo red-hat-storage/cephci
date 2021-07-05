@@ -1,102 +1,120 @@
+---
 tests:
-  - test:
-      name: setup install pre-requisistes
-      desc: Setup phase to deploy the required pre-requisites for running the tests.
-      module: install_prereq.py
+  -
+    test:
       abort-on-fail: true
-  - test:
-      name: cluster deployment
-      desc: Execute the cluster deployment workflow.
-      module: test_cephadm.py
-      polarion-id:
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
       config:
-        verify_cluster_health: true
         steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              base_cmd_args:
-                verbose: true
+          -
+            config:
               args:
-                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
+                registry-url: registry.redhat.io
                 skip-monitoring-stack: true
-          - config:
-              command: add_hosts
-              service: host
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
               args:
                 attach_ip_address: true
                 labels: apply-all-labels
-          - config:
-              command: apply
-              service: mgr
+              command: add_hosts
+              service: host
+          -
+            config:
               args:
                 placement:
                   label: mgr
-          - config:
               command: apply
-              service: mon
+              service: mgr
+          -
+            config:
               args:
                 placement:
                   label: mon
-          - config:
               command: apply
-              service: osd
+              service: mon
+          -
+            config:
               args:
                 all-available-devices: true
-          - config:
-              command: shell
+              command: apply
+              service: osd
+          -
+            config:
               args:
                 - ceph
                 - fs
                 - volume
                 - create
                 - cephfs
-          - config:
-              command: apply
-              service: mds
-              base_cmd_args:
-                verbose: true
-              pos_args:
-                - cephfs
+              command: shell
+          -
+            config:
               args:
                 placement:
                   label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow."
       destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: ~
+  -
+    test:
       abort-on-fail: true
-  - test:
-      name: Add Active Active configuration of MDS
-      desc: Add Active Active configuration of MDS for cephfs
-      module: test_bootstrap.py
-      polarion-id: CEPH-11344
       config:
-        command: shell
-        args: # arguments to ceph orch
+        args:
           - ceph
           - fs
           - set
           - cephfs
           - max_mds
           - "2"
+        command: shell
+      desc: "Add Active Active configuration of MDS for cephfs"
       destroy-cluster: false
-      abort-on-fail: true
-  - test:
+      module: test_bootstrap.py
+      name: "Add Active Active configuration of MDS"
+      polarion-id: CEPH-11344
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
+        copy_admin_keyring: true
         id: client.1
-        node: node7
         install_packages:
           - ceph-common
-        copy_admin_keyring: true
-      desc: Configure the Cephfs client system 1
+        node: node7
+      desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
       module: test_client.py
-      name: configure client
-  - test:
-        name: cephfs-basics
-        module: cephfs_basic_tests.py
-        polarion-id: CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295
-        desc: cephfs basic operations
-        abort-on-fail: false
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+  -
+    test:
+      desc: "generate sosreport"
+      module: sosreport.py
+      name: "generate sosreport"

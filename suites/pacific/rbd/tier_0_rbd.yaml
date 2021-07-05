@@ -10,132 +10,149 @@
 #   - verification of Snapshot and Clone CLI
 #   - verification of other block CLI
 #   - verification of IO operations.
+---
 tests:
-
-  # Setup the cluster
-
-  - test:
+  -
+    test:
       abort-on-fail: true
       module: install_prereq.py
-      name: install ceph pre-requisites
-  - test:
+      name: "install ceph pre-requisites"
+  -
+    test:
       abort-on-fail: true
       config:
-        verify_cluster_health: true
         steps:
-          - config:
-              command: bootstrap
-              service: cephadm
+          -
+            config:
               args:
-                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
+                registry-url: registry.redhat.io
                 skip-monitoring-stack: true
-          - config:
-              command: add_hosts
-              service: host
+              command: bootstrap
+              service: cephadm
+          -
+            config:
               args:
                 attach_ip_address: true
                 labels: apply-all-labels
-          - config:
-              command: apply
-              service: mgr
+              command: add_hosts
+              service: host
+          -
+            config:
               args:
                 placement:
                   label: mgr
-          - config:
               command: apply
-              service: mon
+              service: mgr
+          -
+            config:
               args:
                 placement:
                   label: mon
-          - config:
               command: apply
-              service: osd
+              service: mon
+          -
+            config:
               args:
                 all-available-devices: true
-          - config:
-              command: shell
-              args:                             # arguments to ceph orch
-                - "ceph fs volume create cephfs"
-          - config:
               command: apply
-              service: mds
-              base_cmd_args:                    # arguments to ceph orch
-                verbose: true
-              pos_args:
-                - cephfs                        # name of the filesystem
+              service: osd
+          -
+            config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          -
+            config:
               args:
                 placement:
                   nodes:
                     - node4
                     - node5
-          - config:
-              command: shell
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          -
+            config:
               args:
                 - "ceph osd pool create rbd"
-          - config:
               command: shell
+          -
+            config:
               args:
                 - "rbd pool init rbd"
-      desc: RHCS cluster deployment using cephadm
+              command: shell
+        verify_cluster_health: true
+      desc: "RHCS cluster deployment using cephadm"
       destroy-clster: false
       module: test_cephadm.py
-      name: deploy cluster
-  - test:
+      name: "deploy cluster"
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
+        copy_admin_keyring: true
         id: client.1
-        node: node6
         install_packages:
           - ceph-common
           - rbd-nbd
-        copy_admin_keyring: true
-      desc: Configure the client system
+        node: node6
+      desc: "Configure the client system"
       destroy-cluster: false
       module: test_client.py
-      name: configure client
-
-  # Test cases to be executed
-
-  - test:
+      name: "configure client"
+  -
+    test:
       config:
         branch: master
-        script_path: qa/workunits/rbd
         script: cli_generic.sh
-      desc: Executig upstream RBD CLI Generic scenarios
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Generic scenarios"
       module: test_rbd.py
       name: 1_rbd_cli_generic
-  - test:
+  -
+    test:
       config:
         branch: master
-        script_path: qa/workunits/rbd
         script: rbd_groups.sh
-      desc: Executig upstream RBD CLI Groups scenarios
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Groups scenarios"
       module: test_rbd.py
       name: 2_rbd_cli_groups
-  - test:
+  -
+    test:
       config:
         branch: master
-        script_path: qa/workunits/rbd
         script: import_export.sh
-      desc: Executig upstream RBD CLI Import Export scenarios
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Import Export scenarios"
       module: test_rbd.py
       name: 3_rbd_cli_import_export
-  - test:
+  -
+    test:
       config:
         branch: master
-        script_path: qa/workunits/rbd
         script: luks-encryption.sh
-      desc: Executig upstream RBD LUKS Encryption scenarios
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD LUKS Encryption scenarios"
       module: test_rbd.py
       name: 4_rbd_luks_encryption
-  - test:
+  -
+    test:
       config:
         branch: master
-        script_path: qa/workunits/rbd
         script: cli_migration.sh
-      desc: Executig upstream RBD CLI Migration scenarios
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Migration scenarios"
       module: test_rbd.py
       name: 5_rbd_cli_migration
+  -
+    test:
+      desc: "generate sosreport"
+      module: sosreport.py
+      name: "generate sosreport"
