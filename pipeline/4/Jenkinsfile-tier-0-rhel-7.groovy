@@ -29,24 +29,21 @@ node(nodeName) {
                     url: 'https://github.com/red-hat-storage/cephci.git'
                 ]]
             ])
-            script {
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
-                sharedLib.prepareNode()
-            }
+
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
+            sharedLib.prepareNode()
         }
     }
 
     stage('Publish Compose') {
-        script {
-            def composeInfo = sharedLib.fetchComposeInfo("${params.CI_MESSAGE}")
-            def composeId = composeInfo.composeId
+        def composeInfo = sharedLib.fetchComposeInfo("${params.CI_MESSAGE}")
+        def composeId = composeInfo.composeId
 
-            // get rhbuild value from RHCEPH-4.3-RHEL-7.yyyymmdd.ci.x
-            def rhcsVersion = composeId.substring(7,17).toLowerCase()
+        // get rhbuild value from RHCEPH-4.3-RHEL-7.yyyymmdd.ci.x
+        def rhcsVersion = composeId.substring(7,17).toLowerCase()
 
-            withEnv(["rhcephVersion=${rhcsVersion}"]) {
-                sharedLib.postLatestCompose(true)
-            }
+        withEnv(["rhcephVersion=${rhcsVersion}"]) {
+            sharedLib.postLatestCompose(true)
         }
     }
 

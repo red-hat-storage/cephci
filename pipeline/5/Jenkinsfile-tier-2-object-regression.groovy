@@ -1,10 +1,10 @@
 /*
-    Pipeline script for executing Tier 1 object test suites for RH Ceph 4.x
+    Pipeline script for executing Tier 2 object test suites for RH Ceph 5.0.
 */
 // Global variables section
 
 def nodeName = "centos-7"
-def cephVersion = "nautilus"
+def cephVersion = "pacific"
 def sharedLib
 
 // Pipeline script entry point
@@ -31,22 +31,21 @@ node(nodeName) {
                 ]]
             ])
 
+            // Prepare the node for executing Ceph QE Test suites
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
             sharedLib.prepareNode()
         }
     }
 
-    timeout(unit: "MINUTES", time: 120) {
-        stage('Single-site') {
-            script {
-                withEnv([
-                    "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-                    "sutConf=conf/${cephVersion}/rgw/tier_1_rgw.yaml",
-                    "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
-                    "addnArgs=--post-results --log-level DEBUG"
-                ]) {
-                    sharedLib.runTestSuite()
-                }
+    timeout(unit: "HOURS", time: 4) {
+        stage('Regression') {
+            withEnv([
+                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+                "sutConf=conf/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+                "testSuite=suites/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+                "addnArgs=--post-results --log-level INFO"
+            ]) {
+                sharedLib.runTestSuite()
             }
         }
     }

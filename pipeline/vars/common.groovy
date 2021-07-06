@@ -5,6 +5,9 @@
 
 import groovy.json.JsonSlurper
 
+// module variables
+def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+
 def prepareNode() {
     /*
         Installs the required packages needed by the Jenkins node to
@@ -201,7 +204,7 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     def to_list = params["to_list"]
     def jobStatus = params["jobStatus"]
 
-    emailext(
+    emailext (
         mimeType: 'text/html',
         subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
         body: "${body}",
@@ -235,15 +238,14 @@ def sendUMBMessage(def msgType) {
         TOOL = cephci
     """
 
-    def sendResult = sendCIMessage \
-        providerName: 'Red Hat UMB', \
-        overrides: [topic: 'VirtualTopic.qe.ci.jenkins'], \
-        messageContent: "${msgContent}", \
-        messageProperties: msgProperties, \
-        messageType: msgType, \
+    sendCIMessage ([
+        providerName: 'Red Hat UMB',
+        overrides: [topic: 'VirtualTopic.qe.ci.jenkins'],
+        messageContent: "${msgContent}",
+        messageProperties: msgProperties,
+        messageType: msgType,
         failOnError: true
-
-    return sendResult
+    ])
 }
 
 def jsonToMap(def jsonFile) {
@@ -258,26 +260,25 @@ def fetchTier1Compose() {
     /*
        Fetch the compose to be tested for tier1, if there is one
     */
-    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
     def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
 
-    def tier0FileExists = sh(returnStatus: true, script: """ls -l '${tier0Json}'""")
+    def tier0FileExists = sh (returnStatus: true, script: "ls -l ${tier0Json}")
     if (tier0FileExists != 0) {
         println "RHCEPH-${env.rhcephVersion}-tier0.json does not exist."
         return null
     }
     def tier0Compose = jsonToMap(tier0Json)
-    def tier0ComposeString = writeJSON returnText: true, json : tier0Compose
+    def tier0ComposeString = writeJSON returnText: true, json: tier0Compose
 
-    def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
+    def tier1FileExists = sh (returnStatus: true, script: "ls -l ${tier1Json}")
     if (tier1FileExists != 0) {
-        return tier0Compose
+        return tier0ComposeString
     }
     def tier1Compose = jsonToMap(tier1Json)
 
     if (tier0Compose.compose_id != tier1Compose.latest.compose_id) {
-        return tier0Compose
+        return tier0ComposeString
     }
 
     println "There are no new stable build."
@@ -288,10 +289,9 @@ def postCompose(def data, def jsonFile) {
     /*
         Writes the given data to provided file under the default latest compose folder.
     */
-    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def target = "${defaultFileDir}/${jsonFile}"
 
-    sh(script: """ echo '${data}' > ${target} """)
+    sh (script: """ echo '${data}' > ${target} """)
 }
 
 def postLatestCompose(def onlyLatest=false) {
@@ -304,7 +304,6 @@ def postLatestCompose(def onlyLatest=false) {
         return
     }
 
-    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def latestJson = "latest-RHCEPH-${env.rhcephVersion}.json"
     postCompose("${params.CI_MESSAGE}", latestJson)
 
@@ -316,13 +315,13 @@ def postLatestCompose(def onlyLatest=false) {
     postCompose("${params.CI_MESSAGE}", tier0Json)
 }
 
-def postTier1Compose(def testResults, def composeInfo, def tier = "tier1") {
+def postTierCompose(def testResults, def composeInfo, def tier) {
     /*
-        Store the latest compose in ressi for QE usage.
+        Store the stable build details for the Tier in ressi.
     */
-    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def composeMap = readJSON text: composeInfo
     def composeData = [ "latest": composeMap, "pass": composeMap ]
+
     def tierJson = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-${tier}.json"
 
     if ( "FAILURE" in testResults.values() || "ABORTED" in testResults.values() ) {
@@ -337,7 +336,6 @@ def postTier1Compose(def testResults, def composeInfo, def tier = "tier1") {
     }
 
     writeJSON file: tierJson, json: composeData
-
 }
 
 def fetchComposeInfo(def composeInfo) {
@@ -403,7 +401,6 @@ def getPlatformComposeMap(def osVersion) {
     */
     def rhBuild = getRHBuild(osVersion)
 
-    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def jsonFile = "${defaultFileDir}/latest-RHCEPH-${rhBuild}.json"
     def composeInfo = jsonToMap(jsonFile)
 

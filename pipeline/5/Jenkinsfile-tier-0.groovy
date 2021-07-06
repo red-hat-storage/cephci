@@ -6,64 +6,56 @@
 def nodeName = "centos-7"
 def cephVersion = "pacific"
 def sharedLib
-def test_results = [:]
+def testResults = [:]
 def testStages = ['cephadm': {
-                    stage('Deployment suite') {
-                        script {
-                            withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
-                                "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
-                                "addnArgs=--post-results --log-level debug --grafana-image registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["cephadm"] = rc
-                            }
+                    stage('CephADM') {
+                        withEnv([
+                            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
+                            "sutConf=conf/${cephVersion}/cephadm/sanity-cephadm.yaml",
+                            "testSuite=suites/${cephVersion}/cephadm/tier_0_cephadm.yaml",
+                            "addnArgs=--post-results --log-level debug --grafana-image registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest"
+                        ]) {
+                            rc = sharedLib.runTestSuite()
+                            testResults["Tier-0 CephADM verification"] = rc
                         }
                     }
                  }, 'object': {
-                    stage('Object suite') {
+                    stage('Object') {
                         sleep(180)
-                        script {
-                            withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                                "sutConf=conf/${cephVersion}/rgw/tier_0_rgw.yaml",
-                                "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
-                                "addnArgs=--post-results --log-level debug"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["object"] = rc
-                            }
+                        withEnv([
+                            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+                            "sutConf=conf/${cephVersion}/rgw/tier_0_rgw.yaml",
+                            "testSuite=suites/${cephVersion}/rgw/tier_0_rgw.yaml",
+                            "addnArgs=--post-results --log-level debug"
+                        ]) {
+                            rc = sharedLib.runTestSuite()
+                            testResults["Tier-0 RGW verification"] = rc
                         }
                     }
                  }, 'block': {
-                    stage('Block suite') {
+                    stage('Block') {
                         sleep(360)
-                        script {
-                            withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                                "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-                                "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
-                                "addnArgs=--post-results --log-level debug"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["block"] = rc
-                            }
+                        withEnv([
+                            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+                            "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
+                            "testSuite=suites/${cephVersion}/rbd/tier_0_rbd.yaml",
+                            "addnArgs=--post-results --log-level debug"
+                        ]) {
+                            rc = sharedLib.runTestSuite()
+                            testResults["Tier-0 RBD verification"] = rc
                         }
                     }
                  }, 'cephfs': {
-                    stage('Cephfs Suite') {
+                    stage('CephFS') {
                         sleep(480)
-                        script {
-                            withEnv([
-                                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
-                                "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
-                                "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
-                                "addnArgs=--post-results --log-level debug"
-                            ]) {
-                                rc = sharedLib.runTestSuite()
-                                test_results["cephfs"] = rc
-                            }
+                        withEnv([
+                            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
+                            "sutConf=conf/${cephVersion}/cephfs/tier_0_fs.yaml",
+                            "testSuite=suites/${cephVersion}/cephfs/tier_0_fs.yaml",
+                            "addnArgs=--post-results --log-level debug"
+                        ]) {
+                            rc = sharedLib.runTestSuite()
+                            testResults["Tier-0 CephFS verification"] = rc
                         }
                     }
                  }]
@@ -90,24 +82,22 @@ node(nodeName) {
                     url: 'https://github.com/red-hat-storage/cephci.git'
                 ]]
             ])
-            script {
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
-                sharedLib.prepareNode()
-            }
+
+            // prepare the node for executing test suites
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
+            sharedLib.prepareNode()
         }
     }
 
-    timeout(unit: "MINUTES", time: 120) {
+    timeout(unit: "HOURS", time: 2) {
         parallel testStages
     }
 
     stage('Publish Results') {
-        script {
-               sharedLib.sendEMail("Tier-0", test_results)
-               if ( ! (1 in test_results.values()) ){
-                   sharedLib.postLatestCompose()
-                   sharedLib.sendUMBMessage("Tier0TestingDone")
-               }
+        sharedLib.sendEMail("Tier-0", testResults)
+        if ( ! (1 in testResults.values()) ){
+            sharedLib.postLatestCompose()
+            sharedLib.sendUMBMessage("Tier0TestingDone")
         }
     }
 
