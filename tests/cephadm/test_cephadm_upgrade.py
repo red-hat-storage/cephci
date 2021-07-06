@@ -5,8 +5,13 @@ Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 import logging
 
 from ceph.ceph_admin.orch import Orch
+from ceph.rados.rados_bench import RadosBench
 
-LOG = logging.getLogger()
+LOG = logging.getLogger(__name__)
+
+
+class UpgradeFailure(Exception):
+    pass
 
 
 def run(ceph_cluster, **kwargs) -> int:
@@ -35,7 +40,15 @@ def run(ceph_cluster, **kwargs) -> int:
     LOG.info("Upgrade Ceph cluster...")
     config = kwargs["config"]
     orch = Orch(cluster=ceph_cluster, **config)
+
+    client = ceph_cluster.get_nodes(role="client")[0]
+    clients = ceph_cluster.get_nodes(role="client")
+    executor = RadosBench(mon_node=client, clients=clients)
+
     try:
+        # Initiate thread pool to run rados bench
+        executor.run(config=config["benchmark"])
+
         # Set repo to newer RPMs
         orch.set_tool_repo()
 
@@ -53,14 +66,15 @@ def run(ceph_cluster, **kwargs) -> int:
         orch.monitor_upgrade_status()
 
         if config.get("verify_cluster_health"):
-            orch.cluster.check_health(
+            if orch.cluster.check_health(
                 rhbuild=config.get("rhbuild"), client=orch.installer
-            )
-
+            ):
+                raise UpgradeFailure("Cluster is in HEALTH_ERR state")
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)
         return 1
     finally:
+        executor.teardown()
         # Get cluster state
         orch.get_cluster_state(
             [
