@@ -16,7 +16,7 @@ node(nodeName) {
         stage('Install prereq') {
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: 'refs/remotes/origin/tier1_json']],
+                branches: [[name: '*/master']],
                 doGenerateSubmoduleConfigurations: false,
                 extensions: [[
                     $class: 'SubmoduleOption',
@@ -54,8 +54,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         script {
-//             sharedLib.sendEMail("Tier-1-Cephfs", testResults)
-               println " no email"
+            sharedLib.sendEMail("Tier-1-Cephfs", testResults)
         }
     }
 

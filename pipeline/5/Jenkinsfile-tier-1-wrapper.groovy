@@ -9,10 +9,10 @@ def sharedLib
 def test_results = [:]
 def composeInfo = ""
 def tier1Jobs = [
-//                     "rhceph-5-tier-1-deploy",
-//                     "rhceph-5-tier-1-object",
-//                     "rhceph-5-tier-1-rbd",
-                    "rhceph-5-tier-1-cephfs-tintu"
+                    "rhceph-5-tier-1-deploy",
+                    "rhceph-5-tier-1-object",
+                    "rhceph-5-tier-1-rbd",
+                    "rhceph-5-tier-1-cephfs"
                 ]
 
 // Pipeline script entry point
@@ -22,7 +22,7 @@ node(nodeName) {
 		stage('Install prereq') {
 		    checkout([
 		        $class: 'GitSCM',
-		        branches: [[name: 'refs/remotes/origin/tier1_json']],
+		        branches: [[name: '*/master']],
 		        doGenerateSubmoduleConfigurations: false,
 		        extensions: [[
 		            $class: 'SubmoduleOption',
@@ -97,7 +97,7 @@ node(nodeName) {
 				"composeUrl=${ciValues["composeUrl"]}",
 				"repository=${ciValues["repository"]}"
 			]) {
-// 				sharedLib.sendEMail("Tier-1", test_results, false)
+				sharedLib.sendEMail("Tier-1", test_results, false)
 				sharedLib.postTier1Compose(test_results, composeInfo)
 
 				def result_set = test_results.values().toSet()

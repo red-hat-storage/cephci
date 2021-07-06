@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 0 test suites for RH Ceph 4.x.
+    Pipeline script for storing the latest build information of 4.x RHEL7 build.
 */
 // Global variables section
 def nodeName = "centos-7"
@@ -25,7 +25,9 @@ node(nodeName) {
                     trackingSubmodules: false
                 ]],
                 submoduleCfg: [],
-                userRemoteConfigs: [[url: 'https://github.com/red-hat-storage/cephci.git']]
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
             ])
             script {
                 sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
@@ -34,28 +36,18 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "HOURS", time: 7) {
-  	    stage('RPM Sanity') {
-		script {
-		    withEnv([
-			"osVersion=RHEL-7",
-			"sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-			"sutConf=conf/${cephVersion}/ansible/sanity-ceph-ansible.yaml",
-			"testSuite=suites/${cephVersion}/ansible/sanity_ceph_ansible.yaml",
-			"containerized=false",
-			"addnArgs=--post-results --log-level DEBUG"
-		    ]) {
-			rc = sharedLib.runTestSuite()
-			test_results['rpm_sanity'] = rc
-		    }
-		}
-	    }
-    }
-
-    stage('Publish Results') {
+    stage('Publish Compose') {
         script {
-            sharedLib.sendEMail("Tier-0", test_results)
-            sharedLib.postLatestCompose()
+            def composeInfo = sharedLib.fetchComposeInfo("${params.CI_MESSAGE}")
+            def composeId = composeInfo.composeId
+
+            // get rhbuild value from RHCEPH-4.3-RHEL-7.yyyymmdd.ci.x
+            def rhcsVersion = composeId.substring(7,17).toLowerCase()
+
+            withEnv(["rhcephVersion=${rhcsVersion}"]) {
+                sharedLib.postLatestCompose(true)
+            }
         }
     }
+
 }
