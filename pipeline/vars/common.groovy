@@ -268,6 +268,7 @@ def fetchTier1Compose() {
         return null
     }
     def tier0Compose = jsonToMap(tier0Json)
+    def tier0ComposeString = writeJSON returnText: true, json : tier0Compose
 
     def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
     if (tier1FileExists != 0) {
@@ -315,31 +316,27 @@ def postLatestCompose(def onlyLatest=false) {
     postCompose("${params.CI_MESSAGE}", tier0Json)
 }
 
-def postTier1Compose(def test_results, def composeInfo) {
+def postTier1Compose(def testResults, def composeInfo, def tier = "tier1") {
     /*
         Store the latest compose in ressi for QE usage.
     */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
-    def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
-    def jsonContent = """{ "latest" : ${composeInfo}, "pass" : ${composeInfo} }"""
+    def composeMap = readJSON text: composeInfo
+    def composeData = [ "latest": composeMap, "pass": composeMap ]
+    def tierJson = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-${tier}.json"
 
-    if ( "FAILURE" in test_results.values() || "ABORTED" in test_results.values() ) {
-        def tier1FileExists = sh(returnStatus: true, script: "ls -l ${tier1Json}")
-        if ( tier1FileExists != 0) {
-            jsonContent = """ {"latest" : ${composeInfo}, "pass" : ""} """
+    if ( "FAILURE" in testResults.values() || "ABORTED" in testResults.values() ) {
+        def tierJsonFileExists = sh (returnStatus: true, script: "ls -l ${tierJson}" )
+
+        if ( tierJsonFileExists == 0) {
+            def tierCompose = jsonToMap(tierJson)
+            composeData.pass = tierCompose.pass
         } else {
-            def tier1Compose = jsonToMap(tier1Json)
-
-            jsonContent = """
-                {
-                    "latest": ${composeInfo},
-                    "pass": ${tier1Compose.pass}
-                }
-            """
+            composeData.pass = [:]
         }
     }
 
-    sh(script:"""echo '${jsonContent}' > ${tier1Json} """)
+    writeJSON file: tierJson, json: composeData
 
 }
 
