@@ -18,16 +18,16 @@ from ceph.utils import get_nodes_by_ids
 LOG = logging.getLogger(__name__)
 TEST_REPO = "https://github.com/ceph/ceph.git"
 SCRIPT_PATH = "qa/workunits/rbd"
-EPEL_RPM = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
 
 
-def one_time_setup(node, branch: str) -> None:
+def one_time_setup(node, rhbuild, branch: str) -> None:
     """
     Installs the pre-requisites for executing the tests.
 
     Args:
         node:   The node object participating in the test
         branch: The branch that needs to be cloned
+        rhbuild: specification of rhbuild. ex: 4.3-rhel-7
     """
     try:
         node.exec_command(cmd="ls ceph")
@@ -36,11 +36,17 @@ def one_time_setup(node, branch: str) -> None:
     except BaseException:  # noqa
         pass
 
+    os_ver = rhbuild.split("-")[-1]
+
+    EPEL_RPM = (
+        f"https://dl.fedoraproject.org/pub/epel/epel-release-latest-{os_ver}.noarch.rpm"
+    )
+
     commands = [
         {"cmd": f"git clone -b {branch} {TEST_REPO}"},
-        {"cmd": f"dnf install -y {EPEL_RPM} --nogpgcheck", "sudo": True},
+        {"cmd": f"yum install -y {EPEL_RPM} --nogpgcheck", "sudo": True},
         {
-            "cmd": "dnf install -y xmlstarlet rbd-nbd qemu-img cryptsetup --nogpgcheck",
+            "cmd": "yum install -y xmlstarlet rbd-nbd qemu-img cryptsetup --nogpgcheck",
             "sudo": True,
         },
     ]
@@ -97,7 +103,7 @@ def run(ceph_cluster, **kwargs) -> int:
             )
 
     for node in nodes:
-        one_time_setup(node, branch=branch)
+        one_time_setup(node, rhbuild, branch=branch)
 
         cmd = f"cd ceph/{script_dir}; sudo bash {script}"
         if script == "*":
