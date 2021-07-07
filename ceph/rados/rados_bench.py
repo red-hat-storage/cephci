@@ -7,7 +7,7 @@ the low level native object storage API provided by Ceph.
 
 """
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from time import time
 
 from ceph.ceph_admin.common import config_dict_to_string
@@ -125,8 +125,8 @@ class RadosBench:
         ex., rados bench 10 write -p test_bench  --no-cleanup --run-name test2
 
         Args:
-            client: client node (CephVMNode else client will be picked from self.clients)
-            pool_name: osd pool name (pool name else pool will be picked from self.pools)
+            client: client node
+            pool_name: osd pool name
             config: write ops command arguments
 
         config:
@@ -229,31 +229,48 @@ class RadosBench:
             pool_name: ceph OSD pool name
             duration: duration of benchmark run in seconds
         """
-        while not self.stop_signal():
-            run_name = ""
-            try:
-                config = {
-                    "seconds": str(duration),
-                    "run-name": True,
-                    "no-cleanup": True,
-                }
-                run_name = self.write(client, pool_name, **config)
-                config["run-name"] = run_name
-                self.sequential_read(client, pool_name, **config)
-            except Exception:  # no qa
-                raise RadosBenchExecutionFailure
-            finally:
-                self.cleanup(client, pool_name, run_name)
-        # delete pool
-        delete_osd_pool(node=self.mon, pool_name=pool_name)
+        try:
+            LOG.info(
+                f"[ {pool_name}-{client.shortname} ] RadosBench execution Initiated...."
+            )
+            while not self.stop_signal():
+                run_name = ""
+                try:
+                    config = {
+                        "seconds": str(duration),
+                        "run-name": True,
+                        "no-cleanup": True,
+                    }
+                    run_name = self.write(client, pool_name, **config)
+                    config["run-name"] = run_name
+                    self.sequential_read(client, pool_name, **config)
+                except Exception:  # no qa
+                    raise RadosBenchExecutionFailure
+                finally:
+                    self.cleanup(client, pool_name, run_name)
+        finally:
+            LOG.info(
+                f"[ {pool_name}-{client.shortname} ] RadosBench execution Ended...."
+            )
+            delete_osd_pool(node=self.mon, pool_name=pool_name)
+
         return "Done....."
+
+    def wait_for_completion(self):
+        """
+        Wait for all tasks completion
+        """
+        wait(self.tasks, return_when=ALL_COMPLETED)
 
     def teardown(self):
         """
         cleanup bench mark residues
         - remove pools
+        - wait for tasks completion with cleanup
         """
         self.initiate_stop_signal()
+        self.wait_for_completion()
+        LOG.info("RadosBench Execution Completed......")
 
     def run(self, config):
         """
@@ -273,6 +290,7 @@ class RadosBench:
                 # True - pool per client
                 # False - one pool used by all clients
         """
+        LOG.info("RadosBench Execution Started ......")
         duration = config.get("duration")
         pg_num = config.get("pg_num")
         pool_per_placement = config.get("pool_per_placement")
@@ -288,10 +306,13 @@ class RadosBench:
         else:
             clients = zip(self.clients, self.pools)
 
-        executor = ThreadPoolExecutor()
+        self.executor = ThreadPoolExecutor()
+        self.tasks = []
         try:
             for client, pool in clients.items():
-                executor.submit(self.continuous_run, client, pool, duration)
+                self.tasks.append(
+                    self.executor.submit(self.continuous_run, client, pool, duration)
+                )
         except BaseException as err:  # noqa
             LOG.error(err, exc_info=True)
             self.initiate_stop_signal()
