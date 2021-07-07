@@ -38,6 +38,7 @@ class FsUtils(object):
                 "attr",
                 "gcc",
                 "python3-devel",
+                "git",
             ]
             if build.endswith("7") or build.startswith("3"):
                 pkgs.extend(
@@ -146,6 +147,7 @@ class FsUtils(object):
             mon_node_ip:
             **kwargs:
                 extra_params : we can include extra parameters that needs to be passed to ceph fs fuse mount
+                sub_dir: if you want to mount specific directory
         Returns:
 
         Exceptions:
@@ -161,7 +163,7 @@ class FsUtils(object):
             )
 
             kernel_cmd = (
-                f"mount -t ceph {mon_node_ip}:/ {mounting_dir} "
+                f"mount -t ceph {mon_node_ip}:/{kwargs.get('sub_dir','')} {mounting_dir} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
                 f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
             )
@@ -186,7 +188,7 @@ class FsUtils(object):
         return [node.ip_address for node in self.ceph_cluster.get_nodes(role="mon")]
 
     @staticmethod
-    def client_clean_up(fuse_clients, kernel_clients, mounting_dir, *args, **kwargs):
+    def client_clean_up(*args,fuse_clients=[], kernel_clients=[], mounting_dir="",**kwargs):
         """
         This method cleans up all the client nodes and mount points
         Args:
@@ -245,3 +247,25 @@ class FsUtils(object):
                 client.exec_command(sudo=True, cmd="iptables -F", check_ec=False)
 
         return 0
+
+    def get_all_subvolumes(self,client, fs_list=[]):
+        """
+        it gets all the subvolume details in fs provided
+        if fs_list is empty it will iterate through all the fs present and gets back the list
+        Args:
+            client:
+            fs_list:
+
+        Returns:
+            list of all sub volumes present in the group
+        """
+        if fs_list == []:
+            out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json-pretty")
+            all_fs_info = json.loads(out.read().decode())
+            fs_list = [i["name"] for i in all_fs_info ]
+        subvolumes = []
+        for fs in fs_list:
+            out, rc = client.exec_command(sudo=True, cmd=f"ceph fs subvolume ls {fs} --format json-pretty")
+            all_sub_info = json.loads(out.read().decode())
+            subvolumes.extend([i["name"] for i in all_sub_info])
+        return subvolumes

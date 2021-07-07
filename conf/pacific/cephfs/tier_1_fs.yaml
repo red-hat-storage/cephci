@@ -39,4 +39,6 @@ globals:
       node8:
         role:
           - client
-
+      node9:
+        role:
+          - client
