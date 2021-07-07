@@ -115,6 +115,5 @@ tests:
       module: sanity_rgw.py
       config:
         script-name: ../s3cmd/test_large_object_gc.py
-        config-file-name: ../../s3cmd/configs/test_large_object_gc.py
+        config-file-name: ../../s3cmd/configs/test_large_object_gc.yaml
         timeout: 300
-
