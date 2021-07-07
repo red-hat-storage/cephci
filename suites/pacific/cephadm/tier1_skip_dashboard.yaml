@@ -104,16 +104,13 @@ tests:
               service: mon
               args:
                 placement:
-                  nodes:
-                    - node1
-                    - node2
-                    - node3
+                  limit: 3
           - config:
               command: apply
               service: mgr
               args:
                 placement:
-                  label: mgr
+                  limit: 3
           - config:
               command: apply
               service: osd
@@ -214,3 +211,5 @@ tests:
           mgr: "allow *"
       destroy-cluster: false
       abort-on-fail: true
+
+
