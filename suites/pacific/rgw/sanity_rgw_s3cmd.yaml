@@ -107,3 +107,14 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_s3cmd.yaml
         timeout: 300
+
+  - test:
+      name: S3CMD tests
+      desc: S3CMD large object download with GC
+      polarion-id: CEPH-83574416
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_object_gc.py
+        config-file-name: ../../s3cmd/configs/test_large_object_gc.py
+        timeout: 300
+
