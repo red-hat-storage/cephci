@@ -256,7 +256,7 @@ def jsonToMap(def jsonFile) {
 
 def fetchTier1Compose() {
     /*
-       Fetch the compose to be tested for tier1, is there is one
+       Fetch the compose to be tested for tier1, if there is one
     */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
@@ -276,7 +276,7 @@ def fetchTier1Compose() {
     }
     def tier1Compose = jsonToMap(tier1Json)
 
-    if (tier0Compose.compose_id != tier1compose.latest.compose_id) {
+    if (tier0Compose.compose_id != tier1Compose.latest.compose_id) {
         return tier0Compose
     }
 
