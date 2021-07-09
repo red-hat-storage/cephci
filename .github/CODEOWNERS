@@ -1,7 +1,24 @@
-# Lines starting with '#' are comments.
-# Each line is a file pattern followed by one or more owners,
-# the last matching pattern has the most precendence.
-
 # These owners will be the default owners for everything in this repo.
 # all changes.
-*   @red-hat-storage/cephci-top-reviewers
+*                   @red-hat-storage/cephci-top-reviewers
+
+# for RGW
+rgw/                @red-hat-storage/teams/cephci-rgw
+
+# for RBD team 
+rbd/                @red-hat-storage/teams/cephci-block
+rbd_mirror/         @red-hat-storage/teams/cephci-block
+
+# for RADOS
+rados/              @ed-hat-storage/teams/cephci-rados
+
+# for FS
+cephfs/             @red-hat-storage/teams/cephci-fs
+
+# for DMFG
+ansible/            @red-hat-storage/teams/cephci-dm
+upgrades/           @red-hat-storage/teams/cephci-dm
+dashboard/          @red-hat-storage/teams/cephci-dm
+cephadm/            @red-hat-storage/teams/cephci-dm
+ceph_ansisble/      @red-hat-storage/teams/cephci-dm  
+ceph_installer/     @red-hat-storage/teams/cephci-dm
