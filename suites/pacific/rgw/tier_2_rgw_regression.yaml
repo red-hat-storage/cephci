@@ -142,16 +142,6 @@ tests:
   # Swift basic operation
 
   - test:
-      name: Swift based tests
-      desc: RGW lifecycle operations using swift
-      polarion-id: CEPH-11019
-      module: sanity_rgw.py
-      config:
-        script-name: test_swift_basic_ops.py
-        config-file-name: test_swift_basic_ops.yaml
-        timeout: 300
-
-  - test:
        name: Swift based tests
        desc: Swift bulk delete operation
        polarion-id: CEPH-9753
@@ -179,16 +169,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_large_download.yaml
-        timeout: 300
-
-  # multipart test
-  - test:
-      name: Mbuckets_with_Nobjects_with_multipart
-      desc: test to create "M" no of buckets and "N" no of objects with multipart upload
-      module: sanity_rgw.py
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
         timeout: 300
 
   # Versioning Tests
@@ -488,6 +468,17 @@ tests:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding.yaml
         timeout: 500
+  
+  # AWS4 Auth tests
+  - test:
+      name: AWS4 Auth test
+      desc: AWS4 Auth test
+      polarion-id: CEPH-9637
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
+        timeout: 300
 
   # v1 tests
   # ACLs tests
@@ -668,3 +659,15 @@ tests:
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
+  
+  # Encryption tests
+
+  - test:
+      name: Object Encryption Tests
+      desc: Upload and Download objects using encryption [AES256 alogorith]
+      polarion-id: CEPH-11358,CEPH-11361
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
+        timeout: 300
