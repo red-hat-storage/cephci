@@ -189,3 +189,19 @@ tests:
           mgr: "allow *"
       destroy-cluster: false
       abort-on-fail: true
+  - test:
+      name: Restarting a ceph service using cephadm
+      desc: Apply Ceph orch restart service for all the daemons
+      module: test_orch.py
+      polarion-id:
+      config:
+        service: mon
+        command: restart
+        base_cmd_args:
+          verbose: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+
+
+

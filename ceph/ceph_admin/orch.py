@@ -16,17 +16,19 @@ from .helper import GenerateServiceSpec
 from .ls import LSMixin
 from .ps import PSMixin
 from .remove import RemoveMixin
+from .service_ops import ServiceOpsMixin
 from .upgrade import UpgradeMixin
 
 LOG = logging.getLogger()
 
 
-class Orch(LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI):
+class Orch(ServiceOpsMixin, LSMixin, PSMixin, RemoveMixin, UpgradeMixin, CephCLI):
     """Represent ceph orch command."""
 
     direct_calls = ["ls", "ps"]
 
     def get_hosts_by_label(self, label: str):
+
         """
         Fetch host object by label attached to it.
         Args:
