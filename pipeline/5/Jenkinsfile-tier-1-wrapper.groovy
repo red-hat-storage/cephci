@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 1 jobs for RH Ceph 5.0.
+    Pipeline script for executing all Tier 1 jobs for RH Ceph 5.x
 */
 // Global variables section
 
@@ -37,13 +37,11 @@ node(nodeName) {
                     url: 'https://github.com/red-hat-storage/cephci.git'
                 ]]
             ])
-
-			script {
-				sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
-				sharedLib.prepareNode()
-			}
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
+            sharedLib.prepareNode()
 		}
 	}
+
 	stage('Validate Argument') {
 		def ciMessage = "${params.CI_MESSAGE}" ?: ""
 		if (ciMessage?.trim()) {
@@ -66,46 +64,45 @@ node(nodeName) {
 	}
 
 	timeout(unit: "HOURS", time: 24) {
-		script {
-			for(jobName in tier1Jobs) {
-				stage("${jobName}") {
-					def jobResult = build propagate: false, \
-							        job: jobName, \
-							        parameters: [[
-							            $class: 'StringParameterValue',
-							            name: 'CI_MESSAGE',
-							            value: composeInfo
-							        ]]
+        for(jobName in tier1Jobs) {
+            stage(jobName) {
+                def jobResult = build ([
+                    propagate: false,
+                    job: jobName,
+                    parameters: [[
+                        $class: 'StringParameterValue',
+                        name: 'CI_MESSAGE',
+                        value: composeInfo
+                    ]]
+                ])
 
-					test_results[jobName] = jobResult.result
-					catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-						if (jobResult.result != 'SUCCESS') {
-							sh "exit 1"
-						}
-					}
-				}
-			}
-		}
+                test_results[jobName] = jobResult.result
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    if (jobResult.result != 'SUCCESS') {
+                        sh "exit 1"
+                    }
+                }
+            }
+        }
 	}
 
 	stage('Publish Results') {
-		script {
-			def ciValues = sharedLib.fetchComposeInfo(composeInfo)
-			withEnv([
-				"rhcephVersion=5.0-rhel-8",
-				"composeId=${ciValues["composeId"]}",
-				"composeUrl=${ciValues["composeUrl"]}",
-				"repository=${ciValues["repository"]}"
-			]) {
-				sharedLib.sendEMail("Tier-1", test_results, false)
-				sharedLib.postTier1Compose(test_results, composeInfo)
+	    def ciValues = sharedLib.fetchComposeInfo(composeInfo)
 
-				def result_set = test_results.values().toSet()
-				if ( result_set.size() == 1 && ("SUCCESS" in test_results.values()) ) {
-					sharedLib.sendUMBMessage("Tier1TestingDone")
-				}
-			}
-		}
+        withEnv([
+            "rhcephVersion=5.0-rhel-8",
+            "composeId=${ciValues["composeId"]}",
+            "composeUrl=${ciValues["composeUrl"]}",
+            "repository=${ciValues["repository"]}"
+        ]) {
+            sharedLib.sendEMail("Tier-1", test_results, false)
+            sharedLib.postTierCompose(test_results, composeInfo, "tier1")
+
+            def result_set = test_results.values().toSet()
+            if ( result_set.size() == 1 && ("SUCCESS" in test_results.values()) ) {
+                sharedLib.sendUMBMessage("Tier1TestingDone")
+            }
+        }
 	}
 
 }
