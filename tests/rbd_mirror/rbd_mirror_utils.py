@@ -82,10 +82,14 @@ class RbdMirror:
                     yield result
             elif isinstance(v, list):
                 for d in v:
-                    for result in self.find(key, d):
-                        yield result
+                    if isinstance(d, dict):
+                        for result in self.find(key, d):
+                            yield result
+                    else:
+                        yield d
 
     # Handling of clusters with same name
+
     def handle_same_name(self, name):
         self.cluster_name = name
         self.cluster_spec = self.rbd_client + "@" + self.cluster_name
@@ -266,6 +270,7 @@ class RbdMirror:
                 out2 = out1[1].split(",")
                 log.info(f"entries_behind_primary : {out2[0]}")
                 if int(out2[0]) == 0:
+                    time.sleep(30)
                     return out2[0]
             else:
                 if int(out.split("=")[-1]) == 0:
@@ -292,11 +297,67 @@ class RbdMirror:
         else:
             return out
 
+    def get_mirror_mode(self, *args):
+        output = self.exec_cmd(
+            output=True, cmd=f"rbd --image {args[0]} info --format=json"
+        )
+        json_dict = json.loads(output)
+        mirroring_details = json_dict.get("mirroring", None)
+        if mirroring_details:
+            return mirroring_details.get("mode")
+        return None
+
+    def schedule_snapshot_image(self, poolname, **kwargs):
+        """
+        This will schedule snapshot based on below kwargs
+        Args:
+            poolname:
+            **kwargs:
+                imagename : if imagename is specified scedule will done per image if not will done per pool
+                interval : if specidifed will be used or default it to 5 min
+                starttime : optional if specified will be configured
+
+        Returns:
+        """
+        cmd1 = f"rbd mirror snapshot schedule add --pool {poolname}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')}"
+        cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else " 1m"
+        cmd1 += f" {kwargs.get('starttime')}" if kwargs.get("starttime") else ""
+        self.exec_cmd(cmd=cmd1)
+
+    def verify_snapshot_schedule(self, imagespec, interval=1):
+        """
+        This will verify the snapshot roll overs on the image which is snapshot based mirroring
+        Args:
+            imagespec:
+            interval : this is int and specified in min
+        Returns:
+
+        """
+        output = self.exec_cmd(
+            output=True, cmd=f"rbd mirror image status {imagespec} --format=json"
+        )
+        json_dict = json.loads(output)
+        snapshot_ids = [i["id"] for i in json_dict.get("snapshots")]
+        log.info(f"snapshot_ids Before : {snapshot_ids}")
+        time.sleep(interval * 120)
+        output = self.exec_cmd(
+            output=True, cmd=f"rbd mirror image status {imagespec} --format=json"
+        )
+        json_dict = json.loads(output)
+        snapshot_ids_1 = [i["id"] for i in json_dict.get("snapshots")]
+        log.info(f"snapshot_ids After : {snapshot_ids_1}")
+        if snapshot_ids != snapshot_ids_1:
+            return 0
+        raise Exception("snapshots not generated after the intervel")
+
     # Check data consistency
     def check_data(self, peercluster, imagespec):
         self.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
         peercluster.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
-        peercluster.wait_for_replay_complete(imagespec)
+        if self.get_mirror_mode(imagespec) != "snapshot":
+            peercluster.wait_for_replay_complete(imagespec)
         export_path = "/home/cephuser/image.export"
         self.export_image(imagespec=imagespec, path=export_path)
         peercluster.export_image(imagespec=imagespec, path=export_path)
@@ -472,6 +533,20 @@ class RbdMirror:
         self.exec_cmd(
             cmd="ceph osd pool set {} allow_ec_overwrites true".format(poolname)
         )
+
+    def enable_mirror_image(self, poolname, imagename, mode):
+        """
+
+        Args:
+            poolname:
+            imagename:
+            mode:
+            Allowed modes journal,snapshot
+
+        Returns:
+
+        """
+        self.exec_cmd(cmd=f"rbd mirror image enable {poolname}/{imagename} {mode}")
 
     def clean_up(self, peercluster, **kw):
         if kw.get("dir_name"):
