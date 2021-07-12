@@ -32,6 +32,7 @@ from utility.utils import (
     create_run_dir,
     create_unique_test_name,
     email_results,
+    generate_unique_id,
     get_latest_container,
     magna_url,
     timestamp,
@@ -292,7 +293,7 @@ def run(args):
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms", False)
 
     # Set log directory and get absolute path
-    run_id = timestamp()
+    run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)
     startup_log = os.path.join(run_dir, "startup.log")
     print("Startup log location: {}".format(startup_log))
