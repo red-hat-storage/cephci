@@ -16,6 +16,7 @@ from libcloud.compute.types import Provider
 
 from mita.v2 import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.retry import retry
+from utility.utils import generate_node_name
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
@@ -78,25 +79,15 @@ def create_ceph_nodes(
                 node_dict = ceph_cluster.get(node)
                 node_params = params.copy()
                 node_params["role"] = RolesContainer(node_dict.get("role"))
-                role = node_params["role"]
                 user = os.getlogin()
 
-                if instances_name:
-                    node_params["node-name"] = "{}-{}-{}-{}-{}".format(
-                        node_params.get("cluster-name", "ceph"),
-                        instances_name,
-                        run_id,
-                        node,
-                        "-".join(role),
-                    )
-                else:
-                    node_params["node-name"] = "{}-{}-{}-{}-{}".format(
-                        node_params.get("cluster-name", "ceph"),
-                        user,
-                        run_id,
-                        node,
-                        "-".join(role),
-                    )
+                node_params["node-name"] = generate_node_name(
+                    node_params.get("cluster-name", "ceph"),
+                    instances_name or user,
+                    run_id,
+                    node,
+                    node_params["role"],
+                )
 
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")

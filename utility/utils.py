@@ -8,6 +8,7 @@ import time
 import traceback
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from string import ascii_uppercase, digits
 
 import requests
 import yaml
@@ -838,3 +839,45 @@ def setup_cluster_access(cluster, target) -> None:
         fh = target.remote_file(file_name=out_file, file_mode="w", sudo=True)
         fh.write(file_)
         fh.flush()
+
+
+def generate_unique_id(length):
+    """
+    Return unique string of N(length) characters
+    Args:
+        length: positive integer
+
+    Note:
+        make sure length > 0 for a proper value
+        length = 0, returns empty string ''
+    """
+    return "".join(random.choices(ascii_uppercase + digits, k=length))
+
+
+def generate_node_name(cluster_name, instance_name, run_id, node, role):
+    """
+    Return node name using provided parameters
+
+    Args:
+        cluster_name: cluster name from config
+        instance_name: preferred instance name
+        run_id: unique run Id
+        node: node name
+        role: all node roles
+
+    Only Installer node will get prefixed with "Installer" name,
+    which helps in identification of admin node.
+
+    """
+    node_name = [
+        cluster_name,
+        instance_name if instance_name else "",
+        run_id,
+        node,
+        "installer" if "installer" in role else "",
+    ]
+    node_name = "-".join([i for i in node_name if i])
+    if len(node_name) > 48:
+        log.warning(f"[{node_name}] WARNING!!!!, Node name too long(>48 chars)")
+
+    return node_name
