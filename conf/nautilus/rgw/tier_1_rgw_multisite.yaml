@@ -15,6 +15,7 @@ globals:
         role:
           - mgr
           - osd
+          - grafana
 
       node3:
         disk-size: 20
@@ -53,6 +54,7 @@ globals:
         role:
           - mgr
           - osd
+          - grafana
 
       node3:
         disk-size: 20
