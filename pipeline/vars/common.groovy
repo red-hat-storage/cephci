@@ -5,9 +5,6 @@
 
 import groovy.json.JsonSlurper
 
-// module variables
-def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
-
 def prepareNode() {
     /*
         Installs the required packages needed by the Jenkins node to
@@ -260,6 +257,8 @@ def fetchTier1Compose() {
     /*
        Fetch the compose to be tested for tier1, if there is one
     */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+
     def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
     def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
 
@@ -289,9 +288,10 @@ def postCompose(def data, def jsonFile) {
     /*
         Writes the given data to provided file under the default latest compose folder.
     */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def target = "${defaultFileDir}/${jsonFile}"
 
-    sh (script: """ echo '${data}' > ${target} """)
+    sh(script: """ echo '${data}' > ${target} """)
 }
 
 def postLatestCompose(def onlyLatest=false) {
@@ -319,6 +319,8 @@ def postTierCompose(def testResults, def composeInfo, def tier) {
     /*
         Store the stable build details for the Tier in ressi.
     */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+
     def composeMap = readJSON text: composeInfo
     def composeData = [ "latest": composeMap, "pass": composeMap ]
 
@@ -399,6 +401,7 @@ def getPlatformComposeMap(def osVersion) {
     /*
         Return the Map of the given platform's latest json content.
     */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def rhBuild = getRHBuild(osVersion)
 
     def jsonFile = "${defaultFileDir}/latest-RHCEPH-${rhBuild}.json"
