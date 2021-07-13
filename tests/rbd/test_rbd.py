@@ -29,12 +29,6 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
         branch: The branch that needs to be cloned
         rhbuild: specification of rhbuild. ex: 4.3-rhel-7
     """
-    try:
-        node.exec_command(cmd="ls ceph")
-
-        return
-    except BaseException:  # noqa
-        pass
 
     os_ver = rhbuild.split("-")[-1]
 
@@ -43,7 +37,8 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
     )
 
     commands = [
-        {"cmd": f"git clone -b {branch} {TEST_REPO}"},
+        {"cmd": "rm -rf ceph"},
+        {"cmd": f"git clone --branch {branch} --single-branch --depth 1 {TEST_REPO}"},
         {"cmd": f"yum install -y {EPEL_RPM} --nogpgcheck", "sudo": True},
         {
             "cmd": "yum install -y xmlstarlet rbd-nbd qemu-img cryptsetup --nogpgcheck",
