@@ -750,8 +750,10 @@ def get_node_by_id(cluster, node_name):
         node instance (CephVMNode)
     """
     for node in cluster.get_nodes():
-        if node_name == node.shortname or f"{node_name}-" in node.shortname:
-            return node
+        searches = re.findall(fr"{node_name}?\d*", node.shortname)
+        for ele in searches:
+            if ele == node_name:
+                return node
 
 
 def get_nodes_by_ids(cluster, node_names):
