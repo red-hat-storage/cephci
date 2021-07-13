@@ -264,7 +264,8 @@ class RbdMirror:
             if self.ceph_version >= 4:
                 out1 = out.split('entries_behind_primary":')
                 out2 = out1[1].split(",")
-                if isinstance(int(out2[0]), int):
+                log.info(f"entries_behind_primary : {out2[0]}")
+                if int(out2[0]) == 0:
                     return out2[0]
             else:
                 if int(out.split("=")[-1]) == 0:
@@ -297,24 +298,14 @@ class RbdMirror:
         peercluster.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
         peercluster.wait_for_replay_complete(imagespec)
         export_path = "/home/cephuser/image.export"
-        time.sleep(
-            300
-        )  # Adding sleep as image export taking some time compare to cli execution
         self.export_image(imagespec=imagespec, path=export_path)
-        time.sleep(
-            300
-        )  # Adding sleep as image export taking some time compare to cli execution
         peercluster.export_image(imagespec=imagespec, path=export_path)
-
-        time.sleep(300)
         local_md5 = self.exec_cmd(
             ceph_args=False, output=True, cmd="md5sum {}".format(export_path)
         )
         rmt_md5 = peercluster.exec_cmd(
             ceph_args=False, output=True, cmd="md5sum {}".format(export_path)
         )
-        print(local_md5)
-        print(rmt_md5)
         log.info(local_md5)
         log.info(rmt_md5)
         if local_md5 == rmt_md5:
