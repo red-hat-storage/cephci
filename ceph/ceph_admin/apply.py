@@ -73,7 +73,7 @@ class ApplyMixin:
         placement = args.pop("placement", {})
 
         if placement:
-            placement_str = "--placement="
+            placement_str = "--placement "
             verify_service = True
 
             if "label" in placement:

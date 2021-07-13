@@ -750,7 +750,15 @@ def get_node_by_id(cluster, node_name):
         node instance (CephVMNode)
     """
     for node in cluster.get_nodes():
-        if node_name == node.shortname or f"{node_name}-" in node.shortname:
+        if node_name == node.shortname:
+            return node
+
+        # Only installer node has the role attached so adding a check
+        if "installer" in node.shortname and f"{node_name}-" in node.shortname:
+            return node
+
+        found_node_name = node.shortname.split("-")[-1]
+        if node_name == found_node_name:
             return node
 
 
