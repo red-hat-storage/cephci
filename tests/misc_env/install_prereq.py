@@ -143,6 +143,19 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
     )
     while True:
         try:
+            # subscription-manager tips:
+            #
+            # "--serverurl" (optional) is the entitlement service. The default
+            # server (production) has customer-facing entitlement and SKU
+            # information. The "stage" server has QE-only entitlement data.
+            # We use Red Hat's internal "Ethel" tool to add SKUs to the
+            # "rhcsuser" account that only exists in stage.
+            #
+            # "--baseurl" (optional) is the RPM content host. The default
+            # value is the production CDN (cdn.redhat.com), and this hosts the
+            # RPM contents to which all customers have access. Alternatively
+            # you can push content to the staging CDN through the Errata Tool,
+            # and then test it with --baseurl=cdn.stage.redhat.com.
             config_ = get_cephci_config()
             command = "sudo subscription-manager --force register "
             if is_production:
