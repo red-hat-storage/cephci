@@ -37,7 +37,7 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
     )
 
     commands = [
-        {"cmd": "rm -rf ceph"},
+        {"cmd": "sudo rm -rf ceph"},
         {"cmd": f"git clone --branch {branch} --single-branch --depth 1 {TEST_REPO}"},
         {"cmd": f"yum install -y {EPEL_RPM} --nogpgcheck", "sudo": True},
         {
