@@ -92,6 +92,9 @@ def create_ceph_nodes(
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
                     node_params["size-of-disks"] = node_dict.get("disk-size")
+                    # osd-scenario option is not mandatory and,
+                    # can be used only for specific OSD_SCENARIO
+                    node_params["osd-scenario"] = node_dict.get("osd-scenario")
 
                 if node_dict.get("image-name"):
                     node_params["image-name"] = node_dict.get("image-name")
@@ -146,6 +149,7 @@ def setup_vm_node(node, ceph_nodes, **params):
         vm.role = params["role"]
         vm.root_login = params["root-login"]
         vm.keypair = params["keypair"]
+        vm.osd_scenario = params.get("osd-scenario", False)
         ceph_nodes[node] = vm
     except RETRY_EXCEPTIONS as retry_except:
         log.warning(retry_except, exc_info=True)
