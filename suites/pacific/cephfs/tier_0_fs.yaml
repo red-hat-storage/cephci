@@ -115,6 +115,12 @@ tests:
       polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
   -
     test:
+        name: nfs-ganesha_with_cephfs
+        module: nfs-ganesha_basics.py
+        desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+        abort-on-fail: false
+  -
+    test:
       desc: "generate sosreport"
       module: sosreport.py
       name: "generate sosreport"
