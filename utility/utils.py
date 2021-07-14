@@ -119,6 +119,58 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
+def sync_status_on_primary(verify_io_on_site_node, retry=5, delay=30):
+    """
+    verify multisite sync status on primary
+    """
+    check_sync_status, err = verify_io_on_site_node.exec_command(
+        cmd="sudo radosgw-admin sync status"
+    )
+    check_sync_status = check_sync_status.read().decode()
+
+    # check for 'failed' or 'ERROR' in sync status.
+    if "failed|ERROR" in check_sync_status:
+        log.info("checking for any sync error")
+        sync_error_list, err = verify_io_on_site_node.exec_command(
+            cmd="sudo radosgw-admin sync error list"
+        )
+        log.error(err.read().decode())
+        raise Exception(sync_error_list)
+    else:
+        log.info("No errors or failures in sync status")
+
+    log.info(
+        f"check if sync is in progress, if sync is in progress retry {retry} times with {delay}secs of sleep"
+    )
+    if "behind" in check_sync_status or "recovering" in check_sync_status:
+        log.info("sync is in progress")
+        log.info("sleep of 30 secs for sync to complete")
+        for retry_count in range(retry):
+            time.sleep(delay)
+            check_sync_status, err = verify_io_on_site_node.exec_command(
+                cmd="sudo radosgw-admin sync status"
+            )
+            check_sync_status = check_sync_status.read().decode()
+            if "behind" in check_sync_status or "recovering" in check_sync_status:
+                log.info(f"sync is still in progress. sleep for {delay}secs and retry")
+            else:
+                log.info("sync completed")
+                break
+
+        if (retry_count > retry) and (
+            "behind" in check_sync_status or "recovering" in check_sync_status
+        ):
+            raise Exception(
+                f"sync is still in progress. with {retry} retries and sleep of {delay}secs between each retry"
+            )
+
+    # check status for complete sync
+    if "data is caught up with source" in check_sync_status:
+        log.info("sync status complete")
+    else:
+        raise Exception("sync is either in progress or stuck")
+
+
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
     try:
         for client in kernel_clients:
