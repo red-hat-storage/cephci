@@ -1,0 +1,81 @@
+# Test cases expects mon_allow_pool_delete set as True
+tests:
+   - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+   - test:
+      name: ceph ansible
+      module: test_ansible.py
+      config:
+        ansi_config:
+            ceph_test: True
+            ceph_origin: distro
+            ceph_stable_release: nautilus
+            ceph_repository: rhcs
+            osd_scenario: lvm
+            osd_auto_discovery: False
+            ceph_stable: True
+            ceph_stable_rh_storage: True
+            fetch_directory: ~/fetch
+            copy_admin_key: true
+            dashboard_enabled: False
+            ceph_conf_overrides:
+                global:
+                  osd_pool_default_pg_num: 64
+                  osd_default_pool_size: 2
+                  osd_pool_default_pgp_num: 64
+                  mon_max_pg_per_osd: 1024
+                mon:
+                  mon_allow_pool_delete: true
+            cephfs_pools:
+              - name: "cephfs_data"
+                pgs: "8"
+              - name: "cephfs_metadata"
+                pgs: "8"
+      desc: setup four node cluster using ceph ansible
+      destroy-cluster: false
+      abort-on-fail: true
+
+  # Test cases to be executed
+
+   - test:
+      config:
+        branch: nautilus
+        script_path: qa/workunits/rbd
+        script: test_librbd_python.sh
+      desc: Executig upstream LibRBD scenarios
+      module: test_rbd.py
+      name: 1_librbd_python
+   - test:
+      config:
+        branch: nautilus
+        script_path: qa/workunits/rbd
+        script: permissions.sh
+      desc: Executig upstream RBD permissions scenarios
+      module: test_rbd.py
+      name: 2_rbd_permissions
+   - test:
+      config:
+        branch: nautilus
+        script_path: qa/workunits/rbd
+        script: read-flags.sh
+      desc: Executig upstream RBD Read Flag scenarios
+      module: test_rbd.py
+      name: 3_rbd_read_flags
+   - test:
+      config:
+        branch: nautilus
+        script_path: qa/workunits/rbd
+        script: journal.sh
+      desc: Executig upstream RBD Journal scenarios
+      module: test_rbd.py
+      name: 4_journal
+   - test:
+      config:
+        branch: nautilus
+        script_path: qa/workunits/rbd
+        script: kernel.sh
+      desc: Executig upstream RBD Kernal scenarios
+      module: test_rbd.py
+      name: 5_rbd_kernel
