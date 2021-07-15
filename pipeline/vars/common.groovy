@@ -214,17 +214,17 @@ def sendUMBMessage(def msgType) {
     /*
         Trigger a UMB message for successful tier completion
     */
-    def msgContent = """
-    {
-        "BUILD_URL": "${env.BUILD_URL}",
-        "CI_STATUS": "PASS",
-        "COMPOSE_ID": "${env.composeId}",
-        "COMPOSE_URL": "${env.composeUrl}",
-        "PRODUCT": "Red Hat Ceph Storage",
-        "REPOSITORY": "${env.repository}",
-        "TOOL": "cephci"
-    }
-    """
+    def msgMap = [
+        "BUILD_URL" : env.BUILD_URL,
+        "CI_STATUS" : "PASS",
+        "COMPOSE_ID" : env.composeId,
+        "COMPOSE_URL" : env.composeUrl,
+        "PRODUCT" : "Red Hat Ceph Storage",
+        "REPOSITORY" : env.repository,
+        "TOOL" : "cephci"
+    ]
+
+    def msgContent = writeJSON returnText: true, json: msgMap
 
     def msgProperties = """ BUILD_URL = ${env.BUILD_URL}
         CI_STATUS = PASS
@@ -419,8 +419,14 @@ def getBaseUrl(def osVersion) {
         Return the compose url for the current RHCS build. The osVersion determines the
         platform for which the URL needs to be retrieved.
     */
+    def url
+    def composeMap = readJSON text: "${params.CI_MESSAGE}"
+    if( composeMap.payload?.trim() ){
+        url = composeMap.payload.compose_urls.find({x -> x.compose_id.contains(osVersion.toUpperCase())}).compose_url
+        return url
+    }
     def compose = getPlatformComposeMap(osVersion)
-    def url = compose.compose_url
+    url = compose.compose_url
 
     return url
 }
@@ -433,6 +439,97 @@ def getComposeId(def osVersion) {
     def composeId = compose.compose_id
 
     return composeId
+}
+
+def fetchRCJsonFile(def rhcsVersion){
+
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+    def rcJsonFile = "RHCEPH-${rhcsVersion}-RC.json"
+    def rcFileExists = sh(returnStatus: true, script: "ls -l ${defaultFileDir}/${rcJsonFile}")
+    def rcMapExisting = null
+    if(rcFileExists == 0){
+        rcMapExisting = jsonToMap("${defaultFileDir}/${rcJsonFile}")
+    }
+    def rcJsonDetails = ["fileExists" : rcFileExists, "rcMapExisting" : rcMapExisting, "fileName" : rcJsonFile]
+    return rcJsonDetails
+}
+
+def postRCRPMCompose(){
+    def composeMap = getCIMessageMap()
+    def rhcsVersion = composeMap["compose-id"].substring(7,10).toLowerCase()
+    def rcJsonDetails = fetchRCJsonFile(rhcsVersion)
+    def osVersion = composeMap["compose-id"].substring(11,17)
+    def compose_path = composeMap["compose-path"].replace("/mnt/redhat/", "")
+    def compose_url = "http://download-node-02.eng.bos.redhat.com/${compose_path}".toString()
+
+    def jsonContent
+    if(rcJsonDetails.fileExists == 0 && composeMap["compose-label"] == rcJsonDetails.rcMapExisting.compose_label){
+        def compose_urls = [
+            "compose_id" : composeMap["compose-id"],
+            "compose_url" : compose_url
+        ]
+        rcJsonDetails.rcMapExisting.compose_urls.add(compose_urls)
+        jsonContent = writeJSON returnText: true, json: rcJsonDetails.rcMapExisting
+        postCompose(jsonContent.trim(), rcJsonDetails.fileName)
+        return
+    }
+    def rcMap = [
+        "compose_label" : composeMap["compose-label"],
+        "compose_urls" : [
+            [
+                "compose_id" : composeMap["compose-id"],
+                "compose_url" : compose_url
+            ]
+        ]
+    ]
+    jsonContent = writeJSON returnText: true, json: rcMap
+    postCompose(jsonContent.trim(), rcJsonDetails.fileName)
+}
+
+def postRCContCompose(){
+    def composeMap = readJSON text: "${params.CI_MESSAGE}"
+    def rhcsVersion = composeMap.tag.name.substring(5,8)
+    def rcJsonDetails = fetchRCJsonFile(rhcsVersion)
+    if(rcJsonDetails.fileExists != 0){
+        error "Missing RC Json File."
+    }
+    def repoDetails = composeMap.build.extra.image
+    def containerImage = repoDetails.index.pull.find({x -> !(x.contains("sha"))})
+    def repoUrl = repoDetails.yum_repourls.find({x -> x.contains("RHCEPH")})
+    def composeId = repoUrl.split("/").find({x -> x.contains("RHCEPH-${rhcsVersion}")})
+    def compose_ids = rcJsonDetails.rcMapExisting.compose_urls.collect{it.compose_id}
+    if(!(composeId in compose_ids)){
+        error "Compose ID mismatch"
+    }
+    def compose_url = rcJsonDetails.rcMapExisting.compose_urls.find({x -> x.compose_id == composeId}).compose_url
+    rcJsonDetails.rcMapExisting.repository = containerImage
+    rcJsonDetails.rcMapExisting.compose_id = composeId
+    rcJsonDetails.rcMapExisting.compose_url = compose_url
+    def jsonContent = writeJSON returnText: true, json: rcJsonDetails.rcMapExisting
+    postCompose(jsonContent.trim(), rcJsonDetails.fileName)
+    return jsonContent
+}
+
+def postRCCompose(def jobKey){
+    /*
+        Store the RC compose in ressi for QE usage.
+    */
+    def ciMsgFlag = "${params.CI_MESSAGE}" ?: ""
+    if (! ciMsgFlag?.trim()) {
+        println "Missing required information hence not posting compose details."
+        return
+    }
+
+    if(jobKey == "rpm"){
+        echo jobKey
+        postRCRPMCompose()
+        return
+    }
+    if(jobKey == "container"){
+        def jsonContent = postRCContCompose()
+        return jsonContent
+    }
+
 }
 
 return this;
