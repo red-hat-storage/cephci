@@ -72,9 +72,17 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Enable Cluster Monitoring and Alerts
+      name: Enable Cluster modules
       module: rados_prep.py
+      polarion-id: CEPH-83573857
       config:
+        configure_balancer:
+          configure: true
+          balancer_mode: upmap
+        configure_pg_autoscaler:
+          enable: true
+          default_mode: 'on'
+        log_to_file: true
         email_alerts:
           smtp_host: smtp.corp.redhat.com
           smtp_sender: ceph-iad2-c01-lab.mgr@redhat.com
@@ -86,9 +94,11 @@ tests:
         cluster_configuration_checks:
           configure: true
           disable_check_list:
-            - osd_linkspeed
             - osd_mtu_size
-      desc: Enable Cluster Configuration checks and ceph health email Alerts
+        replicated_pool:
+          create: true
+          rados_write_duration: 100
+      desc: Enable Cluster Configuration checks, Logging to file, PG Autoscaler, balancer and alerts
 
   - test:
       name: Configure client admin
@@ -109,35 +119,65 @@ tests:
           mds: "allow *"
           mgr: "allow *"
 
+# Deleting the EC pool created as EC pool creation is not supported with Stretch mode
   - test:
-      name: Testbed setup for RADOS
+      name: EC pool workflow
       module: rados_prep.py
       config:
+        ec_pool:
+          create: true
+          delete_pool: true
+          rados_write_duration: 200
+          rados_read_duration: 80
         replicated_pool:
           create: true
-          rados_write_duration: 80
-        log_to_file: true
-      desc: Enable logging to file and create a test pool with data
+          pool_name: delete_pool
+          rados_write_duration: 200
+      desc: Create & delete a EC pool with data
 
   - test:
       name: Deploy stretch Cluster
       module: stretch_cluster.py
       polarion-id: CEPH-83573621
       config:
+        site1: site-blr
+        site2: site-pune
         perform_add_capacity: true
+        osd_max_backfills: 10
+        osd_recovery_max_active: 16
       desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
 
   - test:
-      name: Replicated pool with stretch rule
+      name: Create Replicated pool with stretch rule
       module: rados_prep.py
+      polarion-id: CEPH-83573247,CEPH-83573621
       config:
         replicated_pool:
           create: true
+          pool_name: rep_test_pool
           crush_rule: stretch_rule
-          rados_write_duration: 100
-          rados_read_duration: 200
-        log_to_file: true
-      desc: Replicated pool creation with stretch rule and writing data
+          rados_write_duration: 300
+          rados_read_duration: 80
+        configure_pg_autoscaler:
+          pool_name: rep_test_pool
+          pg_autoscale_value: warn
+        configure_balancer:
+          configure: true
+          balancer_mode: upmap
+      desc: RE pool with stretch rule and writing data, with chanag balancer and autoscale mode
+
+  - test:
+      name: Customer Scenario BZ1905339
+      module: customer_scenarios.py
+      polarion-id: CEPH-83574095,CEPH-83573589
+      config:
+        mondb_trim_config:
+          paxos_service_trim_min: 10
+          paxos_service_trim_max: 100
+          osd_op_complaint_time: 0.000001
+          osd_max_backfills: 8
+          osd_recovery_max_active: 10
+      desc: Verification of mon DB trimming during various cluster operations
 
   - test:
        name: Mute ceph health alerts
