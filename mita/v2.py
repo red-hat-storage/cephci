@@ -138,6 +138,7 @@ class CephVMNodeV2:
 
         # Fixme: determine if we can pick this information for OpenStack.
         self.root_login: str
+        self.osd_scenario: int
         self.keypair: Optional[str] = None
 
         if node_name:

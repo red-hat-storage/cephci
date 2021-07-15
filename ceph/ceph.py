@@ -281,8 +281,9 @@ class Ceph(object):
                             check_lvm=False if device_to_add else True,
                         )
                     else:
+                        osd_scenario = node.vm_node.osd_scenario or counter
                         lvm_vols = node.multiple_lvm_scenarios(
-                            devices, lvm_utils.osd_scenario_list[counter]
+                            devices, lvm_utils.osd_scenario_list[osd_scenario]
                         )
                         counter += 1
                         logger.info(lvm_vols)
