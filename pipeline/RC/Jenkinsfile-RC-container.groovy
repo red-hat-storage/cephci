@@ -1,5 +1,6 @@
 /*
-    Pipeline script for storing the RC container information and triggering tier-0 suites for RC.
+    Pipeline script for storing the RC container information and triggering tier-0
+    suites for RC.
 */
 // Global variables section
 def nodeName = "centos-7"
@@ -40,11 +41,16 @@ node(nodeName) {
         }
     }
 
-    stage("Trigger Tier0 Job"){
+    stage("Execute Tier-0 suite") {
         def composeMap = readJSON text: "${jsonContent}"
         def rhcephMajorVersion = composeMap.compose_id.substring(7,8)
         def jobName = "rhceph-${rhcephMajorVersion}-tier-0"
-        build wait: false, job: jobName, parameters: [string(name: 'CI_MESSAGE', value: jsonContent)]
+
+        build ([
+            wait: false,
+            job: jobName,
+            parameters: [string(name: 'CI_MESSAGE', value: jsonContent)]
+        ])
     }
 
 }
