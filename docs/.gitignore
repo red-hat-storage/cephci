@@ -1,0 +1,7 @@
+# Ignore everything in this directory
+.gitignore
+# Except this file
+!.gitignore
+_build
+_static
+_templates
