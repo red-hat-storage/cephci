@@ -1,7 +1,8 @@
+# from _typeshed import SupportsRead
 import logging
 import time
 
-from utility.utils import setup_cluster_access
+from utility.utils import setup_cluster_access, sync_status_on_primary
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +86,10 @@ def run(**kw):
         io_info = home_dir_path + "io_info.yaml"
         for site in verify_io_on_sites:
             verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
+            log.info(f"Check sync status on {site}")
+            sync_status_on_primary(verify_io_on_site_node)
+            # adding sleep for 60 seconds before verification of data starts
+            time.sleep(60)
             log.info(f"verification IO on {site}")
             if test_site != site:
                 copy_file_from_node_to_node(
