@@ -69,7 +69,8 @@ def getCLIArgsFromMessage() {
 
 def cleanUp(def instanceName) {
    /*
-       Destroys the created instances and volumes with the given instanceName from rhos-d
+       Destroys the created instances and volumes with the given instanceName created in
+       RHOS-D ring.
    */
    try {
         cleanup_cmd = "PYTHONUNBUFFERED=1 ${env.WORKSPACE}/.venv/bin/python"
@@ -149,6 +150,9 @@ def runTestSuite() {
 }
 
 def fetchEmailBodyAndReceiver(def test_results, def isStage) {
+    /*
+        Return the Email body with the the test results in a tabular form.
+    */
     def to_list = "ceph-qe-list@redhat.com"
     def jobStatus = "stable"
     def failureCount = 0
@@ -421,8 +425,12 @@ def getBaseUrl(def osVersion) {
     */
     def url
     def composeMap = readJSON text: "${params.CI_MESSAGE}"
-    if( composeMap.payload?.trim() ){
-        url = composeMap.payload.compose_urls.find({x -> x.compose_id.contains(osVersion.toUpperCase())}).compose_url
+    if( composeMap.compose_urls?.trim() ) {
+        // When RC pipeline is used compose_urls is present
+        url = composeMap.compose_urls.find( {
+            x -> x.compose_id.contains(osVersion.toUpperCase())
+        } ).compose_url
+
         return url
     }
     def compose = getPlatformComposeMap(osVersion)
@@ -442,34 +450,52 @@ def getComposeId(def osVersion) {
 }
 
 def fetchRCJsonFile(def rhcsVersion){
-
+    /*
+        Process and retrieve the Compose information
+    */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def rcJsonFile = "RHCEPH-${rhcsVersion}-RC.json"
-    def rcFileExists = sh(returnStatus: true, script: "ls -l ${defaultFileDir}/${rcJsonFile}")
+
+    def rcFileExists = sh(
+        returnStatus: true, script: "ls -l ${defaultFileDir}/${rcJsonFile}"
+    )
     def rcMapExisting = null
-    if(rcFileExists == 0){
+
+    if (rcFileExists == 0) {
         rcMapExisting = jsonToMap("${defaultFileDir}/${rcJsonFile}")
     }
-    def rcJsonDetails = ["fileExists" : rcFileExists, "rcMapExisting" : rcMapExisting, "fileName" : rcJsonFile]
+
+    def rcJsonDetails = [
+        "fileExists" : rcFileExists,
+        "rcMapExisting" : rcMapExisting,
+        "fileName" : rcJsonFile
+    ]
+
     return rcJsonDetails
 }
 
-def postRCRPMCompose(){
+def postRCRPMCompose() {
+    /*
+        Create/append the RC compose information.
+    */
     def composeMap = getCIMessageMap()
+
     def rhcsVersion = composeMap["compose-id"].substring(7,10).toLowerCase()
     def rcJsonDetails = fetchRCJsonFile(rhcsVersion)
     def osVersion = composeMap["compose-id"].substring(11,17)
     def compose_path = composeMap["compose-path"].replace("/mnt/redhat/", "")
+
     def compose_url = "http://download-node-02.eng.bos.redhat.com/${compose_path}".toString()
 
     def jsonContent
-    if(rcJsonDetails.fileExists == 0 && composeMap["compose-label"] == rcJsonDetails.rcMapExisting.compose_label){
+    if (rcJsonDetails.fileExists == 0 && composeMap["compose-label"] == rcJsonDetails.rcMapExisting.compose_label) {
         def compose_urls = [
             "compose_id" : composeMap["compose-id"],
             "compose_url" : compose_url
         ]
         rcJsonDetails.rcMapExisting.compose_urls.add(compose_urls)
         jsonContent = writeJSON returnText: true, json: rcJsonDetails.rcMapExisting
+
         postCompose(jsonContent.trim(), rcJsonDetails.fileName)
         return
     }
@@ -486,7 +512,10 @@ def postRCRPMCompose(){
     postCompose(jsonContent.trim(), rcJsonDetails.fileName)
 }
 
-def postRCContCompose(){
+def postRCContCompose() {
+    /*
+        Retrieve the container details from the repository.
+    */
     def composeMap = readJSON text: "${params.CI_MESSAGE}"
     def rhcsVersion = composeMap.tag.name.substring(5,8)
     def rcJsonDetails = fetchRCJsonFile(rhcsVersion)
@@ -496,17 +525,23 @@ def postRCContCompose(){
     def repoDetails = composeMap.build.extra.image
     def containerImage = repoDetails.index.pull.find({x -> !(x.contains("sha"))})
     def repoUrl = repoDetails.yum_repourls.find({x -> x.contains("RHCEPH")})
+
     def composeId = repoUrl.split("/").find({x -> x.contains("RHCEPH-${rhcsVersion}")})
     def compose_ids = rcJsonDetails.rcMapExisting.compose_urls.collect{it.compose_id}
     if(!(composeId in compose_ids)){
         error "Compose ID mismatch"
     }
-    def compose_url = rcJsonDetails.rcMapExisting.compose_urls.find({x -> x.compose_id == composeId}).compose_url
+    def compose_url = rcJsonDetails.rcMapExisting.compose_urls.find(
+        { x -> x.compose_id == composeId }
+    ).compose_url
+
     rcJsonDetails.rcMapExisting.repository = containerImage
     rcJsonDetails.rcMapExisting.compose_id = composeId
     rcJsonDetails.rcMapExisting.compose_url = compose_url
+
     def jsonContent = writeJSON returnText: true, json: rcJsonDetails.rcMapExisting
     postCompose(jsonContent.trim(), rcJsonDetails.fileName)
+
     return jsonContent
 }
 
@@ -520,12 +555,12 @@ def postRCCompose(def jobKey){
         return
     }
 
-    if(jobKey == "rpm"){
+    if (jobKey == "rpm") {
         echo jobKey
         postRCRPMCompose()
         return
     }
-    if(jobKey == "container"){
+    if (jobKey == "container") {
         def jsonContent = postRCContCompose()
         return jsonContent
     }
