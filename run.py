@@ -924,4 +924,5 @@ if __name__ == "__main__":
     args = docopt(doc)
     rc = run(args)
     log.info("final rc of test run %d" % rc)
+    print("a swing msg, test - dnm")
     sys.exit(rc)
