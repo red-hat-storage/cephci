@@ -33,8 +33,8 @@ tests:
       module: install_prereq.py
       abort-on-fail: true
   - test:
-      name: cluster deployment
-      desc: Cluster deployment with alpha version.
+      name: Cluster deployment
+      desc: Cluster deployment with alpha version 16.2.0-8
       module: test_cephadm.py
       polarion-id:
       config:
@@ -145,6 +145,25 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
+      name: Configure client
+      desc: Configure client on node4
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node4                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
       name: Upgrade ceph
       desc: Upgrade cluster to latest version
       module: test_cephadm_upgrade.py
@@ -154,5 +173,11 @@ tests:
         service: upgrade
         base_cmd_args:
           verbose: true
+        benchmark:
+          type: rados                      # future-use
+          pool_per_client: true
+          pg_num: 128
+          duration: 10
+        verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true

@@ -132,7 +132,7 @@ class FsUtils(object):
             fuse_cmd = f"ceph-fuse -n client.{kwargs.get('new_client_hostname', client.node.hostname)} {mount_point} "
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
-            client.exec_command(sudo=True, cmd=fuse_cmd)
+            client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
             out, rc = client.exec_command(cmd="mount")
             mount_output = out.read().decode().rstrip("\n")
             mount_output = mount_output.split()
@@ -174,6 +174,7 @@ class FsUtils(object):
             client.exec_command(
                 sudo=True,
                 cmd=kernel_cmd,
+                long_running=True,
             )
             out, rc = client.exec_command(cmd="mount")
             mount_output = out.read().decode()
@@ -251,7 +252,6 @@ class FsUtils(object):
                 client.exec_command(sudo=True, cmd="iptables -F", check_ec=False)
 
         return 0
-
 
     def get_all_subvolumes(self, client, fs_list):
         """
@@ -574,4 +574,3 @@ class FsUtils(object):
             volname_ls = json.loads(out.read().decode())
             if vol_name in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
-

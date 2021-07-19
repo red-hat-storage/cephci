@@ -22,6 +22,9 @@
 #       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
 #       - initial-dashboard-user: admin123
 #       - initial-dashboard-password: admin@123,
+#       - dashboard-password-noupdate: <boolean> 
+#       - dashboard-key: <path for dashboard.key>
+#       - dashboard-crt: <path for dashboard.crt>
 #       - registry-json: registry.json
 #       - ssl-dashboard-port: <port-number>.
 #       - apply-spec: <list of service specification>
@@ -68,6 +71,9 @@ tests:
           mon-ip: node1
           initial-dashboard-user: admin123
           initial-dashboard-password: admin@123
+          dashboard-password-noupdate: true
+          dashboard-key: /root/dashboard.key
+          dashboard-crt: /root/dashboard.crt
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
           skip-monitoring-stack: true
           orphan-initial-daemons: true
@@ -183,3 +189,19 @@ tests:
           mgr: "allow *"
       destroy-cluster: false
       abort-on-fail: true
+  - test:
+      name: Restarting a ceph service using cephadm
+      desc: Apply Ceph orch restart service for all the daemons
+      module: test_orch.py
+      polarion-id:
+      config:
+        service: mon
+        command: restart
+        base_cmd_args:
+          verbose: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+
+
+

@@ -17,8 +17,6 @@ def getCLIArgsFromMessage() {
     /*
         Returns the arguments required for CLI after processing the CI message
     */
-    env.rhcephVersion = "5.0-rhel-8"
-
     // Processing CI_MESSAGE parameter, it can be empty
     def ciMessage = "${params.CI_MESSAGE}" ?: ""
     println "ciMessage : " + ciMessage
@@ -27,26 +25,23 @@ def getCLIArgsFromMessage() {
 
     if (ciMessage?.trim()) {
         // Process the CI Message
-        def jsonParser = new JsonSlurper()
-        def jsonCIMsg = jsonParser.parseText("${params.CI_MESSAGE}")
+        def jsonCIMsg = readJSON text: "${params.CI_MESSAGE}"
 
         env.composeId = jsonCIMsg.compose_id
+
+        // Don't use Elvis operator
         if (! env.composeUrl ) {
             env.composeUrl = jsonCIMsg.compose_url
         }
 
-        // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
-        env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
-
-        // get rhbuild value based on OS version
-        if ("${env.osVersion}" == 'RHEL-7') {
-            env.rhcephVersion = env.rhcephVersion.substring(0,env.rhcephVersion.length() - 1) + '7'
-            cmd += " --rhs-ceph-repo ${env.composeUrl}"
-            cmd += " --ignore-latest-container"
-        } else {
-            cmd += " --rhs-ceph-repo ${env.composeUrl}"
-            cmd += " --ignore-latest-container"
+        // Don't use Elvis operator
+        if (! env.rhcephVersion ) {
+            // get rhbuild value from RHCEPH-5.0-RHEL-8.yyyymmdd.ci.x
+            env.rhcephVersion = env.composeId.substring(7,17).toLowerCase()
         }
+
+        cmd += " --rhs-ceph-repo ${env.composeUrl}"
+        cmd += " --ignore-latest-container"
 
         if (!env.containerized || (env.containerized && "${env.containerized}" == "true")) {
             def (dockerDTR, dockerImage1, dockerImage2Tag) = (jsonCIMsg.repository).split('/')
@@ -61,18 +56,21 @@ def getCLIArgsFromMessage() {
             }
         }
 
-        cmd += " --rhbuild ${env.rhcephVersion}"
-
-    } else {
-        cmd += " --rhbuild ${env.rhcephVersion}"
     }
+
+    if (! env.rhcephVersion ) {
+        error "Unable to determine the value for CLI option --rhbuild value"
+    }
+
+    cmd += " --rhbuild ${env.rhcephVersion}"
 
     return cmd
 }
 
 def cleanUp(def instanceName) {
    /*
-       Destroys the created instances and volumes with the given instanceName from rhos-d
+       Destroys the created instances and volumes with the given instanceName created in
+       RHOS-D ring.
    */
    try {
         cleanup_cmd = "PYTHONUNBUFFERED=1 ${env.WORKSPACE}/.venv/bin/python"
@@ -121,12 +119,10 @@ def runTestSuite() {
 
     // generate random instance name
     def randString = sh(
-                            script: "cat /dev/urandom | tr -cd 'a-f0-9' | head -c 5",
-                            returnStdout: true
-                        ).trim()
+                        script: "cat /dev/urandom | tr -cd 'a-f0-9' | head -c 5",
+                        returnStdout: true
+                     ).trim()
     def instanceName = "psi${randString}"
-
-    env.rhcephVersion = "5.0-rhel-8"
 
     // Build the CLI options
     def cmd = "${env.WORKSPACE}/.venv/bin/python run.py"
@@ -154,6 +150,9 @@ def runTestSuite() {
 }
 
 def fetchEmailBodyAndReceiver(def test_results, def isStage) {
+    /*
+        Return the Email body with the the test results in a tabular form.
+    */
     def to_list = "ceph-qe-list@redhat.com"
     def jobStatus = "stable"
     def failureCount = 0
@@ -192,7 +191,7 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
     return ["to_list" : to_list, "jobStatus" : jobStatus, "body" : body]
 }
 
-def sendEMail(def subjectPrefix,def test_results,def isStage=true) {
+def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     /*
         Send an email notification.
     */
@@ -206,7 +205,7 @@ def sendEMail(def subjectPrefix,def test_results,def isStage=true) {
     def to_list = params["to_list"]
     def jobStatus = params["jobStatus"]
 
-    emailext(
+    emailext (
         mimeType: 'text/html',
         subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
         body: "${body}",
@@ -215,38 +214,21 @@ def sendEMail(def subjectPrefix,def test_results,def isStage=true) {
     )
 }
 
-def postLatestCompose() {
-    /*
-        Store the latest compose in ressi for QE usage.
-    */
-    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
-    def latestJson = "${defaultFileDir}/latest-RHCEPH-${env.rhcephVersion}.json"
-    def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
-    def ciMsgFlag = "${params.CI_MESSAGE}" ?: ""
-
-    if (ciMsgFlag?.trim()) {
-        sh """
-            echo '${params.CI_MESSAGE}' > ${latestJson};
-            echo '${params.CI_MESSAGE}' > ${tier0Json};
-        """
-    }
-}
-
 def sendUMBMessage(def msgType) {
     /*
         Trigger a UMB message for successful tier completion
     */
-    def msgContent = """
-    {
-        "BUILD_URL": "${env.BUILD_URL}",
-        "CI_STATUS": "PASS",
-        "COMPOSE_ID": "${env.composeId}",
-        "COMPOSE_URL": "${env.composeUrl}",
-        "PRODUCT": "Red Hat Ceph Storage",
-        "REPOSITORY": "${env.repository}",
-        "TOOL": "cephci"
-    }
-    """
+    def msgMap = [
+        "BUILD_URL" : env.BUILD_URL,
+        "CI_STATUS" : "PASS",
+        "COMPOSE_ID" : env.composeId,
+        "COMPOSE_URL" : env.composeUrl,
+        "PRODUCT" : "Red Hat Ceph Storage",
+        "REPOSITORY" : env.repository,
+        "TOOL" : "cephci"
+    ]
+
+    def msgContent = writeJSON returnText: true, json: msgMap
 
     def msgProperties = """ BUILD_URL = ${env.BUILD_URL}
         CI_STATUS = PASS
@@ -257,100 +239,332 @@ def sendUMBMessage(def msgType) {
         TOOL = cephci
     """
 
-    def sendResult = sendCIMessage \
-        providerName: 'Red Hat UMB', \
-        overrides: [topic: 'VirtualTopic.qe.ci.jenkins'], \
-        messageContent: "${msgContent}", \
-        messageProperties: msgProperties, \
-        messageType: msgType, \
+    sendCIMessage ([
+        providerName: 'Red Hat UMB',
+        overrides: [topic: 'VirtualTopic.qe.ci.jenkins'],
+        messageContent: "${msgContent}",
+        messageProperties: msgProperties,
+        messageType: msgType,
         failOnError: true
+    ])
+}
 
-    return sendResult
+def jsonToMap(def jsonFile) {
+    /*
+        Read the JSON file and returns a map object
+    */
+    def props = readJSON file: jsonFile
+    return props
 }
 
 def fetchTier1Compose() {
     /*
-       Fetch the compose to be tested for tier1, is there is one
+       Fetch the compose to be tested for tier1, if there is one
     */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+
     def tier0Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier0.json"
     def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
 
-    def tier0FileExists = sh(returnStatus: true, script: """ls -l '${tier0Json}'""")
+    def tier0FileExists = sh (returnStatus: true, script: "ls -l ${tier0Json}")
     if (tier0FileExists != 0) {
         println "RHCEPH-${env.rhcephVersion}-tier0.json does not exist."
         return null
     }
-    def tier0Compose = sh(returnStdout: true, script: """ cat '${tier0Json}' """).trim()
+    def tier0Compose = jsonToMap(tier0Json)
+    def tier0ComposeString = writeJSON returnText: true, json: tier0Compose
 
-    def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
+    def tier1FileExists = sh (returnStatus: true, script: "ls -l ${tier1Json}")
     if (tier1FileExists != 0) {
-        return tier0Compose
+        return tier0ComposeString
     }
+    def tier1Compose = jsonToMap(tier1Json)
 
-    def tier1Compose = sh(returnStdout: true, script: """ cat '${tier1Json}' """).trim()
-    def jsonParser = new JsonSlurper()
-
-    def jsonCIMsgTier0 = jsonParser.parseText("${tier0Compose}")
-    def tier0composeId = jsonCIMsgTier0.compose_id
-
-    def jsonCIMsgTier1 = jsonParser.parseText("${tier1Compose}")
-    def tier1composeId = jsonCIMsgTier1.latest.compose_id
-
-    if (tier0composeId != tier1composeId) {
-        return tier0Compose
+    if (tier0Compose.compose_id != tier1Compose.latest.compose_id) {
+        return tier0ComposeString
     }
 
     println "There are no new stable build."
     return null
 }
 
-def postTier1Compose(def test_results, def composeInfo) {
+def postCompose(def data, def jsonFile) {
+    /*
+        Writes the given data to provided file under the default latest compose folder.
+    */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+    def target = "${defaultFileDir}/${jsonFile}"
+
+    sh(script: """ echo '${data}' > ${target} """)
+}
+
+def postLatestCompose(def onlyLatest=false) {
     /*
         Store the latest compose in ressi for QE usage.
     */
-    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
-    def tier1Json = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-tier1.json"
-    def jsonContent = """{ "latest" : ${composeInfo}, "pass" : ${composeInfo} }"""
+    def ciMsgFlag = "${params.CI_MESSAGE}" ?: ""
+    if (! ciMsgFlag?.trim()) {
+        println "Missing required information hence not posting compose details."
+        return
+    }
 
-    if (1 in test_results.values()) {
-        def tier1FileExists = sh(returnStatus: true, script: """ls -l '${tier1Json}'""")
-        if ( tier1FileExists != 0) {
-            jsonContent = """ {"latest" : ${composeInfo}, "pass" : ""} """
+    def latestJson = "latest-RHCEPH-${env.rhcephVersion}.json"
+    postCompose("${params.CI_MESSAGE}", latestJson)
+
+    if (onlyLatest) {
+        return
+    }
+
+    def tier0Json = "RHCEPH-${env.rhcephVersion}-tier0.json"
+    postCompose("${params.CI_MESSAGE}", tier0Json)
+}
+
+def postTierCompose(def testResults, def composeInfo, def tier) {
+    /*
+        Store the stable build details for the Tier in ressi.
+    */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+
+    def composeMap = readJSON text: composeInfo
+    def composeData = [ "latest": composeMap, "pass": composeMap ]
+
+    def tierJson = "${defaultFileDir}/RHCEPH-${env.rhcephVersion}-${tier}.json"
+
+    if ( "FAILURE" in testResults.values() || "ABORTED" in testResults.values() ) {
+        def tierJsonFileExists = sh (returnStatus: true, script: "ls -l ${tierJson}" )
+
+        if ( tierJsonFileExists == 0) {
+            def tierCompose = jsonToMap(tierJson)
+            composeData.pass = tierCompose.pass
         } else {
-            def jsonParser = new JsonSlurper()
-            def tier1Compose = sh(
-                                    returnStdout: true,
-                                    script: """cat ${tier1Json}"""
-                               ).trim()
-            def tier1JsonContent = jsonParser.parseText("${tier1Compose}")
-            jsonContent = """
-                {
-                    "latest": ${composeInfo},
-                    "pass": ${tier1JsonContent.pass}
-                }
-            """
+            composeData.pass = [:]
         }
     }
 
-    sh """
-        echo '${jsonContent}' > ${tier1Json};
-    """
-
+    writeJSON file: tierJson, json: composeData
 }
 
 def fetchComposeInfo(def composeInfo) {
     /*
         Return a map after processing the passed information.
     */
-    def jsonParser = new JsonSlurper()
-    def jsonCIMsg = jsonParser.parseText("${composeInfo}") 
+    def composeMap = readJSON text: "${composeInfo}"
 
     return [
-                "composeId" : jsonCIMsg.compose_id,
-                "composeUrl" : jsonCIMsg.compose_url,
-                "repository" : jsonCIMsg.repository
-           ]
+        "composeId" : composeMap.compose_id,
+        "composeUrl" : composeMap.compose_url,
+        "repository" : composeMap.repository
+    ]
+}
+
+def getCIMessageMap() {
+    /*
+        Return the CI_MESSAGE map
+    */
+    def ciMessage = "${params.CI_MESSAGE}" ?: ""
+    if (! ciMessage?.trim() ) {
+        error "The CI_MESSAGE has not been provided"
+    }
+
+    def compose = readJSON text: "${params.CI_MESSAGE}"
+
+    return compose
+}
+
+def getRHCSVersion() {
+    /*
+        Returns the RHCEPH version from the compose ID in CI_MESSAGE.
+    */
+    def compose = getCIMessageMap()
+    def ver = compose.compose_id.substring(7,10).toLowerCase()
+
+    return ver
+}
+
+def getRepository() {
+    /*
+        Return the repository details from CI_MESSAGE
+    */
+    def compose = getCIMessageMap()
+    def repo = compose.repository
+
+    return repo
+}
+
+def getRHBuild(def osVersion) {
+    /*
+        Return the rhbuild value based on the given OS version.
+    */
+    def rhcsVersion = getRHCSVersion()
+    def build = "${rhcsVersion}-${osVersion}"
+
+    return build
+}
+
+def getPlatformComposeMap(def osVersion) {
+    /*
+        Return the Map of the given platform's latest json content.
+    */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+    def rhBuild = getRHBuild(osVersion)
+
+    def jsonFile = "${defaultFileDir}/latest-RHCEPH-${rhBuild}.json"
+    def composeInfo = jsonToMap(jsonFile)
+
+    if (! composeInfo) {
+        error "Unable to retrieve the latest build information."
+    }
+
+    return composeInfo
+}
+
+def getBaseUrl(def osVersion) {
+    /*
+        Return the compose url for the current RHCS build. The osVersion determines the
+        platform for which the URL needs to be retrieved.
+    */
+    def url
+    def composeMap = readJSON text: "${params.CI_MESSAGE}"
+    if( composeMap.compose_urls?.trim() ) {
+        // When RC pipeline is used compose_urls is present
+        url = composeMap.compose_urls.find( {
+            x -> x.compose_id.contains(osVersion.toUpperCase())
+        } ).compose_url
+
+        return url
+    }
+    def compose = getPlatformComposeMap(osVersion)
+    url = compose.compose_url
+
+    return url
+}
+
+def getComposeId(def osVersion) {
+    /*
+        Retrieve the composeId details from the latest compose file for the given osVer.
+    */
+    def compose = getPlatformComposeMap(osVersion)
+    def composeId = compose.compose_id
+
+    return composeId
+}
+
+def fetchRCJsonFile(def rhcsVersion){
+    /*
+        Process and retrieve the Compose information
+    */
+    def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
+    def rcJsonFile = "RHCEPH-${rhcsVersion}-RC.json"
+
+    def rcFileExists = sh(
+        returnStatus: true, script: "ls -l ${defaultFileDir}/${rcJsonFile}"
+    )
+    def rcMapExisting = null
+
+    if (rcFileExists == 0) {
+        rcMapExisting = jsonToMap("${defaultFileDir}/${rcJsonFile}")
+    }
+
+    def rcJsonDetails = [
+        "fileExists" : rcFileExists,
+        "rcMapExisting" : rcMapExisting,
+        "fileName" : rcJsonFile
+    ]
+
+    return rcJsonDetails
+}
+
+def postRCRPMCompose() {
+    /*
+        Create/append the RC compose information.
+    */
+    def composeMap = getCIMessageMap()
+
+    def rhcsVersion = composeMap["compose-id"].substring(7,10).toLowerCase()
+    def rcJsonDetails = fetchRCJsonFile(rhcsVersion)
+    def osVersion = composeMap["compose-id"].substring(11,17)
+    def compose_path = composeMap["compose-path"].replace("/mnt/redhat/", "")
+
+    def compose_url = "http://download-node-02.eng.bos.redhat.com/${compose_path}".toString()
+
+    def jsonContent
+    if (rcJsonDetails.fileExists == 0 && composeMap["compose-label"] == rcJsonDetails.rcMapExisting.compose_label) {
+        def compose_urls = [
+            "compose_id" : composeMap["compose-id"],
+            "compose_url" : compose_url
+        ]
+        rcJsonDetails.rcMapExisting.compose_urls.add(compose_urls)
+        jsonContent = writeJSON returnText: true, json: rcJsonDetails.rcMapExisting
+
+        postCompose(jsonContent.trim(), rcJsonDetails.fileName)
+        return
+    }
+    def rcMap = [
+        "compose_label" : composeMap["compose-label"],
+        "compose_urls" : [
+            [
+                "compose_id" : composeMap["compose-id"],
+                "compose_url" : compose_url
+            ]
+        ]
+    ]
+    jsonContent = writeJSON returnText: true, json: rcMap
+    postCompose(jsonContent.trim(), rcJsonDetails.fileName)
+}
+
+def postRCContCompose() {
+    /*
+        Retrieve the container details from the repository.
+    */
+    def composeMap = readJSON text: "${params.CI_MESSAGE}"
+    def rhcsVersion = composeMap.tag.name.substring(5,8)
+    def rcJsonDetails = fetchRCJsonFile(rhcsVersion)
+    if(rcJsonDetails.fileExists != 0){
+        error "Missing RC Json File."
+    }
+    def repoDetails = composeMap.build.extra.image
+    def containerImage = repoDetails.index.pull.find({x -> !(x.contains("sha"))})
+    def repoUrl = repoDetails.yum_repourls.find({x -> x.contains("RHCEPH")})
+
+    def composeId = repoUrl.split("/").find({x -> x.contains("RHCEPH-${rhcsVersion}")})
+    def compose_ids = rcJsonDetails.rcMapExisting.compose_urls.collect{it.compose_id}
+    if(!(composeId in compose_ids)){
+        error "Compose ID mismatch"
+    }
+    def compose_url = rcJsonDetails.rcMapExisting.compose_urls.find(
+        { x -> x.compose_id == composeId }
+    ).compose_url
+
+    rcJsonDetails.rcMapExisting.repository = containerImage
+    rcJsonDetails.rcMapExisting.compose_id = composeId
+    rcJsonDetails.rcMapExisting.compose_url = compose_url
+
+    def jsonContent = writeJSON returnText: true, json: rcJsonDetails.rcMapExisting
+    postCompose(jsonContent.trim(), rcJsonDetails.fileName)
+
+    return jsonContent
+}
+
+def postRCCompose(def jobKey){
+    /*
+        Store the RC compose in ressi for QE usage.
+    */
+    def ciMsgFlag = "${params.CI_MESSAGE}" ?: ""
+    if (! ciMsgFlag?.trim()) {
+        println "Missing required information hence not posting compose details."
+        return
+    }
+
+    if (jobKey == "rpm") {
+        echo jobKey
+        postRCRPMCompose()
+        return
+    }
+    if (jobKey == "container") {
+        def jsonContent = postRCContCompose()
+        return jsonContent
+    }
+
 }
 
 return this;

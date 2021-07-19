@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 1 RBD test suites for RH Ceph 5.x
+    Pipeline script for executing Tier 2 object test suites for RH Ceph 5.0.
 */
 // Global variables section
 
@@ -30,31 +30,20 @@ node(nodeName) {
                     url: 'https://github.com/red-hat-storage/cephci.git'
                 ]]
             ])
+
+            // Prepare the node for executing Ceph QE Test suites
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
             sharedLib.prepareNode()
         }
     }
 
-    timeout(unit: "HOURS", time: 2) {
-        stage('Extended MAT') {
+    timeout(unit: "HOURS", time: 4) {
+        stage('Regression') {
             withEnv([
                 "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-                "testSuite=suites/${cephVersion}/rbd/tier_1_rbd.yaml",
-                "addnArgs=--post-results --log-level info"
-            ]) {
-                sharedLib.runTestSuite()
-            }
-        }
-    }
-
-    timeout(unit: "HOURS", time: 2) {
-        stage('RBD Mirror') {
-            withEnv([
-                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                "sutConf=conf/${cephVersion}/rbd/tier_1_rbd_mirror.yaml",
-                "testSuite=suites/${cephVersion}/rbd/tier_1_rbd_mirror.yaml",
-                "addnArgs=--post-results --log-level info"
+                "sutConf=conf/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+                "testSuite=suites/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+                "addnArgs=--post-results --log-level INFO"
             ]) {
                 sharedLib.runTestSuite()
             }

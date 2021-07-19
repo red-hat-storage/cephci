@@ -281,8 +281,9 @@ class Ceph(object):
                             check_lvm=False if device_to_add else True,
                         )
                     else:
+                        osd_scenario = node.vm_node.osd_scenario or counter
                         lvm_vols = node.multiple_lvm_scenarios(
-                            devices, lvm_utils.osd_scenario_list[counter]
+                            devices, lvm_utils.osd_scenario_list[osd_scenario]
                         )
                         counter += 1
                         logger.info(lvm_vols)
@@ -1344,6 +1345,7 @@ class CephNode(object):
             timeout = kw["timeout"]
         else:
             timeout = 120
+
         logger.info("Running command %s on %s", kw["cmd"], self.ip_address)
         stdin = None
         stdout = None
@@ -1351,6 +1353,7 @@ class CephNode(object):
         if self.run_once:
             self.ssh_transport().set_keepalive(15)
             self.rssh_transport().set_keepalive(15)
+
         if kw.get("long_running"):
             logger.info("long running command --")
             channel = ssh().get_transport().open_session()
@@ -1360,23 +1363,32 @@ class CephNode(object):
                 if channel.exit_status_ready():
                     ec = channel.recv_exit_status()
                     break
+
                 rl, wl, xl = select([channel], [], [channel], 4200)
+
                 if len(rl) > 0:
                     data = channel.recv(1024)
-                    read += data.decode()
-                    logger.info(data.decode())
+                    data = data.decode(errors="ignore")
+                    logger.info(data)
+                    read += data
+
                 if len(xl) > 0:
                     data = channel.recv(1024)
-                    read += data.decode()
-                    logger.info(data.decode())
+                    data = data.decode(errors="ignore")
+                    logger.error(data)
+                    read += data
+
             return read, ec
+
         try:
             stdin, stdout, stderr = ssh().exec_command(kw["cmd"], timeout=timeout)
         except SSHException as e:
             logger.error("SSHException during cmd: %s", str(e))
+
         exit_status = None
         if stdout is not None:
             exit_status = stdout.channel.recv_exit_status()
+
         self.exit_status = exit_status
         if kw.get("check_ec", True):
             if exit_status == 0:

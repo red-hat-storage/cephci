@@ -502,4 +502,3 @@ def run_ios(client, mounting_dir):
     io_tools = [dd, smallfile]
     f = random.choice(io_tools)
     f()
-{"mode":"full","isActive":false}

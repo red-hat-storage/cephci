@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import time
@@ -43,13 +44,16 @@ def run(ceph_cluster, **kw):
             return 1
         run_rados_bench_read(node=cephadm, **ec_config)
         log.info("Created the EC Pool, Finished writing data into the pool")
+        if ec_config.get("delete_pool"):
+            if not detete_pool(node=cephadm, pool=ec_config["pool_name"]):
+                log.error("Failed to delete EC Pool")
+                return 1
 
     if config.get("replicated_pool"):
         rep_config = config.get("replicated_pool")
         rep_config.setdefault("pool_name", f"repool_{uuid}")
         if not create_pool(
             node=cephadm,
-            disable_pg_autoscale=True,
             **rep_config,
         ):
             log.error("Failed to create the replicated Pool")
@@ -59,6 +63,10 @@ def run(ceph_cluster, **kw):
             return 1
         run_rados_bench_read(node=cephadm, **rep_config)
         log.info("Created the replicated Pool, Finished writing data into the pool")
+        if rep_config.get("delete_pool"):
+            if not detete_pool(node=cephadm, pool=rep_config["pool_name"]):
+                log.error("Failed to delete replicated Pool")
+                return 1
 
     if config.get("email_alerts"):
         alert_config = config.get("email_alerts")
@@ -79,6 +87,20 @@ def run(ceph_cluster, **kw):
             log.error("Error while setting Cluster config checks")
             return 1
         log.info("Set up cluster configuration checks")
+
+    if config.get("configure_balancer"):
+        balancer_config = config.get("configure_balancer")
+        if not enable_balancer(node=cephadm, **balancer_config):
+            log.error("Error while setting up balancer on the Cluster")
+            return 1
+        log.info("Set up Balancer on the cluster")
+
+    if config.get("configure_pg_autoscaler"):
+        autoscaler_config = config.get("configure_pg_autoscaler")
+        if not configure_pg_autoscaler(node=cephadm, **autoscaler_config):
+            log.error("Error while setting up pg_autoscaler on the Cluster")
+            return 1
+        log.info("Set up pg_autoscaler on the cluster")
 
     log.info("All Pre-requisites completed to run Rados suite")
     return 0
@@ -199,7 +221,7 @@ def set_logging_to_file(node: CephAdmin) -> bool:
         match = re.findall(regex, out)
         for val in match:
             if not (val[0] == perm and val[1] == user and val[2] == user):
-                print(f"file permissions are not correct for file : {val[3]}")
+                log.error(f"file permissions are not correct for file : {val[3]}")
                 return False
             if val[3] in files:
                 files.remove(val[3])
@@ -313,13 +335,119 @@ def create_erasure_pool(node: CephAdmin, name: str, **kwargs) -> bool:
     if not create_pool(
         node=node,
         ec_profile_name=profile_name,
-        disable_pg_autoscale=True,
         **kwargs,
     ):
         log.error(f"Failed to create Pool {pool_name}")
         return False
     log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
     return True
+
+
+def configure_pg_autoscaler(node: CephAdmin, **kwargs) -> bool:
+    """
+    Configures pg_Autoscaler as a global global parameter and on pools
+    Args:
+        node: Cephadm node where the commands need to be executed
+        **kwargs: Any other param that needs to be set
+
+    Returns: True -> pass, False -> fail
+    """
+
+    if kwargs.get("enable"):
+        mgr_modules = run_ceph_command(node, cmd="ceph mgr module ls")
+        if "pg_autoscaler" not in mgr_modules["enabled_modules"]:
+            cmd = "ceph mgr module enable pg_autoscaler"
+            node.shell([cmd])
+
+    if kwargs.get("pool_name"):
+        pool_name = kwargs.get("pool_name")
+        pg_scale_value = kwargs.get("pg_autoscale_value", "on")
+        cmd = f"ceph osd pool set {pool_name} pg_autoscale_mode {pg_scale_value}"
+        node.shell([cmd])
+
+    if kwargs.get("default_mode"):
+        default_mode = kwargs.get("default_mode")
+        cmd = (
+            f"ceph config set global osd_pool_default_pg_autoscale_mode {default_mode}"
+        )
+        node.shell([cmd])
+
+    cmd = "ceph osd pool autoscale-status -f json"
+    log.info(node.shell([cmd]))
+    return True
+
+
+def detete_pool(node: CephAdmin, pool: str) -> bool:
+    """
+    Deletes the given pool from the cluster
+    Args:
+        node: Cephadm node where the commands need to be executed
+        pool: name of the pool to be deleted
+
+    Returns: True -> pass, False -> fail
+    """
+    # Checking if config is set to allow pool deletion
+    config_dump = run_ceph_command(node, cmd="ceph config dump")
+    if "mon_allow_pool_delete" not in [conf["name"] for conf in config_dump]:
+        cmd = "ceph config set mon mon_allow_pool_delete true"
+        node.shell([cmd])
+
+    existing_pools = run_ceph_command(node, cmd="ceph df")
+    if pool not in [ele["name"] for ele in existing_pools["pools"]]:
+        log.error(f"Pool:{pool} does not exist on cluster, cannot delete")
+        return True
+
+    cmd = f"ceph osd pool delete {pool} {pool} --yes-i-really-really-mean-it"
+    node.shell([cmd])
+
+    existing_pools = run_ceph_command(node, cmd="ceph df")
+    if pool not in [ele["name"] for ele in existing_pools["pools"]]:
+        log.info(f"Pool:{pool} deleted Successfully")
+        return True
+    log.error(f"Pool:{pool} could not be deleted on cluster")
+    return False
+
+
+def enable_balancer(node: CephAdmin, **kwargs) -> bool:
+    """
+    Enables the balancer module with the given mode
+    Args:
+        node: Cephadm node where the commands need to be executed
+        kwargs: Any other args that need to be passed
+    Returns: True -> pass, False -> fail
+    """
+    # balancer is always enabled module, There is no need to enable the module via mgr.
+    # To verify the same run ` ceph mgr module ls `, which would list all modules.
+    # if found to be disabled, can be enabled by ` ceph mgr module enable balancer `
+    mgr_modules = run_ceph_command(node, cmd="ceph mgr module ls")
+    if not (
+        "balancer" in mgr_modules["always_on_modules"]
+        or "balancer" in mgr_modules["enabled_modules"]
+    ):
+        log.error(
+            f"Balancer is not enabled. Enabled modules on cluster are:"
+            f"{mgr_modules['always_on_modules']} & "
+            f"{mgr_modules['enabled_modules']}"
+        )
+
+    # Setting the mode for the balancer. Available modes: none|crush-compat|upmap
+    balancer_mode = kwargs.get("balancer_mode", "upmap")
+    cmd = f"ceph balancer mode {balancer_mode}"
+    node.shell([cmd])
+    # Turning on the balancer on the system
+    cmd = "ceph balancer on"
+    node.shell([cmd])
+
+    # Sleeping for 10 seconds after enabling balancer and then collecting the evaluation status
+    time.sleep(10)
+    cmd = "ceph balancer status"
+    try:
+        op, err = node.shell([cmd])
+        log.info(op)
+        return True
+    except Exception:
+        log.error("Exception hit while checking balancer status")
+        return False
 
 
 def create_pool(node: CephAdmin, pool_name: str, pg_num: int = 64, **kwargs) -> bool:
@@ -369,3 +497,20 @@ def create_pool(node: CephAdmin, pool_name: str, pg_num: int = 64, **kwargs) -> 
 
     log.info(f"Created pool {pool_name} successfully")
     return True
+
+
+def run_ceph_command(node: CephAdmin, cmd: str) -> dict:
+    """
+    Runs ceph commands with json tag for the action specified otherwise treats action as command
+    and returns formatted output
+    Args:
+        node: Cephadm node where the commands need to be executed
+        cmd: Command that needs to be run
+
+    Returns: dictionary of the output
+    """
+
+    cmd = f"{cmd} -f json"
+    out, err = node.shell([cmd])
+    status = json.loads(out)
+    return status

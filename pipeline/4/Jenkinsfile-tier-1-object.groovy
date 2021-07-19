@@ -6,7 +6,6 @@
 def nodeName = "centos-7"
 def cephVersion = "nautilus"
 def sharedLib
-def testResults = [:]
 
 // Pipeline script entry point
 
@@ -27,12 +26,13 @@ node(nodeName) {
                     trackingSubmodules: false
                 ]],
                 submoduleCfg: [],
-                userRemoteConfigs: [[url: 'https://github.com/red-hat-storage/cephci.git']]
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
             ])
-            script {
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
-                sharedLib.prepareNode()
-            }
+
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
+            sharedLib.prepareNode()
         }
     }
 
@@ -45,16 +45,10 @@ node(nodeName) {
                     "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
                     "addnArgs=--post-results --log-level DEBUG"
                 ]) {
-                    rc = sharedLib.runTestSuite()
-                    testResults['Single_Site'] = rc
+                    sharedLib.runTestSuite()
                 }
             }
         }
     }
 
-    stage('Publish Results') {
-        script {
-            sharedLib.sendEMail("Object-Tier-1",testResults)
-        }
-    }
 }

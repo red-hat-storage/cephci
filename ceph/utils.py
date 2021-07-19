@@ -16,6 +16,7 @@ from libcloud.compute.types import Provider
 
 from mita.v2 import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.retry import retry
+from utility.utils import generate_node_name
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
@@ -78,29 +79,22 @@ def create_ceph_nodes(
                 node_dict = ceph_cluster.get(node)
                 node_params = params.copy()
                 node_params["role"] = RolesContainer(node_dict.get("role"))
-                role = node_params["role"]
                 user = os.getlogin()
 
-                if instances_name:
-                    node_params["node-name"] = "{}-{}-{}-{}-{}".format(
-                        node_params.get("cluster-name", "ceph"),
-                        instances_name,
-                        run_id,
-                        node,
-                        "-".join(role),
-                    )
-                else:
-                    node_params["node-name"] = "{}-{}-{}-{}-{}".format(
-                        node_params.get("cluster-name", "ceph"),
-                        user,
-                        run_id,
-                        node,
-                        "-".join(role),
-                    )
+                node_params["node-name"] = generate_node_name(
+                    node_params.get("cluster-name", "ceph"),
+                    instances_name or user,
+                    run_id,
+                    node,
+                    node_params["role"],
+                )
 
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
                     node_params["size-of-disks"] = node_dict.get("disk-size")
+                    # osd-scenario option is not mandatory and,
+                    # can be used only for specific OSD_SCENARIO
+                    node_params["osd-scenario"] = node_dict.get("osd-scenario")
 
                 if node_dict.get("image-name"):
                     node_params["image-name"] = node_dict.get("image-name")
@@ -155,6 +149,7 @@ def setup_vm_node(node, ceph_nodes, **params):
         vm.role = params["role"]
         vm.root_login = params["root-login"]
         vm.keypair = params["keypair"]
+        vm.osd_scenario = params.get("osd-scenario", False)
         ceph_nodes[node] = vm
     except RETRY_EXCEPTIONS as retry_except:
         log.warning(retry_except, exc_info=True)
@@ -759,8 +754,10 @@ def get_node_by_id(cluster, node_name):
         node instance (CephVMNode)
     """
     for node in cluster.get_nodes():
-        if node_name == node.shortname or f"{node_name}-" in node.shortname:
-            return node
+        searches = re.findall(fr"{node_name}?\d*", node.shortname)
+        for ele in searches:
+            if ele == node_name:
+                return node
 
 
 def get_nodes_by_ids(cluster, node_names):

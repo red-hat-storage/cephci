@@ -143,21 +143,34 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
     )
     while True:
         try:
+            # subscription-manager tips:
+            #
+            # "--serverurl" (optional) is the entitlement service. The default
+            # server (production) has customer-facing entitlement and SKU
+            # information. The "stage" server has QE-only entitlement data.
+            # We use Red Hat's internal "Ethel" tool to add SKUs to the
+            # "rhcsuser" account that only exists in stage.
+            #
+            # "--baseurl" (optional) is the RPM content host. The default
+            # value is the production CDN (cdn.redhat.com), and this hosts the
+            # RPM contents to which all customers have access. Alternatively
+            # you can push content to the staging CDN through the Errata Tool,
+            # and then test it with --baseurl=cdn.stage.redhat.com.
             config_ = get_cephci_config()
             command = "sudo subscription-manager --force register "
             if is_production:
                 command += "--serverurl=subscription.rhsm.redhat.com:443/subscription "
-
                 username_ = config_["cdn_credentials"]["username"]
                 password_ = config_["cdn_credentials"]["password"]
+                pool_id = "8a85f98960dbf6510160df23eb447470"
 
             else:
                 command += (
                     "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription "
                 )
-
                 username_ = config_["stage_credentials"]["username"]
                 password_ = config_["stage_credentials"]["password"]
+                pool_id = "8a99f9af795d57ab01797e572e860569"
 
             command += f"--baseurl=https://cdn.redhat.com --username={username_} --password={password_}"
 
@@ -167,7 +180,7 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
             )
 
             ceph.exec_command(
-                cmd="sudo subscription-manager attach --pool 8a99f9af795d57ab01797e572e860569",
+                cmd=f"sudo subscription-manager attach --pool {pool_id}",
                 timeout=720,
             )
             break

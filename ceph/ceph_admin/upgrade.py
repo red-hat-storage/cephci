@@ -73,7 +73,7 @@ class UpgradeMixin:
         LOG.info("check upgrade : %s" % out)
         return loads(out)
 
-    def monitor_upgrade_status(self, timeout=1200):
+    def monitor_upgrade_status(self, timeout=3600):
         """
         Monitor upgrade status
         """
