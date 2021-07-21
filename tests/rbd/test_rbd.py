@@ -10,6 +10,7 @@ This module will not install any pre-requisites of the repo.
 
 This module returns 0 on success else 1.
 """
+import json
 import logging
 from time import sleep
 
@@ -32,14 +33,18 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
     node.exec_command(
         cmd=f"sudo rm -rf ceph && git clone --branch {branch} --single-branch --depth 1 {TEST_REPO}"
     )
+    os_ver = rhbuild.split("-")[-1]
 
+    if os_ver == "7":
+        node.exec_command(
+            cmd="sed -i '49 a rbd feature disable testimg1 object-map fast-diff deep-flatten' "
+            "ceph/qa/workunits/rbd/kernel.sh"
+        )
     try:
         node.exec_command(cmd="rpm -qa | grep epel-release")
         return
     except BaseException:  # noqa
         pass
-
-    os_ver = rhbuild.split("-")[-1]
 
     EPEL_RPM = (
         f"https://dl.fedoraproject.org/pub/epel/epel-release-latest-{os_ver}.noarch.rpm"
@@ -89,20 +94,21 @@ def run(ceph_cluster, **kwargs) -> int:
         # By default, tests would be executed on a single client node
         nodes = [ceph_cluster.get_nodes(role="client")[0]]
 
-    if "5." in rhbuild:
-        nodes[0].exec_command(cmd="ceph config set mon mon_allow_pool_delete true")
-        nodes[0].exec_command(cmd="ceph orch restart mon")
-    else:
+    os_ver = rhbuild.split("-")[-1]
+    if "4." in rhbuild and os_ver == "8":
         nodes[0].exec_command(
-            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+            cmd="sudo /usr/sbin/alternatives --set python /usr/bin/python3"
         )
-        mon_nodes = ceph_cluster.get_nodes(role="mon")
-        for ceph_mon in mon_nodes:
-            ceph_mon.exec_command(
-                sudo=True,
-                cmd=f"systemctl restart ceph-mon@{ceph_mon.hostname}",
-                long_running=True,
-            )
+
+    if "5." in rhbuild:
+        out, err = nodes[0].exec_command(
+            sudo=True, cmd="ceph config get mon mon_allow_pool_delete --format json"
+        )
+
+        out = out.read().decode()
+        if not json.loads(out):
+            nodes[0].exec_command(cmd="ceph config set mon mon_allow_pool_delete true")
+            nodes[0].exec_command(cmd="ceph orch restart mon")
 
     for node in nodes:
         one_time_setup(node, rhbuild, branch=branch)
