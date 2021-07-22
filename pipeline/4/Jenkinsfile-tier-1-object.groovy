@@ -15,7 +15,7 @@ node(nodeName) {
         stage('Install prereq') {
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: '*/wrapper_4x']],
                 doGenerateSubmoduleConfigurations: false,
                 extensions: [[
                     $class: 'SubmoduleOption',
@@ -27,7 +27,7 @@ node(nodeName) {
                 ]],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
-                    url: 'https://github.com/red-hat-storage/cephci.git'
+                    url: 'https://github.com/udaysk23/cephci.git'
                 ]]
             ])
 
@@ -36,18 +36,24 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "MINUTES", time: 120) {
-        stage('Single-site') {
-            script {
-                withEnv([
-                    "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-                    "sutConf=conf/${cephVersion}/rgw/tier_1_rgw.yaml",
-                    "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
-                    "addnArgs=--post-results --log-level DEBUG"
-                ]) {
-                    sharedLib.runTestSuite()
-                }
-            }
+    stage('Single-site') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
+            "sutConf=conf/${cephVersion}/rgw/tier_1_rgw.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
+            "addnArgs=--post-results --log-level DEBUG"
+        ]) {
+            sharedLib.runTestSuite()
+        }
+    }
+    stage('Multi-site') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
+            "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_multisite.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_1_rgw_multisite.yaml",
+            "addnArgs=--post-results --log-level DEBUG"
+        ]) {
+            sharedLib.runTestSuite()
         }
     }
 
