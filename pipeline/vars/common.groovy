@@ -10,7 +10,31 @@ def prepareNode() {
         Installs the required packages needed by the Jenkins node to
         run and execute the cephci test suites.
     */
-    sh(script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
+    withCredentials([
+        usernamePassword(
+            credentialsId: 'psi-ceph-jenkins',
+            usernameVariable: 'OSPUSER',
+            passwordVariable: 'OSPCRED'
+        )
+    ]) {
+        def ospMap = [
+            "globals": [
+                "openstack-credentials": [
+                    "username": OSPUSER,
+                    "password": OSPCRED,
+                    "auth-url": "https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000",
+                    "auth-version": "3.x_password",
+                    "tenant-name": "ceph-jenkins",
+                    "service-region": "regionOne",
+                    "domain": "redhat.com",
+                    "tenant-domain-id": "62cf1b5ec006489db99e2b0ebfb55f57"
+                ]
+            ]
+        ]
+        writeYaml file: "${env.HOME}/osp-cred-ci-2.yaml", data: ospMap, overwrite: true
+    }
+
+    sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
 }
 
 def getCLIArgsFromMessage() {
