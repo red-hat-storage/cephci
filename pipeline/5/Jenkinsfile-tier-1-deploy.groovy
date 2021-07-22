@@ -125,12 +125,8 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "MINUTES", time: 180) {
-        parallel testStages0
-    }
+    parallel testStages0
 
-    timeout(unit: "MINUTES", time: 120) {
-        parallel testStages1
-    }
+    parallel testStages1
 
 }

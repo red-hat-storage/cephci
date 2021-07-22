@@ -36,29 +36,25 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "MINUTES", time: 120) {
-        stage('Single-site') {
-            withEnv([
-                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
-                "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_cephadm.yaml",
-                "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
-                "addnArgs=--post-results --log-level DEBUG"
-            ]) {
-                sharedLib.runTestSuite()
-            }
+    stage('Single-site') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
+            "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_cephadm.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
+            "addnArgs=--post-results --log-level DEBUG"
+        ]) {
+            sharedLib.runTestSuite()
         }
     }
 
-    timeout(unit: "MINUTES", time: 120) {
-        stage('Multi-site') {
-            withEnv([
-                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
-                "sutConf=conf/${cephVersion}/rgw/rgw_mutlisite.yaml",
-                "testSuite=suites/${cephVersion}/rgw/rgw_multisite.yaml",
-                "addnArgs=--post-results --log-level DEBUG"
-            ]) {
-                sharedLib.runTestSuite()
-            }
+   stage('Multi-site') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
+            "sutConf=conf/${cephVersion}/rgw/rgw_mutlisite.yaml",
+            "testSuite=suites/${cephVersion}/rgw/rgw_multisite.yaml",
+            "addnArgs=--post-results --log-level DEBUG"
+        ]) {
+            sharedLib.runTestSuite()
         }
     }
 

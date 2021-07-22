@@ -37,16 +37,14 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "MINUTES", time: 360) {
-        stage('Cephfs Extended MAT Suite') {
-            withEnv([
-                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                "sutConf=conf/${cephVersion}/cephfs/tier_1_fs.yaml",
-                "testSuite=suites/${cephVersion}/cephfs/tier_1_fs.yaml",
-                "addnArgs=--post-results --log-level info"
-            ]) {
-                sharedLib.runTestSuite()
-            }
+    stage('Cephfs Extended MAT Suite') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+            "sutConf=conf/${cephVersion}/cephfs/tier_1_fs.yaml",
+            "testSuite=suites/${cephVersion}/cephfs/tier_1_fs.yaml",
+            "addnArgs=--post-results --log-level info"
+        ]) {
+            sharedLib.runTestSuite()
         }
     }
 
