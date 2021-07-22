@@ -1,12 +1,15 @@
 """
 Contains helper functions that can used across the module.
 """
+import json
 import logging
+import os
 import tempfile
 from os.path import dirname
 
 from jinja2 import Template
 
+from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from utility.utils import generate_self_signed_certificate
 
@@ -426,3 +429,124 @@ def get_cluster_state(cls, commands=[]):
         out, err = cls.shell(args=[cmd])
         LOG.info("STDOUT:\n %s" % out)
         LOG.error("STDERR:\n %s" % err)
+
+
+def get_host_osd_map(cls):
+    """
+    Method to get the OSDs deployed in each of the hosts
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        Dictionary with host names as keys and osds deployed as value list
+    """
+    out, _ = cls.shell(args=["ceph", "osd", "tree", "-f", "json"])
+    osd_obj = json.loads(out)
+    osd_dict = {}
+    for obj in osd_obj["nodes"]:
+        if obj["type"] == "host":
+            osd_dict[obj["name"]] = obj["children"]
+    return osd_dict
+
+
+def get_host_daemon_map(cls):
+    """
+    Method to get the daemons deployed in each of the hosts
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        Dictionary with host names as keys and names of the daemons deployed as value list
+    """
+    out, _ = cls.shell(args=["ceph", "orch", "ps", "-f", "json"])
+    daemon_obj = json.loads(out)
+    daemon_dict = dict()
+    for daemon in daemon_obj:
+        daemon_name = daemon["daemon_type"] + "." + daemon["daemon_id"]
+        if daemon["hostname"] in daemon_dict.keys():
+            daemon_dict[daemon["hostname"]].append(daemon_name)
+        else:
+            daemon_dict[daemon["hostname"]] = [daemon_name]
+    return daemon_dict
+
+
+def get_hosts_deployed(cls):
+    """
+    Method to get all the hosts deployed in the cluster
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        List of the names of hosts deployed in the cluster
+    """
+    out, _ = cls.shell(args=["ceph", "orch", "host", "ls", "-f", "json"])
+    hosts = list()
+    host_obj = json.loads(out)
+    for host in host_obj:
+        hosts.append(host["hostname"])
+    return hosts
+
+
+def file_or_path_exists(node, file_or_path):
+    """
+    Method to check abs path exists
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+
+    Returns:
+        boolean
+    """
+    try:
+        out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
+        LOG.info("Output : %s" % out.read().decode())
+    except CommandFailed as err:
+        LOG.error("Error: %s" % err)
+        return False
+    return True
+
+
+def validate_log_file_after_enable(cls):
+    """
+    Method to verify generation of log files in default log directory when logging not enabled
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        boolean
+    """
+    out, _ = cls.shell(args=["ceph", "config", "set", "global", "log_to_file", "true"])
+    out, _ = cls.shell(args=["ceph", "fsid"])
+    fsid = out.strip()
+    log_file_path = os.path.join("/var/log/ceph", fsid)
+    daemon_dict = get_host_daemon_map(cls)
+    roles_to_validate = ["mon", "mgr", "osd", "rgw", "mds"]
+
+    daemon_valid = {
+        k: [val for val in v if val.split(".")[0] in roles_to_validate]
+        for (k, v) in daemon_dict.items()
+    }
+
+    for node in cls.cluster.get_nodes():
+        try:
+            if node.hostname not in daemon_valid.keys():
+                continue
+            daemons = daemon_valid[node.hostname]
+            for daemon in daemons:
+                file = os.path.join(log_file_path, f"ceph-{daemon}.log")
+                if "rgw" in daemon:
+                    file = os.path.join(log_file_path, f"ceph-client.{daemon}.log")
+                LOG.info(
+                    f"Verifying existence of log file {file} in host {node.hostname}"
+                )
+                fileExists = file_or_path_exists(node, file)
+                if not fileExists:
+                    LOG.error(
+                        f"Log for {daemon} is not present in the node {node.ip_address}"
+                    )
+                    return False
+            LOG.info(f"Log verification on node {node.ip_address} successful")
+        except CommandFailed as err:
+            LOG.error("Error: %s" % err)
+            return False
+    return True

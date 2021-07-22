@@ -155,6 +155,7 @@ tests:
       polarion-id:
       config:
         verify_cluster_health: true
+        verify_log_files: true
         steps:
           - config:
               command: shell      # wait for daemons to come up, need to remove this sleep
