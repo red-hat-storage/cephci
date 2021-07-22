@@ -9,7 +9,8 @@ def sharedLib
 def test_results = [:]
 def composeInfo = ""
 def tier1Jobs = [
-                    "rhceph-4-tier-1-object"
+                    "rhceph-4-tier-1-object",
+                    "rhceph-4-tier-1-rbd"
                 ]
 
 // Pipeline script entry point
