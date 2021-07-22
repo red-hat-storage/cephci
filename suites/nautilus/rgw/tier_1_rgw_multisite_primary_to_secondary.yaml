@@ -1,3 +1,9 @@
+#Below are the multi-site test scenarios run on the master and verified the sync on the slave
+
+#where :
+#ceph-rgw1 is master/primary site
+#ceph-rgw2 is slave/secondary site
+
 tests:
   - test:
       name: pre-req
@@ -80,11 +86,6 @@ tests:
                   osd_default_pool_size: 2
                   osd_pool_default_pgp_num: 64
                   mon_max_pg_per_osd: 1024
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
       desc: setup multisite cluster using ceph-ansible
       abort-on-fail: true
   - test:
