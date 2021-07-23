@@ -183,9 +183,9 @@ def send_email(payload: Dict) -> list:
                 elif category == "error":
                     continue
 
-                html += """\
-                    f"</table><h4 style='color:navy;'>{statement}</h4>"
-                    "<table><tr><th>Project</th><th>Instance name</th></tr>"""
+                html += f"""\
+                    </table><h4 style='color:navy;'>{statement}</h4>
+                    <table><tr><th>Project</th><th>Instance name</th></tr>"""
                 for project, instance in pro.items():
                     if category == "marked":
                         failed_vm.extend(instance)
