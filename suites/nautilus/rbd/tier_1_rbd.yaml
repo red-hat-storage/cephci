@@ -79,3 +79,11 @@ tests:
       desc: Executig upstream RBD Kernal scenarios
       module: test_rbd.py
       name: 5_rbd_kernel
+   - test:
+       config:
+         branch: master
+         script_path: qa/workunits/rbd
+         script: krbd_exclusive_option.sh
+       desc: Executig upstream RBD kernel exclusive scenarios
+       module: test_rbd.py
+       name: 6_rbd_krbd_exclusive
