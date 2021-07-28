@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 1 object test suites for RH Ceph 4.x
+    Pipeline script for executing Tier 1 Cephfs test suites for RH Ceph 4.x
 */
 // Global variables section
 
@@ -12,7 +12,7 @@ def sharedLib
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
+        stage('Install Prereq') {
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],
@@ -30,21 +30,19 @@ node(nodeName) {
                     url: 'https://github.com/red-hat-storage/cephci.git'
                 ]]
             ])
-
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
             sharedLib.prepareNode()
         }
     }
 
-    stage('Single-site') {
+    stage('Cephfs Extended MAT Suite') {
         withEnv([
-            "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-            "sutConf=conf/${cephVersion}/rgw/tier_1_rgw.yaml",
-            "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
-            "addnArgs=--post-results --log-level DEBUG"
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+            "sutConf=conf/${cephVersion}/cephfs/tier_1_fs.yaml",
+            "testSuite=suites/${cephVersion}/cephfs/tier_1_fs.yaml",
+            "addnArgs=--post-results --log-level info"
         ]) {
             sharedLib.runTestSuite()
         }
     }
-
 }
