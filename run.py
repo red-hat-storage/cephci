@@ -821,6 +821,7 @@ def run(args):
                 log.error(traceback.format_exc())
                 rc = 1
             finally:
+                collect_recipe(ceph_cluster_dict[cluster_name])
                 if store:
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
             if rc != 0:
@@ -918,6 +919,21 @@ def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
     pickle.dump(ceph_cluster_object, cn)
     cn.close()
     log.info("ceph_clusters_file %s", ceph_clusters_file_name)
+
+def collect_recipe(ceph_cluster):
+    version_datails = {}
+    installer_node = ceph_cluster.get_ceph_objects("installer")
+    out, rc = installer_node[0].exec_command(
+        sudo=True, cmd="podman --version | awk {'print $3'}"
+    )
+    output = out.read().decode().rstrip()
+    version_datails["podman"] = output
+    version_detail = open("/ceph/cephci-jenkins/latest-rhceph-container-info/version_info.json", "w+")
+    json.dump(version_datails, version_detail)
+    version_detail.close()
+
+
+
 
 
 if __name__ == "__main__":

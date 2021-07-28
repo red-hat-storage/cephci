@@ -178,9 +178,8 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
         Return the Email body with the the test results in a tabular form.
     */
     def to_list = "ceph-qe-list@redhat.com"
-    def jobStatus = "stable"
+    def jobStatus = "STABLE"
     def failureCount = 0
-    
     def body = "<table>"
 
     if(isStage) {
@@ -210,7 +209,7 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
 
     if (failureCount > 0) {
         to_list = "cephci@redhat.com"
-        jobStatus = 'unstable'
+        jobStatus = 'UNSTABLE'
     }
     return ["to_list" : to_list, "jobStatus" : jobStatus, "body" : body]
 }
@@ -219,8 +218,17 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     /*
         Send an email notification.
     */
+    def versionFileExists = sh(
+        returnStatus: true, script: "ls -l /ceph/cephci-jenkins/latest-rhceph-container-info/version_info.json"
+    )
+    if (versionFileExists == 0) {
+        version_info = jsonToMap("/ceph/cephci-jenkins/latest-rhceph-container-info/version_info.json")
+    }
     def body = readFile(file: "pipeline/vars/emailable-report.html")
-    body += "<body><u><h3>Test Summary</h3></u><br />"
+    body += "<h2><u>Test Receipes</h2></u><table><tr><td> COMPOSE_URL </td><td>${env.composeUrl}</td></tr><td>COMPOSE_ID</td><td> ${env.composeId}</td></tr>"
+    body += "<tr><td> REPOSITORY </td><td>${env.repository}</td></tr>"
+    body += "<tr><td> PODMAN </td><td>${version_info.podman}</td></tr></table>"
+    body += "<body><u><h2>Test Summary</h2></u><br />"
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
 
     def params = fetchEmailBodyAndReceiver(test_results, isStage)
@@ -231,10 +239,11 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
 
     emailext (
         mimeType: 'text/html',
-        subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
+        subject: "QE ${subjectPrefix} stage - ${jobStatus}",
         body: "${body}",
         from: "cephci@redhat.com",
-        to: "${to_list}"
+//         to: "${to_list}"
+        to: "amk@redhat.com"
     )
 }
 
