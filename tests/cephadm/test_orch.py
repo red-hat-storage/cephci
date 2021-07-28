@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 def run(ceph_cluster, **kw):
     """
     Executing the service operation using cephadm
-        ceph orch restart|start|stop|reconfigure|redeploy  <service name>.
+        ceph orch remove|restart|start|stop|reconfigure|redeploy  <service name>.
 
     Args:
         ceph_cluster

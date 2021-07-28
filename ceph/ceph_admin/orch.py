@@ -54,26 +54,6 @@ class Orch(
         out, _ = self.shell(args=["ceph", "orch", "host", "ls", "--format=json"])
         return [node for node in loads(out) if label in node.get("labels")]
 
-    def remove(self, config):
-        cmd = ["ceph", "orch"]
-        if config.get("base_cmd_args"):
-            cmd.append(config_dict_to_string(config["base_cmd_args"]))
-
-        args = config["args"]
-
-        service_name = args.pop("service_name")
-        cmd.extend(["rm", service_name])
-
-        self.shell(args=cmd)
-
-        verify = args.pop("verify", True)
-
-        if verify:
-            self.check_service(
-                service_name=service_name,
-                exist=False,
-            )
-
     def check_service_exists(
         self, service_name: str, timeout: int = 300, interval: int = 5
     ) -> bool:
