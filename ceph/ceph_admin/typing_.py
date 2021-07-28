@@ -69,6 +69,13 @@ class OrchProtocol(CephAdmProtocol, Protocol):
     ) -> bool:
         ...
 
+    def op(self, op: str, config: Dict):
+        ...
+
+
+class DaemonProtocol(OrchProtocol, Protocol):
+    """Daemon protocol object for supporting static duck typing hints."""
+
 
 class ServiceProtocol(OrchProtocol, Protocol):
     """Base service protocol for supporting static duck typing hints."""

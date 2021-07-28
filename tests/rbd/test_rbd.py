@@ -34,12 +34,20 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
         cmd=f"sudo rm -rf ceph && git clone --branch {branch} --single-branch --depth 1 {TEST_REPO}"
     )
     os_ver = rhbuild.split("-")[-1]
+    ceph_ver = rhbuild.split("-")[0]
 
     if os_ver == "7":
         node.exec_command(
             cmd="sed -i '49 a rbd feature disable testimg1 object-map fast-diff deep-flatten' "
             "ceph/qa/workunits/rbd/kernel.sh"
         )
+
+    if "4." in ceph_ver:
+        node.exec_command(
+            cmd="sed -i 's/blocklist/blacklist/g' "
+            "ceph/qa/workunits/rbd/krbd_exclusive_option.sh"
+        )
+
     try:
         node.exec_command(cmd="rpm -qa | grep epel-release")
         return

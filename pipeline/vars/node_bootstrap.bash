@@ -18,7 +18,7 @@ if [ ! -d "/ceph" ]; then
 fi
 
 # Copy the auth files from internal server to the Jenkins user home directory
-wget http://magna002.ceph.redhat.com/cephci-jenkins/.osp-cred-ci-2.yaml -O ${HOME}/osp-cred-ci-2.yaml
+# wget http://magna002.ceph.redhat.com/cephci-jenkins/.osp-cred-ci-2.yaml -O ${HOME}/osp-cred-ci-2.yaml
 wget http://magna002.ceph.redhat.com/cephci-jenkins/.cephci.yaml -O ${HOME}/.cephci.yaml
 
 # Install cephci pre-requisistes

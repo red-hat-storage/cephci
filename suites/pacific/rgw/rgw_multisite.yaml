@@ -183,7 +183,21 @@ tests:
       desc: Retrieve the configured environment details
       module: exec.py
       name: get shared realm info
-
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      module: exec.py
+      name: get shared realm info
   # Test work flow
 
   - test:
