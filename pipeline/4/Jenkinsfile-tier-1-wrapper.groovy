@@ -10,7 +10,8 @@ def test_results = [:]
 def composeInfo = ""
 def tier1Jobs = [
                     "rhceph-4-tier-1-object",
-                    "rhceph-4-tier-1-rbd"
+                    "rhceph-4-tier-1-rbd",
+                    "rhceph-4-tier-1-cephfs"
                 ]
 
 // Pipeline script entry point

@@ -35,18 +35,14 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "HOURS", time: 2) {
-        stage('Extended RBD Tier1') {
-            script {
-                withEnv([
-                    "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                    "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-                    "testSuite=suites/${cephVersion}/rbd/tier_1_rbd.yaml",
-                    "addnArgs=--post-results --log-level DEBUG"
-                ]) {
-                    sharedLib.runTestSuite()
-                }
-            }
+    stage('Extended RBD Tier1') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+            "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
+            "testSuite=suites/${cephVersion}/rbd/tier_1_rbd.yaml",
+            "addnArgs=--post-results --log-level DEBUG"
+        ]) {
+            sharedLib.runTestSuite()
         }
     }
 
