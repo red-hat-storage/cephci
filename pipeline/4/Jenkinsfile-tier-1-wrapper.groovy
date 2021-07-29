@@ -10,7 +10,8 @@ def test_results = [:]
 def composeInfo = ""
 def tier1Jobs = [
                     "rhceph-4-tier-1-object",
-                    "rhceph-4-tier-1-rbd"
+                    "rhceph-4-tier-1-rbd",
+                    "rhceph-4-tier-1-cephfs"
                 ]
 
 // Pipeline script entry point
@@ -47,7 +48,7 @@ node(nodeName) {
 		}
 		else {
 			withEnv([
-				"rhcephVersion=4.3-rhel-7"
+				"rhcephVersion=4.3-rhel-8"
 			]) {
 				composeInfo = sharedLib.fetchTier1Compose()
 			}
@@ -88,7 +89,7 @@ node(nodeName) {
 	    def ciValues = sharedLib.fetchComposeInfo(composeInfo)
 
         withEnv([
-            "rhcephVersion=4.3-rhel-7",
+            "rhcephVersion=4.3-rhel-8",
             "composeId=${ciValues["composeId"]}",
             "composeUrl=${ciValues["composeUrl"]}",
             "repository=${ciValues["repository"]}"
