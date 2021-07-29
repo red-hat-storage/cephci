@@ -48,7 +48,7 @@ node(nodeName) {
 		}
 		else {
 			withEnv([
-				"rhcephVersion=4.3-rhel-7"
+				"rhcephVersion=4.3-rhel-8"
 			]) {
 				composeInfo = sharedLib.fetchTier1Compose()
 			}
@@ -89,7 +89,7 @@ node(nodeName) {
 	    def ciValues = sharedLib.fetchComposeInfo(composeInfo)
 
         withEnv([
-            "rhcephVersion=4.3-rhel-7",
+            "rhcephVersion=4.3-rhel-8",
             "composeId=${ciValues["composeId"]}",
             "composeUrl=${ciValues["composeUrl"]}",
             "repository=${ciValues["repository"]}"
