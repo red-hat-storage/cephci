@@ -59,7 +59,7 @@ node(nodeName) {
             "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
             "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_multisite.yaml",
             "testSuite=suites/${cephVersion}/rgw/tier_1_rgw_multisite.yaml",
-            "addnArgs=--post-results --log-level DEBUG"
+            "addnArgs=--post-results --log-level DEBUG",
             "composeUrl=${defaultRHEL7BaseUrl}",
             "rhcephVersion=${defaultRHEL7Build}"
         ]) {
