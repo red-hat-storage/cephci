@@ -170,7 +170,7 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
                 )
                 username_ = config_["stage_credentials"]["username"]
                 password_ = config_["stage_credentials"]["password"]
-                pool_id = "8a99f9ad7ac6855d017aebb094cc11b7"
+                pool_id = "8a99f9af795d57ab01797e572e860569"
 
             command += f"--baseurl=https://cdn.redhat.com --username={username_} --password={password_}"
 
