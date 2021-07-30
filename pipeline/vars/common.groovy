@@ -425,24 +425,30 @@ def getRHBuild(def osVersion) {
     return build
 }
 
-def getPlatformComposeMap(def osVersion) {
+def getPlatformComposeMap(def osVersion, def tier=None) {
     /*
         Return the Map of the given platform's latest json content.
     */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def rhBuild = getRHBuild(osVersion)
-
-    def jsonFile = "${defaultFileDir}/latest-RHCEPH-${rhBuild}.json"
-    def composeInfo = jsonToMap(jsonFile)
-
-    if (! composeInfo) {
-        error "Unable to retrieve the latest build information."
+    def composeInfo = ""
+    def jsonFile = ""
+    if(tier == "tier1") {
+        jsonFile = "${defaultFileDir}/RHCEPH-${rhBuild}-tier0.json"
+    }
+    else
+    {
+        jsonFile = "${defaultFileDir}/latest-RHCEPH-${rhBuild}.json"
     }
 
+    composeInfo = jsonToMap(jsonFile)
+    if(! composeInfo) {
+        error "Unable to retrieve the latest build information."
+    }
     return composeInfo
 }
 
-def getBaseUrl(def osVersion) {
+def getBaseUrl(def osVersion, def tier=None) {
     /*
         Return the compose url for the current RHCS build. The osVersion determines the
         platform for which the URL needs to be retrieved.
@@ -457,7 +463,7 @@ def getBaseUrl(def osVersion) {
 
         return url
     }
-    def compose = getPlatformComposeMap(osVersion)
+    def compose = getPlatformComposeMap(osVersion, tier)
     url = compose.compose_url
 
     return url
