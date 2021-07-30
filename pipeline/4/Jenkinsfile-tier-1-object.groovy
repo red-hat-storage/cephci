@@ -40,7 +40,7 @@ node(nodeName) {
     stage('Set RHEL7 vars') {
     // Gather the RHEL 7 latest compose information
         defaultRHEL7Build = sharedLib.getRHBuild("rhel-7")
-        defaultRHEL7BaseUrl = sharedLib.getBaseUrl("rhel-7")}
+        defaultRHEL7BaseUrl = sharedLib.getBaseUrl("rhel-7", "tier1")}
 
     stage('Single-site') {
         withEnv([
