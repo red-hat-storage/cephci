@@ -920,20 +920,33 @@ def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
     cn.close()
     log.info("ceph_clusters_file %s", ceph_clusters_file_name)
 
+
 def collect_recipe(ceph_cluster):
+    """
+    Collects the podman version and ceph version installed and writes to version_info.json file
+    Args:
+        ceph_cluster:
+
+    Returns:
+
+    """
     version_datails = {}
-    installer_node = ceph_cluster.get_ceph_objects("installer")
-    out, rc = installer_node[0].exec_command(
+    client_node = ceph_cluster.get_ceph_objects("client")
+    out, rc = client_node[0].exec_command(
         sudo=True, cmd="podman --version | awk {'print $3'}"
     )
     output = out.read().decode().rstrip()
-    version_datails["podman"] = output
-    version_detail = open("/ceph/cephci-jenkins/latest-rhceph-container-info/version_info.json", "w+")
+    log.info(f"Podman Version {output}")
+    version_datails["PODMAN"] = output
+    out, rc = client_node[0].exec_command(
+        sudo=True, cmd="ceph --version | awk {'print $3'}"
+    )
+    output = out.read().decode().rstrip()
+    log.info(f"ceph Version {output}")
+    version_datails["CEPH"] = output
+    version_detail = open("version_info.json", "w+")
     json.dump(version_datails, version_detail)
     version_detail.close()
-
-
-
 
 
 if __name__ == "__main__":

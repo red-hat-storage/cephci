@@ -1,5 +1,5 @@
 /*
-    Pipeline script for executing Tier 1 RBD test suites for RH Ceph 4.x
+    Pipeline script for executing Tier 1 Cephfs test suites for RH Ceph 4.x
 */
 // Global variables section
 
@@ -12,7 +12,7 @@ def sharedLib
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
+        stage('Install Prereq') {
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],
@@ -35,15 +35,14 @@ node(nodeName) {
         }
     }
 
-    stage('Extended RBD Tier1') {
+    stage('Cephfs Extended MAT Suite') {
         withEnv([
             "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-            "sutConf=conf/${cephVersion}/rbd/tier_0_rbd.yaml",
-            "testSuite=suites/${cephVersion}/rbd/tier_1_rbd.yaml",
-            "addnArgs=--post-results --log-level DEBUG"
+            "sutConf=conf/${cephVersion}/cephfs/tier_1_fs.yaml",
+            "testSuite=suites/${cephVersion}/cephfs/tier_1_fs.yaml",
+            "addnArgs=--post-results --log-level info"
         ]) {
             sharedLib.runTestSuite()
         }
     }
-
 }

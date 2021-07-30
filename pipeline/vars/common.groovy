@@ -219,15 +219,18 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
         Send an email notification.
     */
     def versionFileExists = sh(
-        returnStatus: true, script: "ls -l /ceph/cephci-jenkins/latest-rhceph-container-info/version_info.json"
+        returnStatus: true, script: "ls -l version_info.json"
     )
     if (versionFileExists == 0) {
-        version_info = jsonToMap("/ceph/cephci-jenkins/latest-rhceph-container-info/version_info.json")
+        version_info = jsonToMap("version_info.json")
     }
     def body = readFile(file: "pipeline/vars/emailable-report.html")
-    body += "<h2><u>Test Receipes</h2></u><table><tr><td> COMPOSE_URL </td><td>${env.composeUrl}</td></tr><td>COMPOSE_ID</td><td> ${env.composeId}</td></tr>"
+    body += "<h2><u>Test Artifacts</h2></u><table><tr><td> COMPOSE_URL </td><td>${env.composeUrl}</td></tr><td>COMPOSE_ID</td><td> ${env.composeId}</td></tr>"
     body += "<tr><td> REPOSITORY </td><td>${env.repository}</td></tr>"
-    body += "<tr><td> PODMAN </td><td>${version_info.podman}</td></tr></table>"
+    for (def key in version_info.keySet()) {
+        body += "<tr><td> ${key} </td><td> ${version_info[key]}</td></tr>"
+    }
+    body += "</table>"
     body += "<body><u><h2>Test Summary</h2></u><br />"
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
 
@@ -236,14 +239,14 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
 
     def to_list = params["to_list"]
     def jobStatus = params["jobStatus"]
+    def rh_ceph_version = env.rhcephVersion.substring(0,3)
 
     emailext (
         mimeType: 'text/html',
-        subject: "QE ${subjectPrefix} stage - ${jobStatus}",
+        subject: "Test report status of RH Ceph ${rh_ceph_version} for ${subjectPrefix} is ${jobStatus}",
         body: "${body}",
         from: "cephci@redhat.com",
-//         to: "${to_list}"
-        to: "amk@redhat.com"
+        to: "${to_list}"
     )
 }
 

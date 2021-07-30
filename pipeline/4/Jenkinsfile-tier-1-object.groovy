@@ -6,6 +6,8 @@
 def nodeName = "centos-7"
 def cephVersion = "nautilus"
 def sharedLib
+def defaultRHEL7BaseUrl
+def defaultRHEL7Build
 
 // Pipeline script entry point
 
@@ -35,19 +37,33 @@ node(nodeName) {
             sharedLib.prepareNode()
         }
     }
+    stage('Set RHEL7 vars') {
+    // Gather the RHEL 7 latest compose information
+        defaultRHEL7Build = sharedLib.getRHBuild("rhel-7")
+        defaultRHEL7BaseUrl = sharedLib.getBaseUrl("rhel-7")}
 
-    timeout(unit: "MINUTES", time: 120) {
-        stage('Single-site') {
-            script {
-                withEnv([
-                    "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
-                    "sutConf=conf/${cephVersion}/rgw/tier_1_rgw.yaml",
-                    "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
-                    "addnArgs=--post-results --log-level DEBUG"
-                ]) {
-                    sharedLib.runTestSuite()
-                }
-            }
+    stage('Single-site') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
+            "sutConf=conf/${cephVersion}/rgw/tier_1_rgw.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_1_object.yaml",
+            "addnArgs=--post-results --log-level DEBUG",
+            "composeUrl=${defaultRHEL7BaseUrl}",
+            "rhcephVersion=${defaultRHEL7Build}"
+        ]) {
+            sharedLib.runTestSuite()
+        }
+    }
+    stage('Multi-site') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-7.9-server-x86_64.yaml",
+            "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_multisite.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_1_rgw_multisite.yaml",
+            "addnArgs=--post-results --log-level DEBUG",
+            "composeUrl=${defaultRHEL7BaseUrl}",
+            "rhcephVersion=${defaultRHEL7Build}"
+        ]) {
+            sharedLib.runTestSuite()
         }
     }
 
