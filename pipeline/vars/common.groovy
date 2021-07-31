@@ -425,7 +425,7 @@ def getRHBuild(def osVersion) {
     return build
 }
 
-def getPlatformComposeMap(def osVersion, def tier=None) {
+def getPlatformComposeMap(def osVersion, def tier=null) {
     /*
         Return the Map of the given platform's latest json content.
     */
@@ -448,7 +448,7 @@ def getPlatformComposeMap(def osVersion, def tier=None) {
     return composeInfo
 }
 
-def getBaseUrl(def osVersion, def tier=None) {
+def getBaseUrl(def osVersion, def tier=null) {
     /*
         Return the compose url for the current RHCS build. The osVersion determines the
         platform for which the URL needs to be retrieved.
