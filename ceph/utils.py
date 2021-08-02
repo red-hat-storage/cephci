@@ -522,8 +522,8 @@ def config_ntp(ceph_node):
             "sudo sed -i '/pool*/d;/server*/d' /etc/chrony.conf",
             "sudo sed -i '1i server clock.corp.redhat.com iburst' /etc/chrony.conf",
             "sudo systemctl stop chronyd.service",
-            "sudo chronyc makestep",
             "sudo systemctl start chronyd.service",
+            "sudo chronyc makestep",
             "sudo chronyc sources",
         ],
         "7": [
@@ -540,8 +540,7 @@ def config_ntp(ceph_node):
     _commands = _ntp_commands[distro_ver.split(".")[0]]
 
     for cmd in _commands:
-        out, err = ceph_node.exec_command(cmd=cmd)
-        log.info(out.read().decode().rstrip())
+        ceph_node.exec_command(cmd=cmd, long_running=True)
 
     return True
 
