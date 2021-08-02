@@ -508,34 +508,42 @@ def open_firewall_port(ceph_node, port, protocol):
 
 
 def config_ntp(ceph_node):
+    """
+    Configure NTP/Chronyc service based on the OS platform
+
+    Args:
+        ceph_node: Ceph Node
+    """
     distro_info = ceph_node.distro_info
     distro_ver = distro_info["VERSION_ID"]
 
-    if distro_ver.startswith("8"):
-        ceph_node.exec_command(
-            cmd="sudo sed -i '/pool*/d;/server*/d' /etc/chrony.conf", long_running=True
-        )
-        ceph_node.exec_command(
-            cmd="sudo sed -i '1i server clock.corp.redhat.com iburst'"
-            " /etc/chrony.conf",
-            long_running=True,
-        )
-        ceph_node.exec_command(
-            cmd="sudo systemctl stop chronyd.service; sudo chronyc makestep;"
-            " sudo systemctl start chronyd.service; sudo chronyc sources",
-            long_running=True,
-        )
-        return True
-    ceph_node.exec_command(
-        cmd="sudo sed -i '/server*/d' /etc/ntp.conf", long_running=True
-    )
-    ceph_node.exec_command(
-        cmd="echo 'server clock.corp.redhat.com iburst' | sudo tee -a /etc/ntp.conf",
-        long_running=True,
-    )
-    ceph_node.exec_command(cmd="sudo ntpd -gq", long_running=True)
-    ceph_node.exec_command(cmd="sudo systemctl enable ntpd", long_running=True)
-    ceph_node.exec_command(cmd="sudo systemctl start ntpd", long_running=True)
+    _ntp_commands = {
+        "8": [
+            "sudo sed -i '/pool*/d;/server*/d' /etc/chrony.conf",
+            "sudo sed -i '1i server clock.corp.redhat.com iburst' /etc/chrony.conf",
+            "sudo systemctl stop chronyd.service",
+            "sudo chronyc makestep",
+            "sudo systemctl start chronyd.service",
+            "sudo chronyc sources",
+        ],
+        "7": [
+            "sudo sed -i '/server*/d' /etc/ntp.conf",
+            "echo 'server clock.corp.redhat.com iburst' | sudo tee -a /etc/ntp.conf",
+            "sudo ntpd -gq",
+            "sudo systemctl enable ntpd",
+            "sudo systemctl start ntpd",
+            "sudo ntpq -p",
+            "sudo ntpstat",
+        ],
+    }
+
+    _commands = _ntp_commands[distro_ver.split(".")[0]]
+
+    for cmd in _commands:
+        out, err = ceph_node.exec_command(cmd=cmd)
+        log.info(out.read().decode().rstrip())
+
+    return True
 
 
 def get_ceph_versions(ceph_nodes, containerized=False):
