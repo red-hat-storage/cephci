@@ -921,12 +921,18 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
     which helps in identification of admin node.
 
     """
+    _role = ""
+    if "installer" in role:
+        _role = "installer"
+    elif "pool" in role:
+        _role = "pool"
+
     node_name = [
         cluster_name,
         instance_name if instance_name else "",
         run_id,
         node,
-        "installer" if "installer" in role else "",
+        _role,
     ]
     node_name = "-".join([i for i in node_name if i])
     if len(node_name) > 48:
