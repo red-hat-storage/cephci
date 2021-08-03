@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <style>
+    table.full-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+    table.half-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 75%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    p { margin:0 }
+    </style>
+</head>
+<body>
+    <h1><u>RHOS-D Quota Usage Summary</u></h1><br />
+    <p>Hi Team,<br /><br />
+    Please go through the instances created by each one of you and
+    please plan to clear unused instances in each project.<br />
+    RHOS-D URL: https://rhos-d.infra.prod.upshift.rdu2.redhat.com</p>
+    <h2><u>Consolidated Quota Usage Summary for Projects</u></h2>
+    <table>
+        <tr>
+            <th>Project Name</th>
+            <th>RAM usage in %</th>
+            <th>VCPU usage in %</th>
+            <th>Storage usage in %</th>
+        </tr>
+    <% for (pro in quota["Project Stats"]) { %>
+        <% range = pro["RAM usage in %"].intValue() %>
+        <% if (range > pro_range[0]) { %>
+            <% color = "F1948A" %>
+        <% } else if(range <= pro_range[0] && range > pro_range[1]) { %>
+            <% color = "FCF3CF" %>
+        <% } else { color = "82E0AA" } %>
+        <tr bgcolor=$color>
+            <td>${pro["Project Name"]}</td>
+            <td>${pro["RAM usage in %"]}</td>
+            <td>${pro["VCPU usage in %"]}</td>
+            <td>${pro["Storage usage in %"]}</td>
+        </tr>
+    <% } %>
+    </table><h2><u>Consolidated Quota Usage Summary for Users</u></h2>
+    <table>
+        <tr>
+            <th>User</th>
+            <th>Project</th>
+            <th>Instance Count</th>
+            <th>RAM Used in GB</th>
+            <th>VCPU Used</th>
+            <th>Volume Used in GB</th>
+        </tr>
+    <% for (user in quota["User Stats"]) { %>
+        <% if (user.User == "psi-ceph-jenkins") { continue; } %>
+        <% u_range = user["Instance Count"].intValue() %>
+        <% if (u_range > user_range[0]) { %>
+            <% color = "F1948A" %>
+        <% } else if(u_range <= user_range[0] && u_range > user_range[1]) { %>
+            <% color = "FCF3CF" %>
+        <% } else { color = "82E0AA" } %>
+        <tr bgcolor=$color>
+            <td>${user["User"]}</td>
+            <td>${user["Project"]}</td>
+            <td>${user["Instance Count"]}</td>
+            <td>${user["RAM Used in GB"]}</td>
+            <td>${user["VCPU Used"]}</td>
+            <td>${user["Volume Used in GB"]}</td>
+        </tr>
+    <% } %>
+    </table>
+    <br /><p style="color:red;">NOTE: Reach out to ceph-qe-infra@redhat.com
+        for any queries, clarification and suggestions.</p>
+</body>
+</html>

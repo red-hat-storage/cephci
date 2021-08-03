@@ -251,7 +251,11 @@ def run(args: Dict) -> int:
 
     response = send_email(results)
 
-    return 1 if response else 0
+    if response:
+        print(f"Failed to delete Instances/nodes: {response}")
+        return 1
+    else:
+        return 0
 
 
 if __name__ == "__main__":
