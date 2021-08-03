@@ -287,7 +287,7 @@ def sendEmail(def quota_detail){
     body += fetch_html_table(quota_detail["Project Stats"], [80, 50], "Projects", "RAM usage in %")
     body += fetch_html_table(quota_detail["User Stats"], [20, 10], "Users", "Instance Count")
     body += "</body> </html>"
-    def to_list = "cephci@redhat.com"
+    def to_list = "cephci@redhat.com, ceph-qe@redhat.com"
 
     emailext(
         mimeType: 'text/html',
