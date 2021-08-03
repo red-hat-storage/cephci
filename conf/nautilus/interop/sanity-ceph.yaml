@@ -2,7 +2,7 @@ globals:
   - ceph-cluster:
      name: ceph
      node1:
-      role: installer
+       role: installer
      node2:
        role:
           - mon
