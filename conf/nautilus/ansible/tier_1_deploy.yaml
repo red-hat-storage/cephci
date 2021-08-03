@@ -1,0 +1,40 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        no-of-volumes: 4
+        disk-size: 15
+        role:
+          - installer
+          - mon
+          - mgr
+          - osd
+      node2:
+        no-of-volumes: 4
+        disk-size: 15
+        role:
+          - mon
+          - mgr
+          - osd
+      node3:
+        no-of-volumes: 4
+        disk-size: 15
+        role:
+          - mon
+          - osd
+      node4:
+        role:
+          - grafana
+          - client
+      node5:
+        role: pool
+        no-of-volumes: 4
+        disk-size: 15
+      node6:
+        role: pool
+        no-of-volumes: 4
+        disk-size: 15
+      node7:
+        role: pool
+        no-of-volumes: 4
+        disk-size: 15
