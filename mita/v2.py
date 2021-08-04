@@ -4,6 +4,7 @@ import socket
 from datetime import datetime, timedelta
 from time import sleep
 from typing import List, Optional, Union
+from uuid import UUID
 
 from libcloud.compute.base import Node, NodeDriver, NodeImage, NodeSize
 from libcloud.compute.drivers.openstack import (
@@ -269,6 +270,12 @@ class CephVMNodeV2:
             ExactMatchFailed - when the named image resource does not exist in the given
                                OpenStack cloud.
         """
+        try:
+            if UUID(hex=name):
+                return self.driver.get_image(name)
+        except ValueError:
+            LOG.debug("Given name is not an image ID")
+
         url = f"/v2/images?name={name}"
         object_ = self.driver.image_connection.request(url).object
         images = self.driver._to_images(object_, ex_only_active=False)
