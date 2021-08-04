@@ -70,6 +70,17 @@ def run(ceph_cluster, **kw):
             return 1
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        if build.startswith("4"):
+            # create EC pool
+            list_cmds = [
+                "ceph fs flag set enable_multiple true",
+                "ceph osd pool create cephfs-data-ec 64 erasure",
+                "ceph osd pool create cephfs-metadata 64",
+                "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
+                "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
+            ]
+            for cmd in list_cmds:
+                clients[0].exec_command(sudo=True, cmd=cmd)
         log.info("Create 2 SubVolumeGroups on each file system")
         subvolumegroup_list = [
             {"vol_name": "cephfs", "group_name": "subvolgroup_1"},
@@ -175,66 +186,72 @@ def run(ceph_cluster, **kw):
         log.info(
             "On EC,Mount 1 subvolumegroup/subvolume on kernal and 1 subvloume on Fuse → Client2"
         )
-        kernel_mounting_dir_3 = f"/mnt/cephfs_kernel{mounting_dir}_EC_3/"
-        mon_node_ips = fs_util.get_mon_node_ips()
-        log.info("Get the path of sub volume")
-        subvol_path, rc = clients[0].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_3 subvolgroup_1"
-        )
-        fs_util.kernel_mount(
-            [clients[0]],
-            kernel_mounting_dir_3,
-            ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
-            extra_params=",fs=cephfs-ec",
-        )
+        if build.startswith("5"):
+            kernel_mounting_dir_3 = f"/mnt/cephfs_kernel{mounting_dir}_EC_3/"
+            mon_node_ips = fs_util.get_mon_node_ips()
+            log.info("Get the path of sub volume")
 
-        subvol_path, rc = clients[0].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_7"
-        )
-        fuse_mounting_dir_3 = f"/mnt/cephfs_fuse{mounting_dir}_EC_3/"
-        fs_util.fuse_mount(
-            [clients[0]],
-            fuse_mounting_dir_3,
-            extra_params=f" -r {subvol_path.read().decode().strip()} --client_fs cephfs-ec",
-        )
+            subvol_path, rc = clients[0].exec_command(
+                sudo=True,
+                cmd="ceph fs subvolume getpath cephfs-ec subvol_3 subvolgroup_1",
+            )
+            fs_util.kernel_mount(
+                [clients[0]],
+                kernel_mounting_dir_3,
+                ",".join(mon_node_ips),
+                sub_dir=f"{subvol_path.read().decode().strip()}",
+                extra_params=",fs=cephfs-ec",
+            )
+
+            subvol_path, rc = clients[0].exec_command(
+                sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_7"
+            )
+            fuse_mounting_dir_3 = f"/mnt/cephfs_fuse{mounting_dir}_EC_3/"
+            fs_util.fuse_mount(
+                [clients[0]],
+                fuse_mounting_dir_3,
+                extra_params=f" -r {subvol_path.read().decode().strip()} --client_fs cephfs-ec",
+            )
 
         log.info(
             "On EC,Mount 1 subvolumeon kernal and 1 subvloumegroup/subvolume on Fuse → Client1"
         )
-        kernel_mounting_dir_4 = f"/mnt/cephfs_kernel{mounting_dir}_EC_4/"
-        mon_node_ips = fs_util.get_mon_node_ips()
-        log.info("Get the path of sub volume")
+        if build.startswith("5"):
+            kernel_mounting_dir_4 = f"/mnt/cephfs_kernel{mounting_dir}_EC_4/"
+            mon_node_ips = fs_util.get_mon_node_ips()
+            log.info("Get the path of sub volume")
 
-        subvol_path, rc = clients[1].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_8"
-        )
-        fs_util.kernel_mount(
-            [clients[1]],
-            kernel_mounting_dir_4,
-            ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
-            extra_params=",fs=cephfs-ec",
-        )
+            subvol_path, rc = clients[1].exec_command(
+                sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_8"
+            )
+            fs_util.kernel_mount(
+                [clients[1]],
+                kernel_mounting_dir_4,
+                ",".join(mon_node_ips),
+                sub_dir=f"{subvol_path.read().decode().strip()}",
+                extra_params=",fs=cephfs-ec",
+            )
 
-        subvol_path, rc = clients[1].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_4 subvolgroup_2"
-        )
-        fuse_mounting_dir_4 = f"/mnt/cephfs_fuse{mounting_dir}_EC_4/"
-        fs_util.fuse_mount(
-            [clients[1]],
-            fuse_mounting_dir_4,
-            extra_params=f" -r {subvol_path.read().decode().strip()} --client_fs cephfs-ec",
-        )
+            subvol_path, rc = clients[1].exec_command(
+                sudo=True,
+                cmd="ceph fs subvolume getpath cephfs-ec subvol_4 subvolgroup_2",
+            )
+            fuse_mounting_dir_4 = f"/mnt/cephfs_fuse{mounting_dir}_EC_4/"
+            fs_util.fuse_mount(
+                [clients[1]],
+                fuse_mounting_dir_4,
+                extra_params=f" -r {subvol_path.read().decode().strip()} --client_fs cephfs-ec",
+            )
 
         run_ios(clients[0], kernel_mounting_dir_1)
         run_ios(clients[0], fuse_mounting_dir_1)
         run_ios(clients[1], kernel_mounting_dir_2)
         run_ios(clients[1], fuse_mounting_dir_2)
-        run_ios(clients[0], kernel_mounting_dir_3)
-        run_ios(clients[0], fuse_mounting_dir_3)
-        run_ios(clients[1], kernel_mounting_dir_4)
-        run_ios(clients[1], fuse_mounting_dir_4)
+        if build.startswith("5"):
+            run_ios(clients[0], kernel_mounting_dir_3)
+            run_ios(clients[1], kernel_mounting_dir_4)
+            run_ios(clients[0], fuse_mounting_dir_3)
+            run_ios(clients[1], fuse_mounting_dir_4)
 
         log.info("Create Snapshots.Verify the snap ls")
         snapshot_list = [
@@ -346,34 +363,42 @@ def run(ceph_cluster, **kw):
         clients[1].exec_command(
             sudo=True, cmd=f"getfattr -n ceph.quota.max_files {fuse_mounting_dir_5}"
         )
-
-        subvol_path, rc = clients[0].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_10"
-        )
-        kernel_mounting_dir_5 = f"/mnt/cephfs_kernel{mounting_dir}_5/"
-        fs_util.kernel_mount(
-            [clients[1]],
-            kernel_mounting_dir_5,
-            ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
-            extra_params=",fs=cephfs-ec",
-        )
-        clients[1].exec_command(
-            sudo=True,
-            cmd=f"setfattr -n ceph.quota.max_files -v 10 {kernel_mounting_dir_5}",
-        )
-        clients[1].exec_command(
-            sudo=True, cmd=f"getfattr -n ceph.quota.max_files {kernel_mounting_dir_5}"
-        )
-
         out, rc = clients[1].exec_command(
             sudo=True,
-            cmd=f"cd {kernel_mounting_dir_5};touch quota{{1..15}}.txt",
+            cmd=f"cd {fuse_mounting_dir_5};touch quota{{1..15}}.txt",
         )
         log.info(out)
         if clients[1].node.exit_status == 0:
             log.error("Quota set has been failed able to create more files")
-            # return 1
+        if build.startswith("5"):
+            subvol_path, rc = clients[0].exec_command(
+                sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_10"
+            )
+            kernel_mounting_dir_5 = f"/mnt/cephfs_kernel{mounting_dir}_5/"
+            fs_util.kernel_mount(
+                [clients[1]],
+                kernel_mounting_dir_5,
+                ",".join(mon_node_ips),
+                sub_dir=f"{subvol_path.read().decode().strip()}",
+                extra_params=",fs=cephfs-ec",
+            )
+            clients[1].exec_command(
+                sudo=True,
+                cmd=f"setfattr -n ceph.quota.max_files -v 10 {kernel_mounting_dir_5}",
+            )
+            clients[1].exec_command(
+                sudo=True,
+                cmd=f"getfattr -n ceph.quota.max_files {kernel_mounting_dir_5}",
+            )
+
+            out, rc = clients[1].exec_command(
+                sudo=True,
+                cmd=f"cd {kernel_mounting_dir_5};touch quota{{1..15}}.txt",
+            )
+            log.info(out)
+            if clients[1].node.exit_status == 0:
+                log.error("Quota set has been failed able to create more files")
+                # return 1
 
         log.info("Clean up the system")
         fs_util.client_clean_up(
@@ -382,27 +407,36 @@ def run(ceph_cluster, **kw):
         fs_util.client_clean_up(
             "umount", kernel_clients=[clients[1]], mounting_dir=kernel_mounting_dir_2
         )
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[clients[0]], mounting_dir=kernel_mounting_dir_3
-        )
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[clients[1]], mounting_dir=kernel_mounting_dir_4
-        )
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[clients[1]], mounting_dir=kernel_mounting_dir_5
-        )
+        if build.startswith("5"):
+            fs_util.client_clean_up(
+                "umount",
+                kernel_clients=[clients[0]],
+                mounting_dir=kernel_mounting_dir_3,
+            )
+
+            fs_util.client_clean_up(
+                "umount",
+                kernel_clients=[clients[1]],
+                mounting_dir=kernel_mounting_dir_4,
+            )
+            fs_util.client_clean_up(
+                "umount",
+                kernel_clients=[clients[1]],
+                mounting_dir=kernel_mounting_dir_5,
+            )
         fs_util.client_clean_up(
             "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
         )
         fs_util.client_clean_up(
             "umount", fuse_clients=[clients[1]], mounting_dir=fuse_mounting_dir_2
         )
-        fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_3
-        )
-        fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[1]], mounting_dir=fuse_mounting_dir_4
-        )
+        if build.startswith("5"):
+            fs_util.client_clean_up(
+                "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_3
+            )
+            fs_util.client_clean_up(
+                "umount", fuse_clients=[clients[1]], mounting_dir=fuse_mounting_dir_4
+            )
         fs_util.client_clean_up(
             "umount", fuse_clients=[clients[1]], mounting_dir=fuse_mounting_dir_5
         )
