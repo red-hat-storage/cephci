@@ -37,20 +37,24 @@ def prepareNode() {
     sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
 }
 
+def getCvpVariable() {
+    /*
+        Returns the cvp variable after processing the CI message
+    */
+    def ciMessage = getCIMessageMap()
+    def cvp = ciMessage.CVP ?: false
+    return cvp
+}
+
 def getCLIArgsFromMessage() {
     /*
         Returns the arguments required for CLI after processing the CI message
     */
     // Processing CI_MESSAGE parameter, it can be empty
-    def ciMessage = "${params.CI_MESSAGE}" ?: ""
-    println "ciMessage : " + ciMessage
-
     def cmd = ""
+    def jsonCIMsg = getCIMessageMap()
 
-    if (ciMessage?.trim()) {
-        // Process the CI Message
-        def jsonCIMsg = readJSON text: "${params.CI_MESSAGE}"
-
+    if (! getCvpVariable()) {
         env.composeId = jsonCIMsg.compose_id
 
         // Don't use Elvis operator
@@ -65,7 +69,6 @@ def getCLIArgsFromMessage() {
         }
 
         cmd += " --rhs-ceph-repo ${env.composeUrl}"
-        cmd += " --ignore-latest-container"
 
         if (!env.containerized || (env.containerized && "${env.containerized}" == "true")) {
             def (dockerDTR, dockerImage1, dockerImage2Tag) = (jsonCIMsg.repository).split('/')
@@ -79,8 +82,24 @@ def getCLIArgsFromMessage() {
                 cmd += " --insecure-registry"
             }
         }
+    } else {
+        env.buildTarget = jsonCIMsg.artifact.brew_build_target
 
+        // Don't use Elvis operator
+        if (! env.rhcephVersion ) {
+            // get rhbuild value from ceph-4.2-rhel-8-containers-candidate
+            env.rhcephVersion = env.buildTarget.substring(5,15).toLowerCase()
+        }
+
+        def dockerRegistry = jsonCIMsg.artifact.registry_url
+        def dockerImage = jsonCIMsg.artifact.namespace + "/" + jsonCIMsg.artifact.name
+        def dockerTag = jsonCIMsg.artifact.image_tag
+        cmd += " --docker-registry ${dockerRegistry}"
+        cmd += " --docker-image ${dockerImage}"
+        cmd += " --docker-tag ${dockerTag}"
     }
+
+    cmd += " --ignore-latest-container"
 
     if (! env.rhcephVersion ) {
         error "Unable to determine the value for CLI option --rhbuild value"
@@ -221,6 +240,10 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     */
     def body = readFile(file: "pipeline/vars/emailable-report.html")
     body += "<body><u><h3>Test Summary</h3></u><br />"
+    if (getCvpVariable()) {
+        def ciMsg = getCIMessageMap()
+        body += "<p>CVP Image : ${ciMsg.artifact.nvr}</p><br />"
+    }
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
 
     def params = fetchEmailBodyAndReceiver(test_results, isStage)
@@ -229,9 +252,14 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     def to_list = params["to_list"]
     def jobStatus = params["jobStatus"]
 
+    def subject = "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage."
+    if (getCvpVariable()) {
+        subject = "${subjectPrefix} test execution is ${jobStatus}."
+    }
+
     emailext (
         mimeType: 'text/html',
-        subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
+        subject: "${subject}",
         body: "${body}",
         from: "cephci@redhat.com",
         to: "${to_list}"
@@ -400,8 +428,12 @@ def getRHCSVersion() {
         Returns the RHCEPH version from the compose ID in CI_MESSAGE.
     */
     def compose = getCIMessageMap()
-    def ver = compose.compose_id.substring(7,10).toLowerCase()
-
+    def ver
+    if ( getCvpVariable() ) {
+        ver = compose.artifact.brew_build_target.substring(5,8).toLowerCase()
+    } else {
+        ver = compose.compose_id.substring(7,10).toLowerCase()
+    }
     return ver
 }
 
