@@ -173,6 +173,32 @@ def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
         raise Exception("sync is either in progress or stuck")
 
 
+def configure_ha_proxy(first_rgw_ceph_object, number_of_nodes):
+    log.info("Configuring HAproxy")
+    log.info(first_rgw_ceph_object)
+    check_installation, err = first_rgw_ceph_object.exec_command(
+        cmd="sudo yum install haproxy -y"
+    )
+    check_installation = check_installation.read().decode()
+    log.info("Printing rgw nodes")
+    log.info(len(number_of_nodes))
+    for rgw_node in number_of_nodes:
+        rgw_node = rgw_node.node
+        rgw_node_ip = rgw_node.ip_address
+        port = get_radosgw_port_no(rgw_node)
+        rgw_endpoint = rgw_node_ip + port
+        log.info("radosgw is running on endpoint: %s" % rgw_endpoint)
+
+def get_radosgw_port_no(rgw_node):
+    port, error = rgw_node.exec_command(
+            cmd="sudo netstat -nltp| grep radosgw"
+            )
+    port = port.read().decode()
+    x = port.split(" ")
+    port = [i for i in x if ":" in i][0].split(":")[1]
+    log.info("radosgw is running in port: %s" % port)
+    return port
+
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
     try:
         for client in kernel_clients:
