@@ -47,11 +47,22 @@ node(nodeName) {
         }
     }
 
-   stage('Multi-site') {
+   stage('Multi-site-primary-to-secondary') {
         withEnv([
             "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
             "sutConf=conf/${cephVersion}/rgw/rgw_mutlisite.yaml",
-            "testSuite=suites/${cephVersion}/rgw/rgw_multisite.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier1_rgw_multisite_primary_to_secondary.yaml",
+            "addnArgs=--post-results --log-level DEBUG"
+        ]) {
+            sharedLib.runTestSuite()
+        }
+    }
+
+    stage('Multi-site-secondary-to-primary') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
+            "sutConf=conf/${cephVersion}/rgw/rgw_mutlisite.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier1_rgw_multisite_secondary_to_primary.yaml",
             "addnArgs=--post-results --log-level DEBUG"
         ]) {
             sharedLib.runTestSuite()
