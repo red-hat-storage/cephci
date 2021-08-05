@@ -16,10 +16,14 @@ class RemoveMixin:
     def remove(self: ServiceProtocol, config: Dict) -> None:
         """
         Execute the remove method using the object's service name.
+
         Args:
-            config:     Key/value pairs passed from the test suite.
-                        pos_args        - List to be added as positional params
-        Example:
+            config (Dict):     Key/value pairs passed from the test suite.
+
+        Example::
+
+            pos_args - List to be added as positional params
+
             config:
                 command: remove
                 service: rgw
@@ -28,6 +32,7 @@ class RemoveMixin:
                 args:
                     service_name: rgw.realm.zone
                     verify: true
+
         """
         cmd = ["ceph", "orch"]
         if config.get("base_cmd_args"):

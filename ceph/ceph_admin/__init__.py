@@ -32,12 +32,14 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Initialize Cephadm with ceph_cluster object
 
         Args:
-            cluster: Ceph cluster object
-            config: test data configuration
+            cluster (Ceph.Ceph): Ceph cluster object
+            config (Dict): test data configuration
 
-        config:
-            base_url: ceph compose URL
-            container_image: custom ceph container image
+        Example::
+
+            config:
+                base_url (Str): ceph compose URL
+                container_image (Str): custom ceph container image
         """
         self.cluster = cluster
         self.config = config
@@ -48,10 +50,10 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Read cephadm generated public key.
 
         Arg:
-            ssh_key_path: custom ssh public key path
+            ssh_key_path ( Str ): custom ssh public key path
 
         Returns:
-            Public Key string
+            Public Key string (Str)
         """
         path = ssh_key_path if ssh_key_path else "/etc/ceph/ceph.pub"
         ceph_pub_key, _ = self.installer.exec_command(sudo=True, cmd=f"cat {path}")
@@ -62,8 +64,8 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Distribute cephadm generated public key to all nodes in the list.
 
         Args:
-            ssh_key_path: custom SSH ceph public key path(default: None)
-            nodes: node list to add ceph public key(default: None)
+            ssh_key_path (Str): custom SSH ceph public key path (default: None)
+            nodes (List): node list to add ceph public key (default: None)
         """
         ceph_pub_key = self.read_cephadm_gen_pub_key(ssh_key_path)
 
@@ -87,7 +89,13 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             )
 
     def set_tool_repo(self, repo=None):
-        """Add the given repo on every node part of the cluster."""
+        """
+        Add the given repo on every node part of the cluster.
+
+        Args:
+            repo (Str): repository (default: None)
+
+        """
         hotfix_repo = self.config.get("hotfix_repo")
         if hotfix_repo:
             for node in self.cluster.get_nodes():
@@ -121,12 +129,17 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Install the cephadm package in the installer node.
 
         Args:
-          kwargs: Key/value pairs that needs to be provided to the installer
+          kwargs (Dict): Key/value pairs that needs to be provided to the installer
 
-        Supported keys:
-            Note: At present, they are prefixed with -- hence use long options
-          upgrade: boolean # to upgrade cephadm RPM package
-          gpgcheck: boolean
+
+        Example::
+
+            Supported keys:
+              upgrade: boolean # to upgrade cephadm RPM package
+              gpgcheck: boolean
+
+
+        :Note: At present, they are prefixed with -- hence use long options
 
         """
         cmd = "yum install cephadm -y"
@@ -150,6 +163,9 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         """
         Display cluster state by executing commands provided
         Just used for sanity.
+
+        Args:
+            commands (List): list of commands
         """
         for cmd in commands:
             out, err = self.shell(args=[cmd])

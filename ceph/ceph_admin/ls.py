@@ -13,9 +13,13 @@ class LSMixin:
         Execute the command ceph orch ls <args>.
 
         Args:
-            config: The key/value pairs passed from the test case.
+            config (Dict): The key/value pairs passed from the test case.
 
-        Example:
+        Returns:
+            output (Str), error (Str)   returned by the command.
+
+        Example::
+
             Testing ceph orch ls
 
             config:
@@ -30,8 +34,6 @@ class LSMixin:
                     export: true
                     refresh: true
 
-        Returns:
-            output, error   returned by the command.
         """
         cmd = ["ceph", "orch"]
 

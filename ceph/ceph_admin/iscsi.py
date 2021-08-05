@@ -15,9 +15,10 @@ class ISCSI(ApplyMixin, Orch):
         Deploy ISCSI client daemon using the provided arguments.
 
         Args:
-            config: Key/value pairs provided from the test scenario
+            config (Dict) : Key/value pairs provided from the test scenario
 
-        Example:
+        Example::
+
             config:
                 command: apply
                 service: iscsi
@@ -39,6 +40,7 @@ class ISCSI(ApplyMixin, Orch):
                         sep: " "    # separator to be used for placements
                     dry-run: true
                     unmanaged: true
+
         """
         pos_args = config.pop("pos_args")
 

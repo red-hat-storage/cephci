@@ -13,10 +13,11 @@ class RGW(ApplyMixin, Orch):
         Deploy the RGW service using the provided data.
 
         Args:
-            config: test arguments
+            config (Dict): test arguments
 
-        Example:
-            <adm_shell> ceph orch apply rgw realm zone --placement="label:rgw"
+        Example::
+
+            <cephadm_shell> ceph orch apply rgw realm zone --placement="label:rgw"
 
             config:
                 command: apply
@@ -40,5 +41,6 @@ class RGW(ApplyMixin, Orch):
                         sep: " "            # separator to be used for placements
                     dry-run: true
                     unmanaged: true
+
         """
         super().apply(config)

@@ -15,9 +15,10 @@ class Mon(ApplyMixin, Orch):
         Deploy the Monitor service using the provided configuration.
 
         Args:
-            config: Key/value pairs provided by the test case to create the service.
+            config (Dict): Key/value pairs provided by the test case to create the service.
 
-        Example
+        Example::
+
             config:
                 command: apply
                 service: mon

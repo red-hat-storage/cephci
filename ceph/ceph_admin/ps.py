@@ -13,9 +13,13 @@ class PSMixin:
         Execute the command ceph orch ps <args>.
 
         Args:
-            config: The key/value pairs passed from the test case.
+            config (Dict): The key/value pairs passed from the test case.
 
-        Example:
+        Returns:
+            output, error   returned by the command.
+
+        Example::
+
             Testing ceph orch ps
 
             config:
@@ -30,8 +34,6 @@ class PSMixin:
                     daemon_id: <id of the daemon>
                     refresh: true
 
-        Returns:
-            output, error   returned by the command.
         """
         cmd = ["ceph", "orch"]
 

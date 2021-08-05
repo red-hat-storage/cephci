@@ -24,14 +24,14 @@ class ShellMixin:
         Ceph orchestrator shell interface to run ceph commands.
 
         Args:
-            args: list arguments
-            base_cmd_args: cephadm base command options
-            check_status: check command status
-            timeout: Maximum time allowed for execution.
+            args (List): list arguments
+            base_cmd_args (Dict)): cephadm base command options
+            check_status (Bool): check command status
+            timeout (Int): Maximum time allowed for execution.
 
         Returns:
-            out: stdout
-            err: stderr
+            out (Str), err (Str) stdout and stderr response
+
         """
         cmd = deepcopy(BASE_CMD)
 
