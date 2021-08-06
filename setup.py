@@ -21,6 +21,7 @@ setup(
         "reportportal-client==3.2.0",
         "requests==2.21.0",
         "paramiko==2.4.2",
+        "pyOpenSSL==20.0.1",
         "pyyaml>=4.2b1",
         "jinja2",
         "junitparser==1.4.0",

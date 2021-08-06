@@ -8,6 +8,7 @@ from os.path import dirname
 from jinja2 import Template
 
 from ceph.utils import get_node_by_id, get_nodes_by_ids
+from utility.utils import generate_self_signed_certificate
 
 LOG = logging.getLogger(__name__)
 
@@ -290,13 +291,60 @@ class GenerateServiceSpec:
               rgw_frontend_port: 8080
               rgw_realm: east
               rgw_zone: india
+              rgw_frontend_ssl_certificate: create-cert | <contents of crt>
         Returns:
             service_spec
+
+        contents of rgw_spec.yaml file
+
+            service_type: rgw
+            service_id: rgw.india
+            placement:
+              hosts:
+                - node5
+            spec:
+              ssl: true
+              rgw_frontend_ssl_certificate: |
+                -----BEGIN PRIVATE KEY------
+                ...
         """
         template = self._get_template("rgw")
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        # ToDo: This works for only one host. Not sure, how cephadm handles SSL
+        #       certificate for multiple hosts.
+        if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
+            subject = {"common_name": spec["placement"]["hosts"][0]}
+            cert, key = generate_self_signed_certificate(subject=subject)
+            pem = key + cert
+            cert_value = "|\n" + pem
+            spec["spec"]["rgw_frontend_ssl_certificate"] = "\n    ".join(
+                cert_value.split("\n")
+            )
+
+            LOG.debug(pem)
+
+            # Copy the certificate to all clients
+            clients = self.cluster.get_nodes(role="client")
+
+            # As the tests are executed on the hosts, copying the certs to them also
+            rgws = self.cluster.get_nodes(role="rgw")
+            nodes = clients + rgws
+
+            for node in nodes:
+                cert_file = node.remote_file(
+                    sudo=True,
+                    file_name=f"/etc/pki/ca-trust/source/anchors/{spec['service_id']}.crt",
+                    file_mode="w",
+                )
+                cert_file.write(cert)
+                cert_file.flush()
+
+                node.exec_command(
+                    sudo=True, cmd="update-ca-trust enable && update-ca-trust extract"
+                )
 
         return template.render(spec=spec)
 

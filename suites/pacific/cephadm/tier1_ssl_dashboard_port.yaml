@@ -218,6 +218,54 @@ tests:
           mgr: "allow *"
       destroy-cluster: false
       abort-on-fail: true
+  - test:
+      name: Remove a grafana service using cephadm      #MON, MGR, OSDs should not be opted for removal as it makes cluster inaccessible,
+      desc: Apply Ceph orch remove service for all the daemons
+      module: test_orch.py
+      polarion-id:
+      config:
+        command: remove
+        service: grafana
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: grafana
+          verify: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove a prometheus service using cephadm
+      desc: Apply Ceph orch remove service for all the daemons
+      module: test_orch.py
+      polarion-id:
+      config:
+        command: remove
+        service: prometheus
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: prometheus
+          verify: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Remove a node-exporter service using cephadm
+      desc: Apply Ceph orch remove service for all the daemons
+      module: test_orch.py
+      polarion-id:
+      config:
+        command: remove
+        service: node-exporter
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: node-exporter
+          verify: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+
+
 
 
 

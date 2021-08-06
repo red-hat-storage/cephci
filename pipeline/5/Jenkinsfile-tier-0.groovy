@@ -67,7 +67,7 @@ node(nodeName) {
         stage('Install prereq') {
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'refs/remotes/origin/email_notify']],
                 doGenerateSubmoduleConfigurations: false,
                 extensions: [[
                     $class: 'SubmoduleOption',
