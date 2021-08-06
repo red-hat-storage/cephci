@@ -23,7 +23,7 @@ import re
 import time
 
 from ceph.ceph_admin import CephAdmin
-from tests.rados.rados_prep import create_pool, detete_pool, run_ceph_command
+from ceph.rados.core_workflows import RadosOrchestrator
 
 log = logging.getLogger(__name__)
 
@@ -72,11 +72,14 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     Returns: Exception hit for failure conditions.
 
     """
+
+    # Creating rados object to run rados commands
+    rados_obj = RadosOrchestrator(node=node)
     mon_nodes = ceph_cluster.get_nodes(role="mon")
     osd_nodes = ceph_cluster.get_nodes(role="osd")
     client_node = ceph_cluster.get_nodes(role="client")[0]
     installer_node = ceph_cluster.get_nodes(role="installer")[0]
-    daemon_info = run_ceph_command(node, cmd="ceph orch ps")
+    daemon_info = rados_obj.run_ceph_command(cmd="ceph orch ps")
     mon_daemons = [entry for entry in daemon_info if entry["daemon_type"] == "mon"]
 
     # Duration for which we will sleep after the mon DB changes are made and mon would have begun trimming old mappings
@@ -87,19 +90,19 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     mon_db_size_list.append(get_mondb_size(mon_nodes[0], mon_daemons))
 
     # Collecting first and last commits to osdmap
-    status = run_ceph_command(node, cmd="ceph report")
+    status = rados_obj.run_ceph_command(cmd="ceph report")
     init_commmits = {
         "osdmap_first_committed": float(status["osdmap_first_committed"]),
         "osdmap_last_committed": float(status["osdmap_last_committed"]),
     }
 
     # creating scenarios where the mon db would be updated with new info
-    change_config_for_slow_ops(node=node, action="set", **kwargs)
+    change_config_for_slow_ops(rados_obj=rados_obj, action="set", **kwargs)
     mon_db_size_list.append(get_mondb_size(mon_nodes[0], mon_daemons))
 
     # Starting read and write on by creating a test pool .
     pool_name = "test_pool_ops"
-    if not create_pool(node=node, pool_name=pool_name, crush_rule="stretch_rule"):
+    if not rados_obj.create_pool(pool_name=pool_name, crush_rule="stretch_rule"):
         error = "failed to create pool to run IO"
         raise TestCaseFailureException(error)
     cmd = f"rados --no-log-to-stderr -b 1024 -p {pool_name} bench 400 write --no-cleanup &"
@@ -109,11 +112,11 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
 
     # deleting a previously created pool to increase OSD operations and map changes
     # Pool created as part of suite set-up workflow.
-    detete_pool(node=node, pool="delete_pool")
+    rados_obj.detete_pool(pool="delete_pool")
 
     # Proceeding to reboot 1 OSD from each host to trigger rebalance & Backfill
-    cluster_fsid = run_ceph_command(node, cmd="ceph fsid")["fsid"]
-    daemon_info = run_ceph_command(node, cmd="ceph orch ps")
+    cluster_fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
+    daemon_info = rados_obj.run_ceph_command(cmd="ceph orch ps")
     osd_daemons = [entry for entry in daemon_info if entry["daemon_type"] == "osd"]
     for onode in osd_nodes:
         for osd in osd_daemons:
@@ -134,7 +137,7 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     # todo: Verify re-balancing process on OSD's ( PG movement across cluster)
     # todo: Add re-balancing based on crush item provided
     # BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1766702
-    reweight_crush_items(node=node)
+    rados_obj.reweight_crush_items()
 
     """
     Waiting for 2 hours for cluster to get to active + clean state.
@@ -149,10 +152,10 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=7200)
     while end_time > datetime.datetime.now():
-        status_report = run_ceph_command(node, cmd="ceph report")
+        status_report = rados_obj.run_ceph_command(cmd="ceph report")
         ceph_health_status = status_report["health"]
         recovery_tuple = ("OSD_DOWN", "PG_AVAILABILITY", "PG_DEGRADED", "SLOW_OPS")
-        daemon_info = run_ceph_command(node, cmd="ceph orch ps")
+        daemon_info = rados_obj.run_ceph_command(cmd="ceph orch ps")
         mon_daemons = [entry for entry in daemon_info if entry["daemon_type"] == "mon"]
         mon_db_size_list.append(get_mondb_size(mon_nodes[0], mon_daemons))
 
@@ -201,10 +204,10 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
         break
 
     # collecting the final size of the Mon DB and the OSD map epoch times
-    daemon_info = run_ceph_command(node, cmd="ceph orch ps")
+    daemon_info = rados_obj.run_ceph_command(cmd="ceph orch ps")
     mon_daemons = [entry for entry in daemon_info if entry["daemon_type"] == "mon"]
     final_db_size = get_mondb_size(mon_nodes[0], mon_daemons)
-    final_status = run_ceph_command(node, cmd="ceph report")
+    final_status = rados_obj.run_ceph_command(cmd="ceph report")
     final_commmits = {
         "osdmap_first_committed": float(final_status["osdmap_first_committed"]),
         "osdmap_last_committed": float(final_status["osdmap_last_committed"]),
@@ -217,7 +220,7 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
         mon_db_size_size_change.append(mon_db_size_list[i + 1] - mon_db_size_list[i])
 
     # Reverting the config changes made for generation slow_ops
-    change_config_for_slow_ops(node=node, action="rm", **kwargs)
+    change_config_for_slow_ops(rados_obj=rados_obj, action="rm", **kwargs)
 
     # Checking the final results
     if True not in list(map(lambda x: x <= 0, mon_db_size_size_change)):
@@ -311,35 +314,7 @@ def get_mondb_size(mon_node, mon_daemons) -> int:
     return int(size)
 
 
-def reweight_crush_items(node: CephAdmin, **kwargs) -> bool:
-    """
-    Performs Re-weight of various CRUSH items, based on key-value pairs sent
-    Args:
-        node: Cephadm node where the commands need to be executed
-        **kwargs: Arguments for the commands
-
-    Returns: True -> pass, False -> fail
-
-    """
-    """Not returning false as I am not verifying the result of this.
-    ( PG would be redistributed based whether we increase or decrease the weight. )
-    PG movement is slow and will take time based on no of objects.
-    Need to implement this check. So for now assuming it worked and returning true."""
-    if kwargs.get("name"):
-        name = kwargs["name"]
-        weight = kwargs["weight"]
-        cmd = f"ceph osd crush reweight {name} {weight}"
-        node.shell([cmd])
-        return True
-
-    # if no params are provided, Doing the re-balance by utilization.
-    # todo: implementing the checks to verify the behaviour of the re-weight commands
-    cmd = r"ceph osd reweight-by-utilization"
-    node.shell([cmd])
-    return True
-
-
-def change_config_for_slow_ops(node: CephAdmin, action: str, **kwargs):
+def change_config_for_slow_ops(rados_obj: RadosOrchestrator, action: str, **kwargs):
     """
     Changes few config Values on ceph cluster to intentionally increase changes of hitting slow_ops on
     the cluster network.
@@ -352,7 +327,7 @@ def change_config_for_slow_ops(node: CephAdmin, action: str, **kwargs):
     backfill as to reduce n/w bandwidth for client IO operations
 
     Args:
-        node: Cephadm node where the commands need to be executed
+        rados_obj: Rados object for command execution
         action: weather to set the Config or to remove it from cluster
                 Values : "set" -> to set the config values
                          "rm" -> to remove the config changes made
@@ -378,16 +353,16 @@ def change_config_for_slow_ops(node: CephAdmin, action: str, **kwargs):
     # Removing the config values set when action is to remove
     if action == "rm":
         for cmd in cmd_map.keys():
-            node.shell([cmd_map[cmd]])
+            rados_obj.node.shell([cmd_map[cmd]])
         return
 
     # Adding the config values
     for val in cmd_map.keys():
         cmd = f"{cmd_map[val]} {value_map[val]}"
-        node.shell([cmd])
+        rados_obj.node.shell([cmd])
 
     # Verifying the values set in the config
-    config_dump = run_ceph_command(node, cmd="ceph config dump")
+    config_dump = rados_obj.run_ceph_command(cmd="ceph config dump")
     for val in cmd_map.keys():
         for conf in config_dump:
             if conf["name"] == val:
