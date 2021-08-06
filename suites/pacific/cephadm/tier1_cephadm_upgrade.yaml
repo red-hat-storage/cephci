@@ -46,8 +46,8 @@ tests:
               base_cmd_args:
                 verbose: true
               args:       # https://bugzilla.redhat.com/show_bug.cgi?id=1944978
-                custom_repo: "http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.0-rhel-8/RHCEPH-5.0-RHEL-8-20210414.ci.0/compose/Tools/x86_64/os/"
-                custom_image: "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:ceph-5.0-rhel-8-containers-candidate-27211-20210414013210"
+                custom_repo: "ftp://partners.redhat.com/d960e6f2052ade028fa16dfc24a827f5/rhel-8/Tools/x86_64/os/"
+                custom_image: false     # pick default image from cephadm source code.
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 skip-monitoring-stack: true
