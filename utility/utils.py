@@ -9,11 +9,13 @@ import traceback
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from string import ascii_uppercase, digits
+from typing import Dict, Tuple
 
 import requests
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
+from OpenSSL import crypto
 from reportportal_client import ReportPortalServiceAsync
 
 log = logging.getLogger(__name__)
@@ -119,7 +121,7 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
-def sync_status_on_primary(verify_io_on_site_node, retry=5, delay=30):
+def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
     """
     verify multisite sync status on primary
     """
@@ -144,7 +146,7 @@ def sync_status_on_primary(verify_io_on_site_node, retry=5, delay=30):
     )
     if "behind" in check_sync_status or "recovering" in check_sync_status:
         log.info("sync is in progress")
-        log.info("sleep of 30 secs for sync to complete")
+        log.info("sleep of 60 secs for sync to complete")
         for retry_count in range(retry):
             time.sleep(delay)
             check_sync_status, err = verify_io_on_site_node.exec_command(
@@ -921,15 +923,54 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
     which helps in identification of admin node.
 
     """
+    _role = ""
+    if "installer" in role:
+        _role = "installer"
+    elif "pool" in role:
+        _role = "pool"
+
     node_name = [
         cluster_name,
         instance_name if instance_name else "",
         run_id,
         node,
-        "installer" if "installer" in role else "",
+        _role,
     ]
     node_name = "-".join([i for i in node_name if i])
     if len(node_name) > 48:
         log.warning(f"[{node_name}] WARNING!!!!, Node name too long(>48 chars)")
 
     return node_name
+
+
+def generate_self_signed_certificate(subject: Dict) -> Tuple:
+    """
+    Create and return a self-signed certificate using the provided subject information.
+
+    Args:
+        subject     Dictionary holding the certificate subject key/value pair
+
+    Returns:
+        cert, key   Tuple as strings
+    """
+    keyout = crypto.PKey()
+    keyout.generate_key(crypto.TYPE_RSA, 2048)
+
+    cert = crypto.X509()
+    cert.get_subject().C = subject.get("country", "IN")
+    cert.get_subject().ST = subject.get("state", "Karnataka")
+    cert.get_subject().L = subject.get("locality", "Bangalore")
+    cert.get_subject().O = subject.get("company", "Red Hat Inc")
+    cert.get_subject().OU = subject.get("department", "Storage")
+    cert.get_subject().CN = subject["common_name"]
+    cert.set_serial_number(1000)
+    cert.gmtime_adj_notBefore(0)
+    cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
+    cert.set_issuer(cert.get_subject())
+    cert.set_pubkey(keyout)
+    cert.sign(keyout, "sha256")
+
+    return (
+        crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"),
+        crypto.dump_privatekey(crypto.FILETYPE_PEM, keyout).decode("utf-8"),
+    )

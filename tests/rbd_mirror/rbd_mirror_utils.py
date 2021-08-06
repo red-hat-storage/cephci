@@ -23,6 +23,7 @@ class RbdMirror:
         self.cluster_spec = self.rbd_client + "@" + self.cluster_name
         self.datapool = None
         self.flag = 0
+        self.ceph_rbdmirror = self.ceph_nodes.get_ceph_objects("rbd-mirror")[0]
 
         # Identifying Monitor And Client node
         for node in self.ceph_nodes:
@@ -559,3 +560,35 @@ class RbdMirror:
             for pool in pool_list:
                 self.delete_pool(poolname=pool)
                 peercluster.delete_pool(poolname=pool)
+
+    def get_rbd_service_name(self, service_name):
+        """
+        Gets the rbd mirror service name where the rbd mirror daemon running
+        Args:
+            service_name:
+
+        Returns:
+            service_name --> str
+        """
+        out, rc = self.ceph_rbdmirror.exec_command(
+            sudo=True,
+            cmd=f"systemctl list-units --all | grep {service_name} | awk {{'print $1'}}",
+        )
+        service_name = out.read().decode()
+        log.info(f"Service name : {service_name} ")
+        return service_name
+
+    def change_service_state(self, service_name, operation):
+        """
+        Starts or Stops the given service name
+        Args:
+            service_name:
+            operation:
+
+        Returns:
+            None
+        """
+        log.info(f"{operation}ing the service : {service_name} ")
+        self.ceph_rbdmirror.exec_command(
+            sudo=True, cmd=f"systemctl {operation} {service_name}"
+        )

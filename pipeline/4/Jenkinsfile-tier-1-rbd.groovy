@@ -45,5 +45,14 @@ node(nodeName) {
             sharedLib.runTestSuite()
         }
     }
-
+    stage('RBD Mirror') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+            "sutConf=conf/${cephVersion}/rbd/tier_1_rbd_mirror.yaml",
+            "testSuite=suites/${cephVersion}/rbd/tier_1_rbd_mirror.yaml",
+            "addnArgs=--post-results --log-level info"
+        ]) {
+            sharedLib.runTestSuite()
+        }
+    }
 }

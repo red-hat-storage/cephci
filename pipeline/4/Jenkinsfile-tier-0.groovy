@@ -9,6 +9,8 @@ def sharedLib
 def test_results = [:]
 def defaultRHEL7BaseUrl
 def defaultRHEL7Build
+def cvp
+
 def rpmStages = ['deployRpmRhel7': {
                     stage('RHEL7 RPM') {
                         withEnv([
@@ -149,14 +151,20 @@ node(nodeName) {
         }
     }
 
+    stage('Set CVP Variable') {
+        cvp = sharedLib.getCvpVariable()
+    }
+
     stage('Set RHEL7 vars') {
         // Gather the RHEL 7 latest compose information
         defaultRHEL7Build = sharedLib.getRHBuild("rhel-7")
         defaultRHEL7BaseUrl = sharedLib.getBaseUrl("rhel-7")
     }
 
-    timeout(unit: "HOURS", time: 2) {
-        parallel rpmStages
+    if ( ! cvp ) {
+        timeout(unit: "HOURS", time: 2) {
+            parallel rpmStages
+        }
     }
 
     timeout(unit: "HOURS", time: 2) {
@@ -168,6 +176,10 @@ node(nodeName) {
     }
 
     stage('Publish Results') {
+        if (cvp) {
+            sharedLib.sendEMail("RHCS CVP", test_results)
+            return
+        }
         sharedLib.sendEMail("Tier-0", test_results)
         if ( ! (1 in test_results.values()) ){
            sharedLib.postLatestCompose()
