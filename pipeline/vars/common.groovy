@@ -197,9 +197,8 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
         Return the Email body with the the test results in a tabular form.
     */
     def to_list = "ceph-qe-list@redhat.com"
-    def jobStatus = "stable"
+    def jobStatus = "STABLE"
     def failureCount = 0
-    
     def body = "<table>"
 
     if(isStage) {
@@ -229,7 +228,7 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
 
     if (failureCount > 0) {
         to_list = "cephci@redhat.com"
-        jobStatus = 'unstable'
+        jobStatus = 'UNSTABLE'
     }
     return ["to_list" : to_list, "jobStatus" : jobStatus, "body" : body]
 }
@@ -238,21 +237,33 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     /*
         Send an email notification.
     */
+    def versionFileExists = sh(
+        returnStatus: true, script: "ls -l version_info.json"
+    )
+    if (versionFileExists == 0) {
+        version_info = jsonToMap("version_info.json")
+    }
     def body = readFile(file: "pipeline/vars/emailable-report.html")
+    body += "<h2><u>Test Artifacts</h2></u><table><tr><td> COMPOSE_URL </td><td>${env.composeUrl}</td></tr><td>COMPOSE_ID</td><td> ${env.composeId}</td></tr>"
+    body += "<tr><td> REPOSITORY </td><td>${env.repository}</td></tr>"
+    for (def key in version_info.keySet()) {
+        body += "<tr><td> ${key} </td><td> ${version_info[key]}</td></tr>"
+    }
+    body += "</table>"
     body += "<body><u><h3>Test Summary</h3></u><br />"
     if (getCvpVariable()) {
         def ciMsg = getCIMessageMap()
         body += "<p>CVP Image : ${ciMsg.artifact.nvr}</p><br />"
     }
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
-
     def params = fetchEmailBodyAndReceiver(test_results, isStage)
     body += params["body"]
 
     def to_list = params["to_list"]
     def jobStatus = params["jobStatus"]
+    def rh_ceph_version = env.rhcephVersion.substring(0,3)
 
-    def subject = "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage."
+    def subject = "Test report status of RH Ceph ${rh_ceph_version} for ${subjectPrefix} is ${jobStatus}"
     if (getCvpVariable()) {
         subject = "${subjectPrefix} test execution is ${jobStatus}."
     }
