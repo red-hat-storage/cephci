@@ -240,14 +240,15 @@ def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     def versionFileExists = sh(
         returnStatus: true, script: "ls -l version_info.json"
     )
-    if (versionFileExists == 0) {
-        version_info = jsonToMap("version_info.json")
-    }
+    def version_info = [:]
     def body = readFile(file: "pipeline/vars/emailable-report.html")
     body += "<h2><u>Test Artifacts</h2></u><table><tr><td> COMPOSE_URL </td><td>${env.composeUrl}</td></tr><td>COMPOSE_ID</td><td> ${env.composeId}</td></tr>"
     body += "<tr><td> REPOSITORY </td><td>${env.repository}</td></tr>"
-    for (def key in version_info.keySet()) {
-        body += "<tr><td> ${key} </td><td> ${version_info[key]}</td></tr>"
+    if (versionFileExists == 0) {
+        version_info = jsonToMap("version_info.json")
+        for (def key in version_info.keySet()) {
+            body += "<tr><td> ${key} </td><td> ${version_info[key]}</td></tr>"
+        }
     }
     body += "</table>"
     body += "<body><u><h3>Test Summary</h3></u><br />"
