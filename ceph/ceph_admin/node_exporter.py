@@ -15,9 +15,10 @@ class NodeExporter(ApplyMixin, Orch):
         Deploy the node-exporter service using the provided configuration.
 
         Args:
-            config: Key/value pairs provided by the test case to create the service.
+            config (Dict): Key/value pairs provided by the test case to create the service.
 
-        Example
+        Example::
+
             config:
                 command: apply
                 service: node-exporter
@@ -34,5 +35,6 @@ class NodeExporter(ApplyMixin, Orch):
                         sep: " "    # separator to be used for placements
                     dry-run: true
                     unmanaged: true
+
         """
         super().apply(config=config)

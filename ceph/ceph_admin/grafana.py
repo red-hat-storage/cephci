@@ -15,9 +15,10 @@ class Grafana(ApplyMixin, Orch):
         Deploy the grafana service using the provided configuration.
 
         Args:
-            config: Key/value pairs provided by the test case to create the service.
+            config (Dict): Key/value pairs provided by the test case to create the service.
 
-        Example
+        Example::
+
             config:
                 command: apply
                 service: grafana

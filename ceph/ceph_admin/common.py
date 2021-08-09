@@ -7,10 +7,10 @@ def config_dict_to_string(data: Dict) -> str:
     Convert the provided data to a string of optional arguments.
 
     Args:
-        data:   Key/value pairs that are CLI optional arguments
+        data (Dict):   Key/value pairs that are CLI optional arguments
 
     Return:
-        string instead of the a data dict
+        string instead of the a data dict (Str)
     """
     rtn = ""
     for key, value in data.items():
@@ -27,12 +27,14 @@ def config_dict_to_string(data: Dict) -> str:
 
 def fetch_method(obj, method):
     """
-    fetch object attributes by name
+    Fetch object attributes by name
+
     Args:
-        obj: class object
-        method: name of the method
+        obj (CephAdmin): class object
+        method (Str): name of the method
+
     Returns:
-        function
+        function (Func)
     """
     try:
         return getattr(obj, method)

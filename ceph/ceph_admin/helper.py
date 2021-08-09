@@ -38,40 +38,42 @@ class GenerateServiceSpec:
         Initialize the GenerateServiceSpec
 
         Args:
-            node: ceph node where spec file to be created
-            cluster: ceph cluster (ceph-nodes)
-            specs: service specifications
+            node (CephNode): ceph node where spec file to be created
+            cluster (Ceph.Ceph): ceph cluster (ceph-nodes)
+            specs (Dict): service specifications
 
-        specs:
-          - service_type: host
-            address: true
-            labels: apply-all-labels
-            nodes:
-                - node2
-                - node3
-          - service_type: mon
-            placement:
-              nodes:
-                - node2
-                - node3
-          - service_type: mgr
-            placement:
-                count: 2
-          - service_type: alertmanager
-            placement:
-                count: 1
-          - service_type: crash
-            placement:
-                host_pattern: '*'
-          - service_type: grafana
-            placement:
-                count: 1
-          - service_type: node-exporter
-            placement:
-                host_pattern: '*'
-          - service_type: prometheus
-            placement:
-                count: 1
+        Example::
+
+            specs:
+              - service_type: host
+                address: true
+                labels: apply-all-labels
+                nodes:
+                    - node2
+                    - node3
+              - service_type: mon
+                placement:
+                  nodes:
+                    - node2
+                    - node3
+              - service_type: mgr
+                placement:
+                    count: 2
+              - service_type: alertmanager
+                placement:
+                    count: 1
+              - service_type: crash
+                placement:
+                    host_pattern: '*'
+              - service_type: grafana
+                placement:
+                    count: 1
+              - service_type: node-exporter
+                placement:
+                    host_pattern: '*'
+              - service_type: prometheus
+                placement:
+                    count: 1
         """
         self.cluster = cluster
         self.node = node
@@ -80,24 +82,52 @@ class GenerateServiceSpec:
 
     @staticmethod
     def get_hostname(node):
+        """
+        Returns Host Name of node
+
+        Args:
+            node (CephNode): node object
+
+        Returns:
+            hostname (Str)
+        """
         return node.shortname
 
     @staticmethod
     def get_addr(node):
+        """
+        Returns IP Address of node
+
+        Args:
+            node (CephNode): node object
+
+        Returns:
+            IP Address (Str)
+        """
         return node.ip_address
 
     @staticmethod
     def get_labels(node):
+        """
+        Returns role list of node
+
+        Args:
+            node (CephNode): node object
+
+        Returns:
+            node role list (List)
+        """
         return node.role.role_list
 
     def get_hostnames(self, node_names):
         """
         Return list of hostnames
+
         Args:
-            node_names: node names
+            node_names (List): node names
 
         Returns:
-            list of hostanmes
+            list of hostanmes (List)
         """
         nodes = get_nodes_by_ids(self.cluster, node_names)
         return [node.shortname for node in nodes]
@@ -105,8 +135,10 @@ class GenerateServiceSpec:
     def _get_template(self, service_type):
         """
         Return Jinja template based on the service_type
+
         Args:
-            service_type: service name (ex., "host")
+            service_type (Str): service name (ex., "host")
+
         Returns:
             template
         """
@@ -118,18 +150,22 @@ class GenerateServiceSpec:
     def generate_host_spec(self, spec):
         """
         Return hosts spec content based on host config
-        args:
-            spec: hosts specification
 
-        spec:
-          - service_type: host
-            address: true
-            labels: apply-all-labels
-            nodes:
-                - node2
-                - node3
+        Args:
+            spec (Dict): hosts specification
+
         Returns:
-            hosts_spec
+            hosts_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: host
+                address: true
+                labels: apply-all-labels
+                nodes:
+                    - node2
+                    - node3
         """
         template = self._get_template("host")
         hosts = []
@@ -150,30 +186,34 @@ class GenerateServiceSpec:
     def generate_generic_spec(self, spec):
         """
         Return spec content for common services
-        which is mentioned in COMMON_SERVICES
-         - mon
-         - mgr
-         - alertmanager
-         - crash
-         - grafana
-         - node-exporter
-         - prometheus
+        which is mentioned in COMMON_SERVICES::
+
+             - mon
+             - mgr
+             - alertmanager
+             - crash
+             - grafana
+             - node-exporter
+             - prometheus
 
         Args:
-            spec: common service spec config
+            spec (Dict): common service spec config
 
-        spec:
-          - service_type: mon
-            unmanaged: boolean    # true or false
-            placement:
-              count: 2
-              label: "mon"
-              host_pattern: "*"   # either hosts or host_pattern
-              nodes:
-                - node2
-                - node3
         Returns:
             service_spec
+
+        Example::
+
+            spec:
+              - service_type: mon
+                unmanaged: boolean    # true or false
+                placement:
+                  count: 2
+                  label: "mon"
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
         """
         template = self._get_template("common_svc_template")
         node_names = spec["placement"].pop("nodes", None)
@@ -187,21 +227,25 @@ class GenerateServiceSpec:
         Return spec content for osd service
 
         Args:
-            spec: osd service spec config
+            spec (Dict): osd service spec config
 
-        spec:
-          - service_type: osd
-            unmanaged: boolean    # true or false
-            placement:
-              host_pattern: "*"   # either hosts or host_pattern
-              nodes:
-                - node2
-                - node3
-            data_devices:
-                all: boolean      # true or false
-            encrypted: boolean    # true or false
         Returns:
-            service_spec
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: osd
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                data_devices:
+                    all: boolean      # true or false
+                encrypted: boolean    # true or false
+
         """
         template = self._get_template("osd")
         node_names = spec["placement"].pop("nodes", None)
@@ -214,23 +258,27 @@ class GenerateServiceSpec:
         """
         Return spec content for mds service
 
-        Note: make sure volume is already created.
-
         Args:
-            spec: mds service spec config
+            spec (Dict): mds service spec config
 
-        spec:
-          - service_type: mds
-            service_id: cephfs
-            unmanaged: boolean    # true or false
-            placement:
-              host_pattern: "*"   # either hosts or host_pattern
-              nodes:
-                - node2
-                - node3
-              label: mds
         Returns:
-            service_spec
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: mds
+                service_id: cephfs
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: mds
+
+        :Note: make sure volume is already created.
+
         """
         template = self._get_template("mds")
         node_names = spec["placement"].pop("nodes", None)
@@ -243,26 +291,29 @@ class GenerateServiceSpec:
         """
         Return spec content for nfs service
 
-        Note: make sure pool is already created.
-
         Args:
-            spec: mds service spec config
+            spec (Dict): mds service spec config
 
-        spec:
-          - service_type: nfs
-            service_id: nfs-name
-            unmanaged: boolean    # true or false
-            placement:
-              host_pattern: "*"   # either hosts or host_pattern
-              nodes:
-                - node2
-                - node3
-              label: nfs
-            spec:
-              pool: pool-name
-              namespace: namespace-name
         Returns:
-            service_spec
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: nfs
+                service_id: nfs-name
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: nfs
+                spec:
+                  pool: pool-name
+                  namespace: namespace-name
+
+        :Note: make sure pool is already created.
         """
         template = self._get_template("nfs")
         node_names = spec["placement"].pop("nodes", None)
@@ -275,41 +326,45 @@ class GenerateServiceSpec:
         """
         Return spec content for rgw service
 
-        Note: make sure realm, zone group and zone is already created.
-
         Args:
-            spec: rgw service spec config
+            spec (Dict): rgw service spec config
 
-        spec:
-          - service_type: rgw
-            service_id: my-rgw
-            unmanaged: boolean    # true or false
-            placement:
-              host_pattern: "*"   # either hosts or host_pattern
-              nodes:
-                - node2
-                - node3
-              label: rgw
-            spec:
-              rgw_frontend_port: 8080
-              rgw_realm: east
-              rgw_zone: india
-              rgw_frontend_ssl_certificate: create-cert | <contents of crt>
         Returns:
-            service_spec
+            service_spec (Str)
 
-        contents of rgw_spec.yaml file
+        Example::
 
-            service_type: rgw
-            service_id: rgw.india
-            placement:
-              hosts:
-                - node5
             spec:
-              ssl: true
-              rgw_frontend_ssl_certificate: |
-                -----BEGIN PRIVATE KEY------
-                ...
+              - service_type: rgw
+                service_id: my-rgw
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: rgw
+                spec:
+                  rgw_frontend_port: 8080
+                  rgw_realm: east
+                  rgw_zone: india
+                  rgw_frontend_ssl_certificate: create-cert | <contents of crt>
+
+            contents of rgw_spec.yaml file
+
+                service_type: rgw
+                service_id: rgw.india
+                placement:
+                  hosts:
+                    - node5
+                spec:
+                  ssl: true
+                  rgw_frontend_ssl_certificate: |
+                    -----BEGIN PRIVATE KEY------
+                    ...
+
+        :Note: make sure realm, zone group and zone is already created.
+
         """
         template = self._get_template("rgw")
         node_names = spec["placement"].pop("nodes", None)
@@ -354,10 +409,12 @@ class GenerateServiceSpec:
     def _get_render_method(self, service_type):
         """
         Return render definition based on service_type
+
         Args:
-            service_type: service name
+            service_type (Str): service name
+
         Returns:
-            method
+            method (Func)
         """
         render_definitions = {
             "host": self.generate_host_spec,
@@ -376,10 +433,11 @@ class GenerateServiceSpec:
 
     def create_spec_file(self):
         """
-        start to generate spec file based on spec config
+        Create spec file based on spec config and return file name
 
         Returns:
-            temp_filename
+            temp_filename (Str)
+
         """
         spec_content = ""
         for spec in self.specs:
@@ -403,16 +461,16 @@ class GenerateServiceSpec:
 def get_cluster_state(cls, commands=[]):
     """
     fetch cluster state using commands provided along
-    with the default set of commands
+    with the default set of commands::
 
-    - ceph status
-    - ceph orch ls -f json-pretty
-    - ceph orch ps -f json-pretty
-    - ceph health detail -f yaml
+        - ceph status
+        - ceph orch ls -f json-pretty
+        - ceph orch ps -f json-pretty
+        - ceph health detail -f yaml
 
     Args:
-        cls: ceph.ceph_admin instance with shell access
-        commands: list of commands
+        cls (CephAdmin): ceph.ceph_admin instance with shell access
+        commands (List): list of commands
 
     """
     __CLUSTER_STATE_COMMANDS = [

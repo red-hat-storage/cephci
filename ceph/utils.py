@@ -291,8 +291,8 @@ def check_ceph_healthly(
        build: rhcs build version
        mon_container: monitor container name if monitor is placed in the container
        timeout: 300 seconds(default) max time to check
-         if cluster is not healthy within timeout period
-                return 1
+
+    :note:  if cluster is not healthy within timeout period return 1
 
     Returns:
        return 0 when ceph is in healthy state, else 1
@@ -733,26 +733,26 @@ def get_disk_info(node):
 
 def get_node_by_id(cluster, node_name):
     """
-    Fetch node using provided node substring
+    Fetch node using provided node substring::
 
-    As per the naming convention used at VM creation, where each node.shortname
-    is framed with hyphen("-") separated string as below, please refer
-    ceph.utils.create_ceph_nodes definition
-        "ceph-<name>-node1-<roles>"
+        As per the naming convention used at VM creation, where each node.shortname
+        is framed with hyphen("-") separated string as below, please refer
+        ceph.utils.create_ceph_nodes definition
+            "ceph-<name>-node1-<roles>"
 
-        name: RHOS-D username or provided --instances-name
-        roles: roles attached to node in inventory file
+            name: RHOS-D username or provided --instances-name
+            roles: roles attached to node in inventory file
 
-    In this method we use hyphen("-") appended to node_name string to try fetch exact node.
-    for example,
-        "node1" ----> "node1-"
+        In this method we use hyphen("-") appended to node_name string to try fetch exact node.
+        for example,
+            "node1" ----> "node1-"
 
-    Note: But however if node_name doesn't follow naming convention as mentioned in
-    inventory, the first searched node will be returned.
-    for example,
-        "node" ----> it might return any node which matched first, like node11.
+        Note: But however if node_name doesn't follow naming convention as mentioned in
+        inventory, the first searched node will be returned.
+        for example,
+            "node" ----> it might return any node which matched first, like node11.
 
-    return None, If this cluster has no nodes with this substring.
+        return None, If this cluster has no nodes with this substring.
 
     Args:
         cluster: ceph object

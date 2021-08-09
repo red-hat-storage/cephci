@@ -29,9 +29,10 @@ class OSD(ApplyMixin, Orch):
         Deploy the ODS service using the provided configuration.
 
         Args:
-            config: Key/value pairs provided by the test case to create the service.
+            config (Dict): Key/value pairs provided by the test case to create the service.
 
-        Example
+        Example::
+
             config:
                 command: apply
                 service: osd
@@ -42,6 +43,7 @@ class OSD(ApplyMixin, Orch):
                     all-available-devices: true
                     dry-run: true
                     unmanaged: true
+
         """
         cmd = ["ceph orch device ls -f json"]
         self.shell(args=["ceph orch device ls --refresh"])

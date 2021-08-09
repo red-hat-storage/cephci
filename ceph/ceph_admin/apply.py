@@ -27,12 +27,15 @@ class ApplyMixin:
         Execute the apply method using the object's service name and provided input.
 
         Args:
-            config:     Key/value pairs passed from the test suite.
-                        base_cmd_args   - key/value pairs to set for base command
-                        pos_args        - List to be added as positional params
-                        args            - Key/value pairs as optional arguments.
+            config (Dict):     Key/value pairs passed from the test suite.
 
-        Example:
+
+        Example::
+
+            base_cmd_args   - key/value pairs to set for base command
+            pos_args        - List to be added as positional params
+            args            - Key/value pairs as optional arguments.
+
             config:
                 command: apply
                 service: rgw

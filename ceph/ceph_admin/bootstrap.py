@@ -24,17 +24,19 @@ def construct_registry(cls, registry: str, json_file: bool = False):
     Construct registry credentials for bootstrapping cluster
 
     Args:
-        cls: class object
-        registry: registry name
-        json_file: registry credentials in file with JSON format
+        cls (CephAdmin): class object
+        registry (Str): registry name
+        json_file (Bool): registry credentials in JSON file (default:False)
 
-    json_file(default=false):
-    - False : Constructs registry credentials for bootstrap
-    - True  : Creates file with registry name attached with it,
-              and saved as /tmp/<registry>.json file.
+    Example::
+
+        json_file:
+            - False : Constructs registry credentials for bootstrap
+            - True  : Creates file with registry name attached with it,
+                      and saved as /tmp/<registry>.json file.
 
     Returns:
-        constructed string for registry credentials
+        constructed string of registry credentials ( Str )
     """
     # Todo: Retrieve credentials based on registry name
     cdn_cred = get_cephci_config().get("cdn_credentials")
@@ -62,19 +64,21 @@ def copy_ceph_configuration_files(cls, ceph_conf_args):
     """
     Copy ceph configuration files to ceph default "/etc/ceph" path.
 
-     we can eliminate this definition when we have support to access
-     ceph cli via custom ceph config files.
-
     Args:
-        ceph_conf_args: bootstrap arguments
-        cls: cephadm instance
+        cls (CephAdmin): cephadm instance
+        ceph_conf_args (Dict): bootstrap arguments
 
-    ceph_conf_args:
-          output-dir: "/root/ceph"
-          output-keyring : "/root/ceph/ceph.client.admin.keyring"
-          output-config : "/root/ceph/ceph.conf"
-          output-pub-ssh-key : "/root/ceph/ceph.pub"
-          ssh-public-key : "/root/ceph/ceph.pub"
+    Example::
+
+        ceph_conf_args:
+            output-dir: "/root/ceph"
+            output-keyring : "/root/ceph/ceph.client.admin.keyring"
+            output-config : "/root/ceph/ceph.conf"
+            output-pub-ssh-key : "/root/ceph/ceph.pub"
+            ssh-public-key : "/root/ceph/ceph.pub"
+
+    :Note: we can eliminate this definition when we have support to access
+            ceph cli via custom ceph config files.
     """
     ceph_dir = ceph_conf_args.get("output-dir")
     if ceph_dir:
@@ -99,10 +103,14 @@ def generate_ssl_certificate(cls, dashboard_key, dashboard_crt):
     """
     Construct dashboard key and certificate files for bootstrapping cluster
     with dashboard custom key and certificate files for ssl
+
     Args:
-        cls: class object
-        dashboard_key: path to generate ssl key
-        dashboard_crt: path to generate ssl certificate
+        cls (CephAdmin): class object
+        dashboard_key (Str): path to generate ssl key
+        dashboard_crt (Str): path to generate ssl certificate
+
+    Returns:
+         constructed string of SSL CLI option (Str)
     """
 
     # Installing openssl package needed for ssl
@@ -128,22 +136,24 @@ class BootstrapMixin:
 
     def bootstrap(self: CephAdmProtocol, config: Dict):
         """
-        Execute cephadm bootstrap with the passed kwargs on the installer node.
+        Execute cephadm bootstrap with the passed kwargs on the installer node.::
 
-        Bootstrap involves,
-          - Creates /etc/ceph directory with permissions
-          - CLI creation with bootstrap options with custom/default image
-          - Execution of bootstrap command
+            Bootstrap involves,
+              - Creates /etc/ceph directory with permissions
+              - CLI creation with bootstrap options with custom/default image
+              - Execution of bootstrap command
 
         Args:
-            config: Key/value pairs passed from the test case.
+            config (Dict): Key/value pairs passed from the test case.
 
-        Example:
+        Example::
+
             config:
                 command: bootstrap
                 base_cmd_args:
                     verbose: true
                 args:
+                    custom_repo: custom repository path
                     custom_image: <image path> or <boolean>
                     mon-ip: <node_name>
                     mgr-id: <mgr_id>
@@ -153,13 +163,15 @@ class BootstrapMixin:
                     initial-dashboard-user: <admin123>
                     initial-dashboard-password: <admin123>
 
-        custom_image:
-          image path: compose path for example alpha build,
-            ftp://partners.redhat.com/d960e6f2052ade028fa16dfc24a827f5/rhel-8/Tools/x86_64/os/
-          boolean:
-            True: use latest image from test config
-            False: do not use latest image from test config,
-                   and also indicates usage of default image from cephadm source-code.
+        custom_image::
+
+            image path: compose path for example alpha build,
+                ftp://partners.redhat.com/d960e6f2052ade028fa16dfc24a827f5/rhel-8/Tools/x86_64/os/
+
+            boolean:
+                True: use latest image from test config
+                False: do not use latest image from test config,
+                        and also indicates usage of default image from cephadm source-code.
 
         """
         self.cluster.setup_ssh_keys()
