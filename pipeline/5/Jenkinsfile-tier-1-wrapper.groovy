@@ -63,8 +63,8 @@ node(nodeName) {
 		println "Triggering tier-1 jobs for compose ${composeInfo}"
 	}
 
-    for(jobName in tier1Jobs) {
-        timeout(unit: "HOURS", time: 5) {
+    timeout(unit: "HOURS", time: 23) {
+        for(jobName in tier1Jobs) {
             stage(jobName) {
                 def jobResult = build ([
                     propagate: false,
