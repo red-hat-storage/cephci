@@ -1,13 +1,19 @@
 import json
 import logging
+import os
 import re
+from time import sleep
 
 import requests
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.ceph_admin.helper import get_cluster_state
+from ceph.ceph_admin.helper import (
+    file_or_path_exists,
+    get_cluster_state,
+    get_hosts_deployed,
+)
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +35,7 @@ def validate_fsid(cls, fsid: str):
         fsid: fsid
 
     """
-    out, err = cls.shell(args=["ceph", "fsid"])
+    out, _ = cls.shell(args=["ceph", "fsid"])
     log.info("custom fsid provided for bootstrap: %s" % fsid)
     log.info("cluster fsid : %s" % out)
     if out.strip() != fsid:
@@ -234,25 +240,6 @@ def validate_orphan_intial_daemons(cls, flag):
     log.info("orphan-initial-daemons validation is successful")
 
 
-def file_or_path_exists(node, file_or_path):
-    """
-    Method to check abs path exists
-    Args:
-        node: node object where file should be exists
-        file_or_path: ceph file or directory path
-
-    Returns:
-        boolean
-    """
-    try:
-        out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
-        log.info("Output : %s" % out.read().decode())
-    except CommandFailed as err:
-        log.error("Error: %s" % err)
-        return False
-    return True
-
-
 def fetch_file_content(node, file):
     """
     Method to fetch file content
@@ -451,6 +438,52 @@ def validate_ssh_private_key(cls, ssh_private_key):
     log.info("ssh-private-key validation is successful")
 
 
+def validate_log_file_generation(cls):
+    """
+    Method to verify generation of log files in default log directory
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        string
+    """
+    out, _ = cls.shell(args=["ceph", "fsid"])
+    fsid = out.strip()
+    log_file_path = "/var/log/ceph"
+    hosts = get_hosts_deployed(cls)
+    retry_count = 3
+    for node in cls.cluster.get_nodes():
+        try:
+            if node.hostname not in hosts:
+                continue
+            file = os.path.join(log_file_path, "cephadm.log")
+            fileExists = file_or_path_exists(node, file)
+            if not fileExists:
+                raise BootStrapValidationFailure(
+                    f"cephadm.log is not present in the node {node.ip_address}"
+                )
+            count = 0
+            fileExists = False
+            while count < retry_count:
+                count += 1
+                sleep(60)
+                file = os.path.join(log_file_path, fsid, "ceph-volume.log")
+                fileExists = file_or_path_exists(node, file)
+                if fileExists:
+                    break
+            if not fileExists:
+                raise BootStrapValidationFailure(
+                    f"ceph-volume.log is not present in the node {node.ip_address}"
+                )
+            log.info(f"Log verification on node {node.ip_address} successful")
+        except CommandFailed as err:
+            log.error("Error: %s" % err)
+            raise BootStrapValidationFailure(
+                f"ceph-volume.log is not present in the node {node.ip_address}"
+            )
+    log.info("Log file validation successful")
+
+
 def verify_bootstrap(cls, args, response):
     """
     Verify bootstrap based on the parameter(s) provided.
@@ -485,6 +518,9 @@ def verify_bootstrap(cls, args, response):
     # Private Key validations
     if args.get("ssh-private-key"):
         validate_ssh_private_key(cls, args.get("ssh-private-key"))
+
+    # Log file validations
+    validate_log_file_generation(cls)
 
 
 def run(ceph_cluster, **kw):
