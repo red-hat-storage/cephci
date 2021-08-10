@@ -7,6 +7,7 @@ from ceph.ceph import CephNode
 from ceph.utils import get_node_by_id
 
 from .common import config_dict_to_string
+from .maintenance import MaintenanceMixin
 from .orch import Orch, ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ class HostOpFailure(Exception):
     pass
 
 
-class Host(Orch):
+class Host(MaintenanceMixin, Orch):
     """Interface for executing ceph host <options> operations."""
 
     SERVICE_NAME = "host"
@@ -419,3 +420,30 @@ class Host(Orch):
                 return node["addr"]
 
         return None
+
+    def get_host(self, hostname: str):
+        """Fetches the host with given hostname is deployed in the cluster.
+
+        Args:
+            hostname (str): hostname of the host to be verified
+
+        Returns:
+            host with the given hostname
+        """
+        out, _ = self.list()
+        for node in json.loads(out):
+            if hostname in node["hostname"]:
+                return node
+        raise AssertionError("Node not found")
+
+    def get_host_status(self, hostname) -> str:
+        """Fetches the status of the host with given hostname as present in ceph orch host ls output
+
+        Args:
+            hostname: hostname of the host whose status needs to be fetched
+
+        Returns:
+            status of the host as given in ceph orch host ls output
+        """
+        node = self.get_host(hostname)
+        return node["status"]
