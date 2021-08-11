@@ -71,9 +71,7 @@ node(nodeName) {
             "sutVMConf=conf/inventory/rhel-8.4-server-x86_64.yaml",
             "sutConf=conf/${cephVersion}/rgw/tier_1_rgw_multisite.yaml",
             "testSuite=suites/${cephVersion}/rgw/tier_1_rgw_multisite_secondary_to_primary.yaml",
-            "addnArgs=--post-results --log-level DEBUG",
-            "composeUrl=${defaultRHEL7BaseUrl}",
-            "rhcephVersion=${defaultRHEL7Build}"
+            "addnArgs=--post-results --log-level DEBUG"
         ]) {
             sharedLib.runTestSuite()
         }
