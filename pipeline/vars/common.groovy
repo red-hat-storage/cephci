@@ -41,8 +41,13 @@ def getCvpVariable() {
     /*
         Returns the cvp variable after processing the CI message
     */
-    def ciMessage = getCIMessageMap()
-    def cvp = ciMessage.CVP ?: false
+    def ciMessage = "${params.CI_MESSAGE}" ?: ""
+    def cvp
+    if (! ciMessage?.trim() ) {
+        cvp = false
+    } else {
+        cvp = ciMessage.CVP ?: false
+    }
     return cvp
 }
 
