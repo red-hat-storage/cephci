@@ -13,7 +13,7 @@ def sendCVPUMBMessage(def ciMsg, def status) {
     */
     def msgMap = [
         "category": "RHCEPH CVP",
-         "status": "${status}",
+        "status": "${status}",
         "ci": [
             "url": "${env.JENKINS_URL}",
             "team": "RH Ceph QE",
@@ -31,10 +31,10 @@ def sendCVPUMBMessage(def ciMsg, def status) {
         "artifact": [
             "nvr": "${ciMsg.artifact.nvr}",
             "scratch": "false",
-             "component": "${ciMsg.artifact.component}",
-             "type": "brew-build",
-             "id": "${ciMsg.artifact.id}",
-             "issuer": "Unknown issuer"
+            "component": "${ciMsg.artifact.component}",
+            "type": "brew-build",
+            "id": "${ciMsg.artifact.id}",
+            "issuer": "RHCEPH QE"
         ],
         "type": "default",
         "namespace": "rhceph-cvp-test",
