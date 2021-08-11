@@ -33,6 +33,7 @@ def run(ceph_cluster, **kw):
     command = config.pop("command")
     log.info("Executing OSD %s service" % command)
     osd = OSD(cluster=ceph_cluster, **config)
+
     try:
         method = fetch_method(osd, command)
         method(config)
