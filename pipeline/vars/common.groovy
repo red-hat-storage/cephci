@@ -41,11 +41,13 @@ def getCvpVariable() {
     /*
         Returns the cvp variable after processing the CI message
     */
-    def ciMap = getCIMessageMap()
-    if (ciMap.containsKey("CVP")) {
-        return ciMap.CVP
+    def ciMessage = "${params.CI_MESSAGE}" ?: ""
+    if (ciMessage?.trim() ) {
+        def ciMap = getCIMessageMap()
+        if (ciMap.containsKey("CVP")) {
+            return ciMap.CVP
+        }
     }
-
     return false
 }
 
