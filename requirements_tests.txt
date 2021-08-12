@@ -1,0 +1,8 @@
+# Everything in this file reflects gate test configuration
+-e .
+bandit
+black
+flake8
+isort
+mypy
+pytest
