@@ -1,21 +1,21 @@
-*~
-.*.sw[nmop]
-*.pyc
 .tox
 __pycache__
+.pytest_cache
 ven*
-*egg*
 .idea
-*.iml
-config.yaml
 .vscode
+*egg*
 *.bak
-result.html
-result.props
+
+# ignore temporary files
+.*.sw[nmop]
+*.pyc
 
 # ignore Logs
 *.log
+*.logs
 
-# ignore cephci execution residues
+# ignore cephci generated files
 *osd_scenarios_ceph*-osd
 rerun
+verion_info.json
