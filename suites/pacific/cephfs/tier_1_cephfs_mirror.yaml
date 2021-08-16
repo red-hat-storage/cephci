@@ -1,0 +1,149 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier_1_cephfs_mirror.yaml
+# Test-Case: Configure CephFS Mirror setup and run IOs
+#
+# Cluster Configuration:
+#    No of Clusters : 2
+#    Cluster 1 :
+#    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 CEPHFS MIRROR, 1 Client service daemon(s)
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - Mon, Mgr
+#     Node3 - Mon, OSD
+#     Node4 - OSD,MDS
+#     Node5 - OSD, MDS
+#     Node6 - CephFS Mirror
+#     Node7 - Client
+#    Cluster 2 :
+#    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 Client service daemon(s)
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - Mon, Mgr
+#     Node3 - Mon, OSD
+#     Node4 - OSD,MDS
+#     Node5 - OSD, MDS
+#     Node6 - Client
+
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: shell
+                  args: # arguments to ceph orch
+                    - "ceph fs volume create cephfs"
+              - config:
+                  command: apply
+                  service: mds
+                  base_cmd_args: # arguments to ceph orch
+                    verbose: true
+                  pos_args:
+                    - cephfs                        # name of the filesystem
+                  args:
+                    placement:
+                      nodes:
+                        - node4
+                        - node5
+              - config:
+                  command: apply
+                  service: cephfs-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node6
+        ceph2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: shell
+                  args:                             # arguments to ceph orch
+                    - "ceph fs volume create cephfs"
+              - config:
+                  command: apply
+                  service: mds
+                  base_cmd_args:                    # arguments to ceph orch
+                    verbose: true
+                  pos_args:
+                    - cephfs                        # name of the filesystem
+                  args:
+                    placement:
+                      nodes:
+                        - node4
+                        - node5
+      desc:  CephFS Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      polarion-id: CEPH-83574114
+      name: deploy cephfs-mirror

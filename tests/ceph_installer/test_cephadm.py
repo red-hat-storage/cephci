@@ -9,6 +9,7 @@ import logging
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.alert_manager import AlertManager
+from ceph.ceph_admin.cephfs_mirror import CephfsMirror
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.crash import Crash
 from ceph.ceph_admin.daemon import Daemon
@@ -48,6 +49,7 @@ SERVICE_MAP = dict(
         "rgw": RGW,
         "orch": Orch,
         "rbd-mirror": RbdMirror,
+        "cephfs-mirror": CephfsMirror,
         "daemon": Daemon,
     }
 )
