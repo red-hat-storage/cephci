@@ -17,5 +17,6 @@ result.props
 *.log
 
 # ignore cephci execution residues
-*osd_scenarios_ceph*-osd
+osd_scenarios_*node*
+version_info.json
 rerun
