@@ -180,6 +180,7 @@ node(nodeName) {
             sharedLib.sendEMail("RHCS CVP", test_results)
             return
         }
+        sharedLib.sendGChatNotification("Tier-0")
         sharedLib.sendEMail("Tier-0", test_results)
         if ( ! (1 in test_results.values()) ){
            sharedLib.postLatestCompose()
