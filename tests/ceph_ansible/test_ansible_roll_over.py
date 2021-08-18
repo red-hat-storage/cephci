@@ -127,7 +127,6 @@ def run(ceph_cluster, **kw):
         "3": {"mon": "%s" % yaml, "osd": "add-osd.yml"},
         "4": {
             "mon": "infrastructure-playbooks/add-mon.yml",
-            "osd": "infrastructure-playbooks/add-osd.yml",
         },
     }
     yaml_file = yaml_dict[build_starts].get(daemon, "%s --limit %ss" % (yaml, daemon))
