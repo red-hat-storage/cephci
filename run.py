@@ -164,7 +164,8 @@ def create_nodes(
         )
 
     log.info("Destroying existing osp instances..")
-    cleanup_ceph_nodes(osp_cred, instances_name)
+    instance_name = f"-{instances_name}-"
+    cleanup_ceph_nodes(osp_cred, instance_name)
     ceph_cluster_dict = {}
 
     log.info("Creating osp instances")
