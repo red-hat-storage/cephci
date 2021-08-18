@@ -231,62 +231,23 @@ def fetch_quota(args){
     return quota_detail
 }
 
-def getColorForValue(def value, def range){
-    def color = ""
-    if(value > range[0]){
-        color = "F1948A"
-    }
-    else if(value <= range[0] && value > range[1]){
-        color = "FCF3CF"
-    }
-    else{
-        color = "82E0AA"
-    }
-    return color
-}
-
-def fetch_html_table(def stats, def range, def table_key, def color_code_key){
-    def overall_stat_body = "<u><h2>Consolidated Quota Usage Summary for ${table_key}</h2></u>"
-    def header_tag = "<tr>"
-    def value_tag = ""
-    def keys = stats[0].keySet()
-    for(key in keys){
-        header_tag += "<th>${key}</th>"
-    }
-    header_tag += "</tr>"
-    for(stat in stats){
-        value_tag += "<tr"
-        def row_tag = ""
-        def user = ""
-        for(key in keys){
-            user = stat[key]
-            if(key == color_code_key){
-                def color = getColorForValue(stat[key].intValue(), range)
-                value_tag += " bgcolor=\"${color}\"}>"
-            }
-            row_tag += "<td>${stat[key]}</td>"
-        }
-        if(user == "psi-ceph-jenkins"){
-            continue
-        }
-        value_tag += "${row_tag}</tr>"
-    }
-    overall_stat_body += "<table>${header_tag}${value_tag}</table>"
-    return overall_stat_body
+@NonCPS
+def generate_mail_body(html_body, quota_detail){
+    /*
+        Generate mail body using groovy template for sending mail.
+    */
+    def data = [quota : quota_detail, pro_range : [80, 50], user_range : [20, 10]]
+    def mail_body = new groovy.text.StreamingTemplateEngine().createTemplate(html_body).make(data)
+    return mail_body.toString()
 }
 
 def sendEmail(def quota_detail){
      /*
         Send an email notification.
     */
-    def body = readFile(file: "pipeline/vars/emailable-report.html")
-    body += "<body><u><h1>RHOS-D Quota Usage Summary</h1></u><br />"
-    body += '''<p>Hi Team,
-                Please go through the instances created by each one of you and
-                please plan to clear unused instances in each project.</p><br />'''
-    body += fetch_html_table(quota_detail["Project Stats"], [80, 50], "Projects", "RAM usage in %")
-    body += fetch_html_table(quota_detail["User Stats"], [20, 10], "Users", "Instance Count")
-    body += "</body> </html>"
+    echo "Sending Email"
+    def html_body = readFile(file: "pipeline/rhos_scripts/quota-template.html")
+    def body = generate_mail_body(html_body, quota_detail)
     def to_list = "cephci@redhat.com, ceph-qe@redhat.com"
 
     emailext(
