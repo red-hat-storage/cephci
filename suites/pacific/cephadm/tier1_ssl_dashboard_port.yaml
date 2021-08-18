@@ -264,7 +264,19 @@ tests:
           verify: true
       destroy-cluster: false
       abort-on-fail: true
-
+  - test:
+      name: Remove OSD daemon
+      desc: Remove single OSD daemon from the cluster
+      module: test_osd.py
+      polarion-id:
+      config:
+        command: rm
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - 4
+      destroy-cluster: false
+      abort-on-fail: true
 
 
 
