@@ -65,7 +65,7 @@ node(nodeName) {
 		println "Triggering Tier-2 Object jobs for compose ${ciMessage}"
 	}
 
-	timeout (unit: "HOURS", time: 24) {
+	timeout (unit: "HOURS", time: 72) {
 	    def jobResult
 
 	    for (job in jobs) {

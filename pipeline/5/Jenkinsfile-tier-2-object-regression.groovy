@@ -37,16 +37,25 @@ node(nodeName) {
         }
     }
 
-    timeout(unit: "HOURS", time: 4) {
-        stage('Regression') {
-            withEnv([
-                "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
-                "sutConf=conf/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
-                "testSuite=suites/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
-                "addnArgs=--post-results --log-level INFO"
-            ]) {
-                sharedLib.runTestSuite()
-            }
+    stage('Regression') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+            "sutConf=conf/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_2_rgw_regression.yaml",
+            "addnArgs=--post-results --log-level INFO"
+        ]) {
+            sharedLib.runTestSuite()
+        }
+    }
+
+    stage('Secure S3Tests') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+            "sutConf=conf/${cephVersion}/rgw/tier_0_rgw.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_2_rgw_ssl_s3tests.yaml",
+            "addnArgs=--post-results --log-level debug"
+        ]) {
+            sharedLib.runTestSuite()
         }
     }
 
