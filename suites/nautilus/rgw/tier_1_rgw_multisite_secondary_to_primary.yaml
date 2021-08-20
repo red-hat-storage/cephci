@@ -1,3 +1,7 @@
+# Below are the multi-site test scenarios run on the secondary and verified the sync/io on the primary
+# ceph-rgw1 is master/primary site
+# ceph-rgw2 is slave/secondary site
+
 tests:
   - test:
       name: pre-req
