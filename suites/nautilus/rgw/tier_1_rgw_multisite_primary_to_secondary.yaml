@@ -1,8 +1,6 @@
-#Below are the multi-site test scenarios run on the master and verified the sync on the slave
-
-#where :
-#ceph-rgw1 is master/primary site
-#ceph-rgw2 is slave/secondary site
+# Below are the multi-site test scenarios run on the master and verified the sync/io on the slave
+# ceph-rgw1 is master/primary site
+# ceph-rgw2 is slave/secondary site
 
 tests:
   - test:
