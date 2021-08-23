@@ -3,6 +3,10 @@
     Common groovy methods that can be reused by the pipeline jobs.
 */
 
+// Define global variables
+def passStatus = "PASS"
+def failStatus = "FAIL"
+
 import org.jsoup.Jsoup
 
 def prepareNode() {
@@ -60,6 +64,15 @@ def getCIMessageMap() {
     }
     def compose = readJSON text: "${params.CI_MESSAGE}"
     return compose
+}
+
+def getRHCSVersionFromArtifactsNvr() {
+    /*
+        Returns the RHCEPH version from the compose ID in CI_MESSAGE.
+    */
+    def compose = getCIMessageMap()
+    def (major_version, minor_version) = compose.artifact.nvr.substring(7,).tokenize(".")
+    return ["major_version": major_version, "minor_version": minor_version]
 }
 
 def fetchMajorMinorOSVersion(def buildType){
@@ -289,6 +302,60 @@ def sendGChatNotification(def testResults, def tierLevel){
     googlechatnotification(url: "id:rhcephCIGChatRoom",
                            message: msg
                           )
+}
+
+def executeTestScript(def scriptPath, def cliArgs) {
+   /*
+        Executes the test script
+   */
+    def rc = passStatus
+    catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
+        try {
+            sh(script: "sh ${scriptPath} ${cliArgs}")
+        } catch(Exception err) {
+            rc = failStatus
+            println err.getMessage()
+            error "Encountered an error"
+        }
+    }
+    println "exit status: ${rc}"
+    return rc
+}
+
+def fetchStages(def scriptArg, def tierLevel, def testResults) {
+    /*
+        Return all the scripts found under
+        cephci/pipeline/scripts/<MAJOR>/<MINOR>/<TIER-x>/*.sh
+        as pipeline Test Stages.
+
+           example: cephci/pipeline/scripts/5/0/tier-0/*.sh
+
+        MAJOR   -   RHceph major version (ex., 5)
+        MINOR   -   RHceph minor version (ex., 0)
+        TIER-x  -   Tier level number (ex., tier-0)
+    */
+    def RHCSVersion = getRHCSVersionFromArtifactsNvr()
+    def majorVersion = RHCSVersion["major_version"]
+    def minorVersion = RHCSVersion["minor_version"]
+
+    def scriptPath = "${env.WORKSPACE}/pipeline/scripts/${majorVersion}/${minorVersion}/${tierLevel}/"
+    
+    def testStages = [:]
+    def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
+    def fileNames = scriptFiles.split("\\n")
+
+    for (filePath in fileNames) {
+        def fileName = filePath.tokenize("/")[-1].tokenize(".")[0]
+
+        testStages[fileName] = {
+            stage(fileName) {
+                testResults[fileName] = executeTestScript(filePath, scriptArg)
+            }
+        }
+    }
+
+    println "Test Stages - ${testStages}"
+    return testStages
 }
 
 return this;
