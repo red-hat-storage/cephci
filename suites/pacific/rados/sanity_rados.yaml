@@ -159,8 +159,11 @@ tests:
           rados_write_duration: 300
           rados_read_duration: 80
         configure_pg_autoscaler:
-          pool_name: rep_test_pool
-          pg_autoscale_value: warn
+          pool_config:
+            pool_name: rep_test_pool
+            pg_autoscale_mode: "on"
+            pg_num_min: 16
+            target_size_ratio: 0.4
         configure_balancer:
           configure: true
           balancer_mode: upmap

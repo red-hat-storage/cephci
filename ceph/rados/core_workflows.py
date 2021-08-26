@@ -229,13 +229,12 @@ class RadosOrchestrator:
         # Sleeping for 10 seconds after enabling balancer and then collecting the evaluation status
         time.sleep(10)
         cmd = "ceph balancer status"
-        try:
-            op, err = self.node.shell([cmd])
-            log.info(op)
-            return True
-        except Exception:
-            log.error("Exception hit while checking balancer status")
+        out = self.run_ceph_command(cmd)
+        if not out["active"]:
+            log.error("Exception balancer is not active")
             return False
+        log.info(f"the balancer status is \n {out}")
+        return True
 
     def detete_pool(self, pool: str) -> bool:
         """
@@ -286,25 +285,57 @@ class RadosOrchestrator:
         Returns: True -> pass, False -> fail
         """
 
-        if kwargs.get("enable"):
-            mgr_modules = self.run_ceph_command(cmd="ceph mgr module ls")
-            if "pg_autoscaler" not in mgr_modules["enabled_modules"]:
-                cmd = "ceph mgr module enable pg_autoscaler"
-                self.node.shell([cmd])
-
-        if kwargs.get("pool_name"):
-            pool_name = kwargs.get("pool_name")
-            pg_scale_value = kwargs.get("pg_autoscale_value", "on")
-            cmd = f"ceph osd pool set {pool_name} pg_autoscale_mode {pg_scale_value}"
+        mgr_modules = self.run_ceph_command(cmd="ceph mgr module ls")
+        if "pg_autoscaler" not in mgr_modules["enabled_modules"]:
+            cmd = "ceph mgr module enable pg_autoscaler"
             self.node.shell([cmd])
+
+        if kwargs.get("pool_config"):
+            pool_conf = kwargs.get("pool_config")
+            if not self.autoscaler_pool_settings(**pool_conf):
+                return False
 
         if kwargs.get("default_mode"):
             default_mode = kwargs.get("default_mode")
             cmd = f"ceph config set global osd_pool_default_pg_autoscale_mode {default_mode}"
             self.node.shell([cmd])
 
+        if kwargs.get("mon_target_pg_per_osd"):
+            cmd = f"ceph config set global mon_target_pg_per_osd {kwargs['mon_target_pg_per_osd']}"
+            self.node.shell([cmd])
+
         cmd = "ceph osd pool autoscale-status -f json"
         log.info(self.node.shell([cmd]))
+        return True
+
+    def autoscaler_pool_settings(self, **kwargs):
+        """
+        Sets various options on pools wrt PG Autoscaler
+        Args:
+            **kwargs: various kwargs to be sent
+                Supported kw args:
+                1. pg_autoscale_mode: PG saler mode for the indivudial pool. Values-> on, warn, off. (str)
+                2. target_size_ratio: ratio of cluster pool will utilize. Values -> 0 - 1. (float)
+                3. target_size_bytes: size the pool is assumed to utilize. eg: 10T (str)
+                4. pg_num_min: minimum pg's for a pool. (int)
+
+        Returns:
+
+        """
+        pool_name = kwargs["pool_name"]
+        value_map = {
+            "pg_autoscale_mode": kwargs.get("pg_autoscale_mode"),
+            "target_size_ratio": kwargs.get("target_size_ratio"),
+            "target_size_bytes": kwargs.get("target_size_bytes"),
+            "pg_num_min": kwargs.get("pg_num_min"),
+        }
+        for val in value_map.keys():
+            if val in kwargs.keys():
+                if not self.set_pool_property(
+                    pool=pool_name, props=val, value=value_map[val]
+                ):
+                    log.error(f"failed to set property {val} on pool {pool_name}")
+                    return False
         return True
 
     def set_cluster_configuration_checks(self, **kwargs) -> bool:
@@ -644,8 +675,8 @@ class RadosOrchestrator:
         self.node.shell([enable_app_cmd])
 
         cmd_map = {
-            "min_size": f" ceph osd pool set {pool_name} min_size {kwargs.get('min_size')}",
-            "size": f" ceph osd pool set {pool_name} size {kwargs.get('min_size')}",
+            "min_size": f"ceph osd pool set {pool_name} min_size {kwargs.get('min_size')}",
+            "size": f"ceph osd pool set {pool_name} size {kwargs.get('size')}",
             "erasure_code_use_overwrites": f"ceph osd pool set {pool_name} "
             f"allow_ec_overwrites {kwargs.get('erasure_code_use_overwrites')}",
             "disable_pg_autoscale": f"ceph osd pool set {pool_name} pg_autoscale_mode off",
@@ -811,9 +842,6 @@ class RadosOrchestrator:
         out, err = self.node.shell([cmd])
         # sleeping for 2 seconds for the values to reflect
         time.sleep(2)
-        if not self.get_pool_property(pool=pool, props=props):
-            log.error(f"The property : {props} not set on the cluster.")
-            return False
         log.info(f"property {props} set on pool {pool}")
         return True
 

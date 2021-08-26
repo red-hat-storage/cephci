@@ -100,5 +100,40 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("Set up pg_autoscaler on the cluster")
 
+    if config.get("set_pool_configs"):
+        changes = config["set_pool_configs"]
+        pool_name = changes["pool_name"]
+        configurations = changes["configurations"]
+        for conf in configurations.keys():
+            if not rados_obj.set_pool_property(
+                pool=pool_name, props=conf, value=configurations[conf]
+            ):
+                log.error(f"failed to set property {conf} on the cluster")
+                return 1
+        log.info(f"made the config changes on the pool {pool_name}")
+
+    if config.get("enable_compression"):
+        compression_conf = config["enable_compression"]
+        pool_name = compression_conf["pool_name"]
+        for conf in compression_conf["configurations"]:
+            for entry in conf.values():
+                if not rados_obj.pool_inline_compression(pool_name=pool_name, **entry):
+                    log.error(
+                        f"Error setting compression on pool : {pool_name} for config {conf}"
+                    )
+                    return 1
+        if not rados_obj.bench_write(**compression_conf):
+            log.error("Failed to write objects into the EC Pool")
+            return 1
+        rados_obj.bench_read(**compression_conf)
+        log.info("Created the replicated Pool, Finished writing data into the pool")
+
+    if config.get("delete_pools"):
+        for name in config["delete_pools"]:
+            if not rados_obj.detete_pool(name):
+                log.error(f"the pool {name} could not be deleted")
+                return 1
+        log.info("deleted all the given pools successfully")
+
     log.info("All Pre-requisites completed to run Rados suite")
     return 0
