@@ -94,6 +94,7 @@ node(nodeName) {
     }
 
     stage('Publish Results') {
+        sharedLib.sendGChatNotification("Tier-0")
         sharedLib.sendEMail("Tier-0", testResults)
         if ( ! (1 in testResults.values()) ){
             sharedLib.postLatestCompose()

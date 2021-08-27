@@ -96,6 +96,7 @@ node(nodeName) {
             "repository=${ciValues["repository"]}"
         ]) {
             sharedLib.sendEMail("Tier-1", test_results, false)
+            sharedLib.sendGChatNotification("Tier-1")
             sharedLib.postTierCompose(test_results, composeInfo, "tier1")
 
             def result_set = test_results.values().toSet()
