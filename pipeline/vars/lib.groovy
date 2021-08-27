@@ -147,8 +147,8 @@ def compareCephVersion(def oldCephVer, def newCephVer){
 
     if (newCephVer == oldCephVer){return 0}
 
-    def oldVer = oldCephVer.split("\\.|-")*.toInteger()
-    def newVer= newCephVer.split("\\.|-")*.toInteger()
+    def oldVer = oldCephVer.split("\\.|-").collect { it.toInteger() }
+    def newVer = newCephVer.split("\\.|-").collect { it.toInteger() }
 
     if (newVer[0] > oldVer[0]){return 1}
     else if (newVer[0] < oldVer[0]){return -1}
