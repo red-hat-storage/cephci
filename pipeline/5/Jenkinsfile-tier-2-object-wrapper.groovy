@@ -101,6 +101,7 @@ node(nodeName) {
             "composeUrl=${ciValues["composeUrl"]}",
             "repository=${ciValues["repository"]}"
         ]) {
+            sharedLib.sendGChatNotification("Tier-2-Object")
             sharedLib.sendEMail("Tier-2-Object", testResults, false)
         }
 	}
