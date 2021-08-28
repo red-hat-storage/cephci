@@ -79,6 +79,14 @@ def install_prereq(
         cert_url="https://password.corp.redhat.com/RH-IT-Root-CA.crt",
         out_file="RH-IT-Root-CA.crt",
     )
+
+    # Update CephCI Cert to all nodes. Useful when creating self-signed certificates.
+    update_ca_cert(
+        node=ceph,
+        cert_url="http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem",
+        out_file="cephqe-ca.pem",
+        check_ec=False,
+    )
     distro_info = ceph.distro_info
     distro_ver = distro_info["VERSION_ID"]
     log.info("distro name: {name}".format(name=distro_info["NAME"]))

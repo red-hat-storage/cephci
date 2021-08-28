@@ -458,7 +458,7 @@ def setup_deb_cdn_repo(node, build=None):
     node.exec_command(sudo=True, cmd="apt-get update")
 
 
-def update_ca_cert(node, cert_url, out_file, timeout=120):
+def update_ca_cert(node, cert_url, out_file, timeout=120, check_ec=True):
     """
     Update CA cert in the nodes.
       by default options picked for RHEL platforms
@@ -468,6 +468,7 @@ def update_ca_cert(node, cert_url, out_file, timeout=120):
         cert_url: path to download certificate
         out_file: output file name
         timeout: timeout in seconds
+        check_ec: bool by default true, checks the error code
     """
     output_dir = "/etc/pki/ca-trust/source/anchors/"
     update_cmd = "update-ca-trust extract"
@@ -482,6 +483,7 @@ def update_ca_cert(node, cert_url, out_file, timeout=120):
             sudo=True,
             cmd=cmd,
             timeout=timeout,
+            check_ec=check_ec,
         )
 
 
