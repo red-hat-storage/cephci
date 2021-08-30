@@ -14,11 +14,13 @@ from .ceph import CephCLI
 from .common import config_dict_to_string
 from .helper import GenerateServiceSpec
 from .ls import LSMixin
+from .pause import PauseMixin
 from .ps import PSMixin
 from .reconfig import ReconfigMixin
 from .redeploy import RedeployMixin
 from .remove import RemoveMixin
 from .restart import RestartMixin
+from .resume import ResumeMixin
 from .start import StartMixin
 from .stop import StopMixin
 from .upgrade import UpgradeMixin
@@ -36,9 +38,10 @@ class Orch(
     StartMixin,
     StopMixin,
     UpgradeMixin,
+    PauseMixin,
+    ResumeMixin,
     CephCLI,
 ):
-
     """Represent ceph orch command."""
 
     direct_calls = ["ls", "ps"]
@@ -237,3 +240,58 @@ class Orch(
         base_cmd.extend(config.get("pos_args"))
 
         return self.shell(args=base_cmd)
+
+    def status(self, config) -> bool:
+        """Execute the command ceph orch status <args>.
+
+        Args:
+            config (Dict): The key/value pairs passed from the test case.
+
+        Returns:
+            output, error   returned by the command.
+
+        Example::
+
+            Testing ceph orch status
+
+            config:
+                command: status
+                base_cmd_args:
+                    verbose: true
+                    format: json | json-pretty | xml | xml-pretty | plain | yaml
+                args:
+                    detail: true
+
+        """
+        cmd = ["ceph", "orch"]
+
+        if config and config.get("base_cmd_args"):
+            base_cmd_args = config_dict_to_string(config["base_cmd_args"])
+            cmd.append(base_cmd_args)
+
+        cmd.append("status")
+
+        if config and config.get("args"):
+            args = config.get("args")
+            if args["detail"]:
+                cmd.append("--detail")
+
+        return self.shell(args=cmd)
+
+    def verify_status(self, op) -> None:
+        """Verify the status of the orchestrator for the operation specified.
+
+        Args:
+            op (str): pause/resume based on whether the pause or resume status to be checked
+        """
+        config = {"command": "status", "base_cmd_args": {"format": "json"}}
+        out, _ = self.status(config)
+        status = loads(out)
+
+        if op == "pause" and status["paused"]:
+            LOG.info("The orch operations are paused")
+            return True
+        elif op == "resume" and not loads(out)["paused"]:
+            LOG.info("The orch operations are resumed")
+            return True
+        return False
