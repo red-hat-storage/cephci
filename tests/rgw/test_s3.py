@@ -223,12 +223,7 @@ def install_s3test_requirements(node: CephNode, branch: str) -> None:
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
-    rhel8, err = node.exec_command(
-        cmd="grep -i 'release 8' /etc/redhat-release", check_ec=False
-    )
-    rhel8 = rhel8.read().decode()
-
-    if branch == "ceph-nautilus" and rhel8:
+    if branch in ["ceph-nautilus", "ceph-luminous"]:
         return _s3tests_req_install(node)
 
     _s3tests_req_bootstrap(node)
@@ -290,17 +285,15 @@ def get_rgw_frontend(cluster: Ceph) -> Tuple:
 
     # Double check the port number
     for value in frontend_value:
-        if "port" in value:
-            port = value.split("=")[-1]
+        # support values like endpoint=x.x.x.x:port ssl_port=443 port=x.x.x.x:8080
+        if "port" in value or "endpoint" in value:
+            sep = ":" if ":" in value else "="
+            port = value.split(sep)[-1]
             continue
 
         if not secure and "ssl" in value.lower():
             secure = True
             continue
-
-        # support 4.x wherein conf has endpoint=x.x.x.x:port
-        if "endpoint" in value:
-            port = value.split(":")[-1]
 
     return lib, secure, port
 
