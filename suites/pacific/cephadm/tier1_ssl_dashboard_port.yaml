@@ -42,6 +42,7 @@
 #       - alertmanager on node1, node2 using label "alert-manager".
 #       - grafana and prometheus on node1 using host placement with limit.
 #       - crash and node-exporter on all nodes using placement="*".
+#       - enable service logs and verify their existence if verify_log_files: true is set.
 #   (4) Configure client node by adding ceph.conf and keying to node.
 #   (5) Setup S3cmd tool and prepare for RGW IO on client Node.     - TODO
 #   (6) Run IOs from S3cmd tool for 20 mins.                        - TODO
@@ -49,6 +50,8 @@
 #       - Create /mnt/cephfs directory and Mount cephfs on client node.
 #         sudo mount -t ceph 10.8.128.110:6789:/ /mnt/cephfs -o name=client.0,secret=<key>
 #       - using dd command create files on /mnt/cephfs directory.
+#   (8) Pause orchestrator background work and verify
+#   (9) Resume orchestrator background work and verify
 #===============================================================================================
 tests:
   - test:
@@ -277,11 +280,27 @@ tests:
           - 4
       destroy-cluster: false
       abort-on-fail: true
-
-
-
-
-
-
-
-
+  - test:
+      name: Pause orchestrator background operations using cephadm
+      desc: Apply ceph orch pause to pause orchestrator background operations
+      module: test_orch.py
+      polarion-id: CEPH-83573782
+      config:
+        command: pause
+        base_cmd_args:
+          verbose: true
+        verify: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Resume orchestrator background operations using cephadm
+      desc: Apply ceph orch resume to resume orchestrator background operations
+      module: test_orch.py
+      polarion-id: CEPH-83573783
+      config:
+        command: resume
+        base_cmd_args:
+          verbose: true
+        verify: true
+      destroy-cluster: false
+      abort-on-fail: true
