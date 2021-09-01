@@ -126,7 +126,6 @@ tests:
         ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-rgw1"]
             config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
             timeout: 300
   - test:
