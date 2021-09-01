@@ -36,6 +36,8 @@ ceph:
         base_url: 'http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.2-rhel-7/latest-RHCEPH-4-RHEL-7/'
       '4.2-rhel-8':
         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.2-rhel-8/latest-RHCEPH-4-RHEL-8/'
+      '4.3-rhel-7':
+        base_url: 'http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7/'
       '4.3-rhel-8':
         base_url: 'http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.3-rhel-8/latest-RHCEPH-4-RHEL-8/'
       'latest':

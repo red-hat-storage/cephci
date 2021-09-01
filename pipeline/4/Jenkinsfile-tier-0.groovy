@@ -129,6 +129,9 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
+            if (env.WORKSPACE) {
+                deleteDir()
+            }
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],

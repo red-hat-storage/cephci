@@ -3,9 +3,13 @@
     Common groovy methods that can be reused by the pipeline jobs.
 */
 
+// Define global variables
+def passStatus = "PASS"
+def failStatus = "FAIL"
+
 import org.jsoup.Jsoup
 
-def prepareNode() {
+def prepareNode(def listener=0) {
     /*
         Installs the required packages needed by the Jenkins node to
         run and execute the cephci test suites.
@@ -33,8 +37,7 @@ def prepareNode() {
         ]
         writeYaml file: "${env.HOME}/osp-cred-ci-2.yaml", data: ospMap, overwrite: true
     }
-
-    sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
+    sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash $listener")
 }
 
 def yamlToMap(def yamlFile, def location="/ceph/cephci-jenkins/latest-rhceph-container-info") {
@@ -60,6 +63,15 @@ def getCIMessageMap() {
     }
     def compose = readJSON text: "${params.CI_MESSAGE}"
     return compose
+}
+
+def getRHCSVersionFromArtifactsNvr() {
+    /*
+        Returns the RHCEPH version from the compose ID in CI_MESSAGE.
+    */
+    def compose = getCIMessageMap()
+    def (major_version, minor_version) = compose.artifact.nvr.substring(7,).tokenize(".")
+    return ["major_version": major_version, "minor_version": minor_version]
 }
 
 def fetchMajorMinorOSVersion(def buildType){
@@ -147,12 +159,21 @@ def unSetLock(def majorVer, def minorVer){
     sh(script: "rm -f ${lockFile}")
 }
 
-def readFromReleaseFile(def majorVer, def minorVer, def location="/ceph/cephci-jenkins/latest-rhceph-container-info"){
+def readFromReleaseFile(def majorVer, def minorVer, def lockFlag=true, def location="/ceph/cephci-jenkins/latest-rhceph-container-info"){
     /*
         Method to set lock and read content from the release yaml file.
     */
     def releaseFile = "RHCEPH-${majorVer}.${minorVer}.yaml"
+<<<<<<< HEAD
+    def fileExists = sh (returnStatus: true, script: "ls -l ${location}/${releaseFile}")
+    if (fileExists != 0) {
+        error "File:${releaseFile} does not exist." }
     setLock(majorVer, minorVer)
+=======
+    if (lockFlag){
+        setLock(majorVer, minorVer)
+    }
+>>>>>>> 3b52e38... Add methods for email and gchat notification: pipeline v2
     def releaseContent = yamlToMap(releaseFile, location)
     println "content of release file is: ${releaseContent}"
     return releaseContent
@@ -213,6 +234,134 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType){
         failOnError: true
     ])
 
+}
+
+def sendEmail(def testResults, def artifactDetails, def tierLevel){
+    /*
+        Send an Email
+        Arguments:
+            testResults: map of the test suites and its status
+                Example: testResults = [ "01_deploy": "PASS", "02_object": "PASS"]
+            artifactDetails: Map of artifact details
+                Example: artifactDetails = ["composes": ["rhe-7": "composeurl1",
+                                                         "rhel-8": "composeurl2"],
+                                            "product": "Redhat",
+                                            "version": "RHCEPH-5.0",
+                                            "ceph_version": "16.2.0-117",
+                                            "container_image": "repositoryname"]
+            tierLevel:
+                Example: Tier0, Tier1, CVP..
+    */
+    def status = "STABLE"
+    def toList = "ceph-qe-list@redhat.com"
+    def body = readFile(file: "pipeline/vars/emailable-report.html")
+
+    body += "<body>"
+    body += "<h2><u>Test Artifacts</u></h2>"
+    body += "<table>"
+
+    if (artifactDetails.product){body += "<tr><td>Product</td><td>${artifactDetails.product}</td></tr>"}
+    if (artifactDetails.version){body += "<tr><td>Version</td><td>${artifactDetails.version}</td></tr>"}
+    if (artifactDetails.ceph_version){body += "<tr><td>Ceph Version </td><td>${artifactDetails.ceph_version}</td></tr>"}
+    if (artifactDetails.composes){body += "<tr><td>Composes</td><td>${artifactDetails.composes}</td></tr>"}
+    if (artifactDetails.container_image){body += "<tr><td>Container Image</td><td>${artifactDetails.container_image}</td></tr>"}
+    body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
+    body += "</table><br />"
+    body += "<h2><u>Test Summary</u></h2>"
+    body += "<table>"
+    body += "<tr><th>Test Suite</th><th>Result</th></tr>"
+    for (test in testResults) {
+        body += "<tr><td>${test.key}</td><td>${test.value}</td></tr>"
+    }
+    body += "</table><br /></body></html>"
+    if ('FAIL' in testResults.values()){
+        toList = "cephci@redhat.com"
+        status = "UNSTABLE"}
+
+    def subject = "${tierLevel} test report status of ${artifactDetails.version} is ${status}"
+
+    emailext (
+        mimeType: 'text/html',
+        subject: "${subject}",
+        body: "${body}",
+        from: "cephci@redhat.com",
+        to: "${toList}"
+    )
+}
+
+def sendGChatNotification(def testResults, def tierLevel){
+    /*
+        Send a GChat notification.
+        Plugin used:
+            googlechatnotification which allows to post build notifications to a Google Chat Messenger groups.
+            parameter:
+                url: Mandatory String parameter.
+                     Single/multiple comma separated HTTP URLs or/and single/multiple comma separated Credential IDs.
+                message: Mandatory String parameter.
+                         Notification message to be sent.
+    */
+    def ciMsg = getCIMessageMap()
+    def status = "STABLE"
+    if ('FAIL' in testResults.values()){
+        status = "UNSTABLE"}
+    def msg= "Run for ${ciMsg.artifact.nvr}:${tierLevel} is ${status}.Log:${env.BUILD_URL}"
+    googlechatnotification(url: "id:rhcephCIGChatRoom",
+                           message: msg
+                          )
+}
+
+def executeTestScript(def scriptPath, def cliArgs) {
+   /*
+        Executes the test script
+   */
+    def rc = passStatus
+    catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
+        try {
+            sh(script: "sh ${scriptPath} ${cliArgs}")
+        } catch(Exception err) {
+            rc = failStatus
+            println err.getMessage()
+            error "Encountered an error"
+        }
+    }
+    println "exit status: ${rc}"
+    return rc
+}
+
+def fetchStages(def scriptArg, def tierLevel, def testResults) {
+    /*
+        Return all the scripts found under
+        cephci/pipeline/scripts/<MAJOR>/<MINOR>/<TIER-x>/*.sh
+        as pipeline Test Stages.
+
+           example: cephci/pipeline/scripts/5/0/tier-0/*.sh
+
+        MAJOR   -   RHceph major version (ex., 5)
+        MINOR   -   RHceph minor version (ex., 0)
+        TIER-x  -   Tier level number (ex., tier-0)
+    */
+    def RHCSVersion = getRHCSVersionFromArtifactsNvr()
+    def majorVersion = RHCSVersion["major_version"]
+    def minorVersion = RHCSVersion["minor_version"]
+
+    def scriptPath = "${env.WORKSPACE}/pipeline/scripts/${majorVersion}/${minorVersion}/${tierLevel}/"
+    
+    def testStages = [:]
+    def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
+    def fileNames = scriptFiles.split("\\n")
+
+    for (filePath in fileNames) {
+        def fileName = filePath.tokenize("/")[-1].tokenize(".")[0]
+
+        testStages[fileName] = {
+            stage(fileName) {
+                testResults[fileName] = executeTestScript(filePath, scriptArg)
+            }
+        }
+    }
+
+    println "Test Stages - ${testStages}"
+    return testStages
 }
 
 return this;
