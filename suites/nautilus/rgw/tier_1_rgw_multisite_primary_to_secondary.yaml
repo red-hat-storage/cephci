@@ -378,7 +378,7 @@ tests:
           config:
             script-name: test_data_omap_offload.py
             config-file-name: test_data_omap_offload.yaml
-			      verify-io-on-site: ["ceph-rgw2"]
+            verify-io-on-site: ["ceph-rgw2"]
             timeout: 300
 
   - test:
@@ -390,7 +390,7 @@ tests:
           config:
             script-name: test_data_omap_offload.py
             config-file-name: test_data_omap_offload_change_datatype_fifo.yaml
-			      verify-io-on-site: ["ceph-rgw2"]
+            verify-io-on-site: ["ceph-rgw2"]
             timeout: 300
 
   - test:
@@ -402,7 +402,7 @@ tests:
           config:
             script-name: test_data_omap_offload.py
             config-file-name: test_data_omap_offload_multipart.yaml
-			      verify-io-on-site: ["ceph-rgw2"]
+            verify-io-on-site: ["ceph-rgw2"]
             timeout: 300
 
   - test:
@@ -414,7 +414,7 @@ tests:
           config:
             script-name: test_data_omap_offload.py
             config-file-name: test_data_omap_offload_change_datatype_omap.yaml
-			      verify-io-on-site: ["ceph-rgw2"]
+            verify-io-on-site: ["ceph-rgw2"]
             timeout: 300
 
   - test:
@@ -426,6 +426,6 @@ tests:
           config:
             script-name: test_data_omap_offload.py
             config-file-name: test_data_omap_offload_versioned_bucket.yaml
-			      verify-io-on-site: ["ceph-rgw2"]
+            verify-io-on-site: ["ceph-rgw2"]
             timeout: 300
 
