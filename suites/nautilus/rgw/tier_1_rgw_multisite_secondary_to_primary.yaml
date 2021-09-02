@@ -378,4 +378,3 @@ tests:
             verify-io-on-site: ["ceph-rgw1"]
             timeout: 300
 
-
