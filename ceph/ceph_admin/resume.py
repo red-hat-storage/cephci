@@ -50,5 +50,5 @@ class ResumeMixin:
 
         verify = config.pop("verify", True)
 
-        if verify and not self.verify_pause_status("resume"):
+        if verify and not self.verify_status("resume"):
             raise ResumeFailure("Orchestrator operations could not be resumed")
