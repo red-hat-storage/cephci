@@ -9,7 +9,7 @@ def failStatus = "FAIL"
 
 import org.jsoup.Jsoup
 
-def prepareNode() {
+def prepareNode(def listener=0) {
     /*
         Installs the required packages needed by the Jenkins node to
         run and execute the cephci test suites.
@@ -38,7 +38,7 @@ def prepareNode() {
         writeYaml file: "${env.HOME}/osp-cred-ci-2.yaml", data: ospMap, overwrite: true
     }
 
-    sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
+    sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash $listener")
 }
 
 def yamlToMap(def yamlFile, def location="/ceph/cephci-jenkins/latest-rhceph-container-info") {
