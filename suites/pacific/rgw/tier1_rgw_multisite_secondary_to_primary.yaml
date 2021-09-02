@@ -494,39 +494,3 @@ tests:
             config-file-name: test_bucket_policy_replace.yaml
             verify-io-on-site: ["ceph-pri"]
             timeout: 300
-
-  - test:
-      name:  datalog omap offload
-      desc: Execute datalog omap offload on secondary
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_data_omap_offload.py
-            config-file-name: test_data_omap_offload.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-
-  - test:
-      name:  datalog omap offload
-      desc: Execute datalog omap offload with multipart objects on secondary 
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_data_omap_offload.py
-            config-file-name: test_data_omap_offload_multipart.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-
-  - test:
-      name:  datalog omap offload
-      desc:  Execute datalog omap offload on versioned bucket on secondary
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_data_omap_offload.py
-            config-file-name: test_data_omap_offload_versioned_bucket.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
