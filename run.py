@@ -26,12 +26,14 @@ from ceph.utils import cleanup_ceph_nodes, create_ceph_nodes
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
+    TestSetupFailure,
     close_and_remove_filehandlers,
     configure_logger,
     create_report_portal_session,
     create_run_dir,
     create_unique_test_name,
     email_results,
+    fetch_build_artifacts,
     generate_unique_id,
     get_latest_container,
     magna_url,
@@ -50,6 +52,9 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--add-repo <repo>]
         [--kernel-repo <repo>]
         [--store | --reuse <file>]
+        [--v2]
+        [--platform <name>]
+        [--build <name>]
         [--skip-cluster]
         [--skip-subscription]
         [--docker-registry <registry>]
@@ -88,6 +93,10 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
+  --v2                              select pipeline Version 2.0 execution workflow
+  --build <latest>                  eg: latest|tier-0|tier-1|tier-2|cvp|released
+                                    [default: latest]
+  --platform <rhel-8>                 select platform version eg., rhel-8, rhel-7
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
                                     Top level location of compose
   --add-repo <repo>                 Any additional repo's need to be enabled
@@ -248,23 +257,140 @@ def run(args):
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     # Mandatory arguments
+    rhbuild = args["--rhbuild"]
     glb_file = args["--global-conf"]
     inventory_file = args["--inventory"]
     osp_cred_file = args["--osp-cred"]
     suite_file = args["--suite"]
+    version2 = args.get("--v2", False)
+    ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
+
+    platform = None
+    build = None
+    base_url = None
+    ubuntu_repo = None
+    docker_registry = None
+    docker_image = None
+    docker_tag = None
+
+    ceph_name = None
+    compose_id = None
+
+    if not version2:
+
+        # Get ceph cluster version name
+        with open("rhbuild.yaml") as fd:
+            rhbuild_file = yaml.safe_load(fd)
+
+        ceph = rhbuild_file["ceph"]
+        rhbuild_ = None
+        try:
+            ceph_name, rhbuild_ = next(
+                filter(
+                    lambda x: x,
+                    [(ceph[x]["name"], x) for x in ceph if x == rhbuild.split(".")[0]],
+                )
+            )
+        except StopIteration:
+            print("\nERROR: Please provide correct RH build version, run exited.")
+            sys.exit(1)
+
+        # Get base-url
+        composes = ceph[rhbuild_]["composes"]
+        if not base_url:
+
+            if rhbuild in composes:
+                base_url = composes[rhbuild or "latest"]["base_url"]
+
+        # Get ubuntu-repo
+        if not ubuntu_repo and rhbuild.startswith("3"):
+            if rhbuild in composes:
+                ubuntu_repo = composes[rhbuild or "latest"]["ubuntu_repo"]
+
+        if os.environ.get("TOOL") is not None:
+            ci_message = json.loads(os.environ["CI_MESSAGE"])
+            compose_id = ci_message["compose_id"]
+            compose_url = ci_message["compose_url"] + "/"
+            product_name = ci_message.get("product_name", None)
+            product_version = ci_message.get("product_version", None)
+            log.info("COMPOSE_URL = %s ", compose_url)
+
+            if os.environ["TOOL"] == "pungi":
+                # is a rhel compose
+                log.info("trigger on CI RHEL Compose")
+            elif os.environ["TOOL"] == "rhcephcompose":
+                # is a ubuntu compose
+                log.info("trigger on CI Ubuntu Compose")
+                ubuntu_repo = compose_url
+                log.info("using ubuntu repo" + ubuntu_repo)
+            elif os.environ["TOOL"] == "bucko":
+                # is a docker compose
+                log.info("Trigger on CI Docker Compose")
+                docker_registry, docker_tag = ci_message["repository"].split(
+                    "/rh-osbs/rhceph:"
+                )
+                docker_image = "rh-osbs/rhceph"
+                log.info(
+                    f"\nUsing docker registry from ci message: {docker_registry} \n"
+                    f"Docker image: {docker_image}\nDocker tag:{docker_tag}"
+                )
+                log.warning("Using Docker insecure registry setting")
+                docker_insecure_registry = True
+
+            if product_name == "ceph":
+                # is a rhceph compose
+                base_url = compose_url
+                log.info("using base url" + base_url)
+
+        if not os.environ.get("TOOL") and not ignore_latest_nightly_container:
+            try:
+                latest_container = get_latest_container(rhbuild)
+            except ValueError:
+                print(
+                    "ERROR:No latest nightly container UMB msg at "
+                    "/ceph/cephci-jenkins/latest-rhceph-container-info/ "
+                    "specify using the cli args or use --ignore-latest-container"
+                )
+                sys.exit(1)
+            docker_registry = (
+                latest_container.get("docker_registry")
+                if not docker_registry
+                else docker_registry
+            )
+            docker_image = (
+                latest_container.get("docker_image")
+                if not docker_image
+                else docker_image
+            )
+            docker_tag = (
+                latest_container.get("docker_tag") if not docker_tag else docker_tag
+            )
+            log.info(
+                f"Using latest nightly docker image - {docker_registry}/{docker_image}:{docker_tag}"
+            )
+            docker_insecure_registry = True
+            log.warning("Using Docker insecure registry setting")
+    else:
+        platform = args.get("--platform", "rhel-8")
+        build = args.get("--build", "latest")
+
+        if not platform:
+            raise TestSetupFailure("please provide --platform [rhel-7|rhel-8]")
+        if build != "released":
+            base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
+                build, rhbuild, platform
+            )
 
     store = args.get("--store", False)
     reuse = args.get("--reuse", None)
 
-    base_url = args.get("--rhs-ceph-repo", None)
-    ubuntu_repo = args.get("--ubuntu-repo", None)
+    base_url = args.get("--rhs-ceph-repo") or base_url
+    ubuntu_repo = args.get("--ubuntu-repo") or ubuntu_repo
+    docker_registry = args.get("--docker-registry") or docker_registry
+    docker_image = args.get("--docker-image") or docker_image
+    docker_tag = args.get("--docker-tag") or docker_tag
     kernel_repo = args.get("--kernel-repo", None)
 
-    rhbuild = args.get("--rhbuild")
-
-    docker_registry = args.get("--docker-registry", None)
-    docker_image = args.get("--docker-image", None)
-    docker_tag = args.get("--docker-tag", None)
     docker_insecure_registry = args.get("--insecure-registry", False)
     custom_grafana_image = args.get("--grafana-image", None)
 
@@ -283,7 +409,6 @@ def run(args):
     osp_image = args.get("--osp-image")
     filestore = args.get("--filestore", False)
     ec_pool_vals = args.get("--use-ec-pool", None)
-    ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
     skip_version_compare = args.get("--skip-version-compare", False)
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
@@ -307,9 +432,18 @@ def run(args):
     if console_log_level:
         ch.setLevel(logging.getLevelName(console_log_level.upper()))
 
-    if osp_cred_file:
-        with open(osp_cred_file, "r") as osp_cred_stream:
-            osp_cred = yaml.safe_load(osp_cred_stream)
+    def load_file(file_name):
+        """Retrieve yaml data content from file."""
+        file_path = os.path.abspath(file_name)
+        with open(file_path, "r") as conf_:
+            content = yaml.safe_load(conf_)
+        return content
+
+    # load config, suite and inventory yaml files
+    conf = load_file(glb_file)
+    inventory = load_file(inventory_file)
+    suite = load_file(suite_file)
+    osp_cred = load_file(osp_cred_file)
 
     if cleanup_name is not None:
         cleanup_ceph_nodes(osp_cred, cleanup_name)
@@ -317,96 +451,11 @@ def run(args):
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
-
-    # Get ceph cluster version name
-    with open("rhbuild.yaml") as fd:
-        rhbuild_file = yaml.safe_load(fd)
-
-    ceph = rhbuild_file["ceph"]
-    ceph_name = None
-    rhbuild_ = None
-
-    try:
-        ceph_name, rhbuild_ = next(
-            filter(
-                lambda x: x,
-                [(ceph[x]["name"], x) for x in ceph if x == rhbuild.split(".")[0]],
-            )
-        )
-    except StopIteration:
-        print("\nERROR: Please provide correct RH build version, run exited.")
-        sys.exit(1)
-
-    # Get base-url
-    composes = ceph[rhbuild_]["composes"]
-    if not base_url:
-        if rhbuild in composes:
-            base_url = composes[rhbuild]["base_url"]
-        else:
-            base_url = composes["latest"]["base_url"]
-
-    # Get ubuntu-repo
-    if not ubuntu_repo and rhbuild.startswith("3"):
-        if rhbuild in composes:
-            ubuntu_repo = composes[rhbuild]["ubuntu_repo"]
-        else:
-            ubuntu_repo = composes["latest"]["ubuntu_repo"]
-
-    if glb_file:
-        conf_path = os.path.abspath(glb_file)
-        with open(conf_path, "r") as conf_stream:
-            conf = yaml.safe_load(conf_stream)
-
-    if inventory_file:
-        inventory_path = os.path.abspath(inventory_file)
-        with open(inventory_path, "r") as inventory_stream:
-            inventory = yaml.safe_load(inventory_stream)
-
-    if suite_file:
-        suites_path = os.path.abspath(suite_file)
-        with open(suites_path, "r") as suite_stream:
-            suite = yaml.safe_load(suite_stream)
+    log.info(f"RPM Compose source - {base_url}")
+    log.info(f"Red Hat Ceph Image used - {docker_registry}/{docker_image}:{docker_tag}")
 
     if osp_image and inventory.get("instance").get("create"):
         inventory.get("instance").get("create").update({"image-name": osp_image})
-
-    compose_id = None
-
-    if os.environ.get("TOOL") is not None:
-        ci_message = json.loads(os.environ["CI_MESSAGE"])
-        compose_id = ci_message["compose_id"]
-        compose_url = ci_message["compose_url"] + "/"
-        product_name = ci_message.get("product_name", None)
-        product_version = ci_message.get("product_version", None)
-        log.info("COMPOSE_URL = %s ", compose_url)
-
-        if os.environ["TOOL"] == "pungi":
-            # is a rhel compose
-            log.info("trigger on CI RHEL Compose")
-        elif os.environ["TOOL"] == "rhcephcompose":
-            # is a ubuntu compose
-            log.info("trigger on CI Ubuntu Compose")
-            ubuntu_repo = compose_url
-            log.info("using ubuntu repo" + ubuntu_repo)
-        elif os.environ["TOOL"] == "bucko":
-            # is a docker compose
-            log.info("Trigger on CI Docker Compose")
-            docker_registry, docker_tag = ci_message["repository"].split(
-                "/rh-osbs/rhceph:"
-            )
-            docker_image = "rh-osbs/rhceph"
-            log.info(
-                "\nUsing docker registry from ci message: {registry} \nDocker image: {image}\nDocker tag:{tag}".format(
-                    registry=docker_registry, image=docker_image, tag=docker_tag
-                )
-            )
-            log.warning("Using Docker insecure registry setting")
-            docker_insecure_registry = True
-
-        if product_name == "ceph":
-            # is a rhceph compose
-            base_url = compose_url
-            log.info("using base url" + base_url)
 
     image_name = inventory.get("instance").get("create").get("image-name")
     ceph_version = []
@@ -430,58 +479,33 @@ def run(args):
             distro.append(image_name.replace(".iso", ""))
 
         # get COMPOSE ID and ceph version
-        id = requests.get(base_url + "/COMPOSE_ID")
-        compose_id = id.text
+        if build not in ["released", "cvp"]:
+            id = requests.get(base_url + "/COMPOSE_ID")
+            compose_id = id.text
 
-        if "rhel" == inventory.get("id"):
-            ceph_pkgs = requests.get(base_url + "/compose/Tools/x86_64/os/Packages/")
-            m = re.search(r"ceph-common-(.*?).x86", ceph_pkgs.text)
-            ceph_version.append(m.group(1))
-            m = re.search(r"ceph-ansible-(.*?).rpm", ceph_pkgs.text)
-            ceph_ansible_version.append(m.group(1))
-            log.info("Compose id is: " + compose_id)
-        else:
-            ubuntu_pkgs = requests.get(
-                ubuntu_repo + "/Tools/dists/xenial/main/binary-amd64/Packages"
-            )
-            m = re.search(r"ceph\nVersion: (.*)", ubuntu_pkgs.text)
-            ceph_version.append(m.group(1))
-            m = re.search(r"ceph-ansible\nVersion: (.*)", ubuntu_pkgs.text)
-            ceph_ansible_version.append(m.group(1))
+            if "rhel" == inventory.get("id"):
+                ceph_pkgs = requests.get(
+                    base_url + "/compose/Tools/x86_64/os/Packages/"
+                )
+                m = re.search(r"ceph-common-(.*?).x86", ceph_pkgs.text)
+                ceph_version.append(m.group(1))
+                m = re.search(r"ceph-ansible-(.*?).rpm", ceph_pkgs.text)
+                ceph_ansible_version.append(m.group(1))
+                log.info("Compose id is: " + compose_id)
+            else:
+                ubuntu_pkgs = requests.get(
+                    ubuntu_repo + "/Tools/dists/xenial/main/binary-amd64/Packages"
+                )
+                m = re.search(r"ceph\nVersion: (.*)", ubuntu_pkgs.text)
+                ceph_version.append(m.group(1))
+                m = re.search(r"ceph-ansible\nVersion: (.*)", ubuntu_pkgs.text)
+                ceph_ansible_version.append(m.group(1))
 
     distro = ",".join(list(set(distro)))
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
     log.info("Testing Ceph Version: " + ceph_version)
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
-
-    if not os.environ.get("TOOL") and not ignore_latest_nightly_container:
-        try:
-            latest_container = get_latest_container(rhbuild)
-        except ValueError:
-            print(
-                "\nERROR:No latest nightly container UMB msg at /ceph/cephci-jenkins/latest-rhceph-container-info/,"
-                "specify using the cli args or use --ignore-latest-container"
-            )
-            sys.exit(1)
-        docker_registry = (
-            latest_container.get("docker_registry")
-            if not docker_registry
-            else docker_registry
-        )
-        docker_image = (
-            latest_container.get("docker_image") if not docker_image else docker_image
-        )
-        docker_tag = (
-            latest_container.get("docker_tag") if not docker_tag else docker_tag
-        )
-        log.info(
-            "Using latest nightly docker image \nRegistry: {registry} \nDocker image: {image}\nDocker tag:{tag}".format(
-                registry=docker_registry, image=docker_image, tag=docker_tag
-            )
-        )
-        docker_insecure_registry = True
-        log.warning("Using Docker insecure registry setting")
 
     service = None
     suite_name = os.path.basename(suite_file).split(".")[0]

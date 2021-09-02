@@ -36,7 +36,13 @@ active_mdss = []
 RC = []
 failure = {}
 output = []
-magna_url = "http://magna002.ceph.redhat.com/cephci-jenkins/"
+magna_server = "http://magna002.ceph.redhat.com"
+magna_url = f"{magna_server}/cephci-jenkins/"
+magna_rhcs_artifacts = f"{magna_server}/cephci-jenkins/latest-rhceph-container-info/"
+
+
+class TestSetupFailure(Exception):
+    pass
 
 
 # function for getting the clients
@@ -1029,3 +1035,33 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
         crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"),
         "",
     )
+
+
+def fetch_build_artifacts(build, ceph_version, platform):
+    """Retrieves build details from magna002.ceph.redhat.com.
+
+    "RHCEPH-{ceph_version}.yaml" would be file name which is
+    searched in magna002 Ceph artifacts location.
+
+    Args:
+        ceph_version: RHCS version
+        build: build section to be fetched
+        platform: OS distribution name with major Version(ex., rhel-8)
+
+    Returns:
+        base_url, container_registry, image-name, image-tag
+    """
+    url = f"{magna_rhcs_artifacts}RHCEPH-{ceph_version}.yaml"
+    data = requests.get(url)
+    yml_data = yaml.safe_load(data.text)
+
+    build_info = yml_data.get(build)
+    if not build_info:
+        raise TestSetupFailure(f"{build} did not found in {url}.")
+
+    container_image = build_info["repository"]
+    registry, image_name = container_image.split(":")[0].split("/", 1)
+    image_tag = container_image.split(":")[-1]
+    base_url = build_info["composes"][platform]
+
+    return base_url, registry, image_name, image_tag
