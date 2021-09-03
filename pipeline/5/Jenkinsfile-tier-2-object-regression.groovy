@@ -59,4 +59,15 @@ node(nodeName) {
         }
     }
 
+    stage('MultiSite with Secure Endpoint') {
+        withEnv([
+            "sutVMConf=conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml",
+            "sutConf=conf/${cephVersion}/rgw/rgw_mutlisite.yaml",
+            "testSuite=suites/${cephVersion}/rgw/tier_2_rgw_ssl_multisite_verify_io_from_primary.yaml",
+            "addnArgs=--post-results --log-level debug"
+        ]) {
+            sharedLib.runTestSuite()
+        }
+    }
+
 }
