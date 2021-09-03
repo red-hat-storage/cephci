@@ -142,6 +142,7 @@ def setLock(def majorVer, def minorVer){
     }
     def startTime = System.currentTimeMillis()
     while((System.currentTimeMillis()-startTime)<600000){
+        sleep(2)
         lockFilePresent = sh (returnStatus: true, script: "ls -l ${lockFile}")
         if (lockFilePresent != 0) {
             sh(script: "touch ${lockFile}")
