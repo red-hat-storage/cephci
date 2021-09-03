@@ -5,7 +5,7 @@
 # executing the cephci test suites. This script performs the required changes.
 
 echo "Initialize Node"
-sudo yum install -y wget git-core python3
+sudo yum install -y wget git-core
 
 # Workaround: Disable IPv6 to have quicker downloads
 sudo sysctl -w net.ipv6.conf.eth0.disable_ipv6=1
@@ -17,6 +17,11 @@ if [ ! -d "/ceph" ]; then
     sudo mount -t nfs -o sec=sys,nfsvers=4.1 reesi004.ceph.redhat.com:/ /ceph
 fi
 
+if [ ${1:-0} -ne 0 ]; then
+  exit 0
+fi
+
+sudo yum install -y wget python3
 # Copy the auth files from internal server to the Jenkins user home directory
 # wget http://magna002.ceph.redhat.com/cephci-jenkins/.osp-cred-ci-2.yaml -O ${HOME}/osp-cred-ci-2.yaml
 wget http://magna002.ceph.redhat.com/cephci-jenkins/.cephci.yaml -O ${HOME}/.cephci.yaml
