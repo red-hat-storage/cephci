@@ -923,7 +923,7 @@ def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
 
 def collect_recipe(ceph_cluster):
     """
-    Collects the podman version and ceph version installed and writes to version_info.json file
+    Collects the podman version/Docker Version and ceph version installed and writes to version_info.json file
     Args:
         ceph_cluster:
 
@@ -931,15 +931,25 @@ def collect_recipe(ceph_cluster):
 
     """
     version_datails = {}
+    installer_node = ceph_cluster.get_ceph_objects("installer")
     client_node = ceph_cluster.get_ceph_objects("client")
-    out, rc = client_node[0].exec_command(
-        sudo=True, cmd="podman --version | awk {'print $3'}"
+    out, rc = installer_node[0].exec_command(
+        sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
     )
     output = out.read().decode().rstrip()
-    log.info(f"Podman Version {output}")
-    version_datails["PODMAN"] = output
+    if output:
+        log.info(f"Podman Version {output}")
+        version_datails["PODMAN"] = output
+
+    out, rc = installer_node[0].exec_command(
+        sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
+    )
+    output = out.read().decode().rstrip()
+    if output:
+        log.info(f"Docker Version {output}")
+        version_datails["DOCKER"] = output
     out, rc = client_node[0].exec_command(
-        sudo=True, cmd="ceph --version | awk {'print $3'}"
+        sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
     )
     output = out.read().decode().rstrip()
     log.info(f"ceph Version {output}")
