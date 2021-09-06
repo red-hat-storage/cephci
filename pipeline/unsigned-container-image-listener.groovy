@@ -46,10 +46,13 @@ node(nodeName) {
         def releaseMap = lib.readFromReleaseFile(versions.major_version, versions.minor_version)
         println "releaseMap : " + releaseMap
         if (! releaseMap.latest) {
+            lib.unSetLock(versions.major_version, versions.minor_version)
             error "'latest' key does not exist in the ${fileName} file"
         }
         if (lib.compareCephVersion(releaseMap.latest["ceph-version"] , ceph_version) !=0 ) {
+            lib.unSetLock(versions.major_version, versions.minor_version)
             error "Ceph versions ${relMap.latest['ceph-version']} and ${ceph_version} mismatched"
+
         }
         println "Updating repository as ${versions['platform']} exists in ${fileName} latest map"
         releaseMap.latest.repository = compose.repository
