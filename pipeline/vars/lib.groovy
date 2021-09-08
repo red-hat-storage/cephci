@@ -3,9 +3,6 @@
     Common groovy methods that can be reused by the pipeline jobs.
 */
 
-// Define global variables
-def passStatus = "PASS"
-def failStatus = "FAIL"
 
 import org.jsoup.Jsoup
 
@@ -169,17 +166,17 @@ def readFromReleaseFile(def majorVer, def minorVer, def lockFlag=true, def locat
     if (lockFlag){
         setLock(majorVer, minorVer)
     }
-    def releaseContent = yamlToMap(releaseFile, location)
-    println "content of release file is: ${releaseContent}"
-    return releaseContent
+    def dataContent = yamlToMap(releaseFile, location)
+    println "content of release file is: ${dataContent}"
+    return dataContent
 }
 
-def writeToReleaseFile(def majorVer, def minorVer, def releaseContent, def location="/ceph/cephci-jenkins/latest-rhceph-container-info"){
+def writeToReleaseFile(def majorVer, def minorVer, def dataContent, def location="/ceph/cephci-jenkins/latest-rhceph-container-info"){
     /*
         Method write content from the release yaml file and unset the lock.
     */
     def releaseFile = "RHCEPH-${majorVer}.${minorVer}.yaml"
-    writeYaml file: "${location}/${releaseFile}", data: releaseContent, overwrite: true
+    writeYaml file: "${location}/${releaseFile}", data: dataContent, overwrite: true
     unSetLock(majorVer, minorVer)
 }
 
@@ -252,7 +249,7 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     def body = readFile(file: "pipeline/vars/emailable-report.html")
 
     body += "<body>"
-    body += "<h2><u>Test Artifacts</u></h2>"
+    body += "<h3><u>Test Artifacts</u></h3>"
     body += "<table>"
 
     if (artifactDetails.product){body += "<tr><td>Product</td><td>${artifactDetails.product}</td></tr>"}
@@ -262,7 +259,7 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     if (artifactDetails.container_image){body += "<tr><td>Container Image</td><td>${artifactDetails.container_image}</td></tr>"}
     body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
     body += "</table><br />"
-    body += "<h2><u>Test Summary</u></h2>"
+    body += "<h3><u>Test Summary</u></h3>"
     body += "<table>"
     body += "<tr><th>Test Suite</th><th>Result</th></tr>"
     for (test in testResults) {
@@ -270,7 +267,7 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     }
     body += "</table><br /></body></html>"
     if ('FAIL' in testResults.values()){
-        toList = "cephci@redhat.com"
+        toList = "ceph-qe@redhat.com"
         status = "UNSTABLE"}
 
     def subject = "${tierLevel} test report status of ${artifactDetails.version} is ${status}"
@@ -309,12 +306,12 @@ def executeTestScript(def scriptPath, def cliArgs) {
    /*
         Executes the test script
    */
-    def rc = passStatus
+    def rc = "PASS"
     catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
         try {
             sh(script: "sh ${scriptPath} ${cliArgs}")
         } catch(Exception err) {
-            rc = failStatus
+            rc = "FAIL"
             println err.getMessage()
             error "Encountered an error"
         }
@@ -357,6 +354,17 @@ def fetchStages(def scriptArg, def tierLevel, def testResults) {
 
     println "Test Stages - ${testStages}"
     return testStages
+}
+
+def buildArtifactsDetails(def content, def ciMsgMap, def phase) {
+    /* Return artifacts details using release content */
+    return [
+        "composes": content[phase]["composes"],
+        "product": "Red Hat Ceph Storage",
+        "version": ciMsgMap["artifact"]["nvr"],
+        "ceph_version": content[phase]["ceph-version"],
+        "container_image": content[phase]["repository"]
+    ]
 }
 
 return this;

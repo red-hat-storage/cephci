@@ -7,39 +7,28 @@ def nodeName = "centos-7"
 def tierLevel = "tier-0"
 def testStages = [:]
 def testResults = [:]
-def releaseContent
+def releaseContent = [:]
 def buildPhase
 def ciMap
 def sharedLib
 def majorVersion
 def minorVersion
 
-def buildArtifactsDetails() {
-    /* Return artifacts details using release content */
-    return [
-        "composes": releaseContent[buildPhase]["composes"],
-        "product": "Red Hat Ceph Storage",
-        "version": ciMap["artifact"]["nvr"],
-        "ceph_version": releaseContent[buildPhase]["ceph-version"],
-        "container_image": releaseContent[buildPhase]["repository"]
-    ]
-}
 
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
-        stage('Install Prereq') {
+        stage('Install prereq') {
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],
                 doGenerateSubmoduleConfigurations: false,
                 extensions: [[
-                    $class: 'SubmoduleOption',
-                    disableSubmodules: false,
-                    parentCredentials: false,
-                    recursiveSubmodules: true,
+                    $class: 'CloneOption',
+                    shallow: true,
+                    noTags: false,
                     reference: '',
-                    trackingSubmodules: false
+                    depth: 0
                 ]],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
@@ -47,7 +36,7 @@ node(nodeName) {
                 ]]
             ])
 
-            // prepare the node for executing test suites
+            // prepare the node
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
             sharedLib.prepareNode()
         }
@@ -57,13 +46,15 @@ node(nodeName) {
         /* Prepare pipeline stages using RHCEPH version */
         ciMap = sharedLib.getCIMessageMap()
         buildPhase = ciMap["artifact"]["build_action"]
-        def (majorVersion, minorVersion) = getRHCSVersionFromArtifactsNvr()
+        def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
+        majorVersion = rhcsVersion["major_version"]
+        minorVersion = rhcsVersion["minor_version"]
 
-        /* 
+        /*
            Read the release yaml contents to get contents,
-           before other listener/Executo Jobs updates it.
+           before other listener/Executor Jobs updates it.
         */
-        releaseContent = sharedLib.ReadFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
+        releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
         testStages = sharedLib.fetchStages(buildPhase, tierLevel, testResults)
     }
 
@@ -71,17 +62,21 @@ node(nodeName) {
 
     stage('Publish Results') {
         /* Publish results through E-mail and Google Chat */
-        def emailTo = "ceph-qe@redhat.com"
 
-        if ( ! (sharedLib.failStatus in testResults.values()) ) {
-            emailTo = "ceph-qe-list@redhat.com"
-            releaseContent = sharedLib.ReadFromReleaseFile(majorVersion, minorVersion)
-            releaseContent[tierLevel]["composes"] = releaseContent[buildPhase]["composes"]
-            releaseContent[tierLevel]["last-run"] = releaseContent[buildPhase]["ceph-version"]
-            sharedLib.WriteToReleaseFile(majorVersion, minorVersion, releaseContent)
+        if ( ! ("FAIL" in testResults.values()) ) {
+            def latestContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
+            if (latestContent.containsKey(tierLevel)){
+                latestContent[tierLevel] = releaseContent[buildPhase]
+            }
+            else {
+                def updateContent = ["${tierLevel}": releaseContent[buildPhase]]
+                latestContent += updateContent
+            }
+            sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
         }
-        sharedLib.sendGChatNotification(testResults, tierLevel)
-        sharedLib.sendEMail(testResults, buildArtifactsDetails(), tierLevel)
+
+        sharedLib.sendGChatNotification(testResults, tierLevel.capitalize())
+        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(releaseContent,ciMap,buildPhase), tierLevel.capitalize())
     }
 
     stage('Publish UMB') {
@@ -121,7 +116,7 @@ node(nodeName) {
         sharedLib.SendUMBMessage(
             artifactsMap,
             "VirtualTopic.qe.ci.rhcephqe.product-build.test.complete",
-            "tier0testingdone",
+            "Tier0TestingDone",
         )
     }
 
