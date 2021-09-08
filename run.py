@@ -250,6 +250,14 @@ def print_results(tc):
         print(line)
 
 
+def load_file(file_name):
+    """Retrieve yaml data content from file."""
+    file_path = os.path.abspath(file_name)
+    with open(file_path, "r") as conf_:
+        content = yaml.safe_load(conf_)
+    return content
+
+
 def run(args):
 
     import urllib3
@@ -265,6 +273,13 @@ def run(args):
     version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
+    osp_cred = load_file(osp_cred_file)
+    cleanup_name = args.get("--cleanup", None)
+
+    if cleanup_name is not None:
+        cleanup_ceph_nodes(osp_cred, cleanup_name)
+        return 0
+
     platform = None
     build = None
     base_url = None
@@ -277,7 +292,6 @@ def run(args):
     compose_id = None
 
     if not version2:
-
         # Get ceph cluster version name
         with open("rhbuild.yaml") as fd:
             rhbuild_file = yaml.safe_load(fd)
@@ -397,7 +411,6 @@ def run(args):
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster", False)
     skip_subscription = args.get("--skip-subscription", False)
-    cleanup_name = args.get("--cleanup", None)
     post_to_report_portal = args.get("--report-portal", False)
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir", "/tmp")
@@ -432,22 +445,10 @@ def run(args):
     if console_log_level:
         ch.setLevel(logging.getLevelName(console_log_level.upper()))
 
-    def load_file(file_name):
-        """Retrieve yaml data content from file."""
-        file_path = os.path.abspath(file_name)
-        with open(file_path, "r") as conf_:
-            content = yaml.safe_load(conf_)
-        return content
-
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     inventory = load_file(inventory_file)
     suite = load_file(suite_file)
-    osp_cred = load_file(osp_cred_file)
-
-    if cleanup_name is not None:
-        cleanup_ceph_nodes(osp_cred, cleanup_name)
-        return 0
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
