@@ -7,6 +7,8 @@ def nodeName = "centos-7"
 def cephVersion = "pacific"
 def sharedLib
 def testResults = [:]
+def cvp
+
 def testStages = ['cephadm': {
                     stage('CephADM') {
                         withEnv([
@@ -59,6 +61,7 @@ def testStages = ['cephadm': {
                         }
                     }
                  }]
+
 // Pipeline script entry point
 
 node(nodeName) {
@@ -86,6 +89,7 @@ node(nodeName) {
             // prepare the node for executing test suites
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
             sharedLib.prepareNode()
+            cvp = sharedLib.getCvpVariable()
         }
     }
 
@@ -94,6 +98,10 @@ node(nodeName) {
     }
 
     stage('Publish Results') {
+        if (cvp) {
+            sharedLib.sendEMail("RHCS CVP", testResults)
+            return
+        }
         sharedLib.sendGChatNotification("Tier-0")
         sharedLib.sendEMail("Tier-0", testResults)
         if ( ! (1 in testResults.values()) ){
