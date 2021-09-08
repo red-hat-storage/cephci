@@ -1,10 +1,8 @@
 /*
-    Pipeline script for executing Tier 0 test suites for RH Ceph Storage.
+    Pipeline script for executing Tier x test suites for RH Ceph Storage.
 */
-// Global variables section
 
 def nodeName = "centos-7"
-def tierLevel = "tier-0"
 def testStages = [:]
 def testResults = [:]
 def releaseContent = [:]
@@ -13,6 +11,9 @@ def ciMap
 def sharedLib
 def majorVersion
 def minorVersion
+def postTierLevel
+def msgType
+def buildPhaseValue
 
 
 node(nodeName) {
@@ -45,7 +46,7 @@ node(nodeName) {
     stage('Prepare-Stages') {
         /* Prepare pipeline stages using RHCEPH version */
         ciMap = sharedLib.getCIMessageMap()
-        buildPhase = ciMap["artifact"]["build_action"]
+        buildPhase = ciMap["artifact"]["phase"]
         def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
         majorVersion = rhcsVersion["major_version"]
         minorVersion = rhcsVersion["minor_version"]
@@ -55,37 +56,45 @@ node(nodeName) {
            before other listener/Executor Jobs updates it.
         */
         releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
-        testStages = sharedLib.fetchStages(buildPhase, tierLevel, testResults)
+        testStages = sharedLib.fetchStages(buildPhase, buildPhase, testResults)
     }
 
     parallel testStages
 
     stage('Publish Results') {
         /* Publish results through E-mail and Google Chat */
+        buildPhaseValue = buildPhase.split("-")
+        def postTierValue = buildPhaseValue[1].toInteger()+1
+        postTierLevel = buildPhaseValue[0]+"-"+postTierValue
+        def preTierValue = buildPhaseValue[1].toInteger()-1
+        def preTierLevel = buildPhaseValue[0]+"-"+preTierValue
 
         if ( ! ("FAIL" in testResults.values()) ) {
             def latestContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
-            if (latestContent.containsKey(tierLevel)){
-                latestContent[tierLevel] = releaseContent[buildPhase]
+            if (releaseContent.containsKey(preTierLevel)){
+                if (latestContent.containsKey(buildPhase)){
+                    latestContent[buildPhase] = releaseContent[preTierLevel]
+                }
+                else {
+                    def updateContent = ["${buildPhase}": releaseContent[preTierLevel]]
+                    latestContent += updateContent
+                }
             }
-            else {
-                def updateContent = ["${tierLevel}": releaseContent[buildPhase]]
-                latestContent += updateContent
+            else{
+                sharedLib.unSetLock(majorVersion, minorVersion)
+                error "No data found for pre tier level: ${preTierLevel}"
             }
+
             sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
+            println "latest content is: ${latestContent}"
         }
 
-        sharedLib.sendGChatNotification(testResults, tierLevel.capitalize())
-        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(releaseContent,ciMap,buildPhase), tierLevel.capitalize())
+        sharedLib.sendGChatNotification(testResults, buildPhase.capitalize())
+        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(releaseContent,ciMap,preTierLevel), buildPhase.capitalize())
     }
 
     stage('Publish UMB') {
         /* send UMB message */
-        def buildState = buildPhase
-
-        if ( buildPhase == "latest" ) {
-            buildState = "tier-1"
-        }
 
         def artifactsMap = [
             "artifact": [
@@ -93,30 +102,31 @@ node(nodeName) {
                 "name": "Red Hat Ceph Storage",
                 "version": ciMap["artifact"]["version"],
                 "nvr": ciMap["artifact"]["nvr"],
-                "phase": buildState,
+                "phase": postTierLevel,
             ],
             "contact": [
                 "name": "Downstream Ceph QE",
                 "email": "ceph-qe@redhat.com",
             ],
             "pipeline": [
-                "name": "rhceph-tier-0",
+                "name": "rhceph-tier-x",
             ],
             "test-run": [
-                "type": tierLevel,
+                "type": buildPhase,
                 "result": currentBuild.currentResult,
                 "url": env.BUILD_URL,
                 "log": "${env.BUILD_URL}console",
             ]
         ]
-
+        if (buildPhase == "tier-2"){msgType = "Tier2ValidationTestingDone"}
+        else {msgType = buildPhaseValue[0].capitalize()+buildPhaseValue[1]+"TestingDone"}
         def msgContent = writeJSON returnText: true, json: artifactsMap
         println "${msgContent}"
 
         sharedLib.SendUMBMessage(
             artifactsMap,
             "VirtualTopic.qe.ci.rhcephqe.product-build.test.complete",
-            "Tier0TestingDone",
+            msgType,
         )
     }
 
