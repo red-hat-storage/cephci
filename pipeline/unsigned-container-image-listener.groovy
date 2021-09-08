@@ -1,11 +1,11 @@
 /*
-    Pipeline script for unsigned container image listener workflow
+    Script to update development RHCS container image information to QE build recipes.
 */
 // Global variables section
 def nodeName = "centos-7"
 def lib
 def versions
-def ceph_version
+def cephVersion
 def compose
 
 // Pipeline script entry point
@@ -13,7 +13,7 @@ def compose
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
+        stage('Preparing') {
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],
@@ -37,52 +37,70 @@ node(nodeName) {
         }
     }
 
-    stage('Update Release Yaml') {
+    stage('Updating') {
         println "msg = ${params.CI_MESSAGE}"
+
         compose = lib.getCIMessageMap()
         versions = lib.fetchMajorMinorOSVersion('unsigned-container-image')
-        ceph_version = lib.fetchCephVersion(compose.compose_url)
-        def fileName = "RHCEPH-${versions.major_version}.${versions.minor_version}.yaml"
-        def releaseMap = lib.readFromReleaseFile(versions.major_version, versions.minor_version)
-        println "releaseMap : " + releaseMap
-        if (! releaseMap.latest) {
-            lib.unSetLock(versions.major_version, versions.minor_version)
-            error "'latest' key does not exist in the ${fileName} file"
-        }
-        if (lib.compareCephVersion(releaseMap.latest["ceph-version"] , ceph_version) !=0 ) {
-            lib.unSetLock(versions.major_version, versions.minor_version)
-            error "Ceph versions ${relMap.latest['ceph-version']} and ${ceph_version} mismatched"
+        cephVersion = lib.fetchCephVersion(compose.compose_url)
 
+        def releaseDetails = lib.readFromReleaseFile(
+            versions.major_version, versions.minor_version
+        )
+        if ( !releaseDetails?.latest?."ceph-version") {
+            currentBuild.results = "ABORTED"
+            error("Unable to retrieve release information")
         }
-        println "Updating repository as ${versions['platform']} exists in ${fileName} latest map"
-        releaseMap.latest.repository = compose.repository
-        lib.writeToReleaseFile(versions.major_version, versions.minor_version, releaseMap)
+
+        def currentCephVersion = releaseDetails.latest."ceph-version"
+        def compare = lib.compareCephVersion(currentCephVersion, cephVersion)
+
+        if (compare != 0) {
+            currentBuild.result = "ABORTED"
+            println "Build Ceph Version: ${cephVersion}"
+            println "Found Ceph Version: ${currentCephVersion}"
+            error("The ceph versions do not match.")
+        }
+        releaseDetails.latest.repository = compose.repository
+        lib.writeToReleaseFile(
+            versions.major_version, versions.minor_version, releaseDetails
+        )
+
     }
 
-    stage('Publish UMB') {
+    stage('Messaging') {
         def artifactsMap = [
             "artifact": [
                 "type": "product-build",
                 "name": "Red Hat Ceph Storage",
-                "version": ceph_version,
+                "version": cephVersion,
                 "nvr": "RHCEPH-${versions.major_version}.${versions.minor_version}",
                 "phase": "tier-0",
-                "build_action": "latest"],
+                "build_action": "latest"
+            ],
             "contact": [
                 "name": "Downstream Ceph QE",
-                "email": "ceph-qe@redhat.com"],
+                "email": "ceph-qe@redhat.com"
+            ],
             "build": [
-                "repository": compose.repository],
+                "repository": compose.repository
+            ],
             "test": [
-                "phase": "tier-0"],
+                "phase": "tier-0"
+            ],
             "run": [
-                "url": "${env.BUILD_URL}",
-                "log": "${env.BUILD_URL}/console"],
-            "version": "1.0.0"]
+                "url": env.BUILD_URL,
+                "log": "${env.BUILD_URL}console"
+            ],
+            "version": "1.0.0"
+        ]
+
         def msgContent = writeJSON returnText: true, json: artifactsMap
         println "${msgContent}"
+
         def overrideTopic = "VirtualTopic.qe.ci.rhcephqe.product-build.promote.complete"
         def msgType = "ProductBuildDone"
+
         lib.SendUMBMessage(msgContent, overrideTopic, msgType)
     }
 }
