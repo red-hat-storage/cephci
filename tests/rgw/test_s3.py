@@ -31,6 +31,7 @@ import json
 import logging
 import os
 from json import loads
+from time import sleep
 from typing import Dict, Optional, Tuple
 
 from jinja2 import Template
@@ -167,7 +168,8 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         tests = "s3tests"
 
         if build.startswith("5"):
-            extra_args = "-a '!fails_on_aws,!fails_on_rgw,!fails_strict_rfc2616"
+            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!fails_on_aws"
+            extra_args += ",!lifecycle_expiration"
 
             if not encryption:
                 extra_args += ",!encryption"
@@ -471,6 +473,9 @@ def _rgw_lc_debug_conf(cluster: Ceph, add: bool = True) -> None:
     for node in cluster.get_nodes(role="rgw"):
         node.exec_command(sudo=True, cmd=command)
 
+    # Service restart can take time
+    sleep(60)
+
     log.debug("Lifecycle dev configuration set to 10")
 
 
@@ -511,3 +516,6 @@ def _rgw_lc_debug(cluster: Ceph, add: bool = True) -> None:
 
     for service in rgw_services:
         node.exec_command(sudo=True, cmd=f"ceph orch restart {service}")
+
+    # Restart can take time
+    sleep(60)
