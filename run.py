@@ -273,10 +273,29 @@ def run(args):
     version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
+    # Set log directory and get absolute path
+    console_log_level = args.get("--log-level")
+    log_directory = args.get("--log-dir", "/tmp")
+
+    run_id = generate_unique_id(length=6)
+    run_dir = create_run_dir(run_id, log_directory)
+    startup_log = os.path.join(run_dir, "startup.log")
+
+    handler = logging.FileHandler(startup_log)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
+    if console_log_level:
+        ch.setLevel(logging.getLevelName(console_log_level.upper()))
+
+    log.info(f"Startup log location: {startup_log}")
+    run_start_time = datetime.datetime.now()
+    trigger_user = getuser()
+
     osp_cred = load_file(osp_cred_file)
     cleanup_name = args.get("--cleanup", None)
-
-    if cleanup_name is not None:
+    if cleanup_name:
         cleanup_ceph_nodes(osp_cred, cleanup_name)
         return 0
 
@@ -412,8 +431,6 @@ def run(args):
     skip_setup = args.get("--skip-cluster", False)
     skip_subscription = args.get("--skip-subscription", False)
     post_to_report_portal = args.get("--report-portal", False)
-    console_log_level = args.get("--log-level")
-    log_directory = args.get("--log-dir", "/tmp")
 
     instances_name = args.get("--instances-name")
     if instances_name:
@@ -429,21 +446,6 @@ def run(args):
 
     enable_eus = args.get("--enable-eus", False)
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms", False)
-
-    # Set log directory and get absolute path
-    run_id = generate_unique_id(length=6)
-    run_dir = create_run_dir(run_id, log_directory)
-    startup_log = os.path.join(run_dir, "startup.log")
-    print("Startup log location: {}".format(startup_log))
-    run_start_time = datetime.datetime.now()
-    trigger_user = getuser()
-    handler = logging.FileHandler(startup_log)
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
-    if console_log_level:
-        ch.setLevel(logging.getLevelName(console_log_level.upper()))
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
