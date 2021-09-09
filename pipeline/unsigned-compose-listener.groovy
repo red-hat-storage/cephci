@@ -1,5 +1,5 @@
 /*
-    Pipeline script for modifying the unsigned RPM information
+    Script that adds the unsigned RPM build url into the qe build information file.
 */
 // Global variables section
 def nodeName = "centos-7"
@@ -11,18 +11,17 @@ def composeUrl
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
+        stage('Preparing') {
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],
                 doGenerateSubmoduleConfigurations: false,
                 extensions: [[
-                    $class: 'SubmoduleOption',
-                    disableSubmodules: false,
-                    parentCredentials: false,
-                    recursiveSubmodules: true,
+                    $class: 'CloneOption',
+                    shallow: true,
+                    noTags: false,
                     reference: '',
-                    trackingSubmodules: false
+                    depth: 0
                 ]],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
@@ -34,58 +33,49 @@ node(nodeName) {
         }
     }
 
-    stage('Update Release Yaml'){
+    stage('Updating') {
         echo "${params.CI_MESSAGE}"
 
         ciMsg = sharedLib.getCIMessageMap()
         composeUrl = ciMsg["compose_url"]
 
         cephVersion = sharedLib.fetchCephVersion(composeUrl)
-
         versionInfo = sharedLib.fetchMajorMinorOSVersion("unsigned-compose")
+
         majorVer = versionInfo['major_version']
         minorVer = versionInfo['minor_version']
         platform = versionInfo['platform']
 
         releaseContent = sharedLib.readFromReleaseFile(majorVer, minorVer)
-
-        if(releaseContent.isEmpty() || !releaseContent.containsKey("latest")){
-            Map latestMap = [
-                                "ceph-version": cephVersion,
-                                "composes":
-                                [
-                                    "${platform}": composeUrl
-                                ]
-                            ]
-            releaseContent.put("latest", latestMap)
-            sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
-        }
-        else if(releaseContent.containsKey("latest")){
+        if ( releaseContent?.latest?."ceph-version") {
             currentCephVersion = releaseContent["latest"]["ceph-version"]
-            compare = sharedLib.compareCephVersion(currentCephVersion, cephVersion)
+            def compare = sharedLib.compareCephVersion(currentCephVersion, cephVersion)
 
-            if(compare == 0 && !releaseContent["latest"]["composes"].containsKey(platform)){
-                releaseContent["latest"]["composes"].put(platform, composeUrl)
+            if (compare == -1) {
+                sharedLib.unSetLock(majorVer, minorVer)
+                currentBuild.result = "ABORTED"
+                println "Build Ceph Version: ${cephVersion}"
+                println "Found Ceph Version: ${currentCephVersion}"
+                error("The latest ceph version is lower than existing one.")
             }
-            else if(compare == 1){
-                Map latestMap = [
-                                    "ceph-version": cephVersion,
-                                    "composes":
-                                    [
-                                        "${platform}": composeUrl
-                                    ]
-                                ]
-                releaseContent.put("latest", latestMap)
-            }
-            sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
         }
+
+        if ( !releaseContent.containsKey("latest") ) {
+            releaseContent.latest = [:]
+            releaseContent.latest.composes = [:]
+        }
+
+        releaseContent["latest"]["ceph-version"] = cephVersion
+        releaseContent["latest"]["composes"]["${platform}"] = composeUrl
+        sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
+
     }
 
-    stage('Publish Unsigned RPM Compose') {
+    stage('Messaging') {
 
         def msgMap = [
             "artifact": [
-                "type" : "unsigned-product-build",
+                "type" : "product-build",
                 "name": "Red Hat Ceph Storage",
                 "version": cephVersion,
                 "nvr": "RHCEPH-${majorVer}.${minorVer}",
@@ -105,7 +95,7 @@ node(nodeName) {
             ],
             "version": "1.0.0"
         ]
-        def topic = 'VirtualTopic.qe.ci.rhcephqe.product-build.promote.complete'
+        def topic = 'VirtualTopic.qe.ci.rhcephqe.product-build.update.complete'
 
         //send UMB message notifying that a new build has arrived
         sharedLib.SendUMBMessage(msgMap, topic, 'ProductBuildDone')
