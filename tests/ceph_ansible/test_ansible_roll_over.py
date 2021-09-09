@@ -55,14 +55,10 @@ def run(ceph_cluster, **kw):
             matched_short_names = list(filter(matcher.match, short_name_list))
             if len(matched_short_names) > 1:
                 raise RuntimeError(
-                    "Multiple nodes are matching node-name {node_name}: \n{matched_short_names}".format(
-                        node_name=node_name, matched_short_names=matched_short_names
-                    )
+                    f"Multiple nodes are matching node-name {node_name}: \n{matched_short_names}"
                 )
             if len(matched_short_names) == 0:
-                raise RuntimeError(
-                    "No match for {node_name}".format(node_name=node_name)
-                )
+                raise RuntimeError(f"No match for {node_name}")
             for ceph_node in ceph_cluster:
                 if ceph_node.shortname == matched_short_names[0]:
                     matched_ceph_node = ceph_node
@@ -70,16 +66,11 @@ def run(ceph_cluster, **kw):
             free_volumes = matched_ceph_node.get_free_volumes()
             if len(osds_required) > len(free_volumes):
                 raise RuntimeError(
-                    "Insufficient volumes on the {node_name} node. Required: {required} - Found: {found}".format(
-                        node_name=matched_ceph_node.shortname,
-                        required=len(osds_required),
-                        found=len(free_volumes),
-                    )
+                    f"Insufficient volumes on the {matched_ceph_node.shortname} \
+                    node. Required: {len(osds_required)} - Found: {len(free_volumes)}"
                 )
-            log.debug("osds_required: {}".format(osds_required))
-            log.debug(
-                "matched_ceph_node.shortname: {}".format(matched_ceph_node.shortname)
-            )
+            log.debug(f"osds_required: {osds_required}")
+            log.debug(f"matched_ceph_node.shortname: {matched_ceph_node.shortname}")
             for osd in osds_required:
                 free_volumes.pop().status = NodeVolume.ALLOCATED
             for daemon in daemon_list:
@@ -135,15 +126,17 @@ def run(ceph_cluster, **kw):
         if daemon == "osd":
             ceph_installer.exec_command(
                 sudo=True,
-                cmd="cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{yaml_file} .".format(
-                    ansible_dir=ansible_dir, yaml_file=yaml_file
-                ),
+                cmd=f"cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{yaml_file} .",
             )
 
-    cmd = "cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {}".format(
-        ansible_dir, yaml_file
-    )
+    cmd = f"cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {yaml_file}"
     out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+
+    if "4.2" in build:
+        if daemon == "mon":
+            cmd = f"cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook \
+                  -vvvv -i hosts {yaml} --limit mons"
+        out1, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:
         log.error("Failed during deployment")
