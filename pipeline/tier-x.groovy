@@ -7,6 +7,7 @@ def testStages = [:]
 def testResults = [:]
 def releaseContent = [:]
 def buildPhase
+def buildType
 def ciMap
 def sharedLib
 def majorVersion
@@ -20,6 +21,9 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
+            if (env.WORKSPACE) {
+                deleteDir()
+            }
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: '*/master']],
@@ -47,6 +51,7 @@ node(nodeName) {
         /* Prepare pipeline stages using RHCEPH version */
         ciMap = sharedLib.getCIMessageMap()
         buildPhase = ciMap["artifact"]["phase"]
+        buildType = ciMap["test-run"]["type"]
         def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
         majorVersion = rhcsVersion["major_version"]
         minorVersion = rhcsVersion["minor_version"]
@@ -56,7 +61,7 @@ node(nodeName) {
            before other listener/Executor Jobs updates it.
         */
         releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
-        testStages = sharedLib.fetchStages(buildPhase, buildPhase, testResults)
+        testStages = sharedLib.fetchStages(buildType, buildPhase, testResults)
     }
 
     parallel testStages
@@ -66,23 +71,21 @@ node(nodeName) {
         buildPhaseValue = buildPhase.split("-")
         def postTierValue = buildPhaseValue[1].toInteger()+1
         postTierLevel = buildPhaseValue[0]+"-"+postTierValue
-        def preTierValue = buildPhaseValue[1].toInteger()-1
-        def preTierLevel = buildPhaseValue[0]+"-"+preTierValue
 
         if ( ! ("FAIL" in testResults.values()) ) {
             def latestContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
-            if (releaseContent.containsKey(preTierLevel)){
+            if (releaseContent.containsKey(buildType)){
                 if (latestContent.containsKey(buildPhase)){
-                    latestContent[buildPhase] = releaseContent[preTierLevel]
+                    latestContent[buildPhase] = releaseContent[buildType]
                 }
                 else {
-                    def updateContent = ["${buildPhase}": releaseContent[preTierLevel]]
+                    def updateContent = ["${buildPhase}": releaseContent[buildType]]
                     latestContent += updateContent
                 }
             }
             else{
                 sharedLib.unSetLock(majorVersion, minorVersion)
-                error "No data found for pre tier level: ${preTierLevel}"
+                error "No data found for pre tier level: ${buildType}"
             }
 
             sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
@@ -90,7 +93,7 @@ node(nodeName) {
         }
 
         sharedLib.sendGChatNotification(testResults, buildPhase.capitalize())
-        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(releaseContent,ciMap,preTierLevel), buildPhase.capitalize())
+        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(releaseContent,ciMap,buildType), buildPhase.capitalize())
     }
 
     stage('Publish UMB') {
