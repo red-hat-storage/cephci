@@ -349,7 +349,8 @@ def fetchStages(def scriptArg, def tierLevel, def testResults) {
 
         testStages[fileName] = {
             stage(fileName) {
-                testResults[fileName] = executeTestScript(filePath, scriptArg)
+                def absFile = "${scriptPath}${fileName}.sh"
+                testResults[fileName] = executeTestScript(absFile, scriptArg)
             }
         }
     }
