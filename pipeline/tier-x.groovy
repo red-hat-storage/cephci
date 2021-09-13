@@ -62,6 +62,10 @@ node(nodeName) {
         */
         releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
         testStages = sharedLib.fetchStages(buildType, buildPhase, testResults)
+        if ( testStages.isEmpty() ) {
+            currentBuild.result = "ABORTED"
+            error "No test stages found.."
+        }
     }
 
     parallel testStages
