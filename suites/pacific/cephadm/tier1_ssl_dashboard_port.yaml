@@ -223,10 +223,62 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
+      name: Restarting a ceph service using cephadm
+      desc: Apply Ceph orch restart grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573727
+      config:
+        command: restart
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Reconfiguring a ceph service using cephadm
+      desc: Apply Ceph orch reconfig grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573726
+      config:
+        command: reconfig
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Stopping a ceph service using cephadm
+      desc: Apply Ceph orch stop grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573727
+      config:
+        command: restart
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Starting a ceph service using cephadm
+      desc: Apply Ceph orch start grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573727
+      config:
+        command: start
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
       name: Remove a grafana service using cephadm      #MON, MGR, OSDs should not be opted for removal as it makes cluster inaccessible,
       desc: Apply Ceph orch remove service for all the daemons
       module: test_orch.py
-      polarion-id:
+      polarion-id: CEPH-83573727
       config:
         command: remove
         service: grafana
