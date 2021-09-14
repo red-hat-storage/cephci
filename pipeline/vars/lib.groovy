@@ -371,4 +371,26 @@ def buildArtifactsDetails(def content, def ciMsgMap, def phase) {
     ]
 }
 
+def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
+    /*
+        This method is a wrapper around upload_compose.py which passes the given
+        arguments to the upload_compose script. It supports
+
+        Args:
+            rhBuild     RHCS Build in the format rhbuild-<major>.<minor>.<platform>
+            cephVersion The ceph version
+            baseUrl     The compose base URL
+    */
+    try {
+        def cmd = "${env.WORKSPACE}/.venv/bin/python"
+        def scriptFile = "pipeline/scripts/ci/upload_compose.py"
+        def args = "${rhBuild} ${cephVersion} ${baseUrl}"
+
+        sh "${cmd} ${scriptFile} ${args}"
+    } catch(Exception exc) {
+        println "Encountered a failure during compose upload."
+        println exc
+    }
+}
+
 return this;
