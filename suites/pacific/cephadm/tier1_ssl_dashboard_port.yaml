@@ -22,7 +22,7 @@
 #       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
 #       - initial-dashboard-user: admin123
 #       - initial-dashboard-password: admin@123,
-#       - dashboard-password-noupdate: <boolean> 
+#       - dashboard-password-noupdate: <boolean>
 #       - dashboard-key: <path for dashboard.key>
 #       - dashboard-crt: <path for dashboard.crt>
 #       - registry-json: registry.json
@@ -52,6 +52,8 @@
 #       - using dd command create files on /mnt/cephfs directory.
 #   (8) Pause orchestrator background work and verify
 #   (9) Resume orchestrator background work and verify
+#   (10) Place a host specified in args under maintenance and verify
+#   (11) Exit a host specified from maintenance mode and verify
 #===============================================================================================
 tests:
   - test:
@@ -354,5 +356,31 @@ tests:
         base_cmd_args:
           verbose: true
         verify: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Place a host under maintenance using cephadm
+      desc: Use orchestrator to place a host in maintenance mode, verify its status.
+      module: test_host.py
+      polarion-id: CEPH-83573799
+      config:
+        service: host
+        command: enter
+        verify: true
+        args:
+          node: node2
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Exit a host from maintenance using cephadm
+      desc: Use orchestrator to exit maintenance mode on a host, verify its status.
+      module: test_host.py
+      polarion-id: CEPH-83573799
+      config:
+        service: host
+        command: exit
+        verify: true
+        args:
+          node: node2
       destroy-cluster: false
       abort-on-fail: true

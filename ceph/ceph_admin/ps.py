@@ -28,7 +28,7 @@ class PSMixin:
                     verbose: true
                     format: json | json-pretty | xml | xml-pretty | plain | yaml
                 args:
-                    host: <hostname>
+                    hostname: <hostname>
                     service_name: <name of service>
                     daemon_type: <type of daemon>
                     daemon_id: <id of the daemon>
