@@ -263,7 +263,8 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     body += "<table>"
     body += "<tr><th>Test Suite</th><th>Result</th></tr>"
     for (test in testResults) {
-        body += "<tr><td>${test.key}</td><td>${test.value}</td></tr>"
+        def test_name = test.key.replace("-", " ")
+        body += "<tr><td>${test_name.capitalize()}</td><td>${test.value}</td></tr>"
     }
     body += "</table><br /></body></html>"
     if ('FAIL' in testResults.values()){
