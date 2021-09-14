@@ -683,7 +683,7 @@ def run(args):
             if not config.get("base_url"):
                 config["base_url"] = base_url
 
-            config["rhbuild"] = rhbuild
+            config["rhbuild"] = f"{rhbuild}-{platform}" if version2 else rhbuild
             if "ubuntu_repo" in locals():
                 config["ubuntu_repo"] = ubuntu_repo
 
