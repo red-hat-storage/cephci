@@ -377,7 +377,7 @@ def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
         arguments to the upload_compose script. It supports
 
         Args:
-            rhBuild     RHCS Build in the format rhbuild-<major>.<minor>.<platform>
+            rhBuild     RHCS Build in the format ceph-<major>.<minor>-<platform>
             cephVersion The ceph version
             baseUrl     The compose base URL
     */

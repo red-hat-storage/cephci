@@ -69,6 +69,9 @@ node(nodeName) {
         releaseContent["latest"]["composes"]["${platform}"] = composeUrl
         sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
 
+        def bucket = "ceph-${majorVer}.${minorVer}-${platform}"
+        sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
+
     }
 
     stage('Messaging') {

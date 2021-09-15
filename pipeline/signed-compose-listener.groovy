@@ -76,6 +76,9 @@ node(nodeName) {
         releaseMap.rc.composes["${platform}"] = composeUrl
         sharedLib.writeToReleaseFile(majorVersion, minorVersion, releaseMap)
 
+        def bucket = "ceph-${majorVersion}.${minorVersion}-${platform}"
+        sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
+
     }
 
     stage('Messaging') {
