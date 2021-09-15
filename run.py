@@ -483,12 +483,12 @@ def run(args):
 
         # get COMPOSE ID and ceph version
         if build not in ["released", "cvp"]:
-            id = requests.get(base_url + "/COMPOSE_ID")
+            id = requests.get(base_url + "/COMPOSE_ID", verify=False)
             compose_id = id.text
 
             if "rhel" == inventory.get("id"):
                 ceph_pkgs = requests.get(
-                    base_url + "/compose/Tools/x86_64/os/Packages/"
+                    base_url + "/compose/Tools/x86_64/os/Packages/", verify=False
                 )
                 m = re.search(r"ceph-common-(.*?).x86", ceph_pkgs.text)
                 ceph_version.append(m.group(1))
