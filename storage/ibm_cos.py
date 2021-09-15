@@ -34,7 +34,6 @@ import logging
 
 import ibm_boto3
 from ibm_botocore.client import ClientError, Config
-from ibm_s3transfer.aspera.manager import AsperaTransferManager
 
 from utility.utils import get_cephci_config
 
@@ -225,6 +224,13 @@ class CloudObjectStorage:
             object_prefix (str):    Prefix to be added to the contents.
             bucket_name (str):      Bucket name to which the contents are uploaded.
         """
+        try:
+            from ibm_s3transfer.aspera.manager import AsperaTransferManager
+        except BaseException as be:
+            # COS-Aspera package is unavailable in Python 3.7
+            LOG.debug(be)
+            raise NotImplementedError("Method is unsupported in this platform.")
+
         with AsperaTransferManager(client=self.client) as _mgr:
             future = _mgr.upload_directory(local_dir, bucket_name, object_prefix)
             future.result()
@@ -242,6 +248,13 @@ class CloudObjectStorage:
             object_prefix (str):    Prefix to be added to the contents.
             local_dir (str):        Absolute path to store the objects.
         """
+        try:
+            from ibm_s3transfer.aspera.manager import AsperaTransferManager
+        except BaseException as be:
+            # COS-Aspera package is unavailable in Python 3.7
+            LOG.debug(be)
+            raise NotImplementedError("Method is unsupported in this platform.")
+
         with AsperaTransferManager(client=self.client) as _mgr:
             future = _mgr.download(bucket_name, object_prefix, local_dir)
             future.result()
