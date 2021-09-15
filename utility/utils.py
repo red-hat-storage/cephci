@@ -591,7 +591,7 @@ def get_latest_container(version):
     url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json".format(
         version
     )
-    data = requests.get(url)
+    data = requests.get(url, verify=False)
     docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
     docker_image = "rh-osbs/rhceph"
     return {
@@ -1052,7 +1052,7 @@ def fetch_build_artifacts(build, ceph_version, platform):
         base_url, container_registry, image-name, image-tag
     """
     url = f"{magna_rhcs_artifacts}RHCEPH-{ceph_version}.yaml"
-    data = requests.get(url)
+    data = requests.get(url, verify=False)
     yml_data = yaml.safe_load(data.text)
 
     build_info = yml_data.get(build)

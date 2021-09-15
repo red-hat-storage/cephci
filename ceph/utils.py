@@ -842,7 +842,7 @@ def fetch_build(version, custom_build):
     builds = fetch_image_builds(version)
 
     def get_build_details(build):
-        build = requests.get(f"{DEFAULT_OSBS_SERVER}{build.name}").json()
+        build = requests.get(f"{DEFAULT_OSBS_SERVER}{build.name}", verify=False).json()
         return build.get("compose_url"), build.get("repository")
 
     # To fetch (N-1) ceph image and build compose

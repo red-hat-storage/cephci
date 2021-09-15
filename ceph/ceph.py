@@ -867,7 +867,7 @@ class Ceph(object):
             str:  iso file url
         """
         iso_file_path = base_url + "compose/Tools/x86_64/iso/"
-        iso_dir_html = requests.get(iso_file_path, timeout=10).content
+        iso_dir_html = requests.get(iso_file_path, timeout=10, verify=False).content
         match = re.search('<a href="(.*?)">(.*?)-x86_64-dvd.iso</a>', iso_dir_html)
         iso_file_name = match.group(1)
         logger.info("Using {}".format(iso_file_name))
@@ -889,7 +889,7 @@ class Ceph(object):
         for repo in repos:
             base_url = base_url.rstrip("/")
             repo_to_use = f"{base_url}/compose/{repo}/x86_64/os"
-            r = requests.get(repo_to_use, timeout=10)
+            r = requests.get(repo_to_use, timeout=10, verify=False)
             logger.info("Checking %s", repo_to_use)
             if r.status_code == 200:
                 logger.info("Using %s", repo_to_use)
