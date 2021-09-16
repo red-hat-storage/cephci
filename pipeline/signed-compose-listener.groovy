@@ -30,7 +30,7 @@ node(nodeName) {
                     url: 'https://github.com/red-hat-storage/cephci.git']]
             ])
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
-            sharedLib.prepareNode(1)
+            sharedLib.prepareNode()
         }
     }
 
