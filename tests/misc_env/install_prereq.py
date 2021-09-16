@@ -195,7 +195,7 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
         except (KeyError, AttributeError):
             raise RuntimeError(
                 "Require the {} to be set in ~/.cephci.yaml, Please refer cephci.yaml.template".format(
-                    "cdn_credentials" if is_production else "stage_credentails"
+                    "cdn_credentials" if is_production else "stage_credentials"
                 )
             )
 
