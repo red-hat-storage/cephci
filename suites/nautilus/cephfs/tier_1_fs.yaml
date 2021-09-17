@@ -43,10 +43,6 @@ tests:
      destroy-cluster: False
      abort-on-fail: true
   - test:
-      name: recreate cephfs with ec pools
-      module: recreate-cephfs-ecpool.py
-      abort-on-fail: false
-  - test:
       name: cephfs-lifecycle ops
       module: CEPH-11333.py
       polarion-id: CEPH-11333
@@ -94,6 +90,7 @@ tests:
        name: nfs-ganesha_with_cephfs
        module: nfs-ganesha_basics.py
        desc: Mount cephfs on clients,configure nfs-ganesha on nfs server,do mount on any client and do IOs
+       polarion-id: CEPH-11308
        abort-on-fail: false
   - test:
        name: client-eviction

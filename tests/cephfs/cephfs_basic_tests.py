@@ -147,3 +147,4 @@ def mount_test_case(clients, mounting_dir):
     except CommandFailed as e:
         log.info(e)
         log.info(traceback.format_exc())
+        return 1
