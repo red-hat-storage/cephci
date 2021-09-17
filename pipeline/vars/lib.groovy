@@ -104,6 +104,11 @@ def fetchMajorMinorOSVersion(def buildType){
         minorVer = cimsg.tag.name.substring(7,8)
         platform = cimsg.tag.name.substring(9,15).toLowerCase()
     }
+    if (buildType == 'released') {
+        majorVer = cimsg.tag.name.substring(5,6)
+        minorVer = cimsg.tag.name.substring(7,8)
+        platform = cimsg.tag.name.substring(9,15).toLowerCase()
+    }
     if (majorVer && minorVer && platform){
         return ["major_version":majorVer, "minor_version":minorVer, "platform":platform]
     }
@@ -249,6 +254,14 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     def body = readFile(file: "pipeline/vars/emailable-report.html")
 
     body += "<body>"
+    body += "<h3><u>Test Summary</u></h3>"
+    body += "<table>"
+    body += "<tr><th>Test Suite</th><th>Result</th></tr>"
+    for (test in testResults) {
+        def test_name = test.key.replace("-", " ")
+        body += "<tr><td>${test_name.capitalize()}</td><td>${test.value}</td></tr>"
+    }
+    body += "</table><br />"
     body += "<h3><u>Test Artifacts</u></h3>"
     body += "<table>"
 
@@ -258,14 +271,6 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     if (artifactDetails.composes){body += "<tr><td>Composes</td><td>${artifactDetails.composes}</td></tr>"}
     if (artifactDetails.container_image){body += "<tr><td>Container Image</td><td>${artifactDetails.container_image}</td></tr>"}
     body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
-    body += "</table><br />"
-    body += "<h3><u>Test Summary</u></h3>"
-    body += "<table>"
-    body += "<tr><th>Test Suite</th><th>Result</th></tr>"
-    for (test in testResults) {
-        def test_name = test.key.replace("-", " ")
-        body += "<tr><td>${test_name.capitalize()}</td><td>${test.value}</td></tr>"
-    }
     body += "</table><br /></body></html>"
     if ('FAIL' in testResults.values()){
         toList = "ceph-qe@redhat.com"
@@ -333,12 +338,17 @@ def fetchStages(def scriptArg, def tierLevel, def testResults) {
         MINOR   -   RHceph minor version (ex., 0)
         TIER-x  -   Tier level number (ex., tier-0)
     */
-    def RHCSVersion = getRHCSVersionFromArtifactsNvr()
-    def majorVersion = RHCSVersion["major_version"]
-    def minorVersion = RHCSVersion["minor_version"]
+    def RHCSVersion = [:]
+    if (scriptArg == "released") {
+      RHCSVersion = getRHCSVersionFromArtifactsNvr()
+    } else {
+      RHCSVersion = fetchMajorMinorOSVersion("released")
+    }
+    def majorVersion = RHCSVersion.major_version
+    def minorVersion = RHCSVersion.minor_version
 
     def scriptPath = "${env.WORKSPACE}/pipeline/scripts/${majorVersion}/${minorVersion}/${tierLevel}/"
-    
+
     def testStages = [:]
     def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
     if (! scriptFiles){
