@@ -110,7 +110,8 @@ node(nodeName) {
                 "result": currentBuild.currentResult,
                 "url": env.BUILD_URL,
                 "log": "${env.BUILD_URL}console",
-            ]
+            ],
+            "version": "1.0.0"
         ]
 
         def msgContent = writeJSON returnText: true, json: artifactsMap
