@@ -40,9 +40,21 @@ def sendCVPUMBMessage(def ciMsg, def status) {
             "id": "${ciMsg.artifact.id}",
             "issuer": "RHCEPH QE"
         ],
+        "contact": [
+            "name": "Downstream Ceph QE",
+            "email": "ceph-qe@redhat.com"
+        ],
+        "test": [
+            "type": "tier-0",
+            "category": "validation",
+            "result": "${status}",
+            "namespace": "rhceph.cvp.tier0.stage"
+        ],
+        "generated_at": "${env.BUILD_ID}",
+        "pipeline": "rhceph-cvp",
         "type": "default",
         "namespace": "rhceph-cvp-test",
-        "version": "0.1.0"
+        "version": "1.0.0"
     ]
 
     def msgContent = writeJSON returnText: true, json: msgMap
@@ -87,10 +99,14 @@ node(nodeName) {
     stage("Prepare Tier-0 suite") {
         def ciMessageMap = sharedLib.getCIMessageMap()
         def versions = sharedLib.fetchMajorMinorOSVersion('cvp')
-        def releaseContent = sharedLib.readFromReleaseFile(versions.major_version, versions.minor_version)
+        def releaseContent = sharedLib.readFromReleaseFile(
+            versions.major_version, versions.minor_version
+        )
         releaseContent.cvp.repository = ciMessageMap.registry_url
         releaseContent.cvp["tag-name"] = ciMessageMap.image_tag
-        def writeToFile = sharedLib.writeToReleaseFile(versions.major_version, versions.minor_version, releaseContent)
+        def writeToFile = sharedLib.writeToReleaseFile(
+            versions.major_version, versions.minor_version, releaseContent
+        )
         testStages = sharedLib.fetchStages(buildAction, tierLevel, testResults)
     }
 

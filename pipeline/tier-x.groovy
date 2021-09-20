@@ -60,7 +60,9 @@ node(nodeName) {
            Read the release yaml contents to get contents,
            before other listener/Executor Jobs updates it.
         */
-        releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
+        releaseContent = sharedLib.readFromReleaseFile(
+            majorVersion, minorVersion, lockFlag=false
+        )
         testStages = sharedLib.fetchStages(buildType, buildPhase, testResults)
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
@@ -77,7 +79,9 @@ node(nodeName) {
         postTierLevel = buildPhaseValue[0]+"-"+postTierValue
 
         if ( ! ("FAIL" in testResults.values()) ) {
-            def latestContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
+            def latestContent = sharedLib.readFromReleaseFile(
+                majorVersion, minorVersion
+            )
             if (releaseContent.containsKey(buildType)){
                 if (latestContent.containsKey(buildPhase)){
                     latestContent[buildPhase] = releaseContent[buildType]
@@ -87,7 +91,7 @@ node(nodeName) {
                     latestContent += updateContent
                 }
             }
-            else{
+            else {
                 sharedLib.unSetLock(majorVersion, minorVersion)
                 error "No data found for pre tier level: ${buildType}"
             }
@@ -97,7 +101,11 @@ node(nodeName) {
         }
 
         sharedLib.sendGChatNotification(testResults, buildPhase.capitalize())
-        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(releaseContent,ciMap,buildType), buildPhase.capitalize())
+        sharedLib.sendEmail(
+            testResults,
+            sharedLib.buildArtifactsDetails(releaseContent, ciMap, buildType),
+            buildPhase.capitalize()
+        )
     }
 
     stage('Publish UMB') {
@@ -123,7 +131,8 @@ node(nodeName) {
                 "result": currentBuild.currentResult,
                 "url": env.BUILD_URL,
                 "log": "${env.BUILD_URL}console",
-            ]
+            ],
+            "version": "1.0.0"
         ]
         if (buildPhase == "tier-2"){msgType = "Tier2ValidationTestingDone"}
         else {msgType = buildPhaseValue[0].capitalize()+buildPhaseValue[1]+"TestingDone"}
