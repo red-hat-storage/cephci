@@ -392,11 +392,12 @@ def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
             baseUrl     The compose base URL
     */
     try {
-        def cmd = "${env.WORKSPACE}/.venv/bin/python"
+        def cpFile = "sudo cp ${env.HOME}/.cephci.yaml /root/"
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python"
         def scriptFile = "pipeline/scripts/ci/upload_compose.py"
         def args = "${rhBuild} ${cephVersion} ${baseUrl}"
 
-        sh "${cmd} ${scriptFile} ${args}"
+        sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
     } catch(Exception exc) {
         println "Encountered a failure during compose upload."
         println exc
