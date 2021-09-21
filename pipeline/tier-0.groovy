@@ -20,7 +20,7 @@ node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
             if (env.WORKSPACE) {
-                deleteDir()
+                sh script: "sudo rm -rf *"
             }
             checkout([
                 $class: 'GitSCM',
@@ -57,7 +57,9 @@ node(nodeName) {
            Read the release yaml contents to get contents,
            before other listener/Executor Jobs updates it.
         */
-        releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
+        releaseContent = sharedLib.readFromReleaseFile(
+            majorVersion, minorVersion, lockFlag=false
+        )
         testStages = sharedLib.fetchStages(buildPhase, tierLevel, testResults)
     }
 
@@ -79,7 +81,9 @@ node(nodeName) {
         }
 
         sharedLib.sendGChatNotification(testResults, tierLevel.capitalize())
-        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(releaseContent,ciMap,buildPhase), tierLevel.capitalize())
+        sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(
+            releaseContent,ciMap,buildPhase), tierLevel.capitalize()
+        )
     }
 
     stage('Publish UMB') {

@@ -12,7 +12,9 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Preparing') {
-            if (env.WORKSPACE) { deleteDir()  }
+            if (env.WORKSPACE) {
+                sh script: "sudo rm -rf *"
+            }
             checkout([
                 $class: 'GitSCM',
                 branches: [[ name: '*/master' ]],

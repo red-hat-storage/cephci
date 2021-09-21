@@ -22,7 +22,7 @@ node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
             if (env.WORKSPACE) {
-                deleteDir()
+                sh script: "sudo rm -rf *"
             }
             checkout([
                 $class: 'GitSCM',
