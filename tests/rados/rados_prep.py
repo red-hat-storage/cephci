@@ -41,10 +41,10 @@ def run(ceph_cluster, **kw):
         if not create_erasure_pool(node=cephadm, name=uuid, **ec_config):
             log.error("Failed to create the EC Pool")
             return 1
-        if not run_rados_bench_write(node=cephadm, **ec_config):
+        if not rados_obj.bench_write(**ec_config):
             log.error("Failed to write objects into the EC Pool")
             return 1
-        run_rados_bench_read(node=cephadm, **ec_config)
+        rados_obj.bench_read(**ec_config)
         log.info("Created the EC Pool, Finished writing data into the pool")
         if ec_config.get("delete_pool"):
             if not detete_pool(node=cephadm, pool=ec_config["pool_name"]):
@@ -60,10 +60,10 @@ def run(ceph_cluster, **kw):
         ):
             log.error("Failed to create the replicated Pool")
             return 1
-        if not run_rados_bench_write(node=cephadm, **rep_config):
+        if not rados_obj.bench_write(**rep_config):
             log.error("Failed to write objects into the EC Pool")
             return 1
-        run_rados_bench_read(node=cephadm, **rep_config)
+        rados_obj.bench_read(**rep_config)
         log.info("Created the replicated Pool, Finished writing data into the pool")
         if rep_config.get("delete_pool"):
             if not detete_pool(node=cephadm, pool=rep_config["pool_name"]):
@@ -104,6 +104,24 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("Set up pg_autoscaler on the cluster")
 
+    if config.get("enable_compression"):
+        compression_conf = config["enable_compression"]
+        pool_name = compression_conf["pool_name"]
+        for conf in compression_conf["configurations"]:
+            for entry in conf.values():
+                if not rados_obj.pool_inline_compression(pool_name=pool_name, **entry):
+                    log.error(
+                        f"Error setting compression on pool : {pool_name} for config {conf}"
+                    )
+                    return 1
+                if not rados_obj.bench_write(**compression_conf):
+                    log.error("Failed to write objects into the EC Pool")
+                    return 1
+                rados_obj.bench_read(**compression_conf)
+                log.info(
+                    "Created the replicated Pool, Finished writing data into the pool"
+                )
+
     log.info("All Pre-requisites completed to run Rados suite")
     return 0
 
@@ -143,53 +161,6 @@ def set_cluster_configuration_checks(node: CephAdmin, **kwargs) -> bool:
     cmd = "ceph cephadm config-check ls"
     log.info(node.shell([cmd]))
     return True
-
-
-def run_rados_bench_write(node: CephAdmin, pool_name: str, **kwargs) -> bool:
-    """
-    Method to trigger Write operations via the Rados Bench tool
-    Args:
-        node: Cephadm node where the commands need to be executed
-        pool_name: pool on which the operation will be performed
-        kwargs: Any other param that needs to passed
-
-    Returns: True -> pass, False -> fail
-
-    """
-    duration = kwargs.get("rados_write_duration", 200)
-    byte_size = kwargs.get("byte_size", 4096)
-    cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write --no-cleanup"
-    try:
-        node.shell([cmd])
-        return True
-    except Exception as err:
-        log.error(f"Error running rados bench write on pool : {pool_name}")
-        log.error(err)
-        return False
-
-
-def run_rados_bench_read(node: CephAdmin, pool_name: str, **kwargs) -> bool:
-    """
-    Method to trigger Read operations via the Rados Bench tool
-    Args:
-        node: Cephadm node where the commands need to be executed
-        pool_name: pool on which the operation will be performed
-        kwargs: Any other param that needs to passed
-
-    Returns: True -> pass, False -> fail
-
-    """
-    duration = kwargs.get("rados_read_duration", 80)
-    try:
-        cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} seq"
-        node.shell([cmd])
-        cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} rand"
-        node.shell([cmd])
-        return True
-    except Exception as err:
-        log.error(f"Error running rados bench write on pool : {pool_name}")
-        log.error(err)
-        return False
 
 
 def set_logging_to_file(node: CephAdmin) -> bool:
