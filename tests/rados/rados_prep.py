@@ -4,6 +4,7 @@ import re
 import time
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados.core_workflows import RadosOrchestrator
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
     ceph_nodes = kw.get("ceph_nodes")
     out, err = ceph_nodes[0].exec_command(cmd="uuidgen")
     uuid = out.read().strip().decode()[0:5]
@@ -70,7 +72,7 @@ def run(ceph_cluster, **kw):
 
     if config.get("email_alerts"):
         alert_config = config.get("email_alerts")
-        if not enable_email_alerts(node=cephadm, **alert_config):
+        if not rados_obj.enable_email_alerts(**alert_config):
             log.error("Error while configuring email alerts")
             return 1
         log.info("email alerts configured")
@@ -228,75 +230,6 @@ def set_logging_to_file(node: CephAdmin) -> bool:
     if files:
         log.error(f"Did not find the log files : {files}")
         return False
-    return True
-
-
-def enable_email_alerts(node: CephAdmin, **kwargs) -> bool:
-    """
-    Enables the email alerts module and configures alerts to be sent
-    Args:
-        node: Cephadm node where the commands need to be executed
-        **kwargs: Any other param that needs to be set
-
-    Returns: True -> pass, False -> fail
-    """
-    alert_cmds = {
-        "smtp_host": f"ceph config set mgr mgr/alerts/smtp_host "
-        f"{kwargs.get('smtp_host', 'smtp.corp.redhat.com')}",
-        "smtp_sender": f"ceph config set mgr mgr/alerts/smtp_sender "
-        f"{kwargs.get('smtp_sender', 'ceph-iad2-c01-lab.mgr@redhat.com')}",
-        "smtp_ssl": f"ceph config set mgr mgr/alerts/smtp_ssl {kwargs.get('smtp_ssl', 'false')}",
-        "smtp_port": f"ceph config set mgr mgr/alerts/smtp_port {kwargs.get('smtp_port', '25')}",
-        "interval": f"ceph config set mgr mgr/alerts/interval {kwargs.get('interval', '5')}",
-        "smtp_from_name": f"ceph config set mgr mgr/alerts/smtp_from_name "
-        f"'{kwargs.get('smtp_from_name', 'Rados 5.0 sanity Cluster')}'",
-    }
-    try:
-        cmd = "ceph mgr module enable alerts"
-        node.shell([cmd])
-
-        for cmd in alert_cmds.values():
-            node.shell([cmd])
-
-        if kwargs.get("smtp_destination"):
-            for email in kwargs.get("smtp_destination"):
-                cmd = f"ceph config set mgr mgr/alerts/smtp_destination {email}"
-                node.shell([cmd])
-        else:
-            log.error("email addresses not provided")
-            return False
-
-    except Exception as err:
-        log.error("Error while configuring the cluster for email alerts")
-        log.error(err)
-        return False
-
-    # Printing all the configuration set for email alerts
-    cmd = "ceph config dump | grep 'mgr/alerts'"
-    log.info(node.shell([cmd]))
-
-    # Disabling and enabling the email alert module after setting all the config
-    try:
-        states = ["disable", "enable"]
-        for state in states:
-            cmd = f"ceph mgr module {state} alerts"
-            node.shell([cmd])
-            time.sleep(2)
-    except Exception as err:
-        log.error("Error while enabling/disabling alerts module after configuration")
-        log.error(err)
-        return False
-
-    # Triggering email alert
-    try:
-        cmd = "ceph alerts send"
-        node.shell([cmd])
-    except Exception as err:
-        log.error("Error while Sending email alerts")
-        log.error(err)
-        return False
-
-    log.info("Email alerts configured on the cluster")
     return True
 
 
