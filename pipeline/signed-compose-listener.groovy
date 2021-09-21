@@ -12,7 +12,7 @@ node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
         stage('Preparing') {
             if (env.WORKSPACE) {
-                deleteDir()
+                sh script: "sudo rm -rf *"
             }
             checkout([
                 $class: 'GitSCM',

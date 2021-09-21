@@ -339,7 +339,7 @@ def fetchStages(def scriptArg, def tierLevel, def testResults) {
         TIER-x  -   Tier level number (ex., tier-0)
     */
     def RHCSVersion = [:]
-    if (scriptArg == "released") {
+    if (scriptArg != "released") {
       RHCSVersion = getRHCSVersionFromArtifactsNvr()
     } else {
       RHCSVersion = fetchMajorMinorOSVersion("released")
