@@ -63,7 +63,9 @@ node(nodeName) {
         releaseContent = sharedLib.readFromReleaseFile(
             majorVersion, minorVersion, lockFlag=false
         )
-        testStages = sharedLib.fetchStages(buildType, buildPhase, testResults)
+
+        // Till the pipeline matures, using the build that has passed tier-0 suite.
+        testStages = sharedLib.fetchStages("tier-0", buildPhase, testResults)
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test stages found.."

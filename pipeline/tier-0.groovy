@@ -88,6 +88,13 @@ node(nodeName) {
 
     stage('Publish UMB') {
         /* send UMB message */
+        if ( "FAIL" in testResults.values() ) {
+            // As part of executing all tiers, we are not publishing this message when
+            // there is a failure. This way we prevent execution of Tier-1 and
+            // subsequently the other tiers in the pipeline.
+            println "Not posting the UMB message..."
+            return
+        }
         def buildState = buildPhase
 
         if ( buildPhase == "latest" ) {
