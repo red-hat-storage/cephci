@@ -11,6 +11,7 @@ More operations to be added as needed
 
 import json
 import logging
+import re
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -445,3 +446,213 @@ class RadosOrchestrator:
         """
         cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
         return self.run_ceph_command(cmd=cmd)
+
+    def enable_balancer(self, **kwargs) -> bool:
+        """
+        Enables the balancer module with the given mode
+        Args:
+            kwargs: Any other args that need to be passed
+            Supported kw args :
+                1. balancer_mode: There are currently two supported balancer modes (str)
+                   -> crush-compat
+                   -> upmap (default )
+                2. target_max_misplaced_ratio : the percentage of PGs that are allowed to misplaced by balancer (float)
+                    target_max_misplaced_ratio = .07
+                3. sleep_interval : number of seconds to sleep in between runs (int)
+                    sleep_interval = 60
+        Returns: True -> pass, False -> fail
+        """
+        # balancer is always enabled module, There is no need to enable the module via mgr.
+        # To verify the same run ` ceph mgr module ls `, which would list all modules.
+        # if found to be disabled, can be enabled by ` ceph mgr module enable balancer `
+        mgr_modules = self.run_ceph_command(cmd="ceph mgr module ls")
+        if not (
+            "balancer" in mgr_modules["always_on_modules"]
+            or "balancer" in mgr_modules["enabled_modules"]
+        ):
+            log.error(
+                f"Balancer is not enabled. Enabled modules on cluster are:"
+                f"{mgr_modules['always_on_modules']} & "
+                f"{mgr_modules['enabled_modules']}"
+            )
+
+        # Setting the mode for the balancer. Available modes: none|crush-compat|upmap
+        balancer_mode = kwargs.get("balancer_mode", "upmap")
+        cmd = f"ceph balancer mode {balancer_mode}"
+        self.node.shell([cmd])
+        # Turning on the balancer on the system
+        cmd = "ceph balancer on"
+        self.node.shell([cmd])
+
+        if kwargs.get("target_max_misplaced_ratio"):
+            cmd = f"ceph config set mgr target_max_misplaced_ratio {kwargs.get('target_max_misplaced_ratio')}"
+            self.node.shell([cmd])
+
+        if kwargs.get("sleep_interval"):
+            cmd = f"ceph config set mgr mgr/balancer/sleep_interval {kwargs.get('sleep_interval')}"
+            self.node.shell([cmd])
+
+        # Sleeping for 10 seconds after enabling balancer and then collecting the evaluation status
+        time.sleep(10)
+        cmd = "ceph balancer status"
+        out = self.run_ceph_command(cmd)
+        if not out["active"]:
+            log.error("Exception balancer is not active")
+            return False
+        log.info(f"the balancer status is \n {out}")
+        return True
+
+    def configure_pg_autoscaler(self, **kwargs) -> bool:
+        """
+        Configures pg_Autoscaler as a global global parameter and on pools
+        Args:
+            **kwargs: Any other param that needs to be set
+                1. mon_target_pg_per_osd -> Sets the target number of PG's per OSD
+                2. pool_config -> Config to be changed on the given pool (dict)
+                    for supported args, look autoscaler_pool_settings() doc
+                3. pg_autoscale_value -> Mode of pg auto-scaling to be set, if pool name is provided (str)
+                    the allowed values are :
+                    1. off -> turns off PG autoscaler on the given pool
+                    2. warn -> displays warnings in ceph status, but does not trigger autoscale
+                    3. on -> automatically autoscale based on PG count in pool
+                4. default_mode -> Default mode to be set for all the newly created pools on the cluster (str)
+                    the allowed values are :
+                    1. off -> turns off PG autoscaler on the given pool
+                    2. warn -> displays warnings in ceph status, but does not trigger autoscale
+                    3. on -> automatically autoscale based on PG count in pool
+        Returns: True -> pass, False -> fail
+        """
+
+        mgr_modules = self.run_ceph_command(cmd="ceph mgr module ls")
+        if "pg_autoscaler" not in mgr_modules["enabled_modules"]:
+            cmd = "ceph mgr module enable pg_autoscaler"
+            self.node.shell([cmd])
+
+        if kwargs.get("pool_config"):
+            pool_conf = kwargs.get("pool_config")
+            if not self.autoscaler_pool_settings(**pool_conf):
+                return False
+
+        if kwargs.get("default_mode"):
+            cmd = f"ceph config set global osd_pool_default_pg_autoscale_mode {kwargs.get('default_mode')}"
+            self.node.shell([cmd])
+
+        if kwargs.get("mon_target_pg_per_osd"):
+            cmd = f"ceph config set global mon_target_pg_per_osd {kwargs['mon_target_pg_per_osd']}"
+            self.node.shell([cmd])
+
+        cmd = "ceph osd pool autoscale-status"
+        log.info(self.run_ceph_command(cmd))
+        return True
+
+    def autoscaler_pool_settings(self, **kwargs):
+        """
+        Sets various options on pools wrt PG Autoscaler
+        Args:
+            **kwargs: various kwargs to be sent
+                Supported kw args:
+                1. pg_autoscale_mode: PG saler mode for the indivudial pool. Values-> on, warn, off. (str)
+                2. target_size_ratio: ratio of cluster pool will utilize. Values -> 0 - 1. (float)
+                3. target_size_bytes: size the pool is assumed to utilize. eg: 10T (str)
+                4. pg_num_min: minimum pg's for a pool. (int)
+        Returns:
+        """
+        pool_name = kwargs["pool_name"]
+        value_map = {
+            "pg_autoscale_mode": kwargs.get("pg_autoscale_mode"),
+            "target_size_ratio": kwargs.get("target_size_ratio"),
+            "target_size_bytes": kwargs.get("target_size_bytes"),
+            "pg_num_min": kwargs.get("pg_num_min"),
+        }
+        for val in value_map.keys():
+            if val in kwargs.keys():
+                if not self.set_pool_property(
+                    pool=pool_name, props=val, value=value_map[val]
+                ):
+                    log.error(f"failed to set property {val} on pool {pool_name}")
+                    return False
+        return True
+
+    def set_cluster_configuration_checks(self, **kwargs) -> bool:
+        """
+        Sets up Cephadm to periodically scan each of the hosts in the cluster, and to understand the state of the OS,
+         disks, NICs etc
+         ref doc : https://docs.ceph.com/en/latest/cephadm/operations/#cluster-configuration-checks
+        Args:
+            kwargs: Any other param that needs to passed
+            The various args that can be sent are :
+            1. disable_check_list : list of config checks that need to be disabled. (list)
+            2. enable_check_list : list of config checks that need to be Enabled. (list)
+            The allowed list of configuration values that can be sent are :
+            1. kernel_security : checks SELINUX/Apparmor profiles are consistent across cluster hosts
+            2. os_subscription : checks subscription states are consistent for all cluster hosts
+            3. public_network : check that all hosts have a NIC on the Ceph public_netork
+            4. osd_mtu_size : check that OSD hosts share a common MTU setting
+            5. osd_linkspeed : check that OSD hosts share a common linkspeed
+            6. network_missing : checks that the cluster/public networks defined exist on the Ceph hosts
+            7. ceph_release : check for Ceph version consistency - ceph daemons should be on the same release
+            8. kernel_version :  checks that the MAJ.MIN of the kernel on Ceph hosts is consistent
+        Returns: True -> pass, False -> fail
+        """
+
+        # Checking if the checks are enabled on cluster
+        cmd = "ceph cephadm config-check status"
+        out, err = self.node.shell([cmd])
+        if not re.search("Enabled", out):
+            log.info("Cluster config checks not enabled, Proceeding to enable them")
+            cmd = "ceph config set mgr mgr/cephadm/config_checks_enabled true"
+            self.node.shell([cmd])
+
+        if kwargs.get("disable_check_list"):
+            if not self.disable_configuration_checks(kwargs.get("disable_check_list")):
+                log.error("failed to disable the given checks")
+                return False
+
+        if kwargs.get("enable_check_list"):
+            if not self.enable_configuration_checks(kwargs.get("enable_check_list")):
+                log.error("failed to enable the given checks")
+                return False
+        log.info("Completed setting the config checks ")
+        return True
+
+    def enable_configuration_checks(self, configs: list) -> bool:
+        """
+        Enables checks for the configs provided
+        Note: Once enabled the module, all the config checks are enabled by default
+        Args:
+            configs: list of config checks that need to be Enabled. (list)
+        Returns: True -> Pass, False -> fail
+        """
+        for check in configs:
+            cmd = f"ceph cephadm config-check enable {check}"
+            self.node.shell([cmd])
+
+        cmd = "ceph cephadm config-check ls"
+        all_conf_checks = self.run_ceph_command(cmd)
+
+        changed = [entry for entry in all_conf_checks if entry["name"] in configs]
+        for check in changed:
+            if check["status"] != "enabled":
+                return False
+        return True
+
+    def disable_configuration_checks(self, configs: list) -> bool:
+        """
+        disables checks for the configs provided
+        Note: Once enabled the module, all the config checks are enabled by default
+        Args:
+            configs: list of config checks that need to be disabled. (list)
+        Returns: True -> Pass, False -> fail
+        """
+        for check in configs:
+            cmd = f"ceph cephadm config-check disable {check}"
+            self.node.shell([cmd])
+
+        cmd = "ceph cephadm config-check ls"
+        all_conf_checks = self.run_ceph_command(cmd)
+
+        changed = [entry for entry in all_conf_checks if entry["name"] in configs]
+        for check in changed:
+            if check["status"] == "enabled":
+                return False
+        return True
