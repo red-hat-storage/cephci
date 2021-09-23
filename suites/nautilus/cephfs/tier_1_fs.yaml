@@ -98,3 +98,9 @@ tests:
        polarion-id: CEPH-11335
        desc: Mount CephFS on multiple clients and perform client eviction
        abort-on-fail: false
+  - test:
+       name: cephfs_client_authorize
+       module: client_authorize.py
+       polarion-id: CEPH-83574483
+       desc: client authorize test for cephfs
+       abort-on-fail: false
