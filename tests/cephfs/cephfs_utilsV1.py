@@ -129,6 +129,14 @@ class FsUtils(object):
             log.info("Creating mounting dir:")
             client.exec_command(sudo=True, cmd="mkdir %s" % mount_point)
             log.info("Mounting fs with ceph-fuse on client %s:" % client.node.hostname)
+            if kwargs.get("new_client_hostname"):
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph auth get "
+                    f"client.{kwargs.get('new_client_hostname')} "
+                    f"-o /etc/ceph/ceph.client"
+                    f".{kwargs.get('new_client_hostname')}.keyring",
+                )
             fuse_cmd = f"ceph-fuse -n client.{kwargs.get('new_client_hostname', client.node.hostname)} {mount_point} "
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
@@ -574,3 +582,30 @@ class FsUtils(object):
             volname_ls = json.loads(out.read().decode())
             if vol_name in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+
+    def fs_client_authorize(
+        self, client, fs_name, client_name, dir_name, permission, **kwargs
+    ):
+        """
+        We can create ceph clients for cephfs using this module.
+        We can create client with permissions on directories in cephfs.
+
+        Args:
+            client: Client_node
+            fs_name: cephfs name
+            client_name: ceph client
+            dir_name: Directory in cephfs
+            permission: r/rw (read-only/read-write)
+            **kwargs:
+                extra_params : we can include extra parameters as more directories & permissions
+
+        Returns:
+
+        """
+        command = (
+            f"ceph fs authorize {fs_name} client.{client_name} {dir_name} {permission} "
+        )
+        if kwargs.get("extra_params"):
+            command += f"{kwargs.get('extra_params')}"
+        out, rc = client.exec_command(sudo=True, cmd=command)
+        return 0
