@@ -705,15 +705,23 @@ class Ceph(object):
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
         if not pacific:
-            match = re.search(r"(\d+) daemons, quorum", lines)
-            if not match:
-                match = re.search(r"(\d+) mons at", lines)
-            all_mons = int(match.group(1))
-            logger.info(all_mons)
-            logger.info(self.ceph_demon_stat["mon"])
-            if all_mons != self.ceph_demon_stat["mon"]:
+            cmd = "ceph quorum_status -f json"
+            if cluster_name is not None:
+                cmd += f" --cluster {cluster_name}"
+            if pacific:
+                cmd = f"cephadm shell -- {cmd}"
+
+            out, err = client.exec_command(cmd=cmd, sudo=True)
+            mons = json.loads(out.read().decode())
+            logger.info(
+                f"Expected MONS: {self.ceph_demon_stat['mon']}, MON quorum : {mons}"
+            )
+
+            if len(mons.get("quorum")) != self.ceph_demon_stat["mon"]:
                 logger.error("Not all monitors are in cluster")
                 return 1
+        logger.info("Expected MONs is in quorum")
+
         if "HEALTH_ERR" in lines:
             logger.error("HEALTH in ERROR STATE")
             return 1
