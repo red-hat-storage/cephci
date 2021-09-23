@@ -48,6 +48,7 @@ node(nodeName) {
             versions.major_version, versions.minor_version
         )
         if ( !releaseDetails?.latest?."ceph-version") {
+            lib.unSetLock(versions.major_version, versions.minor_version)
             currentBuild.results = "ABORTED"
             error("Unable to retrieve release information")
         }
@@ -56,6 +57,7 @@ node(nodeName) {
         def compare = lib.compareCephVersion(currentCephVersion, cephVersion)
 
         if (compare != 0) {
+            lib.unSetLock(versions.major_version, versions.minor_version)
             currentBuild.result = "ABORTED"
             println "Build Ceph Version: ${cephVersion}"
             println "Found Ceph Version: ${currentCephVersion}"
