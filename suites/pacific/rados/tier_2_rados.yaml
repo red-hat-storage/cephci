@@ -112,11 +112,19 @@ tests:
           smtp_from_name: Rados Sanity Cluster Alerts
       desc: Configure email alerts on ceph cluster
 
+  - test:
+        name: Deploy stretch Cluster
+        module: stretch_cluster.py
+        polarion-id: CEPH-83573621
+        config:
+          site1: site-blr
+          site2: site-pune
+        desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
 
   - test:
       name: Compression algorithms
       module: rados_prep.py
-      polarion-id: CEPH-83571669
+      polarion-id: CEPH-83571669, CEPH-83571670, CEPH-83571671
       config:
         replicated_pool:
           create: true

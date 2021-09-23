@@ -1,13 +1,12 @@
 import datetime
-import json
 import logging
 import re
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
+from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.mute_alerts import get_alerts
-from tests.rados.rados_prep import create_pool, run_ceph_command
 from tests.rados.test_9281 import do_rados_get, do_rados_put
 
 log = logging.getLogger(__name__)
@@ -26,7 +25,6 @@ def run(ceph_cluster, **kw):
     7. Create a test pool, write some data and perform add capacity. ( add osd nodes into two sites )
     8. Check for the bump in election epochs throughout.
     9. Check the acting set in PG for 4 OSD's. 2 from each site.
-
     Verifies bugs:
     [1]. https://bugzilla.redhat.com/show_bug.cgi?id=1937088
     [2]. https://bugzilla.redhat.com/show_bug.cgi?id=1952763
@@ -37,6 +35,7 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     tiebreaker_node = ceph_cluster.get_nodes(role="installer")[0]
 
@@ -129,9 +128,7 @@ def run(ceph_cluster, **kw):
 
     # All the existing pools should be automatically changed with stretch rule. Creating a test pool
     pool_name = "test_pool_1"
-    if not create_pool(
-        node=cephadm, disable_pg_autoscale=True, pool_name=pool_name, pg_num=16
-    ):
+    if not rados_obj.create_pool(pool_name=pool_name, pg_num=16):
         log.error("Failed to create the replicated Pool")
         return 1
 
@@ -152,9 +149,7 @@ def run(ceph_cluster, **kw):
 
     if config.get("perform_add_capacity"):
         pool_name = "test_stretch_pool"
-        if not create_pool(
-            node=cephadm,
-            disable_pg_autoscale=True,
+        if not rados_obj.create_pool(
             pool_name=pool_name,
             crush_rule=stretch_rule_name,
         ):
@@ -163,7 +158,7 @@ def run(ceph_cluster, **kw):
         do_rados_put(mon=client_node, pool=pool_name, nobj=1000)
 
         # Increasing backfill/rebalance threads so that cluster will re-balance it faster after add capacity
-        change_recover_threads(node=cephadm, config=config, action="set")
+        rados_obj.change_recover_threads(config=config, action="set")
 
         log.info("Performing add Capacity after the deployment of stretch cluster")
         site_a_osds = [osd for osd in sorted_osds[0] if osd not in site_a_osds]
@@ -191,7 +186,7 @@ def run(ceph_cluster, **kw):
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
         flag = True
         while end_time > datetime.datetime.now():
-            status_report = run_ceph_command(node=cephadm, cmd="ceph report")
+            status_report = rados_obj.run_ceph_command(cmd="ceph report")
 
             # Proceeding to check if all PG's are in active + clean
             for entry in status_report["num_pg_by_state"]:
@@ -222,7 +217,7 @@ def run(ceph_cluster, **kw):
                 f" checking status again in 2 minutes"
             )
             time.sleep(120)
-        change_recover_threads(node=cephadm, config=config, action="rm")
+        rados_obj.change_recover_threads(config=config, action="rm")
         if not flag:
             log.error(
                 "The cluster did not reach active + Clean state after add capacity"
@@ -235,7 +230,7 @@ def run(ceph_cluster, **kw):
                 log.info(res)
 
     # Checking if the pools have been updated with the new crush rules
-    acting_set = get_pg_acting_set(node=cephadm, pool_name=pool_name)
+    acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
     if len(acting_set) != 4:
         log.error(
             f"There are {len(acting_set)} OSD's in PG. OSDs: {acting_set}. Stretch cluster requires 4"
@@ -244,57 +239,6 @@ def run(ceph_cluster, **kw):
     log.info(f"Acting set : {acting_set} Consists of 4 OSD's per PG")
     log.info("Stretch rule with arbiter monitor node set up successfully")
     return 0
-
-
-def change_recover_threads(node: CephAdmin, config: dict, action: str):
-    """
-    increases or decreases the recovery threads based on the action sent
-    Args:
-        node: Cephadm node where the commands need to be executed
-        config: Config from the suite file for the run
-        action: Set or remove increase the backfill / recovery threads
-            Values : "set" -> set the threads to specified value
-                     "rm" -> remove the config changes made
-
-    """
-
-    cfg_map = {
-        "osd_max_backfills": f"ceph config {action} osd osd_max_backfills",
-        "osd_recovery_max_active": f"ceph config {action} osd osd_recovery_max_active",
-    }
-    for cmd in cfg_map:
-        if action == "set":
-            command = f"{cfg_map[cmd]} {config.get(cmd, 8)}"
-        else:
-            command = cfg_map[cmd]
-        node.shell([command])
-
-
-def get_pg_acting_set(node: CephAdmin, pool_name: str) -> list:
-    """
-    Fetches the PG details about the given pool and then returns the acting set of OSD's from sample PG of the pool
-    Args:
-        node: Cephadm node where the commands need to be executed
-        pool_name: name of the pool whose one of the acting OSD set is needed
-
-    Returns: list osd's part of acting set
-    eg : [3,15,20]
-
-    """
-    # Collecting details about the cluster
-    cmd = "ceph osd dump --format=json"
-    out, err = node.shell([cmd])
-    res = json.loads(out)
-    for val in res["pools"]:
-        if val["pool_name"] == pool_name:
-            pool_id = val["pool"]
-            break
-    # Collecting the details of the 1st PG in the pool <ID>.0
-    pg_num = f"{pool_id}.0"
-    cmd = f"ceph pg map {pg_num} --format=json"
-    out, err = node.shell([cmd])
-    res = json.loads(out)
-    return res["up"]
 
 
 def setup_crush_rule(node, rule_name: str, site1: str, site2: str) -> bool:
@@ -306,7 +250,6 @@ def setup_crush_rule(node, rule_name: str, site1: str, site2: str) -> bool:
         site1: Name the 1st site
         site2: Name of the 2nd site
     Returns: True -> pass, False -> fail
-
     """
     rule = rule_name
     rules = f"""id 111
@@ -332,9 +275,7 @@ def add_crush_rules(node, rule_name: str, rules: str) -> bool:
         node: ceph client node where the commands need to be executed
         rule_name: Name of the crush rule to add
         rules: The rules for crush
-
     Returns: True -> pass, False -> fail
-
     """
     try:
         # Getting the crush map
@@ -376,10 +317,8 @@ def sort_osd_sites(all_osd_details: dict) -> tuple:
         all_osd_details: dictionary of OSD's containing the details
             eg : {'2': {'weight': 0.01459, 'state': 'up', 'name': 'osd.2'},
                 '7': {'weight': 0.01459, 'state': 'up', 'name': 'osd.7'}}
-
     Returns: Tuple of lists, containing the OSD list for the 2 sites
         eg : ([1, 2, 3, 4, 5], [6, 7, 8, 9, 0])
-
     """
     site_a_osds = []
     site_b_osds = []
@@ -426,7 +365,6 @@ def set_osd_sites(
         all_osd_details: dictionary of OSD's containing the details
             eg : {'2': {'weight': 0.01459, 'state': 'up', 'name': 'osd.2'},
                 '7': {'weight': 0.01459, 'state': 'up', 'name': 'osd.7'}}
-
     Returns: True -> pass, False -> fail
     """
     # adding the identified OSD's into the respective sites
@@ -512,7 +450,6 @@ def set_mon_sites(node: CephAdmin, tiebreaker_node, site1: str, site2: str) -> b
         site1: Name the 1st site
         site2: Name of the 2nd site
     Returns: True -> pass, False -> fail
-
     """
     # Collecting the mon details
     mon_state = get_mon_details(node=node)
@@ -546,10 +483,8 @@ def wait_for_alert(node: CephAdmin, alert: str, duration: int):
         node: Cephadm node where the commands need to be executed
         alert: name of the alert to wait until cleared
         duration: time duration for the wait
-
     Returns: True -> pass ( Alert cleared within given time)
             False -> fail ( Alert was not cleared within given time)
-
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=duration)
     while end_time > datetime.datetime.now():

@@ -291,3 +291,157 @@ class RadosOrchestrator:
             log.error(f"Error running rados bench write on pool : {pool_name}")
             log.error(err)
             return False
+
+    def create_pool(self, pool_name: str, **kwargs) -> bool:
+        """
+        Create a pool named from the pool_name parameter.
+         Args:
+            pool_name: name of the pool being created.
+            kwargs: Any other args that need to be passed
+                1. pg_num -> number of PG's and PGP's
+                2. ec_profile_name -> name of EC profile if pool being created is a EC pool
+                3. min_size -> min replication size for pool for pool to serve data
+                4. size -> min replication size for pool for pool to write data
+                5. erasure_code_use_overwrites -> allows overrides in an erasure coded pool
+                6. allow_ec_overwrites -> This lets RBD and CephFS store their data in an erasure coded pool
+                7. disable_pg_autoscale -> sets auto-scale mode off on the pool
+                8. crush_rule -> custom crush rule for the pool
+                9. pool_quota -> limit the maximum number of objects or the maximum number of bytes stored
+         Returns: True -> pass, False -> fail
+        """
+
+        log.info(f"creating pool_name {pool_name}")
+        pg_num = kwargs.get("pg_num", 64)
+        cmd = f"ceph osd pool create {pool_name} {pg_num} {pg_num}"
+        if kwargs.get("ec_profile_name"):
+            cmd = f"{cmd} erasure {kwargs['ec_profile_name']}"
+        try:
+            self.node.shell([cmd])
+        except Exception as err:
+            log.error(f"Error creating pool : {pool_name}")
+            log.error(err)
+            return False
+
+        # Enabling rados application on the pool
+        enable_app_cmd = f"sudo ceph osd pool application enable {pool_name} {kwargs.get('app_name', 'rados')}"
+        self.node.shell([enable_app_cmd])
+
+        cmd_map = {
+            "min_size": f"ceph osd pool set {pool_name} min_size {kwargs.get('min_size')}",
+            "size": f"ceph osd pool set {pool_name} size {kwargs.get('size')}",
+            "erasure_code_use_overwrites": f"ceph osd pool set {pool_name} "
+            f"allow_ec_overwrites {kwargs.get('erasure_code_use_overwrites')}",
+            "disable_pg_autoscale": f"ceph osd pool set {pool_name} pg_autoscale_mode off",
+            "crush_rule": f"sudo ceph osd pool set {pool_name} crush_rule {kwargs.get('crush_rule')}",
+            "pool_quota": f"ceph osd pool set-quota {pool_name} {kwargs.get('pool_quota')}",
+        }
+        for key in kwargs:
+            if cmd_map.get(key):
+                try:
+                    self.node.shell([cmd_map[key]])
+                except Exception as err:
+                    log.error(
+                        f"Error setting the property : {key} for pool : {pool_name}"
+                    )
+                    log.error(err)
+                    return False
+
+        log.info(f"Created pool {pool_name} successfully")
+        return True
+
+    def change_recover_threads(self, config: dict, action: str):
+        """
+        increases or decreases the recovery threads based on the action sent
+        Args:
+            config: Config from the suite file for the run
+            action: Set or remove increase the backfill / recovery threads
+                Values : "set" -> set the threads to specified value
+                         "rm" -> remove the config changes made
+        """
+
+        cfg_map = {
+            "osd_max_backfills": f"ceph config {action} osd osd_max_backfills",
+            "osd_recovery_max_active": f"ceph config {action} osd osd_recovery_max_active",
+        }
+        for cmd in cfg_map:
+            if action == "set":
+                command = f"{cfg_map[cmd]} {config.get(cmd, 8)}"
+            else:
+                command = cfg_map[cmd]
+            self.node.shell([command])
+
+    def get_pg_acting_set(self, **kwargs) -> list:
+        """
+        Fetches the PG details about the given pool and then returns the acting set of OSD's from sample PG of the pool
+        Args:
+            kwargs: Args that can be passed to fetch acting set
+                pool_name: name of the pool whose one of the acting OSD set is needed.
+                pg_num: pg whose acting set needs to be fetched
+                None: Collects the acting set of pool with ID 1
+            eg:
+        Returns: list osd's part of acting set
+        eg : [3,15,20]
+        """
+        if kwargs.get("pool_name"):
+            pool_name = kwargs["pool_name"]
+            # Collecting details about the cluster
+            cmd = "ceph osd dump"
+            out = self.run_ceph_command(cmd=cmd)
+            for val in out["pools"]:
+                if val["pool_name"] == pool_name:
+                    pool_id = val["pool"]
+                    break
+            # Collecting the details of the 1st PG in the pool <ID>.0
+            pg_num = f"{pool_id}.0"
+
+        elif kwargs.get("pg_num"):
+            pg_num = kwargs["pg_num"]
+
+        else:
+            # Collecting the acting set for a random pool ID 1 from cluster
+            pg_num = "1.0"
+
+        cmd = f"ceph pg map {pg_num}"
+        out = self.run_ceph_command(cmd=cmd)
+        return out["up"]
+
+    def run_scrub(self, **kwargs):
+        """
+        Run scrub on the given OSD or on all OSD's
+         Args:
+            kwargs:
+            1. osd : if a OSD id is passed , scrub to be triggered on that osd
+                    eg: obj.run_scrub(osd=3)
+         Returns: True -> pass, False -> fail
+        """
+        if kwargs.get("osd"):
+            cmd = f"ceph osd scrub {kwargs.get('osd')}"
+        else:
+            # scrubbing all the OSD's
+            cmd = "ceph osd scrub all"
+        self.node.shell([cmd])
+
+    def run_deep_scrub(self, **kwargs):
+        """
+        Run scrub on the given OSD or on all OSD's
+            Args:
+            kwargs:
+            1. osd : if a OSD id is passed , scrub to be triggered on that osd
+                    eg: obj.run_deep_scrub(osd=3)
+            Returns: True -> pass, False -> fail
+        """
+        if kwargs.get("osd"):
+            cmd = f"ceph osd deep-scrub {kwargs.get('osd')}"
+        else:
+            # scrubbing all the OSD's
+            cmd = "ceph osd deep-scrub all"
+        self.node.shell([cmd])
+
+    def collect_osd_daemon_ids(self, osd_node) -> dict:
+        """
+        The method is used to collect the various OSD daemons present on a particular node
+        :param osd_node: name of the OSD node on which osd daemon details are collected (ceph.ceph.CephNode): ceph node
+        :return: list of OSD ID's
+        """
+        cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
+        return self.run_ceph_command(cmd=cmd)
