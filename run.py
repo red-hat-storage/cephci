@@ -234,8 +234,12 @@ def create_nodes(
 
 
 def print_results(tc):
-    header = "\n{name:<30s}   {desc:<60s}   {duration:<30s}   {status:>15s}".format(
-        name="TEST NAME", desc="TEST DESCRIPTION", duration="DURATION", status="STATUS"
+    header = "\n{name:<30s}   {desc:<60s}   {duration:<30s}   {status:<15s}    {comments:>15s}".format(
+        name="TEST NAME",
+        desc="TEST DESCRIPTION",
+        duration="DURATION",
+        status="STATUS",
+        comments="COMMENTS",
     )
     print(header)
     for test in tc:
@@ -246,7 +250,8 @@ def print_results(tc):
         name = test["name"]
         desc = test["desc"] or "None"
         status = test["status"]
-        line = f"{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:>15s}"
+        comments = test["comments"]
+        line = f"{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:<15s}   {comments:>15s}"
         print(line)
 
 
@@ -578,6 +583,7 @@ def run(args):
         details["ceph-version-name"] = ceph_name
         details["duration"] = "0s"
         details["status"] = "Not Executed"
+        details["comments"] = var.get("comments")
         return details
 
     if reuse is None:
