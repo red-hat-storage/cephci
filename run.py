@@ -250,7 +250,7 @@ def print_results(tc):
         name = test["name"]
         desc = test["desc"] or "None"
         status = test["status"]
-        comments = test.get("comments", str())
+        comments = test["comments"]
         line = f"{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:<15s}   {comments:>15s}"
         print(line)
 
@@ -583,7 +583,7 @@ def run(args):
         details["ceph-version-name"] = ceph_name
         details["duration"] = "0s"
         details["status"] = "Not Executed"
-        details["comments"] = var.get("comments")
+        details["comments"] = var.get("comments", str())
         return details
 
     if reuse is None:
