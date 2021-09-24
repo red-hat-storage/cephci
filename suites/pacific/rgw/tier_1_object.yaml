@@ -1,3 +1,7 @@
+"""
+Note: If the following tests are being called and executed manually or via pipeline.
+      Please use conf/pacific/rgw/tier_0_rgw.yaml
+"""
 tests:
   - test:
       abort-on-fail: true
@@ -136,13 +140,4 @@ tests:
       config:
         script-name: test_object_lock.py
         config-file-name: test_object_lock.yaml
-        timeout: 500
-  - test:
-      name: STS Tests
-      desc: Perform Server Side Copy
-      polarion-id: CEPH-83574522
-      module: sanity_rgw.py
-      config:
-        script-name: test_sts_using_boto_servser_side_copy.py
-        config-file-name: test_sts_using_boto_server_side_copy.yaml
         timeout: 500
