@@ -1,13 +1,13 @@
 #! /bin/sh
-echo "Executing external S3Tests on RGW using $1 build."
+echo "RGW multi-realm deployment test using $1 build."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="psi${random_string}"
 build_type=${1:-'released'}
 platform="rhel-8"
 rhbuild="5.0"
-test_suite="suites/pacific/rgw/tier_2_rgw_ssl_s3tests.yaml"
-test_conf="conf/pacific/rgw/tier_0_rgw.yaml"
+test_suite="suites/pacific/rgw/tier_1_rgw_cephadm.yaml"
+test_conf="conf/pacific/rgw/tier_1_rgw_cephadm.yaml"
 test_inventory="conf/inventory/rhel-8.4-server-x86_64-medlarge.yaml"
 return_code=0
 
