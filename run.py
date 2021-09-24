@@ -250,7 +250,7 @@ def print_results(tc):
         name = test["name"]
         desc = test["desc"] or "None"
         status = test["status"]
-        comments = test["comments"]
+        comments = test.get("comments", str())
         line = f"{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:<15s}   {comments:>15s}"
         print(line)
 
