@@ -61,20 +61,20 @@ tests:
       name: STS Tests
       desc: Perform assume role call with permissive session policies
       polarion-id: CEPH-83574491
+      comments: known issue. 1976883
       module: sanity_rgw.py
       config:
         script-name: test_sts_using_boto_session_policy.py
         config-file-name: test_sts_using_boto_permissive_session_policy.yaml
-        comments: known issue. 1976883
         timeout: 500
   - test:
       name: STS Tests
       desc: Perform assume role call with restrictive session policies
       polarion-id: CEPH-83574492
+      comments: known issue. 1976883
       module: sanity_rgw.py
       config:
         script-name: test_sts_using_boto_session_policy.py
         config-file-name: test_sts_using_boto_restricted_session_policy.yaml
-        comments: known issue. 1976883
         timeout: 500
 
