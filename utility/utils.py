@@ -9,7 +9,8 @@ import traceback
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from string import ascii_uppercase, digits
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
+from urllib import request
 
 import requests
 import yaml
@@ -35,7 +36,13 @@ active_mdss = []
 RC = []
 failure = {}
 output = []
-magna_url = "http://magna002.ceph.redhat.com/cephci-jenkins/"
+magna_server = "http://magna002.ceph.redhat.com"
+magna_url = f"{magna_server}/cephci-jenkins/"
+magna_rhcs_artifacts = f"{magna_server}/cephci-jenkins/latest-rhceph-container-info/"
+
+
+class TestSetupFailure(Exception):
+    pass
 
 
 # function for getting the clients
@@ -584,7 +591,7 @@ def get_latest_container(version):
     url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json".format(
         version
     )
-    data = requests.get(url)
+    data = requests.get(url, verify=False)
     docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
     docker_image = "rh-osbs/rhceph"
     return {
@@ -943,6 +950,24 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
     return node_name
 
 
+def get_cephqe_ca() -> Optional[Tuple]:
+    """Retrieve CephCI QE CA certificate and key."""
+    base_uri = "http://magna002.ceph.redhat.com/cephci-jenkins"
+    ca_cert = None
+    ca_key = None
+
+    try:
+        with request.urlopen(url=f"{base_uri}/.cephqe-ca.pem") as fd:
+            ca_cert = crypto.load_certificate(crypto.FILETYPE_PEM, fd.read())
+
+        with request.urlopen(url=f"{base_uri}/.cephqe-ca.key") as fd:
+            ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, fd.read())
+    except BaseException as be:
+        log.debug(be)
+
+    return ca_key, ca_cert
+
+
 def generate_self_signed_certificate(subject: Dict) -> Tuple:
     """
     Create and return a self-signed certificate using the provided subject information.
@@ -951,11 +976,15 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
         subject     Dictionary holding the certificate subject key/value pair
 
     Returns:
-        cert, key   Tuple as strings
+        device_key, device_cert, ca_cert   Tuple as strings
     """
+    ca_key, ca_cert = get_cephqe_ca()
+
+    # Generate the private key
     keyout = crypto.PKey()
     keyout.generate_key(crypto.TYPE_RSA, 2048)
 
+    # Create CSR
     cert = crypto.X509()
     cert.get_subject().C = subject.get("country", "IN")
     cert.get_subject().ST = subject.get("state", "Karnataka")
@@ -963,14 +992,76 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
     cert.get_subject().O = subject.get("company", "Red Hat Inc")
     cert.get_subject().OU = subject.get("department", "Storage")
     cert.get_subject().CN = subject["common_name"]
-    cert.set_serial_number(1000)
+    cert.set_serial_number(random.randint(200, 50000))
     cert.gmtime_adj_notBefore(0)
     cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
+
+    extensions = [
+        crypto.X509Extension(
+            b"keyUsage", False, b"Digital Signature, Non Repudiation, Key Encipherment"
+        ),
+        crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
+        crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth, clientAuth"),
+        crypto.X509Extension(
+            b"subjectAltName", False, f"IP:{subject['ip_address']}".encode()
+        ),
+    ]
+    cert.add_extensions(extensions)
+
     cert.set_issuer(cert.get_subject())
     cert.set_pubkey(keyout)
     cert.sign(keyout, "sha256")
 
+    # Sign CSR
+    if ca_cert and ca_key:
+        signed_cert = crypto.X509()
+        signed_cert.set_serial_number(random.randint(10, 10000))
+        signed_cert.gmtime_adj_notBefore(0)
+        signed_cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
+        signed_cert.set_subject(cert.get_subject())
+        signed_cert.add_extensions(extensions)
+        signed_cert.set_issuer(ca_cert.get_subject())
+        signed_cert.set_pubkey(cert.get_pubkey())
+        signed_cert.sign(ca_key, "sha256")
+
+        return (
+            crypto.dump_privatekey(crypto.FILETYPE_PEM, keyout).decode("utf-8"),
+            crypto.dump_certificate(crypto.FILETYPE_PEM, signed_cert).decode("utf-8"),
+            crypto.dump_certificate(crypto.FILETYPE_PEM, ca_cert).decode("utf-8"),
+        )
+
     return (
-        crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"),
         crypto.dump_privatekey(crypto.FILETYPE_PEM, keyout).decode("utf-8"),
+        crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"),
+        "",
     )
+
+
+def fetch_build_artifacts(build, ceph_version, platform):
+    """Retrieves build details from magna002.ceph.redhat.com.
+
+    "RHCEPH-{ceph_version}.yaml" would be file name which is
+    searched in magna002 Ceph artifacts location.
+
+    Args:
+        ceph_version: RHCS version
+        build: build section to be fetched
+        platform: OS distribution name with major Version(ex., rhel-8)
+
+    Returns:
+        base_url, container_registry, image-name, image-tag
+    """
+    url = f"{magna_rhcs_artifacts}RHCEPH-{ceph_version}.yaml"
+    data = requests.get(url, verify=False)
+    yml_data = yaml.safe_load(data.text)
+
+    build_info = yml_data.get(build)
+    if not build_info:
+        raise TestSetupFailure(f"{build} did not found in {url}.")
+
+    container_image = build_info["repository"]
+    registry, image_name = container_image.split(":")[0].split("/", 1)
+    image_tag = container_image.split(":")[-1]
+    base_url = build_info["composes"][platform]
+
+    return base_url, registry, image_name, image_tag

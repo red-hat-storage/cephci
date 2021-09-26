@@ -36,3 +36,10 @@
 
 # email:
 #  address: cephci@redhat.com
+
+# Provide IBM Cloud Object Storage API Key for uploading objects.
+# cos:
+#  api-key: <service-or-user-api-key>
+#  endpoint: <resource-public-endpoint>
+#  resource-id: <deployed-instance-resource-id>
+#  location-constraint: <storage-class>

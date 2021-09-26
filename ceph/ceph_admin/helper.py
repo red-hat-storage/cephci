@@ -374,35 +374,19 @@ class GenerateServiceSpec:
         # ToDo: This works for only one host. Not sure, how cephadm handles SSL
         #       certificate for multiple hosts.
         if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
-            subject = {"common_name": spec["placement"]["hosts"][0]}
-            cert, key = generate_self_signed_certificate(subject=subject)
-            pem = key + cert
+            subject = {
+                "common_name": spec["placement"]["hosts"][0],
+                "ip_address": self.cluster.get_node_by_hostname(
+                    spec["placement"]["hosts"][0]
+                ).ip_address,
+            }
+            key, cert, ca = generate_self_signed_certificate(subject=subject)
+            pem = key + cert + ca
             cert_value = "|\n" + pem
             spec["spec"]["rgw_frontend_ssl_certificate"] = "\n    ".join(
                 cert_value.split("\n")
             )
-
             LOG.debug(pem)
-
-            # Copy the certificate to all clients
-            clients = self.cluster.get_nodes(role="client")
-
-            # As the tests are executed on the hosts, copying the certs to them also
-            rgws = self.cluster.get_nodes(role="rgw")
-            nodes = clients + rgws
-
-            for node in nodes:
-                cert_file = node.remote_file(
-                    sudo=True,
-                    file_name=f"/etc/pki/ca-trust/source/anchors/{spec['service_id']}.crt",
-                    file_mode="w",
-                )
-                cert_file.write(cert)
-                cert_file.flush()
-
-                node.exec_command(
-                    sudo=True, cmd="update-ca-trust enable && update-ca-trust extract"
-                )
 
         return template.render(spec=spec)
 

@@ -126,7 +126,8 @@ def cleanup(
             return
 
         add_key_to_ref(results, "deleted", user_.email, node.name, tenant)
-    except BaseException:  # noqa
+    except BaseException as e:  # noqa
+        print(f"For Node:{node.name} exception occurred is {e}")
         add_key_to_ref(results, "marked", user_.email, node.name, tenant)
 
 

@@ -1,4 +1,51 @@
+"""
+This module will allow us to run tests from ceph-qe-scritps repo.
+Repo: https://github.com/red-hat-storage/ceph-qe-scripts
+Folder: rgw
+
+Below configs are needed in order to run the tests
+
+    config:
+        script-name:
+                    The script to run
+        config-file-name:
+                    Config file for the above script,
+                    use this file if custom test-config is not given
+        test-config (optional):
+                    Custom test config supported for the above script,
+                    refer structure in ceph-qe-scripts/rgw
+                    example:
+                        test-config:
+                            user_count: 1
+                            bucket_count: 10
+                            objects_count: 5
+                            objects_size_range:
+                            min: 5M
+                            max: 15M
+        run_io_verify (optional):
+                    true or false
+        extra-pkgs (optional):
+                    Packages to install
+                    example:
+                        a. distro specific packages
+                            extra-pkgs:
+                                7:
+                                    - pkg1
+                                    - pkg2
+                                8:
+                                    - pkg1
+                                    - pkg2
+                        b. list of packages which are not distro version specific
+                            extra-pkgs:
+                                - pkg1
+                                - pkg2
+
+"""
+
+
 import logging
+
+import yaml
 
 from utility.utils import setup_cluster_access
 
@@ -30,6 +77,7 @@ def run(ceph_cluster, **kw):
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
+    test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     distro_version_id = rgw_node.distro_info["VERSION_ID"]
 
@@ -94,6 +142,12 @@ def run(ceph_cluster, **kw):
     config_dir = DIR[test_version]["config"]
     lib_dir = DIR[test_version]["lib"]
     timeout = config.get("timeout", 300)
+
+    if test_config["config"]:
+        log.info("creating custom config")
+        f_name = test_folder + config_dir + config_file_name
+        remote_fp = rgw_node.remote_file(file_name=f_name, file_mode="w")
+        remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     out, err = rgw_node.exec_command(
         cmd=f"sudo {python_cmd} "

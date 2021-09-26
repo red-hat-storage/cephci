@@ -7,7 +7,9 @@ globals:
           - mgr
           - installer
      node2:
-       role: client
+       role:
+         - client
+         - rbd-mirror
      node3:
        role: osd
        no-of-volumes: 4
@@ -24,8 +26,6 @@ globals:
           - mds
        no-of-volumes: 4
        disk-size: 15
-     node6:
-       role: rbd-mirror
 
   - ceph-cluster:
       name: ceph-rbd2
@@ -35,7 +35,9 @@ globals:
           - mgr
           - installer
       node2:
-        role: client
+        role:
+          - client
+          - rbd-mirror
       node3:
         role: osd
         no-of-volumes: 4
@@ -52,5 +54,3 @@ globals:
           - mds
         no-of-volumes: 4
         disk-size: 15
-      node6:
-        role: rbd-mirror

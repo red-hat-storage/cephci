@@ -1,6 +1,52 @@
-# from _typeshed import SupportsRead
+"""
+This module will allow us to run tests from ceph-qe-scritps repo.
+We tests multisite scenarios here
+Repo: https://github.com/red-hat-storage/ceph-qe-scripts
+Folder: rgw
+
+Below configs are needed in order to run the tests
+
+    clusters: Primary node or Secondary node
+        config:
+            script-name:
+                        The script to run
+            config-file-name:
+                        Config file for the above script,
+                        use this file if custom test-config is not given
+            test-config (optional):
+                        Custom test config supported for the above script,
+                        refer structure in ceph-qe-scripts/rgw
+                        example:
+                            test-config:
+                                user_count: 1
+                                bucket_count: 10
+                                objects_count: 5
+                                objects_size_range:
+                                min: 5M
+                                max: 15M
+            verify-io-on-site (optional):
+                        Primary node> or Secondary node
+            extra-pkgs (optional):
+                        Packages to install
+                        example:
+                            a. distro specific packages
+                                extra-pkgs:
+                                    7:
+                                        - pkg1
+                                        - pkg2
+                                    8:
+                                        - pkg1
+                                        - pkg2
+                            b. list of packages without distro version
+                                extra-pkgs:
+                                    - pkg1
+                                    - pkg2
+"""
+
 import logging
 import time
+
+import yaml
 
 from utility.utils import setup_cluster_access, sync_status_on_primary
 
@@ -48,6 +94,7 @@ def run(**kw):
     # run the test
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
+    test_config = {"config": config.get("test-config", {})}
     test_version = config.get("test-version", "v2")
     script_dir = TEST_DIR[test_version]["script"]
     config_dir = TEST_DIR[test_version]["config"]
@@ -56,6 +103,12 @@ def run(**kw):
 
     log.info("flushing iptables")
     test_site_node.exec_command(cmd="sudo iptables -F", check_ec=False)
+
+    if test_config["config"]:
+        log.info("creating custom config")
+        f_name = test_folder + config_dir + config_file_name
+        remote_fp = test_site_node.remote_file(file_name=f_name, file_mode="w")
+        remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     out, err = test_site_node.exec_command(
         cmd="sudo python3 "

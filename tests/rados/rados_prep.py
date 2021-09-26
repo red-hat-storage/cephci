@@ -4,6 +4,7 @@ import re
 import time
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados.core_workflows import RadosOrchestrator
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
     ceph_nodes = kw.get("ceph_nodes")
     out, err = ceph_nodes[0].exec_command(cmd="uuidgen")
     uuid = out.read().strip().decode()[0:5]
@@ -39,10 +41,10 @@ def run(ceph_cluster, **kw):
         if not create_erasure_pool(node=cephadm, name=uuid, **ec_config):
             log.error("Failed to create the EC Pool")
             return 1
-        if not run_rados_bench_write(node=cephadm, **ec_config):
+        if not rados_obj.bench_write(**ec_config):
             log.error("Failed to write objects into the EC Pool")
             return 1
-        run_rados_bench_read(node=cephadm, **ec_config)
+        rados_obj.bench_read(**ec_config)
         log.info("Created the EC Pool, Finished writing data into the pool")
         if ec_config.get("delete_pool"):
             if not detete_pool(node=cephadm, pool=ec_config["pool_name"]):
@@ -58,10 +60,10 @@ def run(ceph_cluster, **kw):
         ):
             log.error("Failed to create the replicated Pool")
             return 1
-        if not run_rados_bench_write(node=cephadm, **rep_config):
+        if not rados_obj.bench_write(**rep_config):
             log.error("Failed to write objects into the EC Pool")
             return 1
-        run_rados_bench_read(node=cephadm, **rep_config)
+        rados_obj.bench_read(**rep_config)
         log.info("Created the replicated Pool, Finished writing data into the pool")
         if rep_config.get("delete_pool"):
             if not detete_pool(node=cephadm, pool=rep_config["pool_name"]):
@@ -70,7 +72,7 @@ def run(ceph_cluster, **kw):
 
     if config.get("email_alerts"):
         alert_config = config.get("email_alerts")
-        if not enable_email_alerts(node=cephadm, **alert_config):
+        if not rados_obj.enable_email_alerts(**alert_config):
             log.error("Error while configuring email alerts")
             return 1
         log.info("email alerts configured")
@@ -83,111 +85,45 @@ def run(ceph_cluster, **kw):
 
     if config.get("cluster_configuration_checks"):
         cls_config = config.get("cluster_configuration_checks")
-        if not set_cluster_configuration_checks(node=cephadm, **cls_config):
+        if not rados_obj.set_cluster_configuration_checks(**cls_config):
             log.error("Error while setting Cluster config checks")
             return 1
         log.info("Set up cluster configuration checks")
 
     if config.get("configure_balancer"):
         balancer_config = config.get("configure_balancer")
-        if not enable_balancer(node=cephadm, **balancer_config):
+        if not rados_obj.enable_balancer(**balancer_config):
             log.error("Error while setting up balancer on the Cluster")
             return 1
         log.info("Set up Balancer on the cluster")
 
     if config.get("configure_pg_autoscaler"):
         autoscaler_config = config.get("configure_pg_autoscaler")
-        if not configure_pg_autoscaler(node=cephadm, **autoscaler_config):
+        if not rados_obj.configure_pg_autoscaler(**autoscaler_config):
             log.error("Error while setting up pg_autoscaler on the Cluster")
             return 1
         log.info("Set up pg_autoscaler on the cluster")
 
+    if config.get("enable_compression"):
+        compression_conf = config["enable_compression"]
+        pool_name = compression_conf["pool_name"]
+        for conf in compression_conf["configurations"]:
+            for entry in conf.values():
+                if not rados_obj.pool_inline_compression(pool_name=pool_name, **entry):
+                    log.error(
+                        f"Error setting compression on pool : {pool_name} for config {conf}"
+                    )
+                    return 1
+                if not rados_obj.bench_write(**compression_conf):
+                    log.error("Failed to write objects into the EC Pool")
+                    return 1
+                rados_obj.bench_read(**compression_conf)
+                log.info(
+                    "Created the replicated Pool, Finished writing data into the pool"
+                )
+
     log.info("All Pre-requisites completed to run Rados suite")
     return 0
-
-
-def set_cluster_configuration_checks(node: CephAdmin, **kwargs) -> bool:
-    """
-    Sets up Cephadm to periodically scan each of the hosts in the cluster, and to understand the state of the OS,
-     disks, NICs etc
-     ref doc : https://docs.ceph.com/en/latest/cephadm/operations/#cluster-configuration-checks
-    Args:
-        node: Cephadm node where the commands need to be executed
-        kwargs: Any other param that needs to passed
-
-    Returns: True -> pass, False -> fail
-
-    """
-    cmd = "ceph config set mgr mgr/cephadm/config_checks_enabled true"
-    node.shell([cmd])
-
-    # Checking if the checks are enabled on cluster
-    cmd = "ceph cephadm config-check status"
-    out, err = node.shell([cmd])
-    if not re.search("Enabled", out):
-        log.error("Cluster config checks no t enabled")
-        return False
-
-    if kwargs.get("disable_check_list"):
-        for check in kwargs.get("disable_check_list"):
-            cmd = f"ceph cephadm config-check disable {check}"
-            node.shell([cmd])
-
-    if kwargs.get("enable_check_list"):
-        for check in kwargs.get("enable_check_list"):
-            cmd = f"ceph cephadm config-check enable {check}"
-            node.shell([cmd])
-
-    cmd = "ceph cephadm config-check ls"
-    log.info(node.shell([cmd]))
-    return True
-
-
-def run_rados_bench_write(node: CephAdmin, pool_name: str, **kwargs) -> bool:
-    """
-    Method to trigger Write operations via the Rados Bench tool
-    Args:
-        node: Cephadm node where the commands need to be executed
-        pool_name: pool on which the operation will be performed
-        kwargs: Any other param that needs to passed
-
-    Returns: True -> pass, False -> fail
-
-    """
-    duration = kwargs.get("rados_write_duration", 200)
-    byte_size = kwargs.get("byte_size", 4096)
-    cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write --no-cleanup"
-    try:
-        node.shell([cmd])
-        return True
-    except Exception as err:
-        log.error(f"Error running rados bench write on pool : {pool_name}")
-        log.error(err)
-        return False
-
-
-def run_rados_bench_read(node: CephAdmin, pool_name: str, **kwargs) -> bool:
-    """
-    Method to trigger Read operations via the Rados Bench tool
-    Args:
-        node: Cephadm node where the commands need to be executed
-        pool_name: pool on which the operation will be performed
-        kwargs: Any other param that needs to passed
-
-    Returns: True -> pass, False -> fail
-
-    """
-    duration = kwargs.get("rados_read_duration", 80)
-    try:
-        cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} seq"
-        node.shell([cmd])
-        cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} rand"
-        node.shell([cmd])
-        return True
-    except Exception as err:
-        log.error(f"Error running rados bench write on pool : {pool_name}")
-        log.error(err)
-        return False
 
 
 def set_logging_to_file(node: CephAdmin) -> bool:
@@ -228,75 +164,6 @@ def set_logging_to_file(node: CephAdmin) -> bool:
     if files:
         log.error(f"Did not find the log files : {files}")
         return False
-    return True
-
-
-def enable_email_alerts(node: CephAdmin, **kwargs) -> bool:
-    """
-    Enables the email alerts module and configures alerts to be sent
-    Args:
-        node: Cephadm node where the commands need to be executed
-        **kwargs: Any other param that needs to be set
-
-    Returns: True -> pass, False -> fail
-    """
-    alert_cmds = {
-        "smtp_host": f"ceph config set mgr mgr/alerts/smtp_host "
-        f"{kwargs.get('smtp_host', 'smtp.corp.redhat.com')}",
-        "smtp_sender": f"ceph config set mgr mgr/alerts/smtp_sender "
-        f"{kwargs.get('smtp_sender', 'ceph-iad2-c01-lab.mgr@redhat.com')}",
-        "smtp_ssl": f"ceph config set mgr mgr/alerts/smtp_ssl {kwargs.get('smtp_ssl', 'false')}",
-        "smtp_port": f"ceph config set mgr mgr/alerts/smtp_port {kwargs.get('smtp_port', '25')}",
-        "interval": f"ceph config set mgr mgr/alerts/interval {kwargs.get('interval', '5')}",
-        "smtp_from_name": f"ceph config set mgr mgr/alerts/smtp_from_name "
-        f"'{kwargs.get('smtp_from_name', 'Rados 5.0 sanity Cluster')}'",
-    }
-    try:
-        cmd = "ceph mgr module enable alerts"
-        node.shell([cmd])
-
-        for cmd in alert_cmds.values():
-            node.shell([cmd])
-
-        if kwargs.get("smtp_destination"):
-            for email in kwargs.get("smtp_destination"):
-                cmd = f"ceph config set mgr mgr/alerts/smtp_destination {email}"
-                node.shell([cmd])
-        else:
-            log.error("email addresses not provided")
-            return False
-
-    except Exception as err:
-        log.error("Error while configuring the cluster for email alerts")
-        log.error(err)
-        return False
-
-    # Printing all the configuration set for email alerts
-    cmd = "ceph config dump | grep 'mgr/alerts'"
-    log.info(node.shell([cmd]))
-
-    # Disabling and enabling the email alert module after setting all the config
-    try:
-        states = ["disable", "enable"]
-        for state in states:
-            cmd = f"ceph mgr module {state} alerts"
-            node.shell([cmd])
-            time.sleep(2)
-    except Exception as err:
-        log.error("Error while enabling/disabling alerts module after configuration")
-        log.error(err)
-        return False
-
-    # Triggering email alert
-    try:
-        cmd = "ceph alerts send"
-        node.shell([cmd])
-    except Exception as err:
-        log.error("Error while Sending email alerts")
-        log.error(err)
-        return False
-
-    log.info("Email alerts configured on the cluster")
     return True
 
 
@@ -343,40 +210,6 @@ def create_erasure_pool(node: CephAdmin, name: str, **kwargs) -> bool:
     return True
 
 
-def configure_pg_autoscaler(node: CephAdmin, **kwargs) -> bool:
-    """
-    Configures pg_Autoscaler as a global global parameter and on pools
-    Args:
-        node: Cephadm node where the commands need to be executed
-        **kwargs: Any other param that needs to be set
-
-    Returns: True -> pass, False -> fail
-    """
-
-    if kwargs.get("enable"):
-        mgr_modules = run_ceph_command(node, cmd="ceph mgr module ls")
-        if "pg_autoscaler" not in mgr_modules["enabled_modules"]:
-            cmd = "ceph mgr module enable pg_autoscaler"
-            node.shell([cmd])
-
-    if kwargs.get("pool_name"):
-        pool_name = kwargs.get("pool_name")
-        pg_scale_value = kwargs.get("pg_autoscale_value", "on")
-        cmd = f"ceph osd pool set {pool_name} pg_autoscale_mode {pg_scale_value}"
-        node.shell([cmd])
-
-    if kwargs.get("default_mode"):
-        default_mode = kwargs.get("default_mode")
-        cmd = (
-            f"ceph config set global osd_pool_default_pg_autoscale_mode {default_mode}"
-        )
-        node.shell([cmd])
-
-    cmd = "ceph osd pool autoscale-status -f json"
-    log.info(node.shell([cmd]))
-    return True
-
-
 def detete_pool(node: CephAdmin, pool: str) -> bool:
     """
     Deletes the given pool from the cluster
@@ -406,48 +239,6 @@ def detete_pool(node: CephAdmin, pool: str) -> bool:
         return True
     log.error(f"Pool:{pool} could not be deleted on cluster")
     return False
-
-
-def enable_balancer(node: CephAdmin, **kwargs) -> bool:
-    """
-    Enables the balancer module with the given mode
-    Args:
-        node: Cephadm node where the commands need to be executed
-        kwargs: Any other args that need to be passed
-    Returns: True -> pass, False -> fail
-    """
-    # balancer is always enabled module, There is no need to enable the module via mgr.
-    # To verify the same run ` ceph mgr module ls `, which would list all modules.
-    # if found to be disabled, can be enabled by ` ceph mgr module enable balancer `
-    mgr_modules = run_ceph_command(node, cmd="ceph mgr module ls")
-    if not (
-        "balancer" in mgr_modules["always_on_modules"]
-        or "balancer" in mgr_modules["enabled_modules"]
-    ):
-        log.error(
-            f"Balancer is not enabled. Enabled modules on cluster are:"
-            f"{mgr_modules['always_on_modules']} & "
-            f"{mgr_modules['enabled_modules']}"
-        )
-
-    # Setting the mode for the balancer. Available modes: none|crush-compat|upmap
-    balancer_mode = kwargs.get("balancer_mode", "upmap")
-    cmd = f"ceph balancer mode {balancer_mode}"
-    node.shell([cmd])
-    # Turning on the balancer on the system
-    cmd = "ceph balancer on"
-    node.shell([cmd])
-
-    # Sleeping for 10 seconds after enabling balancer and then collecting the evaluation status
-    time.sleep(10)
-    cmd = "ceph balancer status"
-    try:
-        op, err = node.shell([cmd])
-        log.info(op)
-        return True
-    except Exception:
-        log.error("Exception hit while checking balancer status")
-        return False
 
 
 def create_pool(node: CephAdmin, pool_name: str, pg_num: int = 64, **kwargs) -> bool:

@@ -112,11 +112,14 @@ def translate_to_service_name(node, string: str) -> str:
     """
     replaced_string = string
     names = re.findall("{service_name:(.+?)}", string)
+    if not names:
+        return replaced_string
+    cmd = "ceph orch ls --format json"
 
-    out, _ = exec_command(
-        node, sudo=True, cmd="cephadm shell -- ceph orch ls --format json"
-    )
+    if "installer" in node.role:
+        cmd = f"cephadm shell {cmd}"
 
+    out, _ = exec_command(node, sudo=True, cmd=cmd)
     services_dict = json.loads(out)
 
     for name in names:
@@ -147,11 +150,14 @@ def translate_to_daemon_id(node, string: str) -> str:
     """
     replaced_string = string
     ids_ = re.findall("{daemon_id:(.+?)}", string)
+    if not ids_:
+        return replaced_string
+    cmd = "ceph orch ps --format json"
 
-    out, _ = exec_command(
-        node, sudo=True, cmd="cephadm shell -- ceph orch ps --format json"
-    )
+    if "installer" in node.role:
+        cmd = f"cephadm shell {cmd}"
 
+    out, _ = exec_command(node, sudo=True, cmd=cmd)
     daemon_details = json.loads(out)
 
     for id_ in ids_:
@@ -203,6 +209,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     """
     LOG.info("Executing command")
     config = kwargs["config"]
+    build = config.get("build", config.get("rhbuild"))
 
     command = config.get("cmd")
     LOG.warning("Usage of cmd is deprecated instead use commands.")
@@ -230,7 +237,8 @@ def run(ceph_cluster, **kwargs: Any) -> int:
             sudo = True
             long_running = False
 
-            # Reconstruct cephadm specific lookups
+        # Reconstruct cephadm specific lookups
+        if not build.startswith("4"):
             cmd = translate_to_daemon_id(node, cmd)
             cmd = translate_to_service_name(node, cmd)
 

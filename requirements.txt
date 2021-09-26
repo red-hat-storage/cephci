@@ -1,3 +1,6 @@
 -e .
+cos-aspera; python_version == '3.6'
 black
 isort
+flake8
+tox
