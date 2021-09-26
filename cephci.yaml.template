@@ -1,45 +1,232 @@
-# Provide report-portal details
+# This is a configuration template supported by CephCI run.py. This file is broken into
+# the logical parts
+
+#   1. Required keys for executing the workflow
+#   2. Provision the system under test environment (Required)
+#   3. System Under test details (Future - Tech preview for v 2.0)
+#   4. Test Suite setup (optional)
+
+# =============
+# Required keys
+# =============
+
+# ----
+# rhcs
+# ----
+
+# rhcs: <rhcs-version>      # Red Hat Ceph Storage version
+
+# --------
+# clusters
+# --------
+
+# clusters:             # Cluster spec that holds the cluster configuration information
+#   spec: <cluster_spec.yaml>
+
+# -----------
+# test_suites
+# -----------
+
+# test_suites:      # List of test suites to be used for execution
+#   - deploy_cluster.yaml
+#   - test_rgw_bucket_object_operations.yaml
+
+# -----
+# build
+# -----
+
+# Optional: The type of build to be used. By default, latest CDN bits would be deployed
+# The support values are
+#   latest      # use the latest development build
+#   tier-0      # read the qe_recipe file for latest build that has passed tier-0
+#   tier-1      # use the latest build that has passed tier-1 stage from qe_recipe file
+#   tier-2      # use the latest build that has passed tier-2 stage from qe_recipe file
+#   rc          # use the build details from the rc section in qe_recipe file
+#   cvp         # use the container image details from cvp section in qe_recipe file
+#   released    # Default - pull artifacts from CDN
+
+# build: <type-of-build>
+
+
+# ===========================================
+# Provision the system under test environment
+# ===========================================
+
+# The below section is consider when the default.provision is set to true. Currently,
+# two types of provisioners are supported "softlayer" & "openstack"
+
+# -------
+# compute
+# -------
+
+# OpenStack
+# compute:
+#   type: openstack
+#   spec: <configuration-file-to-be-used>       # example rhel-8-4-x86_64.yaml
+#   credential:
+#     auth-url: <authentication endpoint>
+#     username: <username>
+#     password: <password>
+#     auth-version: <authentication version>
+#     tenant-name: <name of the project>
+#     service-region: <name of the region>
+#     domain: <name of the OpenStack domain>
+#     tenant-domain-id: <Tenant OpenStack ID>
+
+# IBM-Cloud
+# compute:
+#   type: softlayer
+#   spec: <configuration-file-to-be-used>       # example rhel-8-4-x86_64.yaml
+#   credentials:
+#     username: <username>
+#     api_key: <IBM Cloud service/user account API key>
+
+
+# =========================
+# System Under Test details
+# =========================
+# This section is in tech preview and contains information about the system under test.
+# It enables execution of the tests on a provisioned environment.
+
+# --------
+# clusters
+# --------
+
+# clusters:     # list of clusters
+#   - cluster:  # dict containing information about the system layout.
+#       name: <name-of-the-cluster>
+#       nodes:
+#         - hostname: <FQDN or shortname>
+#           ip_address: <IPv4 or IPv6>
+#           roles:              # list of roles/services to be configured
+#             - osd
+#             - installer
+#           volumes:
+#             - /dev/sdb        # absolute path of the device
+#           credentials:
+#             type: <password-or-private_key>
+#             username: <name-to-be-used>
+#             password: <password-required-if-type-password>
+#             private_key: <absolute-path-to-key-if-type-private_key>
+
+
+# ================
+# Test Suite Setup
+# ================
+# Below keys are used as part of pre-install. The below section is useful if there
+# exists a test case -- pre_install.py in the test scenarios. Ignored otherwise.
+
+# ------------
+# subscription
+# ------------
+
+# subscription:
+#   serverurl: <stage or production server url to be used>
+#   baseurl: <optional - base url to be passed to subscription manager>
+#   username: <username>
+#   password: <password>
+#   pools:
+#     - <POOL_ID: specific pool to be used to attach a subscription>
+#     - <POOL_ID_02>
+#   repos:
+#     - <repo-01 to be enabled in the system. eg. rhel-8-server-rpms>
+#     - <repo-02 to be enabled in the system. eg. rhel-7-server-extra-rpms>
+#     - <support for $platform-server-extra-eus-rpms is available for generalization>
+
+# ----------------
+# additional-repos
+# ----------------
+
+# additional-repos:
+#   - files:    # [optional] a list of absolute path to repo files
+#       - file.repo
+#       - file_2.repo
+#   - urls:     # [optional] a list of dicts having key url and/or suffix
+#       url: http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.0-rhel-8/RHCEPH-5.0-RHEL-8-20210913.ci.1
+#     suffix:
+#       - compose/MON/x86_64/os
+#       - compose/Tools/x86_64/os
+#       - compose/OSD/x86_64/os
+
+# ---
+# dtr
+# ---
+
+# dtr:
+#   registry: brew.redhat.io        # Registry name
+#   username: <username>
+#   password: <password>
+#   insecure: true | false -> secure registry
+
+# =================
+# Global credential
+# =================
+# Supported credential section that can be leverage by the test cases.
+
+# -----------------------
+# HashiCorp Vault (vault)
+# -----------------------
+
+# vault:
+#   url: <vault-endpoint>
+#   agent:
+#     auth: <authentication type>
+#     engine: <engine type>
+#     role-id: <ID of the role>
+#     secret-id: <Secret ID to be used>
+#     prefix: <Prefix to secret>
+
+# ----------------------------
+# IBM Cloud Object Store (COS)
+# ----------------------------
+
+# cos:
+#   api-key: <service-or-user-api-key>
+#   endpoint: <cos-resource-public-endpoint>
+#   resource-id: <deployed-instance-resource-id>
+#   location-constraint: <default-storage-class>
+
+# -------------------------------
+# Overrides to test configuration
+# -------------------------------
+# Use this section for providing custom configuration or overrides to test case
+
+# ------
+# custom
+# ------
+
+# custom:
+#   grafana-image: <dtr-image-path-name-and-tag>
+#   file-server: <proto://web-server-holding-artifacts>
+#   <test-supported-key>: <value>
+
+
+# ===============
+# Publish results
+# ===============
+# The results are published the supported formats to the enabled publishers.
+
+# -------------
+# report-portal
+# -------------
 
 # report-portal:
-#  endpoint: http://<hostname>:<port>
-#  project: <project_name>
-#  token: <user_token>
+#   endpoint: <report-portal-url>
+#   project: <project-name>
+#   token: <api-token>
 
-# Provide polarion credentials
+# --------
+# polarion
+# --------
 
 # polarion:
-#  endpoint: <polarion_url>
-#  username: <polarion_user_name>
-#  password: <polarion_password>
+#   url: <polarion-endpoint-xunit>
+#   username: <service-account-name-or-username>
+#   password: <password-token>
 
-# Some test suites require a CDN login in order to pull packages from CDN
-# and also to pull GA'd images from registry.redhat.io.
-# For example, cephadm requires the prometheus images from
-# registry.redhat.io, so you must fill out the cdn_credentials section to run
-# the cephadm suites:
-
-# cdn_credentials:
-#  username: <user_name>
-#  password: <user_password>
-
-# Provide stage_credentials before running suites which needs
-# access to rhel and ceph repos that are configured on the staging CDN.
-
-# stage_credentials:
-#  username: <user_name>
-#  password: <user_password>
-
-# Provide email address(es) in comma-seperated values
-# Example., address: email1, email2, ...... ,emailn
-# To completely disable all email, remove the "email:" and "address:" settings
-# entirely.
+# -----
+# email
+# -----
 
 # email:
-#  address: cephci@redhat.com
-
-# Provide IBM Cloud Object Storage API Key for uploading objects.
-# cos:
-#  api-key: <service-or-user-api-key>
-#  endpoint: <resource-public-endpoint>
-#  resource-id: <deployed-instance-resource-id>
-#  location-constraint: <storage-class>
+#   address: email1, ... emailN      # a list with one or more elements comma separated
