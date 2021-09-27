@@ -38,11 +38,16 @@ def prepareNode(def listener=0) {
     sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash $listener")
 }
 
-def yamlToMap(def yamlFile, def location="/ceph/cephci-jenkins/latest-rhceph-container-info") {
+def yamlToMap(
+    def yamlFile,
+    def location="/ceph/cephci-jenkins/latest-rhceph-container-info"
+    ) {
     /*
         Read the yaml file and returns a map object
     */
-    def yamlFileExists = sh (returnStatus: true, script: "ls -l ${location}/${yamlFile}")
+    def yamlFileExists = sh (
+        returnStatus: true, script: "ls -l ${location}/${yamlFile}"
+    )
     if (yamlFileExists != 0) {
         println "File ${location}/${yamlFile} does not exist."
         return [:]
@@ -72,11 +77,15 @@ def getRHCSVersionFromArtifactsNvr() {
     return ["major_version": major_version, "minor_version": minor_version]
 }
 
-def fetchMajorMinorOSVersion(def buildType){
+def fetchMajorMinorOSVersion(def buildType) {
     /*
-        method accepts buildType as an input and
+        Returns a tuple Major, Minor and platform of the build.
+
+        buildType:  type of the build. Supported types are unsigned-compose,
+                    unsigned-container-image, cvp, signed-compose,
+                    signed-container-image
+
         Returns RH-CEPH major version, minor version and OS platform based on buildType
-        different buildType supported: unsigned-compose, unsigned-container-image, cvp, signed-compose, signed-container-image
 
     */
     def cimsg = getCIMessageMap()
@@ -89,17 +98,17 @@ def fetchMajorMinorOSVersion(def buildType){
         minorVer = cimsg.compose_id.substring(9,10)
         platform = cimsg.compose_id.substring(11,17).toLowerCase()
     }
-    if (buildType == 'cvp'){
+    if (buildType == 'cvp') {
         majorVer = cimsg.artifact.brew_build_target.substring(5,6)
         minorVer = cimsg.artifact.brew_build_target.substring(7,8)
         platform = cimsg.artifact.brew_build_target.substring(9,15).toLowerCase()
     }
-    if (buildType == 'signed-compose'){
+    if (buildType == 'signed-compose') {
         majorVer = cimsg["compose-id"].substring(7,8)
         minorVer = cimsg["compose-id"].substring(9,10)
         platform = cimsg["compose-id"].substring(11,17).toLowerCase()
     }
-    if (buildType == 'signed-container-image'){
+    if (buildType == 'signed-container-image') {
         majorVer = cimsg.tag.name.substring(5,6)
         minorVer = cimsg.tag.name.substring(7,8)
         platform = cimsg.tag.name.substring(9,15).toLowerCase()
@@ -109,28 +118,30 @@ def fetchMajorMinorOSVersion(def buildType){
         minorVer = cimsg.tag.name.substring(7,8)
         platform = cimsg.tag.name.substring(9,15).toLowerCase()
     }
-    if (majorVer && minorVer && platform){
+    if (majorVer && minorVer && platform) {
         return ["major_version":majorVer, "minor_version":minorVer, "platform":platform]
     }
     error "Required values are not obtained.."
 }
 
-def fetchCephVersion(def baseUrl){
+def fetchCephVersion(def baseUrl) {
     /*
         Fetches ceph version using compose base url
     */
     baseUrl += "/compose/Tools/x86_64/os/Packages/"
     println baseUrl
     def document = Jsoup.connect(baseUrl).get().toString()
-    def cephVer = document.findAll(/"ceph-common-([\w.-]+)\.([\w.-]+)"/)[0].findAll(/([\d]+)\.([\d]+)\.([\d]+)\-([\d]+)/)
+    def cephVer = document.findAll(/"ceph-common-([\w.-]+)\.([\w.-]+)"/)[0].findAll(
+        /([\d]+)\.([\d]+)\.([\d]+)\-([\d]+)/
+    )
     println cephVer
-    if (! cephVer){
+    if (! cephVer) {
         error "ceph version not found.."
     }
     return cephVer[0]
 }
 
-def setLock(def majorVer, def minorVer){
+def setLock(def majorVer, def minorVer) {
     /*
         create a lock file
     */
@@ -154,7 +165,7 @@ def setLock(def majorVer, def minorVer){
     error "Lock file: RHCEPH-${majorVer}.${minorVer}.lock already exist.can not create lock file"
 }
 
-def unSetLock(def majorVer, def minorVer){
+def unSetLock(def majorVer, def minorVer) {
     /*
         Unset a lock file
     */
@@ -163,12 +174,17 @@ def unSetLock(def majorVer, def minorVer){
     sh(script: "rm -f ${lockFile}")
 }
 
-def readFromReleaseFile(def majorVer, def minorVer, def lockFlag=true, def location="/ceph/cephci-jenkins/latest-rhceph-container-info"){
+def readFromReleaseFile(
+    def majorVer,
+    def minorVer,
+    def lockFlag=true,
+    def location="/ceph/cephci-jenkins/latest-rhceph-container-info"
+    ) {
     /*
         Method to set lock and read content from the release yaml file.
     */
     def releaseFile = "RHCEPH-${majorVer}.${minorVer}.yaml"
-    if (lockFlag){
+    if (lockFlag) {
         setLock(majorVer, minorVer)
     }
     def dataContent = yamlToMap(releaseFile, location)
@@ -176,7 +192,12 @@ def readFromReleaseFile(def majorVer, def minorVer, def lockFlag=true, def locat
     return dataContent
 }
 
-def writeToReleaseFile(def majorVer, def minorVer, def dataContent, def location="/ceph/cephci-jenkins/latest-rhceph-container-info"){
+def writeToReleaseFile(
+    def majorVer,
+    def minorVer,
+    def dataContent,
+    def location="/ceph/cephci-jenkins/latest-rhceph-container-info"
+    ) {
     /*
         Method write content from the release yaml file and unset the lock.
     */
@@ -185,7 +206,7 @@ def writeToReleaseFile(def majorVer, def minorVer, def dataContent, def location
     unSetLock(majorVer, minorVer)
 }
 
-def compareCephVersion(def oldCephVer, def newCephVer){
+def compareCephVersion(def oldCephVer, def newCephVer) {
     /*
         compares new and old ceph versions.
         returns 0 if equal
@@ -195,25 +216,44 @@ def compareCephVersion(def oldCephVer, def newCephVer){
         example for ceph version: 16.2.0-117, 14.2.11-190
     */
 
-    if (newCephVer == oldCephVer){return 0}
+    if (newCephVer == oldCephVer) {
+        return 0
+    }
 
     def oldVer = oldCephVer.split("\\.|-").collect { it.toInteger() }
     def newVer = newCephVer.split("\\.|-").collect { it.toInteger() }
 
-    if (newVer[0] > oldVer[0]){return 1}
-    else if (newVer[0] < oldVer[0]){return -1}
+    if (newVer[0] > oldVer[0]) {
+        return 1
+    }
+    else if (newVer[0] < oldVer[0]) {
+        return -1
+    }
 
-    if (newVer[1] > oldVer[1]){return 1}
-    else if (newVer[1] < oldVer[1]){return -1}
+    if (newVer[1] > oldVer[1]) {
+        return 1
+    }
+    else if (newVer[1] < oldVer[1]) {
+        return -1
+    }
 
-    if (newVer[2] > oldVer[2]){return 1}
-    else if (newVer[2] < oldVer[2]){return -1}
+    if (newVer[2] > oldVer[2]) {
+        return 1
+    }
+    else if (newVer[2] < oldVer[2]) {
+        return -1
+    }
 
-    if (newVer[3] > oldVer[3]){return 1}
-    else if (newVer[3] < oldVer[3]){return -1}
+    if (newVer[3] > oldVer[3]) {
+        return 1
+    }
+    else if (newVer[3] < oldVer[3]) {
+        return -1
+    }
+
 }
 
-def SendUMBMessage(def msgMap, def overrideTopic, def msgType){
+def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
     /*
         Trigger a UMB message.
     */
@@ -233,7 +273,7 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType){
 
 }
 
-def sendEmail(def testResults, def artifactDetails, def tierLevel){
+def sendEmail(def testResults, def artifactDetails, def tierLevel) {
     /*
         Send an Email
         Arguments:
@@ -265,16 +305,28 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     body += "<h3><u>Test Artifacts</u></h3>"
     body += "<table>"
 
-    if (artifactDetails.product){body += "<tr><td>Product</td><td>${artifactDetails.product}</td></tr>"}
-    if (artifactDetails.version){body += "<tr><td>Version</td><td>${artifactDetails.version}</td></tr>"}
-    if (artifactDetails.ceph_version){body += "<tr><td>Ceph Version </td><td>${artifactDetails.ceph_version}</td></tr>"}
-    if (artifactDetails.composes){body += "<tr><td>Composes</td><td>${artifactDetails.composes}</td></tr>"}
-    if (artifactDetails.container_image){body += "<tr><td>Container Image</td><td>${artifactDetails.container_image}</td></tr>"}
+    if (artifactDetails.product) {
+        body += "<tr><td>Product</td><td>${artifactDetails.product}</td></tr>"
+    }
+    if (artifactDetails.version) {
+        body += "<tr><td>Version</td><td>${artifactDetails.version}</td></tr>"
+    }
+    if (artifactDetails.ceph_version) {
+        body += "<tr><td>Ceph Version </td><td>${artifactDetails.ceph_version}</td></tr>"
+    }
+    if (artifactDetails.composes) {
+        body += "<tr><td>Composes</td><td>${artifactDetails.composes}</td></tr>"
+    }
+    if (artifactDetails.container_image) {
+        body += "<tr><td>Container Image</td><td>${artifactDetails.container_image}</td></tr>"
+    }
     body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
     body += "</table><br /></body></html>"
-    if ('FAIL' in testResults.values()){
-        toList = "ceph-qe@redhat.com"
-        status = "UNSTABLE"}
+
+    if ('FAIL' in testResults.values()) {
+        toList = "cephci@redhat.com"
+        status = "UNSTABLE"
+    }
 
     def subject = "${tierLevel} test report status of ${artifactDetails.version} is ${status}"
 
@@ -287,25 +339,27 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel){
     )
 }
 
-def sendGChatNotification(def testResults, def tierLevel){
+def sendGChatNotification(def testResults, def tierLevel) {
     /*
         Send a GChat notification.
         Plugin used:
-            googlechatnotification which allows to post build notifications to a Google Chat Messenger groups.
+            googlechatnotification which allows to post build notifications to a Google
+            Chat Messenger groups.
             parameter:
                 url: Mandatory String parameter.
-                     Single/multiple comma separated HTTP URLs or/and single/multiple comma separated Credential IDs.
+                     Single/multiple comma separated HTTP URLs or/and single/multiple
+                     comma separated Credential IDs.
                 message: Mandatory String parameter.
                          Notification message to be sent.
     */
     def ciMsg = getCIMessageMap()
     def status = "STABLE"
-    if ('FAIL' in testResults.values()){
-        status = "UNSTABLE"}
+    if ('FAIL' in testResults.values()) {
+        status = "UNSTABLE"
+    }
+
     def msg= "Run for ${ciMsg.artifact.nvr}:${tierLevel} is ${status}.Log:${env.BUILD_URL}"
-    googlechatnotification(url: "id:rhcephCIGChatRoom",
-                           message: msg
-                          )
+    googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
 }
 
 def executeTestScript(def scriptPath, def cliArgs) {
