@@ -1,7 +1,10 @@
-"""
-Note: If the following tests are being called and executed manually or via pipeline.
-      Please use conf/pacific/rgw/tier_0_rgw.yaml
-"""
+# Tier 1: RGW extension suites
+
+# This test suite is executed in stage 2 of the QE pipeline. The primary objective of
+# the test suite is to evaluate the STS functionality of RGW.
+
+# Requires a 5 node cluster layout having only one node with RGW role.
+
 tests:
   - test:
       abort-on-fail: true
@@ -103,4 +106,3 @@ tests:
         script-name: test_sts_using_boto_server_side_copy.py
         config-file-name: test_sts_using_boto_server_side_copy.yaml
         timeout: 500
-
