@@ -654,6 +654,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/mgr"))
     sys.path.append(os.path.abspath("tests/dashboard"))
     sys.path.append(os.path.abspath("tests/misc_env"))
+    sys.path.append(os.path.abspath("tests/parallel"))
 
     tests = suite.get("tests")
     tcs = []
@@ -665,6 +666,7 @@ def run(args):
 
     for test in tests:
         test = test.get("test")
+        parallel = test.get("parallel")
         tc = fetch_test_details(test)
         test_file = tc["file"]
         report_portal_description = tc["desc"] or ""
@@ -842,6 +844,7 @@ def run(args):
                     ceph_cluster=ceph_cluster_dict[cluster_name],
                     ceph_nodes=ceph_cluster_dict[cluster_name],
                     config=config,
+                    parallel=parallel,
                     test_data=ceph_test_data,
                     ceph_cluster_dict=ceph_cluster_dict,
                     clients=clients,
