@@ -61,6 +61,10 @@ node(nodeName) {
             majorVersion, minorVersion, lockFlag=false
         )
         testStages = sharedLib.fetchStages(buildPhase, tierLevel, testResults)
+        if ( testStages.isEmpty() ) {
+            currentBuild.result = "ABORTED"
+            error "No test scripts were found for execution."
+        }
     }
 
     parallel testStages
