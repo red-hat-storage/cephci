@@ -9,6 +9,7 @@ More operations to be added as needed
 
 """
 
+import datetime
 import json
 import logging
 import re
@@ -656,3 +657,235 @@ class RadosOrchestrator:
             if check["status"] == "enabled":
                 return False
         return True
+
+    def reweight_crush_items(self, **kwargs) -> bool:
+        """
+        Performs Re-weight of various CRUSH items, based on key-value pairs sent
+        Args:
+            **kwargs: Arguments for the commands
+        Returns: True -> pass, False -> fail
+        """
+        # Collecting OSD utilization before re-weights
+        cmd = "ceph osd df tree"
+        out = self.run_ceph_command(cmd=cmd)
+        osd_info_init = [entry for entry in out["nodes"] if entry["type"] == "osd"]
+        affected_osds = []
+        if kwargs.get("name"):
+            name = kwargs["name"]
+            weight = kwargs["weight"]
+            cmd = f"ceph osd crush reweight {name} {weight}"
+            out = self.run_ceph_command(cmd=cmd)
+            affected_osds.append(name)
+
+        else:
+            # if no params are provided, Doing the re-balance by utilization.
+            cmd = r"ceph osd reweight-by-utilization"
+            out = self.run_ceph_command(cmd=cmd)
+            if int(out["max_change_osds"]) >= 1:
+                affected_osds = [entry["osd"] for entry in out["reweights"]]
+                log.info(
+                    f"re-weights have been triggered on these OSD's, Deatils\n"
+                    f"PG's affected : {out['utilization']['moved_pgs']}\n"
+                    f"OSd's affected: {[entry for entry in out['reweights']]}"
+                )
+                # Sleeping for 5 seconds after command execution for process to start
+                time.sleep(5)
+            else:
+                log.info(
+                    "No re-weights based on utilization were triggered. PG distribution is optimal"
+                )
+                return True
+
+        if kwargs.get("verify_reweight"):
+            if not self.verify_reweight(
+                affected_osds=affected_osds, osd_info=osd_info_init
+            ):
+                log.error("OSD utilization was not reduced upon re-weight")
+                return False
+        log.info("Completed the re-weight of OSD's")
+        return True
+
+    def verify_reweight(self, affected_osds: list, osd_info: list) -> bool:
+        """
+        Verifies if Re-weight of various CRUSH items reduced the data on the re-weighted OSD's
+        Args:
+            affected_osds: osd's whose weights were changed
+            osd_info: OSD details before the re-weight was performed
+        Returns: Pass -> True, Fail -> False
+        """
+        # Increasing backfill & recovery rate
+        self.change_recover_threads(config={}, action="set")
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
+        while end_time > datetime.datetime.now():
+            status_report = self.run_ceph_command(cmd="ceph report")
+            # Proceeding to check if all PG's are in active + clean
+            for entry in status_report["num_pg_by_state"]:
+                rec = (
+                    "remapped",
+                    "backfilling",
+                )
+                flag = (
+                    False
+                    if any(key in rec for key in entry["state"].split("+"))
+                    else True
+                )
+
+            if flag:
+                log.info("The recovery and back-filling of the OSD is completed")
+                break
+            log.info(
+                f"Waiting for active + clean. Active aletrs: {status_report['health']['checks'].keys()},"
+                f"PG States : {status_report['num_pg_by_state']}"
+                f" checking status again in 1 minutes"
+            )
+            time.sleep(60)
+        self.change_recover_threads(config={}, action="rm")
+        if not flag:
+            log.error(
+                "The cluster did not reach active + Clean After re-balancing by capacity"
+            )
+            return False
+
+        # Checking OSD utilization after re-weight
+        cmd = "ceph osd df tree"
+        out = self.run_ceph_command(cmd=cmd)
+
+        osd_info_end = [entry for entry in out["nodes"] if entry["id"] in affected_osds]
+        for osd_end in osd_info_end:
+            for osd_init in osd_info:
+                if int(osd_init["id"]) == int(osd_end["id"]):
+                    if int(osd_init["kb_used"]) > int(osd_end["kb_used"]):
+                        log.error(
+                            f"The utilization is higher for OSD : {osd_init['id']}"
+                            f"end KB: {int(osd_end['kb_used'])}, init KB: {int(osd_init['kb_used'])}"
+                        )
+                        return False
+
+        return True
+
+    def detete_pool(self, pool: str) -> bool:
+        """
+        Deletes the given pool from the cluster
+        Args:
+            pool: name of the pool to be deleted
+        Returns: True -> pass, False -> fail
+        """
+        # Checking if config is set to allow pool deletion
+        config_dump = self.run_ceph_command(cmd="ceph config dump")
+        if "mon_allow_pool_delete" not in [conf["name"] for conf in config_dump]:
+            cmd = "ceph config set mon mon_allow_pool_delete true"
+            self.node.shell([cmd])
+
+        existing_pools = self.run_ceph_command(cmd="ceph df")
+        if pool not in [ele["name"] for ele in existing_pools["pools"]]:
+            log.error(f"Pool:{pool} does not exist on cluster, cannot delete")
+            return True
+
+        cmd = f"ceph osd pool delete {pool} {pool} --yes-i-really-really-mean-it"
+        self.node.shell([cmd])
+
+        existing_pools = self.run_ceph_command(cmd="ceph df")
+        if pool not in [ele["name"] for ele in existing_pools["pools"]]:
+            log.info(f"Pool:{pool} deleted Successfully")
+            return True
+        log.error(f"Pool:{pool} could not be deleted on cluster")
+        return False
+
+    def enable_file_logging(self) -> bool:
+        """
+        Enables the cluster logging into files at var/log/ceph and checks file permissions
+        Returns: True -> pass, False -> fail
+        """
+        try:
+            cmd = "ceph config set global log_to_file true"
+            self.node.shell([cmd])
+            cmd = "ceph config set global mon_cluster_log_to_file true"
+            self.node.shell([cmd])
+        except Exception:
+            log.error("Error while enabling config to log into file")
+            return False
+        return True
+
+    def create_erasure_pool(self, name: str, **kwargs) -> bool:
+        """
+        Creates a erasure code profile and then creates a pool with the same
+        References: https://docs.ceph.com/en/latest/rados/operations/erasure-code/
+        Args:
+            name: Name of the profile to create
+            **kwargs: Any other param that needs to be set in the EC profile
+                1. k -> the number of data chunks (int)
+                2. m -> the number of coding chunks (int)
+                3. l -> Group the coding and data chunks into sets of size locality.
+                4. crush-failure-domain -> crush object to be us to store replica sets (str)
+                5. plugin -> plugin to be set (str)
+                    supported plugins:
+                    1. jerasure (default)
+                    2. isa
+                    3. lrc
+                    4. shec
+                    5. clay
+                6. pool_name -> pool name to create and associate with the EC profile being created
+        Returns: True -> pass, False -> fail
+        """
+        failure_domain = kwargs.get("crush-failure-domain", "osd")
+        k = kwargs.get("k", 3)
+        m = kwargs.get("m", 2)
+        l = kwargs.get("l")
+        plugin = kwargs.get("plugin", "jerasure")
+        pool_name = kwargs.get("pool_name")
+        profile_name = f"ecprofile_{name}"
+
+        # Creating a erasure coded profile with the options provided
+        cmd = (
+            f"ceph osd erasure-code-profile set {profile_name}"
+            f" crush-failure-domain={failure_domain} k={k} m={m} plugin={plugin} --force "
+        )
+
+        if plugin == "lrc":
+            cmd = cmd + f" l={l}"
+        try:
+            self.node.shell([cmd])
+        except Exception as err:
+            log.error(f"Failed to create ec profile : {profile_name}")
+            log.error(err)
+            return False
+
+        cmd = f"ceph osd erasure-code-profile get {profile_name}"
+        log.info(self.node.shell([cmd]))
+        # Creating the pool with the profile created
+        if not self.create_pool(
+            ec_profile_name=profile_name,
+            **kwargs,
+        ):
+            log.error(f"Failed to create Pool {pool_name}")
+            return False
+        log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
+        return True
+
+    def change_osd_state(self, action: str, target: int) -> bool:
+        """
+        Changes the state of the OSD daemons wrt the action provided
+        Args:
+            action: operation to be performed on the service, i.e start, stop, restart
+            target: ID osd the target OSD
+        Returns: Pass -> True, Fail -> False
+        """
+
+        cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        osd_nodes = self.ceph_cluster.get_nodes(role="osd")
+        flag = False
+        for onode in osd_nodes:
+            res = self.collect_osd_daemon_ids(osd_node=onode)
+            if target in res:
+                cmd = f"systemctl {action} ceph-{cluster_fsid}@osd.{target}.service"
+                flag = True
+                log.info(
+                    f"Performing {action} on osd-{target} on host {onode.hostname}. Command {cmd}"
+                )
+                onode.exec_command(sudo=True, cmd=cmd)
+                # Sleeping for 5 seconds for status to be updated
+                time.sleep(5)
+                return True
+        if not flag:
+            log.error(f"osd-{target} not found on cluster")
+            return False
