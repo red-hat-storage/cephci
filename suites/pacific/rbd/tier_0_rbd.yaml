@@ -115,6 +115,7 @@ tests:
       desc: "Executing upstream RBD CLI Generic scenarios"
       module: test_rbd.py
       name: 1_rbd_cli_generic
+      polarion-id: CEPH-83574241
   -
     test:
       config:
@@ -124,6 +125,7 @@ tests:
       desc: "Executing upstream RBD CLI Groups scenarios"
       module: test_rbd.py
       name: 2_rbd_cli_groups
+      polarion-id: CEPH-83574239
   -
     test:
       config:
@@ -133,6 +135,7 @@ tests:
       desc: "Executing upstream RBD CLI Import Export scenarios"
       module: test_rbd.py
       name: 3_rbd_cli_import_export
+      polarion-id: CEPH-83574240
   -
     test:
       config:
