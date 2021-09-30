@@ -72,3 +72,13 @@ tests:
         config-file-name: test_sts_using_boto_server_side_copy.yaml
         timeout: 500
 
+  - test:
+      name: Multipart upload with Bucket policy enabled
+      desc: Perform multipart upload with Bucket policy enabled
+      polarion-id: CEPH-83574538
+      comments: BZ 1960262
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_with_multipart_upload.yaml
+        timeout: 500
