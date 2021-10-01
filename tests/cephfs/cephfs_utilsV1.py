@@ -102,6 +102,15 @@ class FsUtils(object):
             log.info("Giving required permissions for clients:")
             client.exec_command(
                 sudo=True,
+                cmd=f"ceph auth get client.{client.node.hostname}",
+                check_ec=False,
+            )
+            if client.node.exit_status == 0:
+                client.exec_command(
+                    sudo=True, cmd=f"ceph auth del client.{client.node.hostname}"
+                )
+            client.exec_command(
+                sudo=True,
                 cmd=f"ceph auth get-or-create client.{client.node.hostname}"
                 f" mon 'allow *' mds "
                 f"'allow *, allow * path=/' osd 'allow *'"
