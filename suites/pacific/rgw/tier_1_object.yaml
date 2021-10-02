@@ -1,7 +1,7 @@
-"""
-Note: If the following tests are being called and executed manually or via pipeline.
-      Please use conf/pacific/rgw/tier_0_rgw.yaml
-"""
+# Tier-1: Downstream RGW test suite focusing on verifying the core features.
+
+# Config:  conf/pacific/rgw/tier_0_rgw.yaml
+
 tests:
   - test:
       abort-on-fail: true
