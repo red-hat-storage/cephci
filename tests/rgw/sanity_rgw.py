@@ -125,15 +125,18 @@ def run(ceph_cluster, **kw):
             + f"-r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
         )
 
-        # Ceph object's containerized attribute is not initialized and bound to err
-        # as a workaround for 5.x, checking if the environment is 5.0
-        if ceph_cluster.rhcs_version == "5.0" or ceph_cluster.containerized:
-            if ceph_cluster.rhcs_version == "5.0":
-                setup_cluster_access(ceph_cluster, rgw_node)
-
+        if ceph_cluster.rhcs_version.version[0] == 5:
+            setup_cluster_access(ceph_cluster, rgw_node)
             rgw_node.exec_command(
                 sudo=True, cmd="yum install -y ceph-radosgw --nogpgcheck"
             )
+
+        if ceph_cluster.rhcs_version.version[0] in [3, 4]:
+            if ceph_cluster.containerized:
+                # install ceph-radosgw on the host hosting the container
+                rgw_node.exec_command(
+                    sudo=True, cmd="yum install -y ceph-radosgw --nogpgcheck"
+                )
 
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
