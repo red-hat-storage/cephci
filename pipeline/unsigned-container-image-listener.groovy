@@ -105,4 +105,16 @@ node(nodeName) {
 
         lib.SendUMBMessage(msgContent, overrideTopic, msgType)
     }
+
+    stage("Push Ceph Recipe") {
+        def recipeMap = [
+            "ceph-version": cephVersion,
+            "repository": compose.repository.tokenize(":")[-1],
+            "RHCephVersion": "RHCEPH-${versions.major_version}.${versions.minor_version}",
+            "platforms": releaseDetails.latest.composes.keySet()
+        ]
+
+        lib.uploadBuildRecipe(recipeMap)
+    }
+
 }

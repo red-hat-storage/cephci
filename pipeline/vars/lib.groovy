@@ -458,4 +458,71 @@ def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
     }
 }
 
+def uploadBuildRecipe(def recipeMap){
+    /*
+        This method is to PUSH Red Hat Ceph build recipe into
+        rhceph-qe-recipe github repository.
+
+        Args:
+            recipeMap   RHceph build recipe details in map
+    */
+    def recipeDir = "recipe-directory"
+    def hostAliasName = "github.com-rhceph-qe-recipe"
+    def recipeRepoUrl = "git@${hostAliasName}:red-hat-storage/rhceph-qe-recipe.git"
+    def keyPath = "~/.ssh"
+    def keyFilename = "${keyPath}/rhceph-qe-recipe-key"
+    def sshConfig = "${keyPath}/config"
+    def gitUser = "cephci"
+    def gitEmail = "cephci@redhat.com"
+
+    withCredentials([
+        sshUserPrivateKey(
+            credentialsId: 'rhceph-qe-recipe-key',
+            keyFileVariable: 'KEYFILE',
+            )
+        ]) {
+        sh "sudo cp ${KEYFILE} ${keyFilename}"
+        sh "echo -e '\nHost ${hostAliasName}\n\tHostname github.com\n\tIdentityFile ${keyFilename}' > ${sshConfig}"
+        sh "cat ${sshConfig}"
+        sh "rm -rf ${recipeDir}"
+
+        checkout([
+            $class: 'GitSCM',
+            branches: [[
+                name: '*/master'
+            ]],
+            extensions: [
+                [$class: 'RelativeTargetDirectory', relativeTargetDir: recipeDir],
+                [$class: 'CleanBeforeCheckout'],
+            ],
+            userRemoteConfigs: [
+                [
+                    credentialsId: 'rhceph-qe-recipe-key',
+                    url: recipeRepoUrl
+                ]
+            ]
+        ])
+    }
+
+    dir(recipeDir){
+        sh "git checkout master"
+        sh "git pull --rebase origin master"
+
+        def dateTime = sh (returnStdout: true, script: "date '+%D %Z %H-%M-%S'").trim()
+        recipeMap["updated"] = dateTime
+        def recipeFile = "${recipeMap['RHCephVersion']}.recipe"
+        writeYaml file: recipeFile, data: recipeMap, overwrite: true
+
+        sh "ls -ltrh"
+        sh "cat ${recipeFile}"
+        sh "git config push.default simple"
+        sh "git config --local user.email ${gitUser}"
+        sh "git config --local user.name ${gitEmail}"
+        sh "git add ${recipeFile}; git status"
+        sh "git commit -s -m '[${dateTime}] ${recipeMap['ceph-version']} ${recipeFile}'"
+        sh "git push origin master"
+    }
+}
+
+
 return this;
