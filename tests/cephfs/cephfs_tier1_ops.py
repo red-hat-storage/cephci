@@ -70,6 +70,7 @@ def run(ceph_cluster, **kw):
             return 1
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        default_fs = "cephfs"
         if build.startswith("4"):
             # create EC pool
             list_cmds = [
@@ -79,12 +80,15 @@ def run(ceph_cluster, **kw):
                 "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
                 "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
             ]
+            if fs_util.get_fs_info(clients[0], "cephfs_new"):
+                default_fs = "cephfs_new"
+                list_cmds.append("ceph fs volume create cephfs")
             for cmd in list_cmds:
                 clients[0].exec_command(sudo=True, cmd=cmd)
         log.info("Create 2 SubVolumeGroups on each file system")
         subvolumegroup_list = [
-            {"vol_name": "cephfs", "group_name": "subvolgroup_1"},
-            {"vol_name": "cephfs", "group_name": "subvolgroup_2"},
+            {"vol_name": default_fs, "group_name": "subvolgroup_1"},
+            {"vol_name": default_fs, "group_name": "subvolgroup_2"},
             {"vol_name": "cephfs-ec", "group_name": "subvolgroup_1"},
             {"vol_name": "cephfs-ec", "group_name": "subvolgroup_2"},
         ]
@@ -93,13 +97,13 @@ def run(ceph_cluster, **kw):
         log.info("Create 2 Sub volumes on each of the subvolume group Size 20 GB")
         subvolume_list = [
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_1",
                 "group_name": "subvolgroup_1",
                 "size": "5368706371",
             },
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_2",
                 "group_name": "subvolgroup_2",
                 "size": "5368706371",
@@ -116,11 +120,11 @@ def run(ceph_cluster, **kw):
                 "group_name": "subvolgroup_2",
                 "size": "5368706371",
             },
-            {"vol_name": "cephfs", "subvol_name": "subvol_5", "size": "5368706371"},
-            {"vol_name": "cephfs", "subvol_name": "subvol_6", "size": "5368706371"},
+            {"vol_name": default_fs, "subvol_name": "subvol_5", "size": "5368706371"},
+            {"vol_name": default_fs, "subvol_name": "subvol_6", "size": "5368706371"},
             {"vol_name": "cephfs-ec", "subvol_name": "subvol_7", "size": "5368706371"},
             {"vol_name": "cephfs-ec", "subvol_name": "subvol_8", "size": "5368706371"},
-            {"vol_name": "cephfs", "subvol_name": "subvol_9", "size": "5368706371"},
+            {"vol_name": default_fs, "subvol_name": "subvol_9", "size": "5368706371"},
             {"vol_name": "cephfs-ec", "subvol_name": "subvol_10", "size": "5368706371"},
         ]
         for subvolume in subvolume_list:
@@ -137,7 +141,8 @@ def run(ceph_cluster, **kw):
         mon_node_ips = fs_util.get_mon_node_ips()
         log.info("Get the path of sub volume")
         subvol_path, rc = clients[0].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs subvol_1 subvolgroup_1"
+            sudo=True,
+            cmd=f"ceph fs subvolume getpath {default_fs} subvol_1 subvolgroup_1",
         )
         fs_util.kernel_mount(
             [clients[0]],
@@ -147,7 +152,7 @@ def run(ceph_cluster, **kw):
         )
 
         subvol_path, rc = clients[0].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs subvol_5"
+            sudo=True, cmd=f"ceph fs subvolume getpath {default_fs} subvol_5"
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fs_util.fuse_mount(
@@ -164,7 +169,7 @@ def run(ceph_cluster, **kw):
         log.info("Get the path of sub volume")
 
         subvol_path, rc = clients[1].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs subvol_6"
+            sudo=True, cmd=f"ceph fs subvolume getpath {default_fs} subvol_6"
         )
         fs_util.kernel_mount(
             [clients[1]],
@@ -174,7 +179,8 @@ def run(ceph_cluster, **kw):
         )
 
         subvol_path, rc = clients[1].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs subvol_2 subvolgroup_2"
+            sudo=True,
+            cmd=f"ceph fs subvolume getpath {default_fs} subvol_2 subvolgroup_2",
         )
         fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
         fs_util.fuse_mount(
@@ -256,13 +262,13 @@ def run(ceph_cluster, **kw):
         log.info("Create Snapshots.Verify the snap ls")
         snapshot_list = [
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_1",
                 "snap_name": "snap_1",
                 "group_name": "subvolgroup_1",
             },
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_2",
                 "snap_name": "snap_2",
                 "group_name": "subvolgroup_2",
@@ -279,8 +285,8 @@ def run(ceph_cluster, **kw):
                 "snap_name": "snap_4",
                 "group_name": "subvolgroup_2",
             },
-            {"vol_name": "cephfs", "subvol_name": "subvol_5", "snap_name": "snap_5"},
-            {"vol_name": "cephfs", "subvol_name": "subvol_6", "snap_name": "snap_6"},
+            {"vol_name": default_fs, "subvol_name": "subvol_5", "snap_name": "snap_5"},
+            {"vol_name": default_fs, "subvol_name": "subvol_6", "snap_name": "snap_6"},
             {"vol_name": "cephfs-ec", "subvol_name": "subvol_7", "snap_name": "snap_7"},
             {"vol_name": "cephfs-ec", "subvol_name": "subvol_8", "snap_name": "snap_8"},
         ]
@@ -289,14 +295,14 @@ def run(ceph_cluster, **kw):
 
         clone_list = [
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_1",
                 "snap_name": "snap_1",
                 "target_subvol_name": "clone_1",
                 "group_name": "subvolgroup_1",
             },
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_2",
                 "snap_name": "snap_2",
                 "target_subvol_name": "clone_2",
@@ -317,13 +323,13 @@ def run(ceph_cluster, **kw):
                 "group_name": "subvolgroup_2",
             },
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_5",
                 "snap_name": "snap_5",
                 "target_subvol_name": "clone_5",
             },
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_6",
                 "snap_name": "snap_6",
                 "target_subvol_name": "clone_6",
@@ -348,7 +354,7 @@ def run(ceph_cluster, **kw):
             "under 2 directories under subvolume"
         )
         subvol_path, rc = clients[0].exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs subvol_9"
+            sudo=True, cmd=f"ceph fs subvolume getpath {default_fs} subvol_9"
         )
         fuse_mounting_dir_5 = f"/mnt/cephfs_fuse{mounting_dir}_5/"
         fs_util.fuse_mount(
@@ -445,13 +451,13 @@ def run(ceph_cluster, **kw):
         )
         rmsnapshot_list = [
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_1",
                 "snap_name": "snap_1",
                 "group_name": "subvolgroup_1",
             },
             {
-                "vol_name": "cephfs",
+                "vol_name": default_fs,
                 "subvol_name": "subvol_2",
                 "snap_name": "snap_2",
                 "group_name": "subvolgroup_2",
@@ -468,8 +474,8 @@ def run(ceph_cluster, **kw):
                 "snap_name": "snap_4",
                 "group_name": "subvolgroup_2",
             },
-            {"vol_name": "cephfs", "subvol_name": "subvol_5", "snap_name": "snap_5"},
-            {"vol_name": "cephfs", "subvol_name": "subvol_6", "snap_name": "snap_6"},
+            {"vol_name": default_fs, "subvol_name": "subvol_5", "snap_name": "snap_5"},
+            {"vol_name": default_fs, "subvol_name": "subvol_6", "snap_name": "snap_6"},
             {"vol_name": "cephfs-ec", "subvol_name": "subvol_7", "snap_name": "snap_7"},
             {"vol_name": "cephfs-ec", "subvol_name": "subvol_8", "snap_name": "snap_8"},
         ]
@@ -477,12 +483,12 @@ def run(ceph_cluster, **kw):
             fs_util.remove_snapshot(clients[0], **snapshot)
 
         rmclone_list = [
-            {"vol_name": "cephfs", "subvol_name": "clone_1"},
-            {"vol_name": "cephfs", "subvol_name": "clone_2"},
+            {"vol_name": default_fs, "subvol_name": "clone_1"},
+            {"vol_name": default_fs, "subvol_name": "clone_2"},
             {"vol_name": "cephfs-ec", "subvol_name": "clone_3"},
             {"vol_name": "cephfs-ec", "subvol_name": "clone_4"},
-            {"vol_name": "cephfs", "subvol_name": "clone_5"},
-            {"vol_name": "cephfs", "subvol_name": "clone_6"},
+            {"vol_name": default_fs, "subvol_name": "clone_5"},
+            {"vol_name": default_fs, "subvol_name": "clone_6"},
             {"vol_name": "cephfs-ec", "subvol_name": "clone_7"},
             {"vol_name": "cephfs-ec", "subvol_name": "clone_8"},
         ]
