@@ -3,6 +3,7 @@ globals:
       name: ceph1
       node1:
         role:
+          - _admin
           - mon
           - mgr
           - installer
@@ -36,6 +37,7 @@ globals:
       name: ceph2
       node1:
         role:
+          - _admin
           - mon
           - mgr
           - installer
