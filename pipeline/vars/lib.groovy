@@ -470,18 +470,23 @@ def uploadBuildRecipe(def recipeMap){
     def hostAliasName = "github.com-rhceph-qe-recipe"
     def recipeRepoUrl = "git@${hostAliasName}:red-hat-storage/rhceph-qe-recipe.git"
     def keyPath = "~/.ssh"
-    def keyFilename = "${keyPath}/rhceph-qe-recipe-key"
+    def keyFilename = "/tmp/rhceph-qe-recipe-key"
     def sshConfig = "${keyPath}/config"
     def gitUser = "cephci"
     def gitEmail = "cephci@redhat.com"
 
+    println "Recipe Map - ${recipeMap}"
+
     withCredentials([
         sshUserPrivateKey(
             credentialsId: 'rhceph-qe-recipe-key',
-            keyFileVariable: 'KEYFILE',
+            keyFileVariable: 'ssh_key_file',
             )
         ]) {
-        sh "sudo cp ${KEYFILE} ${keyFilename}"
+        sh "rm -rf ${keyFilename}"
+        def file = readFile(ssh_key_file)
+        writeFile(file: "${keyFilename}", text: file)
+        sh "chmod 400 ${keyFilename}"
         sh "echo -e '\nHost ${hostAliasName}\n\tHostname github.com\n\tIdentityFile ${keyFilename}' > ${sshConfig}"
         sh "cat ${sshConfig}"
         sh "rm -rf ${recipeDir}"
@@ -508,7 +513,7 @@ def uploadBuildRecipe(def recipeMap){
         sh "git checkout master"
         sh "git pull --rebase origin master"
 
-        def dateTime = sh (returnStdout: true, script: "date '+%D %Z %H-%M-%S'").trim()
+        def dateTime = sh (returnStdout: true, script: "date '+%D-%H:%M:%S-%Z'").trim()
         recipeMap["updated"] = dateTime
         def recipeFile = "${recipeMap['RHCephVersion']}.recipe"
         writeYaml file: recipeFile, data: recipeMap, overwrite: true
