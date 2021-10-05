@@ -7,6 +7,7 @@ def lib
 def versions
 def cephVersion
 def compose
+def releaseDetails = [:]
 
 // Pipeline script entry point
 
@@ -44,7 +45,7 @@ node(nodeName) {
         versions = lib.fetchMajorMinorOSVersion('unsigned-container-image')
         cephVersion = lib.fetchCephVersion(compose.compose_url)
 
-        def releaseDetails = lib.readFromReleaseFile(
+        releaseDetails = lib.readFromReleaseFile(
             versions.major_version, versions.minor_version
         )
         if ( !releaseDetails?.latest?."ceph-version") {
