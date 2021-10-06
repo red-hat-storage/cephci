@@ -22,7 +22,12 @@ from libcloud.common.types import LibcloudError
 
 from ceph.ceph import Ceph, CephNode
 from ceph.clients import WinNode
-from ceph.utils import cleanup_ceph_nodes, create_ceph_nodes
+from ceph.utils import (
+    cleanup_ceph_nodes,
+    cleanup_ibmc_ceph_nodes,
+    create_ceph_nodes,
+    create_ibmc_ceph_nodes,
+)
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
@@ -46,6 +51,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
   run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE
+        [--cloud <openstack> | <ibmc> ]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--ubuntu-repo <repo>]
@@ -78,7 +84,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
         [--grafana-image <image-name>]
-  run.py --cleanup=name [--osp-cred <file>]
+  run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
 Options:
@@ -90,6 +96,7 @@ Options:
                                     eg: -f 'rbd' will run tests that have 'rbd'
   --global-conf <file>              global cloud configuration file
   --inventory <file>                hosts inventory file
+  --cloud <cloud_type>              cloud type [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
@@ -160,6 +167,7 @@ def create_nodes(
     inventory,
     osp_cred,
     run_id,
+    cloud_type="openstack",
     report_portal_session=None,
     instances_name=None,
     enable_eus=False,
@@ -173,35 +181,59 @@ def create_nodes(
         )
 
     log.info("Destroying existing osp instances..")
-    cleanup_ceph_nodes(osp_cred, instances_name)
+    if cloud_type == "openstack":
+        cleanup_ceph_nodes(osp_cred, instances_name)
+    elif cloud_type == "ibmc":
+        cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
+
     ceph_cluster_dict = {}
 
     log.info("Creating osp instances")
     clients = []
     for cluster in conf.get("globals"):
-        ceph_vmnodes = create_ceph_nodes(
-            cluster, inventory, osp_cred, run_id, instances_name, enable_eus=enable_eus
-        )
+        if cloud_type == "openstack":
+            ceph_vmnodes = create_ceph_nodes(
+                cluster,
+                inventory,
+                osp_cred,
+                run_id,
+                instances_name,
+                enable_eus=enable_eus,
+            )
+        elif cloud_type == "ibmc":
+            ceph_vmnodes = create_ibmc_ceph_nodes(
+                cluster, inventory, osp_cred, run_id, instances_name
+            )
 
         ceph_nodes = []
         for node in ceph_vmnodes.values():
+            if cloud_type == "openstack":
+                private_key_path = ""
+                private_ip = node.get_private_ip()
+                look_for_key = False
+            elif cloud_type == "ibmc":
+                glbs = osp_cred.get("globals")
+                ibmc = glbs.get("ibm-credentials")
+                private_key_path = ibmc.get("private_key_path")
+                private_ip = node.ip_address
+                look_for_key = True
             if node.role == "win-iscsi-clients":
                 clients.append(
-                    WinNode(
-                        ip_address=node.ip_address, private_ip=node.get_private_ip()
-                    )
+                    WinNode(ip_address=node.ip_address, private_ip=private_ip)
                 )
             else:
                 ceph = CephNode(
                     username="cephuser",
                     password="cephuser",
                     root_password="passwd",
+                    look_for_key=look_for_key,
+                    private_key_path=private_key_path,
                     root_login=node.root_login,
                     role=node.role,
                     no_of_volumes=node.no_of_volumes,
                     ip_address=node.ip_address,
                     subnet=node.subnet,
-                    private_ip=node.get_private_ip(),
+                    private_ip=private_ip,
                     hostname=node.hostname,
                     ceph_vmnode=node,
                 )
@@ -275,6 +307,7 @@ def run(args):
     inventory_file = args["--inventory"]
     osp_cred_file = args["--osp-cred"]
     suite_file = args["--suite"]
+    cloud_type = args.get("--cloud", "openstack")
     version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
@@ -301,7 +334,10 @@ def run(args):
     osp_cred = load_file(osp_cred_file)
     cleanup_name = args.get("--cleanup", None)
     if cleanup_name:
-        cleanup_ceph_nodes(osp_cred, cleanup_name)
+        if cloud_type == "openstack":
+            cleanup_ceph_nodes(osp_cred, cleanup_name)
+        elif cloud_type == "ibmc":
+            cleanup_ibmc_ceph_nodes(osp_cred, cleanup_name)
         return 0
 
     platform = None
@@ -488,13 +524,21 @@ def run(args):
 
         # get COMPOSE ID and ceph version
         if build not in ["released", "cvp"]:
-            id = requests.get(base_url + "/COMPOSE_ID", verify=False)
-            compose_id = id.text
+            if cloud_type == "openstack":
+                id = requests.get(base_url + "/COMPOSE_ID", verify=False)
+                compose_id = id.text
+            elif cloud_type == "ibmc":
+                compose_id = "UNKNOWN"
 
             if "rhel" == inventory.get("id"):
-                ceph_pkgs = requests.get(
-                    base_url + "/compose/Tools/x86_64/os/Packages/", verify=False
-                )
+                if cloud_type == "ibmc":
+                    ceph_pkgs = requests.get(
+                        base_url + "/Tools/Packages/", verify=False
+                    )
+                elif cloud_type == "openstack":
+                    ceph_pkgs = requests.get(
+                        base_url + "/compose/Tools/x86_64/os/Packages/", verify=False
+                    )
                 m = re.search(r"ceph-common-(.*?).x86", ceph_pkgs.text)
                 ceph_version.append(m.group(1))
                 m = re.search(r"ceph-ansible-(.*?).rpm", ceph_pkgs.text)
@@ -593,6 +637,7 @@ def run(args):
                 inventory,
                 osp_cred,
                 run_id,
+                cloud_type,
                 service,
                 instances_name,
                 enable_eus=enable_eus,
@@ -892,7 +937,10 @@ def run(args):
                 break
 
         if test.get("destroy-cluster") is True:
-            cleanup_ceph_nodes(osp_cred, instances_name)
+            if cloud_type == "openstack":
+                cleanup_ceph_nodes(osp_cred, instances_name)
+            elif cloud_type == "ibmc":
+                cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
 
         if test.get("recreate-cluster") is True:
             ceph_cluster_dict, clients = create_nodes(
@@ -900,6 +948,7 @@ def run(args):
                 inventory,
                 osp_cred,
                 run_id,
+                cloud_type,
                 service,
                 instances_name,
                 enable_eus=enable_eus,

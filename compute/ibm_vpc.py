@@ -299,6 +299,10 @@ class CephVMNodeIBM:
             key_identity_model = {}
             key_identity_model["id"] = key_id
 
+            key_identity_shared = {
+                "fingerprint": "SHA256:OkzMbGLDIzqUcZoH9H/j5o/v01trlqKqp5DaUpJ0tcQ"
+            }
+
             # Construct a dict representation of a SecurityGroupIdentityById model
             security_group_identity_model = {}
             security_group_identity_model["id"] = security_group_id
@@ -361,7 +365,7 @@ class CephVMNodeIBM:
 
             # Construct a dict representation of a InstancePrototypeInstanceByImage model
             instance_prototype_model = {}
-            instance_prototype_model["keys"] = [key_identity_model]
+            instance_prototype_model["keys"] = [key_identity_model, key_identity_shared]
 
             instance_prototype_model["name"] = node_name.lower()
             instance_prototype_model["profile"] = instance_profile_identity_model

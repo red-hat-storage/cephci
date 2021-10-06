@@ -14,7 +14,8 @@ from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-from mita.v2 import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
+from compute.ibm_vpc import CephVMNodeIBM
+from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.retry import retry
 from utility.utils import generate_node_name
 
@@ -24,6 +25,169 @@ from .parallel import parallel
 log = logging.getLogger(__name__)
 RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 DEFAULT_OSBS_SERVER = "http://file.rdu.redhat.com/~kdreyer/osbs/"
+
+
+def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, timeout=300):
+    """
+    Clean up the DNS records, instance and volumes that matches the given pattern.
+
+    Args:
+         ibm_cred     global configuration file(ibm)
+         pattern      pattern to match instance name
+         timeout      Max time limit for cleanup instance
+    """
+    glbs = ibm_cred.get("globals")
+    ibmc = glbs.get("ibm-credentials")
+
+    vm = CephVMNodeIBM(ibmc["access-key"], ibmc["service-url"])
+    vm.clean_up_instances(ibmc["access-key"], pattern, ibmc["zone_name"], timeout)
+    log.info(f"Done cleaning up nodes with pattern {pattern}")
+
+
+def create_ibmc_ceph_nodes(
+    cluster_conf, inventory, ibm_creds, run_id, instances_name=None
+):
+    """
+    creates instances in IBM cloud
+
+    Args:
+         cluster_conf     configuration of cluster
+         inventory        Instance configuration file
+         ibm_creds        global configuration file(ibm)
+         run_id           unique id for the run
+         instances_name   Name of the instance
+    """
+    log.info("testing ibm stage")
+    ibm_glbs = ibm_creds.get("globals")
+    ibm_cred = ibm_glbs.get("ibm-credentials")
+    params = dict()
+    ceph_cluster = cluster_conf.get("ceph-cluster")
+    ceph_nodes = dict()
+    if ceph_cluster.get("inventory"):
+        inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
+        with open(inventory_path, "r") as inventory_stream:
+            inventory = yaml.safe_load(inventory_stream)
+    node_count = 0
+
+    params["cloud-data"] = inventory.get("instance").get("setup")
+    params["accesskey"] = ibm_cred["access-key"]
+    params["service_url"] = ibm_cred["service-url"]
+    params["zone_name"] = ibm_cred["zone_name"]
+    params["vpc_name"] = ibm_cred["vpc_name"]
+    params["zone_id_model_name"] = ibm_cred["zone_id_model_name"]
+
+    if inventory.get("instance").get("create"):
+        if ceph_cluster.get("image-name"):
+            params["image-name"] = ceph_cluster.get("image-name")
+        else:
+            params["image-name"] = (
+                inventory.get("instance").get("create").get("image-name")
+            )
+
+        params["cluster-name"] = ceph_cluster.get("name")
+        params["network_name"] = (
+            inventory.get("instance").get("create").get("network_name")
+        )
+        params["private_key"] = (
+            inventory.get("instance").get("create").get("private_key")
+        )
+        params["group_access"] = (
+            inventory.get("instance").get("create").get("group_access")
+        )
+        params["profile"] = inventory.get("instance").get("create").get("profile")
+
+        if params.get("root-login") is False:
+            params["root-login"] = False
+        else:
+            params["root-login"] = True
+
+        with parallel() as p:
+            for node in range(1, 100):
+                node = "node" + str(node)
+                if not ceph_cluster.get(node):
+                    break
+
+                node_dict = ceph_cluster.get(node)
+                node_params = params.copy()
+                node_params["role"] = RolesContainer(node_dict.get("role"))
+
+                node_params["node-name"] = generate_node_name(
+                    node_params.get("cluster-name", "ceph"),
+                    instances_name,
+                    run_id,
+                    node,
+                    node_params["role"],
+                )
+
+                if node_dict.get("no-of-volumes"):
+                    node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
+                    node_params["size-of-disks"] = node_dict.get("disk-size")
+                    # osd-scenario option is not mandatory and,
+                    # can be used only for specific OSD_SCENARIO
+                    node_params["osd-scenario"] = node_dict.get("osd-scenario")
+
+                if node_dict.get("image-name"):
+                    node_params["image-name"] = node_dict.get("image-name")
+
+                if node_dict.get("cloud-data"):
+                    node_params["cloud-data"] = node_dict.get("cloud-data")
+                node_count += 1
+                p.spawn(setup_vm_node_ibm, node, ceph_nodes, **node_params)
+
+    if len(ceph_nodes) != node_count:
+        log.error(
+            f"Mismatch error in number of VMs creation. "
+            f"Initiated: {node_count}  \tSpawned: {len(ceph_nodes)}"
+        )
+        raise NodeError("Required number of nodes not created")
+
+    log.info("Done creating nodes")
+    return ceph_nodes
+
+
+@retry(RETRY_EXCEPTIONS, tries=3, delay=10)
+def setup_vm_node_ibm(node, ceph_nodes, **params):
+    """
+    Create the VM node using IBM API calls.
+
+    The retry decorator will trigger a rerun when a soft error is encountered. The VM
+    node is removed in exception scope before throwing raising the exception again.
+    """
+    vm = None
+    try:
+        vm = CephVMNodeIBM(
+            accessKey=params["accesskey"], serviceUrl=params["service_url"]
+        )
+
+        vm.create(
+            node_name=params["node-name"],
+            image_name=params["image-name"],
+            network_name=params["network_name"],
+            private_key=params["private_key"],
+            access_key=params["accesskey"],
+            vpc_name=params["vpc_name"],
+            profile=params["profile"],
+            group_access=params["group_access"],
+            zone_name=params["zone_name"],
+            zone_id_model_name=params["zone_id_model_name"],
+            size_of_disks=params.get("size-of-disks", 0),
+            no_of_volumes=params.get("no-of-volumes", 0),
+            userdata=params.get("cloud-data", ""),
+        )
+
+        vm.role = params["role"]
+        vm.root_login = params["root-login"]
+        vm.osd_scenario = params.get("osd-scenario", False)
+        ceph_nodes[node] = vm
+    except RETRY_EXCEPTIONS as retry_except:
+        log.warning(retry_except, exc_info=True)
+        if vm is not None:
+            vm.delete()
+
+        raise
+    except BaseException as be:  # noqa
+        log.error(be, exc_info=True)
+        raise
 
 
 def create_ceph_nodes(
