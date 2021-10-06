@@ -43,6 +43,14 @@ tests:
      destroy-cluster: False
      abort-on-fail: true
   - test:
+      name: cephfs-mdsfailover-pinning-io
+      module: CEPH-11227.py
+      config:
+        num_of_dirs: 1000
+      polarion-id: CEPH-11227
+      desc: MDSfailover on active-active mdss,performing client IOs with no pinning at the first,later pin 10 dirs with IOs
+      abort-on-fail: false
+  - test:
       name: cephfs-lifecycle ops
       module: CEPH-11333.py
       polarion-id: CEPH-11333
