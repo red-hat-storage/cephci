@@ -46,7 +46,7 @@ node(nodeName) {
         cephVersion = lib.fetchCephVersion(compose.compose_url)
 
         releaseDetails = lib.readFromReleaseFile(
-            versions.major_version, versions.minor_version
+            versions.major_version, versions.minor_version,
         )
         if ( !releaseDetails?.latest?."ceph-version") {
             lib.unSetLock(versions.major_version, versions.minor_version)
@@ -112,9 +112,8 @@ node(nodeName) {
             "ceph-version": cephVersion,
             "repository": compose.repository.tokenize(":")[-1],
             "RHCephVersion": "RHCEPH-${versions.major_version}.${versions.minor_version}",
-            "platforms": releaseDetails.latest.composes.keySet()
+            "platforms": releaseDetails.latest.composes.keySet().collect()
         ]
-
         lib.uploadBuildRecipe(recipeMap)
     }
 
