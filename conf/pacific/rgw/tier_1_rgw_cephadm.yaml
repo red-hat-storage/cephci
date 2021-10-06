@@ -5,6 +5,7 @@ globals:
 
       node1:
         role:
+          - _admin
           - installer
           - mgr
           - mon

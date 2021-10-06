@@ -3,6 +3,7 @@ globals:
       name: ceph
       node1:
         role:
+          - _admin
           - mon
           - mgr
           - mds
