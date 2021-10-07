@@ -142,7 +142,33 @@ tests:
             install_packages:
                 - ceph-common
             copy_admin_keyring: true
-        desc: Configure the Cephfs client system 1
+        desc: Configure the Cephfs client system 2
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+        abort-on-fail: true
+        config:
+            command: add
+            id: client.3
+            node: node10
+            install_packages:
+                - ceph-common
+            copy_admin_keyring: true
+        desc: Configure the Cephfs client system 3
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+        abort-on-fail: true
+        config:
+            command: add
+            id: client.4
+            node: node11
+            install_packages:
+                - ceph-common
+            copy_admin_keyring: true
+        desc: Configure the Cephfs client system 4
         destroy-cluster: false
         module: test_client.py
         name: configure client
@@ -170,3 +196,11 @@ tests:
         polarion-id: CEPH-83574483
         desc: client authorize test for cephfs
         abort-on-fail: false
+  - test:
+      name: cephfs-mdsfailover-pinning-io
+      module: dir_pinning.py
+      config:
+        num_of_dirs: 1000
+      polarion-id: CEPH-11227
+      desc: MDSfailover on active-active mdss,performing client IOs with no pinning at the first,later pin 10 dirs with IOs
+      abort-on-fail: false

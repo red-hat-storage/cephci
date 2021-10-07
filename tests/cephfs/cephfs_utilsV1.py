@@ -4,6 +4,7 @@ It contains all the re-useable functions related to cephfs
 It installs all the pre-requisites on client nodes
 
 """
+import datetime
 import json
 import logging
 
@@ -19,6 +20,8 @@ class FsUtils(object):
         Args:
             ceph_cluster (ceph.ceph.Ceph): ceph cluster
         """
+        self.result_vals = {}
+        self.return_counts = {}
         self.ceph_cluster = ceph_cluster
 
     def prepare_clients(self, clients, build):
@@ -618,3 +621,129 @@ class FsUtils(object):
             command += f"{kwargs.get('extra_params')}"
         out, rc = client.exec_command(sudo=True, cmd=command)
         return 0
+
+    def activate_multiple_mdss(self, clients):
+        """
+        Activate Multiple MDS for ceph filesystem
+        Args:
+            clients: Client_nodes
+        """
+        for client in clients:
+            fs_info = self.get_fs_info(client)
+            fs_name = fs_info.get("fs_name")
+            log.info("Activating Multiple MDSs:")
+            client.exec_command(cmd="ceph -v | awk {'print $3'}")
+            command = f"ceph fs set {fs_name} max_mds 2"
+            client.exec_command(sudo=True, cmd=command)
+            return 0
+
+    def mds_cleanup(self, nodes, dir_fragmentation):
+        """
+        Deactivating multiple mds activated, by setting it to single mds server
+        Args:
+            nodes: Client_nodes
+            dir_fragmentation: fragmentation directory
+        """
+        log.info("Deactivating Multiple MDSs")
+        for node in nodes:
+            fs_info = self.get_fs_info(node)
+            fs_name = fs_info.get("fs_name")
+            log.info("Deactivating Multiple MDSs")
+            log.info("Setting Max mds to 1:")
+            command = f"ceph fs set {fs_name} max_mds 1"
+            node.exec_command(sudo=True, cmd=command)
+            if dir_fragmentation is not None:
+                log.info("Disabling directory fragmentation")
+                node.exec_command(
+                    sudo=True,
+                    cmd="ceph fs set %s allow_dirfrags 0" % fs_info.get("fs_name"),
+                )
+            break
+        return 0
+
+    def mds_fail_over(self, node):
+        """
+        method for validating MDS fail-over functionality
+        Args:
+            node: Client_node
+        """
+        timeout = 120
+        timeout = datetime.timedelta(seconds=timeout)
+        start = datetime.datetime.now()
+        while True:
+            fs_info = self.get_fs_info(node)
+            fs_name = fs_info.get("fs_name")
+            out, rc = node.exec_command(
+                sudo=True, cmd=f"ceph fs status {fs_name} --format json"
+            )
+            output = json.loads(out.read().decode())
+            active_mds = [
+                mds["name"] for mds in output["mdsmap"] if mds["state"] == "active"
+            ]
+            if len(active_mds) == 2:
+                log.info("Failing MDS 1")
+                node.exec_command(sudo=True, cmd="ceph mds fail 1")
+                break
+            else:
+                log.info("waiting for active-active mds state")
+                if datetime.datetime.now() - start > timeout:
+                    log.error("Failed to get active-active mds")
+                    return 1
+        return 0
+
+    def io_verify(self, client):
+        """
+        Client IO Verification
+        Args:
+            client: Client_node
+        """
+        if client.node.exit_status == 0:
+            self.return_counts.update({client.node.hostname: client.node.exit_status})
+            log.info("Client IO is going on,success")
+        else:
+            self.return_counts.update({client.node.hostname: client.node.exit_status})
+            print("------------------------------------")
+            print(self.return_counts)
+            print("------------------------------------")
+            log.error("Client IO got interrupted")
+        return self.return_counts
+
+    def pinned_dir_io_mdsfailover(
+        self,
+        clients,
+        mounting_dir,
+        dir_name,
+        range1,
+        range2,
+        num_of_files,
+        mds_fail_over,
+    ):
+        """
+        Pinnging directories on mds failover
+        Args:
+            clients: Client_nodes
+            mounting_dir: mounted directory
+            dir_name: dir name
+            range1: range2: ranges
+            num_of_files: number of files
+            mds_fail_over: mds failover method
+        """
+        log.info("Performing IOs on clients")
+        for client in clients:
+            for num in range(int(range1), int(range2)):
+                working_dir = dir_name + "_" + str(num)
+                out, rc = client.exec_command(f"sudo ls {mounting_dir}")
+                output = out.read().strip().decode()
+                if working_dir not in output:
+                    client.exec_command(cmd=f"mkdir {mounting_dir}{dir_name}_{num}")
+                log.info("Performing MDS failover:")
+                mds_fail_over(client)
+                command = "python3 /home/cephuser/smallfile/smallfile_cli.py "
+                f"--operation create --threads 1 --file-size 100  --files  {num_of_files} "
+                f"--top {mounting_dir}{dir_name}_{num}"
+                client.exec_command(
+                    sudo=True, cmd=command, long_running=True, timeout=300
+                )
+                self.return_counts = self.io_verify(client)
+            break
+        return self.return_counts, 0
