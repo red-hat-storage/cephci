@@ -1,0 +1,44 @@
+"releases":
+  "3.3":
+    "composes":
+      "rhel-7": "https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-3.3-rhel-7/latest-RHCEPH-3-RHEL-7"
+    "image":
+      "ceph": "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:ceph-3.3-rhel-7-containers-candidate-67426-20210427162543"
+  "4.2":
+    "composes":
+      "rhel-7": "http://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.2-rhel-7/latest-RHCEPH-4-RHEL-7"
+      "rhel-8": "http://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.2-rhel-8/latest-RHCEPH-4-RHEL-8"
+    "image":
+      "ceph": "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:ceph-4.2-rhel-8-containers-candidate-57052-20210928184330"
+      "grafana": "registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4"
+      "alertmanager": "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6"
+      "prometheus": "registry.redhat.io/openshift4/ose-prometheus:v4.6"
+      "nodeexporter": "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6"
+  "4.3":
+    "composes":
+      "rhel-7": "https://download.eng.bos.redhat.com/rhel-7/composes/auto/ceph-4.3-rhel-7/latest-RHCEPH-4-RHEL-7"
+      "rhel-8": "https://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-4.3-rhel-8/latest-RHCEPH-4-RHEL-8"
+    "image":
+      "ceph": "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:ceph-4.3-rhel-8-containers-candidate-43344-20210928194643"
+      "grafana": "registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4"
+      "alertmanager": "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6"
+      "prometheus": "registry.redhat.io/openshift4/ose-prometheus:v4.6"
+      "nodeexporter": "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6"
+  "5.0":
+    "composes":
+      "rhel-8": "https://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.0-rhel-8/latest-RHCEPH-5-RHEL-8"
+    "image":
+      "ceph": "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:ceph-5.0-rhel-8-containers-candidate-68988-20210927155532"
+      "grafana": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:5-26"
+      "alertmanager": "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6"
+      "prometheus": "registry.redhat.io/openshift4/ose-prometheus:v4.6"
+      "nodeexporter": "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6"
+  "5.1":
+    "composes":
+      "rhel-8": "https://download.eng.bos.redhat.com/rhel-8/composes/auto/ceph-5.1-rhel-8/latest-RHCEPH-5-RHEL-8"
+    "image":
+      "ceph": "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:ceph-5.1-rhel-8-containers-candidate-42723-20210927224219"
+      "grafana": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:5-26"
+      "alertmanager": "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6"
+      "prometheus": "registry.redhat.io/openshift4/ose-prometheus:v4.6"
+      "nodeexporter": "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6"

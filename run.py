@@ -654,6 +654,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/mgr"))
     sys.path.append(os.path.abspath("tests/dashboard"))
     sys.path.append(os.path.abspath("tests/misc_env"))
+    sys.path.append(os.path.abspath("tests/upgrades"))
 
     tests = suite.get("tests")
     tcs = []
@@ -813,6 +814,7 @@ def run(args):
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
+
             try:
                 if post_to_report_portal:
                     service.start_test_item(
