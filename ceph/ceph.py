@@ -1100,12 +1100,20 @@ class NodeVolume(object):
 
 class SSHConnectionManager(object):
     def __init__(
-        self, ip_address, username, password, look_for_keys=False, outage_timeout=300
+        self,
+        ip_address,
+        username,
+        password,
+        look_for_keys=False,
+        private_key_file_path="",
+        outage_timeout=300,
     ):
         self.ip_address = ip_address
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
+        if look_for_keys:
+            self.pkey = paramiko.RSAKey.from_private_key_file(private_key_file_path)
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.__transport = None
@@ -1183,6 +1191,8 @@ class CephNode(object):
         self.username = kw["username"]
         self.password = kw["password"]
         self.root_passwd = kw["root_password"]
+        self.look_for_key = kw["look_for_key"]
+        self.private_key_path = kw["private_key_path"]
         self.root_login = kw["root_login"]
         self.private_ip = kw["private_ip"]
         self.ip_address = kw["ip_address"]
@@ -1212,10 +1222,18 @@ class CephNode(object):
             self.vm_node = kw["ceph_vmnode"]
             self.osd_scenario = self.vm_node.osd_scenario
         self.root_connection = SSHConnectionManager(
-            self.ip_address, "root", self.root_passwd
+            self.ip_address,
+            "root",
+            self.root_passwd,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.connection = SSHConnectionManager(
-            self.ip_address, self.username, self.password
+            self.ip_address,
+            self.username,
+            self.password,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.rssh = self.root_connection.get_client
         self.rssh_transport = self.root_connection.get_transport
@@ -1460,10 +1478,18 @@ class CephNode(object):
     def __setstate__(self, pickle_dict):
         self.__dict__.update(pickle_dict)
         self.root_connection = SSHConnectionManager(
-            self.ip_address, "root", self.root_passwd
+            self.ip_address,
+            "root",
+            self.root_passwd,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.connection = SSHConnectionManager(
-            self.ip_address, self.username, self.password
+            self.ip_address,
+            self.username,
+            self.password,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.rssh = self.root_connection.get_client
         self.ssh = self.connection.get_client

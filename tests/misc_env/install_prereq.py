@@ -18,6 +18,7 @@ rpm_packages = {
         "python-nose",
         "ntp",
         "python2-pip",
+        "chrony",
     ],
     "py3": [
         "wget",
@@ -25,6 +26,7 @@ rpm_packages = {
         "python3-virtualenv",
         "python3-nose",
         "python3-pip",
+        "chrony",
     ],
 }
 deb_packages = ["wget", "git", "python-virtualenv", "lsb-release", "ntp"]
@@ -78,6 +80,7 @@ def install_prereq(
         node=ceph,
         cert_url="https://password.corp.redhat.com/RH-IT-Root-CA.crt",
         out_file="RH-IT-Root-CA.crt",
+        check_ec=False,
     )
 
     # Update CephCI Cert to all nodes. Useful when creating self-signed certificates.
@@ -296,15 +299,11 @@ def registry_login(ceph, distro_ver):
     login to this registry 'registry.redhat.io' on all nodes
         docker for RHEL 7.x and podman for RHEL 8.x
     """
-    cdn_cred = get_cephci_config().get("cdn_credentials")
-    if not cdn_cred:
-        log.warning(
-            "no cdn_credentials in ~/.cephci.yaml."
-            " Not logging into registry.redhat.io."
-        )
-        return
+    _config = get_cephci_config()
+    cdn_cred = _config.get("registry_credentials", _config["cdn_credentials"])
     user = cdn_cred.get("username")
     pwd = cdn_cred.get("password")
+    registry = cdn_cred.get("registry", "registry.redhat.io")
     if not (user and pwd):
         log.warning("username and password not found for cdn_credentials")
         return
@@ -321,8 +320,8 @@ def registry_login(ceph, distro_ver):
         ceph.exec_command(cmd="sudo systemctl restart docker", long_running=True)
 
     ceph.exec_command(
-        cmd="sudo {c} login -u {u} -p {p} registry.redhat.io".format(
-            c=container, u=user, p=pwd
+        cmd="sudo {c} login -u {u} -p {p} {registry}".format(
+            c=container, u=user, p=pwd, registry=registry
         ),
         check_ec=True,
     )
