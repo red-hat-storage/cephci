@@ -30,6 +30,8 @@ setup(
         "ibm-cos-sdk",
         "ibm-cos-sdk-core",
         "ibm-cos-sdk-s3transfer",
+        "ibm-vpc>=0.8.0",
+        "ibm-cloud-networking-services",
     ],
     zip_safe=True,
     include_package_data=True,
