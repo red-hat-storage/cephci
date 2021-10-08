@@ -464,11 +464,11 @@ def _rgw_lc_debug_conf(cluster: Ceph, add: bool = True) -> None:
         None
     """
     if add:
-        command = "sed -i -e '$argw lc debug interval = 10' /etc/ceph/ceph.conf"
+        command = "sed -i '/global/a rgw lc debug interval = 10' /etc/ceph/ceph.conf"
     else:
         command = "sed -i '/rgw lc debug interval/d' /etc/ceph/ceph.conf"
 
-    command += " && systemctl restart ceph-radosgw.target"
+    command += " && systemctl restart ceph-radosgw@rgw.`hostname -s`.rgw0.service"
 
     for node in cluster.get_nodes(role="rgw"):
         node.exec_command(sudo=True, cmd=command)
