@@ -43,9 +43,12 @@ globals:
       node6:
         role:
           - mon
+          - osd
           - rgw
           - node-exporter
           - crash
+        no-of-volumes: 4
+        disk-size: 15
       node7:
         role:
           - rgw
