@@ -27,6 +27,7 @@ rpm_packages = {
         "python3-nose",
         "python3-pip",
         "chrony",
+        "yum-utils",
     ],
 }
 deb_packages = ["wget", "git", "python-virtualenv", "lsb-release", "ntp"]

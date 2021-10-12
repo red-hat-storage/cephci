@@ -25,6 +25,7 @@ from ceph.clients import WinNode
 from ceph.utils import (
     cleanup_ceph_nodes,
     cleanup_ibmc_ceph_nodes,
+    create_baremetal_ceph_nodes,
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
 )
@@ -50,7 +51,8 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE
+  run.py --rhbuild BUILD --inventory FILE --suite FILE
+        (--global-conf FILE| --cluster-conf FILE)
         [--cloud <openstack> | <ibmc> ]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
@@ -95,6 +97,7 @@ Options:
   -f <tests> --filter <tests>       filter tests based on the patter
                                     eg: -f 'rbd' will run tests that have 'rbd'
   --global-conf <file>              global cloud configuration file
+  --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
   --cloud <cloud_type>              cloud type [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
@@ -204,13 +207,21 @@ def create_nodes(
             ceph_vmnodes = create_ibmc_ceph_nodes(
                 cluster, inventory, osp_cred, run_id, instances_name
             )
+        elif cloud_type == "baremetal":
+            ceph_vmnodes = create_baremetal_ceph_nodes(cluster, inventory)
 
         ceph_nodes = []
+        root_password = None
         for node in ceph_vmnodes.values():
             if cloud_type == "openstack":
                 private_key_path = ""
                 private_ip = node.get_private_ip()
                 look_for_key = False
+            elif cloud_type == "baremetal":
+                private_key_path = ""
+                private_ip = node.ip_address
+                look_for_key = False
+                root_password = node.root_password
             elif cloud_type == "ibmc":
                 glbs = osp_cred.get("globals")
                 ibmc = glbs.get("ibm-credentials")
@@ -225,7 +236,7 @@ def create_nodes(
                 ceph = CephNode(
                     username="cephuser",
                     password="cephuser",
-                    root_password="passwd",
+                    root_password="passwd" if not root_password else root_password,
                     look_for_key=look_for_key,
                     private_key_path=private_key_path,
                     root_login=node.root_login,
@@ -303,7 +314,9 @@ def run(args):
 
     # Mandatory arguments
     rhbuild = args["--rhbuild"]
-    glb_file = args["--global-conf"]
+    glb_file = args.get("--global-conf")
+    if not glb_file:
+        glb_file = args.get("--cluster-conf")
     inventory_file = args["--inventory"]
     osp_cred_file = args["--osp-cred"]
     suite_file = args["--suite"]
@@ -524,7 +537,7 @@ def run(args):
 
         # get COMPOSE ID and ceph version
         if build not in ["released", "cvp"]:
-            if cloud_type == "openstack":
+            if cloud_type == "openstack" or cloud_type == "baremetal":
                 id = requests.get(base_url + "/COMPOSE_ID", verify=False)
                 compose_id = id.text
             elif cloud_type == "ibmc":
@@ -535,7 +548,7 @@ def run(args):
                     ceph_pkgs = requests.get(
                         base_url + "/Tools/Packages/", verify=False
                     )
-                elif cloud_type == "openstack":
+                elif cloud_type == "openstack" or cloud_type == "baremetal":
                     ceph_pkgs = requests.get(
                         base_url + "/compose/Tools/x86_64/os/Packages/", verify=False
                     )
