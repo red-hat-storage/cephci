@@ -20,6 +20,7 @@ import yaml
 from docopt import docopt
 from libcloud.common.types import LibcloudError
 
+import init_suite
 from ceph.ceph import Ceph, CephNode
 from ceph.clients import WinNode
 from ceph.utils import (
@@ -50,7 +51,8 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE
+  run.py --rhbuild BUILD --global-conf FILE --inventory FILE
+        (--suite <FILE>)...
         [--cloud <openstack> | <ibmc> ]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
@@ -306,7 +308,7 @@ def run(args):
     glb_file = args["--global-conf"]
     inventory_file = args["--inventory"]
     osp_cred_file = args["--osp-cred"]
-    suite_file = args["--suite"]
+    suite_files = args["--suite"]
     cloud_type = args.get("--cloud", "openstack")
     version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
@@ -491,7 +493,7 @@ def run(args):
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     inventory = load_file(inventory_file)
-    suite = load_file(suite_file)
+    suite = init_suite.load_suites(suite_files)
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
@@ -560,7 +562,7 @@ def run(args):
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
 
     service = None
-    suite_name = os.path.basename(suite_file).split(".")[0]
+    suite_name = "::".join(suite_files)
     if post_to_report_portal:
         log.info("Creating report portal session")
         service = create_report_portal_session()
@@ -622,7 +624,7 @@ def run(args):
         details["compose-id"] = compose_id
         details["distro"] = distro
         details["suite-name"] = suite_name
-        details["suite-file"] = suite_file
+        details["suite-file"] = suite_files
         details["conf-file"] = glb_file
         details["ceph-version-name"] = ceph_name
         details["duration"] = "0s"
