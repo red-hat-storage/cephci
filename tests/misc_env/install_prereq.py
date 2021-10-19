@@ -142,7 +142,8 @@ def install_prereq(
         elif cloud_type == "ibmc":
             base_url += "Tools"
         if repo:
-            # provide whole path till "/x86_64/os/"
+            # provide whole path till "/x86_64/os/" for openstack,
+            # "/Tools" for IBM
             base_url = repo
         log.info(f"cloud type is:{cloud_type}")
         log.info(f"base url is:{base_url}")
