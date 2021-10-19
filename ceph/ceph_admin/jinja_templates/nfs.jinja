@@ -12,4 +12,5 @@ placement:
 {%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif %}
 spec:
   pool: {{ spec['spec']['pool'] }}
-  namespace: {{ spec['spec']['namespace'] }}{{ newline }}
+  {%- if spec['spec']['namespace'] -%}{{ nlt }}namespace: {{ spec['spec']['namespace'] }}{%- endif %}
+

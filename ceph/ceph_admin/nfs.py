@@ -30,7 +30,7 @@ class NFS(ApplyMixin, Orch):
                     - india             # service identity
                     - southpool         # name of the pool
                 args:
-                    namespace: <name>       # namespace
+                    namespace: <name>       # namespace (supported only in RHCeph 5.0)
                     placement:
                         label: nfs    # either label or node.
                         nodes:

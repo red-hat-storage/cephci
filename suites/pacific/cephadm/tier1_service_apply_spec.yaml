@@ -210,7 +210,7 @@ tests:
                       - node4
                   spec:
                     pool: nfs-rgw-pool
-                    namespace: nfs-rgw-namespace
+                    # namespace: nfs-rgw-namespace   # Supported only in RHCeph 5.0
           - config:
               command: shell
               args:              # sleep to get all services deployed
