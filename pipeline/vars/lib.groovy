@@ -393,10 +393,10 @@ def fetchStages(def scriptArg, def tierLevel, def testResults) {
         TIER-x  -   Tier level number (ex., tier-0)
     */
     def RHCSVersion = [:]
-    if (scriptArg != "released") {
-      RHCSVersion = getRHCSVersionFromArtifactsNvr()
+    if ( scriptArg.contains('released') ) {
+        RHCSVersion = fetchMajorMinorOSVersion("released")
     } else {
-      RHCSVersion = fetchMajorMinorOSVersion("released")
+        RHCSVersion = getRHCSVersionFromArtifactsNvr()
     }
     def majorVersion = RHCSVersion.major_version
     def minorVersion = RHCSVersion.minor_version
@@ -405,7 +405,7 @@ def fetchStages(def scriptArg, def tierLevel, def testResults) {
 
     def testStages = [:]
     def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
-    if (! scriptFiles){
+    if (! scriptFiles ) {
         return testStages
     }
     def fileNames = scriptFiles.split("\\n")
