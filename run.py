@@ -617,6 +617,7 @@ def run(args):
             polarion_default_url, details["polarion-id"]
         )
         details["rhbuild"] = rhbuild
+        details["cloud-type"] = cloud_type
         details["ceph-version"] = ceph_version
         details["ceph-ansible-version"] = ceph_ansible_version
         details["compose-id"] = compose_id
@@ -737,6 +738,7 @@ def run(args):
                 config["base_url"] = base_url
 
             config["rhbuild"] = f"{rhbuild}-{platform}" if version2 else rhbuild
+            config["cloud-type"] = cloud_type
             if "ubuntu_repo" in locals():
                 config["ubuntu_repo"] = ubuntu_repo
 

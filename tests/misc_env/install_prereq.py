@@ -42,6 +42,9 @@ def run(**kw):
     enable_eus = config.get("enable_eus", False)
     repo = config.get("add-repo", False)
     rhbuild = config.get("rhbuild")
+    cloud_type = config.get("cloud-type")
+    base_url = config.get("base_url")
+
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
     is_production = config.get("is_production", False)
     with parallel() as p:
@@ -53,6 +56,8 @@ def run(**kw):
                 skip_subscription,
                 repo,
                 rhbuild,
+                cloud_type,
+                base_url,
                 enable_eus,
                 skip_enabling_rhel_rpms,
                 is_production,
@@ -67,6 +72,8 @@ def install_prereq(
     skip_subscription=False,
     repo=False,
     rhbuild=None,
+    cloud_type="openstack",
+    base_url=None,
     enable_eus=False,
     skip_enabling_rhel_rpms=False,
     is_production=False,
@@ -127,6 +134,21 @@ def install_prereq(
         ceph.exec_command(
             cmd="sudo yum install -y " + rpm_all_packages, long_running=True
         )
+
+        if not base_url.endswith("/"):
+            base_url += "/"
+        if cloud_type == "openstack":
+            base_url += "compose/Tools/x86_64/os/"
+        elif cloud_type == "ibmc":
+            base_url += "Tools"
+        if repo:
+            # provide whole path till "/x86_64/os/"
+            base_url = repo
+        log.info(f"cloud type is:{cloud_type}")
+        log.info(f"base url is:{base_url}")
+        cmd = f"yum-config-manager --add-repo {base_url}"
+        ceph.exec_command(sudo=True, cmd=cmd)
+
         if ceph.role == "client":
             ceph.exec_command(cmd="sudo yum install -y attr", long_running=True)
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
