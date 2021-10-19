@@ -1,4 +1,5 @@
-// Script to trigger when a RH Ceph is released and execute Tier-0 using the bits available in the external repository.
+// Script to trigger when a RH Ceph is released and execute Tier-0 using the bits
+// available in the external repository.
 // Global variables section
 def nodeName = "centos-7"
 def sharedLib
@@ -6,7 +7,7 @@ def versions
 def cephVersion
 def composeUrl
 def containerImage
-def buildPhase = "released"
+def cliArgs = "--build released"
 def tierLevel = "tier-0"
 def testStages = [:]
 def testResults = [:]
@@ -58,7 +59,9 @@ node(nodeName) {
         println "repo url : ${composeUrl}"
 
         cephVersion = sharedLib.fetchCephVersion(composeUrl)
-        testStages = sharedLib.fetchStages(buildPhase, tierLevel, testResults)
+        testStages = sharedLib.fetchStages(cliArgs, tierLevel, testResults)
+
+        currentBuild.description = "RHCEPH-${majorVersion}.${minorVersion}"
     }
 
     parallel testStages
