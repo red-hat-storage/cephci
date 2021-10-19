@@ -206,6 +206,7 @@ def create_nodes(
             )
 
         ceph_nodes = []
+        item_id = None
         for node in ceph_vmnodes.values():
             if cloud_type == "openstack":
                 private_key_path = ""
@@ -255,12 +256,14 @@ def create_nodes(
             except BaseException:
                 if report_portal_session:
                     report_portal_session.finish_test_item(
-                        end_time=timestamp(), status="FAILED"
+                        item_id=item_id, end_time=timestamp(), status="FAILED"
                     )
                 raise
 
     if report_portal_session:
-        report_portal_session.finish_test_item(end_time=timestamp(), status="PASSED")
+        report_portal_session.finish_test_item(
+            item_id=item_id, end_time=timestamp(), status="PASSED"
+        )
 
     return ceph_cluster_dict, clients
 
@@ -862,7 +865,7 @@ def run(args):
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
             try:
                 if post_to_report_portal:
-                    service.start_test_item(
+                    item_id = service.start_test_item(
                         name=unique_test_name,
                         description=report_portal_description,
                         start_time=timestamp(),
@@ -917,7 +920,9 @@ def run(args):
             print(msg)
 
             if post_to_report_portal:
-                service.finish_test_item(end_time=timestamp(), status="PASSED")
+                service.finish_test_item(
+                    item_id=item_id, end_time=timestamp(), status="PASSED"
+                )
 
             if post_results:
                 post_to_polarion(tc=tc)
@@ -929,7 +934,9 @@ def run(args):
             jenkins_rc = 1
 
             if post_to_report_portal:
-                service.finish_test_item(end_time=timestamp(), status="FAILED")
+                service.finish_test_item(
+                    item_id=item_id, end_time=timestamp(), status="FAILED"
+                )
 
             if post_results:
                 post_to_polarion(tc=tc)
