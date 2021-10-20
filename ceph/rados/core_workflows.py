@@ -889,3 +889,30 @@ class RadosOrchestrator:
         if not flag:
             log.error(f"osd-{target} not found on cluster")
             return False
+
+    def verify_ec_overwrites(self, **kwargs) -> bool:
+        """
+        Creates RBD image on overwritten EC pool & replicated metadata pool
+        Args:
+            **kwargs: various kwargs to be sent
+                Supported kw args:
+                    1. image_name : name of the RBD image
+                    2. image_size : size of the RBD image
+        Returns: True -> pass, False -> fail
+
+        """
+
+        # Creating a replicated pool for metadata
+        metadata_pool = kwargs.get("metadata_pool", "re_pool_overwrite")
+        if not self.create_pool(pool_name=metadata_pool, app_name="rbd"):
+            log.error("Failed to create Metadata pool for rbd images")
+        pool_name = kwargs["pool_name"]
+        image_name = kwargs.get("image_name", "image_ec_pool")
+        image_size = kwargs.get("image_size", "40M")
+        image_create = f"rbd create --size {image_size} --data-pool {pool_name} {metadata_pool}/{image_name}"
+        self.node.shell([image_create])
+        # tbd: create filesystem on image and mount it. Part of tire 3
+        cmd = f"rbd --image {image_name} info --pool {metadata_pool}"
+        out, err = self.node.shell([cmd])
+        log.info(f"The image details are : {out}")
+        return True

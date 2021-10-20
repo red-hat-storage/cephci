@@ -38,11 +38,18 @@ def run(ceph_cluster, **kw):
         if not rados_obj.create_erasure_pool(name=uuid, **ec_config):
             log.error("Failed to create the EC Pool")
             return 1
-        if not rados_obj.bench_write(**ec_config):
-            log.error("Failed to write objects into the EC Pool")
-            return 1
-        rados_obj.bench_read(**ec_config)
-        log.info("Created the EC Pool, Finished writing data into the pool")
+
+        if ec_config.get("test_overwrites_pool"):
+            if not rados_obj.verify_ec_overwrites(**ec_config):
+                log.error("Failed to create the EC Pool")
+                return 1
+        else:
+            if not rados_obj.bench_write(**ec_config):
+                log.error("Failed to write objects into the EC Pool")
+                return 1
+            rados_obj.bench_read(**ec_config)
+            log.info("Created the EC Pool, Finished writing data into the pool")
+
         if ec_config.get("delete_pool"):
             if not rados_obj.detete_pool(pool=ec_config["pool_name"]):
                 log.error("Failed to delete EC Pool")

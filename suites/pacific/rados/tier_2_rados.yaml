@@ -166,6 +166,30 @@ tests:
       desc: Create LRC EC pools and run IO
 
   - test:
+      name: EC pool with Overwrites
+      module: rados_prep.py
+      polarion-id: CEPH-83571730
+      config:
+        ec_pool:
+          create: true
+          pool_name: ec_pool_overwrite
+          app_name: rbd
+          erasure_code_use_overwrites: "true"
+          k: 3
+          m: 2
+          plugin: jerasure
+          rados_write_duration: 50
+          rados_read_duration: 30
+          test_overwrites_pool: true
+          metadata_pool: re_pool_overwrite
+          image_name: image_ec_pool
+          image_size: 100M
+        delete_pools:
+          - ec_pool_overwrite
+          - re_pool_overwrite
+      desc: EC pool with Overwrites & create RBD pool
+
+  - test:
       name: Deploy stretch Cluster
       module: stretch_cluster.py
       polarion-id: CEPH-83573621
@@ -217,7 +241,7 @@ tests:
         configure_balancer:
           configure: true
           balancer_mode: upmap
-          target_max_misplaced_ratio: 0.4
+          target_max_misplaced_ratio: 0.04
           sleep_interval: 60
       desc: Ceph balancer plugins CLI validation
 
