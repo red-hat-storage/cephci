@@ -299,26 +299,35 @@ class FsUtils(object):
 
     def create_fs(self, client, vol_name, validate=True, **kwargs):
         """
-
+        This Function creates the cephfs volume with vol_name given
+        It validates the creation operation by default.
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
-
+            validate:
+            **kwargs:
+                check_ec = True
         Returns:
 
         """
         fs_cmd = f"ceph fs create {vol_name}"
-        client.exec_command(sudo=True, cmd=fs_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
             volname_ls = json.loads(out.read().decode())
             if vol_name not in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+        return cmd_out, cmd_rc
 
     def create_subvolumegroup(
         self, client, vol_name, group_name, validate=True, **kwargs
     ):
         """
+        Create subvolume group with vol_name, group_name
+        It supports below optional arguments also
         Args:
             vol_name:
             group_name:
@@ -328,7 +337,9 @@ class FsUtils(object):
                 gid
                 mode
                 validate = True
+                check_ec = True
         Returns:
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         subvolumegroup_cmd = f"ceph fs subvolumegroup create {vol_name} {group_name}"
         if kwargs.get("pool_layout"):
@@ -339,7 +350,9 @@ class FsUtils(object):
             subvolumegroup_cmd += f" --gid {kwargs.get('gid')}"
         if kwargs.get("mode"):
             subvolumegroup_cmd += f" --mode {kwargs.get('mode')}"
-        client.exec_command(sudo=True, cmd=subvolumegroup_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=subvolumegroup_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(
                 sudo=True, cmd=f"ceph fs subvolumegroup ls {vol_name} --format json"
@@ -347,10 +360,12 @@ class FsUtils(object):
             subvolumegroup_ls = json.loads(out.read().decode())
             if group_name not in [i["name"] for i in subvolumegroup_ls]:
                 raise CommandFailed(f"Creation of subvolume group: {group_name} failed")
+        return cmd_out, cmd_rc
 
     def create_subvolume(self, client, vol_name, subvol_name, validate=True, **kwargs):
         """
-
+        Creates Subvolume with given arguments
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -364,8 +379,9 @@ class FsUtils(object):
                 gid : str
                 mode : str
                 namespace-isolated : boolean
+                check_ec = True
         Returns:
-
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         subvolume_cmd = f"ceph fs subvolume create {vol_name} {subvol_name}"
         if kwargs.get("size"):
@@ -382,7 +398,9 @@ class FsUtils(object):
             subvolume_cmd += f" --mode {kwargs.get('mode')}"
         if kwargs.get("namespace-isolated"):
             subvolume_cmd += " --namespace-isolated"
-        client.exec_command(sudo=True, cmd=subvolume_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=subvolume_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("group_name"):
@@ -393,12 +411,14 @@ class FsUtils(object):
             subvolume_ls = json.loads(out.read().decode())
             if subvol_name not in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Creation of subvolume : {subvol_name} failed")
+        return cmd_out, cmd_rc
 
     def create_snapshot(
         self, client, vol_name, subvol_name, snap_name, validate=True, **kwargs
     ):
         """
-
+        Create snapshot with vol_name, subvol_name, snap_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -407,15 +427,18 @@ class FsUtils(object):
             validate:
             **kwargs:
                 group_name : str
+                check_ec = True
         Returns:
-
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         snapshot_cmd = (
             f"ceph fs subvolume snapshot create {vol_name} {subvol_name} {snap_name}"
         )
         if kwargs.get("group_name"):
             snapshot_cmd += f" --group_name {kwargs.get('group_name')}"
-        client.exec_command(sudo=True, cmd=snapshot_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=snapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsnapshot_cmd = f"ceph fs subvolume snapshot ls {vol_name} {subvol_name}"
             if kwargs.get("group_name"):
@@ -426,6 +449,7 @@ class FsUtils(object):
             snapshot_ls = json.loads(out.read().decode())
             if snap_name not in [i["name"] for i in snapshot_ls]:
                 raise CommandFailed(f"Creation of subvolume : {snap_name} failed")
+        return cmd_out, cmd_rc
 
     def create_clone(
         self,
@@ -438,7 +462,8 @@ class FsUtils(object):
         **kwargs,
     ):
         """
-
+        Creates clone based on the arguments vol_name,subvol_name,snap_name,target_subvol_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -450,9 +475,9 @@ class FsUtils(object):
                 group_name
                 target_group_name
                 pool_layout
-
+                check_ec = True
         Returns:
-
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         clone_cmd = f"ceph fs subvolume snapshot clone {vol_name} {subvol_name} {snap_name} {target_subvol_name}"
         if kwargs.get("group_name"):
@@ -461,7 +486,9 @@ class FsUtils(object):
             clone_cmd += f" --target_group_name {kwargs.get('target_group_name')}"
         if kwargs.get("pool_layout"):
             clone_cmd += f" --pool_layout {kwargs.get('pool_layout')}"
-        client.exec_command(sudo=True, cmd=clone_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=clone_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("target_group_name"):
@@ -474,12 +501,14 @@ class FsUtils(object):
             subvolume_ls = json.loads(out.read().decode())
             if target_subvol_name not in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Creation of clone : {target_subvol_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_snapshot(
         self, client, vol_name, subvol_name, snap_name, validate=True, **kwargs
     ):
         """
-
+        Removes the snapshot by taking snap_name,vol_name, subvol_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -489,9 +518,10 @@ class FsUtils(object):
             **kwargs:
                 group_name : str
                 force : boolean
+                check_ec : boolean
 
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmsnapshot_cmd = (
             f"ceph fs subvolume snapshot rm {vol_name} {subvol_name} {snap_name}"
@@ -500,7 +530,9 @@ class FsUtils(object):
             rmsnapshot_cmd += f" --group_name {kwargs.get('group_name')}"
         if kwargs.get("force"):
             rmsnapshot_cmd += " --force"
-        client.exec_command(sudo=True, cmd=rmsnapshot_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmsnapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsnapshot_cmd = f"ceph fs subvolume snapshot ls {vol_name} {subvol_name}"
             if kwargs.get("group_name"):
@@ -511,10 +543,12 @@ class FsUtils(object):
             snapshot_ls = json.loads(out.read().decode())
             if snap_name in [i["name"] for i in snapshot_ls]:
                 raise CommandFailed(f"Remove of snapshot : {snap_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_subvolume(self, client, vol_name, subvol_name, validate=True, **kwargs):
         """
-
+        Removes the subvolume based subvol_name,vol_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -524,9 +558,9 @@ class FsUtils(object):
                 group_name : str
                 retain-snapshots : boolean
                 force : boolean
-
+                check_ec : boolean
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmsubvolume_cmd = f"ceph fs subvolume rm {vol_name} {subvol_name}"
         if kwargs.get("group_name"):
@@ -535,7 +569,9 @@ class FsUtils(object):
             rmsubvolume_cmd += " --retain-snapshots"
         if kwargs.get("force"):
             rmsubvolume_cmd += " --force"
-        client.exec_command(sudo=True, cmd=rmsubvolume_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmsubvolume_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("group_name"):
@@ -546,27 +582,32 @@ class FsUtils(object):
             subvolume_ls = json.loads(out.read().decode())
             if subvol_name in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Deletion of clone : {subvol_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_subvolumegroup(
         self, client, vol_name, group_name, validate=True, **kwargs
     ):
         """
-
+        Removes the sub volume group with the group_name,vol_name as argument
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
             group_name:
             validate:
             **kwargs:
-                --force
+                force
+                check_ec : boolean
 
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmsubvolumegroup_cmd = f"ceph fs subvolumegroup rm {vol_name} {group_name}"
         if kwargs.get("force"):
             rmsubvolumegroup_cmd += " --force"
-        client.exec_command(sudo=True, cmd=rmsubvolumegroup_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmsubvolumegroup_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(
                 sudo=True, cmd=f"ceph fs subvolumegroup ls {vol_name} --format json"
@@ -574,26 +615,32 @@ class FsUtils(object):
             subvolumegroup_ls = json.loads(out.read().decode())
             if group_name in [i["name"] for i in subvolumegroup_ls]:
                 raise CommandFailed(f"Deletion of subvolume group: {group_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_fs(self, client, vol_name, validate=True, **kwargs):
         """
-
+        Removes the filesystem with the vol_name as argument
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
             validate:
             **kwargs:
+                check_ec : boolean
 
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmvolume_cmd = f"ceph fs volume rm {vol_name} --yes-i-really-mean-it"
-        client.exec_command(sudo=True, cmd=rmvolume_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmvolume_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
             volname_ls = json.loads(out.read().decode())
             if vol_name in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+        return cmd_out, cmd_rc
 
     def fs_client_authorize(
         self, client, fs_name, client_name, dir_name, permission, **kwargs
