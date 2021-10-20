@@ -174,11 +174,12 @@ def create_nodes(
     instances_name=None,
     enable_eus=False,
 ):
+    rp_test_id = None
     if report_portal_session:
         name = create_unique_test_name("ceph node creation", test_names)
         test_names.append(name)
         desc = "Ceph cluster preparation"
-        report_portal_session.start_test_item(
+        rp_test_id = report_portal_session.start_test_item(
             name=name, description=desc, start_time=timestamp(), item_type="STEP"
         )
 
@@ -208,7 +209,6 @@ def create_nodes(
             )
 
         ceph_nodes = []
-        item_id = None
         for node in ceph_vmnodes.values():
             if cloud_type == "openstack":
                 private_key_path = ""
@@ -258,13 +258,13 @@ def create_nodes(
             except BaseException:
                 if report_portal_session:
                     report_portal_session.finish_test_item(
-                        item_id=item_id, end_time=timestamp(), status="FAILED"
+                        item_id=rp_test_id, end_time=timestamp(), status="FAILED"
                     )
                 raise
 
     if report_portal_session:
         report_portal_session.finish_test_item(
-            item_id=item_id, end_time=timestamp(), status="PASSED"
+            item_id=rp_test_id, end_time=timestamp(), status="PASSED"
         )
 
     return ceph_cluster_dict, clients
