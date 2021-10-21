@@ -58,7 +58,8 @@ class OSD(ApplyMixin, Orch):
 
             devices = list()
             for device in node.get("devices"):
-                devices.append(device["path"])
+                if device["available"]:
+                    devices.append(device["path"])
 
             if devices:
                 node_device_dict.update({node["addr"]: devices})

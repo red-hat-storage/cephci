@@ -39,9 +39,10 @@ def construct_registry(cls, registry: str, json_file: bool = False):
         constructed string of registry credentials ( Str )
     """
     # Todo: Retrieve credentials based on registry name
-    cdn_cred = get_cephci_config().get("cdn_credentials")
+    _config = get_cephci_config()
+    cdn_cred = _config.get("registry_credentials", _config["cdn_credentials"])
     reg_args = {
-        "registry-url": registry,
+        "registry-url": cdn_cred.get("registry", registry),
         "registry-username": cdn_cred.get("username"),
         "registry-password": cdn_cred.get("password"),
     }
