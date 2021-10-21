@@ -95,7 +95,7 @@ tests:
         grafana_admin_user: admin
         grafana_admin_password: p@ssw0rd
         node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
-        grafana_container_image: registry-proxy.engineering.redhat.com/rh-osbs/grafana:5-26
+        grafana_container_image: registry.redhat.io/rhceph/rhceph-5-dashboard-rhel8:5
         prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
         alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
         ceph_conf_overrides:
