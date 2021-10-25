@@ -1,0 +1,15 @@
+<testsuites>
+    <properties>
+        <property name="polarion-project-id" value="{{ test_run['polarion-project-id'] }}"/>
+        <property name="polarion-testrun-id" value="{{ test_run['test_run_id'] }}"/>
+        <property name="polarion-group-id" value="ceph-build: {{ test_run['ceph-build'] }} {{ test_run['docker-container'] }}"/>
+    </properties>
+    <testsuite name="{{ test_run['suite-name'] }} test suite" tests="{{ test_run['tests'] }}" failures="{{ test_run['failed'] }}">
+    {% for tc in test_run["test_cases"] %}
+    <testcase name="{{ tc['name'] }}">{{tc['result']}}
+            <properties>
+                <property name="polarion-testcase-id" value="{{ tc['polarion-id'] }}"/>
+            </properties>
+        </testcase>
+    {%+ endfor %}</testsuite>
+</testsuites>

@@ -18,6 +18,7 @@ def create_xunit_results(suite_name, test_cases, run_dir):
 
     Returns: None
     """
+    suite_name = suite_name.split("/")[-1].split(".")[0]
     xml_file = f"{run_dir}/{suite_name}.xml"
 
     log.info(f"Creating xUnit result file for test suite: {suite_name}")

@@ -29,7 +29,7 @@ from ceph.utils import (
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
 )
-from utility.polarion import post_to_polarion
+from utility.polarion import post_to_polarion_v2
 from utility.retry import retry
 from utility.utils import (
     TestSetupFailure,
@@ -928,8 +928,6 @@ def run(args):
                     item_id=item_id, end_time=timestamp(), status="PASSED"
                 )
 
-            if post_results:
-                post_to_polarion(tc=tc)
         else:
             tc["status"] = "Failed"
             msg = "Test {} failed".format(test_mod)
@@ -941,9 +939,6 @@ def run(args):
                 service.finish_test_item(
                     item_id=item_id, end_time=timestamp(), status="FAILED"
                 )
-
-            if post_results:
-                post_to_polarion(tc=tc)
 
             if test.get("abort-on-fail", False):
                 log.info("Aborting on test failure")
@@ -980,6 +975,22 @@ def run(args):
     if post_to_report_portal:
         service.finish_launch(end_time=timestamp())
         service.terminate()
+
+    if post_results:
+        test_run = {
+            "polarion-project-id": "CEPH",
+            "suite-name": suite_name,
+            "distro": distro,
+            "ceph-version": ceph_version,
+            "ceph-ansible-version": ceph_ansible_version,
+            "test_cases": tcs,
+            "base_url": base_url,
+            "container-registry": docker_registry,
+            "container-image": docker_image,
+            "container-tag": docker_tag,
+            "compose-id": compose_id,
+        }
+        post_to_polarion_v2(test_run=test_run)
 
     if xunit_results:
         create_xunit_results(suite_name, tcs, run_dir)
