@@ -19,7 +19,7 @@ tests:
                 verbose: true
               args:
                 registry-url: registry.redhat.io
-                mon-ip: dell-r640-020
+                mon-ip: dell-r730-015
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
           - config:
@@ -125,7 +125,7 @@ tests:
         config:
             command: add
             id: client.1
-            node: dell-r640-028.dsal.lab.eng.pek2.redhat.com
+            node: dell-r730-048
             install_packages:
                 - ceph-common
             copy_admin_keyring: true

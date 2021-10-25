@@ -7,7 +7,7 @@ def nodeName = "centos-7"
 def tierLevel = "tier-0"
 def testStages = [:]
 def testResults = [:]
-def buildAction = "cvp"
+def cliArgs = "--build cvp"
 def sharedLib
 def jobStatus
 
@@ -107,7 +107,9 @@ node(nodeName) {
         def writeToFile = sharedLib.writeToReleaseFile(
             versions.major_version, versions.minor_version, releaseContent
         )
-        testStages = sharedLib.fetchStages(buildAction, tierLevel, testResults)
+        testStages = sharedLib.fetchStages(cliArgs, tierLevel, testResults)
+
+        currentBuild.description = ciMessageMap.artifact.nvr
     }
 
     parallel testStages

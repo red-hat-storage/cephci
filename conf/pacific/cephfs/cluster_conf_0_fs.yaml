@@ -1,0 +1,61 @@
+---
+globals:
+  -
+    ceph-cluster:
+        node1:
+          hostname: dell-r730-015.dsal.lab.eng.rdu2.redhat.com
+          ip: "10.1.8.25"
+          root_password: "None"
+          role:
+            - _admin
+            - mon
+            - mgr
+            - installer
+        node2:
+          hostname: dell-r730-017.dsal.lab.eng.rdu2.redhat.com
+          ip: "10.1.8.27"
+          root_password: "None"
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+        node3:
+          hostname: dell-r730-019.dsal.lab.eng.rdu2.redhat.com
+          ip: "10.1.8.29"
+          root_password: "None"
+          role:
+            - osd
+            - mon
+          volumes:
+            - /dev/sdb
+        node4:
+          hostname: dell-r730-018.dsal.lab.eng.rdu2.redhat.com
+          ip: "10.1.8.28"
+          root_password: "None"
+          role:
+            - nfs
+            - mds
+        node5:
+          hostname: dell-r730-055.dsal.lab.eng.rdu2.redhat.com
+          ip: "10.1.8.65"
+          root_password: "None"
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sdb
+        node6:
+          hostname: dell-r730-029.dsal.lab.eng.rdu2.redhat.com
+          ip: "10.1.8.39"
+          root_password: "None"
+          role:
+            - nfs
+            - mds
+        node7:
+          hostname: dell-r730-048.dsal.lab.eng.rdu2.redhat.com
+          ip: "10.1.8.58"
+          root_password: "None"
+          role:
+            - client

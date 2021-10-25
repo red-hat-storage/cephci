@@ -52,6 +52,7 @@ node(nodeName) {
         ciMap = sharedLib.getCIMessageMap()
         buildPhase = ciMap["artifact"]["phase"]
         buildType = ciMap["test-run"]["type"]
+        cliArg = "--build ${buildPhase}"
         def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
         majorVersion = rhcsVersion["major_version"]
         minorVersion = rhcsVersion["minor_version"]
@@ -65,11 +66,13 @@ node(nodeName) {
         )
 
         // Till the pipeline matures, using the build that has passed tier-0 suite.
-        testStages = sharedLib.fetchStages("tier-0", buildPhase, testResults)
+        testStages = sharedLib.fetchStages("--build tier-0", buildPhase, testResults)
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test stages found.."
         }
+
+        currentBuild.description = ciMap.artifact.version
     }
 
     parallel testStages

@@ -20,6 +20,7 @@ import yaml
 from docopt import docopt
 from libcloud.common.types import LibcloudError
 
+import init_suite
 from ceph.ceph import Ceph, CephNode
 from ceph.clients import WinNode
 from ceph.utils import (
@@ -51,9 +52,10 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD --inventory FILE --suite FILE
-        (--global-conf FILE| --cluster-conf FILE)
-        [--cloud <openstack> | <ibmc> ]
+  run.py --rhbuild BUILD --inventory FILE
+        (--suite <FILE>)...
+        (--global-conf FILE | --cluster-conf FILE)
+        [--cloud <openstack> | <ibmc> | <baremetal>]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--ubuntu-repo <repo>]
@@ -175,11 +177,12 @@ def create_nodes(
     instances_name=None,
     enable_eus=False,
 ):
+    rp_test_id = None
     if report_portal_session:
         name = create_unique_test_name("ceph node creation", test_names)
         test_names.append(name)
         desc = "Ceph cluster preparation"
-        report_portal_session.start_test_item(
+        rp_test_id = report_portal_session.start_test_item(
             name=name, description=desc, start_time=timestamp(), item_type="STEP"
         )
 
@@ -207,6 +210,7 @@ def create_nodes(
             ceph_vmnodes = create_ibmc_ceph_nodes(
                 cluster, inventory, osp_cred, run_id, instances_name
             )
+
         elif cloud_type == "baremetal":
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster, inventory)
 
@@ -266,12 +270,14 @@ def create_nodes(
             except BaseException:
                 if report_portal_session:
                     report_portal_session.finish_test_item(
-                        end_time=timestamp(), status="FAILED"
+                        item_id=rp_test_id, end_time=timestamp(), status="FAILED"
                     )
                 raise
 
     if report_portal_session:
-        report_portal_session.finish_test_item(end_time=timestamp(), status="PASSED")
+        report_portal_session.finish_test_item(
+            item_id=rp_test_id, end_time=timestamp(), status="PASSED"
+        )
 
     return ceph_cluster_dict, clients
 
@@ -319,7 +325,7 @@ def run(args):
         glb_file = args.get("--cluster-conf")
     inventory_file = args["--inventory"]
     osp_cred_file = args["--osp-cred"]
-    suite_file = args["--suite"]
+    suite_files = args["--suite"]
     cloud_type = args.get("--cloud", "openstack")
     version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
@@ -504,7 +510,7 @@ def run(args):
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     inventory = load_file(inventory_file)
-    suite = load_file(suite_file)
+    suite = init_suite.load_suites(suite_files)
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
@@ -573,7 +579,7 @@ def run(args):
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
 
     service = None
-    suite_name = os.path.basename(suite_file).split(".")[0]
+    suite_name = "::".join(suite_files)
     if post_to_report_portal:
         log.info("Creating report portal session")
         service = create_report_portal_session()
@@ -630,12 +636,13 @@ def run(args):
             polarion_default_url, details["polarion-id"]
         )
         details["rhbuild"] = rhbuild
+        details["cloud-type"] = cloud_type
         details["ceph-version"] = ceph_version
         details["ceph-ansible-version"] = ceph_ansible_version
         details["compose-id"] = compose_id
         details["distro"] = distro
         details["suite-name"] = suite_name
-        details["suite-file"] = suite_file
+        details["suite-file"] = suite_files
         details["conf-file"] = glb_file
         details["ceph-version-name"] = ceph_name
         details["duration"] = "0s"
@@ -712,6 +719,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/mgr"))
     sys.path.append(os.path.abspath("tests/dashboard"))
     sys.path.append(os.path.abspath("tests/misc_env"))
+    sys.path.append(os.path.abspath("tests/parallel"))
 
     tests = suite.get("tests")
     tcs = []
@@ -723,6 +731,7 @@ def run(args):
 
     for test in tests:
         test = test.get("test")
+        parallel = test.get("parallel")
         tc = fetch_test_details(test)
         test_file = tc["file"]
         report_portal_description = tc["desc"] or ""
@@ -748,6 +757,7 @@ def run(args):
                 config["base_url"] = base_url
 
             config["rhbuild"] = f"{rhbuild}-{platform}" if version2 else rhbuild
+            config["cloud-type"] = cloud_type
             if "ubuntu_repo" in locals():
                 config["ubuntu_repo"] = ubuntu_repo
 
@@ -873,7 +883,7 @@ def run(args):
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
             try:
                 if post_to_report_portal:
-                    service.start_test_item(
+                    item_id = service.start_test_item(
                         name=unique_test_name,
                         description=report_portal_description,
                         start_time=timestamp(),
@@ -900,6 +910,7 @@ def run(args):
                     ceph_cluster=ceph_cluster_dict[cluster_name],
                     ceph_nodes=ceph_cluster_dict[cluster_name],
                     config=config,
+                    parallel=parallel,
                     test_data=ceph_test_data,
                     ceph_cluster_dict=ceph_cluster_dict,
                     clients=clients,
@@ -927,7 +938,9 @@ def run(args):
             print(msg)
 
             if post_to_report_portal:
-                service.finish_test_item(end_time=timestamp(), status="PASSED")
+                service.finish_test_item(
+                    item_id=item_id, end_time=timestamp(), status="PASSED"
+                )
 
             if post_results:
                 post_to_polarion(tc=tc)
@@ -939,7 +952,9 @@ def run(args):
             jenkins_rc = 1
 
             if post_to_report_portal:
-                service.finish_test_item(end_time=timestamp(), status="FAILED")
+                service.finish_test_item(
+                    item_id=item_id, end_time=timestamp(), status="FAILED"
+                )
 
             if post_results:
                 post_to_polarion(tc=tc)

@@ -49,6 +49,7 @@ node(nodeName) {
         /* Prepare pipeline stages using RHCEPH version */
         ciMap = sharedLib.getCIMessageMap()
         buildPhase = ciMap["artifact"]["build_action"]
+        cliArg = "--build ${buildPhase}"
         def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
         majorVersion = rhcsVersion["major_version"]
         minorVersion = rhcsVersion["minor_version"]
@@ -60,11 +61,13 @@ node(nodeName) {
         releaseContent = sharedLib.readFromReleaseFile(
             majorVersion, minorVersion, lockFlag=false
         )
-        testStages = sharedLib.fetchStages(buildPhase, tierLevel, testResults)
+        testStages = sharedLib.fetchStages(cliArg, tierLevel, testResults)
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test scripts were found for execution."
         }
+
+        currentBuild.description = ciMap.artifact.version
     }
 
     parallel testStages

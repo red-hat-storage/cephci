@@ -115,8 +115,10 @@ def run(ceph_cluster, **kwargs) -> int:
 
         out = out.read().decode()
         if not json.loads(out):
-            nodes[0].exec_command(cmd="ceph config set mon mon_allow_pool_delete true")
-            nodes[0].exec_command(cmd="ceph orch restart mon")
+            nodes[0].exec_command(
+                sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+            )
+            nodes[0].exec_command(sudo=True, cmd="ceph orch restart mon")
 
     for node in nodes:
         one_time_setup(node, rhbuild, branch=branch)

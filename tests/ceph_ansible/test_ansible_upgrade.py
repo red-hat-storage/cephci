@@ -2,6 +2,7 @@ import logging
 
 import yaml
 
+from ceph.ceph_admin.common import config_dict_to_string
 from ceph.utils import get_ceph_versions, get_public_network
 from utility.utils import get_latest_container_image_tag
 
@@ -124,6 +125,10 @@ def run(ceph_cluster, **kw):
     if jewel_minor_update:
         cmd += " -e jewel_minor_update=true"
         log.info("Upgrade is jewel_minor_update, cmd: {cmd}".format(cmd=cmd))
+
+    if config.get("ansi_cli_args"):
+        cmd += config_dict_to_string(config["ansi_cli_args"])
+
     out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:

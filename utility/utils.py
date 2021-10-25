@@ -17,7 +17,7 @@ import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
 from OpenSSL import crypto
-from reportportal_client import ReportPortalServiceAsync
+from reportportal_client import ReportPortalService
 
 log = logging.getLogger(__name__)
 
@@ -513,11 +513,11 @@ def create_report_portal_session():
     """
     cfg = get_cephci_config()["report-portal"]
 
-    return ReportPortalServiceAsync(
+    return ReportPortalService(
         endpoint=cfg["endpoint"],
         project=cfg["project"],
         token=cfg["token"],
-        error_handler=error_handler,
+        verify_ssl=False,
     )
 
 
