@@ -1051,7 +1051,8 @@ def fetch_build_artifacts(build, ceph_version, platform):
     Returns:
         base_url, container_registry, image-name, image-tag
     """
-    url = f"{magna_rhcs_artifacts}RHCEPH-{ceph_version}.yaml"
+    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    url = f"{recipe_url}RHCEPH-{ceph_version}.yaml"
     data = requests.get(url, verify=False)
     yml_data = yaml.safe_load(data.text)
 
