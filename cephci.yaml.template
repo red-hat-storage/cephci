@@ -29,6 +29,11 @@
 #  username: <user_name>
 #  password: <user_password>
 
+# registry_credentials:
+#  registry: <registry_url>
+#  username: <user_name>
+#  password: <user_password>
+
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn
 # To completely disable all email, remove the "email:" and "address:" settings
