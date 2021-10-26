@@ -14,6 +14,7 @@ from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
+from compute.baremetal import CephBaremetalNode
 from compute.ibm_vpc import CephVMNodeIBM
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.retry import retry
@@ -42,6 +43,57 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, timeout=300):
     vm = CephVMNodeIBM(ibmc["access-key"], ibmc["service-url"])
     vm.clean_up_instances(ibmc["access-key"], pattern, ibmc["zone_name"], timeout)
     log.info(f"Done cleaning up nodes with pattern {pattern}")
+
+
+def create_baremetal_ceph_nodes(cluster_conf, inventory):
+    """
+    Creates the nodes with cluster details provided
+    Args:
+        cluster_conf:
+        inventory:
+
+    Returns:
+
+    """
+    log.info("Creating the baremetal ceph nodes")
+    params = dict()
+    ceph_cluster = cluster_conf.get("ceph-cluster")
+    params["cloud-data"] = inventory.get("instance").get("setup")
+    ceph_nodes = dict()
+    with parallel() as p:
+        for node in range(1, 100):
+            node = "node" + str(node)
+            if not ceph_cluster.get(node):
+                break
+            node_dict = ceph_cluster.get(node)
+            node_params = params.copy()
+            node_params["role"] = RolesContainer(node_dict.get("role"))
+            if node_dict.get("volumes"):
+                node_params["no-of-volumes"] = len(node_dict.get("volumes"))
+            node_params["ip"] = node_dict.get("ip")
+            node_params["hostname"] = node_dict.get("hostname")
+            node_params["volumes"] = node_dict.get("volumes")
+            node_params["root_password"] = node_dict.get("root_password")
+            p.spawn(setup_vm_node_baremetal, node, ceph_nodes, **node_params)
+    log.info("Done creating nodes")
+    return ceph_nodes
+
+
+def setup_vm_node_baremetal(node, ceph_nodes, **params):
+    """
+    Create the VM node using details provided.
+    """
+    vm = None
+    try:
+        vm = CephBaremetalNode(**params)
+        vm.role = params["role"]
+        ceph_nodes[node] = vm
+    except RETRY_EXCEPTIONS as retry_except:
+        log.warning(retry_except, exc_info=True)
+        raise
+    except BaseException as be:  # noqa
+        log.error(be, exc_info=True)
+        raise
 
 
 def create_ibmc_ceph_nodes(
