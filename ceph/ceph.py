@@ -1650,6 +1650,10 @@ class CephNode(object):
             "rhceph-4-osd-for-rhel-8-x86_64-rpms",
         ]
 
+        repos_5x_rhel8 = [
+            "rhceph-5-tools-for-rhel-8-x86_64-rpms",
+        ]
+
         repos = None
         if build.startswith("1"):
             repos = repos_13x
@@ -1661,6 +1665,8 @@ class CephNode(object):
             repos = repos_4x_rhel8
         elif build.startswith("4") & distro_ver.startswith("7"):
             repos = repos_4x_rhel7
+        elif build.startswith("5"):
+            repos = repos_5x_rhel8
         self.exec_command(
             sudo=True, cmd="subscription-manager repos --enable={r}".format(r=repos[0])
         )

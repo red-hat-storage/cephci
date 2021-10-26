@@ -182,7 +182,7 @@ class BootstrapMixin:
         if custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
-            self.set_tool_repo()
+            self.set_cdn_tool_repo()
 
         self.install()
 
