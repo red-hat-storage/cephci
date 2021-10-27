@@ -67,7 +67,7 @@ node(nodeName) {
             error "No test scripts were found for execution."
         }
 
-        currentBuild.description = ciMap.artifact.version
+        currentBuild.description = "${ciMap.artifact.nvr} - ${ciMap.artifact.version}"
     }
 
     parallel testStages
