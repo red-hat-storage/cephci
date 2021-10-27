@@ -794,3 +794,24 @@ class FsUtils(object):
                 self.return_counts = self.io_verify(client)
             break
         return self.return_counts, 0
+
+    def get_clone_status(self, client, vol_name, clone_name, **kwargs):
+        """
+        Returns the clone status
+        Args:
+            clients: Client_nodes
+            vol_name:
+            clone_name:
+            **kwargs:
+                group_name
+
+        """
+        clone_status_cmd = f"ceph fs clone status {vol_name} {clone_name}"
+        if kwargs.get("group_name"):
+            clone_status_cmd += f" --group_name {kwargs.get('group_name')}"
+        clone_status_cmd += " --format json"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=clone_status_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+
+        return cmd_out, cmd_rc
