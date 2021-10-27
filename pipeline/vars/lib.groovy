@@ -380,7 +380,7 @@ def executeTestScript(def scriptPath, def cliArgs) {
     return rc
 }
 
-def fetchStages(def scriptArg, def tierLevel, def testResults) {
+def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion=null) {
     /*
         Return all the scripts found under
         cephci/pipeline/scripts/<MAJOR>/<MINOR>/<TIER-x>/*.sh
@@ -395,6 +395,9 @@ def fetchStages(def scriptArg, def tierLevel, def testResults) {
     def RHCSVersion = [:]
     if ( scriptArg.contains('released') ) {
         RHCSVersion = fetchMajorMinorOSVersion("released")
+    } else if ( rhcephversion ) {
+        RHCSVersion["major_version"] = rhcephversion.substring(7,8)
+        RHCSVersion["minor_version"] = rhcephversion.substring(9,10)
     } else {
         RHCSVersion = getRHCSVersionFromArtifactsNvr()
     }
@@ -527,6 +530,61 @@ def uploadBuildRecipe(def recipeMap){
         sh "git commit -s -m '[${dateTime}] ${recipeMap['ceph-version']} ${recipeFile}'"
         sh "git push origin master"
     }
+}
+
+def prepareIbmNode() {
+    /*
+        Installs the required packages needed by the IBM Jenkins node to
+        run and execute the cephci test suites. IbmDetails
+    */
+    withCredentials([file(credentialsId: 'cephCIIBMCToken', variable: 'ibmDetails'),
+                 file(credentialsId: 'cephCIConf', variable: 'cephciDetails')]) {
+        def ibmFileExists = sh (returnStatus: true, script: "ls -l ${env.HOME}/osp-cred-ci-2.yaml")
+        if (ibmFileExists != 0) {
+            println "${env.HOME}/osp-cred-ci-2.yaml does not exist. creating it"
+            writeFile file: "${env.HOME}/osp-cred-ci-2.yaml", text: readFile(ibmDetails)
+        }
+        def cephciFileExists = sh (returnStatus: true, script: "ls -l ${env.HOME}/.cephci.yaml")
+        if (cephciFileExists != 0) {
+            println "${env.HOME}/.cephci.yaml does not exist. creating it"
+            writeFile file: "${env.HOME}/.cephci.yaml", text: readFile(cephciDetails)
+        }
+        sh "rm -rf .venv"
+        sh "python3 -m venv .venv"
+        sh ".venv/bin/python -m pip install --upgrade pip"
+        sh ".venv/bin/python -m pip install -r requirements.txt"
+        println "Done preparing the node"
+    }
+}
+
+def recipeFileExist(def rhcephVersion, def recipeFile, def infra) {
+    /*
+        Method to check existence of recipe file.
+    */
+    def fileExist = sh (returnStatus: true, script: "ssh $infra \"sudo ls -l $recipeFile\"")
+    if (fileExist != 0) {
+        error "Recipe file ${rhcephVersion}.yaml does not exist.."
+    }
+}
+
+def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.4") {
+    /*
+        Method to read content from the recipe file.
+    */
+    def recipeFile = "/data/site/recipe/${rhcephVersion}.yaml"
+    recipeFileExist(rhcephVersion, recipeFile, infra)
+    def data = sh(script: "ssh $infra \"sudo yq e '.' $recipeFile\"", returnStdout: true)
+    return data
+}
+
+def writeToRecipeFile(def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.4") {
+    /*
+        Method to update content to the recipe file
+    */
+    def recipeFile = "/data/site/recipe/${rhcephVersion}.yaml"
+    recipeFileExist(rhcephVersion, recipeFile, infra)
+    sh "ssh $infra \"sudo yq eval -i '.$dataPhase = .$buildType' $recipeFile\""
+    sh "ssh $infra \"sudo chown apache:apache $recipeFile\""
 }
 
 
