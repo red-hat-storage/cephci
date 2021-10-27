@@ -81,7 +81,8 @@ def mount_test_case(clients, mounting_dir):
         log.info("Create files and directories of 1000 depth and 1000 breadth")
         for client in clients:
             client.exec_command(
-                cmd=f"sudo mkdir -p {mounting_dir}{dir1} {mounting_dir}{dir2} {mounting_dir}{dir3}"
+                sudo=True,
+                cmd=f"mkdir -p {mounting_dir}{dir1} {mounting_dir}{dir2} {mounting_dir}{dir3}",
             )
             log.info(f"Execution of testcase {tc1} started")
             out, rc = client.exec_command(
@@ -96,17 +97,17 @@ def mount_test_case(clients, mounting_dir):
 
             log.info(f"Execution of testcase {tc2} started")
             client.exec_command(
-                cmd=f"sudo cp -r  {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
+                sudo=True, cmd=f"cp -r  {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
             )
             client.exec_command(
-                cmd=f"diff -qr  {mounting_dir}{dir1} {mounting_dir}{dir2}/"
+                sudo=True, cmd=f"diff -qr  {mounting_dir}{dir1} {mounting_dir}{dir2}/"
             )
             log.info(f"Execution of testcase {tc2} ended")
             results.append(f"TC {tc2} passed")
 
             log.info(f"Execution of testcase {tc3} started")
             client.exec_command(
-                cmd=f"sudo mv  -t {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
+                sudo=True, cmd=f"mv  -t {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
             )
             log.info(f"Execution of testcase {tc3} ended")
             results.append(f"TC {tc3} passed")
@@ -114,18 +115,22 @@ def mount_test_case(clients, mounting_dir):
             for client in clients:
                 if client.pkg_type != "deb":
                     client.exec_command(
-                        cmd=f"sudo dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=100M "
-                        "count=5"
+                        sudo=True,
+                        cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=100M "
+                        "count=5",
                     )
                     out1, rc1 = client.exec_command(
-                        cmd=f"sudo  ls -c -ltd -- {mounting_dir}{client.node.hostname}.*"
+                        sudo=True,
+                        cmd=f" ls -c -ltd -- {mounting_dir}{client.node.hostname}.*",
                     )
                     client.exec_command(
-                        cmd=f"sudo dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=200M "
-                        "count=5"
+                        sudo=True,
+                        cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=200M "
+                        "count=5",
                     )
                     out2, rc2 = client.exec_command(
-                        cmd=f"sudo  ls -c -ltd -- {mounting_dir}{client.node.hostname}.*"
+                        sudo=True,
+                        cmd=f" ls -c -ltd -- {mounting_dir}{client.node.hostname}.*",
                     )
                     a = out1.read().decode()
                     b = out2.read().decode()
