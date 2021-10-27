@@ -747,7 +747,13 @@ class Ceph(object):
         self.ansible_config = installer.get_all_yml()
 
     def setup_packages(
-        self, base_url, hotfix_repo, installer_url, ubuntu_repo, build=None
+        self,
+        base_url,
+        hotfix_repo,
+        installer_url,
+        ubuntu_repo,
+        build=None,
+        cloud_type="openstack",
     ):
         """
         Setup packages required for ceph-ansible istallation
@@ -806,7 +812,9 @@ class Ceph(object):
                                     not self.ansible_config.get("ceph_repository_type")
                                     == "cdn"
                                 ):
-                                    node.setup_rhceph_repos(base_url, installer_url)
+                                    node.setup_rhceph_repos(
+                                        base_url, installer_url, cloud_type
+                                    )
                     if (
                         self.ansible_config.get("ceph_repository_type") == "iso"
                         and node.role == "installer"
@@ -883,7 +891,7 @@ class Ceph(object):
         return iso_file
 
     @staticmethod
-    def generate_repository_file(base_url, repos):
+    def generate_repository_file(base_url, repos, cloud_type="openstack"):
         """
         Generate rhel repository file for given repos
         Args:
@@ -896,7 +904,12 @@ class Ceph(object):
         repo_file = ""
         for repo in repos:
             base_url = base_url.rstrip("/")
-            repo_to_use = f"{base_url}/compose/{repo}/x86_64/os"
+            if cloud_type == "ibmc":
+                repo_to_use = f"{base_url}/{repo}"
+            else:
+                repo_to_use = f"{base_url}/compose/{repo}/x86_64/os"
+
+            logger.info(f"repo to use is {repo_to_use}")
             r = requests.get(repo_to_use, timeout=10, verify=False)
             logger.info("Checking %s", repo_to_use)
             if r.status_code == 200:
@@ -1734,7 +1747,7 @@ class CephNode(object):
             self.exec_command(cmd=wget_cmd)
             self.exec_command(cmd="sudo apt-get update")
 
-    def setup_rhceph_repos(self, base_url, installer_url=None):
+    def setup_rhceph_repos(self, base_url, installer_url=None, cloud_type="openstack"):
         """
         Setup repositories for rhel
         Args:
@@ -1742,7 +1755,7 @@ class CephNode(object):
             installer_url (str): installer repos url
         """
         repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
-        base_repo = Ceph.generate_repository_file(base_url, repos)
+        base_repo = Ceph.generate_repository_file(base_url, repos, cloud_type)
         base_file = self.remote_file(
             sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
         )
@@ -1750,7 +1763,9 @@ class CephNode(object):
         base_file.flush()
         if installer_url is not None:
             installer_repos = ["Agent", "Main", "Installer"]
-            inst_repo = Ceph.generate_repository_file(installer_url, installer_repos)
+            inst_repo = Ceph.generate_repository_file(
+                installer_url, installer_repos, cloud_type
+            )
             logger.info("Setting up repo on %s", self.hostname)
             inst_file = self.remote_file(
                 sudo=True, file_name="/etc/yum.repos.d/rh_ceph_inst.repo", file_mode="w"
@@ -2080,6 +2095,9 @@ class CephInstaller(CephObject):
         )
         all_yml_file.write(content)
         all_yml_file.flush()
+        self.exec_command(
+            sudo=True, cmd="chmod 644 {}/group_vars/all.yml".format(self.ansible_dir)
+        )
 
     def get_all_yml(self):
         """
@@ -2182,6 +2200,10 @@ class CephInstaller(CephObject):
                 ansible_dir=self.ansible_dir, file_name=file_name
             ),
         )
+
+        cmd1 = r" -type f -exec chmod 644 {} \;"
+        cmd = f"find {self.ansible_dir}" + cmd1
+        self.exec_command(sudo=True, cmd=cmd)
 
     def install_ceph_ansible(self, rhbuild, **kw):
         """
