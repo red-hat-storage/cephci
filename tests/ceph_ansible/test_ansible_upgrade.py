@@ -24,6 +24,7 @@ def run(ceph_cluster, **kw):
 
     ubuntu_repo = config.get("ubuntu_repo")
     hotfix_repo = config.get("hotfix_repo")
+    cloud_type = config.get("cloud-type", "openstack")
     base_url = config.get("base_url")
     installer_url = config.get("installer_url")
     config["ansi_config"]["public_network"] = get_public_network(ceph_nodes[0])
@@ -50,7 +51,7 @@ def run(ceph_cluster, **kw):
 
     # setup packages based on build
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
     )
 
     # backup existing hosts file and ansible config

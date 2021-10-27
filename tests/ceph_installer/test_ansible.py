@@ -20,6 +20,7 @@ def run(ceph_cluster, **kw):
     k_and_m = config.get("ec-pool-k-m")
     hotfix_repo = config.get("hotfix_repo")
     test_data = kw.get("test_data")
+    cloud_type = config.get("cloud-type", "openstack")
 
     ubuntu_repo = config.get("ubuntu_repo", None)
     base_url = config.get("base_url", None)
@@ -61,7 +62,7 @@ def run(ceph_cluster, **kw):
     ceph_cluster.setup_ssh_keys()
 
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
     )
 
     ceph_installer.install_ceph_ansible(build)

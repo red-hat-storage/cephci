@@ -30,6 +30,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     filestore = config.get("filestore")
     hotfix_repo = config.get("hotfix_repo")
+    cloud_type = config.get("cloud-type", "openstack")
     test_data = kw.get("test_data")
     cluster_name = config.get("cluster")
 
@@ -85,7 +86,7 @@ def run(ceph_cluster, **kw):
     ceph_cluster.setup_ceph_firewall()
 
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
     )
 
     ceph_installer.install_ceph_ansible(build)

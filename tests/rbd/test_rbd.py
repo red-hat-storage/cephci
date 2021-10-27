@@ -49,7 +49,7 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
         )
 
     try:
-        node.exec_command(cmd="rpm -qa | grep epel-release")
+        node.exec_command(cmd="rpm -qa | grep xmlstarlet")
         return
     except BaseException:  # noqa
         pass
