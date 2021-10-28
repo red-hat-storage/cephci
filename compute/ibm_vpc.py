@@ -458,6 +458,20 @@ class CephVMNodeIBM:
     @property
     def hostname(self) -> str:
         """Return the hostname of the VM."""
+        end_time = datetime.now() + timedelta(seconds=30)
+        while end_time > datetime.now():
+            try:
+                name, _, _ = socket.gethostbyaddr(self.ip_address)
+
+                if name is not None:
+                    return name
+
+            except socket.herror:
+                break
+            except BaseException as be:  # noqa
+                LOG.warning(be)
+
+            sleep(5)
         return self.node["name"]
 
     @property
