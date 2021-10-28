@@ -69,7 +69,7 @@ node(nodeName) {
         println "Recipe file content is: ${latestContent}"
         if (buildType == 'latest') {
             build ([
-                wait: true,
+                wait: false,
                 job: "tier-x",
                 parameters: [string(name: 'rhcephVersion', value: rhcephVersion),
                             string(name: 'buildType', value: buildPhase)]
