@@ -84,14 +84,15 @@ node(nodeName) {
             )
 
             if ( buildType == "rc" ) {
+                sourceKey = "rc"
                 updateKey = "rc"
             }
 
-            if ( latestContent.containsKey(updateKey) ) {
-                latestContent[updateKey] = releaseContent[sourceKey]
+            if ( latestContent.containsKey(tierLevel) ) {
+                latestContent[tierLevel] = releaseContent[sourceKey]
             }
             else {
-                def updateContent = ["${updateKey}": releaseContent[sourceKey]]
+                def updateContent = ["${tierLevel}": releaseContent[sourceKey]]
                 latestContent += updateContent
             }
             sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
