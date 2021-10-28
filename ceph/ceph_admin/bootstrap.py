@@ -227,7 +227,12 @@ class BootstrapMixin:
         mon_node = args.pop("mon-ip", self.installer.node.shortname)
         if mon_node:
             for node in self.cluster.get_nodes():
-                if mon_node in node.shortname:
+                # making sure conditions works in all the scenario
+                if (
+                    node.shortname == mon_node
+                    or node.shortname.endswith(mon_node)
+                    or f"{mon_node}-" in node.shortname
+                ):
                     cmd += f" --mon-ip {node.ip_address}"
                     break
             else:
