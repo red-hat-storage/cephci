@@ -1055,12 +1055,17 @@ def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
 
 def collect_recipe(ceph_cluster):
     """
-    Collects the podman version/Docker Version and ceph version installed and writes to version_info.json file
+    Gather the system under test details.
+
+    At present, the following information are gathered
+        container (podman/docker)   version
+        ceph                        Deployed Ceph version
+
     Args:
-        ceph_cluster:
+        ceph_cluster:   Cluster participating in the test.
 
     Returns:
-
+        None
     """
     version_datails = {}
     installer_node = ceph_cluster.get_ceph_objects("installer")
@@ -1080,12 +1085,15 @@ def collect_recipe(ceph_cluster):
     if output:
         log.info(f"Docker Version {output}")
         version_datails["DOCKER"] = output
-    out, rc = client_node[0].exec_command(
-        sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
-    )
-    output = out.read().decode().rstrip()
-    log.info(f"ceph Version {output}")
-    version_datails["CEPH"] = output
+
+    if client_node:
+        out, rc = client_node[0].exec_command(
+            sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
+        )
+        output = out.read().decode().rstrip()
+        log.info(f"ceph Version {output}")
+        version_datails["CEPH"] = output
+
     version_detail = open("version_info.json", "w+")
     json.dump(version_datails, version_detail)
     version_detail.close()

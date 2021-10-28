@@ -587,5 +587,37 @@ def writeToRecipeFile(def buildType, def rhcephVersion, def dataPhase, def infra
     sh "ssh $infra \"sudo chown apache:apache $recipeFile\""
 }
 
+def executeTestSuite(def cliArgs, def cleanup=true) {
+    /*
+        This method executes a single test suite and also performs cleanup of the VM.
+
+        Args:
+            cliArgs - argument to be passed to run.py
+    */
+    def rc = "PASS"
+    def randString = sh(
+        script: "cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5",
+        returnStdout: true
+    ).trim()
+    def vmPrefix = "ci-${randString}"
+    def baseCmd = ".venv/bin/python run.py --log-level DEBUG"
+    baseCmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
+
+    try {
+        sh(script: "${baseCmd} --instances-name ${vmPrefix} ${cliArgs}")
+    } catch (err) {
+        rc = "FAIL"
+        println err
+        currentBuild.result = 'FAILURE'
+    } finally {
+        if (rc == "FAIL" || cleanup) {
+            sh(script: "${baseCmd} --cleanup ${vmPrefix}")
+        } else {
+            println "Not performing cleanup of cluster."
+        }
+    }
+
+    return [ "result": rc, "instances-name": vmPrefix]
+}
 
 return this;
