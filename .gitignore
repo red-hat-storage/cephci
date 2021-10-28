@@ -20,3 +20,4 @@ result.props
 osd_scenarios_*node*
 version_info.json
 rerun
+sut.yaml
