@@ -45,6 +45,7 @@ def run(**kw):
     rhbuild = config.get("rhbuild")
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
     is_production = config.get("is_production", False)
+    cloud_type = config.get("cloud-type", "openstack")
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
@@ -57,6 +58,7 @@ def run(**kw):
                 enable_eus,
                 skip_enabling_rhel_rpms,
                 is_production,
+                cloud_type,
             )
             time.sleep(20)
     return 0
@@ -71,6 +73,7 @@ def install_prereq(
     enable_eus=False,
     skip_enabling_rhel_rpms=False,
     is_production=False,
+    cloud_type="openstack",
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
@@ -107,10 +110,12 @@ def install_prereq(
         # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
         ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
         if not skip_subscription:
-            setup_subscription_manager(ceph, is_production)
+            if cloud_type != "ibmc":
+                setup_subscription_manager(ceph, is_production)
+
             if not skip_enabling_rhel_rpms:
                 if enable_eus:
-                    enable_rhel_eus_rpms(ceph, distro_ver)
+                    enable_rhel_eus_rpms(ceph, distro_ver, cloud_type)
                 else:
                     enable_rhel_rpms(ceph, distro_ver)
             else:
@@ -132,7 +137,8 @@ def install_prereq(
             ceph.exec_command(cmd="sudo yum install -y attr", long_running=True)
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
         ceph.exec_command(cmd="sudo yum clean metadata")
-        config_ntp(ceph)
+        config_ntp(ceph, cloud_type)
+
     registry_login(ceph, distro_ver)
 
 
@@ -248,26 +254,29 @@ def enable_rhel_rpms(ceph, distro_ver):
         )
 
 
-def enable_rhel_eus_rpms(ceph, distro_ver):
+def enable_rhel_eus_rpms(ceph, distro_ver, cloud_type="openstack"):
     """
     Setup cdn repositories for rhel systems
     reference: http://wiki.test.redhat.com/CEPH/SubscriptionManager
     Args:
-        distro_ver: distro version - example: 7.7
-        ceph: ceph object
+        distro_ver:     distro version - example: 7.7
+        ceph:           ceph object
+        cloud_type:     System deployment environment
     """
 
     eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
 
-    ceph.exec_command(
-        sudo=True,
-        cmd="subscription-manager attach --pool 8a99f9ad77a7d7290177ce3852fc0c44",
-        timeout=720,
-    )
+    if cloud_type != "ibmc":
+        ceph.exec_command(
+            sudo=True,
+            cmd="subscription-manager attach --pool 8a99f9ad77a7d7290177ce3852fc0c44",
+            timeout=720,
+        )
 
-    ceph.exec_command(
-        sudo=True, cmd="subscription-manager repos --disable=*", long_running=True
-    )
+    if cloud_type != "ibmc":
+        ceph.exec_command(
+            sudo=True, cmd="subscription-manager repos --disable=*", long_running=True
+        )
 
     for repo in eus_repos.get(distro_ver[0]):
         ceph.exec_command(
@@ -300,15 +309,6 @@ def registry_login(ceph, distro_ver):
     login to this registry 'registry.redhat.io' on all nodes
         docker for RHEL 7.x and podman for RHEL 8.x
     """
-    _config = get_cephci_config()
-    cdn_cred = _config.get("registry_credentials", _config["cdn_credentials"])
-    user = cdn_cred.get("username")
-    pwd = cdn_cred.get("password")
-    registry = cdn_cred.get("registry", "registry.redhat.io")
-    if not (user and pwd):
-        log.warning("username and password not found for cdn_credentials")
-        return
-
     container = "docker"
     if distro_ver.startswith("8"):
         container = "podman"
@@ -320,9 +320,29 @@ def registry_login(ceph, distro_ver):
     if container == "docker":
         ceph.exec_command(cmd="sudo systemctl restart docker", long_running=True)
 
-    ceph.exec_command(
-        cmd="sudo {c} login -u {u} -p {p} {registry}".format(
-            c=container, u=user, p=pwd, registry=registry
-        ),
-        check_ec=True,
-    )
+    config = get_cephci_config()
+    registries = [
+        {
+            "registry": "registry.redhat.io",
+            "user": config["cdn_credentials"]["username"],
+            "passwd": config["cdn_credentials"]["password"],
+        }
+    ]
+
+    if (
+        config.get("registry_credentials")
+        and config["registry_credentials"]["registry"] != "registry.redhat.io"
+    ):
+        registries.append(
+            {
+                "registry": config["registry_credentials"]["registry"],
+                "user": config["registry_credentials"]["username"],
+                "passwd": config["registry_credentials"]["password"],
+            }
+        )
+
+    for r in registries:
+        ceph.exec_command(
+            cmd=f"sudo {container} login -u {r['user']} -p {r['passwd']} {r['registry']}",
+            check_ec=True,
+        )

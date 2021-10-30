@@ -725,40 +725,52 @@ def open_firewall_port(ceph_node, port, protocol):
     ceph_node.open_firewall_port(port, protocol)
 
 
-def config_ntp(ceph_node):
+def config_ntp(ceph_node, cloud_type="openstack"):
     """
     Configure NTP/Chronyc service based on the OS platform
 
     Args:
-        ceph_node: Ceph Node
+        ceph_node:      Ceph Node
+        cloud_type:     IaaS provider
     """
     distro_info = ceph_node.distro_info
     distro_ver = distro_info["VERSION_ID"]
 
-    _ntp_commands = {
-        "8": [
-            "sudo sed -i '/pool*/d;/server*/d' /etc/chrony.conf",
-            "sudo sed -i '1i server clock.corp.redhat.com iburst' /etc/chrony.conf",
-            "sudo systemctl stop chronyd.service",
-            "sudo systemctl start chronyd.service",
-            "sudo chronyc makestep",
-            "sudo chronyc sources",
-        ],
+    ntp_config = {
         "7": [
-            "sudo sed -i '/server*/d' /etc/ntp.conf",
-            "echo 'server clock.corp.redhat.com iburst' | sudo tee -a /etc/ntp.conf",
-            "sudo ntpd -gq",
-            "sudo systemctl enable ntpd",
-            "sudo systemctl start ntpd",
-            "sudo ntpq -p",
-            "sudo ntpstat",
+            "sed -i '/server*/d' /etc/ntp.conf",
+            "echo 'server clock.corp.redhat.com iburst' | tee -a /etc/ntp.conf",
+        ],
+        "8": [
+            "sed -i '/pool*/d;/server*/d' /etc/chrony.conf",
+            "sed -i '1i server clock.corp.redhat.com iburst' /etc/chrony.conf",
         ],
     }
+    if cloud_type != "ibmc":
+        # IBM-Cloud hosted environments are configured via the DHCP client.
+        commands = ntp_config[distro_ver.split(".")[0]]
+        for cmd in commands:
+            ceph_node.exec_command(sudo=True, cmd=cmd, long_running=True)
 
-    _commands = _ntp_commands[distro_ver.split(".")[0]]
+    ntp_run = {
+        "7": [
+            "ntpd -gq",
+            "systemctl enable ntpd",
+            "systemctl start ntpd",
+            "ntpq -p",
+            "ntpstat",
+        ],
+        "8": [
+            "systemctl stop chronyd.service",
+            "systemctl start chronyd.service",
+            "chronyc makestep",
+            "chronyc sources",
+        ],
+    }
+    commands = ntp_run[distro_ver.split(".")[0]]
 
-    for cmd in _commands:
-        ceph_node.exec_command(cmd=cmd, long_running=True)
+    for cmd in commands:
+        ceph_node.exec_command(sudo=True, cmd=cmd, long_running=True)
 
     return True
 
