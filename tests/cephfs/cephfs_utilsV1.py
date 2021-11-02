@@ -556,7 +556,7 @@ class FsUtils(object):
             validate:
             **kwargs:
                 group_name : str
-                retain-snapshots : boolean
+                retain_snapshots : boolean
                 force : boolean
                 check_ec : boolean
         Returns:
@@ -565,7 +565,7 @@ class FsUtils(object):
         rmsubvolume_cmd = f"ceph fs subvolume rm {vol_name} {subvol_name}"
         if kwargs.get("group_name"):
             rmsubvolume_cmd += f" --group_name {kwargs.get('group_name')}"
-        if kwargs.get("retain-snapshots"):
+        if kwargs.get("retain_snapshots"):
             rmsubvolume_cmd += " --retain-snapshots"
         if kwargs.get("force"):
             rmsubvolume_cmd += " --force"
