@@ -31,6 +31,7 @@ instance:
       expire: False
 
     runcmd:
+      - yum install -y yum-utils sudo
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - curl -k -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem https://10.245.4.4/.ceph-qe-ca.pem
       - update-ca-trust
