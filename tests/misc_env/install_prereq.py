@@ -110,8 +110,7 @@ def install_prereq(
         # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
         ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
         if not skip_subscription:
-            if cloud_type != "ibmc":
-                setup_subscription_manager(ceph, is_production)
+            setup_subscription_manager(ceph, is_production, cloud_type)
 
             if not skip_enabling_rhel_rpms:
                 if enable_eus:
@@ -122,7 +121,8 @@ def install_prereq(
                 log.info("Skipped enabling the RHEL RPM's provided by Subscription")
         if repo:
             setup_addition_repo(ceph, repo)
-        # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
+        # TODO enable only python3 rpms on both rhel7 &rhel8 once all component
+        #  suites(rhcs3,4) are compatible
         if distro_ver.startswith("8"):
             rpm_all_packages = rpm_packages.get("py3") + ["net-tools"]
             if str(rhbuild).startswith("5"):
@@ -151,7 +151,9 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
-def setup_subscription_manager(ceph, is_production=False, timeout=1800):
+def setup_subscription_manager(
+    ceph, is_production=False, cloud_type="openstack", timeout=1800
+):
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
     log.info(
@@ -176,7 +178,7 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
             # and then test it with --baseurl=cdn.stage.redhat.com.
             config_ = get_cephci_config()
             command = "sudo subscription-manager --force register "
-            if is_production:
+            if is_production or cloud_type == "ibmc":
                 command += "--serverurl=subscription.rhsm.redhat.com:443/subscription "
                 username_ = config_["cdn_credentials"]["username"]
                 password_ = config_["cdn_credentials"]["password"]
@@ -190,36 +192,36 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
                 password_ = config_["stage_credentials"]["password"]
                 pool_id = "8a99f9af795d57ab01797e572e860569"
 
-            command += f"--baseurl=https://cdn.redhat.com --username={username_} --password={password_}"
+            command += f"--baseurl=https://cdn.redhat.com --username={username_}"
+            command += f" --password={password_}"
+
+            ceph.exec_command(cmd=command, timeout=720)
 
             ceph.exec_command(
-                cmd=command,
-                timeout=720,
-            )
-
-            ceph.exec_command(
-                cmd=f"sudo subscription-manager attach --pool {pool_id}",
-                timeout=720,
+                cmd=f"sudo subscription-manager attach --pool {pool_id}", timeout=720
             )
             break
         except (KeyError, AttributeError):
-            raise RuntimeError(
-                "Require the {} to be set in ~/.cephci.yaml, Please refer cephci.yaml.template".format(
-                    "cdn_credentials" if is_production else "stage_credentials"
-                )
-            )
+            required_key = "stage_credentials"
+            if is_production or cloud_type == "ibmc":
+                required_key = "cdn_credentials"
 
-        except BaseException:
+            raise RuntimeError(
+                f"Require the {required_key} to be set in ~/.cephci.yaml, "
+                "Please refer cephci.yaml.template"
+            )
+        except BaseException:  # noqa
             if datetime.datetime.now() - starttime > timeout:
                 try:
                     out, err = ceph.exec_command(
                         cmd="cat /var/log/rhsm/rhsm.log", timeout=120
                     )
                     rhsm_log = out.read().decode()
-                except BaseException:
+                except BaseException:  # noqa
                     rhsm_log = "No Log Available"
                 raise RuntimeError(
-                    "Failed to subscribe {ip} with {timeout} timeout:\n {stack_trace}\n\n rhsm.log:\n{log}".format(
+                    "Failed to subscribe {ip} with {timeout} timeout:"
+                    "\n {stack_trace}\n\n rhsm.log:\n{log}".format(
                         ip=ceph.ip_address,
                         timeout=timeout,
                         stack_trace=traceback.format_exc(),
@@ -238,6 +240,7 @@ def enable_rhel_rpms(ceph, distro_ver):
     """
     Setup cdn repositories for rhel systems
     Args:
+        ceph:       cluster instance
         distro_ver: distro version details
     """
 
@@ -267,13 +270,12 @@ def enable_rhel_eus_rpms(ceph, distro_ver, cloud_type="openstack"):
     eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
 
     if cloud_type != "ibmc":
+        # This pool ID would not work for production.
         ceph.exec_command(
             sudo=True,
             cmd="subscription-manager attach --pool 8a99f9ad77a7d7290177ce3852fc0c44",
             timeout=720,
         )
-
-    if cloud_type != "ibmc":
         ceph.exec_command(
             sudo=True, cmd="subscription-manager repos --disable=*", long_running=True
         )
@@ -306,8 +308,9 @@ def enable_rhel_eus_rpms(ceph, distro_ver, cloud_type="openstack"):
 
 def registry_login(ceph, distro_ver):
     """
-    login to this registry 'registry.redhat.io' on all nodes
-        docker for RHEL 7.x and podman for RHEL 8.x
+    Login to the given Container registries provided in the configuration.
+
+    In this method, docker or podman is installed based on OS.
     """
     container = "docker"
     if distro_ver.startswith("8"):

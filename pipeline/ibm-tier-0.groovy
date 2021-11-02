@@ -48,7 +48,12 @@ node(nodeName) {
         if ((! rhcephVersion?.trim()) && (! buildType?.trim())) {
             error "Required Prameters are not provided.."
         }
-        testStages = sharedLib.fetchStages("--build ${buildType} --cloud ibmc --skip-subscription", buildPhase, testResults, rhcephversion)
+        testStages = sharedLib.fetchStages(
+            "--build ${buildType} --cloud ibmc ",
+            buildPhase,
+            testResults,
+            rhcephversion
+        )
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test stages found.."
