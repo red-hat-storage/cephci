@@ -51,7 +51,9 @@ node(nodeName) {
         buildPhase = buildPhaseValue[1].toInteger()+1
         buildPhase = buildPhaseValue[0]+"-"+buildPhase
         // Till the pipeline matures, using the build that has passed tier-0 suite.
-        testStages = sharedLib.fetchStages("--build tier-0 --cloud ibmc --skip-subscription", buildPhase, testResults, rhcephversion)
+        testStages = sharedLib.fetchStages(
+            "--build tier-0 --cloud ibmc", buildPhase, testResults, rhcephversion
+        )
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test stages found.."
