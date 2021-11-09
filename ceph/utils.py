@@ -208,7 +208,7 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
     vm = None
     try:
         vm = CephVMNodeIBM(
-            accessKey=params["accesskey"], serviceUrl=params["service_url"]
+            access_key=params["accesskey"], service_url=params["service_url"]
         )
 
         vm.create(

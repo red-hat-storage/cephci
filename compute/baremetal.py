@@ -6,7 +6,7 @@ from libcloud.compute.base import Node
 
 from ceph.ceph import SSHConnectionManager
 
-LOG = logging.getLogger()
+LOG = logging.getLogger(__name__)
 
 
 class NetworkOpFailure(Exception):
