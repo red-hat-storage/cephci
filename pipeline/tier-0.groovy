@@ -100,7 +100,7 @@ node(nodeName) {
 
         sharedLib.sendGChatNotification(testResults, updateKey.capitalize())
         sharedLib.sendEmail(testResults, sharedLib.buildArtifactsDetails(
-            releaseContent, ciMap, updateKey), tierLevel.capitalize()
+            releaseContent, ciMap, sourceKey), tierLevel.capitalize()
         )
     }
 
