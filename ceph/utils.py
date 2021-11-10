@@ -15,7 +15,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from compute.baremetal import CephBaremetalNode
-from compute.ibm_vpc import CephVMNodeIBM
+from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.retry import retry
 from utility.utils import generate_node_name
@@ -28,20 +28,33 @@ RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 DEFAULT_OSBS_SERVER = "http://file.rdu.redhat.com/~kdreyer/osbs/"
 
 
-def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, timeout=300):
+def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
     """
     Clean up the DNS records, instance and volumes that matches the given pattern.
 
     Args:
          ibm_cred     global configuration file(ibm)
          pattern      pattern to match instance name
-         timeout      Max time limit for cleanup instance
     """
     glbs = ibm_cred.get("globals")
     ibmc = glbs.get("ibm-credentials")
 
-    vm = CephVMNodeIBM(ibmc["access-key"], ibmc["service-url"])
-    vm.clean_up_instances(ibmc["access-key"], pattern, ibmc["zone_name"], timeout)
+    ibmc_client = get_ibm_service(
+        access_key=ibmc["access-key"], service_url=ibmc["service-url"]
+    )
+    resp = ibmc_client.list_instances(vpc_name=ibmc["vpc_name"])
+    resources = resp.get_result()
+    instances = [i for i in resources["instances"] if pattern in i["name"]]
+
+    with parallel() as p:
+        for instance in instances:
+            vsi = CephVMNodeIBM(
+                access_key=ibmc["access-key"],
+                service_url=ibmc["service-url"],
+                node=instance,
+            )
+            p.spawn(vsi.delete, ibmc["zone_name"])
+
     log.info(f"Done cleaning up nodes with pattern {pattern}")
 
 
@@ -216,7 +229,6 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
             image_name=params["image-name"],
             network_name=params["network_name"],
             private_key=params["private_key"],
-            access_key=params["accesskey"],
             vpc_name=params["vpc_name"],
             profile=params["profile"],
             group_access=params["group_access"],
@@ -229,12 +241,12 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
 
         vm.role = params["role"]
         vm.root_login = params["root-login"]
-        vm.osd_scenario = params.get("osd-scenario", False)
+        vm.osd_scenario = params.get("osd-scenario")
         ceph_nodes[node] = vm
     except RETRY_EXCEPTIONS as retry_except:
         log.warning(retry_except, exc_info=True)
         if vm is not None:
-            vm.delete()
+            vm.delete(params["zone_name"])
 
         raise
     except BaseException as be:  # noqa
