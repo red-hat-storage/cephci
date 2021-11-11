@@ -375,7 +375,10 @@ def run(ceph_cluster, **kw):
         )
         log.info(out)
         if clients[1].node.exit_status == 0:
-            log.error("Quota set has been failed able to create more files")
+            log.warning(
+                "Quota set has been failed,Able to create more files."
+                "This is known limitation"
+            )
         if build.startswith("5"):
             subvol_path, rc = clients[0].exec_command(
                 sudo=True, cmd="ceph fs subvolume getpath cephfs-ec subvol_10"
@@ -403,7 +406,10 @@ def run(ceph_cluster, **kw):
             )
             log.info(out)
             if clients[1].node.exit_status == 0:
-                log.error("Quota set has been failed able to create more files")
+                log.warning(
+                    "Quota set has been failed,Able to create more files."
+                    "This is known limitation"
+                )
                 # return 1
 
         log.info("Clean up the system")
