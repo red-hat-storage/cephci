@@ -355,8 +355,10 @@ class CephVMNodeIBM:
             response = self.service.create_instance(instance_prototype)
 
             instance_id = response.get_result()["id"]
-            self.node = response.get_result()
             self.wait_until_vm_state_running(instance_id)
+
+            response = self.service.get_instance(instance_id)
+            self.node = response.get_result()
 
             # DNS record creation phase
             LOG.debug(f"Adding DNS records for {node_name}")
@@ -507,6 +509,9 @@ class CephVMNodeIBM:
         Args:
             zone_name (str):    DNS zone name associated with this VSI
         """
+        if not self.node:
+            return
+
         zones = self.dns_service.list_dnszones("a55534f5-678d-452d-8cc6-e780941d8e31")
         zone_id = get_dns_zone_id(zone_name, zones.get_result())
 
