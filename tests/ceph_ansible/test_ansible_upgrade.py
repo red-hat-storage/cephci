@@ -184,6 +184,11 @@ def run(ceph_cluster, **kw):
             "hosts infrastructure-playbooks/cephadm-adopt.yml".format(ansible_dir)
         )
         out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+
+        if rc != 0:
+            log.error("Failed during cephadm adopt (rc = {})".format(rc))
+            return rc
+
         client = ceph_cluster.get_nodes("mon")[0]
 
     return ceph_cluster.check_health(

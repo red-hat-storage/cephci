@@ -76,14 +76,6 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: Set custom grafana image
-      desc: BZ-1975887 work-around until GA
-      module: test_bootstrap.py
-      config:
-        command: shell
-        args:
-          - "ceph config set mgr mgr/cephadm/container_image_grafana registry.redhat.io/rhceph-beta/rhceph-5-dashboard-rhel8:latest"
-  - test:
       name: Add Host, Service(s) deployment
       desc: Host and service(s) deployment.
       module: test_cephadm.py
