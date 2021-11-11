@@ -1,20 +1,11 @@
 """Collects the Baremetal information and creates the cephNode object."""
 import logging
+from copy import deepcopy
 from typing import List, Optional
-
-from libcloud.compute.base import Node
 
 from ceph.ceph import SSHConnectionManager
 
-LOG = logging.getLogger()
-
-
-class NetworkOpFailure(Exception):
-    pass
-
-
-class NodeError(Exception):
-    pass
+LOG = logging.getLogger(__name__)
 
 
 class CephBaremetalNode:
@@ -26,6 +17,7 @@ class CephBaremetalNode:
     ) -> None:
         """
         Initialize the instance node using the provided information.
+
         This will assign below properties to Baremetal Node
 
         params :
@@ -35,15 +27,11 @@ class CephBaremetalNode:
             Hostname
             root_login
             volumes
-
+            subnet
         """
-        self.node: Optional[Node] = None
         # CephVM attributes
-        self._subnet: list = list()
         self._roles: list = list()
 
-        # Fixme: determine if we can pick this information for OpenStack.
-        self.root_login: str
         self.osd_scenario: int
         self.keypair: Optional[str] = None
         self.params = params
@@ -64,8 +52,7 @@ class CephBaremetalNode:
     @property
     def ip_address(self) -> str:
         """Return the private IP address of the node."""
-        if self.params.get("ip"):
-            return self.params.get("ip")
+        return self.params.get("ip")
 
     @property
     def node_type(self) -> str:
@@ -74,27 +61,21 @@ class CephBaremetalNode:
     @property
     def hostname(self) -> str:
         """Return the hostname of the VM."""
-        if self.params.get("hostname"):
-            return self.params.get("hostname")
+        return self.params.get("hostname")
 
     @property
     def root_password(self) -> str:
         """Return root password for the machine"""
-        if self.params.get("root_password"):
-            return self.params.get("root_password")
-        else:
-            return "passwd"
+        return self.params.get("root_password", "passwd")
 
     @property
     def root_login(self) -> str:
-        return self.params.get("root_login", "")
+        return self.params.get("root_login", "root")
 
     @property
     def volumes(self):
         """Return the list of storage volumes attached to the node."""
-        if self.params.get("volumes"):
-            return self.params.get("volumes")
-        return []
+        return self.params.get("volumes", [])
 
     @property
     def no_of_volumes(self) -> int:
@@ -102,27 +83,9 @@ class CephBaremetalNode:
         return len(self.volumes)
 
     @property
-    def osd_scenario(self) -> int:
-        """Return the number of volumes attached to the VM."""
-        return 0
-
-    @property
     def subnet(self) -> str:
         """Return the subnet information."""
-        if self.node is None:
-            return ""
-
-        if self._subnet:
-            return self._subnet[0]
-
-        networks = self.node.extra.get("addresses")
-        for network in networks:
-            net = self._get_network_by_name(name=network)
-            subnet_id = net.extra.get("subnets")
-            self._subnet.append(self._get_subnet_cidr(subnet_id))
-
-        # Fixme: The CIDR returned needs to be part of the required network.
-        return self._subnet[0]
+        return self.params.get("subnet")
 
     @property
     def role(self) -> List:
@@ -132,6 +95,4 @@ class CephBaremetalNode:
     @role.setter
     def role(self, roles: list) -> None:
         """Set the roles for the VM."""
-        from copy import deepcopy
-
         self._roles = deepcopy(roles)

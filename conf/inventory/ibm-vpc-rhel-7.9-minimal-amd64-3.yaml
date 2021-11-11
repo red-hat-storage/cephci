@@ -2,7 +2,7 @@ version_id: 7.9
 id: rhel
 instance:
   create:
-    image-name: ibm-redhat-7-9-minimal-amd64-3
+    image-name: rhel-server-79-x86-64-kvm
     network_name: sn-01-cephqe-pvt-network
     private_key: ibmc-shared
     group_access: cephqe-sec-grp-all-access
@@ -26,18 +26,13 @@ instance:
 
     chpasswd:
       list: |
-        root: Welcome123#
+        root: passwd
         cephuser: pass123
       expire: False
 
     runcmd:
-      - yum install -y yum-utils sudo
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - curl -k -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem https://10.245.4.4/.ceph-qe-ca.pem
       - curl -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://10.245.4.4/.RH-IT-Root-CA.crt
       - update-ca-trust
-      - subscription-manager unregister
-      - rpm -e katello-ca-consumer-rhncapsyd0102.service.networklayer.com-1.0-4.noarch
-      - subscription-manager clean
-      - rm -f /etc/pki/ca-trust/source/anchors/katello-server-ca.pem
       - touch /ceph-qa-ready

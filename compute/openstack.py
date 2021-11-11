@@ -15,7 +15,16 @@ from libcloud.compute.drivers.openstack import (
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-LOG = logging.getLogger()
+from .exceptions import (
+    ExactMatchFailed,
+    NetworkOpFailure,
+    NodeDeleteFailure,
+    NodeError,
+    ResourceNotFound,
+    VolumeOpFailure,
+)
+
+LOG = logging.getLogger(__name__)
 
 # libcloud does not have a timeout enabled for Openstack calls to
 # ``create_node``, and it uses the default timeout value from socket which is
@@ -63,31 +72,6 @@ def get_openstack_driver(
         ex_domain_name=domain_name,
         ex_tenant_domain_id=tenant_domain_id,
     )
-
-
-# Custom exception objects
-class ResourceNotFound(Exception):
-    pass
-
-
-class ExactMatchFailed(Exception):
-    pass
-
-
-class VolumeOpFailure(Exception):
-    pass
-
-
-class NetworkOpFailure(Exception):
-    pass
-
-
-class NodeError(Exception):
-    pass
-
-
-class NodeDeleteFailure(Exception):
-    pass
 
 
 class CephVMNodeV2:
