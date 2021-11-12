@@ -79,7 +79,7 @@ node(nodeName) {
             error "No test stages found.."
         }
 
-        currentBuild.description = "${ciMap.artifact.nvr} - ${ciMap.artifact.version}"
+        currentBuild.description = "${ciMap.artifact.nvr} - ${ciMap.artifact.version} - ${tierLevel}"
     }
 
     parallel testStages
