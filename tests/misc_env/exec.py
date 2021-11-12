@@ -178,7 +178,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
 
     Args:
         ceph_cluster:   The participating Ceph cluster object
-        kwargs:         Supported key value pairs are
+        kwargs:         Supported key value pairs for the key config are
                         cmd             | Depreciated - command to be executed
                         idx             | Default 0, index to be used
                         sudo            | Execute in the privileged mode
@@ -220,7 +220,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     sudo = config.get("sudo", False)
     long_running = config.get("long_running", False)
 
-    role = kwargs.get("role", "client")
+    role = config.get("role", "client")
     if cephadm:
         role = "installer"
 
