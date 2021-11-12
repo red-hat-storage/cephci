@@ -18,7 +18,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Shrinking monitor")
     config = kw.get("config")
-    build = config.get("build", config.get("rhbuild"))
+    build = config.get("rhbuild")
     mon_to_kill_list = config.get("mon-to-kill")
     mon_to_kill = None
     cluster_name = config.get("cluster")

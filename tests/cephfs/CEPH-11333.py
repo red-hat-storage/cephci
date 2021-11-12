@@ -13,7 +13,7 @@ def run(ceph_cluster, **kw):
         log.info("Running  11333 test")
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
-        build = config.get("build", config.get("rhbuild"))
+        build = config.get("rhbuild")
         client_info, rc = fs_util.get_clients(build)
         k_and_m = config.get("ec-pool-k-m")
         new_fs_name = "cephfs_new"

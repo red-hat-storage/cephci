@@ -28,7 +28,7 @@ def run(**kw):
     try:
         log.info("Starting RBD mirroring test case")
         config = kw.get("config")
-        build = config.get("build", config.get("rhbuild"))
+        build = config.get("rhbuild")
         mirror1, mirror2 = [
             rbdmirror.RbdMirror(cluster, config)
             for cluster in kw.get("ceph_cluster_dict").values()

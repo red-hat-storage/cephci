@@ -3,6 +3,7 @@ globals:
       name: ceph
       node1:
         role:
+          - _admin
           - mon
           - mgr
           - installer
@@ -41,5 +42,11 @@ globals:
         role:
           - client
       node9:
+        role:
+          - client
+      node10:
+        role:
+          - client
+      node11:
         role:
           - client

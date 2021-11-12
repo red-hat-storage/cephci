@@ -584,7 +584,7 @@ tests:
           - mynfs                         # nfs service ID
           - nfs-ganesha-pool              # name of the pool
         args:
-          namespace: mynfs-ns             # specify namespace
+          # namespace: mynfs-ns           # specify namespace(supported only in RHCeph 5.0)
           placement:
             nodes:
               - node8

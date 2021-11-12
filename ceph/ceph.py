@@ -705,15 +705,23 @@ class Ceph(object):
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
         if not pacific:
-            match = re.search(r"(\d+) daemons, quorum", lines)
-            if not match:
-                match = re.search(r"(\d+) mons at", lines)
-            all_mons = int(match.group(1))
-            logger.info(all_mons)
-            logger.info(self.ceph_demon_stat["mon"])
-            if all_mons != self.ceph_demon_stat["mon"]:
+            cmd = "ceph quorum_status -f json"
+            if cluster_name is not None:
+                cmd += f" --cluster {cluster_name}"
+            if pacific:
+                cmd = f"cephadm shell -- {cmd}"
+
+            out, err = client.exec_command(cmd=cmd, sudo=True)
+            mons = json.loads(out.read().decode())
+            logger.info(
+                f"Expected MONS: {self.ceph_demon_stat['mon']}, MON quorum : {mons}"
+            )
+
+            if len(mons.get("quorum")) != self.ceph_demon_stat["mon"]:
                 logger.error("Not all monitors are in cluster")
                 return 1
+        logger.info("Expected MONs is in quorum")
+
         if "HEALTH_ERR" in lines:
             logger.error("HEALTH in ERROR STATE")
             return 1
@@ -739,7 +747,13 @@ class Ceph(object):
         self.ansible_config = installer.get_all_yml()
 
     def setup_packages(
-        self, base_url, hotfix_repo, installer_url, ubuntu_repo, build=None
+        self,
+        base_url,
+        hotfix_repo,
+        installer_url,
+        ubuntu_repo,
+        build=None,
+        cloud_type="openstack",
     ):
         """
         Setup packages required for ceph-ansible istallation
@@ -798,7 +812,9 @@ class Ceph(object):
                                     not self.ansible_config.get("ceph_repository_type")
                                     == "cdn"
                                 ):
-                                    node.setup_rhceph_repos(base_url, installer_url)
+                                    node.setup_rhceph_repos(
+                                        base_url, installer_url, cloud_type
+                                    )
                     if (
                         self.ansible_config.get("ceph_repository_type") == "iso"
                         and node.role == "installer"
@@ -867,7 +883,7 @@ class Ceph(object):
             str:  iso file url
         """
         iso_file_path = base_url + "compose/Tools/x86_64/iso/"
-        iso_dir_html = requests.get(iso_file_path, timeout=10).content
+        iso_dir_html = requests.get(iso_file_path, timeout=10, verify=False).content
         match = re.search('<a href="(.*?)">(.*?)-x86_64-dvd.iso</a>', iso_dir_html)
         iso_file_name = match.group(1)
         logger.info("Using {}".format(iso_file_name))
@@ -875,7 +891,7 @@ class Ceph(object):
         return iso_file
 
     @staticmethod
-    def generate_repository_file(base_url, repos):
+    def generate_repository_file(base_url, repos, cloud_type="openstack"):
         """
         Generate rhel repository file for given repos
         Args:
@@ -888,8 +904,13 @@ class Ceph(object):
         repo_file = ""
         for repo in repos:
             base_url = base_url.rstrip("/")
-            repo_to_use = f"{base_url}/compose/{repo}/x86_64/os"
-            r = requests.get(repo_to_use, timeout=10)
+            if cloud_type == "ibmc":
+                repo_to_use = f"{base_url}/{repo}/"
+            else:
+                repo_to_use = f"{base_url}/compose/{repo}/x86_64/os/"
+
+            logger.info(f"repo to use is {repo_to_use}")
+            r = requests.get(repo_to_use, timeout=10, verify=False)
             logger.info("Checking %s", repo_to_use)
             if r.status_code == 200:
                 logger.info("Using %s", repo_to_use)
@@ -1092,12 +1113,20 @@ class NodeVolume(object):
 
 class SSHConnectionManager(object):
     def __init__(
-        self, ip_address, username, password, look_for_keys=False, outage_timeout=300
+        self,
+        ip_address,
+        username,
+        password,
+        look_for_keys=False,
+        private_key_file_path="",
+        outage_timeout=300,
     ):
         self.ip_address = ip_address
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
+        if look_for_keys:
+            self.pkey = paramiko.RSAKey.from_private_key_file(private_key_file_path)
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.__transport = None
@@ -1175,6 +1204,8 @@ class CephNode(object):
         self.username = kw["username"]
         self.password = kw["password"]
         self.root_passwd = kw["root_password"]
+        self.look_for_key = kw["look_for_key"]
+        self.private_key_path = kw["private_key_path"]
         self.root_login = kw["root_login"]
         self.private_ip = kw["private_ip"]
         self.ip_address = kw["ip_address"]
@@ -1204,10 +1235,18 @@ class CephNode(object):
             self.vm_node = kw["ceph_vmnode"]
             self.osd_scenario = self.vm_node.osd_scenario
         self.root_connection = SSHConnectionManager(
-            self.ip_address, "root", self.root_passwd
+            self.ip_address,
+            "root",
+            self.root_passwd,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.connection = SSHConnectionManager(
-            self.ip_address, self.username, self.password
+            self.ip_address,
+            self.username,
+            self.password,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.rssh = self.root_connection.get_client
         self.rssh_transport = self.root_connection.get_transport
@@ -1289,6 +1328,7 @@ class CephNode(object):
         self.hostname = out.read().strip().decode()
         shortname = self.hostname.split(".")
         self.shortname = shortname[0]
+        self.exec_command(cmd=f"sudo hostname {self.shortname}")
         logger.info(
             "hostname and shortname set to %s and %s", self.hostname, self.shortname
         )
@@ -1452,10 +1492,18 @@ class CephNode(object):
     def __setstate__(self, pickle_dict):
         self.__dict__.update(pickle_dict)
         self.root_connection = SSHConnectionManager(
-            self.ip_address, "root", self.root_passwd
+            self.ip_address,
+            "root",
+            self.root_passwd,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.connection = SSHConnectionManager(
-            self.ip_address, self.username, self.password
+            self.ip_address,
+            self.username,
+            self.password,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.rssh = self.root_connection.get_client
         self.ssh = self.connection.get_client
@@ -1650,10 +1698,6 @@ class CephNode(object):
             "rhceph-4-osd-for-rhel-8-x86_64-rpms",
         ]
 
-        repos_5x_rhel8 = [
-            "rhceph-5-tools-for-rhel-8-x86_64-rpms",
-        ]
-
         repos = None
         if build.startswith("1"):
             repos = repos_13x
@@ -1665,8 +1709,6 @@ class CephNode(object):
             repos = repos_4x_rhel8
         elif build.startswith("4") & distro_ver.startswith("7"):
             repos = repos_4x_rhel7
-        elif build.startswith("5"):
-            repos = repos_5x_rhel8
         self.exec_command(
             sudo=True, cmd="subscription-manager repos --enable={r}".format(r=repos[0])
         )
@@ -1705,7 +1747,7 @@ class CephNode(object):
             self.exec_command(cmd=wget_cmd)
             self.exec_command(cmd="sudo apt-get update")
 
-    def setup_rhceph_repos(self, base_url, installer_url=None):
+    def setup_rhceph_repos(self, base_url, installer_url=None, cloud_type="openstack"):
         """
         Setup repositories for rhel
         Args:
@@ -1713,7 +1755,7 @@ class CephNode(object):
             installer_url (str): installer repos url
         """
         repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
-        base_repo = Ceph.generate_repository_file(base_url, repos)
+        base_repo = Ceph.generate_repository_file(base_url, repos, cloud_type)
         base_file = self.remote_file(
             sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
         )
@@ -1721,7 +1763,9 @@ class CephNode(object):
         base_file.flush()
         if installer_url is not None:
             installer_repos = ["Agent", "Main", "Installer"]
-            inst_repo = Ceph.generate_repository_file(installer_url, installer_repos)
+            inst_repo = Ceph.generate_repository_file(
+                installer_url, installer_repos, cloud_type
+            )
             logger.info("Setting up repo on %s", self.hostname)
             inst_file = self.remote_file(
                 sudo=True, file_name="/etc/yum.repos.d/rh_ceph_inst.repo", file_mode="w"
@@ -2051,6 +2095,9 @@ class CephInstaller(CephObject):
         )
         all_yml_file.write(content)
         all_yml_file.flush()
+        self.exec_command(
+            sudo=True, cmd="chmod 644 {}/group_vars/all.yml".format(self.ansible_dir)
+        )
 
     def get_all_yml(self):
         """
@@ -2153,6 +2200,10 @@ class CephInstaller(CephObject):
                 ansible_dir=self.ansible_dir, file_name=file_name
             ),
         )
+
+        cmd1 = r" -type f -exec chmod 644 {} \;"
+        cmd = f"find {self.ansible_dir}" + cmd1
+        self.exec_command(sudo=True, cmd=cmd)
 
     def install_ceph_ansible(self, rhbuild, **kw):
         """

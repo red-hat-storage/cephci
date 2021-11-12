@@ -1,3 +1,7 @@
+# Tier-1: Downstream RGW test suite focusing on verifying the core features.
+
+# Config:  conf/pacific/rgw/tier_0_rgw.yaml
+
 tests:
   - test:
       abort-on-fail: true
@@ -59,7 +63,7 @@ tests:
   - test:
       name: Versioning Tests
       desc: Basic versioning test, also called as test to enable bucket versioning
-      polarion-id: CEPH-14261, CEPH-9222  # also applies to CEPH-10652
+      polarion-id: CEPH-14261, CEPH-9222 # also applies to CEPH-10652
       module: sanity_rgw.py
       config:
         script-name: test_versioning_with_objects.py

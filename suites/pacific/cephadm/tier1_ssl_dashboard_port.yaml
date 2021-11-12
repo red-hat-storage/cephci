@@ -22,7 +22,7 @@
 #       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
 #       - initial-dashboard-user: admin123
 #       - initial-dashboard-password: admin@123,
-#       - dashboard-password-noupdate: <boolean> 
+#       - dashboard-password-noupdate: <boolean>
 #       - dashboard-key: <path for dashboard.key>
 #       - dashboard-crt: <path for dashboard.crt>
 #       - registry-json: registry.json
@@ -52,6 +52,8 @@
 #       - using dd command create files on /mnt/cephfs directory.
 #   (8) Pause orchestrator background work and verify
 #   (9) Resume orchestrator background work and verify
+#   (10) Place a host specified in args under maintenance and verify
+#   (11) Exit a host specified from maintenance mode and verify
 #===============================================================================================
 tests:
   - test:
@@ -223,10 +225,62 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
+      name: Restarting a ceph service using cephadm
+      desc: Apply Ceph orch restart grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573727
+      config:
+        command: restart
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Reconfiguring a ceph service using cephadm
+      desc: Apply Ceph orch reconfig grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573726
+      config:
+        command: reconfig
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Stopping a ceph service using cephadm
+      desc: Apply Ceph orch stop grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573727
+      config:
+        command: restart
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Starting a ceph service using cephadm
+      desc: Apply Ceph orch start grafana for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83573727
+      config:
+        command: start
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "grafana"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
       name: Remove a grafana service using cephadm      #MON, MGR, OSDs should not be opted for removal as it makes cluster inaccessible,
       desc: Apply Ceph orch remove service for all the daemons
       module: test_orch.py
-      polarion-id:
+      polarion-id: CEPH-83573727
       config:
         command: remove
         service: grafana
@@ -302,5 +356,31 @@ tests:
         base_cmd_args:
           verbose: true
         verify: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Place a host under maintenance using cephadm
+      desc: Use orchestrator to place a host in maintenance mode, verify its status.
+      module: test_host.py
+      polarion-id: CEPH-83573799
+      config:
+        service: host
+        command: enter
+        verify: true
+        args:
+          node: node2
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Exit a host from maintenance using cephadm
+      desc: Use orchestrator to exit maintenance mode on a host, verify its status.
+      module: test_host.py
+      polarion-id: CEPH-83573799
+      config:
+        service: host
+        command: exit
+        verify: true
+        args:
+          node: node2
       destroy-cluster: false
       abort-on-fail: true

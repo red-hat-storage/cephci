@@ -7,6 +7,7 @@ def lib
 def versions
 def cephVersion
 def compose
+def releaseDetails = [:]
 
 // Pipeline script entry point
 
@@ -44,10 +45,11 @@ node(nodeName) {
         versions = lib.fetchMajorMinorOSVersion('unsigned-container-image')
         cephVersion = lib.fetchCephVersion(compose.compose_url)
 
-        def releaseDetails = lib.readFromReleaseFile(
-            versions.major_version, versions.minor_version
+        releaseDetails = lib.readFromReleaseFile(
+            versions.major_version, versions.minor_version,
         )
         if ( !releaseDetails?.latest?."ceph-version") {
+            lib.unSetLock(versions.major_version, versions.minor_version)
             currentBuild.results = "ABORTED"
             error("Unable to retrieve release information")
         }
@@ -56,6 +58,7 @@ node(nodeName) {
         def compare = lib.compareCephVersion(currentCephVersion, cephVersion)
 
         if (compare != 0) {
+            lib.unSetLock(versions.major_version, versions.minor_version)
             currentBuild.result = "ABORTED"
             println "Build Ceph Version: ${cephVersion}"
             println "Found Ceph Version: ${currentCephVersion}"
@@ -103,4 +106,15 @@ node(nodeName) {
 
         lib.SendUMBMessage(msgContent, overrideTopic, msgType)
     }
+
+    stage("Push Ceph Recipe") {
+        def recipeMap = [
+            "ceph-version": cephVersion,
+            "repository": compose.repository.tokenize(":")[-1],
+            "RHCephVersion": "RHCEPH-${versions.major_version}.${versions.minor_version}",
+            "platforms": releaseDetails.latest.composes.keySet().collect()
+        ]
+        lib.uploadBuildRecipe(recipeMap)
+    }
+
 }

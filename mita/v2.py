@@ -15,7 +15,7 @@ from libcloud.compute.drivers.openstack import (
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-LOG = logging.getLogger()
+LOG = logging.getLogger(__name__)
 
 # libcloud does not have a timeout enabled for Openstack calls to
 # ``create_node``, and it uses the default timeout value from socket which is

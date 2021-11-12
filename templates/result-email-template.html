@@ -124,6 +124,7 @@
             <th style="color: blue">Test Description</th>
             <th style="color: blue">Duration</th>
             <th style="color: blue">Status</th>
+            <th style="color: blue">Comments</th>
         </tr>
         {% for test in test_results %}
             <tr>
@@ -137,6 +138,7 @@
                 {% elif test.status == 'Not Executed' %}
                 <td style="color: grey">{{ test.status }}</td>
                 {% endif %}
+                <td>{{ test.comments }}</td>
             </tr>
         {% endfor %}
     </table>

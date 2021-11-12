@@ -39,9 +39,10 @@ def construct_registry(cls, registry: str, json_file: bool = False):
         constructed string of registry credentials ( Str )
     """
     # Todo: Retrieve credentials based on registry name
-    cdn_cred = get_cephci_config().get("cdn_credentials")
+    _config = get_cephci_config()
+    cdn_cred = _config.get("registry_credentials", _config["cdn_credentials"])
     reg_args = {
-        "registry-url": registry,
+        "registry-url": cdn_cred.get("registry", registry),
         "registry-username": cdn_cred.get("username"),
         "registry-password": cdn_cred.get("password"),
     }
@@ -178,11 +179,24 @@ class BootstrapMixin:
         args = config.get("args")
         custom_repo = args.pop("custom_repo", None)
         custom_image = args.pop("custom_image", True)
+        build = config.get("build")
+        container_image = config.get("container_image")
+        base_url = config.get("base_url")
+
+        if build == "released" or custom_repo.lower() == "cdn":
+            custom_repo = "cdn"
+            custom_image = False
+        elif custom_repo != "cdn":
+            custom_repo = base_url
+            custom_image = container_image
 
         if custom_repo:
-            self.set_tool_repo(repo=custom_repo)
+            if custom_repo == "cdn":
+                self.set_cdn_tool_repo()
+            else:
+                self.set_tool_repo(repo=custom_repo)
         else:
-            self.set_cdn_tool_repo()
+            self.set_tool_repo()
 
         self.install()
 
@@ -226,7 +240,12 @@ class BootstrapMixin:
         mon_node = args.pop("mon-ip", self.installer.node.shortname)
         if mon_node:
             for node in self.cluster.get_nodes():
-                if mon_node in node.shortname:
+                # making sure conditions works in all the scenario
+                if (
+                    node.shortname == mon_node
+                    or node.shortname.endswith(mon_node)
+                    or f"{mon_node}-" in node.shortname
+                ):
                     cmd += f" --mon-ip {node.ip_address}"
                     break
             else:

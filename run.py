@@ -20,9 +20,16 @@ import yaml
 from docopt import docopt
 from libcloud.common.types import LibcloudError
 
+import init_suite
 from ceph.ceph import Ceph, CephNode
 from ceph.clients import WinNode
-from ceph.utils import cleanup_ceph_nodes, create_ceph_nodes
+from ceph.utils import (
+    cleanup_ceph_nodes,
+    cleanup_ibmc_ceph_nodes,
+    create_baremetal_ceph_nodes,
+    create_ceph_nodes,
+    create_ibmc_ceph_nodes,
+)
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
@@ -45,7 +52,10 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD --global-conf FILE --inventory FILE --suite FILE
+  run.py --rhbuild BUILD --inventory FILE
+        (--suite <FILE>)...
+        (--global-conf FILE | --cluster-conf FILE)
+        [--cloud <openstack> | <ibmc> | <baremetal>]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--ubuntu-repo <repo>]
@@ -78,7 +88,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
         [--grafana-image <image-name>]
-  run.py --cleanup=name [--osp-cred <file>]
+  run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
 Options:
@@ -89,7 +99,9 @@ Options:
   -f <tests> --filter <tests>       filter tests based on the patter
                                     eg: -f 'rbd' will run tests that have 'rbd'
   --global-conf <file>              global cloud configuration file
+  --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
+  --cloud <cloud_type>              cloud type [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
@@ -160,48 +172,83 @@ def create_nodes(
     inventory,
     osp_cred,
     run_id,
+    cloud_type="openstack",
     report_portal_session=None,
     instances_name=None,
     enable_eus=False,
 ):
+    rp_test_id = None
     if report_portal_session:
         name = create_unique_test_name("ceph node creation", test_names)
         test_names.append(name)
         desc = "Ceph cluster preparation"
-        report_portal_session.start_test_item(
+        rp_test_id = report_portal_session.start_test_item(
             name=name, description=desc, start_time=timestamp(), item_type="STEP"
         )
 
     log.info("Destroying existing osp instances..")
-    cleanup_ceph_nodes(osp_cred, instances_name)
+    if cloud_type == "openstack":
+        cleanup_ceph_nodes(osp_cred, instances_name)
+    elif cloud_type == "ibmc":
+        cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
+
     ceph_cluster_dict = {}
 
     log.info("Creating osp instances")
     clients = []
     for cluster in conf.get("globals"):
-        ceph_vmnodes = create_ceph_nodes(
-            cluster, inventory, osp_cred, run_id, instances_name, enable_eus=enable_eus
-        )
+        if cloud_type == "openstack":
+            ceph_vmnodes = create_ceph_nodes(
+                cluster,
+                inventory,
+                osp_cred,
+                run_id,
+                instances_name,
+                enable_eus=enable_eus,
+            )
+        elif cloud_type == "ibmc":
+            ceph_vmnodes = create_ibmc_ceph_nodes(
+                cluster, inventory, osp_cred, run_id, instances_name
+            )
+
+        elif cloud_type == "baremetal":
+            ceph_vmnodes = create_baremetal_ceph_nodes(cluster, inventory)
 
         ceph_nodes = []
+        root_password = None
         for node in ceph_vmnodes.values():
+            if cloud_type == "openstack":
+                private_key_path = ""
+                private_ip = node.get_private_ip()
+                look_for_key = False
+            elif cloud_type == "baremetal":
+                private_key_path = ""
+                private_ip = node.ip_address
+                look_for_key = False
+                root_password = node.root_password
+            elif cloud_type == "ibmc":
+                glbs = osp_cred.get("globals")
+                ibmc = glbs.get("ibm-credentials")
+                private_key_path = ibmc.get("private_key_path")
+                private_ip = node.ip_address
+                look_for_key = True
             if node.role == "win-iscsi-clients":
                 clients.append(
-                    WinNode(
-                        ip_address=node.ip_address, private_ip=node.get_private_ip()
-                    )
+                    WinNode(ip_address=node.ip_address, private_ip=private_ip)
                 )
             else:
                 ceph = CephNode(
                     username="cephuser",
                     password="cephuser",
-                    root_password="passwd",
+                    root_password="passwd" if not root_password else root_password,
+                    look_for_key=look_for_key,
+                    private_key_path=private_key_path,
                     root_login=node.root_login,
                     role=node.role,
                     no_of_volumes=node.no_of_volumes,
                     ip_address=node.ip_address,
                     subnet=node.subnet,
-                    private_ip=node.get_private_ip(),
+                    private_ip=private_ip,
                     hostname=node.hostname,
                     ceph_vmnode=node,
                 )
@@ -223,19 +270,25 @@ def create_nodes(
             except BaseException:
                 if report_portal_session:
                     report_portal_session.finish_test_item(
-                        end_time=timestamp(), status="FAILED"
+                        item_id=rp_test_id, end_time=timestamp(), status="FAILED"
                     )
                 raise
 
     if report_portal_session:
-        report_portal_session.finish_test_item(end_time=timestamp(), status="PASSED")
+        report_portal_session.finish_test_item(
+            item_id=rp_test_id, end_time=timestamp(), status="PASSED"
+        )
 
     return ceph_cluster_dict, clients
 
 
 def print_results(tc):
-    header = "\n{name:<30s}   {desc:<60s}   {duration:<30s}   {status:>15s}".format(
-        name="TEST NAME", desc="TEST DESCRIPTION", duration="DURATION", status="STATUS"
+    header = "\n{name:<30s}   {desc:<60s}   {duration:<30s}   {status:<15s}    {comments:>15s}".format(
+        name="TEST NAME",
+        desc="TEST DESCRIPTION",
+        duration="DURATION",
+        status="STATUS",
+        comments="COMMENTS",
     )
     print(header)
     for test in tc:
@@ -246,7 +299,8 @@ def print_results(tc):
         name = test["name"]
         desc = test["desc"] or "None"
         status = test["status"]
-        line = f"{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:>15s}"
+        comments = test["comments"]
+        line = f"{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:<15s}   {comments:>15s}"
         print(line)
 
 
@@ -266,10 +320,13 @@ def run(args):
 
     # Mandatory arguments
     rhbuild = args["--rhbuild"]
-    glb_file = args["--global-conf"]
+    glb_file = args.get("--global-conf")
+    if not glb_file:
+        glb_file = args.get("--cluster-conf")
     inventory_file = args["--inventory"]
     osp_cred_file = args["--osp-cred"]
-    suite_file = args["--suite"]
+    suite_files = args["--suite"]
+    cloud_type = args.get("--cloud", "openstack")
     version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
@@ -296,7 +353,10 @@ def run(args):
     osp_cred = load_file(osp_cred_file)
     cleanup_name = args.get("--cleanup", None)
     if cleanup_name:
-        cleanup_ceph_nodes(osp_cred, cleanup_name)
+        if cloud_type == "openstack":
+            cleanup_ceph_nodes(osp_cred, cleanup_name)
+        elif cloud_type == "ibmc":
+            cleanup_ibmc_ceph_nodes(osp_cred, cleanup_name)
         return 0
 
     platform = None
@@ -450,7 +510,7 @@ def run(args):
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     inventory = load_file(inventory_file)
-    suite = load_file(suite_file)
+    suite = init_suite.load_suites(suite_files)
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
@@ -483,13 +543,21 @@ def run(args):
 
         # get COMPOSE ID and ceph version
         if build not in ["released", "cvp"]:
-            id = requests.get(base_url + "/COMPOSE_ID")
-            compose_id = id.text
+            if cloud_type == "openstack" or cloud_type == "baremetal":
+                id = requests.get(base_url + "/COMPOSE_ID", verify=False)
+                compose_id = id.text
+            elif cloud_type == "ibmc":
+                compose_id = "UNKNOWN"
 
             if "rhel" == inventory.get("id"):
-                ceph_pkgs = requests.get(
-                    base_url + "/compose/Tools/x86_64/os/Packages/"
-                )
+                if cloud_type == "ibmc":
+                    ceph_pkgs = requests.get(
+                        base_url + "/Tools/Packages/", verify=False
+                    )
+                elif cloud_type == "openstack" or cloud_type == "baremetal":
+                    ceph_pkgs = requests.get(
+                        base_url + "/compose/Tools/x86_64/os/Packages/", verify=False
+                    )
                 m = re.search(r"ceph-common-(.*?).x86", ceph_pkgs.text)
                 ceph_version.append(m.group(1))
                 m = re.search(r"ceph-ansible-(.*?).rpm", ceph_pkgs.text)
@@ -511,7 +579,7 @@ def run(args):
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
 
     service = None
-    suite_name = os.path.basename(suite_file).split(".")[0]
+    suite_name = "::".join(suite_files)
     if post_to_report_portal:
         log.info("Creating report portal session")
         service = create_report_portal_session()
@@ -568,16 +636,18 @@ def run(args):
             polarion_default_url, details["polarion-id"]
         )
         details["rhbuild"] = rhbuild
+        details["cloud-type"] = cloud_type
         details["ceph-version"] = ceph_version
         details["ceph-ansible-version"] = ceph_ansible_version
         details["compose-id"] = compose_id
         details["distro"] = distro
         details["suite-name"] = suite_name
-        details["suite-file"] = suite_file
+        details["suite-file"] = suite_files
         details["conf-file"] = glb_file
         details["ceph-version-name"] = ceph_name
         details["duration"] = "0s"
         details["status"] = "Not Executed"
+        details["comments"] = var.get("comments", str())
         return details
 
     if reuse is None:
@@ -587,6 +657,7 @@ def run(args):
                 inventory,
                 osp_cred,
                 run_id,
+                cloud_type,
                 service,
                 instances_name,
                 enable_eus=enable_eus,
@@ -648,6 +719,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/mgr"))
     sys.path.append(os.path.abspath("tests/dashboard"))
     sys.path.append(os.path.abspath("tests/misc_env"))
+    sys.path.append(os.path.abspath("tests/parallel"))
 
     tests = suite.get("tests")
     tcs = []
@@ -659,6 +731,7 @@ def run(args):
 
     for test in tests:
         test = test.get("test")
+        parallel = test.get("parallel")
         tc = fetch_test_details(test)
         test_file = tc["file"]
         report_portal_description = tc["desc"] or ""
@@ -683,7 +756,8 @@ def run(args):
             if not config.get("base_url"):
                 config["base_url"] = base_url
 
-            config["rhbuild"] = rhbuild
+            config["rhbuild"] = f"{rhbuild}-{platform}" if version2 else rhbuild
+            config["cloud-type"] = cloud_type
             if "ubuntu_repo" in locals():
                 config["ubuntu_repo"] = ubuntu_repo
 
@@ -698,6 +772,7 @@ def run(args):
                 if repo.startswith("http"):
                     config["add-repo"] = repo
 
+            config["build"] = build
             config["enable_eus"] = enable_eus
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry
@@ -728,6 +803,8 @@ def run(args):
                     config.get("ansi_config")["ceph_docker_registry"] = str(
                         docker_registry
                     )
+                if build == "released":
+                    config.get("ansi_config")["use_cdn"] = True
 
                 if docker_image:
                     config.get("ansi_config")["ceph_docker_image"] = str(docker_image)
@@ -809,7 +886,7 @@ def run(args):
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
             try:
                 if post_to_report_portal:
-                    service.start_test_item(
+                    item_id = service.start_test_item(
                         name=unique_test_name,
                         description=report_portal_description,
                         start_time=timestamp(),
@@ -836,6 +913,7 @@ def run(args):
                     ceph_cluster=ceph_cluster_dict[cluster_name],
                     ceph_nodes=ceph_cluster_dict[cluster_name],
                     config=config,
+                    parallel=parallel,
                     test_data=ceph_test_data,
                     ceph_cluster_dict=ceph_cluster_dict,
                     clients=clients,
@@ -863,7 +941,9 @@ def run(args):
             print(msg)
 
             if post_to_report_portal:
-                service.finish_test_item(end_time=timestamp(), status="PASSED")
+                service.finish_test_item(
+                    item_id=item_id, end_time=timestamp(), status="PASSED"
+                )
 
             if post_results:
                 post_to_polarion(tc=tc)
@@ -875,7 +955,9 @@ def run(args):
             jenkins_rc = 1
 
             if post_to_report_portal:
-                service.finish_test_item(end_time=timestamp(), status="FAILED")
+                service.finish_test_item(
+                    item_id=item_id, end_time=timestamp(), status="FAILED"
+                )
 
             if post_results:
                 post_to_polarion(tc=tc)
@@ -886,7 +968,10 @@ def run(args):
                 break
 
         if test.get("destroy-cluster") is True:
-            cleanup_ceph_nodes(osp_cred, instances_name)
+            if cloud_type == "openstack":
+                cleanup_ceph_nodes(osp_cred, instances_name)
+            elif cloud_type == "ibmc":
+                cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
 
         if test.get("recreate-cluster") is True:
             ceph_cluster_dict, clients = create_nodes(
@@ -894,6 +979,7 @@ def run(args):
                 inventory,
                 osp_cred,
                 run_id,
+                cloud_type,
                 service,
                 instances_name,
                 enable_eus=enable_eus,

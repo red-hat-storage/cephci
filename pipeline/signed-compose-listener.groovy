@@ -12,7 +12,7 @@ node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
         stage('Preparing') {
             if (env.WORKSPACE) {
-                deleteDir()
+                sh script: "sudo rm -rf *"
             }
             checkout([
                 $class: 'GitSCM',
@@ -30,7 +30,7 @@ node(nodeName) {
                     url: 'https://github.com/red-hat-storage/cephci.git']]
             ])
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
-            sharedLib.prepareNode(1)
+            sharedLib.prepareNode()
         }
     }
 
@@ -75,6 +75,9 @@ node(nodeName) {
         releaseMap.rc."compose-label" = cimsg["compose-label"]
         releaseMap.rc.composes["${platform}"] = composeUrl
         sharedLib.writeToReleaseFile(majorVersion, minorVersion, releaseMap)
+
+        def bucket = "ceph-${majorVersion}.${minorVersion}-${platform}"
+        sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
 
     }
 

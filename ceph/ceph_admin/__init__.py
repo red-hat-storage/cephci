@@ -96,6 +96,8 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             repo (Str): repository (default: None)
 
         """
+        cloud_type = self.config.get("cloud-type", "openstack")
+        logger.info(f"cloud type is {cloud_type}")
         hotfix_repo = self.config.get("hotfix_repo")
         if hotfix_repo:
             for node in self.cluster.get_nodes():
@@ -116,9 +118,14 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             base_url = self.config["base_url"]
             if not base_url.endswith("/"):
                 base_url += "/"
-            base_url += "compose/Tools/x86_64/os/"
+            if cloud_type == "ibmc":
+                base_url += "Tools"
+            else:
+                base_url += "compose/Tools/x86_64/os/"
+
             if repo:
-                # provide whole path till "/x86_64/os/"
+                # provide whole path till "/x86_64/os/" for openstack,
+                # "/Tools" for IBM
                 base_url = repo
             cmd = f"yum-config-manager --add-repo {base_url}"
             for node in self.cluster.get_nodes():
@@ -126,7 +133,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
 
     def set_cdn_tool_repo(self):
         """
-        Add the cdn Tools repo on nodes.
+        Enable the cdn Tools repo on Cephadm node.
         """
         cdn_repo = "rhceph-5-tools-for-rhel-8-x86_64-rpms"
         cmd = f"subscription-manager repos --enable={cdn_repo}"

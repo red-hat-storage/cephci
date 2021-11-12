@@ -4,6 +4,7 @@ It contains all the re-useable functions related to cephfs
 It installs all the pre-requisites on client nodes
 
 """
+import datetime
 import json
 import logging
 
@@ -19,6 +20,8 @@ class FsUtils(object):
         Args:
             ceph_cluster (ceph.ceph.Ceph): ceph cluster
         """
+        self.result_vals = {}
+        self.return_counts = {}
         self.ceph_cluster = ceph_cluster
 
     def prepare_clients(self, clients, build):
@@ -102,6 +105,15 @@ class FsUtils(object):
             log.info("Giving required permissions for clients:")
             client.exec_command(
                 sudo=True,
+                cmd=f"ceph auth get client.{client.node.hostname}",
+                check_ec=False,
+            )
+            if client.node.exit_status == 0:
+                client.exec_command(
+                    sudo=True, cmd=f"ceph auth del client.{client.node.hostname}"
+                )
+            client.exec_command(
+                sudo=True,
                 cmd=f"ceph auth get-or-create client.{client.node.hostname}"
                 f" mon 'allow *' mds "
                 f"'allow *, allow * path=/' osd 'allow *'"
@@ -129,6 +141,14 @@ class FsUtils(object):
             log.info("Creating mounting dir:")
             client.exec_command(sudo=True, cmd="mkdir %s" % mount_point)
             log.info("Mounting fs with ceph-fuse on client %s:" % client.node.hostname)
+            if kwargs.get("new_client_hostname"):
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph auth get "
+                    f"client.{kwargs.get('new_client_hostname')} "
+                    f"-o /etc/ceph/ceph.client"
+                    f".{kwargs.get('new_client_hostname')}.keyring",
+                )
             fuse_cmd = f"ceph-fuse -n client.{kwargs.get('new_client_hostname', client.node.hostname)} {mount_point} "
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
@@ -279,26 +299,35 @@ class FsUtils(object):
 
     def create_fs(self, client, vol_name, validate=True, **kwargs):
         """
-
+        This Function creates the cephfs volume with vol_name given
+        It validates the creation operation by default.
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
-
+            validate:
+            **kwargs:
+                check_ec = True
         Returns:
 
         """
         fs_cmd = f"ceph fs create {vol_name}"
-        client.exec_command(sudo=True, cmd=fs_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
             volname_ls = json.loads(out.read().decode())
             if vol_name not in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+        return cmd_out, cmd_rc
 
     def create_subvolumegroup(
         self, client, vol_name, group_name, validate=True, **kwargs
     ):
         """
+        Create subvolume group with vol_name, group_name
+        It supports below optional arguments also
         Args:
             vol_name:
             group_name:
@@ -308,7 +337,9 @@ class FsUtils(object):
                 gid
                 mode
                 validate = True
+                check_ec = True
         Returns:
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         subvolumegroup_cmd = f"ceph fs subvolumegroup create {vol_name} {group_name}"
         if kwargs.get("pool_layout"):
@@ -319,7 +350,9 @@ class FsUtils(object):
             subvolumegroup_cmd += f" --gid {kwargs.get('gid')}"
         if kwargs.get("mode"):
             subvolumegroup_cmd += f" --mode {kwargs.get('mode')}"
-        client.exec_command(sudo=True, cmd=subvolumegroup_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=subvolumegroup_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(
                 sudo=True, cmd=f"ceph fs subvolumegroup ls {vol_name} --format json"
@@ -327,10 +360,12 @@ class FsUtils(object):
             subvolumegroup_ls = json.loads(out.read().decode())
             if group_name not in [i["name"] for i in subvolumegroup_ls]:
                 raise CommandFailed(f"Creation of subvolume group: {group_name} failed")
+        return cmd_out, cmd_rc
 
     def create_subvolume(self, client, vol_name, subvol_name, validate=True, **kwargs):
         """
-
+        Creates Subvolume with given arguments
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -344,8 +379,9 @@ class FsUtils(object):
                 gid : str
                 mode : str
                 namespace-isolated : boolean
+                check_ec = True
         Returns:
-
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         subvolume_cmd = f"ceph fs subvolume create {vol_name} {subvol_name}"
         if kwargs.get("size"):
@@ -362,7 +398,9 @@ class FsUtils(object):
             subvolume_cmd += f" --mode {kwargs.get('mode')}"
         if kwargs.get("namespace-isolated"):
             subvolume_cmd += " --namespace-isolated"
-        client.exec_command(sudo=True, cmd=subvolume_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=subvolume_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("group_name"):
@@ -373,12 +411,14 @@ class FsUtils(object):
             subvolume_ls = json.loads(out.read().decode())
             if subvol_name not in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Creation of subvolume : {subvol_name} failed")
+        return cmd_out, cmd_rc
 
     def create_snapshot(
         self, client, vol_name, subvol_name, snap_name, validate=True, **kwargs
     ):
         """
-
+        Create snapshot with vol_name, subvol_name, snap_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -387,15 +427,18 @@ class FsUtils(object):
             validate:
             **kwargs:
                 group_name : str
+                check_ec = True
         Returns:
-
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         snapshot_cmd = (
             f"ceph fs subvolume snapshot create {vol_name} {subvol_name} {snap_name}"
         )
         if kwargs.get("group_name"):
             snapshot_cmd += f" --group_name {kwargs.get('group_name')}"
-        client.exec_command(sudo=True, cmd=snapshot_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=snapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsnapshot_cmd = f"ceph fs subvolume snapshot ls {vol_name} {subvol_name}"
             if kwargs.get("group_name"):
@@ -406,6 +449,7 @@ class FsUtils(object):
             snapshot_ls = json.loads(out.read().decode())
             if snap_name not in [i["name"] for i in snapshot_ls]:
                 raise CommandFailed(f"Creation of subvolume : {snap_name} failed")
+        return cmd_out, cmd_rc
 
     def create_clone(
         self,
@@ -418,7 +462,8 @@ class FsUtils(object):
         **kwargs,
     ):
         """
-
+        Creates clone based on the arguments vol_name,subvol_name,snap_name,target_subvol_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -430,9 +475,9 @@ class FsUtils(object):
                 group_name
                 target_group_name
                 pool_layout
-
+                check_ec = True
         Returns:
-
+            Returns the cmd_out and cmd_rc for Create cmd
         """
         clone_cmd = f"ceph fs subvolume snapshot clone {vol_name} {subvol_name} {snap_name} {target_subvol_name}"
         if kwargs.get("group_name"):
@@ -441,7 +486,9 @@ class FsUtils(object):
             clone_cmd += f" --target_group_name {kwargs.get('target_group_name')}"
         if kwargs.get("pool_layout"):
             clone_cmd += f" --pool_layout {kwargs.get('pool_layout')}"
-        client.exec_command(sudo=True, cmd=clone_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=clone_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("target_group_name"):
@@ -454,12 +501,14 @@ class FsUtils(object):
             subvolume_ls = json.loads(out.read().decode())
             if target_subvol_name not in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Creation of clone : {target_subvol_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_snapshot(
         self, client, vol_name, subvol_name, snap_name, validate=True, **kwargs
     ):
         """
-
+        Removes the snapshot by taking snap_name,vol_name, subvol_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -469,9 +518,10 @@ class FsUtils(object):
             **kwargs:
                 group_name : str
                 force : boolean
+                check_ec : boolean
 
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmsnapshot_cmd = (
             f"ceph fs subvolume snapshot rm {vol_name} {subvol_name} {snap_name}"
@@ -480,7 +530,9 @@ class FsUtils(object):
             rmsnapshot_cmd += f" --group_name {kwargs.get('group_name')}"
         if kwargs.get("force"):
             rmsnapshot_cmd += " --force"
-        client.exec_command(sudo=True, cmd=rmsnapshot_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmsnapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsnapshot_cmd = f"ceph fs subvolume snapshot ls {vol_name} {subvol_name}"
             if kwargs.get("group_name"):
@@ -491,10 +543,12 @@ class FsUtils(object):
             snapshot_ls = json.loads(out.read().decode())
             if snap_name in [i["name"] for i in snapshot_ls]:
                 raise CommandFailed(f"Remove of snapshot : {snap_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_subvolume(self, client, vol_name, subvol_name, validate=True, **kwargs):
         """
-
+        Removes the subvolume based subvol_name,vol_name
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
@@ -502,20 +556,22 @@ class FsUtils(object):
             validate:
             **kwargs:
                 group_name : str
-                retain-snapshots : boolean
+                retain_snapshots : boolean
                 force : boolean
-
+                check_ec : boolean
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmsubvolume_cmd = f"ceph fs subvolume rm {vol_name} {subvol_name}"
         if kwargs.get("group_name"):
             rmsubvolume_cmd += f" --group_name {kwargs.get('group_name')}"
-        if kwargs.get("retain-snapshots"):
+        if kwargs.get("retain_snapshots"):
             rmsubvolume_cmd += " --retain-snapshots"
         if kwargs.get("force"):
             rmsubvolume_cmd += " --force"
-        client.exec_command(sudo=True, cmd=rmsubvolume_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmsubvolume_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("group_name"):
@@ -526,27 +582,32 @@ class FsUtils(object):
             subvolume_ls = json.loads(out.read().decode())
             if subvol_name in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Deletion of clone : {subvol_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_subvolumegroup(
         self, client, vol_name, group_name, validate=True, **kwargs
     ):
         """
-
+        Removes the sub volume group with the group_name,vol_name as argument
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
             group_name:
             validate:
             **kwargs:
-                --force
+                force
+                check_ec : boolean
 
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmsubvolumegroup_cmd = f"ceph fs subvolumegroup rm {vol_name} {group_name}"
         if kwargs.get("force"):
             rmsubvolumegroup_cmd += " --force"
-        client.exec_command(sudo=True, cmd=rmsubvolumegroup_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmsubvolumegroup_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(
                 sudo=True, cmd=f"ceph fs subvolumegroup ls {vol_name} --format json"
@@ -554,23 +615,203 @@ class FsUtils(object):
             subvolumegroup_ls = json.loads(out.read().decode())
             if group_name in [i["name"] for i in subvolumegroup_ls]:
                 raise CommandFailed(f"Deletion of subvolume group: {group_name} failed")
+        return cmd_out, cmd_rc
 
     def remove_fs(self, client, vol_name, validate=True, **kwargs):
         """
-
+        Removes the filesystem with the vol_name as argument
+        It supports below optional arguments also
         Args:
             client:
             vol_name:
             validate:
             **kwargs:
+                check_ec : boolean
 
         Returns:
-
+            Returns the cmd_out and cmd_rc for remove cmd
         """
         rmvolume_cmd = f"ceph fs volume rm {vol_name} --yes-i-really-mean-it"
-        client.exec_command(sudo=True, cmd=rmvolume_cmd)
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=rmvolume_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
             volname_ls = json.loads(out.read().decode())
             if vol_name in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+        return cmd_out, cmd_rc
+
+    def fs_client_authorize(
+        self, client, fs_name, client_name, dir_name, permission, **kwargs
+    ):
+        """
+        We can create ceph clients for cephfs using this module.
+        We can create client with permissions on directories in cephfs.
+
+        Args:
+            client: Client_node
+            fs_name: cephfs name
+            client_name: ceph client
+            dir_name: Directory in cephfs
+            permission: r/rw (read-only/read-write)
+            **kwargs:
+                extra_params : we can include extra parameters as more directories & permissions
+
+        Returns:
+
+        """
+        command = (
+            f"ceph fs authorize {fs_name} client.{client_name} {dir_name} {permission} "
+        )
+        if kwargs.get("extra_params"):
+            command += f"{kwargs.get('extra_params')}"
+        out, rc = client.exec_command(sudo=True, cmd=command)
+        return 0
+
+    def activate_multiple_mdss(self, clients):
+        """
+        Activate Multiple MDS for ceph filesystem
+        Args:
+            clients: Client_nodes
+        """
+        for client in clients:
+            fs_info = self.get_fs_info(client)
+            fs_name = fs_info.get("fs_name")
+            log.info("Activating Multiple MDSs:")
+            client.exec_command(cmd="ceph -v | awk {'print $3'}")
+            command = f"ceph fs set {fs_name} max_mds 2"
+            client.exec_command(sudo=True, cmd=command)
+            return 0
+
+    def mds_cleanup(self, nodes, dir_fragmentation):
+        """
+        Deactivating multiple mds activated, by setting it to single mds server
+        Args:
+            nodes: Client_nodes
+            dir_fragmentation: fragmentation directory
+        """
+        log.info("Deactivating Multiple MDSs")
+        for node in nodes:
+            fs_info = self.get_fs_info(node)
+            fs_name = fs_info.get("fs_name")
+            log.info("Deactivating Multiple MDSs")
+            log.info("Setting Max mds to 1:")
+            command = f"ceph fs set {fs_name} max_mds 1"
+            node.exec_command(sudo=True, cmd=command)
+            if dir_fragmentation is not None:
+                log.info("Disabling directory fragmentation")
+                node.exec_command(
+                    sudo=True,
+                    cmd="ceph fs set %s allow_dirfrags 0" % fs_info.get("fs_name"),
+                )
+            break
+        return 0
+
+    def mds_fail_over(self, node):
+        """
+        method for validating MDS fail-over functionality
+        Args:
+            node: Client_node
+        """
+        timeout = 120
+        timeout = datetime.timedelta(seconds=timeout)
+        start = datetime.datetime.now()
+        while True:
+            fs_info = self.get_fs_info(node)
+            fs_name = fs_info.get("fs_name")
+            out, rc = node.exec_command(
+                sudo=True, cmd=f"ceph fs status {fs_name} --format json"
+            )
+            output = json.loads(out.read().decode())
+            active_mds = [
+                mds["name"] for mds in output["mdsmap"] if mds["state"] == "active"
+            ]
+            if len(active_mds) == 2:
+                log.info("Failing MDS 1")
+                node.exec_command(sudo=True, cmd="ceph mds fail 1")
+                break
+            else:
+                log.info("waiting for active-active mds state")
+                if datetime.datetime.now() - start > timeout:
+                    log.error("Failed to get active-active mds")
+                    return 1
+        return 0
+
+    def io_verify(self, client):
+        """
+        Client IO Verification
+        Args:
+            client: Client_node
+        """
+        if client.node.exit_status == 0:
+            self.return_counts.update({client.node.hostname: client.node.exit_status})
+            log.info("Client IO is going on,success")
+        else:
+            self.return_counts.update({client.node.hostname: client.node.exit_status})
+            print("------------------------------------")
+            print(self.return_counts)
+            print("------------------------------------")
+            log.error("Client IO got interrupted")
+        return self.return_counts
+
+    def pinned_dir_io_mdsfailover(
+        self,
+        clients,
+        mounting_dir,
+        dir_name,
+        range1,
+        range2,
+        num_of_files,
+        mds_fail_over,
+    ):
+        """
+        Pinnging directories on mds failover
+        Args:
+            clients: Client_nodes
+            mounting_dir: mounted directory
+            dir_name: dir name
+            range1: range2: ranges
+            num_of_files: number of files
+            mds_fail_over: mds failover method
+        """
+        log.info("Performing IOs on clients")
+        for client in clients:
+            for num in range(int(range1), int(range2)):
+                working_dir = dir_name + "_" + str(num)
+                out, rc = client.exec_command(f"sudo ls {mounting_dir}")
+                output = out.read().strip().decode()
+                if working_dir not in output:
+                    client.exec_command(cmd=f"mkdir {mounting_dir}{dir_name}_{num}")
+                log.info("Performing MDS failover:")
+                mds_fail_over(client)
+                command = "python3 /home/cephuser/smallfile/smallfile_cli.py "
+                f"--operation create --threads 1 --file-size 100  --files  {num_of_files} "
+                f"--top {mounting_dir}{dir_name}_{num}"
+                client.exec_command(
+                    sudo=True, cmd=command, long_running=True, timeout=300
+                )
+                self.return_counts = self.io_verify(client)
+            break
+        return self.return_counts, 0
+
+    def get_clone_status(self, client, vol_name, clone_name, **kwargs):
+        """
+        Returns the clone status
+        Args:
+            clients: Client_nodes
+            vol_name:
+            clone_name:
+            **kwargs:
+                group_name
+
+        """
+        clone_status_cmd = f"ceph fs clone status {vol_name} {clone_name}"
+        if kwargs.get("group_name"):
+            clone_status_cmd += f" --group_name {kwargs.get('group_name')}"
+        clone_status_cmd += " --format json"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=clone_status_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+
+        return cmd_out, cmd_rc

@@ -20,7 +20,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         num_of_osds = config.get("num_of_osds")
         fs_util = FsUtils(ceph_cluster)
-        build = config.get("build", config.get("rhbuild"))
+        build = config.get("rhbuild")
         client_info, rc = fs_util.get_clients(build)
         if rc == 0:
             log.info("Got client info")

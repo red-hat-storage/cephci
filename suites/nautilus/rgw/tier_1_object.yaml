@@ -38,7 +38,7 @@ tests:
   - test:
       name: Versioning Tests
       desc: Basic versioning test, also called as test to enable bucket versioning
-      polarion-id: CEPH-14261, CEPH-9222  # also applies to CEPH-10652
+      polarion-id: CEPH-14261, CEPH-9222 # also applies to CEPH-10652
       module: sanity_rgw.py
       config:
         script-name: test_versioning_with_objects.py
@@ -97,13 +97,4 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_object_expire_op.yaml
-        timeout: 500
-  - test:
-      name: STS Tests
-      desc: Perform assume role on priciple user and perform IOs
-      polarion-id: CEPH-83572938
-      module: sanity_rgw.py
-      config:
-        script-name: test_sts_using_boto.py
-        config-file-name: test_sts_using_boto.yaml
         timeout: 500

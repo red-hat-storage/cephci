@@ -16,7 +16,7 @@ def run(ceph_cluster, **kw):
         log.info("Running cephfs %s test case" % (tc))
 
         config = kw.get("config")
-        build = config.get("build", config.get("rhbuild"))
+        build = config.get("rhbuild")
         rhbuild = config.get("rhbuild")
 
         if "5." in rhbuild:

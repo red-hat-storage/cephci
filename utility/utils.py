@@ -17,7 +17,7 @@ import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
 from OpenSSL import crypto
-from reportportal_client import ReportPortalServiceAsync
+from reportportal_client import ReportPortalService
 
 log = logging.getLogger(__name__)
 
@@ -513,11 +513,11 @@ def create_report_portal_session():
     """
     cfg = get_cephci_config()["report-portal"]
 
-    return ReportPortalServiceAsync(
+    return ReportPortalService(
         endpoint=cfg["endpoint"],
         project=cfg["project"],
         token=cfg["token"],
-        error_handler=error_handler,
+        verify_ssl=False,
     )
 
 
@@ -591,7 +591,7 @@ def get_latest_container(version):
     url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json".format(
         version
     )
-    data = requests.get(url)
+    data = requests.get(url, verify=False)
     docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
     docker_image = "rh-osbs/rhceph"
     return {
@@ -1051,8 +1051,9 @@ def fetch_build_artifacts(build, ceph_version, platform):
     Returns:
         base_url, container_registry, image-name, image-tag
     """
-    url = f"{magna_rhcs_artifacts}RHCEPH-{ceph_version}.yaml"
-    data = requests.get(url)
+    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    url = f"{recipe_url}RHCEPH-{ceph_version}.yaml"
+    data = requests.get(url, verify=False)
     yml_data = yaml.safe_load(data.text)
 
     build_info = yml_data.get(build)

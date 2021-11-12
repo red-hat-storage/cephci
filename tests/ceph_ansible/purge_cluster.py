@@ -32,7 +32,7 @@ def run(**kw):
     inventory = "hosts"
     playbook_command = "purge-cluster.yml --extra-vars 'ireallymeanit=yes'"
     config = kw.get("config")
-    build = config.get("build", config.get("rhbuild"))
+    build = config.get("rhbuild")
     if config:
         ansible_dir = config.get("ansible-dir", ansible_dir)
         inventory = config.get("inventory", inventory)

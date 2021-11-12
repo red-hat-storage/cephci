@@ -2,6 +2,7 @@ import logging
 
 import yaml
 
+from ceph.ceph_admin.common import config_dict_to_string
 from ceph.utils import get_ceph_versions, get_public_network
 from utility.utils import get_latest_container_image_tag
 
@@ -17,12 +18,13 @@ def run(ceph_cluster, **kw):
     prev_install_version = test_data["install_version"]
     skip_version_compare = config.get("skip_version_compare")
     containerized = config.get("ansi_config").get("containerized_deployment")
-    build = config.get("build", config.get("rhbuild"))
+    build = config.get("rhbuild")
     log.info("Build for upgrade: {build}".format(build=build))
     cluster_name = config.get("ansi_config").get("cluster")
 
     ubuntu_repo = config.get("ubuntu_repo")
     hotfix_repo = config.get("hotfix_repo")
+    cloud_type = config.get("cloud-type", "openstack")
     base_url = config.get("base_url")
     installer_url = config.get("installer_url")
     config["ansi_config"]["public_network"] = get_public_network(ceph_nodes[0])
@@ -49,7 +51,7 @@ def run(ceph_cluster, **kw):
 
     # setup packages based on build
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
     )
 
     # backup existing hosts file and ansible config
@@ -124,6 +126,10 @@ def run(ceph_cluster, **kw):
     if jewel_minor_update:
         cmd += " -e jewel_minor_update=true"
         log.info("Upgrade is jewel_minor_update, cmd: {cmd}".format(cmd=cmd))
+
+    if config.get("ansi_cli_args"):
+        cmd += config_dict_to_string(config["ansi_cli_args"])
+
     out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:
@@ -133,7 +139,7 @@ def run(ceph_cluster, **kw):
     # set build to new version
     log.info("Setting install_version to {build}".format(build=build))
     test_data["install_version"] = build
-    ceph_cluster.rhcs_version = build
+    ceph_cluster.rhcs_version = config.get("rhbuild")
 
     # check if all mon's and osd's are in correct state
     num_osds = ceph_cluster.ceph_demon_stat["osd"]

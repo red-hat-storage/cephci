@@ -85,6 +85,12 @@ tests:
       desc: Perform rgw tests
 
    - test:
+      name: Purge ceph dashboard
+      module: purge_dashboard.py
+      polarion-id: CEPH-83573277
+      desc: Purges ceph dashboard
+
+   - test:
       name: ceph ansible purge
       module: purge_cluster.py
       config:

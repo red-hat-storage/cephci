@@ -30,7 +30,7 @@ def run(ceph_cluster, **kw):
 
     ceph_nodes = kw.get("ceph_nodes")
     config = kw.get("config")
-    build = config.get("build", config.get("rhbuild"))
+    build = config.get("rhbuild")
     mons = []
     osds = []
     role = "client"

@@ -36,8 +36,8 @@ def run(ceph_cluster, **kw):
 
     # Scenario 1 : Verify the auto-unmute of alert after TTL
     log.info("Scenario 1: Verify the auto-unmute of alert after TTL")
-    alert = alert_list[0]
-    if not verify_alert_with_ttl(node=cephadm, alert=alert, ttl=8):
+    alert = alert_list[1]
+    if not verify_alert_with_ttl(node=cephadm, alert=alert, ttl=8, flag="noscrub"):
         log.error(f"Scenario 1 for alert : {alert} has failed")
         return 1
 

@@ -29,7 +29,7 @@ node(nodeName) {
                 ]]
             ])
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
-            sharedLib.prepareNode(1)
+            sharedLib.prepareNode()
         }
     }
 
@@ -68,6 +68,9 @@ node(nodeName) {
         releaseContent["latest"]["ceph-version"] = cephVersion
         releaseContent["latest"]["composes"]["${platform}"] = composeUrl
         sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
+
+        def bucket = "ceph-${majorVer}.${minorVer}-${platform}"
+        sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
 
     }
 

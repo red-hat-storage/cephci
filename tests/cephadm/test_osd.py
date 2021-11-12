@@ -25,9 +25,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running Ceph-admin Monitor test")
     config = kw.get("config")
-
-    build = config.get("build", config.get("rhbuild"))
-    ceph_cluster.rhcs_version = build
+    ceph_cluster.rhcs_version = config.get("rhbuild")
 
     # Manage Ceph using ceph-admin orchestration
     command = config.pop("command")

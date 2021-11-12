@@ -30,6 +30,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     filestore = config.get("filestore")
     hotfix_repo = config.get("hotfix_repo")
+    cloud_type = config.get("cloud-type", "openstack")
     test_data = kw.get("test_data")
     cluster_name = config.get("cluster")
 
@@ -40,7 +41,7 @@ def run(ceph_cluster, **kw):
     device_to_add = config.get("device", None)
 
     ceph_cluster.use_cdn = config.get("use_cdn")
-    build = config.get("build", config.get("rhbuild"))
+    build = config.get("rhbuild")
     build_starts = build[0]
     if config.get("add"):
         for added_node in config.get("add"):
@@ -85,7 +86,7 @@ def run(ceph_cluster, **kw):
     ceph_cluster.setup_ceph_firewall()
 
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
     )
 
     ceph_installer.install_ceph_ansible(build)

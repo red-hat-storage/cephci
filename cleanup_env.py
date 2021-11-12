@@ -24,7 +24,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from ceph.parallel import parallel
-from mita.v2 import CephVMNodeV2, Node
+from compute.openstack import CephVMNodeV2, Node
 from utility.retry import retry
 
 doc = """
