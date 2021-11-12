@@ -905,9 +905,9 @@ class Ceph(object):
         for repo in repos:
             base_url = base_url.rstrip("/")
             if cloud_type == "ibmc":
-                repo_to_use = f"{base_url}/{repo}"
+                repo_to_use = f"{base_url}/{repo}/"
             else:
-                repo_to_use = f"{base_url}/compose/{repo}/x86_64/os"
+                repo_to_use = f"{base_url}/compose/{repo}/x86_64/os/"
 
             logger.info(f"repo to use is {repo_to_use}")
             r = requests.get(repo_to_use, timeout=10, verify=False)
