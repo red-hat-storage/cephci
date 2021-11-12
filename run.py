@@ -729,6 +729,12 @@ def run(args):
     ceph_test_data["custom-config"] = custom_config
     ceph_test_data["custom-config-file"] = custom_config_file
 
+    # Report Portal test id
+    rp_test_id = None
+
+    # Initialize test return code
+    rc = 0
+
     for test in tests:
         test = test.get("test")
         parallel = test.get("parallel")
@@ -883,22 +889,26 @@ def run(args):
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
             try:
                 if post_to_report_portal:
-                    item_id = service.start_test_item(
-                        name=unique_test_name,
-                        description=report_portal_description,
-                        start_time=timestamp(),
-                        item_type="STEP",
-                    )
-                    service.log(
-                        time=timestamp(),
-                        message="Logfile location: {}".format(tc["log-link"]),
-                        level="INFO",
-                    )
-                    service.log(
-                        time=timestamp(),
-                        message="Polarion ID: {}".format(tc["polarion-id"]),
-                        level="INFO",
-                    )
+                    try:
+                        rp_test_id = service.start_test_item(
+                            name=unique_test_name,
+                            description=report_portal_description,
+                            start_time=timestamp(),
+                            item_type="STEP",
+                        )
+                        service.log(
+                            time=timestamp(),
+                            message="Logfile location: {}".format(tc["log-link"]),
+                            level="INFO",
+                        )
+                        service.log(
+                            time=timestamp(),
+                            message="Polarion ID: {}".format(tc["polarion-id"]),
+                            level="INFO",
+                        )
+                    except BaseException:  # noqa
+                        log.debug("Encountered an issue in writing to ReportPortal.")
+                        pass
 
                 # Initialize the cluster with the expected rhcs_version hence the
                 # precedence would be from test suite.
@@ -915,32 +925,46 @@ def run(args):
                     ceph_cluster_dict=ceph_cluster_dict,
                     clients=clients,
                 )
-            except BaseException:
+            except BaseException:  # noqa
                 if post_to_report_portal:
-                    service.log(
-                        time=timestamp(), message=traceback.format_exc(), level="ERROR"
-                    )
+                    try:
+                        service.log(
+                            time=timestamp(),
+                            message=traceback.format_exc(),
+                            level="ERROR",
+                        )
+                    except BaseException:  # noqa
+                        log.debug("Encountered an issue with logging to ReportPortal.")
+
                 log.error(traceback.format_exc())
                 rc = 1
             finally:
                 collect_recipe(ceph_cluster_dict[cluster_name])
                 if store:
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
+
             if rc != 0:
                 break
 
         elapsed = datetime.datetime.now() - start
         tc["duration"] = elapsed
+
+        # Write to report portal
+        if post_to_report_portal:
+            try:
+                service.finish_test_item(
+                    item_id=rp_test_id,
+                    end_time=timestamp(),
+                    status="PASSED" if rc == 0 else "FAILED",
+                )
+            except BaseException:  # noqa
+                log.debug("Encountered an issue with logging to ReportPortal.")
+
         if rc == 0:
             tc["status"] = "Pass"
             msg = "Test {} passed".format(test_mod)
             log.info(msg)
             print(msg)
-
-            if post_to_report_portal:
-                service.finish_test_item(
-                    item_id=item_id, end_time=timestamp(), status="PASSED"
-                )
 
             if post_results:
                 post_to_polarion(tc=tc)
@@ -950,11 +974,6 @@ def run(args):
             log.info(msg)
             print(msg)
             jenkins_rc = 1
-
-            if post_to_report_portal:
-                service.finish_test_item(
-                    item_id=item_id, end_time=timestamp(), status="FAILED"
-                )
 
             if post_results:
                 post_to_polarion(tc=tc)
@@ -992,8 +1011,11 @@ def run(args):
     close_and_remove_filehandlers()
 
     if post_to_report_portal:
-        service.finish_launch(end_time=timestamp())
-        service.terminate()
+        try:
+            service.finish_launch(end_time=timestamp())
+            service.terminate()
+        except BaseException:  # noqa
+            log.debug("Encountered an error during logging to ReportPortal")
 
     if xunit_results:
         create_xunit_results(suite_name, tcs, run_dir)
