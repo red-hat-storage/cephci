@@ -1,0 +1,23 @@
+tests:
+  - test:
+      name: Deploy stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573621
+      config:
+        site1: site-A
+        site2: site-B
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+
+  - test:
+      name: Create Replicated pool with stretch rule
+      module: rados_prep.py
+      polarion-id: CEPH-83573621
+      config:
+        replicated_pool:
+          create: true
+          pool_name: rep_test_pool
+          crush_rule: stretch_rule
+          rados_write_duration: 300
+          rados_read_duration: 80
+          pg_num: 32
+      desc: RE pool with stretch rule and writing data

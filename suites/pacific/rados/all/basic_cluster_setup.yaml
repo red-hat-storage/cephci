@@ -1,0 +1,23 @@
+tests:
+  - test:
+      name: Configure email alerts
+      module: rados_prep.py
+      polarion-id: CEPH-83574472
+      config:
+        email_alerts:
+          smtp_host: smtp.corp.redhat.com
+          smtp_sender: ceph-iad2-c01-lab.mgr@redhat.com
+          smtp_port: 25
+          interval: 10
+          smtp_destination:
+            - pdhiran@redhat.com
+          smtp_from_name: Rados Sanity Cluster Alerts
+      desc: Configure email alerts on ceph cluster
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+

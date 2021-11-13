@@ -1,0 +1,6 @@
+tests:
+  - test:
+      name: Mon election strategies
+      polarion-id: CEPH-83573627
+      module: test_election_strategies.py
+      desc: Change Mon election strategies and verify status

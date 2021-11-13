@@ -1,0 +1,90 @@
+tests:
+
+  - test:
+      name: Compression algorithms
+      module: rados_prep.py
+      polarion-id: CEPH-83571669, CEPH-83571670, CEPH-83571671
+      config:
+        replicated_pool:
+          create: true
+          pool_name: re_pool_compress
+          rados_write_duration: 10
+          rados_read_duration: 10
+        enable_compression:
+          pool_name: re_pool_compress
+          rados_write_duration: 100
+          rados_read_duration: 50
+          configurations:
+            - config-1:
+                compression_mode: force
+                compression_algorithm: snappy
+                compression_required_ratio: 0.3
+                compression_min_blob_size: 1B
+                byte_size: 10KB
+            - config-2:
+                compression_mode: passive
+                compression_algorithm: zlib
+                compression_required_ratio: 0.7
+                compression_min_blob_size: 10B
+                byte_size: 100KB
+            - config-3:
+                compression_mode: aggressive
+                compression_algorithm: zstd
+                compression_required_ratio: 0.5
+                compression_min_blob_size: 1KB
+                byte_size: 100KB
+      desc: Enable/disable different compression algorithms.
+
+  - test:
+      name: Ceph balancer test
+      module: rados_prep.py
+      polarion-id: CEPH-83573251, CEPH-83573247
+      config:
+        configure_balancer:
+          configure: true
+          balancer_mode: upmap
+          target_max_misplaced_ratio: 0.04
+          sleep_interval: 60
+      desc: Ceph balancer plugins CLI validation
+
+  - test:
+      name: Mute ceph health alerts
+      polarion-id: CEPH-83573854
+      module: mute_alerts.py
+      desc: Mute health alerts
+
+  - test:
+      name: Ceph PG Autoscaler
+      module: rados_prep.py
+      polarion-id: CEPH-83573412
+      config:
+        replicated_pool:
+          create: true
+          pool_name: rep_test_pool
+          rados_write_duration: 10
+          rados_read_duration: 10
+        configure_pg_autoscaler:
+          default_mode: warn
+          mon_target_pg_per_osd: 128
+          pool_config:
+            pool_name: rep_test_pool
+            pg_autoscale_mode: "on"
+            pg_num_min: 16
+            target_size_ratio: 0.4
+      desc: Ceph PG autoscaler CLI validation
+
+  - test:
+      name: Config checks
+      module: rados_prep.py
+      polarion-id: CEPH-83574529
+      config:
+        cluster_configuration_checks:
+          configure: true
+          disable_check_list:
+            - osd_mtu_size
+            - osd_linkspeed
+            - kernel_security
+          enable_check_list:
+            - kernel_security
+            - osd_linkspeed
+      desc: Enable Cluster Configuration checks
