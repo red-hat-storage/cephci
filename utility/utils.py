@@ -513,12 +513,15 @@ def create_report_portal_session():
     """
     cfg = get_cephci_config()["report-portal"]
 
-    return ReportPortalService(
-        endpoint=cfg["endpoint"],
-        project=cfg["project"],
-        token=cfg["token"],
-        verify_ssl=False,
-    )
+    try:
+        return ReportPortalService(
+            endpoint=cfg["endpoint"],
+            project=cfg["project"],
+            token=cfg["token"],
+            verify_ssl=False,
+        )
+    except BaseException:  # noqa
+        print("Encountered an issue in connecting to report portal.")
 
 
 def timestamp():
