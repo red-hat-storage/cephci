@@ -1,0 +1,8 @@
+tests:
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: True
+      desc: Check for ceph health debug info

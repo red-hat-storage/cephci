@@ -1,0 +1,3 @@
+clusters:
+    Primary: ceph-rgw1:
+    verify-io-on-site: ["ceph-rgw2"]

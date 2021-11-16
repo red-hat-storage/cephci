@@ -1,0 +1,5 @@
+tests:
+  - test:
+      name: install ceph pre-requisities
+      module: install_prereq.py
+      abort-on-fail: true
