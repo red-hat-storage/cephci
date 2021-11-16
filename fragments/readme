@@ -1,0 +1,9 @@
+The smallest test exection of test / yaml is called fragment 
+we can place all the fragments in fragments dir
+there are folder available for RGW, RBD, Install and RADOS
+
+Once the fragments are created in this dir, we can softlink 
+tests from here to suites/<release-folder> 
+
+Any change in tests defination can be made here and it will 
+reflect in all the location whereever this file is linked
