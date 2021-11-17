@@ -14,7 +14,7 @@ return_code=0
 CLI_ARGS=$@
 cloud="ibmc"
 if [ -z "${CLI_ARGS##*$cloud*}" ] ; then
-    test_inventory="conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-1.yaml"
+    test_inventory="conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
 else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi

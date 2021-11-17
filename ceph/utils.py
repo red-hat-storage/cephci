@@ -46,14 +46,18 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
     resources = resp.get_result()
     instances = [i for i in resources["instances"] if pattern in i["name"]]
 
+    # Throttling removal otherwise Cloudflare will blacklist us
+    counter = 0
     with parallel() as p:
         for instance in instances:
+            sleep(counter * 3)
             vsi = CephVMNodeIBM(
                 access_key=ibmc["access-key"],
                 service_url=ibmc["service-url"],
                 node=instance,
             )
             p.spawn(vsi.delete, ibmc["zone_name"])
+            counter += 1
 
     log.info(f"Done cleaning up nodes with pattern {pattern}")
 
@@ -196,7 +200,11 @@ def create_ibmc_ceph_nodes(
 
                 if node_dict.get("cloud-data"):
                     node_params["cloud-data"] = node_dict.get("cloud-data")
+
+                # Throttling the spawning of VSI's to avoid hammering of provisioner
+                sleep(node_count * 5)
                 node_count += 1
+
                 p.spawn(setup_vm_node_ibm, node, ceph_nodes, **node_params)
 
     if len(ceph_nodes) != node_count:
