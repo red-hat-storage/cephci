@@ -187,13 +187,19 @@ def run(ceph_cluster, **kw):
                     f"cloneing is in progress for {status_list.count('in-progress')} out of {len(clone_list)}"
                 )
             log.info(f"Iteration {iteration} has been completed")
-        for clonevolume in rmclone_list:
-            fs_util.remove_subvolume(client1, **clonevolume)
-        log.info("Clean Up in progess")
-        fs_util.remove_snapshot(client1, **snapshot)
-        fs_util.remove_subvolume(client1, **subvolume)
         return 0
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+
+    finally:
+        log.info("Setting back the clones to default value 4")
+        client1.exec_command(
+            sudo=True, cmd="ceph config set mgr mgr/volumes/max_concurrent_clones 4"
+        )
+        for clonevolume in rmclone_list:
+            fs_util.remove_subvolume(client1, **clonevolume, force=True, validate=False)
+        log.info("Clean Up in progess")
+        fs_util.remove_snapshot(client1, **snapshot)
+        fs_util.remove_subvolume(client1, **subvolume)
