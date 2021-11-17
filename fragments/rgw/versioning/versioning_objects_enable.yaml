@@ -1,0 +1,12 @@
+# Enable versioning on bucket
+---
+tests:
+  - test:
+      name: Versioning Tests
+      desc: Basic versioning test, also called as test to enable bucket versioning
+      polarion-id: CEPH-14261, CEPH-9222 # also applies to CEPH-10652
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_enable.yaml
+        timeout: 300

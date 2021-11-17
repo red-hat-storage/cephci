@@ -1,0 +1,12 @@
+# Perform copy object operation from one bucket to another using swift
+---
+tests:
+  - test:
+      name: swift versioning copy tests
+      desc: restore versioned object in swift
+      polarion-id: CEPH-10646
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_version_copy_op.yaml
+        timeout: 500

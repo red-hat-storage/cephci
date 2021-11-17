@@ -1,0 +1,10 @@
+tests:
+  - test:
+      name: STS Tests
+      desc: Perform Server Side Copy
+      polarion-id: CEPH-83574522
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_using_boto_server_side_copy.py
+        config-file-name: test_sts_using_boto_server_side_copy.yaml
+        timeout: 500
