@@ -14,6 +14,7 @@ import textwrap
 import time
 import traceback
 from getpass import getuser
+from typing import Optional
 
 import requests
 import yaml
@@ -33,10 +34,10 @@ from ceph.utils import (
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
+    ReportPortal,
     TestSetupFailure,
     close_and_remove_filehandlers,
     configure_logger,
-    create_report_portal_session,
     create_run_dir,
     create_unique_test_name,
     email_results,
@@ -44,7 +45,6 @@ from utility.utils import (
     generate_unique_id,
     get_latest_container,
     magna_url,
-    timestamp,
 )
 from utility.xunit import create_xunit_results
 
@@ -176,15 +176,14 @@ def create_nodes(
     report_portal_session=None,
     instances_name=None,
     enable_eus=False,
+    rp_logger: Optional[ReportPortal] = None,
 ):
-    rp_test_id = None
+    """Creates the system under test environment."""
     if report_portal_session:
         name = create_unique_test_name("ceph node creation", test_names)
         test_names.append(name)
         desc = "Ceph cluster preparation"
-        rp_test_id = report_portal_session.start_test_item(
-            name=name, description=desc, start_time=timestamp(), item_type="STEP"
-        )
+        rp_logger.start_test_item(name=name, description=desc, item_type="STEP")
 
     log.info("Destroying existing osp instances..")
     if cloud_type == "openstack":
@@ -268,16 +267,10 @@ def create_nodes(
             try:
                 instance.connect()
             except BaseException:
-                if report_portal_session:
-                    report_portal_session.finish_test_item(
-                        item_id=rp_test_id, end_time=timestamp(), status="FAILED"
-                    )
+                rp_logger.finish_test_item(status="FAILED")
                 raise
 
-    if report_portal_session:
-        report_portal_session.finish_test_item(
-            item_id=rp_test_id, end_time=timestamp(), status="PASSED"
-        )
+    rp_logger.finish_test_item(status="PASSED")
 
     return ceph_cluster_dict, clients
 
@@ -491,6 +484,7 @@ def run(args):
     skip_setup = args.get("--skip-cluster", False)
     skip_subscription = args.get("--skip-subscription", False)
     post_to_report_portal = args.get("--report-portal", False)
+    rp_logger = ReportPortal()
 
     instances_name = args.get("--instances-name")
     if instances_name:
@@ -582,10 +576,7 @@ def run(args):
     suite_name = "::".join(suite_files)
     if post_to_report_portal:
         log.info("Creating report portal session")
-        service = create_report_portal_session()
-        launch_name = "{suite_name} ({distro})".format(
-            suite_name=suite_name, distro=distro
-        )
+        launch_name = f"{suite_name} ({distro})"
         launch_desc = textwrap.dedent(
             """
             ceph version: {ceph_version}
@@ -613,9 +604,7 @@ def run(args):
                     docker_tag=docker_tag,
                 )
             )
-        service.start_launch(
-            name=launch_name, start_time=timestamp(), description=launch_desc
-        )
+        rp_logger.start_launch(name=launch_name, description=launch_desc)
 
     def fetch_test_details(var) -> dict:
         """
@@ -661,6 +650,7 @@ def run(args):
                 service,
                 instances_name,
                 enable_eus=enable_eus,
+                rp_logger=rp_logger,
             )
         except Exception as err:
             log.error(err)
@@ -728,9 +718,6 @@ def run(args):
     ceph_test_data = dict()
     ceph_test_data["custom-config"] = custom_config
     ceph_test_data["custom-config-file"] = custom_config_file
-
-    # Report Portal test id
-    rp_test_id = None
 
     # Initialize test return code
     rc = 0
@@ -889,26 +876,13 @@ def run(args):
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
             try:
                 if post_to_report_portal:
-                    try:
-                        rp_test_id = service.start_test_item(
-                            name=unique_test_name,
-                            description=report_portal_description,
-                            start_time=timestamp(),
-                            item_type="STEP",
-                        )
-                        service.log(
-                            time=timestamp(),
-                            message="Logfile location: {}".format(tc["log-link"]),
-                            level="INFO",
-                        )
-                        service.log(
-                            time=timestamp(),
-                            message="Polarion ID: {}".format(tc["polarion-id"]),
-                            level="INFO",
-                        )
-                    except BaseException:  # noqa
-                        log.debug("Encountered an issue in writing to ReportPortal.")
-                        pass
+                    rp_logger.start_test_item(
+                        name=unique_test_name,
+                        description=report_portal_description,
+                        item_type="STEP",
+                    )
+                    rp_logger.log(message=f"Logfile location - {tc['log-link']}")
+                    rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
 
                 # Initialize the cluster with the expected rhcs_version hence the
                 # precedence would be from test suite.
@@ -927,14 +901,7 @@ def run(args):
                 )
             except BaseException:  # noqa
                 if post_to_report_portal:
-                    try:
-                        service.log(
-                            time=timestamp(),
-                            message=traceback.format_exc(),
-                            level="ERROR",
-                        )
-                    except BaseException:  # noqa
-                        log.debug("Encountered an issue with logging to ReportPortal.")
+                    rp_logger.log(message=traceback.format_exc(), level="ERROR")
 
                 log.error(traceback.format_exc())
                 rc = 1
@@ -951,14 +918,7 @@ def run(args):
 
         # Write to report portal
         if post_to_report_portal:
-            try:
-                service.finish_test_item(
-                    item_id=rp_test_id,
-                    end_time=timestamp(),
-                    status="PASSED" if rc == 0 else "FAILED",
-                )
-            except BaseException:  # noqa
-                log.debug("Encountered an issue with logging to ReportPortal.")
+            rp_logger.finish_test_item(status="PASSED" if rc == 0 else "FAILED")
 
         if rc == 0:
             tc["status"] = "Pass"
@@ -1011,11 +971,7 @@ def run(args):
     close_and_remove_filehandlers()
 
     if post_to_report_portal:
-        try:
-            service.finish_launch(end_time=timestamp())
-            service.terminate()
-        except BaseException:  # noqa
-            log.debug("Encountered an error during logging to ReportPortal")
+        rp_logger.finish_launch()
 
     if xunit_results:
         create_xunit_results(suite_name, tcs, run_dir)
