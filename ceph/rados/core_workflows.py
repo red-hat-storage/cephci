@@ -916,3 +916,18 @@ class RadosOrchestrator:
         out, err = self.node.shell([cmd])
         log.info(f"The image details are : {out}")
         return True
+
+    def get_cluster_date(self):
+
+        """
+        Used to get the osd parameter value
+        Args:
+            cmd: Command that needs to be run on container
+
+        Returns : string  value
+        """
+
+        cmd = f'{"date +%Y:%m:%d:%H:%u"}'
+        out, err = self.node.shell([cmd])
+        out = out.strip()
+        return out
