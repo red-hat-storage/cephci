@@ -1069,3 +1069,105 @@ def fetch_build_artifacts(build, ceph_version, platform):
     base_url = build_info["composes"][platform]
 
     return base_url, registry, image_name, image_tag
+
+
+def rp_deco(func):
+    def inner_method(cls, *args, **kwargs):
+        if not cls.client:
+            return
+
+        try:
+            func(cls, *args, **kwargs)
+        except BaseException as be:  # noqa
+            log.debug(be, exc_info=True)
+            log.warning("Encountered an error during report portal operation.")
+
+    return inner_method
+
+
+class ReportPortal:
+    """Handles logging to report portal."""
+
+    def __init__(self):
+        """Initializes the instance."""
+        cfg = get_cephci_config()
+        access = cfg.get("report-portal")
+
+        self.client = None
+        self._test_id = None
+
+        if access:
+            try:
+                self.client = ReportPortalService(
+                    endpoint=access["endpoint"],
+                    project=access["project"],
+                    token=access["token"],
+                    verify_ssl=False,
+                )
+            except BaseException:  # noqa
+                log.warning("Unable to connect to Report Portal.")
+
+    @rp_deco
+    def start_launch(self, name: str, description: str) -> None:
+        """
+        Initiates a test execution with the provided details
+
+        Args:
+            name (str):     Name of test execution.
+            description (str):  Meta data information to be added to the launch.
+
+        Returns:
+             None
+        """
+        self.client.start_launch(name, start_time=timestamp(), description=description)
+
+    @rp_deco
+    def start_test_item(self, name: str, description: str, item_type: str) -> None:
+        """
+        Records a entry within the initiated launch.
+
+        Args:
+            name (str):         Name to be set for the test step
+            description (str):  Meta information to be used.
+            item_type (str):    Type of entry to be created.
+
+        Returns:
+            None
+        """
+        self._test_id = self.client.start_test_item(
+            name, start_time=timestamp(), item_type=item_type, description=description
+        )
+
+    @rp_deco
+    def finish_test_item(self, status: Optional[str] = "PASSED") -> None:
+        """
+        Ends a test entry with the given status.
+
+        Args:
+            status (str):
+        """
+        if not self._test_id:
+            return
+
+        self.client.finish_test_item(
+            item_id=self._test_id, end_time=timestamp(), status=status
+        )
+
+    @rp_deco
+    def finish_launch(self) -> None:
+        """Closes the Report Portal execution run."""
+        self.client.finish_launch(end_time=timestamp())
+        self.client.terminate()
+
+    @rp_deco
+    def log(self, message: str) -> None:
+        """
+        Adds log records to the event.
+
+        Args:
+            message (str):  Message to be logged.
+
+        Returns:
+            None
+        """
+        self.client.log(time=timestamp(), message=message, level="INFO")
