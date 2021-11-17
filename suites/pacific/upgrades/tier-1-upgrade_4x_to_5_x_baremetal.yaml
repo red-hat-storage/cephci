@@ -100,7 +100,7 @@ tests:
     config:
       ansi_config:
         ceph_origin: distro
-        ceph_stable_release: nautilus
+        ceph_stable_release: pacific
         ceph_repository: rhcs
         ceph_rhcs_version: 5
         osd_scenario: lvm
