@@ -2,6 +2,7 @@ import logging
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from tests.rados.monitor_configurations import MonConfigMethods
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
+    mon_obj = MonConfigMethods(rados_obj=rados_obj)
     ceph_nodes = kw.get("ceph_nodes")
     out, err = ceph_nodes[0].exec_command(cmd="uuidgen")
     uuid = out.read().strip().decode()[0:5]
@@ -91,6 +93,34 @@ def run(ceph_cluster, **kw):
             log.error("Error while configuring email alerts")
             return 1
         log.info("email alerts configured")
+
+    if config.get("Verify_config_parameters"):
+        test_config = config.get("Verify_config_parameters")
+        test_node = ceph_cluster.get_nodes(role="osd")[0]
+        for conf in test_config["configurations"]:
+            for entry in conf.values():
+                if entry.get("location_type") == "host":
+                    entry["location_value"] = test_node.hostname
+                if not mon_obj.set_config(**entry):
+                    log.error(f"Error setting config {conf}")
+                    return 1
+        log.info("done")
+        pool_name = "test_pool_1"
+        if not rados_obj.create_pool(pool_name=pool_name, pg_num=16):
+            log.error("Failed to create the replicated Pool")
+            return 1
+
+        rados_obj.bench_write(pool_name=pool_name)
+
+        # Removing test configurations
+        for conf in test_config["configurations"]:
+            for entry in conf.values():
+                if entry.get("location_type") == "host":
+                    entry["location_value"] = test_node.hostname
+                if not mon_obj.remove_config(**entry):
+                    log.error(f"Error setting config {conf}")
+                    return 1
+        log.info("finished removing values, passed")
 
     if config.get("log_to_file"):
         if not rados_obj.enable_file_logging():

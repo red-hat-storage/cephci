@@ -4,7 +4,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from tests.rados.election_strategy import MonElectionStrategies
+from tests.rados.monitor_configurations import MonElectionStrategies
 
 log = logging.getLogger(__name__)
 

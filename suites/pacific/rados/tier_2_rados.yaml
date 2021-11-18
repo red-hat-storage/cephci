@@ -119,6 +119,47 @@ tests:
       desc: Change Mon election strategies and verify status
 
   - test:
+      name: Monitor configuration database cli options
+      module: rados_prep.py
+      polarion-id: CEPH-83573477, CEPH-83573475, CEPH-83573473
+      config:
+        Verify_config_parameters:
+          configurations:
+            - config-1:
+                section: "global"
+                name: "debug_mgr"
+                value: "10/10"
+            - config-2:
+                section: "osd"
+                name: "osd_max_scrubs"
+                value: "5"
+            - config-3:
+                section: "osd.1"
+                name: "osd_max_scrubs"
+                value: "3"
+            - config-4:
+                section: "mgr"
+                name: "mgr/pg_autoscaler/log_level"
+                value: "debug"
+            - config-5:
+                section: "osd"
+                name: "osd_max_backfills"
+                value: "8"
+                location_type: "class"
+                location_value: "hdd"
+            - config-6:
+                section: "osd.2"
+                name: "debug_ms"
+                value: "10/10"
+            - config-7:
+                section: "osd"
+                name: "osd_recovery_max_active"
+                value: "8"
+                location_type: "host"
+                location_value: "host"
+      desc: Verify config source changes, section, masks and change values of options in runtime
+
+  - test:
       name: Replicated pool LC
       module: rados_prep.py
       polarion-id: CEPH-83571632
