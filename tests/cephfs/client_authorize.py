@@ -49,6 +49,31 @@ def verify_write_failure(client, kernel_mount_dir, fuse_mount_dir, client_name):
     return 0
 
 
+def test_read_write_op(client, kernel_mount_dir, fuse_mount_dir, client_name):
+    """
+    Verify read-write operation is successful on CephFs mounts for client
+    :param client:
+    :param kernel_mount_dir:
+    :param fuse_mount_dir:
+    :param client_name:
+    Returns:
+        Returns 0 on success & 1 on failure
+    """
+    commands = [
+        f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
+        f"--files 1000 --files-per-dir 10  --top {kernel_mount_dir}",
+        f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
+        f"--files 1000 --files-per-dir 10 --top {kernel_mount_dir}",
+        f"dd if=/dev/zero of={fuse_mount_dir}/file bs=10M count=10",
+        f"dd if={fuse_mount_dir}/file of={fuse_mount_dir}/file2 bs=10M count=10",
+    ]
+    for command in commands:
+        _, err = client.exec_command(sudo=True, cmd=command, long_running=True)
+        if err:
+            log.error(f"Permissions set for {client_name} is not working")
+            return 1
+
+
 def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83574483"
@@ -122,23 +147,11 @@ def run(ceph_cluster, **kw):
                     cmd=f"dd if=/dev/zero of={kernel_mount_dir}/dir_{num}/file_{num} bs=10M count=10",
                 )
             # Test read & write opearions on "/" directory on both kernel & fuse mount
-            commands = [
-                f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top {kernel_mount_dir}",
-                f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top {kernel_mount_dir}",
-                f"dd if=/dev/zero of={fuse_mount_dir}/file bs=10M count=10",
-                f"dd if={fuse_mount_dir}/file of={fuse_mount_dir}/dir_1/file2 bs=10M count=10",
-            ]
-            for command in commands:
-                _, err = client[0].exec_command(
-                    sudo=True, cmd=command, long_running=True
-                )
-                if err:
-                    log.error(
-                        f"Permissions set for client {client_name} is not working"
-                    )
-                    return 1
+            rc = test_read_write_op(
+                client[0], kernel_mount_dir, fuse_mount_dir, client_name
+            )
+            if rc == 1:
+                return 1
             log.info(f"Permissions set for client {client_name} is working")
             client_number += 1
             # Create client with read permission on "/" directory & read-write permission on "dir1" directory
