@@ -6,6 +6,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
+from tests.rados.monitor_configurations import MonElectionStrategies
 from tests.rados.mute_alerts import get_alerts
 from tests.rados.test_9281 import do_rados_get, do_rados_put
 
@@ -36,6 +37,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
+    mon_obj = MonElectionStrategies(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     tiebreaker_node = ceph_cluster.get_nodes(role="installer")[0]
 
@@ -56,6 +58,18 @@ def run(ceph_cluster, **kw):
             f"Minimum of 4 osd daemons needed to deploy a stretch cluster, found : {len(osd_details.keys())}"
         )
         return 1
+
+    # Finding and Deleting any stray EC pools that might have been left on cluster
+    pool_dump = rados_obj.run_ceph_command(cmd="ceph osd dump")
+    for entry in pool_dump["pools"]:
+        if entry["type"] != 1 and entry["crush_rule"] != 0:
+            log.info(
+                f"A non-replicated pool found : {entry['pool_name']}, proceeding to delete pool"
+            )
+            if not rados_obj.detete_pool(pool=entry["pool_name"]):
+                log.error(f"the pool {entry['pool_name']} could not be deleted")
+                return 1
+        log.debug("No pools other than replicated found on cluster")
 
     # disabling automatic crush update
     cmd = "ceph config set osd osd_crush_update_on_start false"
@@ -99,8 +113,9 @@ def run(ceph_cluster, **kw):
         return 1
 
     # Setting the election strategy to connectivity mode
-    cmd = "/bin/ceph mon set election_strategy connectivity"
-    cephadm.shell([cmd])
+    if not mon_obj.set_election_strategy(mode="connectivity"):
+        log.error("could not set election strategy to connectivity mode")
+        return 1
 
     # Sleeping for 5 sec for the strategy to be active
     time.sleep(5)
@@ -112,9 +127,10 @@ def run(ceph_cluster, **kw):
         return 1
 
     # Checking updated election strategy in mon map
-    if init_mon_state["election_strategy"] != 3:
+    strategy = mon_obj.get_election_strategy()
+    if strategy != 3:
         log.error(
-            f"Election strategy is not connectivity mode.\n Currently set {mon_state['election_strategy']}"
+            f"cluster created election strategy other than connectivity, i.e {strategy}"
         )
         return 1
     log.info("Enabled connectivity mode on the cluster")
@@ -184,8 +200,8 @@ def run(ceph_cluster, **kw):
         # Waiting for up to 2.5 hours for the PG's to enter active + Clean state after add capacity
         # Automation for bug : [1] & [2]
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
-        flag = True
         while end_time > datetime.datetime.now():
+            flag = True
             status_report = rados_obj.run_ceph_command(cmd="ceph report")
 
             # Proceeding to check if all PG's are in active + clean
@@ -202,11 +218,8 @@ def run(ceph_cluster, **kw):
                     "undersized",
                     "backfilling_wait",
                 )
-                flag = (
-                    False
-                    if any(key in rec for key in entry["state"].split("+"))
-                    else True
-                )
+                if any(key in rec for key in entry["state"].split("+")):
+                    flag = False
 
             if flag:
                 log.info("The recovery and back-filling of the OSD is completed")
