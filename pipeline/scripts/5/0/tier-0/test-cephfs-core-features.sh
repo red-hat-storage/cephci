@@ -7,7 +7,7 @@ platform="rhel-8"
 rhbuild="5.0"
 test_suite="suites/pacific/cephfs/tier_0_fs.yaml"
 test_conf="conf/pacific/cephfs/tier_0_fs.yaml"
-test_inventory="conf/inventory/rhel-8.4-server-x86_64.yaml"
+test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
 # Process the CLI arguments for IBM-C environment
