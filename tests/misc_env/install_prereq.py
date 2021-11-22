@@ -47,6 +47,10 @@ def run(**kw):
     rhbuild = config.get("rhbuild")
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
     is_production = config.get("is_production", False)
+    build_type = config.get("build_type", None)
+    # when build set to released subscribing nodes with CDN credentials
+    if build_type == "released":
+        is_production = True
     cloud_type = config.get("cloud-type", "openstack")
     with parallel() as p:
         for ceph in ceph_nodes:
