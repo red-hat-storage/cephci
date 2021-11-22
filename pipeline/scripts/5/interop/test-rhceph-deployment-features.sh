@@ -17,9 +17,9 @@ OSP_CRED_FILE=${OSP_CRED_FILE:-}
 REPO_FILE=${REPO_FILE:-}
 VM_SPEC=${VM_SPEC:-}
 
-echo "Red Hat Ceph Storage 5.0 Ceph deploy tier-0 test suite execution."
+echo "Red Hat Ceph Storage 5 Ceph deploy tier-0 test suite execution."
 
-TEST_SUITE="suites/pacific/cephadm/tier_0_cephadm.yaml"
+TEST_SUITE="suites/pacific/cephadm/tier-0_cephadm.yaml"
 TEST_CONF="conf/pacific/cephadm/sanity-cephadm.yaml"
 return_code=0
 

@@ -1,11 +1,11 @@
 #===============================================================================================
 # Tier-level: 2
-# Test-Suite: tier_2_cluster_scaleup_scaledown.yaml
+# Test-Suite: tier-2_cluster_scaleup_scaledown.yaml
 # Test-Case:
 #      Bootstrap cluster with all daemons and scale up and scale down the deployed daemons and verify
 #
 # Cluster Configuration:
-#   cephci/conf/pacific/cephadm/tier2_10node_cephadm_scale.yaml
+#   cephci/conf/pacific/cephadm/tier-2_10node_cephadm_scale.yaml
 #
 #    10-Node cluster(RHEL-8.3 and above)
 #    Initial cluster config - 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)

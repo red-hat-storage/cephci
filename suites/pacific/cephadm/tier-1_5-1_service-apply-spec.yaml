@@ -7,12 +7,12 @@
 #--------------------------------------
 #
 # Tier-level: 1
-# Test-Suite: tier1_service_apply_spec.yaml
+# Test-Suite: tier-1_service_apply_spec.yaml
 # Test-Case: Deploy all services using a spec file option as below command
 #               eg., ceph orch apply -i <spec_file.yaml>
 #
 # Cluster Configuration:
-#    cephci/conf/pacific/cephadm/tier1_3node_cephadm_bootstrap.yaml
+#    cephci/conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)

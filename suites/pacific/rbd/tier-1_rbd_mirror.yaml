@@ -1,28 +1,27 @@
 #===============================================================================================
 # Tier-level: 1
-# Test-Suite: tier_1_cephfs_mirror.yaml
-# Test-Case: Configure CephFS Mirror setup and run IOs
+# Test-Suite: tier-1_rbd_mirror.yaml
+# Test-Case: Configure RBD Mirror setup and run IOs
+# Polarion ID : CEPH-83573329 - RBD HA MirroringDraft
 #
 # Cluster Configuration:
+#    cephci/conf/pacific/rbd/tier-1_rbd_mirror.yaml
 #    No of Clusters : 2
-#    Cluster 1 :
-#    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 CEPHFS MIRROR, 1 Client service daemon(s)
+#    Each cluster configuration
+#    6-Node cluster(RHEL-8.3 and above)
+#    1 MONS, 1 MDS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
 #     Node1 - Mon, Mgr, Installer
-#     Node2 - Mon, Mgr
-#     Node3 - Mon, OSD
+#     Node2 - client
+#     Node3 - OSD
 #     Node4 - OSD,MDS
-#     Node5 - OSD, MDS
-#     Node6 - CephFS Mirror
-#     Node7 - Client
-#    Cluster 2 :
-#    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 Client service daemon(s)
-#     Node1 - Mon, Mgr, Installer
-#     Node2 - Mon, Mgr
-#     Node3 - Mon, OSD
-#     Node4 - OSD,MDS
-#     Node5 - OSD, MDS
-#     Node6 - Client
+#     Node5 - OSD,MDS
+#     Node6 - RBD Mirror
 
+
+# The following evaluations are carried out
+#   (1) Configures RBD Mirroring on cephadm
+#   (2) Creates Pool Image and enables Mirroring
+#   (3) Runs IO using rbd bench
 #===============================================================================================
 tests:
   - test:
@@ -33,7 +32,7 @@ tests:
   - test:
       abort-on-fail: true
       clusters:
-        ceph1:
+        ceph-rbd1:
           config:
             verify_cluster_health: true
             steps:
@@ -86,12 +85,12 @@ tests:
                         - node5
               - config:
                   command: apply
-                  service: cephfs-mirror
+                  service: rbd-mirror
                   args:
                     placement:
                       nodes:
                         - node6
-        ceph2:
+        ceph-rbd2:
           config:
             verify_cluster_health: true
             steps:
@@ -142,8 +141,73 @@ tests:
                       nodes:
                         - node4
                         - node5
-      desc:  CephFS Mirror cluster deployment using cephadm
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node6
+      desc: RBD Mirror cluster deployment using cephadm
       destroy-clster: false
       module: test_cephadm.py
-      polarion-id: CEPH-83574114
-      name: deploy cephfs-mirror
+      name: deploy cluster
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd1:
+            config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true
+          ceph-rbd2:
+            config:
+                command: add
+                id: client.1
+                node: node2
+                install_packages:
+                    - ceph-common
+                copy_admin_keyring: true
+        desc: Configure the Cephfs client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+  - test:
+      name: test_rbd_mirror
+      module: test_rbd_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573329
+      desc: Create RBD mirrored image and run IOs
+  - test:
+      name: test_rbd_mirror_image
+      module: test_rbd_mirror_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573329
+      desc: Create RBD mirrored images in pool and run IOs

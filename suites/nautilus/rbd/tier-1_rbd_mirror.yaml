@@ -1,11 +1,11 @@
 #===============================================================================================
 # Tier-level: 1
-# Test-Suite: tier_1_rbd_mirror.yaml
+# Test-Suite: tier-1_rbd_mirror.yaml
 # Test-Case: Configure RBD Mirror setup and run IOs
 # Polarion ID : CEPH-83573329 - RBD HA MirroringDraft
 #
 # Cluster Configuration:
-#    cephci/conf/nautilus/rbd/tier_1_rbd_mirror.yaml
+#    cephci/conf/nautilus/rbd/tier-1_rbd_mirror.yaml
 #    No of Clusters : 2
 #    Each cluster configuration
 #    6-Node cluster(RHEL-8.3 and above)

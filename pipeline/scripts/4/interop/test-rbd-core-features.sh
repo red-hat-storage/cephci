@@ -19,8 +19,8 @@ VM_SPEC=${VM_SPEC:-}
 
 echo "Red Hat Ceph Storage 4.2 Ceph RBD tier-0 test suite execution."
 
-TEST_SUITE="suites/nautilus/rbd/tier_0_rbd.yaml"
-TEST_CONF="conf/nautilus/rbd/tier_0_rbd.yaml"
+TEST_SUITE="suites/nautilus/rbd/tier-0_rbd.yaml"
+TEST_CONF="conf/nautilus/rbd/tier-0_rbd.yaml"
 return_code=0
 
 while [[ $# -gt 0 ]] ; do

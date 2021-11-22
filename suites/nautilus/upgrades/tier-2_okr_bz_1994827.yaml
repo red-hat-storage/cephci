@@ -2,7 +2,7 @@
 # OKR BZ-1994827
 # (Note: Automation support is only for RPM Based cluster)
 #
-# Cluster configuration: (conf/nautilus/upgrades/tier_2_okr_BZ_1994827.yaml)
+# Cluster configuration: (conf/nautilus/upgrades/tier-2_okr_BZ_1994827.yaml)
 # --------------------------------------------------------------------------
 # 4 Nodes:
 #   - 3 MONS, 3 MGRs, 2 MDSs, 16 OSDs

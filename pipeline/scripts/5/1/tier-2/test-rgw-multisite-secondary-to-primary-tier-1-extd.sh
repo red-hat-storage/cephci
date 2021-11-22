@@ -6,16 +6,16 @@ instance_name="ci-${random_string}"
 
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/rgw/tier_1_extn_rgw_multisite_secondary_to_primary.yaml"
+test_suite="suites/pacific/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
 test_conf="conf/pacific/rgw/rgw_mutlisite.yaml"
-test_inventory="conf/inventory/rhel-8.4-server-x86_64.yaml"
+test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
 # Process the CLI arguments for IBM-C environment
 CLI_ARGS=$@
 cloud="ibmc"
 if [ -z "${CLI_ARGS##*$cloud*}" ] ; then
-    test_inventory="conf/inventory/ibm-vpc-rhel-8.4-minimal-amd64-1.yaml"
+    test_inventory="conf/inventory/ibm-vpc-rhel-8-latest.yaml"
 else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi

@@ -1,10 +1,10 @@
 #===============================================================================================
 # Tier-level: 1
-# Test-Suite: tier_1_deploy.yaml
+# Test-Suite: tier-1_deploy.yaml
 # Test-Case: Deployment and rollover tests
 #
 # Cluster Configuration:
-#    cephci/conf/nautilus/ansible/tier_1_deploy.yaml
+#    cephci/conf/nautilus/ansible/tier-1_deploy.yaml
 #
 #    7-Node cluster(RHEL-7.9 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
