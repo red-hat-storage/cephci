@@ -5,8 +5,8 @@ random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-7"
 rhbuild="4.2"
-test_suite="suites/nautilus/cephfs/tier_0_fs.yaml"
-test_conf="conf/nautilus/cephfs/tier_0_fs.yaml"
+test_suite="suites/nautilus/cephfs/tier-0_fs.yaml"
+test_conf="conf/nautilus/cephfs/tier-0_fs.yaml"
 test_inventory="conf/inventory/rhel-7.9-server-x86_64.yaml"
 return_code=0
 

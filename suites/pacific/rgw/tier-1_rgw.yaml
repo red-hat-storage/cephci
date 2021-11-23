@@ -1,6 +1,6 @@
 # Tier-1: Downstream RGW test suite focusing on verifying the core features.
 
-# Config:  conf/pacific/rgw/tier_0_rgw.yaml
+# Config:  conf/pacific/rgw/tier-0_rgw.yaml
 
 tests:
   - test:

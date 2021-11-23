@@ -1,10 +1,10 @@
 #===============================================================================================
 # Tier-level: 1
-# Test-Suite: tier1_cephadm_upgrade.yaml
+# Test-Suite: tier-1_cephadm_upgrade.yaml
 # Test-Case: Upgrade ceph cluster from Build-to-Build (B2B)
 #
 # Cluster Configuration:
-#    cephci/conf/pacific/cephadm/tier1_3node_cephadm_bootstrap.yaml
+#    cephci/conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)

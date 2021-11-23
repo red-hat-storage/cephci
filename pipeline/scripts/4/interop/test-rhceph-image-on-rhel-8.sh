@@ -19,8 +19,8 @@ VM_SPEC=${VM_SPEC:-}
 
 echo "Red Hat Ceph Storage 4.2 Ceph deployment tier-0 test suite execution."
 
-TEST_SUITE="suites/nautilus/ansible/tier_0_deploy_containerized_ceph.yaml"
-TEST_CONF="conf/nautilus/ansible/tier_0_deploy.yaml"
+TEST_SUITE="suites/nautilus/ansible/tier-0_deploy_containerized_ceph.yaml"
+TEST_CONF="conf/nautilus/ansible/tier-0_deploy.yaml"
 return_code=0
 
 while [[ $# -gt 0 ]] ; do

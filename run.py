@@ -614,6 +614,7 @@ def run(args):
         suite_file_name = suite_name.split("::")[0].split("/")[-1]
         suite_file_name = suite_file_name.strip(".yaml")
         suite_file_name = " ".join(suite_file_name.split("_"))
+        _log = run_dir.replace("/ceph", "http://magna002.ceph.redhat.com")
 
         launch_name = f"RHCS {rhbuild} - {suite_file_name}"
         launch_desc = textwrap.dedent(
@@ -628,7 +629,7 @@ def run(args):
                 ceph_ansible_version=ceph_ansible_version,
                 user=getuser(),
                 compose_id=compose_id,
-                _log=log_directory,
+                _log=_log,
             )
         )
         if docker_image and docker_registry and docker_tag:

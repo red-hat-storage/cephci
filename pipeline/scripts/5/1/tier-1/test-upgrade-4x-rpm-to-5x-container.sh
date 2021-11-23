@@ -7,14 +7,14 @@ platform="rhel-8"
 rhbuild="5.1"
 test_suite="suites/pacific/upgrades/tier-1-upgrade_4x_to_5_x_baremetal.yaml"
 test_conf="conf/pacific/upgrades/upgrade_from4x_big_cluster.yml"
-test_inventory="conf/inventory/rhel-8.4-server-x86_64.yaml"
+test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
 # Process the CLI arguments for IBM-C environment
 CLI_ARGS=$@
 cloud="ibmc"
 if [ -z "${CLI_ARGS##*$cloud*}" ] ; then
-    test_inventory="conf/inventory/ibm-vpc-rhel-8.4-minimal-amd64-1.yaml"
+    test_inventory="conf/inventory/ibm-vpc-rhel-8-latest.yaml"
 else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi

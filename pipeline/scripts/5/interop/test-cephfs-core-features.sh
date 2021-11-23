@@ -17,10 +17,10 @@ OSP_CRED_FILE=${OSP_CRED_FILE:-}
 REPO_FILE=${REPO_FILE:-}
 VM_SPEC=${VM_SPEC:-}
 
-echo "Red Hat Ceph Storage 5.0 CephFS tier-0 test suite execution."
+echo "Red Hat Ceph Storage 5 CephFS tier-0 test suite execution."
 
-TEST_SUITE="suites/pacific/cephfs/tier_0_fs.yaml"
-TEST_CONF="conf/pacific/cephfs/tier_0_fs.yaml"
+TEST_SUITE="suites/pacific/cephfs/tier-0_fs.yaml"
+TEST_CONF="conf/pacific/cephfs/tier-0_fs.yaml"
 return_code=0
 
 while [[ $# -gt 0 ]] ; do

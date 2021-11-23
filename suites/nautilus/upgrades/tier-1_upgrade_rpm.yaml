@@ -4,7 +4,7 @@
 # Test-Case: Upgrade Ceph from CDN to latest using RPM build
 #
 # Cluster Configuration:
-#    cephci/conf/nautilus/ansible/tier_1_upgrade.yaml
+#    cephci/conf/nautilus/ansible/tier-1_upgrade.yaml
 #
 #    7-Node cluster(RHEL-7.9 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)

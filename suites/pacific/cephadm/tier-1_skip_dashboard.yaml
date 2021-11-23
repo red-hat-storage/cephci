@@ -1,12 +1,12 @@
 #===============================================================================================
 #  Tier-level: 1
-#  Test-Suite: tier1_skip_dashboard.yaml
+#  Test-Suite: tier-1_skip_dashboard.yaml
 #  Test-Case:
 #      Bootstrap cluster with skip-dashboard, output configuration directories/files,
 #      then enabling the dashboard with provided credentials and validate login
 #
 #  Cluster Configuration:
-#    cephci/conf/pacific/cephadm/tier1_3node_cephadm_bootstrap.yaml
+#    cephci/conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
