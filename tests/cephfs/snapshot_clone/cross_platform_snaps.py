@@ -11,8 +11,10 @@ log = logging.getLogger(__name__)
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered:
-    CEPH-83573418	Create a Snapshot, reboot the node and rollback the snapshot
-
+    CEPH-11319	Create first snap add more data to original then create a second snap.
+                Rollback 1st snap do data validation.
+                Rollback 2nd snap and do data validation.Perform cross platform rollback
+                i.e. take snap on kernel mount and perform rollback using fuse mount
     Pre-requisites :
     1. We need atleast one client node to execute this test case
     1. creats fs volume create cephfs if the volume is not there
@@ -28,14 +30,15 @@ def run(ceph_cluster, **kw):
 
     Script Flow:
     1. Mount the subvolume on the client using Kernel and fuse mount
-    2. Write data into the fuse mount point
-    3. collect the c
-    3. Try creating directory and file inside the mount_point/.snap directory(CEPH-83573420)
-    4. Get the checksum of the files inside the mount point
-    5. Reboot the node
-    6. Mount again the subvolume and revert the snapshot
-    7. get the checksum of the files
-    8. Validate the checksums
+    2. Write data into the fuse mount point i.e., data_from_fuse_mount
+    3. Collect the checksum of the files
+    4. Take snapshot at this point i.e., snap_1
+    5. Write data into the kernel mount point i.e., data_from_kernel_mount
+    6. Collect the checksum of the files
+    7. Take snapshot at this point i.e., snap_2
+    8. On Kernel mount revert the snapshot to snap_1 and compare the checksum of the files collected in step 3
+    9. On Fuse mount revert the snapshot to snap_2 and compare the checksum of the files colleced in step 6
+
     """
     try:
         fs_util = FsUtils(ceph_cluster)

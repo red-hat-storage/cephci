@@ -1,5 +1,7 @@
+import base64
 import datetime
 import itertools
+import json
 import logging
 import time
 import traceback
@@ -45,6 +47,10 @@ def run(**kw):
     rhbuild = config.get("rhbuild")
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
     is_production = config.get("is_production", False)
+    build_type = config.get("build_type", None)
+    # when build set to released subscribing nodes with CDN credentials
+    if build_type == "released":
+        is_production = True
     cloud_type = config.get("cloud-type", "openstack")
     with parallel() as p:
         for ceph in ceph_nodes:
@@ -343,9 +349,21 @@ def registry_login(ceph, distro_ver):
                 "passwd": config["registry_credentials"]["password"],
             }
         )
-
+    auths = {}
     for r in registries:
-        ceph.exec_command(
-            cmd=f"sudo {container} login -u {r['user']} -p {r['passwd']} {r['registry']}",
-            check_ec=True,
-        )
+        b64_auth = base64.b64encode(f"{r['user']}:{r['passwd']}".encode("ascii"))
+        auths[r["registry"]] = {"auth": b64_auth.decode("utf-8")}
+    auths_dict = {"auths": auths}
+    ceph.exec_command(sudo=True, cmd="mkdir ~/.docker")
+    ceph.exec_command(cmd="mkdir ~/.docker")
+    auths_file_sudo = ceph.remote_file(
+        sudo=True, file_name="/root/.docker/config.json", file_mode="w"
+    )
+    auths_file = ceph.remote_file(
+        file_name="/home/cephuser/.docker/config.json", file_mode="w"
+    )
+    files = [auths_file_sudo, auths_file]
+    for file in files:
+        file.write(json.dumps(auths_dict, indent=4))
+        file.flush()
+        file.close()

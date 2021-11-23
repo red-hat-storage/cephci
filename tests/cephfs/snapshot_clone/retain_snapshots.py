@@ -13,7 +13,6 @@ def run(ceph_cluster, **kw):
     """
     Test Cases Covered :
     CEPH-83573521	Remove a subvolume group by retaining the snapshot : ceph fs subvolume rm <vol_n...
-    CEPH-83573415	Test to validate the cli - ceph fs set <fs_name> allow_new_snaps true
 
     Pre-requisites :
     1. We need atleast one client node to execute this test case
@@ -34,9 +33,8 @@ def run(ceph_cluster, **kw):
     1. ceph fs snapshot rm <vol_name> <subvol_name> snap_name [--group_name <subvol_group_name>
         --force --retain-snapshots]
     2. Remove the sub volume.
-    3. Test allow_new_snaps value and try creating the snapshots
-    4. Clone the new volume from the retained snapshots
-    5. Check the contents of the cloned volume with the copy present locally
+    3. Clone the new volume from the retained snapshots
+    4. Check the contents of the cloned volume with the copy present locally
 
     Clean Up:
     1. Del all the snapshots created

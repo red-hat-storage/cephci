@@ -1,0 +1,13 @@
+# Enable bucket policy and Perform multipart object upload operation on RGW node
+---
+tests:
+  - test:
+      name: Multipart upload with Bucket policy enabled
+      desc: Perform multipart upload with Bucket policy enabled
+      polarion-id: CEPH-83574538
+      comments: BZ 1960262
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_with_multipart_upload.yaml
+        timeout: 500

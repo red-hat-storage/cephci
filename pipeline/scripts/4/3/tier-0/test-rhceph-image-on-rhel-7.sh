@@ -5,8 +5,8 @@ random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-7"
 rhbuild="4.3"
-test_suite="suites/nautilus/ansible/tier_0_deploy_containerized_ceph.yaml"
-test_conf="conf/nautilus/ansible/tier_0_deploy.yaml"
+test_suite="suites/nautilus/ansible/tier-0_deploy_containerized_ceph.yaml"
+test_conf="conf/nautilus/ansible/tier-0_deploy.yaml"
 test_inventory="conf/inventory/rhel-7.9-server-x86_64.yaml"
 return_code=0
 

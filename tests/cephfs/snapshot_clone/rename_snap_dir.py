@@ -12,8 +12,10 @@ log = logging.getLogger(__name__)
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered:
-    CEPH-83573418	Create a Snapshot, reboot the node and rollback the snapshot
-    CEPH-83573420	Try writing the data to snap directory
+    CEPH-83573255	Try renaming the snapshot directory and rollbackCreate a FS and
+                    create 10 directories and mount them on kernel client and fuse client(5 mounts each)
+                    Add data (~ 100 GB). Create a Snapshot and verify the content in snap directory.
+                    Try modifying the snapshot name.
 
     Pre-requisites :
     1. We need atleast one client node to execute this test case
@@ -91,7 +93,7 @@ def run(ceph_cluster, **kw):
         fs_util.create_snapshot(client1, **fuse_snapshot)
         out, rc = client1.exec_command(
             sudo=True,
-            cmd=f"cd {fuse_mounting_dir_1};mv .snap/_snap_1_* .snap/_snap_2_",
+            cmd=f"cd {fuse_mounting_dir_1};mv .snap/_snap_1_* .snap/_snap_rename_",
             check_ec=False,
         )
         if rc == 0:

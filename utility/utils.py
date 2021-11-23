@@ -1108,18 +1108,21 @@ class ReportPortal:
                 log.warning("Unable to connect to Report Portal.")
 
     @rp_deco
-    def start_launch(self, name: str, description: str) -> None:
+    def start_launch(self, name: str, description: str, attributes: dict) -> None:
         """
         Initiates a test execution with the provided details
 
         Args:
-            name (str):     Name of test execution.
+            name (str):         Name of test execution.
             description (str):  Meta data information to be added to the launch.
+            attributes (dict):  Meta data information as dict
 
         Returns:
              None
         """
-        self.client.start_launch(name, start_time=timestamp(), description=description)
+        self.client.start_launch(
+            name, start_time=timestamp(), description=description, attributes=attributes
+        )
 
     @rp_deco
     def start_test_item(self, name: str, description: str, item_type: str) -> None:

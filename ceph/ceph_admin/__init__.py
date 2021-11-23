@@ -131,6 +131,15 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             for node in self.cluster.get_nodes():
                 node.exec_command(sudo=True, cmd=cmd)
 
+    def set_cdn_tool_repo(self):
+        """
+        Enable the cdn Tools repo on all ceph node.
+        """
+        cdn_repo = "rhceph-5-tools-for-rhel-8-x86_64-rpms"
+        cmd = f"subscription-manager repos --enable={cdn_repo}"
+        for node in self.cluster.get_nodes():
+            node.exec_command(sudo=True, cmd=cmd)
+
     def install(self, **kwargs: Dict) -> None:
         """
         Install the cephadm package in the installer node.

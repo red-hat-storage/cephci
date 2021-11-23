@@ -837,7 +837,9 @@ class FsUtils(object):
 
         return cmd_out, cmd_rc
 
-    def validate_clone_state(self, client, clone, expected_state="complete"):
+    def validate_clone_state(
+        self, client, clone, expected_state="complete", timeout=300
+    ):
         """
         Validates the clone status based on the expected_state
         Args:
@@ -849,6 +851,8 @@ class FsUtils(object):
                 "target_subvol_name": "clone_status_1",
                 "group_name": "subvolgroup_1",
         """
+        end_time = datetime.now() + datetime.timedelta(seconds=timeout)
+        clone_transistion_states = []
         cmd_out, cmd_rc = self.get_clone_status(
             client,
             clone["vol_name"],
@@ -856,6 +860,8 @@ class FsUtils(object):
             group_name=clone.get("target_group_name", ""),
         )
         status = json.loads(cmd_out.read().decode())
+        if status["status"]["state"] not in clone_transistion_states:
+            clone_transistion_states.append(status["status"]["state"])
         while status["status"]["state"] != expected_state:
             cmd_out, cmd_rc = self.get_clone_status(
                 client,
@@ -874,6 +880,12 @@ class FsUtils(object):
                 "canceled",
             ]:
                 raise CommandFailed(f'{status["status"]["state"]} is not valid status')
+            if end_time > datetime.now():
+                raise CommandFailed(
+                    f"Clone creation has not reached to Complete state even after {timeout} sec"
+                    f'Current state of the clone is {status["status"]["state"]}'
+                )
+        return clone_transistion_states
 
     def reboot_node(self, ceph_node, timeout=300):
         ceph_node.exec_command(sudo=True, cmd="reboot", check_ec=False)
@@ -973,3 +985,19 @@ class FsUtils(object):
         byte_quota = out.read().decode()
         quota_dict["bytes"] = int(byte_quota)
         return quota_dict
+
+    def subvolume_authorize(self, client, vol_name, subvol_name, client_name, **kwargs):
+        """
+        Create client with permissions on cephfs subvolume
+        Args:
+            client: client node
+            vol_name: Cephfs volume name
+            subvol_name: Cephfs subvolume name
+            client_name: Name of client to be created
+            **kwargs:
+                extra_params : subvolumegroup name, access level etc.
+        """
+        command = f"ceph fs subvolume authorize {vol_name} {subvol_name} {client_name}"
+        if kwargs.get("extra_params"):
+            command += f" {kwargs.get('extra_params')}"
+            client.exec_command(sudo=True, cmd=command)

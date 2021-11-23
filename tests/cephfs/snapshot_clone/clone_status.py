@@ -15,17 +15,17 @@ def run(ceph_cluster, **kw):
 
     Pre-requisites :
     1. We need atleast one client node to execute this test case
-    1. creats fs volume create cephfs if the volume is not there
-    2. Create 2 sub volume groups
+    2. creats fs volume create cephfs if the volume is not there
+    3. Create 2 sub volume groups
         Ex : ceph fs subvolumegroup create cephfs subvolgroup_1
              ceph fs subvolumegroup create cephfs subvolgroup_2
-    3. ceph fs subvolume create <vol_name> <subvol_name> [--size <size_in_bytes>] [--group_name <subvol_group_name>]
+    4. ceph fs subvolume create <vol_name> <subvol_name> [--size <size_in_bytes>] [--group_name <subvol_group_name>]
        [--pool_layout <data_pool_name>] [--uid <uid>] [--gid <gid>] [--mode <octal_mode>]  [--namespace-isolated]
        Ex: ceph fs subvolume create cephfs subvol_clone_status --size 5368706371 --group_name subvolgroup_
-    4. Create Data on the subvolume
+    5. Create Data on the subvolume
         Ex:  python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 --files
             100 --files-per-dir 10 --dirs-per-dir 2 --top /mnt/cephfs_fuse1baxgbpaia_1/
-    5. Create snapshot of the subvolume
+    6. Create snapshot of the subvolume
         Ex: ceph fs subvolume snapshot create cephfs subvol_clone_status snap_1 --group_name subvolgroup_1
 
     Clone Operations and Clone States:
@@ -44,6 +44,7 @@ def run(ceph_cluster, **kw):
         in-progress : Clone operation is in progress
         complete : Clone operation has successfully finished
     6.Once all the clones moved to complete state we are deleting all the clones
+
     Clean-up:
     1. ceph fs snapshot rm <vol_name> <subvol_name> snap_name [--group_name <subvol_group_name>]
     2. ceph fs subvolume rm <vol_name> <subvol_name> [--group_name <subvol_group_name>]
@@ -119,7 +120,13 @@ def run(ceph_cluster, **kw):
             "group_name": "subvolgroup_clone_status_1",
         }
         fs_util.create_clone(client1, **clone_status_1)
-        fs_util.validate_clone_state(client1, clone_status_1)
+        transitation_states = fs_util.validate_clone_state(client1, clone_status_1)
+        valid_state_flow = [
+            ["pending", "in-progress", "complete"],
+            ["in-progress", "complete"],
+        ]
+        if transitation_states in valid_state_flow:
+            return 1
         clonevol_path, rc = client1.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} {clone_status_1['target_subvol_name']}",
@@ -143,7 +150,9 @@ def run(ceph_cluster, **kw):
             "target_group_name": "subvolgroup_clone_status_2",
         }
         fs_util.create_clone(client1, **clone_status_2)
-        fs_util.validate_clone_state(client1, clone_status_2)
+        transitation_states = fs_util.validate_clone_state(client1, clone_status_2)
+        if transitation_states in valid_state_flow:
+            return 1
         clonevol_path, rc = client1.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} "

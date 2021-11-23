@@ -12,7 +12,7 @@ def sharedLib
 def vmPrefix
 
 // Defaults
-def inventory = "rhel-8.4-server-x86_64-medlarge.yaml"
+def inventory = "rhel-8-latest.yaml"
 def globalConf = "integrations/7_node_ceph.yaml"
 def testSuite = "integrations/ocs/"
 

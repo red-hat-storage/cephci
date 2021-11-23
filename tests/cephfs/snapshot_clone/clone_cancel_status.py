@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered:
-    CEPH-83573502	Interrupt the cloning operation in-between and observe the behavior.
+    CEPH-83573502	Interrupt the cloning operation in-between and observe the behavior..
     Pre-requisites :
     1. We need atleast one client node to execute this test case
     1. creats fs volume create cephfs if the volume is not there

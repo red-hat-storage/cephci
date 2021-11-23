@@ -305,6 +305,39 @@ def load_file(file_name):
     return content
 
 
+def get_tier_level(files: str) -> str:
+    """
+    Retrieves the RHCS QE tier level based on the suite path or filename.
+
+    The argument contains "::" as a separate for multiple test suite execution. The
+    understanding in both the cases is that, the qe stage is provided at the starting
+    of the filename or directory.
+
+    Supported formats are
+
+        tier_0/
+        tier-1/
+        tier_0_rgw.yhaml
+        tier-1_cephadm.yaml
+
+    Args:
+        files (str):    The suite files passed for execution.
+
+    Returns:
+        (str) Tier level
+    """
+    file = files.split("::")[0]
+    file_name = file.split("/")[-1]
+
+    if file_name.startswith("tier_"):
+        return "-".join(file_name.split("_")[0:2])
+
+    if file_name.startswith("tier-"):
+        return file_name.split("_")[0]
+
+    return "Unknown"
+
+
 def run(args):
 
     import urllib3
@@ -576,18 +609,27 @@ def run(args):
     suite_name = "::".join(suite_files)
     if post_to_report_portal:
         log.info("Creating report portal session")
-        launch_name = f"{suite_name} ({distro})"
+
+        # Only the first file is considered for launch description.
+        suite_file_name = suite_name.split("::")[0].split("/")[-1]
+        suite_file_name = suite_file_name.strip(".yaml")
+        suite_file_name = " ".join(suite_file_name.split("_"))
+        _log = run_dir.replace("/ceph/", "http://magna002.ceph.redhat.com/")
+
+        launch_name = f"RHCS {rhbuild} - {suite_file_name}"
         launch_desc = textwrap.dedent(
             """
             ceph version: {ceph_version}
             ceph-ansible version: {ceph_ansible_version}
             compose-id: {compose_id}
             invoked-by: {user}
+            log-location: {_log}
             """.format(
                 ceph_version=ceph_version,
                 ceph_ansible_version=ceph_ansible_version,
                 user=getuser(),
                 compose_id=compose_id,
+                _log=_log,
             )
         )
         if docker_image and docker_registry and docker_tag:
@@ -604,7 +646,20 @@ def run(args):
                     docker_tag=docker_tag,
                 )
             )
-        rp_logger.start_launch(name=launch_name, description=launch_desc)
+
+        qe_tier = get_tier_level(suite_name)
+        attributes = dict(
+            {
+                "rhcs": rhbuild,
+                "tier": qe_tier,
+                "ceph_version": ceph_version,
+                "os": platform if platform else "-".join(rhbuild.split("-")[1:]),
+            }
+        )
+
+        rp_logger.start_launch(
+            name=launch_name, description=launch_desc, attributes=attributes
+        )
 
     def fetch_test_details(var) -> dict:
         """
@@ -765,6 +820,7 @@ def run(args):
                 if repo.startswith("http"):
                     config["add-repo"] = repo
 
+            config["build_type"] = build
             config["enable_eus"] = enable_eus
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry

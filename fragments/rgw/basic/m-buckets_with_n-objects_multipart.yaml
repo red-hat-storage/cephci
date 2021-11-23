@@ -1,0 +1,12 @@
+# Perform multipart object upload operation on RGW node
+---
+tests:
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+      module: sanity_rgw.py
+      name: Test multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
