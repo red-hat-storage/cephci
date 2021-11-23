@@ -179,8 +179,12 @@ class BootstrapMixin:
         args = config.get("args")
         custom_repo = args.pop("custom_repo", None)
         custom_image = args.pop("custom_image", True)
+        build_type = config.get("build_type")
 
-        if custom_repo:
+        if build_type == "released" or custom_repo.lower() == "cdn":
+            custom_image = False
+            self.set_cdn_tool_repo()
+        elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
             self.set_tool_repo()

@@ -819,6 +819,7 @@ def run(args):
                 if repo.startswith("http"):
                     config["add-repo"] = repo
 
+            config["build_type"] = build
             config["enable_eus"] = enable_eus
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry
