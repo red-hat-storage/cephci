@@ -1,0 +1,10 @@
+tests:
+  - test:
+      name: STS Tests
+      desc: Perform assume role on priciple user and perform IOs
+      polarion-id: CEPH-83572938
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_using_boto.py
+        config-file-name: test_sts_using_boto.yaml
+       timeout: 500

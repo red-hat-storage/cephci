@@ -1,0 +1,12 @@
+# Perform create, upload, download, modify and delete object operation using swift
+---
+tests:
+  - test:
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+        timeout: 300
+      desc: Test object operations with swift
+      module: sanity_rgw.py
+      name: Swift based tests
+      polarion-id: CEPH-11019

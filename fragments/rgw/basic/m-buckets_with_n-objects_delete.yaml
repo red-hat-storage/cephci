@@ -1,0 +1,12 @@
+# Perform delete operation on RGW node
+---
+tests:
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects with delete
+      module: sanity_rgw.py
+      name: Test delete using M buckets with N objects
+      polarion-id: CEPH-14237
