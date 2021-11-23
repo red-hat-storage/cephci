@@ -614,7 +614,7 @@ def run(args):
         suite_file_name = suite_name.split("::")[0].split("/")[-1]
         suite_file_name = suite_file_name.strip(".yaml")
         suite_file_name = " ".join(suite_file_name.split("_"))
-        _log = run_dir.replace("/ceph", "http://magna002.ceph.redhat.com")
+        _log = run_dir.replace("/ceph/", "http://magna002.ceph.redhat.com/")
 
         launch_name = f"RHCS {rhbuild} - {suite_file_name}"
         launch_desc = textwrap.dedent(
