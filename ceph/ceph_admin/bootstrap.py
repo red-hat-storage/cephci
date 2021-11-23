@@ -177,7 +177,7 @@ class BootstrapMixin:
         """
         self.cluster.setup_ssh_keys()
         args = config.get("args")
-        custom_repo = args.pop("custom_repo", None)
+        custom_repo = args.pop("custom_repo", "")
         custom_image = args.pop("custom_image", True)
         build_type = config.get("build_type")
 
