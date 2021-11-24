@@ -43,7 +43,7 @@ tests:
       config:
         script-name: test_sts_using_boto.py
         config-file-name: test_sts_using_boto.yaml
-       timeout: 500
+        timeout: 500
   - test:
       name: STS Tests
       desc: Perform assume role call with permissive session policies
