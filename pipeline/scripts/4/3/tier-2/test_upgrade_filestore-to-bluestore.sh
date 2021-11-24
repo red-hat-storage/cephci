@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Red Hat Ceph RPM based upgrade OKR testing."
+echo "Beginning Red Hat Ceph RPM based cluster upgrade with ceph disk osd scenario and object store as filestore."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-7"
-rhbuild="4.2"
-test_suite="suites/nautilus/upgrades/tier-2_upgrade_okr-bz-1994827.yaml"
-test_conf="conf/nautilus/upgrades/tier-2_upgrade_okr-bz-1994827.yaml"
+rhbuild="4.3"
+test_suite="suites/nautilus/upgrades/tier-2_upgrade_test-filestore-to-bluestore.yaml"
+test_conf="conf/nautilus/upgrades/upgrades.yaml"
 test_inventory="conf/inventory/rhel-7-latest.yaml"
 return_code=0
 
