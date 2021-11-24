@@ -4,8 +4,8 @@ echo "Beginning Ceph RADOS regression testing."
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
-rhbuild="5.0"
-test_suite="suites/pacific/rados/tier-2_rados.yaml"
+rhbuild="5.1"
+test_suite="suites/pacific/rados/tier-2_rados_basic_regression.yaml"
 test_conf="conf/pacific/rados/tier-2_rados.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
