@@ -128,14 +128,14 @@ def run(ceph_cluster, **kw):
         if ceph_cluster.rhcs_version.version[0] == 5:
             setup_cluster_access(ceph_cluster, rgw_node)
             rgw_node.exec_command(
-                sudo=True, cmd="yum install -y ceph-radosgw --nogpgcheck"
+                sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
             )
 
         if ceph_cluster.rhcs_version.version[0] in [3, 4]:
             if ceph_cluster.containerized:
-                # install ceph-radosgw on the host hosting the container
+                # install ceph-common on the host hosting the container
                 rgw_node.exec_command(
-                    sudo=True, cmd="yum install -y ceph-radosgw --nogpgcheck"
+                    sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
                 )
 
     script_name = config.get("script-name")
