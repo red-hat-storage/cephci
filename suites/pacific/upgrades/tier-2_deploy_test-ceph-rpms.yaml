@@ -1,6 +1,6 @@
 #############################################################################
 # Automation support for RHCS4 cluster deployment with lvm osd scenario
-# Cluster configuration: (conf/nautilus/ansible/tier_2_deploy.yaml)
+# Cluster configuration: (conf/nautilus/ansible/tier-2_deploy.yaml)
 # --------------------------------------------------------------------------
 # Nodes:
 #   - 3 MONS, 1 MGRs, 3 OSDs, 1 RGW, 1 GRAFANA, 1 CLIENT

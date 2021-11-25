@@ -1,7 +1,7 @@
 #############################################################################
 # - Automation support for RPM based cluster with ceph disk osd scenario
 #
-# Cluster configuration: (conf/nautilus/upgrades/tier_2_upgrade.yaml)
+# Cluster configuration: (conf/nautilus/upgrades/tier-2_upgrade.yaml)
 # --------------------------------------------------------------------------
 # Nodes:
 #   - 3 MONS, 1 MGRs, 3 OSDs, 1 RGW, 2 ISCSIGW's, 2 MDS's, 1 NFS, 1 GRAFANA, 1 CLIENT
