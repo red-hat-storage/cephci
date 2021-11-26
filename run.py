@@ -52,10 +52,11 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD --inventory FILE
+  run.py --rhbuild BUILD
         (--suite <FILE>)...
         (--global-conf FILE | --cluster-conf FILE)
         [--cloud <openstack> | <ibmc> | <baremetal>]
+        [--inventory FILE]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--ubuntu-repo <repo>]
@@ -211,19 +212,20 @@ def create_nodes(
             )
 
         elif cloud_type == "baremetal":
-            ceph_vmnodes = create_baremetal_ceph_nodes(cluster, inventory)
+            ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
 
         ceph_nodes = []
         root_password = None
         for node in ceph_vmnodes.values():
+            look_for_key = False
+            private_key_path = ""
+
             if cloud_type == "openstack":
-                private_key_path = ""
                 private_ip = node.get_private_ip()
-                look_for_key = False
             elif cloud_type == "baremetal":
-                private_key_path = ""
+                private_key_path = node.private_key if node.private_key else ""
                 private_ip = node.ip_address
-                look_for_key = False
+                look_for_key = True if node.private_key else False
                 root_password = node.root_password
             elif cloud_type == "ibmc":
                 glbs = osp_cred.get("globals")
@@ -231,6 +233,7 @@ def create_nodes(
                 private_key_path = ibmc.get("private_key_path")
                 private_ip = node.ip_address
                 look_for_key = True
+
             if node.role == "win-iscsi-clients":
                 clients.append(
                     WinNode(ip_address=node.ip_address, private_ip=private_ip)
@@ -346,13 +349,23 @@ def run(args):
 
     # Mandatory arguments
     rhbuild = args["--rhbuild"]
-    glb_file = args.get("--global-conf")
-    if not glb_file:
-        glb_file = args.get("--cluster-conf")
-    inventory_file = args["--inventory"]
-    osp_cred_file = args["--osp-cred"]
     suite_files = args["--suite"]
+
+    glb_file = args.get("--global-conf")
+    if args.get("--cluster-conf"):
+        glb_file = args["--cluster-conf"]
+
+    # Deciders
+    reuse = args.get("--reuse", None)
     cloud_type = args.get("--cloud", "openstack")
+
+    # These are not mandatory options
+    inventory_file = args.get("--inventory")
+    osp_cred_file = args.get("--osp-cred")
+
+    osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
+    cleanup_name = args.get("--cleanup", None)
+
     version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
@@ -376,15 +389,6 @@ def run(args):
     run_start_time = datetime.datetime.now()
     trigger_user = getuser()
 
-    osp_cred = load_file(osp_cred_file)
-    cleanup_name = args.get("--cleanup", None)
-    if cleanup_name:
-        if cloud_type == "openstack":
-            cleanup_ceph_nodes(osp_cred, cleanup_name)
-        elif cloud_type == "ibmc":
-            cleanup_ibmc_ceph_nodes(osp_cred, cleanup_name)
-        return 0
-
     platform = None
     build = None
     base_url = None
@@ -395,6 +399,28 @@ def run(args):
 
     ceph_name = None
     compose_id = None
+
+    if cleanup_name and not osp_cred:
+        raise Exception("Need cloud credentials to perform cleanup.")
+
+    if cleanup_name:
+        if cloud_type == "openstack":
+            cleanup_ceph_nodes(osp_cred, cleanup_name)
+        elif cloud_type == "ibmc":
+            cleanup_ibmc_ceph_nodes(osp_cred, cleanup_name)
+        else:
+            log.warning("Unknown cloud type.")
+
+        return 0
+
+    if glb_file is None and not reuse:
+        raise Exception("Unable to gather information about cluster layout.")
+
+    if osp_cred_file is None and not reuse and cloud_type in ["openstack", "ibmc"]:
+        raise Exception("Require cloud credentials to create cluster.")
+
+    if inventory_file is None and not reuse and cloud_type in ["openstack", "ibmc"]:
+        raise Exception("Require system configuration information to provision.")
 
     if not version2:
         # Get ceph cluster version name
@@ -495,13 +521,13 @@ def run(args):
 
         if not platform:
             raise TestSetupFailure("please provide --platform [rhel-7|rhel-8]")
+
         if build != "released":
             base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
                 build, rhbuild, platform
             )
 
     store = args.get("--store", False)
-    reuse = args.get("--reuse", None)
 
     base_url = args.get("--rhs-ceph-repo") or base_url
     ubuntu_repo = args.get("--ubuntu-repo") or ubuntu_repo
@@ -536,7 +562,6 @@ def run(args):
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
-    inventory = load_file(inventory_file)
     suite = init_suite.load_suites(suite_files)
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
@@ -544,19 +569,26 @@ def run(args):
     log.info(f"RPM Compose source - {base_url}")
     log.info(f"Red Hat Ceph Image used - {docker_registry}/{docker_image}:{docker_tag}")
 
-    if osp_image and inventory.get("instance").get("create"):
-        inventory.get("instance").get("create").update({"image-name": osp_image})
-
-    image_name = inventory.get("instance").get("create").get("image-name")
     ceph_version = []
     ceph_ansible_version = []
     distro = []
     clients = []
 
-    if inventory.get("instance").get("create"):
-        distro.append(inventory.get("instance").get("create").get("image-name"))
+    inventory = None
+    image_name = None
+    if inventory_file:
+        inventory = load_file(inventory_file)
+
+        if osp_image and inventory.get("instance", {}).get("create"):
+            inventory.get("instance").get("create").update({"image-name": osp_image})
+
+        image_name = inventory.get("instance", {}).get("create", {}).get("image-name")
+
+        if inventory.get("instance", {}).get("create"):
+            distro.append(inventory.get("instance").get("create").get("image-name"))
 
     for cluster in conf.get("globals"):
+
         if cluster.get("ceph-cluster").get("inventory"):
             cluster_inventory_path = os.path.abspath(
                 cluster.get("ceph-cluster").get("inventory")
@@ -571,8 +603,8 @@ def run(args):
         # get COMPOSE ID and ceph version
         if build not in ["released", "cvp"]:
             if cloud_type == "openstack" or cloud_type == "baremetal":
-                id = requests.get(base_url + "/COMPOSE_ID", verify=False)
-                compose_id = id.text
+                resp = requests.get(base_url + "/COMPOSE_ID", verify=False)
+                compose_id = resp.text
             elif cloud_type == "ibmc":
                 compose_id = "UNKNOWN"
 

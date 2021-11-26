@@ -224,6 +224,11 @@ class CephVMNodeIBM:
         """Set the roles for the VM."""
         self._roles = deepcopy(roles)
 
+    @property
+    def node_type(self) -> str:
+        """Return the provider type."""
+        return "ibmc"
+
     def create(
         self,
         node_name: str,

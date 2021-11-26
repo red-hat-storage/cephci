@@ -382,16 +382,21 @@ class Ceph(object):
             list: devices
 
         """
-        devices = len(node.get_allocated_volumes())
-        devchar = 98
         devs = []
-        for vol in range(0, devices):
-            dev = "/dev/vd" + chr(devchar)
-            devs.append(dev)
-            devchar += 1
+        devchar = 98
+        if node.vm_node.node_type == "baremetal":
+            devs = [x.path for x in node.get_allocated_volumes()]
+        else:
+            devices = len(node.get_allocated_volumes())
+            for vol in range(0, devices):
+                dev = "/dev/vd" + chr(devchar)
+                devs.append(dev)
+                devchar += 1
+
         reserved_devs = []
         collocated = self.ansible_config.get("osd_scenario") == "collocated"
         lvm = self.ansible_config.get("osd_scenario") == "lvm"
+
         if not collocated and not lvm:
             reserved_devs = [
                 raw_journal_device
@@ -399,9 +404,11 @@ class Ceph(object):
                     self.ansible_config.get("dedicated_devices")
                 )
             ]
+
         if len(node.get_free_volumes()) >= len(reserved_devs):
             for _ in reserved_devs:
                 node.get_free_volumes()[0].status = NodeVolume.ALLOCATED
+
         devs = [_dev for _dev in devs if _dev not in reserved_devs]
         return devs
 
@@ -1107,8 +1114,9 @@ class NodeVolume(object):
     FREE = "free"
     ALLOCATED = "allocated"
 
-    def __init__(self, status):
+    def __init__(self, status, path=None):
         self.status = status
+        self.path = path
 
 
 class SSHConnectionManager(object):
@@ -1213,11 +1221,21 @@ class CephNode(object):
         self.vmname = kw["hostname"]
         vmshortname = self.vmname.split(".")
         self.vmshortname = vmshortname[0]
+
+        if kw.get("ceph_vmnode"):
+            self.vm_node = kw["ceph_vmnode"]
+            self.osd_scenario = self.vm_node.osd_scenario
+
         self.volume_list = []
         if kw["no_of_volumes"]:
-            self.volume_list = [
-                NodeVolume(NodeVolume.FREE) for vol_id in range(kw["no_of_volumes"])
-            ]
+            if self.vm_node.node_type == "baremetal":
+                self.volume_list = [
+                    NodeVolume(NodeVolume.FREE, vol) for vol in self.vm_node.volumes
+                ]
+            else:
+                self.volume_list = [
+                    NodeVolume(NodeVolume.FREE) for _ in range(kw["no_of_volumes"])
+                ]
 
         self.ceph_object_list = [
             CephObjectFactory(self).create_ceph_object(role)
@@ -1231,9 +1249,6 @@ class CephNode(object):
                 CephObjectFactory(self).create_ceph_object("osd")
             )
 
-        if kw.get("ceph_vmnode"):
-            self.vm_node = kw["ceph_vmnode"]
-            self.osd_scenario = self.vm_node.osd_scenario
         self.root_connection = SSHConnectionManager(
             self.ip_address,
             "root",
