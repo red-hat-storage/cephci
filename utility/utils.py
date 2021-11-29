@@ -674,13 +674,7 @@ def email_results(test_result):
         send_to_cephci (optional [bool]): send to cephci@redhat.com as well as user email
     Returns: None
     """
-    cfg = get_cephci_config().get("email")
-    if not cfg:
-        return
-    sender = "cephci@redhat.com"
-    recipients = []
-    address = cfg.get("address")
-    send_to_cephci = test_result.get("send_to_cephci", False)
+
     try:
         run_id = test_result["run_id"]
         results_list = test_result["result"]
@@ -688,6 +682,34 @@ def email_results(test_result):
         log.error(f"Key not found : {kerr}")
         exit(1)
 
+    run_name = "cephci-run-{id}".format(id=run_id)
+    msg = MIMEMultipart("alternative")
+    run_status = get_run_status(results_list)
+    msg["Subject"] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
+        suite=results_list[0]["suite-name"],
+        compose=results_list[0]["compose-id"],
+        run_status=run_status,
+        id=run_id,
+    )
+    test_result["run_name"] = run_name
+    html = create_html_file(test_result=test_result)
+    part1 = MIMEText(html, "html")
+    msg.attach(part1)
+    props_content = f"""
+    run_status=\"{run_status}\"
+    compose=\"{results_list[0]['compose-id']}\"
+    suite=\"{results_list[0]['suite-name']}\"
+    """
+    # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
+    abs_path = os.path.join(os.getcwd(), "result.props")
+    write_to_file(data=props_content.strip(), abs_path=abs_path)
+    cfg = get_cephci_config().get("email")
+    if not cfg:
+        return
+    sender = "cephci@redhat.com"
+    recipients = []
+    address = cfg.get("address")
+    send_to_cephci = test_result.get("send_to_cephci", False)
     if cfg and address:
         recipients = re.split(r",\s*", cfg["address"])
     if address.count("@") != len(recipients):
@@ -700,34 +722,9 @@ def email_results(test_result):
     if send_to_cephci:
         recipients.append(sender)
         recipients = list(set(recipients))
-
     if recipients:
-        run_name = "cephci-run-{id}".format(id=run_id)
-        msg = MIMEMultipart("alternative")
-        run_status = get_run_status(results_list)
-        msg[
-            "Subject"
-        ] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
-            suite=results_list[0]["suite-name"],
-            compose=results_list[0]["compose-id"],
-            run_status=run_status,
-            id=run_id,
-        )
         msg["From"] = sender
         msg["To"] = ", ".join(recipients)
-
-        test_result["run_name"] = run_name
-        html = create_html_file(test_result=test_result)
-        part1 = MIMEText(html, "html")
-        msg.attach(part1)
-        props_content = f"""
-run_status=\"{run_status}\"
-compose=\"{results_list[0]['compose-id']}\"
-suite=\"{results_list[0]['suite-name']}\"
-"""
-        # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
-        abs_path = os.path.join(os.getcwd(), "result.props")
-        write_to_file(data=props_content.strip(), abs_path=abs_path)
         try:
             s = smtplib.SMTP("localhost")
             s.sendmail(sender, recipients, msg.as_string())
