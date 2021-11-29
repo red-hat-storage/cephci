@@ -201,10 +201,12 @@ def setup_subscription_manager(
             command += f"--baseurl=https://cdn.redhat.com --username={username_}"
             command += f" --password={password_}"
 
-            ceph.exec_command(cmd=command, timeout=720)
+            ceph.exec_command(cmd=command, timeout=720, long_running=True)
 
             ceph.exec_command(
-                cmd=f"sudo subscription-manager attach --pool {pool_id}", timeout=720
+                cmd=f"sudo subscription-manager attach --pool {pool_id}",
+                timeout=720,
+                long_running=True,
             )
             break
         except (KeyError, AttributeError):
@@ -354,8 +356,8 @@ def registry_login(ceph, distro_ver):
         b64_auth = base64.b64encode(f"{r['user']}:{r['passwd']}".encode("ascii"))
         auths[r["registry"]] = {"auth": b64_auth.decode("utf-8")}
     auths_dict = {"auths": auths}
-    ceph.exec_command(sudo=True, cmd="mkdir ~/.docker")
-    ceph.exec_command(cmd="mkdir ~/.docker")
+    ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
+    ceph.exec_command(cmd="mkdir -p ~/.docker")
     auths_file_sudo = ceph.remote_file(
         sudo=True, file_name="/root/.docker/config.json", file_mode="w"
     )

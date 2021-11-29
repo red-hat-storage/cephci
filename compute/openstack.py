@@ -609,3 +609,8 @@ class CephVMNodeV2:
         from copy import deepcopy
 
         self._roles = deepcopy(roles)
+
+    @property
+    def node_type(self) -> str:
+        """Return the provider type."""
+        return "openstack"
