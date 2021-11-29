@@ -6,7 +6,7 @@
 
 import org.jsoup.Jsoup
 
-def prepareNode(def listener=0) {
+def prepareNode(def listener=0, def project="ceph-jenkins") {
     /*
         Installs the required packages needed by the Jenkins node to
         run and execute the cephci test suites.
@@ -25,7 +25,7 @@ def prepareNode(def listener=0) {
                     "password": OSPCRED,
                     "auth-url": "https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000",
                     "auth-version": "3.x_password",
-                    "tenant-name": "ceph-jenkins",
+                    "tenant-name": project,
                     "service-region": "regionOne",
                     "domain": "redhat.com",
                     "tenant-domain-id": "62cf1b5ec006489db99e2b0ebfb55f57"
@@ -273,7 +273,7 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
 
 }
 
-def sendEmail(def testResults, def artifactDetails, def tierLevel) {
+def sendEmail(def testResults, def artifactDetails, def tierLevel, def toList="ceph-qe-list@redhat.com") {
     /*
         Send an Email
         Arguments:
@@ -290,7 +290,6 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel) {
                 Example: Tier0, Tier1, CVP..
     */
     def status = "STABLE"
-    def toList = "ceph-qe-list@redhat.com"
     def body = readFile(file: "pipeline/vars/emailable-report.html")
 
     body += "<body>"
@@ -324,7 +323,9 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel) {
     body += "</table><br /></body></html>"
 
     if ('FAIL' in testResults.values()) {
-        toList = "cephci@redhat.com"
+        if(toList == "ceph-qe-list@redhat.com"){
+            toList = "cephci@redhat.com"
+        }
         status = "UNSTABLE"
     }
 
@@ -587,7 +588,7 @@ def writeToRecipeFile(def buildType, def rhcephVersion, def dataPhase, def infra
     sh "ssh $infra \"sudo chown apache:apache $recipeFile\""
 }
 
-def executeTestSuite(def cliArgs, def cleanup=true) {
+def executeTestSuite(def cliArgs, def cleanup_on_success=true, def cleanup_on_failure=true) {
     /*
         This method executes a single test suite and also performs cleanup of the VM.
 
@@ -610,7 +611,10 @@ def executeTestSuite(def cliArgs, def cleanup=true) {
         println err
         currentBuild.result = 'FAILURE'
     } finally {
-        if (rc == "FAIL" || cleanup) {
+        if ((cleanup_on_success && cleanup_on_failure) ||
+            (cleanup_on_success && rc == 'PASS') ||
+            (cleanup_on_failure && rc == 'FAIL'))
+        {
             sh(script: "${baseCmd} --cleanup ${vmPrefix}")
         } else {
             println "Not performing cleanup of cluster."
