@@ -1991,7 +1991,7 @@ class CephDemon(CephObject):
     def container_name(self):
         return (
             (
-                "ceph-{role}-{host}".format(role=self.role, host=self.node.hostname)
+                "ceph-{role}-{host}".format(role=self.role, host=self.node.shortname)
                 if not self.__custom_container_name
                 else self.__custom_container_name
             )
