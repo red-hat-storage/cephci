@@ -128,7 +128,7 @@ tests:
           config:
             script-name:  test_data_omap_offload.py
             config-file-name: test_data_omap_offload_multipart.yaml
-  			timeout: 300
+            timeout: 300
 
   - test:
       name: datalog omap offload

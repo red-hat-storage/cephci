@@ -1,0 +1,196 @@
+#############################################################################
+# Automation support for RHCS4 cluster deployment with lvm osd scenario
+# Cluster configuration: (conf/nautilus/ansible/tier-2_deploy.yaml)
+# --------------------------------------------------------------------------
+# Nodes:
+#   - 3 MONS, 1 MGRs, 3 OSDs, 1 RGW, 1 GRAFANA, 1 CLIENT
+#
+# Test steps:
+# ---------------------------------------------------------------------
+# - Deploy RHCS4 Nautilus Ceph cluster using CDN RPMS with lvm osd scenario
+# - Check idempotency of site.yaml playbook
+# - Run some I/O's
+# - Add mon , osd, nfs, client, rgw, mds using rollover
+# - Shrink mon and osd
+#
+#############################################################################
+tests:
+   - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+   - test:
+      name: ceph ansible
+      polarion-id: CEPH-83571467
+      module: test_ansible.py
+      config:
+        is_mixed_lvm_configs: True
+        ansi_config:
+            ceph_test: True
+            ceph_origin: distro
+            ceph_stable_release: nautilus
+            ceph_repository: rhcs
+            osd_scenario: lvm
+            journal_size: 1024
+            ceph_stable: True
+            ceph_stable_rh_storage: True
+            fetch_directory: ~/fetch
+            copy_admin_key: true
+            dashboard_enabled: True
+            dashboard_admin_user: admin
+            dashboard_admin_password: p@ssw0rd
+            grafana_admin_user: admin
+            grafana_admin_password: p@ssw0rd
+            node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+            grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+            prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+            alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+            cephfs_pools:
+              - name: "cephfs_data"
+                pgs: "16"
+              - name: "cephfs_metadata"
+                pgs: "16"
+      desc: osd with 6 osd scenarios with lvm
+      destroy-cluster: False
+      abort-on-fail: true
+
+   - test:
+      name: Idempotentancy on site.yaml playbook
+      polarion-id: CEPH-83573525
+      module: test_ansible.py
+      config:
+        is_mixed_lvm_configs: True
+        ansi_config:
+            ceph_test: True
+            ceph_origin: distro
+            ceph_stable_release: nautilus
+            ceph_repository: rhcs
+            osd_scenario: lvm
+            journal_size: 1024
+            ceph_stable: True
+            ceph_stable_rh_storage: True
+            fetch_directory: ~/fetch
+            copy_admin_key: true
+            dashboard_enabled: True
+            dashboard_admin_user: admin
+            dashboard_admin_password: p@ssw0rd
+            grafana_admin_user: admin
+            grafana_admin_password: p@ssw0rd
+            node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+            grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+            prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+            alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+            cephfs_pools:
+              - name: "cephfs_data"
+                pgs: "16"
+              - name: "cephfs_metadata"
+                pgs: "16"
+      desc: osd with 6 osd scenarios with lvm
+      destroy-cluster: False
+      abort-on-fail: true
+
+   - test:
+      name: config roll over new osd daemon
+      polarion-id: CEPH-9583
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node9.*
+                  daemon:
+                      - osd
+      desc: add new osd node with lvm scenario
+
+   - test:
+      name: config roll over existing osd daemon
+      polarion-id: CEPH-9582
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          device: /dev/vdc
+          add:
+              - node:
+                  node-name: .*node9.*
+                  daemon:
+                      - osd
+      desc: add osd to existing node with lvm scenario
+
+   - test:
+      name: config roll over client daemon
+      polarion-id: CEPH-83573550
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node9.*
+                  daemon:
+                      - client
+      desc: add client daemon
+
+   - test:
+      name: config roll over rgw daemon
+      polarion-id: CEPH-9581
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node3.*
+                  daemon:
+                      - rgw
+      desc: add rgw
+
+   - test:
+      name: config roll over mds daemon
+      polarion-id: CEPH-9581
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node4.*
+                  daemon:
+                      - mds
+      desc: add mds
+
+   - test:
+      name: config roll over nfs daemon
+      polarion-id: CEPH-9581
+      module: test_ansible_roll_over.py
+      config:
+          is_mixed_lvm_configs: True
+          add:
+              - node:
+                  node-name: .*node5.*
+                  daemon:
+                      - nfs
+      desc: add nfs
+
+   - test:
+      name: shrink mon
+      polarion-id: CEPH-9584
+      module: shrink_mon.py
+      config:
+           mon-to-kill:
+            - .*node6.*
+      desc: remove monitor
+
+
+   - test:
+      name: shrink osd
+      polarion-id: CEPH-9585
+      module: shrink_osd.py
+      config:
+          osd-to-kill:
+            - 2
+      desc: shrink osd
+
+   - test:
+      name: Purge ceph dashboard
+      polarion-id: CEPH-83573277
+      module: purge_dashboard.py
+      desc: Purges ceph dashboard
+

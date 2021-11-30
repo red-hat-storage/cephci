@@ -9,12 +9,9 @@ LOG = logging.getLogger(__name__)
 
 
 class CephBaremetalNode:
-    """Represent the VMNode required for cephci."""
+    """Represent the Baremetal Node."""
 
-    def __init__(
-        self,
-        **params,
-    ) -> None:
+    def __init__(self, **params) -> None:
         """
         Initialize the instance node using the provided information.
 
@@ -32,18 +29,48 @@ class CephBaremetalNode:
         # CephVM attributes
         self._roles: list = list()
 
-        self.osd_scenario: int
+        self.osd_scenario: Optional[int] = None
         self.keypair: Optional[str] = None
         self.params = params
-        self.root_connection = SSHConnectionManager(
-            self.params.get("ip"),
-            "root",
-            self.params.get("root_password"),
-            look_for_keys=False,
-        )
+        self.private_key = params.get("root_private_key")
+        if self.private_key:
+            self.root_connection = SSHConnectionManager(
+                self.params.get("ip"),
+                "root",
+                self.params.get("root_password"),
+                look_for_keys=True,
+                private_key_file_path=self.private_key,
+            )
+        else:
+            self.root_connection = SSHConnectionManager(
+                self.params.get("ip"),
+                "root",
+                self.params.get("root_password"),
+                look_for_keys=False,
+            )
+
         self.rssh = self.root_connection.get_client
-        self.rssh().exec_command(command="useradd cephuser")
-        self.rssh().exec_command(command="chown -R cephuser:cephuser /home/cephuser/")
+
+        # Check if user exists
+        try:
+            self.rssh().exec_command(command="id -u cephuser")
+        except BaseException:  # noqa
+            LOG.info("Creating cephuser...")
+
+            self.rssh().exec_command(
+                command="useradd cephuser -p '$1$1fsNAJ7G$bx4Sz9VnpOnIygVKVaGCT.'"
+            )
+            self.rssh().exec_command(command="mkdir /home/cephuser/.ssh")
+            self.rssh().exec_command(
+                command="cp ~/.ssh/authorized_keys /home/cephuser/.ssh/ || true"
+            )
+            self.rssh().exec_command(
+                command="chown -R cephuser:cephuser /home/cephuser/"
+            )
+            self.rssh().exec_command(
+                command="chmod 600 /home/cephuser.ssh/authorized_keys || true"
+            )
+
         self.rssh().exec_command(
             'echo "cephuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/cephuser'
         )
@@ -80,7 +107,7 @@ class CephBaremetalNode:
     @property
     def no_of_volumes(self) -> int:
         """Return the number of volumes attached to the VM."""
-        return len(self.volumes)
+        return len(self.volumes) if self.volumes else 0
 
     @property
     def subnet(self) -> str:

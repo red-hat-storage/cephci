@@ -851,7 +851,7 @@ class FsUtils(object):
                 "target_subvol_name": "clone_status_1",
                 "group_name": "subvolgroup_1",
         """
-        end_time = datetime.now() + datetime.timedelta(seconds=timeout)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         clone_transistion_states = []
         cmd_out, cmd_rc = self.get_clone_status(
             client,
@@ -880,7 +880,7 @@ class FsUtils(object):
                 "canceled",
             ]:
                 raise CommandFailed(f'{status["status"]["state"]} is not valid status')
-            if end_time > datetime.now():
+            if end_time < datetime.datetime.now():
                 raise CommandFailed(
                     f"Clone creation has not reached to Complete state even after {timeout} sec"
                     f'Current state of the clone is {status["status"]["state"]}'

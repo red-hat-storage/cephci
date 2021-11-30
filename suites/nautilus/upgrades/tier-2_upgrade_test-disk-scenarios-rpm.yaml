@@ -1,3 +1,18 @@
+#############################################################################
+# - Automation support for RPM based cluster with ceph disk osd scenario
+#
+# Cluster configuration: (conf/nautilus/upgrades/tier-2_upgrade.yaml)
+# --------------------------------------------------------------------------
+# Nodes:
+#   - 3 MONS, 1 MGRs, 3 OSDs, 1 RGW, 2 ISCSIGW's, 2 MDS's, 1 NFS, 1 GRAFANA, 1 CLIENT
+#
+# Test steps:
+# ---------------------------------------------------------------------
+# - Deploy Nautilus Ceph cluster using CDN RPMS with ceph disk osd scenario
+# - Run some I/O's
+# - Upgrade to Nautilus using rolling upgrade
+#
+#############################################################################
 tests:
 - test:
     name: install ceph pre-requisites
@@ -19,17 +34,6 @@ tests:
         osd_scenario: collocated
         osd_auto_discovery: False
         copy_admin_key: True
-        ceph_conf_overrides:
-          global:
-            osd_pool_default_pg_num: 128
-            osd_default_pool_size: 2
-            osd_pool_default_pgp_num: 128
-            mon_max_pg_per_osd: 4096
-            mon_allow_pool_delete: True
-          client:
-            rgw crypt require ssl: false
-            rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
-              testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
     desc: test cluster ceph-disk 3.x cdn setup using ceph-ansible
     abort-on-fail: True
 - test:
@@ -55,17 +59,6 @@ tests:
         grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
         prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
         alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
-        ceph_conf_overrides:
-          global:
-            osd_pool_default_pg_num: 64
-            osd_default_pool_size: 2
-            osd_pool_default_pgp_num: 64
-            mon_max_pg_per_osd: 1024
-            mon_allow_pool_delete: true
-            client:
-            rgw crypt require ssl: false
-            rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
-              testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
     desc: Test Ceph-Ansible rolling update - 3.x on rhel7 -> 4.x on rhel7
     abort-on-fail: True
 - test:
@@ -97,10 +90,3 @@ tests:
           pg_count: 128
           timeout: 20
     desc: run deep scrub and check each osd daemon memory usage
-- test:
-    name: ceph ansible purge
-    polarion-id: CEPH-83571498
-    module: purge_cluster.py
-    desc: Purge ceph cluster
-    abort-on-fail: True
- 

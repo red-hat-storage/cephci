@@ -62,36 +62,37 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
     log.info(f"Done cleaning up nodes with pattern {pattern}")
 
 
-def create_baremetal_ceph_nodes(cluster_conf, inventory):
+def create_baremetal_ceph_nodes(cluster_conf):
     """
     Creates the nodes with cluster details provided
+
     Args:
-        cluster_conf:
-        inventory:
+        cluster_conf (dict):    Information regarding the participating cluster
 
     Returns:
-
+        List of CephNode
     """
     log.info("Creating the baremetal ceph nodes")
-    params = dict()
-    ceph_cluster = cluster_conf.get("ceph-cluster")
-    params["cloud-data"] = inventory.get("instance").get("setup")
+    nodes = cluster_conf["ceph-cluster"]["nodes"]
     ceph_nodes = dict()
+
     with parallel() as p:
-        for node in range(1, 100):
-            node = "node" + str(node)
-            if not ceph_cluster.get(node):
-                break
-            node_dict = ceph_cluster.get(node)
-            node_params = params.copy()
-            node_params["role"] = RolesContainer(node_dict.get("role"))
-            if node_dict.get("volumes"):
-                node_params["no-of-volumes"] = len(node_dict.get("volumes"))
-            node_params["ip"] = node_dict.get("ip")
-            node_params["hostname"] = node_dict.get("hostname")
-            node_params["volumes"] = node_dict.get("volumes")
-            node_params["root_password"] = node_dict.get("root_password")
-            p.spawn(setup_vm_node_baremetal, node, ceph_nodes, **node_params)
+        for n, node in enumerate(nodes):
+            params = dict(
+                {
+                    "ip": node.get("ip"),
+                    "hostname": node.get("hostname"),
+                    "root_password": node.get("root_password"),
+                    "root_private_key": node.get("root_private_key"),
+                    "role": RolesContainer(node.get("role")),
+                    "no-of-volumes": len(node.get("volumes", [])),
+                    "volumes": node.get("volumes"),
+                    "subnet": cluster_conf["ceph-cluster"]["public-network-cidr"],
+                }
+            )
+
+            p.spawn(setup_vm_node_baremetal, f"node{n}", ceph_nodes, **params)
+
     log.info("Done creating nodes")
     return ceph_nodes
 
@@ -100,17 +101,9 @@ def setup_vm_node_baremetal(node, ceph_nodes, **params):
     """
     Create the VM node using details provided.
     """
-    vm = None
-    try:
-        vm = CephBaremetalNode(**params)
-        vm.role = params["role"]
-        ceph_nodes[node] = vm
-    except RETRY_EXCEPTIONS as retry_except:
-        log.warning(retry_except, exc_info=True)
-        raise
-    except BaseException as be:  # noqa
-        log.error(be, exc_info=True)
-        raise
+    vm = CephBaremetalNode(**params)
+    vm.role = params["role"]
+    ceph_nodes[node] = vm
 
 
 def create_ibmc_ceph_nodes(
@@ -766,7 +759,7 @@ def config_ntp(ceph_node, cloud_type="openstack"):
             "sed -i '1i server clock.corp.redhat.com iburst' /etc/chrony.conf",
         ],
     }
-    if cloud_type != "ibmc":
+    if cloud_type not in ["ibmc", "baremetal"]:
         # IBM-Cloud hosted environments are configured via the DHCP client.
         commands = ntp_config[distro_ver.split(".")[0]]
         for cmd in commands:
