@@ -5,8 +5,8 @@ random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.0"
-test_suite="suites/pacific/upgrades/tier-1-upgrade_4x_to_5_x_containerized.yaml"
-test_conf="conf/pacific/upgrades/upgrade_from4x_small_cluster.yml"
+test_suite="suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-container.yaml"
+test_conf="conf/pacific/upgrades/upgrade_small-cluster.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
