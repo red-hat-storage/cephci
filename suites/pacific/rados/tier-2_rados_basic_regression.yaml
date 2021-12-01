@@ -177,6 +177,14 @@ tests:
                 section: "osd.1"
                 name: "osd_max_scrubs"
                 value: "3"
+            - config-4:
+                section: "mds"
+                name: "mds_op_history_size"
+                value: "40"
+            - config-5:
+                section: "client.rgw"
+                name: "rgw_lc_debug_interval"
+                value: "1"
       desc: Verify config source changes at both global and local levels
 
   - test:
@@ -256,7 +264,7 @@ tests:
           m: 2
           pg_num: 32
           plugin: jerasure
-          rados_write_duration: 200
+          rados_write_duration: 100
           rados_read_duration: 50
           crush-failure-domain: osd
           osd_max_backfills: 16
@@ -304,7 +312,7 @@ tests:
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 100
+          rados_write_duration: 50
           rados_read_duration: 50
           configurations:
             - config-1:
@@ -334,7 +342,7 @@ tests:
       config:
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 100
+          rados_write_duration: 50
           rados_read_duration: 50
           configurations:
             - config-1:
@@ -364,7 +372,7 @@ tests:
       config:
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 100
+          rados_write_duration: 50
           rados_read_duration: 50
           configurations:
             - config-1:
@@ -425,7 +433,7 @@ tests:
         replicated_pool:
           create: true
           pool_name: rep_test_pool
-          rados_write_duration: 100
+          rados_write_duration: 50
           rados_read_duration: 50
           pg_num: 32
         configure_pg_autoscaler:
