@@ -99,6 +99,7 @@ tests:
     polarion-id: CEPH-83573679
     module: test_ansible_upgrade.py
     config:
+      build: '5.x'
       ansi_config:
         ceph_origin: distro
         ceph_stable_release: pacific

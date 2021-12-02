@@ -139,6 +139,7 @@ tests:
       clusters:
         ceph-rgw1:
           config:
+            build: '5.x'
             ansi_config:
               ceph_origin: distro
               ceph_repository: rhcs
@@ -174,6 +175,7 @@ tests:
                     testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
         ceph-rgw2:
           config:
+            build: '5.x'
             ansi_config:
               ceph_origin: distro
               ceph_repository: rhcs

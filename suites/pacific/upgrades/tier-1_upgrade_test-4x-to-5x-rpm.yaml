@@ -120,28 +120,29 @@ tests:
           polarion-id: CEPH-83573679
           module: test_ansible_upgrade.py
           config:
-             ansi_config:
-               ceph_origin: distro
-               ceph_stable_release: pacific
-               ceph_repository: rhcs
-               ceph_rhcs_version: 5
-               osd_scenario: lvm
-               osd_auto_discovery: False
-               ceph_stable: True
-               ceph_stable_rh_storage: True
-               fetch_directory: ~/fetch
-               radosgw_num_instances: 2
-               copy_admin_key: true
-               containerized_deployment: true
-               upgrade_ceph_packages: True
-               dashboard_admin_user: admin
-               dashboard_admin_password: p@ssw0rd
-               grafana_admin_user: admin
-               grafana_admin_password: p@ssw0rd
-               node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
-               grafana_container_image: registry.redhat.io/rhceph/rhceph-5-dashboard-rhel8:5
-               prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
-               alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+            build: '5.x'
+            ansi_config:
+              ceph_origin: distro
+              ceph_stable_release: pacific
+              ceph_repository: rhcs
+              ceph_rhcs_version: 5
+              osd_scenario: lvm
+              osd_auto_discovery: False
+              ceph_stable: True
+              ceph_stable_rh_storage: True
+              fetch_directory: ~/fetch
+              radosgw_num_instances: 2
+              copy_admin_key: true
+              containerized_deployment: true
+              upgrade_ceph_packages: True
+              dashboard_admin_user: admin
+              dashboard_admin_password: p@ssw0rd
+              grafana_admin_user: admin
+              grafana_admin_password: p@ssw0rd
+              node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+              grafana_container_image: registry.redhat.io/rhceph/rhceph-5-dashboard-rhel8:5
+              prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+              alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
           desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
           abort-on-fail: True
     desc: Running upgrade and i/o's parallelly
