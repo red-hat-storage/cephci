@@ -69,8 +69,6 @@ def run(**kw):
     log.info(f"test site: {test_site.name}")
     test_site_node = test_site.get_ceph_object("rgw").node
 
-    # adding sleep for 60 seconds before another test starts, sync needs to complete
-    time.sleep(60)
     set_env = config.get("set-env", False)
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
@@ -106,8 +104,10 @@ def run(**kw):
 
     if test_config["config"]:
         log.info("creating custom config")
-        f_name = test_folder + config_dir + config_file_name
-        remote_fp = test_site_node.remote_file(file_name=f_name, file_mode="w")
+        f_name = test_folder_path + config_dir + config_file_name
+        remote_fp = test_site_node.remote_file(
+            file_name=f_name, file_mode="w", sudo=True
+        )
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     out, err = test_site_node.exec_command(
