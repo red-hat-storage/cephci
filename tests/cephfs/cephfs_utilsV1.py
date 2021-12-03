@@ -7,6 +7,8 @@ It installs all the pre-requisites on client nodes
 import datetime
 import json
 import logging
+import random
+from time import sleep
 
 from ceph.ceph import CommandFailed
 
@@ -492,9 +494,7 @@ class FsUtils(object):
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("target_group_name"):
-                listsubvolumes_cmd += (
-                    f" --target_group_name {kwargs.get('target_group_name')}"
-                )
+                listsubvolumes_cmd += f" --group_name {kwargs.get('target_group_name')}"
             out, rc = client.exec_command(
                 sudo=True, cmd=f"{listsubvolumes_cmd} --format json"
             )
@@ -815,6 +815,174 @@ class FsUtils(object):
         )
 
         return cmd_out, cmd_rc
+
+    def clone_cancel(self, client, vol_name, clone_name, **kwargs):
+        """
+        Cancels the clone operation
+        Args:
+            clients: Client_nodes
+            vol_name:
+            clone_name:
+            **kwargs:
+                group_name
+
+        """
+        clone_status_cmd = f"ceph fs clone cancel {vol_name} {clone_name}"
+        if kwargs.get("group_name"):
+            clone_status_cmd += f" --group_name {kwargs.get('group_name')}"
+        clone_status_cmd += " --format json"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=clone_status_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+
+        return cmd_out, cmd_rc
+
+    def validate_clone_state(
+        self, client, clone, expected_state="complete", timeout=300
+    ):
+        """
+        Validates the clone status based on the expected_state
+        Args:
+            clients: Client_nodes
+            clone_obj:
+                "vol_name": Volume name where clone as been created Ex: cephfs,
+                "subvol_name": sub Volume name from where this clone has been created,
+                "snap_name": snapshot name,
+                "target_subvol_name": "clone_status_1",
+                "group_name": "subvolgroup_1",
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        clone_transistion_states = []
+        cmd_out, cmd_rc = self.get_clone_status(
+            client,
+            clone["vol_name"],
+            clone["target_subvol_name"],
+            group_name=clone.get("target_group_name", ""),
+        )
+        status = json.loads(cmd_out.read().decode())
+        if status["status"]["state"] not in clone_transistion_states:
+            clone_transistion_states.append(status["status"]["state"])
+        while status["status"]["state"] != expected_state:
+            cmd_out, cmd_rc = self.get_clone_status(
+                client,
+                clone["vol_name"],
+                clone["target_subvol_name"],
+                group_name=clone.get("target_group_name", ""),
+            )
+            status = json.loads(cmd_out.read().decode())
+            log.info(
+                f"Clone Status of {clone['vol_name']} : {status['status']['state']}"
+            )
+            if status["status"]["state"] not in [
+                "in-progress",
+                "complete",
+                "pending",
+                "canceled",
+            ]:
+                raise CommandFailed(f'{status["status"]["state"]} is not valid status')
+            if end_time < datetime.datetime.now():
+                raise CommandFailed(
+                    f"Clone creation has not reached to Complete state even after {timeout} sec"
+                    f'Current state of the clone is {status["status"]["state"]}'
+                )
+        return clone_transistion_states
+
+    def reboot_node(self, ceph_node, timeout=300):
+        ceph_node.exec_command(sudo=True, cmd="reboot", check_ec=False)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        while datetime.datetime.now() < endtime:
+            try:
+                ceph_node.node.reconnect()
+                return
+            except BaseException:
+                log.error(
+                    "Failed to reconnect to the node {node} after reboot ".format(
+                        node=ceph_node.node.ip_address
+                    )
+                )
+                sleep(5)
+        raise RuntimeError(
+            "Failed to reconnect to the node {node} after reboot ".format(
+                node=ceph_node.node.ip_address
+            )
+        )
+
+    def create_file_data(self, client, directory, no_of_files, file_name, data):
+        """
+        This function will write files to the directory with the data given
+        :param client:
+        :param directory:
+        :param no_of_files:
+        :param file_name:
+        :param data:
+        :return:
+        """
+        files = [f"{file_name}_{i}" for i in range(0, no_of_files)]
+        client.exec_command(
+            sudo=True,
+            cmd=f"cd {directory};echo {data * random.randint(100, 500)} | tee {' '.join(files)}",
+        )
+
+    def get_files_and_checksum(self, client, directory):
+        """
+        This will collect the filenames and their respective checksums and returns the dictionary
+        :param client:
+        :param directory:
+        :return:
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"cd {directory};ls -lrt |  awk {{'print $9'}}"
+        )
+        file_list = out.read().decode().strip().split()
+        file_dict = {}
+        for file in file_list:
+            out, rc = client.exec_command(sudo=True, cmd=f"md5sum {directory}/{file}")
+            md5sum = out.read().decode().strip().split()
+            file_dict[file] = md5sum[0]
+        return file_dict
+
+    def set_quota_attrs(self, client, file, bytes, directory, **kwargs):
+        """
+        Args:
+            file: sets the value as total number of files limit
+            bytes: sets the value as total number of bytes limit
+            directory: sets the above limits to this directory
+            **kwargs:
+
+        Returns:
+
+        """
+        if file:
+            quota_set_cmd = f"setfattr -n ceph.quota.max_files -v {file}"
+            client.exec_command(sudo=True, cmd=f"{quota_set_cmd} {directory}")
+        if bytes:
+            quota_set_cmd = f"setfattr -n ceph.quota.max_bytes -v {bytes}"
+            client.exec_command(sudo=True, cmd=f"{quota_set_cmd} {directory}")
+
+    def get_quota_attrs(self, client, directory, **kwargs):
+        """
+        Gets the quota of the given directory
+        Args:
+            client:
+            directory: Gets the quota values for the given directory
+            **kwargs:
+
+        Returns:
+            quota_dict
+            will have values in this format {file : 0, bytes: 0}
+        """
+        quota_dict = {}
+        out, rc = client.exec_command(
+            f"getfattr --only-values -n ceph.quota.max_files {directory}"
+        )
+        file_quota = out.read().decode()
+        quota_dict["files"] = int(file_quota)
+        out, rc = client.exec_command(
+            f"getfattr --only-values -n ceph.quota.max_bytes {directory}"
+        )
+        byte_quota = out.read().decode()
+        quota_dict["bytes"] = int(byte_quota)
+        return quota_dict
 
     def subvolume_authorize(self, client, vol_name, subvol_name, client_name, **kwargs):
         """
