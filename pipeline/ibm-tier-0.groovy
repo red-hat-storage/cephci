@@ -20,7 +20,7 @@ node(nodeName) {
             }
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'refs/remotes/origin/boot_vol']],
                 doGenerateSubmoduleConfigurations: false,
                 extensions: [[
                     $class: 'CloneOption',
