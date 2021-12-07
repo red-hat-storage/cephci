@@ -56,12 +56,14 @@ class OSD(ApplyMixin, Orch):
             if not node.get("devices"):
                 continue
 
-            devices = list()
+            devices = {"available": [], "unavailable": []}
             for device in node.get("devices"):
                 if device["available"]:
-                    devices.append(device["path"])
+                    devices["available"].append(device["path"])
+                    continue
+                devices["unavailable"].append(device["path"])
 
-            if devices:
+            if devices["available"]:
                 node_device_dict.update({node["addr"]: devices})
 
         if not node_device_dict:
@@ -94,11 +96,13 @@ class OSD(ApplyMixin, Orch):
                     if dmn["hostname"] == node and dmn["status_desc"] == "running":
                         count += 1
 
+                count = count - len(devices["unavailable"])
+
                 LOG.info(
                     "%s %s/%s osd daemon(s) up... Retries: %s"
-                    % (node, count, len(devices), checks)
+                    % (node, count, len(devices["available"]), checks)
                 )
-                if count == len(devices):
+                if count == len(devices["available"]):
                     deployed += 1
 
             if deployed == len(node_device_dict):
