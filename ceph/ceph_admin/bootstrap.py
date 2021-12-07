@@ -179,7 +179,7 @@ class BootstrapMixin:
         args = config.get("args")
         custom_repo = args.pop("custom_repo", "")
         custom_image = args.pop("custom_image", True)
-        build_type = config.get("build_type")
+        build_type = self.config.get("build_type")
 
         if build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False
