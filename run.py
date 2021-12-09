@@ -131,7 +131,7 @@ Options:
   --report-portal                   Post results to report portal. Requires config file,
                                     see README.
   --log-level <LEVEL>               Set logging level
-  --log-dir <LEVEL>                 Set log directory [default: /tmp]
+  --log-dir <LEVEL>                 Set log directory
   --instances-name <name>           Name that will be used for instances creation
   --osp-image <image>               Image for osp instances, default value is taken from
                                     conf file
@@ -371,7 +371,7 @@ def run(args):
 
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
-    log_directory = args.get("--log-dir", "/tmp")
+    log_directory = args.get("--log-dir")
 
     run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)

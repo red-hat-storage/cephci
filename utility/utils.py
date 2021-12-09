@@ -456,13 +456,13 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     return log_url
 
 
-def create_run_dir(run_id, log_dir="/tmp"):
+def create_run_dir(run_id, log_dir=""):
     """
     Create the directory where test logs will be placed.
 
     Args:
         run_id: id of the test run. used to name the directory
-        log_dir: log directory. default: "/tmp"
+        log_dir: log directory name.
     Returns:
         Full path of the created directory
     """
@@ -473,11 +473,17 @@ def create_run_dir(run_id, log_dir="/tmp"):
     print(msg)
     dir_name = "cephci-run-{run_id}".format(run_id=run_id)
     base_dir = "/ceph/cephci-jenkins"
-    if not os.path.isdir(base_dir):
-        if not os.path.isabs(log_dir):
-            log_dir = os.path.join(os.getcwd(), log_dir)
+
+    if log_dir:
         base_dir = log_dir
+        if not os.path.isabs(log_dir):
+            base_dir = os.path.join(os.getcwd(), log_dir)
+    elif not os.path.isdir(base_dir):
+        base_dir = "/tmp"
+
     run_dir = os.path.join(base_dir, dir_name)
+    print(f"log directory - {run_dir}")
+
     try:
         os.makedirs(run_dir)
     except OSError:
