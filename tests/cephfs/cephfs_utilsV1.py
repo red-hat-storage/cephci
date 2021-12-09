@@ -8,6 +8,7 @@ import datetime
 import json
 import logging
 import random
+import string
 from time import sleep
 
 from ceph.ceph import CommandFailed
@@ -983,6 +984,45 @@ class FsUtils(object):
         byte_quota = out.read().decode()
         quota_dict["bytes"] = int(byte_quota)
         return quota_dict
+
+    def file_quota_test(self, client, mounting_dir, quota_attrs):
+        total_files = quota_attrs.get("files")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        files_in_dir = int(self.get_total_no_files(client, mounting_dir))
+        if files_in_dir >= total_files:
+            files = 1
+        else:
+            files = total_files - files_in_dir
+        for i in range(1, files + 15):
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=f"cd {mounting_dir};touch file_{temp_str}_{i}.txt",
+                long_running=True,
+                check_ec=False,
+            )
+            if rc == 1 and i < files:
+                raise CommandFailed(
+                    f"total allowed files {files} and current iteration {i}"
+                )
+            log.info(
+                f"Return value for file_{temp_str}_{i}.txt is {rc} and total_allowed_files: {files}"
+            )
+        if rc == 0 and total_files != 0:
+            raise CommandFailed("We are able to create more files than what we set")
+        elif rc == 1 and total_files == 0:
+            raise CommandFailed(
+                f"File Attribute is set to {total_files} still we are not able to create files"
+            )
+        else:
+            pass
+
+    def get_total_no_files(self, client, directory):
+        out, rc = client.exec_command(f"find {directory} -type f -print | wc -l")
+        total_files = out.read().decode()
+        out, rc = client.exec_command(f"find {directory} -type d -print | wc -l")
+        total_dir = out.read().decode()
+        print(f"total dir : {total_dir}")
+        return total_files
 
     def subvolume_authorize(self, client, vol_name, subvol_name, client_name, **kwargs):
         """
