@@ -33,6 +33,22 @@ def run(ceph_cluster, **kw):
     ceph_cluster.custom_config_file = test_data.get("custom-config-file")
     cluster_name = config.get("ansi_config").get("cluster")
 
+    # For cdn container installation GAed container parameters
+    # needs to override as below,
+    #
+    # config:
+    #     use_cdn: True
+    #     ansi_config:
+    #       ceph_origin: repository
+    #       ceph_repository_type: cdn
+
+    # Enables cdn ansible config when --build set to relesed
+    build_type = config.get("build_type", None)
+    if build_type == "released":
+        config["use_cdn"] = True
+        config.get("ansi_config")["ceph_origin"] = "repository"
+        config.get("ansi_config")["ceph_repository_type"] = "cdn"
+
     if all(
         key in ceph_cluster.ansible_config
         for key in ("rgw_multisite", "rgw_zonesecondary")
