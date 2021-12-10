@@ -131,7 +131,7 @@ Options:
   --report-portal                   Post results to report portal. Requires config file,
                                     see README.
   --log-level <LEVEL>               Set logging level
-  --log-dir <LEVEL>                 Set log directory [default: /tmp]
+  --log-dir <LEVEL>                 Set log directory
   --instances-name <name>           Name that will be used for instances creation
   --osp-image <image>               Image for osp instances, default value is taken from
                                     conf file
@@ -371,7 +371,7 @@ def run(args):
 
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
-    log_directory = args.get("--log-dir", "/tmp")
+    log_directory = args.get("--log-dir")
 
     run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)
@@ -1058,11 +1058,25 @@ def run(args):
     log.info("\nAll test logs located here: {base}".format(base=url_base))
     close_and_remove_filehandlers()
 
+    test_run_metadata = {
+        "polarion-project-id": "CEPH",
+        "suite-name": suite_name,
+        "distro": distro,
+        "ceph-version": ceph_version,
+        "ceph-ansible-version": ceph_ansible_version,
+        "base_url": base_url,
+        "container-registry": docker_registry,
+        "container-image": docker_image,
+        "container-tag": docker_tag,
+        "compose-id": compose_id,
+        "log-dir": run_dir,
+    }
+
     if post_to_report_portal:
         rp_logger.finish_launch()
 
     if xunit_results:
-        create_xunit_results(suite_name, tcs, run_dir)
+        create_xunit_results(suite_name, tcs, run_dir, test_run_metadata)
 
     print("\nAll test logs located here: {base}".format(base=url_base))
     print_results(tcs)
