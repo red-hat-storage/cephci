@@ -48,12 +48,14 @@ node(nodeName) {
         if ((! rhcephVersion?.trim()) && (! buildType?.trim())) {
             error "Required Prameters are not provided.."
         }
+
         testStages = sharedLib.fetchStages(
-            "--build ${buildType} --cloud ibmc ",
+            "--build ${buildType} --cloud ibmc --xunit-results",
             buildPhase,
             testResults,
             rhcephversion
         )
+
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test stages found.."
@@ -63,9 +65,16 @@ node(nodeName) {
 
     parallel testStages
 
+    stage('upload xUnit-xml to COS'){
+        def dirName = "ibm_${currentBuild.projectName}_${currentBuild.number}"
+        testResults.each{key,dict->
+            sharedLib.uploadObject(key, dirName, dict["log-dir"])
+        }
+    }
+
     stage('Update Results and Execute Tier-X suite') {
-        /* Update result to recipe file and execute post tier based on run execution */
-        if ("FAIL" in testResults.values()) {
+        // Update result to recipe file and execute post tier based on run execution
+        if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
             currentBuild.result = "FAILED"
             error "Failure occurred in current run.."
         }

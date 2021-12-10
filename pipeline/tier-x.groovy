@@ -87,7 +87,7 @@ node(nodeName) {
     stage('Publish Results') {
         /* Publish results through E-mail and Google Chat */
 
-        if ( ! ("FAIL" in testResults.values()) ) {
+        if ( ! ("FAIL" in sharedLib.fetchStageStatus(testResults)) ) {
             def latestContent = sharedLib.readFromReleaseFile(
                 majorVersion, minorVersion
             )
