@@ -187,7 +187,7 @@ class FsUtils(object):
             )
 
             kernel_cmd = (
-                f"mount -t ceph {mon_node_ip}:/{kwargs.get('sub_dir','')} {mount_point} "
+                f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir','')} {mount_point} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
                 f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
             )
@@ -235,7 +235,7 @@ class FsUtils(object):
             log.info("Removing files:")
             client.exec_command(
                 sudo=True,
-                cmd=f"rm -rf {mounting_dir}/*",
+                cmd=f"rm -rf {mounting_dir}*",
                 long_running=True,
                 timeout=3600,
             )
@@ -1039,3 +1039,36 @@ class FsUtils(object):
         if kwargs.get("extra_params"):
             command += f" {kwargs.get('extra_params')}"
             client.exec_command(sudo=True, cmd=command)
+
+    def get_pool_df(self, client, pool_name, **kwargs):
+        """
+        Gets the pool Avaialble space and used space details
+        Args:
+            client: client node
+            pool_name: Name of the pool
+            **kwargs:
+                vol_name : Name of the fs volume for which we need the status
+        Return:
+            returns pool details if present else returns None
+        sample pool Return dictonary:
+            {
+            "avail": 33608753152,
+            "id": 5,
+            "name": "cephfs-metadata",
+            "type": "metadata",
+            "used": 278888448
+        },
+
+        """
+        fs_status_cmd = "ceph fs status"
+        if kwargs.get("vol_name"):
+            fs_status_cmd += f" {kwargs.get('vol_name')}"
+        fs_status_cmd += " --format json"
+        out, rc = client.exec_command(sudo=True, cmd=fs_status_cmd)
+        fs_status = json.loads(out.read().decode())
+        pool_status = fs_status["pools"]
+        for pool in pool_status:
+            if pool["name"] == pool_name:
+                return pool
+        else:
+            return None
