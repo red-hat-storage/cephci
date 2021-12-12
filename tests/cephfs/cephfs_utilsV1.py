@@ -187,7 +187,7 @@ class FsUtils(object):
             )
 
             kernel_cmd = (
-                f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir','')} {mount_point} "
+                f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir','/')} {mount_point} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
                 f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
             )
