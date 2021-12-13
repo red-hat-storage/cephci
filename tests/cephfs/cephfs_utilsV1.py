@@ -1072,3 +1072,21 @@ class FsUtils(object):
                 return pool
         else:
             return None
+
+    def heartbeat_map(self, mds):
+        """
+        Verify "heartbeat_map" timeout is not in mds log
+        Args:
+            mds: mds node
+        """
+        try:
+            mds.exec_command(
+                sudo=True,
+                cmd=f"grep heartbeat_map /var/log/ceph/ceph-mds.{mds.node.shortname}.log",
+            )
+            log.error("heartbeat map timeout seen")
+            return 1
+        except CommandFailed as e:
+            log.info(e)
+            log.info("heartbeat map timeout not found")
+            return 0
