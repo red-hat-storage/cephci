@@ -479,18 +479,17 @@ def create_run_dir(run_id, log_dir=""):
         if not os.path.isabs(log_dir):
             base_dir = os.path.join(os.getcwd(), log_dir)
     elif not os.path.isdir(base_dir):
-        base_dir = "/tmp"
-
-    run_dir = os.path.join(base_dir, dir_name)
-    print(f"log directory - {run_dir}")
-
+        base_dir = f"/tmp/{dir_name}"
+    else:
+        base_dir = os.path.join(base_dir, dir_name)
+    print(f"log directory - {base_dir}")
     try:
-        os.makedirs(run_dir)
+        os.makedirs(base_dir)
     except OSError:
         if "jenkins" in getpass.getuser():
             raise
 
-    return run_dir
+    return base_dir
 
 
 def close_and_remove_filehandlers(logger=logging.getLogger()):
