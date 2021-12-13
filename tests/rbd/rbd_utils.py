@@ -1,3 +1,4 @@
+import json
 import logging
 import random
 import string
@@ -64,8 +65,12 @@ class Rbd:
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
         self.exec_cmd(cmd="ceph osd pool create {} 64 64".format(poolname))
+        if not self.check_pool_exists(pool_name=poolname):
+            log.error("Pool not created")
+            return False
         if self.ceph_version >= 3:
             self.exec_cmd(cmd="rbd pool init {}".format(poolname))
+        return True
 
     def set_ec_profile(self, profile):
         self.exec_cmd(cmd="ceph osd erasure-code-profile rm {}".format(profile))
@@ -81,10 +86,32 @@ class Rbd:
         self.exec_cmd(
             cmd="ceph osd pool create {} 12 12 erasure {}".format(poolname, profile)
         )
+        if not self.check_pool_exists(pool_name=poolname):
+            log.error("Pool not created")
+            return False
         self.exec_cmd(cmd="rbd pool init {}".format(poolname))
         self.exec_cmd(
             cmd="ceph osd pool set {} allow_ec_overwrites true".format(poolname)
         )
+        return True
+
+    def check_pool_exists(self, pool_name: str) -> bool:
+        """
+        Checks if the specified pool exists in the cluster
+        Args:
+            pool_name: Name of the pool to be checked
+
+        Returns:  True -> pass, False -> fail
+
+        """
+        out = self.exec_cmd(cmd="ceph df -f json", output=True)
+        existing_pools = json.loads(out)
+        if pool_name not in [ele["name"] for ele in existing_pools["pools"]]:
+            log.error(f"Pool:{pool_name} does not exist on cluster")
+            return False
+        else:
+            log.info(f"pool {pool_name} exists in the cluster")
+            return True
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):
