@@ -1,3 +1,9 @@
+"""
+This file contains various tests/ validations related to pools.
+Tests included:
+1. Verification of EC pool recovery improvement
+2. Effect on size of pools with and without compression
+"""
 import datetime
 import logging
 import time
@@ -115,4 +121,72 @@ def run(ceph_cluster, **kw):
             return 1
 
         log.info("Successfully tested EC pool recovery with K osd's surviving")
+        return 0
+
+    if config.get("Compression_tests"):
+        """
+        Create a 2 replicated pools:
+        1. Pool_1 : enable any compression algorithm(def snappy) and compression mode(aggressive/force).
+        2. Pool_2 : set compression mode to none
+        Writing the same amount of data on 2 pools, size of pool with compression on would consume less space
+        """
+        pool_config = config["Compression_tests"]["pool_config"]
+        compression_config = config["Compression_tests"]["compression_config"]
+        pool_1 = pool_config["pool-1"]
+        pool_2 = pool_config["pool-2"]
+        if not rados_obj.create_pool(pool_name=pool_1, **pool_config):
+            log.error("could not create pool-1")
+            return 1
+        if not rados_obj.create_pool(pool_name=pool_2, **pool_config):
+            log.error("could not create pool-2")
+            return 1
+
+        log.debug("Created two pools to test compression")
+
+        # Enabling compression on pool-1
+        if not rados_obj.pool_inline_compression(
+            pool_name=pool_1, **compression_config
+        ):
+            log.error(
+                f"Error setting compression on pool : {pool_1} for config {compression_config}"
+            )
+            return 1
+
+        # Writing the same amount of data into two pools
+        if not rados_obj.bench_write(pool_name=pool_1, **pool_config):
+            log.error("Failed to write objects into Pool-1, with compression enabled")
+            return 1
+
+        if not rados_obj.bench_write(pool_name=pool_2, **pool_config):
+            log.error(
+                "Failed to write objects into Pool-2, without compression enabled"
+            )
+            return 1
+        # Sleeping for 5 seconds for status to be updated.
+        time.sleep(5)
+
+        log.debug("Finished writing data into the two pools. Checking pool stats")
+        try:
+            pool_stats = rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
+            pool_1_stats = [
+                detail for detail in pool_stats if detail["name"] == pool_1
+            ][0]["stats"]
+            pool_2_stats = [
+                detail for detail in pool_stats if detail["name"] == pool_2
+            ][0]["stats"]
+        except KeyError:
+            log.error("No stats about the pools requested found on the cluster")
+            return 1
+
+        log.debug(f"Pool-1 stats: {pool_1_stats}")
+        log.debug(f"Pool-2 stats: {pool_2_stats}")
+        if pool_1_stats["compress_bytes_used"] < 0:
+            log.error("No data stored under pool-1 is compressed")
+            return 1
+
+        if pool_1_stats["kb_used"] >= pool_2_stats["kb_used"]:
+            log.error("Compression has no effect on the pool size...")
+            return 1
+
+        log.info("Pool size is less when compression is enabled")
         return 0
