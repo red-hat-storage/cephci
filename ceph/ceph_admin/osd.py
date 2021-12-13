@@ -58,10 +58,14 @@ class OSD(ApplyMixin, Orch):
 
             devices = {"available": [], "unavailable": []}
             for device in node.get("devices"):
-                if device["available"]:
-                    devices["available"].append(device["path"])
-                    continue
-                devices["unavailable"].append(device["path"])
+                # avoid considering devices which is less than 5GB
+                if "Insufficient space (<5GB)" not in device.get(
+                    "rejected_reasons", []
+                ):
+                    if device["available"]:
+                        devices["available"].append(device["path"])
+                        continue
+                    devices["unavailable"].append(device["path"])
 
             if devices["available"]:
                 node_device_dict.update({node["addr"]: devices})
