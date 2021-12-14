@@ -1,0 +1,113 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_rgw_ssl_regression.yaml
+# Test-Case: adding IO operations with SSL frontend in suite
+#
+# Cluster Configuration:
+#    cephci/conf/nautilus/rgw/tier-1_rgw.yaml
+#
+#    6-Node cluster(RHEL-7.9 and above)
+#    3 MONS, 2 MGR, 4 OSD and 1 RGW service daemon(s)
+#
+# Test Steps:
+#   (1) Install Pre-requisites, and Deploy Ceph using ceph-ansible with CDN/GA build(rpm)
+#   (2) check cluster health
+#   (3) perform RGW IO operations with SSL frontend in rpm
+#===============================================================================================
+tests:
+  - test:
+      name: install ceph pre-requisities
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      config:
+        ansi_config:
+          ceph_test: True
+          ceph_origin: distro
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          journal_size: 1024
+          ceph_stable: True
+          ceph_stable_rh_storage: True
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          dashboard_enabled: False
+      desc: test cluster setup using ceph-ansible
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: True
+      desc: Check for ceph health debug info
+  - test:
+      name: Beast SSL RGW test
+      desc: RGW SSL testing with Beast frontend enabled
+      polarion-id: CEPH-10359
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_frontends_with_ssl.py
+        config-file-name: test_ssl_beast.yaml
+        timeout: 500
+
+  # Basic Bucket Operation Tests
+  - test:
+      name: Mbuckets
+      desc: test to create "M" no of buckets
+      polarion-id: CEPH-9789
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets.yaml
+        timeout: 300
+  - test:
+      name: Mbuckets_with_Nobjects
+      desc: test to create "M" no of buckets and "N" no of objects
+      polarion-id: CEPH-9789
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+        timeout: 300
+  - test:
+      name: Mbuckets_with_Nobjects
+      desc: test to create "M" no of buckets and "N" no of objects with encryption
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+        timeout: 300
+  - test:
+      name: Mbuckets_with_Nobjects_delete
+      desc: test to create "M" no of buckets and "N" no of objects with delete
+      module: sanity_rgw.py
+      polarion-id: CEPH-14237
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+        timeout: 300
+  - test:
+      name: Mbuckets_with_Nobjects_download
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw.py
+      polarion-id: CEPH-14237
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        timeout: 300
+  - test:
+      name: Mbuckets_with_Nobjects with sharing enabled
+      desc: test to perform bucket ops with sharding operations
+      module: sanity_rgw.py
+      polarion-id: CEPH-9245
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
+        timeout: 300
+
