@@ -1090,3 +1090,54 @@ class FsUtils(object):
             log.info(e)
             log.info("heartbeat map timeout not found")
             return 0
+
+    def get_subvolume_info(
+        self, client, vol_name, subvol_name, validate=True, **kwargs
+    ):
+        """
+        Gets the info of subvolume.
+        Args:
+            client: client node
+            fs_name: name of thefilesystem or volume
+            subvol_name: name of the subvolume which is required to collect the info
+            **kwargs:
+                group_name : Name of the subvoumegroup
+        Return:
+            returns pool details if present else returns None
+            Sample output :
+
+            {
+            "atime": "2021-12-07 09:13:12",
+            "bytes_pcent": "0.00",
+            "bytes_quota": 2147483648,
+            "bytes_used": 0,
+            "created_at": "2021-12-07 09:13:12",
+            "ctime": "2021-12-07 10:00:45",
+            "data_pool": "cephfs.cephfs.data",
+            "features": [
+                "snapshot-clone",
+                "snapshot-autoprotect",
+                "snapshot-retention"
+            ],
+            "gid": 0,
+            "mode": 16877,
+            "mon_addrs": [
+                "10.0.208.74:6789",
+                "10.0.209.3:6789",
+                "10.0.208.178:6789"
+            ],
+            "mtime": "2021-12-07 09:13:12",
+            "path": "/volumes/subvolgroup_1/subvol_1/d4b4d20e-b8ed-4831-bb83-cf2bff91d109",
+            "pool_namespace": "",
+            "state": "complete",
+            "type": "subvolume",
+            "uid": 0
+
+        """
+
+        subvolume_info_cmd = f"ceph fs subvolume info {vol_name} {subvol_name}"
+        if kwargs.get("group_name"):
+            subvolume_info_cmd += f" --group_name {kwargs.get('group_name')}"
+        out, rc = client.exec_command(sudo=True, cmd=subvolume_info_cmd)
+        subvolume_info = json.loads(out.read().decode())
+        return subvolume_info
