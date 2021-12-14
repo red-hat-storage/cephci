@@ -110,7 +110,7 @@ def run(ceph_cluster, **kw):
             log.error("Failed to create the replicated Pool")
             return 1
 
-        rados_obj.bench_write(pool_name=pool_name)
+        rados_obj.bench_write(pool_name=pool_name, rados_write_duration=50)
 
         # Removing test configurations
         for conf in test_config["configurations"]:
@@ -160,12 +160,13 @@ def run(ceph_cluster, **kw):
                     )
                     return 1
                 if not rados_obj.bench_write(**compression_conf):
-                    log.error("Failed to write objects into the EC Pool")
+                    log.error("Failed to write objects into Pool")
                     return 1
                 rados_obj.bench_read(**compression_conf)
                 log.info(
                     "Created the replicated Pool, Finished writing data into the pool"
                 )
+        log.info("Completed compression tests")
 
     if config.get("delete_pools"):
         for name in config["delete_pools"]:

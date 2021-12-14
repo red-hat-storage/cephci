@@ -134,12 +134,24 @@ def run(ceph_cluster, **kw):
         compression_config = config["Compression_tests"]["compression_config"]
         pool_1 = pool_config["pool-1"]
         pool_2 = pool_config["pool-2"]
-        if not rados_obj.create_pool(pool_name=pool_1, **pool_config):
-            log.error("could not create pool-1")
-            return 1
-        if not rados_obj.create_pool(pool_name=pool_2, **pool_config):
-            log.error("could not create pool-2")
-            return 1
+
+        if config["Compression_tests"]["pool_type"] == "replicated":
+            if not rados_obj.create_pool(pool_name=pool_1, **pool_config):
+                log.error("could not create pool-1")
+                return 1
+            if not rados_obj.create_pool(pool_name=pool_2, **pool_config):
+                log.error("could not create pool-2")
+                return 1
+        elif config["Compression_tests"]["pool_type"] == "erasure":
+            pool_config["pool_name"] = pool_1
+            if not rados_obj.create_erasure_pool(name=pool_1, **pool_config):
+                log.error("could not create pool-1")
+                return 1
+            pool_config["pool_name"] = pool_2
+            if not rados_obj.create_erasure_pool(name=pool_2, **pool_config):
+                log.error("could not create pool-2")
+                return 1
+            del pool_config["pool_name"]
 
         log.debug("Created two pools to test compression")
 
@@ -187,6 +199,14 @@ def run(ceph_cluster, **kw):
         if pool_1_stats["kb_used"] >= pool_2_stats["kb_used"]:
             log.error("Compression has no effect on the pool size...")
             return 1
+
+        if config["Compression_tests"].get("verify_compression_ratio_set"):
+            # added verification for test: CEPH-83571672
+            if not rados_obj.check_compression_size(
+                pool_name=pool_1, **compression_config
+            ):
+                log.error("data not compressed in accordance to ratio set")
+                return 1
 
         log.info("Pool size is less when compression is enabled")
         return 0

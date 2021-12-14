@@ -943,6 +943,40 @@ class RadosOrchestrator:
         log.info(f"The image details are : {out}")
         return True
 
+    def check_compression_size(self, pool_name: str, **kwargs) -> bool:
+        """
+        Checks the given pool size against "compression_required_ratio" and verifies that data is
+        compressed in accordance to the ratio provided
+        Args:
+            pool_name: Name of the pool
+            **kwargs: additional params needed.
+                Allowed values:
+                    compression_required_ratio: ratio set on the pool for compression
+        Returns: True -> pass, False -> fail
+        """
+        log.info(f"Collecting stats about pool : {pool_name}")
+        pool_stats = self.run_ceph_command(cmd="ceph df detail")["pools"]
+        flag = False
+        for detail in pool_stats:
+            if detail["name"] == pool_name:
+                pool_1_stats = detail["stats"]
+                stored_data = pool_1_stats["stored_data"]
+                ratio_set = kwargs["compression_required_ratio"]
+                if pool_1_stats["data_bytes_used"] >= (stored_data * ratio_set):
+                    log.error(
+                        f"The data stored on pool is not compressed in accordance with the ratio set."
+                        f"Ideal size after compression <= {stored_data * ratio_set} \n"
+                        f"Stored: {pool_1_stats['data_bytes_used']}"
+                    )
+                    return False
+                flag = True
+                break
+        if not flag:
+            log.error(f"Pool {pool_name} not found on cluster.")
+            return False
+        log.info(f"data on pool is compressed in accordance of ratio : {ratio_set}")
+        return True
+
     def get_cluster_date(self):
 
         """
