@@ -11,7 +11,7 @@
 #
 # Test Steps:
 #   (1) Install Pre-requisites, and Deploy Ceph using ceph-ansible with CDN/GA build(rpm)
-#   (2) check cluster health.
+#   (2) check cluster health
 #   (3) perform RGW IO operations with SSL frontend in rpm
 #===============================================================================================
 tests:
