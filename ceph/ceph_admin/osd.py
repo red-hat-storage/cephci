@@ -76,6 +76,10 @@ class OSD(ApplyMixin, Orch):
         if not config.get("args", {}).get("all-available-devices"):
             config["args"]["all-available-devices"] = True
 
+        # print out discovered device list
+        out, _ = self.shell(args=["ceph orch device ls -f yaml"])
+        logging.info(f"Node device list : {out}")
+
         super().apply(config)
 
         # validate of osd(s)
