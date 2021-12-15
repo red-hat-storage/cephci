@@ -612,6 +612,32 @@ def get_latest_container(version):
     }
 
 
+def get_release_repo(version):
+    """
+    Retrieves the repo and image information for the RC build of the version specified from magna002.ceph.redhat.com
+
+    Args:
+        version: version to get the latest image tag, should match version in release.yaml at magna002
+                 storage
+
+    Returns:
+        Repo and Container details dictionary with given format:
+        {'composes': <RC release composes>, 'image': <CEPH and monitoring images related to the RC build>}"""
+    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    url = f"{recipe_url}release.yaml"
+    data = requests.get(url, verify=False)
+    repo_details = yaml.safe_load(data.text)[version]
+    return repo_details
+
+
+def yaml_to_dict(file_name):
+    """Retrieve yaml data content from file."""
+    file_path = os.path.abspath(file_name)
+    with open(file_path, "r") as conf_:
+        content = yaml.safe_load(conf_)
+    return content
+
+
 def custom_ceph_config(suite_config, custom_config, custom_config_file):
     """
     Combines and returns custom configuration overrides for ceph.
