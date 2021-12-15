@@ -176,6 +176,7 @@ def set_test_env(config, rgw_node):
     log.info("flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
     rgw_node.exec_command(cmd="sudo yum install python3 -y", check_ec=False)
+    rgw_node.exec_command(cmd="yum install -y ceph-common", check_ec=False, sudo=True)
     rgw_node.exec_command(cmd="sudo rm -rf " + test_folder)
     rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
     clone_the_repo(config, rgw_node, test_folder_path)

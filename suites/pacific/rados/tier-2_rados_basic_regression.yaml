@@ -473,3 +473,14 @@ tests:
             compression_min_blob_size: 1B
             byte_size: 10KB
       desc: Verification of the effect of compression on erasure coded pools
+
+  - test:
+      name: Pg autoscaler profile
+      module: pool_tests.py
+      polarion-id: CEPH-83573412
+      desc: Ceph PG autoscaler default profile in RHCS 5.1
+      config:
+        check_autoscaler_profile:
+          section: "mgr"
+          name: "mgr/pg_autoscaler/autoscale_profile"
+          value: "scale-up"

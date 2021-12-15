@@ -92,6 +92,7 @@ tests:
            module: rbd_faster_exports.py
            config:
              io-total: 100M
+             cleanup: false
            desc: Perform export during read/write,resizing,flattening,lock operations
        - test:
            name: Upgrade containerized ceph to 5.x latest
