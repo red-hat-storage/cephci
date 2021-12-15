@@ -224,7 +224,7 @@ def run(ceph_cluster, **kw):
                 kernel_mount_dir,
                 mon_node_ip,
                 new_client_hostname=client_name,
-                sub_dir="dir_2",
+                sub_dir="/dir_2",
                 extra_params=kernel_fs_para,
             )
             fs_util.fuse_mount(
@@ -410,7 +410,7 @@ def run(ceph_cluster, **kw):
                 kernel_mount_dir,
                 mon_node_ip,
                 new_client_hostname=client_name,
-                sub_dir="dir_3",
+                sub_dir="/dir_3",
                 extra_params=kernel_fs_para,
             )
             fs_util.fuse_mount(
