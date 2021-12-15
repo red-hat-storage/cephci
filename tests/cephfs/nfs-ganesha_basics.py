@@ -3,6 +3,7 @@ import time
 import traceback
 
 from ceph.ceph import CommandFailed
+from tests.cephfs.cephfs_volume_management import wait_for_process
 
 logger = logging.getLogger(__name__)
 log = logger
@@ -14,11 +15,9 @@ def run(ceph_cluster, **kw):
         nfs_mounting_dir = "/mnt/nfs/"
         dir_name = "dir"
         log.info("Running cephfs %s test case" % (tc))
-
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         rhbuild = config.get("rhbuild")
-
         if "5." in rhbuild:
             from tests.cephfs.cephfs_utilsV1 import FsUtils
 
@@ -40,12 +39,10 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server_name}"
             )
-
             # Verify ceph nfs cluster is created
-            out, rc = nfs_client[0].exec_command(sudo=True, cmd="ceph nfs cluster ls")
-            output = out.read().decode()
-            output.split()
-            if nfs_name in output:
+            if wait_for_process(
+                client=nfs_client[0], process_name=nfs_name, ispresent=True
+            ):
                 log.info("ceph nfs cluster created successfully")
             else:
                 raise CommandFailed("Failed to create nfs cluster")
@@ -116,6 +113,10 @@ def run(ceph_cluster, **kw):
             )
             # Adding Delay to reflect in cluster list
             time.sleep(5)
+            if not wait_for_process(
+                client=nfs_client[0], process_name=nfs_name, ispresent=False
+            ):
+                raise CommandFailed("Cluster has not been deleted")
             # Verify nfs cluster is deleted
             out, rc = nfs_client[0].exec_command(sudo=True, cmd="ceph nfs cluster ls")
             output = out.read().decode()
@@ -189,9 +190,7 @@ def run(ceph_cluster, **kw):
             nfs_client[0].exec_command(sudo=True, cmd="rm -rf  %s" % (nfs_mounting_dir))
 
             log.info("Cleaning up successfull")
-
         return 0
-
     except CommandFailed as e:
         log.info(e)
         log.info(traceback.format_exc())
