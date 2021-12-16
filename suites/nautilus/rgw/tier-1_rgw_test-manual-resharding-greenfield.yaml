@@ -83,7 +83,7 @@ tests:
       desc: Check DBR feature enabled on primary cluster
       abort-on-fail: true
       module: sanity_rgw_multisite.py
-      polarion-id: CEPH-83573596
+      polarion-id: CEPH-83573595
       clusters:
         ceph-rgw1:
           config:
@@ -95,7 +95,7 @@ tests:
       desc: Check DBR feature enabled on Secondary cluster
       abort-on-fail: true
       module: sanity_rgw_multisite.py
-      polarion-id: CEPH-83573596
+      polarion-id: CEPH-83573595
       clusters:
         ceph-rgw2:
           config:
@@ -107,19 +107,19 @@ tests:
         ceph-rgw1:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
+            config-file-name: test_multisite_manual_resharding_greenfield.yaml
             verify-io-on-site: ["ceph-rgw1", "ceph-rgw2"]
             timeout: 300
             test-config:
               user_count: 1
               bucket_count: 1
               objects_count: 100
-              dynamic_resharding: true
+              manual_resharding: true
+              shards: 997
               objects_size_range:
                 min: 15K
                 max: 500K
               cluster_type: greenfield
-              max_objects_per_shard: 2
               local_file_delete: true
               test_ops:
                 create_bucket: true
@@ -132,29 +132,29 @@ tests:
                 compression:
                   enable: false
                   type: zlib
-      desc: Reshading test - dynamic
+      desc: Reshading test - Manual
       abort-on-fail: true
       module: sanity_rgw_multisite.py
-      name: Dynamic Resharding tests on Primary cluster
-      polarion-id: CEPH-83573596
+      name: Manual Resharding tests on Primary cluster
+      polarion-id: CEPH-83573595
   - test:
       clusters:
         ceph-rgw2:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
+            config-file-name: test_multisite_manual_resharding_greenfield.yaml
             verify-io-on-site: ["ceph-rgw2", "ceph-rgw1"]
             timeout: 300
             test-config:
               user_count: 1
               bucket_count: 1
               objects_count: 100
-              dynamic_resharding: true
+              manual_resharding: true
+              shards: 997
               objects_size_range:
                 min: 15K
                 max: 500K
               cluster_type: greenfield
-              max_objects_per_shard: 2
               local_file_delete: true
               test_ops:
                 create_bucket: true
@@ -167,8 +167,8 @@ tests:
                 compression:
                   enable: false
                   type: zlib
-      desc: Reshading test - dynamic
+      desc: Reshading test - Manual
       abort-on-fail: true
       module: sanity_rgw_multisite.py
-      name: Dynamic Resharding tests on secondary cluster
-      polarion-id: CEPH-83573596
+      name: Manual Resharding tests on secondary cluster
+      polarion-id: CEPH-83573595
