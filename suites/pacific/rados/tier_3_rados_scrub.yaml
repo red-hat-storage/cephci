@@ -43,7 +43,30 @@ tests:
       name: deploy cluster
 
   - test:
-       name: Scheduled scrub     
-       polarion-id: CEPH-9361
-       module: scheduled_scrub_scenarios.py 
-       desc: Scheduled scrub validation
+      name: Default scheduled scrub 
+      polarion-id: CEPH-9361
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "default"
+  - test:
+      name: Begin Time = End Time
+      polarion-id: CEPH-9362
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "begin_end_time_equal"
+  - test:
+      name: Begin time > End time
+      polarion-id: CEPH-9363
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "beginTime gt endTime"
+  - test:
+      name: Begin Time >End time<current
+      polarion-id: CEPH-9365
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "beginTime gt endTime lt currentTime"

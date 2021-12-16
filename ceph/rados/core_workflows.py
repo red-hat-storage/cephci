@@ -955,5 +955,4 @@ class RadosOrchestrator:
 
         cmd = f'{"date +%Y:%m:%d:%H:%u"}'
         out, err = self.node.shell([cmd])
-        out = out.strip()
-        return out
+        return out.strip()
