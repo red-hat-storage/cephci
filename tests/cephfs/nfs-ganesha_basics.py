@@ -1,16 +1,16 @@
-import logging
 import time
 import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
     try:
+        log.info(f"MetaData Information {log.metadata} in {__name__}")
         tc = "nfs-ganesha"
         nfs_mounting_dir = "/mnt/nfs/"
         dir_name = "dir"

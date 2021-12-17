@@ -6,14 +6,14 @@ It installs all the pre-requisites on client nodes
 """
 import datetime
 import json
-import logging
 import random
 import string
 from time import sleep
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class FsUtils(object):

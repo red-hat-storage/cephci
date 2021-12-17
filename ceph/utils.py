@@ -17,13 +17,14 @@ from libcloud.compute.types import Provider
 from compute.baremetal import CephBaremetalNode
 from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
+from utility.log import Log
 from utility.retry import retry
 from utility.utils import generate_node_name
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 DEFAULT_OSBS_SERVER = "http://file.rdu.redhat.com/~kdreyer/osbs/"
 
