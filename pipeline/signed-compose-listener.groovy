@@ -5,6 +5,7 @@ def sharedLib
 def versions
 def cephVersion
 def composeUrl
+def platform
 
 // Pipeline script entry point
 node(nodeName) {
@@ -16,18 +17,22 @@ node(nodeName) {
             }
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: false,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
-                    url: 'https://github.com/red-hat-storage/cephci.git']]
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
             ])
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
             sharedLib.prepareNode()
@@ -38,7 +43,7 @@ node(nodeName) {
         versions = sharedLib.fetchMajorMinorOSVersion("signed-compose")
         def majorVersion = versions.major_version
         def minorVersion = versions.minor_version
-        def platform = versions.platform
+        platform = versions.platform
 
         def cimsg = sharedLib.getCIMessageMap()
         composeUrl = cimsg["compose-path"].replace(
@@ -92,6 +97,7 @@ node(nodeName) {
                 "version": cephVersion
             ],
             "build": [
+                "platform": platform,
                 "compose-url": composeUrl
             ],
             "contact": [
