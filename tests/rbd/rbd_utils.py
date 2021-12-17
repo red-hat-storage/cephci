@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import random
@@ -97,21 +98,28 @@ class Rbd:
 
     def check_pool_exists(self, pool_name: str) -> bool:
         """
-        Checks if the specified pool exists in the cluster
+        recursively checks if the specified pool exists in the cluster
         Args:
             pool_name: Name of the pool to be checked
 
         Returns:  True -> pass, False -> fail
 
         """
-        out = self.exec_cmd(cmd="ceph df -f json", output=True)
-        existing_pools = json.loads(out)
-        if pool_name not in [ele["name"] for ele in existing_pools["pools"]]:
-            log.error(f"Pool:{pool_name} does not exist on cluster")
-            return False
-        else:
-            log.info(f"pool {pool_name} exists in the cluster")
-            return True
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=200)
+        while end_time > datetime.datetime.now():
+            out = self.exec_cmd(cmd="ceph df -f json", output=True)
+            existing_pools = json.loads(out)
+            if pool_name not in [ele["name"] for ele in existing_pools["pools"]]:
+                log.error(
+                    f"Pool:{pool_name} not populated yet\n"
+                    f"sleeping for 2 seconds and checking status again"
+                )
+                sleep(2)
+            else:
+                log.info(f"pool {pool_name} exists in the cluster")
+                return True
+        log.info(f"pool {pool_name} does not exist on cluster")
+        return False
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):
