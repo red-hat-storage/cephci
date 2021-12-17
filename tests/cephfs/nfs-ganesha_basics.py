@@ -47,11 +47,19 @@ def run(ceph_cluster, **kw):
             else:
                 raise CommandFailed("Failed to create nfs cluster")
             # Create cephfs nfs export
-            nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"ceph nfs export create cephfs {fs_name} {nfs_name} "
-                f"{nfs_export_name} path={path}",
-            )
+            if "5.0" in rhbuild:
+                nfs_client[0].exec_command(
+                    sudo=True,
+                    cmd=f"ceph nfs export create cephfs {fs_name} {nfs_name} "
+                    f"{nfs_export_name} path={path}",
+                )
+            else:
+                nfs_client[0].exec_command(
+                    sudo=True,
+                    cmd=f"ceph nfs export create cephfs {nfs_name} "
+                    f"{nfs_export_name} {fs_name} path={path}",
+                )
+
             # Verify ceph nfs export is created
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
