@@ -696,4 +696,70 @@ def executeTestSuite(def cliArgs, def cleanup_on_success=true, def cleanup_on_fa
     return [ "result": rc, "instances-name": vmPrefix]
 }
 
+def configureRpPreProc(
+    def rpPreprocFile=".rp_preproc_conf.yaml",
+    def location="/ceph/cephci-jenkins/"){
+    /*
+        This definition is to configure rclone to access IBM-COS
+    */
+    try {
+        def rp_preproc_dir = "${env.WORKSPACE}/rp_preproc-${generateRandomString()}"
+        sh(script: "mkdir -p ${rp_preproc_dir}/payload/results")
+        credsRpProc = yamlToMap(rpPreprocFile, location)
+        return [rp_preproc_dir, credsRpProc]
+    } catch(Exception err) {
+        println err.getMessage()
+        error "Encountered an error"
+    }
+}
+
+def uploadXunitXml(
+    def xmlFile,
+    def credPreproc,
+    def preprocDir,
+    def reportBucket="qe-ci-reports",
+    def remoteName="ibm-cos"){
+    /*
+        upload Xunit Xml file to report portal
+
+        - move xml file to ${preprocDir}/payload/results
+        - configure rp_preproc launch
+        - upload xml file to report portal using rp_preproc
+        - rclone delete xml file
+
+        Args:
+            xmlFile         xml file to be uploaded
+            credPreproc     rp_preproc creds
+            preprocDir      rp_preproc directory to store xml files
+            reportbucket    report bucket ( default: qe-ci-reports )
+            remoteName      remote name of IBM COS ( default : ibm-cos )
+    */
+    def credFile = "${preprocDir}/config.json"
+    def testSuite = xmlFile.tokenize("/")[1]
+    def destFile = "${preprocDir}/payload/results/${testSuite}"
+    if (!xmlFile.endsWith(".xml")){
+        destFile = "${destFile}.xml"
+    }
+
+    // Move xml file under ${preprocDir}/payload/results
+    sh(script: "rclone copyto ${remoteName}:${reportBucket}/${xmlFile} ${destFile}")
+
+    // Configure rp_preproc launch
+    def launchConfig = [
+        "name": testSuite,
+        "description": xmlFile
+    ]
+    credPreproc["reportportal"]["launch"] = launchConfig
+    writeJSON file: credFile, json: credPreproc
+
+    // Upload xml file to report portal
+    sh(script: "./.venv/bin/rp_preproc -c ${credFile} -d ${preprocDir}/payload")
+
+    // Delete local file under payload/results/*.xml
+    sh(script: "rm -rf ${preprocDir}/payload/results/*.xml")
+
+    // Delete source file
+    sh(script: "rclone delete ${remoteName}:${reportBucket}/${xmlFile}")
+}
+
 return this;
