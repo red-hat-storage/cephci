@@ -6,10 +6,12 @@ Tests included:
 """
 import datetime
 import logging
+import re
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from tests.rados.monitor_configurations import MonConfigMethods
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
+    mon_obj = MonConfigMethods(rados_obj=rados_obj)
 
     if config.get("ec_pool_recovery_improvement"):
         ec_config = config.get("ec_pool_recovery_improvement")
@@ -209,4 +212,28 @@ def run(ceph_cluster, **kw):
                 return 1
 
         log.info("Pool size is less when compression is enabled")
+        return 0
+
+    if config.get("check_autoscaler_profile"):
+        """
+        Verifies that the default auto-scaler profile on 5.1 builds in scale-up
+        Verifies bugs : 1. https://bugzilla.redhat.com/show_bug.cgi?id=2021738
+        """
+        build = config.get("build", config.get("rhbuild"))
+        autoscale_conf = config.get("check_autoscaler_profile")
+        regex = r"5.1-rhel-\d{1}"
+        if re.search(regex, build):
+            log.info(
+                "Test running on 5.1 builds, checking the default autoscaler profile"
+            )
+            if not mon_obj.verify_set_config(**autoscale_conf):
+                log.error(
+                    f"The default value for autoscaler profile is not scale-up in buld {build}"
+                )
+                return 1
+            log.info(f"Autoscale profile is scale-up in release : {build}")
+        else:
+            log.debug(
+                f"The profile is already scale-up by default in release : {build}"
+            )
         return 0
