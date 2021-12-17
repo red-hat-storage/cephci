@@ -69,7 +69,11 @@ node(nodeName) {
         currentBuild.description = "${params.rhcephVersion} - ${buildPhase}"
     }
 
-    parallel testStages
+    // Running the test suites in batches of 5
+    (testStages.keySet() as List).collate(5).each{
+        def stages = testStages.subMap(it)
+        parallel stages
+    }
 
     stage('upload xUnit-xml to COS'){
         def dirName = "ibm_${currentBuild.projectName}_${currentBuild.number}"
