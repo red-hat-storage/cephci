@@ -986,6 +986,18 @@ class FsUtils(object):
         return quota_dict
 
     def file_quota_test(self, client, mounting_dir, quota_attrs):
+        """
+        Validates the files quota that has been set on mounting dir
+        it collects the quota_attrs from mounting dir.
+        it checks if we are able to create with in the set limit and
+        Also we are not able to create outside the limit
+        Args:
+            client:
+            mounting_dir: Gets the quota values for the given directory
+            quota_attrs : set quota values in dict
+            **kwargs:
+        Raises CommandFailed Exception anything fails
+        """
         total_files = quota_attrs.get("files")
         temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
         files_in_dir = int(self.get_total_no_files(client, mounting_dir))
@@ -1017,12 +1029,58 @@ class FsUtils(object):
             pass
 
     def get_total_no_files(self, client, directory):
+        """
+        Returns the total number files in the directory
+        Args:
+            client:
+            directory: Gets the quota values for the given directory
+            **kwargs:
+        """
         out, rc = client.exec_command(f"find {directory} -type f -print | wc -l")
         total_files = out.read().decode()
         out, rc = client.exec_command(f"find {directory} -type d -print | wc -l")
         total_dir = out.read().decode()
         print(f"total dir : {total_dir}")
         return total_files
+
+    def byte_quota_test(self, client, mounting_dir, quota_attrs):
+        """
+        Validates the bytes quota that has been set on mounting dir
+        it collects the quota_attrs from mounting dir.
+        it checks if we are able to create with in the set limit and
+        Also we are not able to create outside the limit
+        Args:
+            client:
+            mounting_dir: Gets the quota values for the given directory
+            quota_attrs : set quota values in dict
+            **kwargs:
+        Raises CommandFailed Exception anything fails
+        """
+        total_bytes = quota_attrs.get("bytes")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        bytes_in_dir = int(self.get_total_no_bytes(client, mounting_dir))
+        if bytes_in_dir >= total_bytes:
+            bytes = 1073741824
+        else:
+            bytes = total_bytes - bytes_in_dir
+        client.exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=1 count={bytes}",
+            long_running=True,
+        )
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=1 count={bytes*3}",
+            check_ec=False,
+            long_running=True,
+        )
+        if rc == 0:
+            raise CommandFailed("We are able to write more bytes than bytes quota set")
+
+    def get_total_no_bytes(self, client, directory):
+        out, rc = client.exec_command(f"du -sb  {directory}| awk '{{ print $1}}'")
+        total_bytes = out.read().decode()
+        return total_bytes
 
     def subvolume_authorize(self, client, vol_name, subvol_name, client_name, **kwargs):
         """
