@@ -116,7 +116,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         def status = 'PASSED'
-        if ("FAIL" in testResults.values()) {
+        if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
            status = 'FAILED'
         }
         def ciMsg = sharedLib.getCIMessageMap()

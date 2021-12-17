@@ -6,6 +6,20 @@
 
 import org.jsoup.Jsoup
 
+def fetchStageStatus(def testResults){
+    /*
+        This method is to return list stage status(es).
+
+        Args:
+            testResults - test results of test stages in a map
+    */
+    def stageStatus = []
+    testResults.each{key,dict->
+        stageStatus.add(dict["status"])
+    }
+    return stageStatus
+}
+
 def prepareNode(def listener=0, def project="ceph-jenkins") {
     /*
         Installs the required packages needed by the Jenkins node to
@@ -278,7 +292,10 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel, def toList="c
         Send an Email
         Arguments:
             testResults: map of the test suites and its status
-                Example: testResults = [ "01_deploy": "PASS", "02_object": "PASS"]
+                Example: testResults = [
+                                    "01_deploy": ["status": "PASS", "log-dir": "file_path1/"],
+                                    "02_object": ["status": "PASS", "log-dir": "file_path2/"]
+                                ]
             artifactDetails: Map of artifact details
                 Example: artifactDetails = ["composes": ["rhe-7": "composeurl1",
                                                          "rhel-8": "composeurl2"],
@@ -296,10 +313,12 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel, def toList="c
     body += "<h3><u>Test Summary</u></h3>"
     body += "<table>"
     body += "<tr><th>Test Suite</th><th>Result</th></tr>"
-    for (test in testResults) {
-        def test_name = test.key.replace("-", " ")
-        body += "<tr><td>${test_name.capitalize()}</td><td>${test.value}</td></tr>"
+
+    testResults.each{k,v->
+        def test_name = k.replace("-", " ")
+        body += "<tr><td>${test_name.capitalize()}</td><td>${v['status']}</td></tr>"
     }
+
     body += "</table><br />"
     body += "<h3><u>Test Artifacts</u></h3>"
     body += "<table>"
@@ -322,7 +341,7 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel, def toList="c
     body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
     body += "</table><br /></body></html>"
 
-    if ('FAIL' in testResults.values()) {
+    if ('FAIL' in fetchStageStatus(testResults)) {
         if(toList == "ceph-qe-list@redhat.com"){
             toList = "cephci@redhat.com"
         }
@@ -355,7 +374,7 @@ def sendGChatNotification(def testResults, def tierLevel) {
     */
     def ciMsg = getCIMessageMap()
     def status = "STABLE"
-    if ('FAIL' in testResults.values()) {
+    if ('FAIL' in fetchStageStatus(testResults)) {
         status = "UNSTABLE"
     }
 
@@ -379,6 +398,13 @@ def executeTestScript(def scriptPath, def cliArgs) {
     }
     println "exit status: ${rc}"
     return rc
+}
+
+def generateRandomString() {
+    return sh(
+        script: "cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5",
+        returnStdout: true
+    ).trim()
 }
 
 def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion=null) {
@@ -412,14 +438,26 @@ def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion
     if (! scriptFiles ) {
         return testStages
     }
+
     def fileNames = scriptFiles.split("\\n")
     for (filePath in fileNames) {
         def fileName = filePath.tokenize("/")[-1].tokenize(".")[0]
+        def scriptArgTmp = scriptArg
+        testResults[fileName] = [:]
+
+        // If ibmc, add log directory to capture xml files
+        if ( scriptArgTmp.contains('--cloud ibmc') ) {
+            def logDir = "${env.WORKSPACE}/${generateRandomString()}-${currentBuild.number}"
+            println("Create log directory ${logDir} for ${filePath} test suite run")
+            sh script: "mkdir ${logDir}"
+            testResults[fileName]["log-dir"] = logDir
+            scriptArgTmp = "${scriptArgTmp} --log-dir ${logDir} "
+        }
 
         testStages[fileName] = {
             stage(fileName) {
                 def absFile = "${scriptPath}${fileName}.sh"
-                testResults[fileName] = executeTestScript(absFile, scriptArg)
+                testResults[fileName]["status"] = executeTestScript(absFile, scriptArgTmp)
             }
         }
     }
@@ -456,6 +494,40 @@ def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
         def args = "${rhBuild} ${cephVersion} ${baseUrl}"
 
         sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
+    } catch(Exception exc) {
+        println "Encountered a failure during compose upload."
+        println exc
+    }
+}
+
+def uploadObject(def objKey, def dirName, def filePath) {
+    /*
+        This method is to use cos_cli script to upload xml file to COS.
+
+        example: python3 cos_cli.py upload xunit.xml dirName/objKey bucket-1
+
+        Args:
+            objKey      Object key name to store xml file
+            dirName     directory name where file should be uploaded.
+            filePath    file path
+    */
+    try {
+        def cpFile = "sudo cp ${env.HOME}/.cephci.yaml /root/"
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python"
+        def scriptFile = "pipeline/scripts/ci/cos_cli.py"
+
+        // find xml file
+        def xmlFiles = sh (returnStdout: true, script: "ls ${filePath}/*.xml | cat")
+        if (! xmlFiles ) {
+            println "No xunit xml files found to upload."
+            return
+        }
+
+        def xmlFileNames = xmlFiles.split("\\n")
+        for (xmlFilePath in xmlFileNames) {
+            def args = "upload ${xmlFilePath} ${dirName}/${objKey} qe-ci-reports"
+            sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
+        }
     } catch(Exception exc) {
         println "Encountered a failure during compose upload."
         println exc

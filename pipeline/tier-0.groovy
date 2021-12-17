@@ -15,6 +15,7 @@ def majorVersion
 def minorVersion
 
 
+
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
@@ -78,7 +79,7 @@ node(nodeName) {
         def sourceKey = "latest"
         def updateKey = "tier-0"
 
-        if ( ! ("FAIL" in testResults.values()) ) {
+        if ( ! ("FAIL" in sharedLib.fetchStageStatus(testResults)) ) {
             def latestContent = sharedLib.readFromReleaseFile(
                 majorVersion, minorVersion
             )
@@ -106,7 +107,7 @@ node(nodeName) {
 
     stage('Publish UMB') {
         /* send UMB message */
-        if ( "FAIL" in testResults.values() ) {
+        if ( "FAIL" in sharedLib.fetchStageStatus(testResults) ) {
             // As part of executing all tiers, we are not publishing this message when
             // there is a failure. This way we prevent execution of Tier-1 and
             // subsequently the other tiers in the pipeline.
