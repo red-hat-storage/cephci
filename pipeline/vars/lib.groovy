@@ -525,7 +525,7 @@ def uploadObject(def objKey, def dirName, def filePath) {
 
         def xmlFileNames = xmlFiles.split("\\n")
         for (xmlFilePath in xmlFileNames) {
-            def args = "upload ${xmlFilePath} ${dirName}/${objKey} qe-ci-reports"
+            def args = "upload ${xmlFilePath} ${dirName}/${objKey}.xml qe-ci-reports"
             sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
         }
     } catch(Exception exc) {
