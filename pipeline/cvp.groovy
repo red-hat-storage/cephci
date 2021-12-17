@@ -76,16 +76,18 @@ node(nodeName) {
         stage('Install prereq') {
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'SubmoduleOption',
-                    disableSubmodules: false,
-                    parentCredentials: false,
-                    recursiveSubmodules: true,
-                    reference: '',
-                    trackingSubmodules: false
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
