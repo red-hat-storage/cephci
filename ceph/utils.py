@@ -1095,3 +1095,33 @@ def fetch_build(version, custom_build):
         return get_build_details(builds[-1])
     else:
         raise NotImplementedError
+
+
+def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
+    """
+    Return the string after replacing node_ip: <node> pattern with IP address of <node>.
+
+    In this method, the pattern {node_ip:<cluster>#<node>} would be replaced with the
+    value of node.ipaddress.
+
+    Args:
+        clusters:       Ceph cluster instance
+        cluster_name:   Name of the cluster under test.
+        string:         String that needs to be searched
+
+    Return:
+        String with node IDs replaced with IP addresses
+    """
+    replaced_string = string
+    node_list = re.findall("{node_ip:(.+?)}", string)
+
+    for node in node_list:
+        node_ = node
+        if "#" in node:
+            cluster_name, node = node.split("#")
+
+        node_ip = get_node_by_id(clusters[cluster_name], node).ip_address
+        replacement_pattern = "{node_ip:" + node_ + "}"
+        replaced_string = re.sub(replacement_pattern, node_ip, replaced_string)
+
+    return replaced_string
