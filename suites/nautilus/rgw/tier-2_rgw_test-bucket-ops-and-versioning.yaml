@@ -1,0 +1,161 @@
+# Objective: Testing RadosGW bucket basic operations along with versioning checks.
+# Cluster: Requires a minimum of one RGW daemon
+# conf: 5-node-cluster.yaml
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: "install ceph pre-requisites"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        ansi_config:
+          ceph_conf_overrides:
+            client:
+              rgw crypt require ssl: false
+              rgw crypt s3 kms encryption keys:
+                testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+            mon:
+              mon_allow_pool_delete: true
+          ceph_origin: distro
+          ceph_repository: rhcs
+          ceph_rhcs_version: 4
+          ceph_stable: true
+          ceph_stable_rh_storage: true
+          containerized_deployment: true
+          copy_admin_key: true
+          dashboard_enabled: false
+          osd_scenario: lvm
+      desc: "test cluster setup using ceph-ansible"
+      destroy-cluster: false
+      module: test_ansible.py
+      name: "containerized ceph ansible"
+      polarion-id: CEPH-83571503
+  -
+    test:
+      config:
+        cmd: "ceph -s"
+        sudo: true
+      desc: "Check for ceph health debug info"
+      module: exec.py
+      name: check-ceph-health
+  -
+    test:
+      config:
+        config-file-name: test_Mbuckets.yaml
+        script-name: test_Mbuckets_with_Nobjects.py
+        timeout: 300
+      desc: "test to create \"M\" no of buckets"
+      module: sanity_rgw.py
+      name: Mbuckets
+      polarion-id: CEPH-9789
+  -
+    test:
+      config:
+        config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+        script-name: test_Mbuckets_with_Nobjects.py
+        timeout: 300
+      desc: "test to create \"M\" no of buckets and \"N\" no of objects with encryption"
+      module: sanity_rgw.py
+      name: Mbuckets_with_Nobjects
+  -
+    test:
+      config:
+        config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
+        script-name: test_Mbuckets_with_Nobjects.py
+        timeout: 300
+      desc: "test to perform bucket ops with sharding operations"
+      module: sanity_rgw.py
+      name: "Mbuckets_with_Nobjects with sharing enabled"
+      polarion-id: CEPH-9245
+  -
+    test:
+      config:
+        config-file-name: test_versioning_enable.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: "test to enable versioning"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+  -
+    test:
+      config:
+        config-file-name: test_versioning_objects_copy.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: "test to enable versioning objects copy"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+      polarion-id: CEPH-14264
+  -
+    test:
+      config:
+        config-file-name: test_versioning_objects_suspend.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: "test to suspend versioning objects"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+      polarion-id: CEPH-14263
+  -
+    test:
+      config:
+        config-file-name: test_versioning_objects_delete.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: "test to delete versioning objects"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+      polarion-id: CEPH-14262
+  -
+    test:
+      config:
+        config-file-name: test_versioning_suspend.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: test_versioning_suspend
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+  -
+    test:
+      config:
+        config-file-name: test_versioning_objects_suspend_from_another_user.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: "check to test to overwrite objects suspend from another user"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+  -
+    test:
+      config:
+        config-file-name: test_versioning_objects_acls.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: "GET object/acl/info operations on different object versions"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+      polarion-id: CEPH-9190
+  -
+    test:
+      config:
+        config-file-name: test_versioning_objects_delete_from_another_user.yaml
+        script-name: test_versioning_with_objects.py
+        timeout: 300
+      desc: "Deletes on an object in versioning enabled or suspended container by a new user"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+      polarion-id: CEPH-9226
+  -
+    test:
+      config:
+        config-file-name: test_versioning_copy_objects.yaml
+        script-name: test_versioning_copy_objects.py
+        timeout: 300
+      desc: "Versioning with copy objects"
+      module: sanity_rgw.py
+      name: "Versioning Tests"
+      polarion-id: CEPH-9221
