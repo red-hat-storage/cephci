@@ -85,7 +85,11 @@ node(nodeName) {
         currentBuild.description = "${ciMap.artifact.nvr} - ${ciMap.artifact.version} - ${tierLevel}"
     }
 
-    parallel testStages
+    // Running the test suites in batches of 4
+    (testStages.keySet() as List).collate(4).each{
+        def stages = testStages.subMap(it)
+        parallel stages
+    }
 
     stage('Publish Results') {
         /* Publish results through E-mail and Google Chat */
