@@ -82,8 +82,15 @@ node(nodeName) {
         }
     }
 
-    stage('Update Results and Execute Tier-X suite') {
-        /* Update result to recipe file and execute post tier based on run execution */
+    stage('Publish Results') {
+        // Update result to recipe file and execute post tier based on run execution
+        build ([
+            wait: false,
+            job: "tier-x",
+            parameters: [string(name: 'rhcephVersion', value: rhcephVersion),
+                        string(name: 'buildType', value: buildPhase)]
+        ])
+
         if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
             currentBuild.result = "FAILED"
             error "Failure occurred in current run.."
@@ -92,12 +99,6 @@ node(nodeName) {
         sharedLib.writeToRecipeFile(buildType, rhcephVersion, buildPhase)
         latestContent = sharedLib.readFromRecipeFile(rhcephVersion)
         println "latest content is: ${latestContent}"
-        build ([
-            wait: false,
-            job: "tier-x",
-            parameters: [string(name: 'rhcephVersion', value: rhcephVersion),
-                        string(name: 'buildType', value: buildPhase)]
-        ])
     }
 
 }
