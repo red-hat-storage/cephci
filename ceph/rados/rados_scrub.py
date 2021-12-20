@@ -19,7 +19,7 @@
    5. verify_scrub  method used for the verification of scheduled scrub
       happened or not.
 """
-
+import datetime
 import logging
 from collections import defaultdict
 
@@ -49,7 +49,7 @@ class RadosScrubber(RadosOrchestrator):
         Args:
             params : Parameters to be set for OSD's
 
-        Returns: 0 or 1
+        Returns: 0  for success or 1 for failure
         """
         cmd = f"ceph config set  osd {param} {value}"
         out, err = self.node.shell([cmd])
@@ -98,7 +98,7 @@ class RadosScrubber(RadosOrchestrator):
               pgId and last scrub time data before scrubbing.
             2.after_scrub_data - It is a dictionary that conatins the
               PDId and lst surb time data after scrubbing.
-        Return: 0 or 1
+        Return: 0 for Pass or 1 for Failure
         """
         before_scrub_log = dict(
             zip(before_scrub_data["pgid"], before_scrub_data["last_scrub_stamp"])
@@ -106,14 +106,55 @@ class RadosScrubber(RadosOrchestrator):
         after_scrub_log = dict(
             zip(after_scrub_data["pgid"], after_scrub_data["last_scrub_stamp"])
         )
-        number_of_pgs = len(before_scrub_data.keys())
+
+        number_of_pgs = len(before_scrub_log.keys())
         count_pg = 0
         for key in before_scrub_log.keys():
             if key in after_scrub_log:
                 if before_scrub_log[key] != after_scrub_log[key]:
                     count_pg = count_pg + 1
-                else:
-                    count_pg = count_pg - 1
-        if count_pg < round(number_of_pgs / 3):
+        if count_pg < round(number_of_pgs * 0.5):
             return 1
         return 0
+
+    def add_begin_end_hours(self, begin_hours=0, end_hours=0):
+        """
+        Used to get the begin and end hours from the current time
+
+        Args:
+            1.begin_hours - Hours to add the current time
+              to get start hour.
+            2.end_hours - Hours to add the current time
+              to get end hour.
+        Return: cluster_begin_hour,cluster_begin_weekday,
+                cluster_end_hour,cluster_end_weekday are
+                starting and ending hours and weekdays.
+        """
+        # get current time of cluster
+        current_time = self.get_cluster_date()
+        yy, mm, dd, hh, day = current_time.split(":")
+        date = datetime.datetime(int(yy), int(mm), int(dd), int(hh))
+
+        # getting begin hour and begin weekday
+        date += datetime.timedelta(hours=begin_hours)
+        cluster_begin_hour = date.hour
+        # In Linux weekday starts from Sunday(0) and in python Monday(0)
+        # so adding one day
+        date += datetime.timedelta(days=1)
+        cluster_begin_weekday = date.weekday()
+
+        # Reassign the date to current weekday
+        date += datetime.timedelta(days=-1)
+
+        # getting end hours and end weekday
+        date += datetime.timedelta(hours=end_hours)
+        cluster_end_hour = date.hour
+        # In Linux weekday starts from Sunday(0) and in python Monday(0)
+        date += datetime.timedelta(days=1)
+        cluster_end_weekday = date.weekday()
+        return (
+            cluster_begin_hour,
+            cluster_begin_weekday,
+            cluster_end_hour,
+            cluster_end_weekday,
+        )
