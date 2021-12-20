@@ -91,7 +91,7 @@ def run(**kw):
             rbd.exec_cmd,
             cmd="rbd resize -s {} --allow-shrink {}/{}".format("8G", pool, image),
         )
-
-    rbd.clean_up(dir_name=dir_name, pools=[pool])
+    if config.get("cleanup", True):
+        rbd.clean_up(dir_name=dir_name, pools=[pool])
 
     return rbd.flag
