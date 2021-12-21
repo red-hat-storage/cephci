@@ -1199,3 +1199,35 @@ class FsUtils(object):
         out, rc = client.exec_command(sudo=True, cmd=subvolume_info_cmd)
         subvolume_info = json.loads(out.read().decode())
         return subvolume_info
+
+    def get_stats(self, client, file_path, validate=True, **kwargs):
+        """
+        Gets the stat of a file.
+        Args:
+            client: client node
+            file_path: path of a file to collec the stats
+            **kwargs:
+                --printf : option to print a particular value
+        Return:
+            returns stat of a path(file or directory)
+            Sample output :
+
+            [root@ceph-hyelloji-9etpcf-node8 ~]# stat /mnt/cephfs_kernelqcnquvmv84_1/volumes/subvolgroup_1/
+              File: /mnt/cephfs_kernelqcnquvmv84_1/volumes/subvolgroup_1/
+              Size: 2         	Blocks: 0          IO Block: 65536  directory
+            Device: 31h/49d	Inode: 1099511627829  Links: 4
+            Access: (0755/drwxr-xr-x)  Uid: (   20/ UNKNOWN)   Gid: (   30/ UNKNOWN)
+            Context: system_u:object_r:cephfs_t:s0
+            Access: 2021-12-13 06:14:55.204505533 -0500
+            Modify: 2021-12-13 06:15:16.335938236 -0500
+            Change: 2021-12-13 06:15:16.335938236 -0500
+             Birth: -
+
+        """
+
+        stat_cmd = f"stat {file_path} "
+        if kwargs.get("format"):
+            stat_cmd += f" --printf {kwargs.get('format')}"
+        out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
+        stat_output = json.loads(out.read().decode())
+        return stat_output
