@@ -52,10 +52,12 @@ node(nodeName) {
             script: "rclone lsf ${remoteName}:${reportBucket} -R --files-only",
             returnStdout: true
         )
-        def fileNames = listFiles.split("\\n")
-        for (fName in fileNames){
-            println("Upload ${fName} to report-portal.......")
-            sharedLib.uploadXunitXml(fName, credsRpProc, rpPreprocDir)
+        if (listFiles){
+            def fileNames = listFiles.split("\\n")
+            for (fName in fileNames){
+                println("Upload ${fName} to report-portal.......")
+                sharedLib.uploadXunitXml(fName, credsRpProc, rpPreprocDir)
+            }
         }
     }
 }
