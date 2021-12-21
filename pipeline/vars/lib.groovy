@@ -435,7 +435,7 @@ def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion
 
     def testStages = [:]
     def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
-    if (! scriptFiles ) {
+    if (! scriptFiles ){
         return testStages
     }
 
@@ -746,7 +746,7 @@ def uploadXunitXml(
 
     // Configure rp_preproc launch
     def launchConfig = [
-        "name": testSuite,
+        "name": testSuite.tokenize(".")[0],
         "description": xmlFile
     ]
     credPreproc["reportportal"]["launch"] = launchConfig
