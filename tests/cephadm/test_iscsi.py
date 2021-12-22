@@ -18,7 +18,7 @@ def run(ceph_cluster, **kw):
     check ceph.ceph_admin.iscsi for test config
     """
 
-    log.info("Running Ceph-admin MDS test")
+    log.info("Running Ceph-admin ISCSI test")
     config = kw.get("config")
 
     build = config.get("build", config.get("rhbuild"))

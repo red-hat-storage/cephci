@@ -71,35 +71,23 @@ class ApplyMixin:
 
         args = config.get("args")
 
-        node_names = None
         verify_service = False
         placement = args.pop("placement", {})
 
         if placement:
             placement_str = "--placement="
+            sep = placement.get("sep", " ")
+            node_names = list()
             verify_service = True
 
             if "label" in placement:
-                label = placement["label"]
-                node_names = [
-                    node["hostname"] for node in self.get_hosts_by_label(label)
-                ]
-                placement_str += f'"label:{label}"'
-                base_cmd.append(placement_str)
+                node_names.append(f"label:{placement['label']}")
 
             if "nodes" in placement:
                 nodes = placement.get("nodes")
 
                 if "*" in nodes:
-                    placement_str += '"*"'
-                    node_names = list()
-                    for node in self.cluster.node_list:
-                        if (
-                            len(node.role.role_list) == 1
-                            and ["client"] == node.role.role_list
-                        ):
-                            continue
-                        node_names.append(node.shortname)
+                    node_names.append("*")
                 elif "[" in nodes:
                     placement_str += '"%s"' % nodes
                     verify_service = False
@@ -107,27 +95,19 @@ class ApplyMixin:
                     nodes_ = get_nodes_by_ids(self.cluster, nodes)
                     node_names = [node.shortname for node in nodes_]
 
-                    sep = placement.get("sep", " ")
+            # Support RGW count-per-host placement option
+            if "count-per-host" in placement and self.SERVICE_NAME == "rgw":
+                node_names.append(f"count-per-host:{placement['count-per-host']}")
 
-                    # Support RGW count-per-host placement option
-                    if placement.get("count-per-host") and self.SERVICE_NAME == "rgw":
-                        node_names.append(
-                            f"count-per-host:{placement['count-per-host']}"
-                        )
+            node_str = f"{sep}".join(node_names)
 
-                    node_str = f"{sep}".join(node_names)
+            limit = placement.pop("limit", None)
+            if limit:
+                placement_str += f"'{limit}{sep}{node_str}'"
+            else:
+                placement_str += f"'{node_str}'"
 
-                    limit = placement.pop("limit", None)
-                    if limit:
-                        placement_str += f"'{limit}{sep}{node_str}'"
-                    else:
-                        placement_str += f"'{node_str}'"
-
-                base_cmd.append(placement_str)
-
-            # Odd scenario when limit is specified but without nodes
-            if "limit" in placement:
-                base_cmd.append(f"--placement={placement.get('limit')}")
+            base_cmd.append(placement_str)
 
         # At this junction, optional arguments are left in dict
         if args:
