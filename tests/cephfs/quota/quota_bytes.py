@@ -47,7 +47,7 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
-        if len(clients) < 1:
+        if not clients:
             log.info(
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
@@ -192,7 +192,8 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Clean Up in progess")
-        fs_util.set_quota_attrs(clients[0], "0", 10000000, root_folder_fuse_mount)
+        if "5" in build:
+            fs_util.set_quota_attrs(clients[0], "0", "0", root_folder_fuse_mount)
         for subvolume in subvolume_list:
             fs_util.remove_subvolume(client1, **subvolume)
         for subvolumegroup in subvolumegroup_list:

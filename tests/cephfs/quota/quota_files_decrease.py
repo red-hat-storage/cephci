@@ -11,11 +11,13 @@ log = logging.getLogger(__name__)
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered :
-    CEPH-83573399	Test to validate the quota.max_files
-                    Create a FS and create 10 directories and mount them on kernel client and fuse client(5 mounts each)
-                    Set max files quota to a number(say 50) and add up to that number of files to that directory and
-                    verify if the set quota limit is working fine. Similarly set different limit
-                    on different directories and verify quota.
+    CEPH-83573403    Negative : Test to validate the decrease in quota limit once it reaches the max limit. (files)
+                     Create a FS and create 10 directories and mount them on kernel client and fuse client(5 mountseach)
+                     Set max files quota to a number(say 50) and add up to that number of files to that directory and
+                     verify if the set quota limit is working fine.
+                     Try setting the quota limit to lesser than what was set
+                     earlier, setting quota lesser that the files already present shouldn’t be allowed. Repeat the same
+                     procedures for 5-10 times.
 
     Pre-requisites :
     1. We need atleast one client node to execute this test case
@@ -37,6 +39,8 @@ def run(ceph_cluster, **kw):
     5. Perform same on kernel mount
     6. Create a directory inside fuse mount and set file attribute and verify
     7. Create a directory inside kernel mount and set file attribute and verify
+    8. Decrease the quota of files to 5 and try creating the files on the same directory used in step 3
+    9. Perorm same on Kernel mount
     """
     try:
         fs_util = FsUtils(ceph_cluster)
@@ -60,79 +64,33 @@ def run(ceph_cluster, **kw):
         fs_details = fs_util.get_fs_info(client1)
         if not fs_details:
             fs_util.create_fs(client1, "cephfs")
-
-        log.info("Cheking the file quota on root directory")
-        root_folder_fuse_mount = f"/mnt/cephfs_fuse{mounting_dir}_2/"
-        fs_util.fuse_mount([clients[0]], root_folder_fuse_mount)
-
-        clients[0].exec_command(
-            sudo=True,
-            cmd=f"rm -rf {root_folder_fuse_mount}*;mkdir {root_folder_fuse_mount}test_fuse;",
-        )
-        fs_util.set_quota_attrs(
-            clients[0], 20, 10000000, f"{root_folder_fuse_mount}test_fuse"
-        )
-        quota_attrs = fs_util.get_quota_attrs(
-            clients[0], f"{root_folder_fuse_mount}test_fuse"
-        )
-        fs_util.file_quota_test(
-            clients[0], f"{root_folder_fuse_mount}test_fuse", quota_attrs
-        )
-        log.info("Setting Back the file quota to 0 on root directory ")
-        fs_util.set_quota_attrs(
-            clients[0], "0", 10000000, f"{root_folder_fuse_mount}test_fuse"
-        )
-
-        root_folder_kernel_mount = f"/mnt/cephfs_kernel{mounting_dir}_2/"
-        mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount(
-            [clients[0]], root_folder_kernel_mount, ",".join(mon_node_ips)
-        )
-        clients[0].exec_command(
-            sudo=True,
-            cmd=f"rm -rf {root_folder_kernel_mount}*;mkdir {root_folder_kernel_mount}test_kernel",
-        )
-        fs_util.set_quota_attrs(
-            clients[0], 20, 10000000, f"{root_folder_kernel_mount}test_kernel"
-        )
-        quota_attrs = fs_util.get_quota_attrs(
-            clients[0], f"{root_folder_kernel_mount}test_kernel"
-        )
-        fs_util.file_quota_test(
-            clients[0], f"{root_folder_kernel_mount}test_kernel", quota_attrs
-        )
-        log.info("Setting Back the file quota to 0 on root directory ")
-        fs_util.set_quota_attrs(
-            clients[0], "0", 10000000, f"{root_folder_kernel_mount}test_kernel"
-        )
-
         subvolumegroup_list = [
-            {"vol_name": default_fs, "group_name": "subvolgroup_quota_file_limit_1"},
+            {"vol_name": default_fs, "group_name": "subvolgroup_quota_file_increase_1"},
         ]
         for subvolumegroup in subvolumegroup_list:
             fs_util.create_subvolumegroup(client1, **subvolumegroup)
         subvolume_list = [
             {
                 "vol_name": default_fs,
-                "subvol_name": "subvol_file_fuse",
-                "group_name": "subvolgroup_quota_file_limit_1",
+                "subvol_name": "subvol_file_incr_fuse",
+                "group_name": "subvolgroup_quota_file_increase_1",
                 "size": "5368706371",
             },
             {
                 "vol_name": default_fs,
-                "subvol_name": "subvol_file_kernel",
-                "group_name": "subvolgroup_quota_file_limit_1",
+                "subvol_name": "subvol_file_incr_kernel",
+                "group_name": "subvolgroup_quota_file_increase_1",
                 "size": "5368706371",
             },
         ]
         for subvolume in subvolume_list:
             fs_util.create_subvolume(clients[0], **subvolume)
-
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
+        mon_node_ips = fs_util.get_mon_node_ips()
         log.info("Get the path of sub volume")
         subvol_path, rc = clients[0].exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume getpath {default_fs} subvol_file_kernel subvolgroup_quota_file_limit_1",
+            cmd=f"ceph fs subvolume getpath {default_fs} subvol_file_incr_kernel subvolgroup_quota_file_increase_1",
         )
         fs_util.kernel_mount(
             [clients[0]],
@@ -143,21 +101,20 @@ def run(ceph_cluster, **kw):
 
         subvol_path, rc = clients[0].exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume getpath {default_fs} subvol_file_fuse subvolgroup_quota_file_limit_1",
+            cmd=f"ceph fs subvolume getpath {default_fs} subvol_file_incr_fuse subvolgroup_quota_file_increase_1",
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,
             extra_params=f" -r {subvol_path.read().decode().strip()}",
         )
-
-        fs_util.set_quota_attrs(clients[0], 200, 10000000, kernel_mounting_dir_1)
-        quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
-        fs_util.file_quota_test(clients[0], kernel_mounting_dir_1, quota_attrs)
-
         fs_util.set_quota_attrs(clients[0], 100, 10000000, fuse_mounting_dir_1)
+        quota_attrs = fs_util.get_quota_attrs(clients[0], fuse_mounting_dir_1)
+        fs_util.file_quota_test(clients[0], fuse_mounting_dir_1, quota_attrs)
+
+        log.info("Decreasing the quota to 50 and validating file quota attr")
+        fs_util.set_quota_attrs(clients[0], 50, 10000000, fuse_mounting_dir_1)
         quota_attrs = fs_util.get_quota_attrs(clients[0], fuse_mounting_dir_1)
         fs_util.file_quota_test(clients[0], fuse_mounting_dir_1, quota_attrs)
 
@@ -165,25 +122,10 @@ def run(ceph_cluster, **kw):
         quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
         fs_util.file_quota_test(clients[0], kernel_mounting_dir_1, quota_attrs)
 
-        clients[0].exec_command(
-            sudo=True, cmd=f"cd {fuse_mounting_dir_1};rm -rf *;mkdir test;"
-        )
-        fs_util.set_quota_attrs(clients[0], 30, 10000000, f"{fuse_mounting_dir_1}/test")
-        quota_attrs = fs_util.get_quota_attrs(clients[0], f"{fuse_mounting_dir_1}/test")
-        fs_util.file_quota_test(clients[0], f"{fuse_mounting_dir_1}/test", quota_attrs)
-
-        clients[0].exec_command(
-            sudo=True, cmd=f"cd {kernel_mounting_dir_1};rm -rf *;mkdir test;"
-        )
-        fs_util.set_quota_attrs(
-            clients[0], 30, 10000000, f"{kernel_mounting_dir_1}/test"
-        )
-        quota_attrs = fs_util.get_quota_attrs(
-            clients[0], f"{kernel_mounting_dir_1}/test"
-        )
-        fs_util.file_quota_test(
-            clients[0], f"{kernel_mounting_dir_1}/test", quota_attrs
-        )
+        log.info("Decreasing the quota to 50 and validating file quota attr")
+        fs_util.set_quota_attrs(clients[0], 50, 10000000, kernel_mounting_dir_1)
+        quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
+        fs_util.file_quota_test(clients[0], kernel_mounting_dir_1, quota_attrs)
 
         return 0
     except Exception as e:
@@ -193,8 +135,6 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Clean Up in progess")
-        if "5" in build:
-            fs_util.set_quota_attrs(clients[0], "0", "0", root_folder_fuse_mount)
         for subvolume in subvolume_list:
             fs_util.remove_subvolume(client1, **subvolume)
         for subvolumegroup in subvolumegroup_list:

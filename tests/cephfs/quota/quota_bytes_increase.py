@@ -48,7 +48,7 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
-        if len(clients) < 1:
+        if not clients:
             log.info(
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
