@@ -1,3 +1,4 @@
+# Bare minimal configuration with RGW co-located with OSD along with one client.
 globals:
   - ceph-cluster:
       name: ceph
@@ -31,11 +32,8 @@ globals:
         no-of-volumes: 4
         role:
           - osd
-
-      node5:
-        role:
           - rgw
 
-      node6:
+      node5:
         role:
           - client
