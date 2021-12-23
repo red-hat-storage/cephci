@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from ceph.utils import get_public_network
+from ceph.utils import get_public_network, set_container_info
 
 log = logging.getLogger(__name__)
 
@@ -12,8 +12,7 @@ def run(ceph_cluster, **kw):
     Args:
         ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
     """
-    log.info("Running test")
-    log.info("Running ceph ansible test")
+    log.info("Running ceph ansible deployment")
     ceph_nodes = kw.get("ceph_nodes")
     config = kw.get("config")
     filestore = config.get("filestore", False)
@@ -32,6 +31,12 @@ def run(ceph_cluster, **kw):
     ceph_cluster.custom_config = test_data.get("custom-config")
     ceph_cluster.custom_config_file = test_data.get("custom-config-file")
     cluster_name = config.get("ansi_config").get("cluster")
+    use_cdn = (
+        config.get("build_type") == "released"
+        or config.get("use_cdn")
+        or config.get("ansi_config").get("ceph_repository_type") == "cdn"
+    )
+    containerized = config.get("ansi_config").get("containerized_deployment")
 
     # For cdn container installation GAed container parameters
     # needs to override as below,
@@ -41,13 +46,6 @@ def run(ceph_cluster, **kw):
     #     ansi_config:
     #       ceph_origin: repository
     #       ceph_repository_type: cdn
-
-    # Enables cdn ansible config when --build set to relesed
-    build_type = config.get("build_type", None)
-    if build_type == "released":
-        config["use_cdn"] = True
-        config.get("ansi_config")["ceph_origin"] = "repository"
-        config.get("ansi_config")["ceph_repository_type"] = "cdn"
 
     if all(
         key in ceph_cluster.ansible_config
@@ -60,7 +58,10 @@ def run(ceph_cluster, **kw):
         )
         config["ansi_config"]["rgw_pullhost"] = primary_rgw_node.ip_address
 
-    ceph_cluster.use_cdn = config.get("use_cdn")
+    config["ansi_config"].update(
+        set_container_info(ceph_cluster, config, use_cdn, containerized)
+    )
+
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
 

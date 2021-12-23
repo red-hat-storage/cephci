@@ -862,83 +862,14 @@ def run(args):
                 docker_image,
                 docker_tag,
             )
-            # For cdn container installation provide GAed container parameters
-            # in test suite file as below, In case cdn is not enabled the latest
-            # container details will be considered.
-            #
-            # config:
-            #     use_cdn: True
-            #     ansi_config:
-            #       ceph_repository_type: cdn
-            #       ceph_docker_image: "rhceph/rhceph-4-rhel8"
-            #       ceph_docker_image_tag: "latest"
-            #       ceph_docker_registry: "registry.redhat.io"
 
-            if (
-                config
-                and config.get("ansi_config")
-                and config.get("ansi_config").get("ceph_repository_type") != "cdn"
-            ):
-                if docker_registry:
-                    config.get("ansi_config")["ceph_docker_registry"] = str(
-                        docker_registry
-                    )
+            config["ceph_docker_registry"] = docker_registry
+            report_portal_description += f"docker registry: {docker_registry}"
+            config["ceph_docker_image"] = docker_image
+            report_portal_description += f"docker image: {docker_image}"
+            config["ceph_docker_image_tag"] = docker_tag
+            report_portal_description += f"docker registry: {docker_registry}"
 
-                if docker_image:
-                    config.get("ansi_config")["ceph_docker_image"] = str(docker_image)
-
-                if docker_tag:
-                    config.get("ansi_config")["ceph_docker_image_tag"] = str(docker_tag)
-                cluster_docker_registry = config.get("ansi_config").get(
-                    "ceph_docker_registry"
-                )
-                cluster_docker_image = config.get("ansi_config").get(
-                    "ceph_docker_image"
-                )
-                cluster_docker_tag = config.get("ansi_config").get(
-                    "ceph_docker_image_tag"
-                )
-
-                if cluster_docker_registry:
-                    cluster_docker_registry = config.get("ansi_config").get(
-                        "ceph_docker_registry"
-                    )
-                    report_portal_description = (
-                        report_portal_description
-                        + "\ndocker registry: {docker_registry}".format(
-                            docker_registry=cluster_docker_registry
-                        )
-                    )
-
-                if cluster_docker_image:
-                    cluster_docker_image = config.get("ansi_config").get(
-                        "ceph_docker_image"
-                    )
-                    report_portal_description = (
-                        report_portal_description
-                        + "\ndocker image: {docker_image}".format(
-                            docker_image=cluster_docker_image
-                        )
-                    )
-
-                if cluster_docker_tag:
-                    cluster_docker_tag = config.get("ansi_config").get(
-                        "ceph_docker_image_tag"
-                    )
-                    report_portal_description = (
-                        report_portal_description
-                        + "\ndocker tag: {docker_tag}".format(
-                            docker_tag=cluster_docker_tag
-                        )
-                    )
-                if cluster_docker_image and cluster_docker_registry:
-                    tc["docker-containers-list"].append(
-                        "{docker_registry}/{docker_image}:{docker_tag}".format(
-                            docker_registry=cluster_docker_registry,
-                            docker_image=cluster_docker_image,
-                            docker_tag=cluster_docker_tag,
-                        )
-                    )
             if filestore:
                 config["filestore"] = filestore
 

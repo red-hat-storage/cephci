@@ -3,7 +3,12 @@ import logging
 import yaml
 
 from ceph.ceph_admin.common import config_dict_to_string
-from ceph.utils import get_ceph_versions, get_public_network, translate_to_ip
+from ceph.utils import (
+    get_ceph_versions,
+    get_public_network,
+    set_container_info,
+    translate_to_ip,
+)
 from utility.utils import get_latest_container_image_tag
 
 log = logging.getLogger(__name__)
@@ -33,6 +38,10 @@ def run(ceph_cluster, **kw):
     ceph_cluster.custom_config = test_data.get("custom-config")
     ceph_cluster.custom_config_file = test_data.get("custom-config-file")
     ceph_cluster.use_cdn = config.get("use_cdn")
+
+    config["ansi_config"].update(
+        set_container_info(ceph_cluster, config, ceph_cluster.use_cdn, containerized)
+    )
 
     # Translate RGW node to ip address for Multisite
     rgw_pull_host = config["ansi_config"].get("rgw_pullhost")
