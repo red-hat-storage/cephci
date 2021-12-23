@@ -47,6 +47,8 @@ import logging
 
 import yaml
 
+import time
+
 from utility.utils import setup_cluster_access
 
 log = logging.getLogger(__name__)
@@ -77,6 +79,7 @@ def run(ceph_cluster, **kw):
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
+    install_start_kafka = config.get("install_start_kafka")
     test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     distro_version_id = rgw_node.distro_info["VERSION_ID"]
@@ -93,6 +96,22 @@ def run(ceph_cluster, **kw):
         rgw_node.exec_command(
             sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
         )
+
+    if install_start_kafka:
+        log.info("install and start kafka broker for bucket notification tests")
+        rgw_node.exec_command(
+            cmd="wget http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz && tar -zxvf kafka_2.13-2.8.0.tgz && mv kafka_2.13-2.8.0 kafka && chown cephuser:cephuser kafka", long_running=True
+        )
+        KAFKA_HOME='/home/cephuser/kafka/'
+        rgw_node.exec_command( check_ec=False, sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/zookeeper-server-start.sh -daemon {KAFKA_HOME}/config/zookeeper.properties")
+
+        #wait for zookeepeer service to start
+        time.sleep(30)
+        rgw_node.exec_command( check_ec=False, sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/kafka-server-start.sh -daemon {KAFKA_HOME}/config/server.properties")
+        # wait for kafka service to start
+        time.sleep(30)
 
     log.info("Flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
