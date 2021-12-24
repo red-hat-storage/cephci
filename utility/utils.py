@@ -1176,3 +1176,42 @@ class ReportPortal:
             None
         """
         self.client.log(time=timestamp(), message=message, level="INFO")
+
+
+def install_start_kafka(rgw_node, cloud_type):
+    """
+    install kafka package and start zookeeper and kafka services
+    """
+    log.info("install kafka broker for bucket notification tests")
+    if cloud_type == "ibmc":
+        wget_cmd = "curl -o /tmp/kafka.tgz http://10.245.4.4/kafka_2.13-2.8.0.tgz"
+    else:
+        wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
+    tar_cmd = "tar -zxvf /tmp/kafka.tgz -C /usr/local/"
+    rename_cmd = "mv /usr/local/kafka_2.13-2.8.0 /usr/local/kafka"
+    chown_cmd = "chown cephuser:cephuser /usr/local/kafka"
+    rgw_node.exec_command(
+        cmd=f"{wget_cmd} && {tar_cmd} && {rename_cmd} && {chown_cmd}", sudo=True
+    )
+
+    KAFKA_HOME = "/usr/local/kafka"
+
+    # start zookeeper service
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/zookeeper-server-start.sh -daemon {KAFKA_HOME}/config/zookeeper.properties",
+    )
+
+    # wait for zookeepeer service to start
+    time.sleep(30)
+
+    # start kafka servicee
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/kafka-server-start.sh -daemon {KAFKA_HOME}/config/server.properties",
+    )
+
+    # wait for kafka service to start
+    time.sleep(30)

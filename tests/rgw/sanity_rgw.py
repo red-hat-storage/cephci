@@ -47,7 +47,7 @@ import logging
 
 import yaml
 
-from utility.utils import setup_cluster_access
+from utility.utils import install_start_kafka, setup_cluster_access
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +77,8 @@ def run(ceph_cluster, **kw):
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
+    install_start_kafka_broker = config.get("install_start_kafka")
+    cloud_type = config.get("cloud_type")
     test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     distro_version_id = rgw_node.distro_info["VERSION_ID"]
@@ -93,6 +95,9 @@ def run(ceph_cluster, **kw):
         rgw_node.exec_command(
             sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
         )
+
+    if install_start_kafka_broker:
+        install_start_kafka(rgw_node, cloud_type)
 
     log.info("Flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
