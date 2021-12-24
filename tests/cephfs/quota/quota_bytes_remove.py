@@ -48,7 +48,7 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
-        if len(clients) < 1:
+        if not clients:
             log.info(
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
@@ -123,7 +123,7 @@ def run(ceph_cluster, **kw):
         log.info("Increasing the quota to 0 and validating file quota attr")
         fs_util.set_quota_attrs(clients[0], 100, "0", kernel_mounting_dir_1)
         quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
-        fs_util.file_quota_test(clients[0], kernel_mounting_dir_1, quota_attrs)
+        fs_util.byte_quota_test(clients[0], kernel_mounting_dir_1, quota_attrs)
 
         return 0
     except Exception as e:

@@ -1060,27 +1060,78 @@ class FsUtils(object):
         temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
         bytes_in_dir = int(self.get_total_no_bytes(client, mounting_dir))
         if bytes_in_dir >= total_bytes:
-            bytes = 1073741824
+            bytes = 100000
         else:
             bytes = total_bytes - bytes_in_dir
         client.exec_command(
             sudo=True,
-            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=1 count={bytes}",
+            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int(bytes / 10240)}",
             long_running=True,
         )
         out, rc = client.exec_command(
             sudo=True,
-            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=1 count={bytes*3}",
+            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int((bytes * 3) / 10240)}",
             check_ec=False,
             long_running=True,
         )
-        if rc == 0:
-            raise CommandFailed("We are able to write more bytes than bytes quota set")
+        log.info(
+            f"Return value for cmd: "
+            f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int((bytes * 3) / 10240)}"
+            f" is {rc}"
+        )
+        if total_bytes != 0:
+            if rc == 0:
+                raise CommandFailed(
+                    "We are able to write more bytes than bytes quota set"
+                )
 
     def get_total_no_bytes(self, client, directory):
         out, rc = client.exec_command(f"du -sb  {directory}| awk '{{ print $1}}'")
         total_bytes = out.read().decode()
         return total_bytes
+
+    def file_byte_quota_test(self, client, mounting_dir, quota_attrs):
+
+        total_bytes = quota_attrs.get("bytes")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        bytes_in_dir = int(self.get_total_no_bytes(client, mounting_dir))
+        if bytes_in_dir >= total_bytes:
+            bytes = 1073741824
+        else:
+            bytes = total_bytes - bytes_in_dir
+
+        total_files = quota_attrs.get("files")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        files_in_dir = int(self.get_total_no_files(client, mounting_dir))
+        if files_in_dir >= total_files:
+            files = 1
+        else:
+            files = total_files - files_in_dir
+
+        for i in range(1, files + 15):
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=f"cd {mounting_dir};touch file_bytes{temp_str}_{i}.txt;"
+                f"dd if=/dev/zero of={mounting_dir}/file_bytes{temp_str}_{i}.txt bs=1 "
+                f"count={int(int(bytes / files) / 10)}",
+                long_running=True,
+                check_ec=False,
+            )
+            if rc == 1 and i < files:
+                raise CommandFailed(
+                    f"total allowed files {files} and current iteration {i}"
+                )
+            log.info(
+                f"Return value for file_{temp_str}_{i}.txt is {rc} and total_allowed_files: {files}"
+            )
+        if rc == 0 and total_files != 0:
+            raise CommandFailed("We are able to create more files than what we set")
+        elif rc == 1 and total_files == 0:
+            raise CommandFailed(
+                f"File Attribute is set to {total_files} still we are not able to create files"
+            )
+        else:
+            pass
 
     def subvolume_authorize(self, client, vol_name, subvol_name, client_name, **kwargs):
         """
