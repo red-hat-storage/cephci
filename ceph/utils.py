@@ -1125,3 +1125,29 @@ def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
         replaced_string = re.sub(replacement_pattern, node_ip, replaced_string)
 
     return replaced_string
+
+
+def set_container_info(ceph_cluster, config, use_cdn, containerized):
+    """
+    Set container information in ansible configuration
+    Args:
+        ceph_cluster: ceph cluster object
+        use_cdn: boolean to check CDN
+        config: test config
+        containerized: boolean indicates containerized build.
+    Returns:
+        ansi_config
+    """
+    ansi_config = dict()
+
+    if use_cdn:
+        ceph_cluster.use_cdn = True
+        config["use_cdn"] = True
+        ansi_config["ceph_origin"] = "repository"
+        ansi_config["ceph_repository_type"] = "cdn"
+    else:
+        if containerized:
+            ansi_config["ceph_docker_registry"] = config.get("ceph_docker_registry")
+            ansi_config["ceph_docker_image"] = config.get("ceph_docker_image")
+            ansi_config["ceph_docker_image_tag"] = config.get("ceph_docker_image_tag")
+    return ansi_config
