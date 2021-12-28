@@ -1001,15 +1001,19 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
     cert.gmtime_adj_notBefore(0)
     cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
 
+    san_list = [
+        f"DNS:*.{subject['common_name']}",
+        f"DNS:{subject['common_name']}",
+        f"IP:{subject['ip_address']}",
+    ]
+    sans = ", ".join(san_list)
     extensions = [
         crypto.X509Extension(
             b"keyUsage", False, b"Digital Signature, Non Repudiation, Key Encipherment"
         ),
         crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
         crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth, clientAuth"),
-        crypto.X509Extension(
-            b"subjectAltName", False, f"IP:{subject['ip_address']}".encode()
-        ),
+        crypto.X509Extension(b"subjectAltName", False, sans.encode()),
     ]
     cert.add_extensions(extensions)
 

@@ -168,8 +168,7 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         tests = "s3tests"
 
         if build.startswith("5"):
-            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!fails_on_aws"
-            extra_args += ",!lifecycle_expiration"
+            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616"
 
             if not encryption:
                 extra_args += ",!encryption"
