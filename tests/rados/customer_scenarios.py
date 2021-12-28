@@ -98,7 +98,7 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
 
     # Starting read and write on by creating a test pool .
     pool_name = "test_pool_ops"
-    if not rados_obj.create_pool(pool_name=pool_name, crush_rule="stretch_rule"):
+    if not rados_obj.create_pool(pool_name=pool_name):
         error = "failed to create pool to run IO"
         raise TestCaseFailureException(error)
     cmd = f"rados --no-log-to-stderr -b 1024 -p {pool_name} bench 400 write --no-cleanup &"
