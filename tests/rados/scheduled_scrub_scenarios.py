@@ -53,7 +53,6 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosScrubber(node=cephadm)
-
     # Storing the pg dump log before setting the scrub parameters
     before_scrub_log = rados_obj.get_pg_dump("pgid", "last_scrub_stamp")
 
@@ -93,6 +92,24 @@ def run(ceph_cluster, **kw):
             log.info(
                 f'{"Setting scrub start is greater then end_hour and current time is greater than end hour"}'
             )
+        # set begin hour and end hour greater than current time
+        # CEPH-9367 & CEPH 9368
+        if (
+            config.get("scenario") == "beginTime and endTime gt currentTime"
+            or config.get("scenario") == "decreaseTime"
+        ):
+            (
+                scrub_begin_hour,
+                scrub_begin_weekday,
+                scrub_end_hour,
+                scrub_end_weekday,
+            ) = rados_obj.add_begin_end_hours(2, 3)
+            log.info(
+                f'{"Setting scrub start is greater then end_hour and current time is greater than end hour"}'
+            )
+        # unset the scrub.CEPH-9374
+        if config.get("scenario") == "unsetScrub":
+            rados_obj.set_osd_flags("set", "noscrub")
 
         # Setting the scrub parameters
         rados_obj.set_osd_configuration(
@@ -109,6 +126,21 @@ def run(ceph_cluster, **kw):
         rados_obj.set_osd_configuration("osd_scrub_begin_hour", scrub_begin_hour)
         rados_obj.set_osd_configuration("osd_scrub_end_hour", scrub_end_hour)
 
+        if config.get("scenario") == "decreaseTime":
+            (
+                scrub_begin_hour,
+                scrub_begin_weekday,
+                scrub_end_hour,
+                scrub_end_weekday,
+            ) = rados_obj.add_begin_end_hours(0, 1)
+
+            rados_obj.set_osd_configuration(
+                "osd_scrub_begin_week_day", scrub_begin_weekday
+            )
+            rados_obj.set_osd_configuration("osd_scrub_end_week_day", scrub_end_weekday)
+            rados_obj.set_osd_configuration("osd_scrub_begin_hour", scrub_begin_hour)
+            rados_obj.set_osd_configuration("osd_scrub_end_hour", scrub_end_hour)
+
         # Scheduled scrub verification
         endTime = datetime.datetime.now() + datetime.timedelta(minutes=90)
         while datetime.datetime.now() <= endTime:
@@ -118,12 +150,18 @@ def run(ceph_cluster, **kw):
                 config.get("scenario") == "default"
                 or config.get("scenario") == "begin_end_time_equal"
                 or config.get("scenario") == "beginTime gt endTime"
+                or config.get("scenario") == "decreaseTime"
             ):
                 log.info(f'{"Scrubbing validation is success"}')
                 return 0
             log.info(f'{"Scrubbing validation is in progress..."}')
             time.sleep(240)
-        if config.get("scenario") == "beginTime gt endTime lt currentTime":
+
+        if (
+            config.get("scenario") == "beginTime gt endTime lt currentTime"
+            or config.get("scenario") == "beginTime and endTime gt currentTime"
+            or config.get("scenario") == "unsetScrub"
+        ):
             log.info(f'{"Scrubbing validation is success"}')
             return 0
         log.info(f'{"Scrubbing failed"}')
