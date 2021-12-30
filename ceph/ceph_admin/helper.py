@@ -371,8 +371,6 @@ class GenerateServiceSpec:
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
-        # ToDo: This works for only one host. Not sure, how cephadm handles SSL
-        #       certificate for multiple hosts.
         if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
             subject = {
                 "common_name": spec["placement"]["hosts"][0],
