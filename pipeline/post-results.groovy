@@ -12,7 +12,7 @@ def remoteName= "ibm-cos"
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
+        stage('prepareJenkinsAgent') {
             if (env.WORKSPACE) {
                 sh script: "sudo rm -rf *"
             }
@@ -42,22 +42,32 @@ node(nodeName) {
         }
     }
 
-    stage('Configure RP_PreProc'){
+    stage('configureReportPortalWorkDir') {
         (rpPreprocDir, credsRpProc) = sharedLib.configureRpPreProc()
     }
 
-    stage('Upload xml to report-portal'){
-        def configFile = sh(script: "rclone config file", returnStdout: true )
-        def listFiles = sh(
-            script: "rclone lsf ${remoteName}:${reportBucket} -R --files-only",
-            returnStdout: true
-        )
-        if (listFiles){
-            def fileNames = listFiles.split("\\n")
-            for (fName in fileNames){
-                println("Upload ${fName} to report-portal.......")
-                sharedLib.uploadXunitXml(fName, credsRpProc, rpPreprocDir)
-            }
-        }
+    stage('uploadTestResult') {
+        def msgMap = sharedLib.getCIMessageMap()
+        def resultDir = msgMap["test"]["object-prefix"]
+        println("Test results are available at ${resultDir}")
+
+        def tmpDir = sh(returnStdout: true, script: "mktemp -d").trim()
+        sh script: "rclone sync ${remoteName}://${reportBucket} ${tmpDir} --progress --create-empty-src-dirs"
+
+        def metaData = readYaml file: "${tmpDir}/${resultDir}/metadata.yaml"
+        def copyFiles = "cp -a ${tmpDir}/${resultDir}/results ${rpPreprocDir}/payload/"
+        def rmTmpDir = "rm -rf ${tmpDir}"
+
+        // Modifications to reuse methods
+        metaData["ceph_version"] = metaData["ceph-version"]
+        if ( metaData["stage"] == "latest" ) { metaData["stage"] = "Tier-0" }
+
+        sh script: "${copyFiles} && ${rmTmpDir}"
+        sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
+        sharedLib.uploadTestResultToReportPortal(rpPreprocDir, credsRpProc, metaData)
+
+        //Remove the sync results folder
+        sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
     }
+
 }
