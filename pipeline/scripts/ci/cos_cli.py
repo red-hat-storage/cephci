@@ -18,6 +18,7 @@ This script helps to update reports in IBM.
 
 Usage:
   cos_cli.py upload <SOURCE_FILE> <OBJ_KEYNAME> <bucket_name>
+  cos_cli.py upload_directory <SOURCE_FILE> <OBJ_KEYNAME> <bucket_name>
   cos_cli.py download <OBJ_KEYNAME> <bucket_name> <DESTINATION_FILE>
   cos_cli.py delete <OBJ_KEYNAME> <bucket_name>
   cos_cli.py list <bucket_name>
@@ -28,6 +29,7 @@ Usage:
 
 Example:
     python cos_cli.py upload test.xml test-run-1 qe-ci-reports-bucket
+    python cos_cli.py upload_directory results test-run-1 qe-ci-reports
     python cos_cli.py download test-run-1 qe-ci-reports test.xml
     python cos_cli.py delete test-run-1 qe-ci-reports
     python cos_cli.py list qe-ci-reports
@@ -81,6 +83,19 @@ def delete_objfile(bucket: str, obj_key: str):
     LOG.info(f"Deleted successfully the file object({obj_key})")
 
 
+def upload_directory(bucket: str, local_dir: str, prefix: str) -> None:
+    """
+    Uploads the given file to the provided bucket with the mentioned name.
+
+    Args:
+        bucket (str):       The name of container to which file has to be uploaded
+        local_dir (str):    Complete path to the file that needs to be uploaded
+        prefix (str):       The name to be used for the uploaded object
+    """
+    cos.upload_directory(local_dir, prefix, bucket)
+    LOG.info("Successfully upload the object to IBM COS !!!")
+
+
 def list_objects(bucket: str):
     """List file objects from bucket.
 
@@ -98,6 +113,7 @@ OPS = {
     "download": download_objfile,
     "delete": delete_objfile,
     "list": list_objects,
+    "upload_directory": upload_directory,
 }
 
 if __name__ == "__main__":

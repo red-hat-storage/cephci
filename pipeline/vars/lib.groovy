@@ -1,12 +1,8 @@
-#!/usr/bin/env groovy
-/*
-    Common groovy methods that can be reused by the pipeline jobs.
-*/
-
+/* Library module that contains methods used across Ceph QE CI pipeline. */
 
 import org.jsoup.Jsoup
 
-def fetchStageStatus(def testResults){
+def fetchStageStatus(def testResults) {
     /*
         This method is to return list stage status(es).
 
@@ -14,9 +10,8 @@ def fetchStageStatus(def testResults){
             testResults - test results of test stages in a map
     */
     def stageStatus = []
-    testResults.each{key,dict->
-        stageStatus.add(dict["status"])
-    }
+    testResults.each { key, value -> stageStatus.add(value["status"]) }
+
     return stageStatus
 }
 
@@ -148,10 +143,12 @@ def fetchCephVersion(def baseUrl) {
     def cephVer = document.findAll(/"ceph-common-([\w.-]+)\.([\w.-]+)"/)[0].findAll(
         /([\d]+)\.([\d]+)\.([\d]+)\-([\d]+)/
     )
+
     println cephVer
     if (! cephVer) {
         error "ceph version not found.."
     }
+
     return cephVer[0]
 }
 
@@ -168,21 +165,19 @@ def setLock(def majorVer, def minorVer) {
         return
     }
     def startTime = System.currentTimeMillis()
-    while((System.currentTimeMillis()-startTime)<600000){
+    while( (System.currentTimeMillis()-startTime) < 600000 ) {
         sleep(2)
         lockFilePresent = sh (returnStatus: true, script: "ls -l ${lockFile}")
         if (lockFilePresent != 0) {
             sh(script: "touch ${lockFile}")
             return
-            }
+        }
     }
     error "Lock file: RHCEPH-${majorVer}.${minorVer}.lock already exist.can not create lock file"
 }
 
 def unSetLock(def majorVer, def minorVer) {
-    /*
-        Unset a lock file
-    */
+    /* Unset a lock file */
     def defaultFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
     def lockFile = "${defaultFileDir}/RHCEPH-${majorVer}.${minorVer}.lock"
     sh(script: "rm -f ${lockFile}")
@@ -203,6 +198,7 @@ def readFromReleaseFile(
     }
     def dataContent = yamlToMap(releaseFile, location)
     println "content of release file is: ${dataContent}"
+
     return dataContent
 }
 
@@ -268,9 +264,7 @@ def compareCephVersion(def oldCephVer, def newCephVer) {
 }
 
 def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
-    /*
-        Trigger a UMB message.
-    */
+    /* Trigger a UMB message. */
     def msgContent = writeJSON returnText: true, json: msgMap
     def msgProperties = """ PRODUCT = Red Hat Ceph Storage
         TOOL = cephci
@@ -287,14 +281,21 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
 
 }
 
-def sendEmail(def testResults, def artifactDetails, def tierLevel, def toList="ceph-qe-list@redhat.com") {
+def sendEmail(
+    def testResults,
+    def artifactDetails,
+    def tierLevel,
+    def toList="ceph-qe-list@redhat.com"
+    ) {
     /*
         Send an Email
         Arguments:
             testResults: map of the test suites and its status
                 Example: testResults = [
-                                    "01_deploy": ["status": "PASS", "log-dir": "file_path1/"],
-                                    "02_object": ["status": "PASS", "log-dir": "file_path2/"]
+                                    "01_deploy": ["status": "PASS",
+                                                  "log-dir": "file_path1/"],
+                                    "02_object": ["status": "PASS",
+                                                  "log-dir": "file_path2/"]
                                 ]
             artifactDetails: Map of artifact details
                 Example: artifactDetails = ["composes": ["rhe-7": "composeurl1",
@@ -338,7 +339,12 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel, def toList="c
     if (artifactDetails.container_image) {
         body += "<tr><td>Container Image</td><td>${artifactDetails.container_image}</td></tr>"
     }
-    body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
+    if (artifactDetails.log) {
+        body += "<tr><td>Log</td><td>${artifactDetails.log}</td></tr>"
+    } else {
+        body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
+    }
+
     body += "</table><br /></body></html>"
 
     if ('FAIL' in fetchStageStatus(testResults)) {
@@ -348,7 +354,7 @@ def sendEmail(def testResults, def artifactDetails, def tierLevel, def toList="c
         status = "UNSTABLE"
     }
 
-    def subject = "${tierLevel} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
+    def subject = "${tierLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
 
     emailext (
         mimeType: 'text/html',
@@ -383,11 +389,14 @@ def sendGChatNotification(def testResults, def tierLevel) {
 }
 
 def executeTestScript(def scriptPath, def cliArgs) {
-   /*
-        Executes the test script
-   */
+   /* Executes the test script */
     def rc = "PASS"
-    catchError (message: 'STAGE_FAILED', buildResult: 'FAILURE', stageResult: 'FAILURE') {
+
+    catchError(
+        message: 'STAGE_FAILED',
+        buildResult: 'FAILURE',
+        stageResult: 'FAILURE'
+        ) {
         try {
             sh(script: "sh ${scriptPath} ${cliArgs}")
         } catch(Exception err) {
@@ -397,6 +406,7 @@ def executeTestScript(def scriptPath, def cliArgs) {
         }
     }
     println "exit status: ${rc}"
+
     return rc
 }
 
@@ -428,6 +438,7 @@ def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion
     } else {
         RHCSVersion = getRHCSVersionFromArtifactsNvr()
     }
+
     def majorVersion = RHCSVersion.major_version
     def minorVersion = RHCSVersion.minor_version
 
@@ -447,9 +458,10 @@ def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion
 
         // If ibmc, add log directory to capture xml files
         if ( scriptArgTmp.contains('--cloud ibmc') ) {
-            def logDir = "${env.WORKSPACE}/${generateRandomString()}-${currentBuild.number}"
+            def logDir = "${env.WORKSPACE}/logs/${generateRandomString()}-${currentBuild.number}"
             println("Create log directory ${logDir} for ${filePath} test suite run")
-            sh script: "mkdir ${logDir}"
+
+            sh script: "mkdir -p ${logDir}"
             testResults[fileName]["log-dir"] = logDir
             scriptArgTmp = "${scriptArgTmp} --log-dir ${logDir} "
         }
@@ -500,108 +512,27 @@ def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
     }
 }
 
-def uploadObject(def objKey, def dirName, def filePath) {
+def uploadResults(def objKey, def dirName, def bucketName="qe-ci-reports") {
     /*
-        This method is to use cos_cli script to upload xml file to COS.
+        Uploads the given directory to COS using cos_cli.py module
 
         example: python3 cos_cli.py upload xunit.xml dirName/objKey bucket-1
 
         Args:
-            objKey      Object key name to store xml file
-            dirName     directory name where file should be uploaded.
-            filePath    file path
+            objKey      Prefix to be used for uploaded objects.
+            dirName     Name of the directory to be uploaded.
+            bucketName  Name of the bucket to which the contents are uploaded.
     */
     try {
         def cpFile = "sudo cp ${env.HOME}/.cephci.yaml /root/"
         def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python"
         def scriptFile = "pipeline/scripts/ci/cos_cli.py"
+        def args = "upload_directory ${dirName} ${objKey} ${bucketName}"
 
-        // find xml file
-        def xmlFiles = sh (returnStdout: true, script: "ls ${filePath}/*.xml | cat")
-        if (! xmlFiles ) {
-            println "No xunit xml files found to upload."
-            return
-        }
-
-        def xmlFileNames = xmlFiles.split("\\n")
-        for (xmlFilePath in xmlFileNames) {
-            def args = "upload ${xmlFilePath} ${dirName}/${objKey}.xml qe-ci-reports"
-            sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
-        }
+        sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
     } catch(Exception exc) {
-        println "Encountered a failure during compose upload."
+        println "Encountered a failure during uploading of results."
         println exc
-    }
-}
-
-def uploadBuildRecipe(def recipeMap){
-    /*
-        This method is to PUSH Red Hat Ceph build recipe into
-        rhceph-qe-recipe github repository.
-
-        Args:
-            recipeMap   RHceph build recipe details in map
-    */
-    def recipeDir = "recipe-directory"
-    def hostAliasName = "github.com-rhceph-qe-recipe"
-    def recipeRepoUrl = "git@${hostAliasName}:red-hat-storage/rhceph-qe-recipe.git"
-    def keyPath = "~/.ssh"
-    def keyFilename = "/tmp/rhceph-qe-recipe-key"
-    def sshConfig = "${keyPath}/config"
-    def gitUser = "cephci"
-    def gitEmail = "cephci@redhat.com"
-
-    println "Recipe Map - ${recipeMap}"
-
-    withCredentials([
-        sshUserPrivateKey(
-            credentialsId: 'rhceph-qe-recipe-key',
-            keyFileVariable: 'ssh_key_file',
-            )
-        ]) {
-        sh "rm -rf ${keyFilename}"
-        def file = readFile(ssh_key_file)
-        writeFile(file: "${keyFilename}", text: file)
-        sh "chmod 400 ${keyFilename}"
-        sh "echo -e '\nHost ${hostAliasName}\n\tHostname github.com\n\tIdentityFile ${keyFilename}' > ${sshConfig}"
-        sh "cat ${sshConfig}"
-        sh "rm -rf ${recipeDir}"
-
-        checkout([
-            $class: 'GitSCM',
-            branches: [[
-                name: '*/master'
-            ]],
-            extensions: [
-                [$class: 'RelativeTargetDirectory', relativeTargetDir: recipeDir],
-                [$class: 'CleanBeforeCheckout'],
-            ],
-            userRemoteConfigs: [
-                [
-                    credentialsId: 'rhceph-qe-recipe-key',
-                    url: recipeRepoUrl
-                ]
-            ]
-        ])
-    }
-
-    dir(recipeDir){
-        sh "git checkout master"
-        sh "git pull --rebase origin master"
-
-        def dateTime = sh (returnStdout: true, script: "date '+%D-%H:%M:%S-%Z'").trim()
-        recipeMap["updated"] = dateTime
-        def recipeFile = "${recipeMap['RHCephVersion']}.recipe"
-        writeYaml file: recipeFile, data: recipeMap, overwrite: true
-
-        sh "ls -ltrh"
-        sh "cat ${recipeFile}"
-        sh "git config push.default simple"
-        sh "git config --local user.email ${gitUser}"
-        sh "git config --local user.name ${gitEmail}"
-        sh "git add ${recipeFile}; git status"
-        sh "git commit -s -m '[${dateTime}] ${recipeMap['ceph-version']} ${recipeFile}'"
-        sh "git push origin master"
     }
 }
 
@@ -610,15 +541,25 @@ def prepareIbmNode() {
         Installs the required packages needed by the IBM Jenkins node to
         run and execute the cephci test suites. IbmDetails
     */
-    withCredentials([file(credentialsId: 'cephCIIBMCToken', variable: 'ibmDetails'),
-                 file(credentialsId: 'cephCIConf', variable: 'cephciDetails')]) {
-        def ibmFileExists = sh (returnStatus: true, script: "ls -l ${env.HOME}/osp-cred-ci-2.yaml")
-        if (ibmFileExists != 0) {
+    withCredentials([
+        file(credentialsId: 'cephCIIBMCToken', variable: 'ibmDetails'),
+        file(credentialsId: 'cephCIConf', variable: 'cephciDetails')
+        ]) {
+
+        def ibmFileExists = sh(
+            returnStatus: true,
+            script: "ls -l ${env.HOME}/osp-cred-ci-2.yaml"
+            )
+
+        if ( ibmFileExists != 0 ) {
             println "${env.HOME}/osp-cred-ci-2.yaml does not exist. creating it"
             writeFile file: "${env.HOME}/osp-cred-ci-2.yaml", text: readFile(ibmDetails)
         }
-        def cephciFileExists = sh (returnStatus: true, script: "ls -l ${env.HOME}/.cephci.yaml")
-        if (cephciFileExists != 0) {
+        def cephciFileExists = sh(
+            returnStatus: true,
+            script: "ls -l ${env.HOME}/.cephci.yaml"
+            )
+        if ( cephciFileExists != 0 ) {
             println "${env.HOME}/.cephci.yaml does not exist. creating it"
             writeFile file: "${env.HOME}/.cephci.yaml", text: readFile(cephciDetails)
         }
@@ -634,7 +575,10 @@ def recipeFileExist(def rhcephVersion, def recipeFile, def infra) {
     /*
         Method to check existence of recipe file.
     */
-    def fileExist = sh (returnStatus: true, script: "ssh $infra \"sudo ls -l $recipeFile\"")
+    def fileExist = sh(
+        returnStatus: true,
+        script: "ssh $infra \"sudo ls -l $recipeFile\""
+        )
     if (fileExist != 0) {
         error "Recipe file ${rhcephVersion}.yaml does not exist.."
     }
@@ -646,11 +590,18 @@ def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.4") {
     */
     def recipeFile = "/data/site/recipe/${rhcephVersion}.yaml"
     recipeFileExist(rhcephVersion, recipeFile, infra)
-    def data = sh(script: "ssh $infra \"sudo yq e '.' $recipeFile\"", returnStdout: true)
-    return data
+
+    def content = sh(
+        script: "ssh ${infra} \"sudo yq e '.' ${recipeFile}\"", returnStdout: true
+    )
+    def contentMap = readYaml text: content
+
+    return contentMap
 }
 
-def writeToRecipeFile(def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.4") {
+def writeToRecipeFile(
+    def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.4"
+    ) {
     /*
         Method to update content to the recipe file
     */
@@ -660,7 +611,9 @@ def writeToRecipeFile(def buildType, def rhcephVersion, def dataPhase, def infra
     sh "ssh $infra \"sudo chown apache:apache $recipeFile\""
 }
 
-def executeTestSuite(def cliArgs, def cleanup_on_success=true, def cleanup_on_failure=true) {
+def executeTestSuite(
+    def cliArgs, def cleanup_on_success=true, def cleanup_on_failure=true
+    ) {
     /*
         This method executes a single test suite and also performs cleanup of the VM.
 
@@ -698,14 +651,18 @@ def executeTestSuite(def cliArgs, def cleanup_on_success=true, def cleanup_on_fa
 
 def configureRpPreProc(
     def rpPreprocFile=".rp_preproc_conf.yaml",
-    def location="/ceph/cephci-jenkins/"){
+    def location="/ceph/cephci-jenkins"
+    ) {
     /*
         This definition is to configure rclone to access IBM-COS
     */
     try {
-        def rp_preproc_dir = "${env.WORKSPACE}/rp_preproc-${generateRandomString()}"
-        sh(script: "mkdir -p ${rp_preproc_dir}/payload/results")
+        def tmpString = generateRandomString()
+        def rp_preproc_dir = "${env.WORKSPACE}/rp_preproc-${tmpString}"
+
+        sh script: "mkdir -p ${rp_preproc_dir}/payload"
         credsRpProc = yamlToMap(rpPreprocFile, location)
+
         return [rp_preproc_dir, credsRpProc]
     } catch(Exception err) {
         println err.getMessage()
@@ -713,12 +670,7 @@ def configureRpPreProc(
     }
 }
 
-def uploadXunitXml(
-    def xmlFile,
-    def credPreproc,
-    def preprocDir,
-    def reportBucket="qe-ci-reports",
-    def remoteName="ibm-cos"){
+def uploadTestResultToReportPortal(def sourceDir, def credPreproc, def runProperties) {
     /*
         upload Xunit Xml file to report portal
 
@@ -728,38 +680,29 @@ def uploadXunitXml(
         - rclone delete xml file
 
         Args:
-            xmlFile         xml file to be uploaded
+            sourceDir       Working directory containing payload
             credPreproc     rp_preproc creds
-            preprocDir      rp_preproc directory to store xml files
-            reportbucket    report bucket ( default: qe-ci-reports )
-            remoteName      remote name of IBM COS ( default : ibm-cos )
+            runProperties   Metadata information about the launch.
     */
-    def credFile = "${preprocDir}/config.json"
-    def testSuite = xmlFile.tokenize("/")[1]
-    def destFile = "${preprocDir}/payload/results/${testSuite}"
-    if (!xmlFile.endsWith(".xml")){
-        destFile = "${destFile}.xml"
-    }
-
-    // Move xml file under ${preprocDir}/payload/results
-    sh(script: "rclone copyto ${remoteName}:${reportBucket}/${xmlFile} ${destFile}")
+    def msgMap = getCIMessageMap()
+    def credFile = "${sourceDir}/config.json"
 
     // Configure rp_preproc launch
     def launchConfig = [
-        "name": testSuite.tokenize(".")[0],
-        "description": xmlFile
+        "name": "${runProperties['version']} - ${runProperties['stage']}",
+        "description": "Test executed on ${runProperties['date']}",
+        "attributes": [
+            "ceph_version": runProperties["ceph_version"],
+            "rhcs": runProperties["version"].split('-')[1],
+            "tier": runProperties["stage"],
+        ]
     ]
     credPreproc["reportportal"]["launch"] = launchConfig
     writeJSON file: credFile, json: credPreproc
 
     // Upload xml file to report portal
-    sh(script: "./.venv/bin/rp_preproc -c ${credFile} -d ${preprocDir}/payload")
+    sh(script: "./.venv/bin/rp_preproc -c ${credFile} -d ${sourceDir}/payload")
 
-    // Delete local file under payload/results/*.xml
-    sh(script: "rm -rf ${preprocDir}/payload/results/*.xml")
-
-    // Delete source file
-    sh(script: "rclone delete ${remoteName}:${reportBucket}/${xmlFile}")
 }
 
 return this;
