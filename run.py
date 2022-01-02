@@ -559,6 +559,12 @@ def run(args):
             if cloud_type.startswith("ibmc"):
                 ver_url = f"{base_url}/Tools/Packages/"
 
+            if platform.startswith("ubuntu"):
+                os_version = platform.split("-")[1]
+                ver_url = (
+                    f"{base_url}/Tools/dists/{os_version}/main/binary-amd64/Packages"
+                )
+
             # Ceph Version
             ver_text = get_html_page(url=ver_url)
             search_results = re.search(r"ceph-common-(.*?).x86", ver_text)
