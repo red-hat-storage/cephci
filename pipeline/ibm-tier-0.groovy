@@ -141,8 +141,8 @@ node(nodeName) {
 
     stage('postBuildAction') {
         // Archive the logs
-        archiveArtifacts artifacts: "${env.WORKSPACE}/logs/**/*.log"
-        junit "${env.WORKSPACE}/logs/**/xunit.xml"
+        archiveArtifacts artifacts: "**/*.log"
+        junit testResults: "**/*.xml", skipPublishingChecks: true
 
         // Update result to recipe file and execute post tier based on run execution
         if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
