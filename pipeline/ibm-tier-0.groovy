@@ -70,7 +70,10 @@ node(nodeName) {
         def targetDir = "${env.WORKSPACE}/${dirName}/results"
         sh(script: "mkdir -p ${targetDir}")
         testResults.each { key, value ->
-            sh(script: "cp ${value['log-dir']}/xunit.xml ${targetDir}/${key}.xml")
+            sh(
+                script: "cp ${value['log-dir']}/xunit.xml ${targetDir}/${key}.xml",
+                returnStatus: true
+            )
         }
 
         // Adding metadata information
@@ -80,7 +83,7 @@ node(nodeName) {
         content["version"] = rhcephVersion
         content["date"] = sh(returnStdout: true, script: "date")
         content["log"] = env.RUN_DISPLAY_URL
-        content["stage"] = buildType
+        content["stage"] = buildPhase
         content["results"] = testResults
 
         writeYaml file: "${env.WORKSPACE}/${dirName}/metadata.yaml", data: content
@@ -142,7 +145,11 @@ node(nodeName) {
     stage('postBuildAction') {
         // Archive the logs
         archiveArtifacts artifacts: "**/*.log"
-        junit testResults: "**/*.xml", skipPublishingChecks: true
+        junit(
+            testResults: "**/xunit.xml",
+            skipPublishingChecks: true ,
+            allowEmptyResults: true
+        )
 
         // Update result to recipe file and execute post tier based on run execution
         if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
