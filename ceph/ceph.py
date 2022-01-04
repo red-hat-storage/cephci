@@ -1,6 +1,5 @@
 import datetime
 import json
-import logging
 import pickle
 import random
 import re
@@ -15,9 +14,10 @@ from paramiko.ssh_exception import SSHException
 
 from ceph.parallel import parallel
 from utility import lvm_utils
+from utility.log import Log
 from utility.utils import custom_ceph_config
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
 
 
 class ResourceNotFoundError(Exception):

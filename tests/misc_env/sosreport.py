@@ -1,11 +1,11 @@
 """ Collecting logs using sosreport from all nodes in cluster Except Client Node"""
 
-import logging
 import re
 
 from ceph.parallel import parallel
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(**kw):
@@ -14,6 +14,7 @@ def run(**kw):
        - ceph_nodes: ceph node list representing a cluster
     :return: 0 on success, 1 for failures
     """
+    log.info(f"MetaData Information {log.metadata} in {__name__}")
     ceph_nodes = kw.get("ceph_nodes")
     results = dict()
     log.info("Running sosreport test")

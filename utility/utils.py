@@ -19,7 +19,10 @@ from jinja_markdown import MarkdownExtension
 from OpenSSL import crypto
 from reportportal_client import ReportPortalService
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
+
 
 # variables
 mounting_dir = "/mnt/cephfs/"

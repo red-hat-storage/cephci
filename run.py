@@ -1,5 +1,9 @@
 #!/usr/bin/env python
+import logstash
 from gevent import monkey
+
+from utility.config import TestMetaData
+from utility.log import Log
 
 monkey.patch_all()
 import datetime
@@ -43,6 +47,7 @@ from utility.utils import (
     email_results,
     fetch_build_artifacts,
     generate_unique_id,
+    get_cephci_config,
     get_latest_container,
     magna_url,
 )
@@ -153,7 +158,7 @@ Options:
                                     in conjunction with --skip-monitoring-stack during
                                     cluster bootstrap via CephADM
 """
-log = logging.getLogger(__name__)
+log = Log(__name__)
 root = logging.getLogger()
 root.setLevel(logging.INFO)
 
@@ -375,6 +380,26 @@ def run(args):
 
     run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)
+    metadata = TestMetaData(
+        run_id=run_id,
+        rhbuild=rhbuild,
+        logstash=get_cephci_config().get("logstash", {}),
+    )
+    if log.config.get("logstash"):
+        host = log.config["logstash"]["host"]
+        port = log.config["logstash"]["port"]
+        version = log.config["logstash"].get("version", 1)
+        handler = logstash.TCPLogstashHandler(
+            host=host,
+            port=port,
+            version=version,
+        )
+        handler.setLevel(log.log_level)
+        root.addHandler(handler)
+
+        server = f"tcp://{host}:{port}"
+        log._logger.debug(f"Log events are also pushed to {server}")
+
     startup_log = os.path.join(run_dir, "startup.log")
 
     handler = logging.FileHandler(startup_log)
@@ -634,6 +659,7 @@ def run(args):
     distro = ",".join(list(set(distro)))
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
+    metadata["rhcs"] = ceph_version
     log.info("Testing Ceph Version: " + ceph_version)
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
 
@@ -824,8 +850,8 @@ def run(args):
 
         if tc.get("log-link"):
             print("Test logfile location: {log_url}".format(log_url=tc["log-link"]))
-
-        log.info("Running test %s", test_file)
+        log.info(f"Running test {test_file}")
+        # log.info("Running test %s", test_file)
         start = datetime.datetime.now()
         for cluster_name in test.get("clusters", ceph_cluster_dict):
             if test.get("clusters"):
