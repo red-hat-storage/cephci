@@ -6,7 +6,7 @@ instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.0"
 test_suite="suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-rpm.yaml"
-test_conf="conf/pacific/upgrades/upgrades.yaml"
+test_conf="conf/pacific/upgrades/5-0_upgrades.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
