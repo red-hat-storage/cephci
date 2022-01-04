@@ -89,7 +89,9 @@ node(nodeName) {
 
         // Adding metadata information
         def recipeMap = sharedLib.readFromRecipeFile(rhcephVersion)
-        def content = recipeMap[buildType]
+
+        // Using only Tier-0 as pipeline progresses even if intermediate stages fail.
+        def content = recipeMap["tier-0"]
         content["product"] = "Red Hat Ceph Storage"
         content["version"] = rhcephVersion
         content["date"] = sh(returnStdout: true, script: "date")
