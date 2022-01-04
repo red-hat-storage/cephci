@@ -45,7 +45,6 @@ tests:
       config:
         extra-pkgs:
           - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
-        cloudtype: openstack
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
