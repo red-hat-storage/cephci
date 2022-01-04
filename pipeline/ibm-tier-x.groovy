@@ -15,9 +15,7 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('prepareJenkinsAgent') {
-            if (env.WORKSPACE) {
-                sh script: "sudo rm -rf *"
-            }
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: 'origin/master']],

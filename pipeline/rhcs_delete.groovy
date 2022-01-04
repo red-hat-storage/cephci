@@ -7,9 +7,7 @@ node("centos-7") {
 
     timeout(unit: "MINUTES", time: 30) {
         stage("Prepare env") {
-            if (env.WORKSPACE) {
-                sh (script: "sudo rm -rf *")
-            }
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
 
             checkout([
                 $class: 'GitSCM',
