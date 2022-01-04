@@ -13,6 +13,7 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Preparing') {
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
                 branches: [[name: 'origin/master']],
