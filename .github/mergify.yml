@@ -6,8 +6,7 @@ pull_request_rules:
       - label!=work-in-progress
       - base=master
       - "approved-reviews-by=@red-hat-storage/cephci-top-level-reviewers"
-      - check-success=tests / tox (3.6) (pull_request)
-      - check-success=tests / tox (3.7) (pull_request)
+      - "check-success=tox (3.6)"
       - check-success=WIP
     actions:
       merge:
