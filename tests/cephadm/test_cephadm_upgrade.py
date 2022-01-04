@@ -83,6 +83,8 @@ def run(ceph_cluster, **kwargs) -> int:
                 "ceph orch ps -f yaml",
                 "ceph orch ls -f yaml",
                 "ceph orch upgrade status",
+                "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
+                "ceph mon stat",
             ]
         )
     return 0
