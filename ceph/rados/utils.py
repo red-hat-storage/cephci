@@ -14,21 +14,6 @@ from ceph.ceph_admin.osd import OSD
 log = logging.getLogger(__name__)
 
 
-def method_should_succeed(function, *args, **kwargs):
-    """
-    Checks return status of command execution
-    and raise assertion on failure
-    Args:
-        function: name of the function
-        args: arg list
-        kwargs: arg dict
-    """
-    if function(*args, **kwargs):
-        pass
-    else:
-        raise AssertionError(f"Execution failed at function {function}")
-
-
 def set_osd_devices_unamanged(ceph_cluster, unmanaged):
     """
     Sets osd device unmanaged as true/false

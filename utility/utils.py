@@ -1222,3 +1222,24 @@ def install_start_kafka(rgw_node, cloud_type):
 
     # wait for kafka service to start
     time.sleep(30)
+
+
+def method_should_succeed(function, *args, **kwargs):
+    """
+    Wrapper function to verify the return value of executed method.
+
+    This function will raise Assertion if return value is false, empty, or 0.
+    Args:
+        function: name of the function
+        args: arg list
+        kwargs: arg dict
+    Usage:
+        Basic usage is pass a function and it's list and/or dict arguments
+        ex:     method_should_succeed(set_osd_out, ceph_cluster, osd_id)
+                method_should_succeed(bench_write, **pool)
+    """
+    rc = function(*args, **kwargs)
+
+    log.debug(f"The {function} return status is {rc}")
+    if not rc:
+        raise AssertionError(f"Execution failed at function {function}")
