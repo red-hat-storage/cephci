@@ -17,6 +17,7 @@ globals:
         disk-size: 15
       node2:
         role:
+          - _admin
           - osd
           - mon
           - mgr
@@ -29,6 +30,7 @@ globals:
         disk-size: 15
       node3:
         role:
+          - _admin
           - mon
           - osd
           - node-exporter

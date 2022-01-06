@@ -72,7 +72,7 @@ tests:
       name: Host addition with spec file
       desc: add hosts using spec file.
       module: test_cephadm.py
-      polarion-id:
+      polarion-id: CEPH-83574670
       config:
         steps:
         - config:

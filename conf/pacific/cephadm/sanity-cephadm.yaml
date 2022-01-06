@@ -40,6 +40,7 @@ globals:
           - osd
           - node-exporter
           - crash
+          - _admin
         no-of-volumes: 4
         disk-size: 15
       node6:
