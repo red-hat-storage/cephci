@@ -1,0 +1,6 @@
+{%- set nlt = "\n  " -%}
+{%+ for conf, dict in config.items() %}
+[{{ conf }}]
+{%+ for key, value in dict.items() %}{{ key }} = {{ value }}
+{%+ endfor %}
+{%+ endfor %}

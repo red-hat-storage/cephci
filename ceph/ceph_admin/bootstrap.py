@@ -9,7 +9,7 @@ from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from utility.utils import get_cephci_config
 
 from .common import config_dict_to_string
-from .helper import GenerateServiceSpec
+from .helper import GenerateServiceSpec, create_ceph_config_file
 from .typing_ import CephAdmProtocol
 
 logger = logging.getLogger(__name__)
@@ -259,6 +259,11 @@ class BootstrapMixin:
                 node=self.installer, cluster=self.cluster, specs=specs
             )
             args["apply-spec"] = spec_cls.create_spec_file()
+
+        # config
+        conf = args.get("config")
+        if conf:
+            args["config"] = create_ceph_config_file(node=self.installer, config=conf)
 
         cmd += config_dict_to_string(args)
         out, err = self.installer.exec_command(
