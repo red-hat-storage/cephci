@@ -7,6 +7,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
+from utility.utils import method_should_succeed
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def run(ceph_cluster, **kw):
     log.info("Running create pool test case")
     if config.get("create_pool"):
         pool = config.get("create_pool")
-        utils.method_should_succeed(
+        method_should_succeed(
             rados_obj.create_pool, pool_name=pool["pool_name"], pg_num=pool["pg_num"]
         )
         rados_obj.change_recover_threads(config=pool, action="set")
@@ -73,24 +74,20 @@ def run(ceph_cluster, **kw):
             f"device path  : {dev_path}, osd_id : {osd_id}, host.hostname : {host.hostname}"
         )
         utils.set_osd_devices_unamanged(ceph_cluster, unmanaged=True)
-        utils.method_should_succeed(rados_obj.bench_write, **pool)
-        utils.method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
-        utils.method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(rados_obj.bench_write, **pool)
+        method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         utils.osd_remove(ceph_cluster, osd_id)
-        utils.method_should_succeed(wait_for_clean_pg_sets, rados_obj)
-        utils.method_should_succeed(
-            utils.zap_device, ceph_cluster, host.hostname, dev_path
-        )
-        utils.method_should_succeed(
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
+        method_should_succeed(
             wait_for_device, host, container_id, osd_id, action="remove"
         )
         utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
-        utils.method_should_succeed(
-            wait_for_device, host, container_id, osd_id, action="add"
-        )
-        utils.method_should_succeed(wait_for_clean_pg_sets, rados_obj)
-        utils.method_should_succeed(rados_obj.bench_write, **pool)
-        utils.method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(wait_for_device, host, container_id, osd_id, action="add")
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(rados_obj.bench_write, **pool)
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         utils.set_osd_devices_unamanged(ceph_cluster, unmanaged=False)
         rados_obj.change_recover_threads(config=pool, action="rm")
     return 0
