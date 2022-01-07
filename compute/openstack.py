@@ -200,10 +200,13 @@ class CephVMNodeV2:
             self.driver.ex_detach_floating_ip_from_node(self.node, ip)
 
         # At this point self.node is stale
-        for vol in self.volumes:
-            self.driver.detach_volume(volume=vol)
-            self.driver.destroy_volume(volume=vol)
-
+        try:
+            for vol in self.volumes:
+                self.driver.detach_volume(volume=vol)
+                self.driver.destroy_volume(volume=vol)
+        except BaseException as e:
+            print(f"Volume detach/deletion failed, exception hit is {e}, Proceeding with destroying {self.node}")
+        print(f"Triggering destroying of node : {self.node}")
         self.driver.destroy_node(self.node)
         self.node = None
 
