@@ -148,7 +148,6 @@ class Log:
     def error(
         self,
         message: Any,
-        exc_info: bool = True,
         *args,
         **kwargs,
     ) -> None:
@@ -163,13 +162,12 @@ class Log:
         Returns:
             None
         """
-        kwargs["exc_info"] = exc_info
+        kwargs["exc_info"] = kwargs.get("exc_info", True)
         self._log("error", message, *args, **kwargs)
 
     def exception(
         self,
         message: Any,
-        exc_info: bool = True,
         *args,
         **kwargs,
     ) -> None:
@@ -183,5 +181,5 @@ class Log:
         Returns:
             None
         """
-        kwargs["exc_info"] = exc_info
+        kwargs["exc_info"] = kwargs.get("exc_info", True)
         self._log("exception", message, *args, **kwargs)
