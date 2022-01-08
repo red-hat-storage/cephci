@@ -52,7 +52,7 @@ def run(ceph_cluster, **kw):
         for key in ("rgw_multisite", "rgw_zonesecondary")
     ):
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
-        primary_node = "ceph-rgw1"
+        primary_node = config.get("primary_node", "ceph-rgw1")
         primary_rgw_node = (
             ceph_cluster_dict.get(primary_node).get_ceph_object("rgw").node
         )
