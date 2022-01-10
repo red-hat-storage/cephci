@@ -12,7 +12,13 @@ log = logger
 
 
 def verify_mount_failure_on_root(
-    fs_util, client, kernel_mount_dir, fuse_mount_dir, client_name, mon_node_ip
+    fs_util,
+    client,
+    kernel_mount_dir,
+    fuse_mount_dir,
+    client_name,
+    mon_node_ip,
+    **kwargs,
 ):
     """
     Verify kernel & fuse mount on root directory fails for client.
@@ -22,10 +28,18 @@ def verify_mount_failure_on_root(
     :param fuse_mount_dir:
     :param client_name:
     :param mon_node_ip:
+    **kwargs:
+        extra_params : we can include extra parameters for mount options such as fs_name
     """
+    kernel_fs_para = f",fs={kwargs.get('fs_name', '')}"
+    fuse_fs_para = f" --client_fs {kwargs.get('fs_name', '')}"
     try:
         fs_util.kernel_mount(
-            client, kernel_mount_dir, mon_node_ip, new_client_hostname=client_name
+            client,
+            kernel_mount_dir,
+            mon_node_ip,
+            new_client_hostname=client_name,
+            extra_params=kernel_fs_para,
         )
     except AssertionError as e:
         log.info(e)
@@ -47,7 +61,12 @@ def verify_mount_failure_on_root(
         log.error(f"Permissions set for {client_name} is not working for kernel mount")
         return 1
     try:
-        fs_util.fuse_mount(client, fuse_mount_dir, new_client_hostname=client_name)
+        fs_util.fuse_mount(
+            client,
+            fuse_mount_dir,
+            new_client_hostname=client_name,
+            extra_params=fuse_fs_para,
+        )
     except AssertionError as e:
         log.info(e)
         log.info(f"Permissions set for {client_name} is working for fuse mount")
