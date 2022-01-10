@@ -8,6 +8,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
+from utility.utils import method_should_succeed
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +114,6 @@ def run(ceph_cluster, **kw):
                 log.error(f"the pool {name} could not be deleted")
                 return 1
         log.info("deleted all the given pools successfully")
-
     return 0
 
 

@@ -158,3 +158,21 @@ class RadosScrubber(RadosOrchestrator):
             cluster_end_hour,
             cluster_end_weekday,
         )
+
+    def set_osd_flags(self, flag, value):
+        """
+        Used to set/unset the osd flags
+
+        Args:
+            1.flag: set or unset the flags
+            2.value - value of the falg
+                example:pause|noup|nodown|noout|noin|nobackfill|
+                norebalance|norecover|noscrub|nodeep-scrub|notieragent
+        Returns: True/False
+        """
+        cmd = f"ceph osd {flag} {value}"
+        out, err = self.node.shell([cmd])
+        if err:
+            log.info(f"The OSD falg {value} not {flag} on the cluster. Error: {err}")
+            return False
+        return True

@@ -436,6 +436,16 @@ tests:
         config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
         timeout: 300
 
+  - test:
+      name: Bucket radoslist 
+      desc: radoslist on all buckets
+      polarion-id: CEPH-83574480
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_radoslist.yaml
+        timeout: 300
+        
   # Bucket Request Payer tests
 
   - test:
