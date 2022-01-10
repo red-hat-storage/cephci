@@ -2,7 +2,6 @@ import json
 import logging
 import random
 import string
-import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -28,16 +27,10 @@ def run(ceph_cluster, **kw):
         fs_util = FsUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        create_cephfs = "ceph fs volume create cephfs"
-        client1.exec_command(sudo=True, cmd=create_cephfs)
-        mon_node_ips = fs_util.get_mon_node_ips()
-        kernel_dir_generate = "".join(
-            random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(5))
-        )
-        kernel_mounting_dir = f"/mnt/cephfs_kernel{kernel_dir_generate}/"
+        fs_details = fs_util.get_fs_info(client1)
+        if not fs_details:
+            fs_util.create_fs(client1, "cephfs")
         fs_util.auth_list([client1])
-        fs_util.kernel_mount([client1], kernel_mounting_dir, ",".join(mon_node_ips))
         subvolume_name_generate = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(5))
