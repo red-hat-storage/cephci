@@ -960,7 +960,11 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
 
 def get_cephqe_ca() -> Optional[Tuple]:
     """Retrieve CephCI QE CA certificate and key."""
-    base_uri = "http://magna002.ceph.redhat.com/cephci-jenkins"
+    base_uri = (
+        get_cephci_config()
+        .get("root-ca-location", "http://magna002.ceph.redhat.com/cephci-jenkins")
+        .rstrip("/")
+    )
     ca_cert = None
     ca_key = None
 

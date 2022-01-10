@@ -51,3 +51,6 @@
 
 # URI to be used for retrieving the RHCS build details
 # build-url: <URI to fileserver>
+
+# Web based location to retrieve root CA key and cert
+root-ca-location: <URL to base location of rootCA cert>
