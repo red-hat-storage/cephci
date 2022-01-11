@@ -823,6 +823,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/dashboard"))
     sys.path.append(os.path.abspath("tests/misc_env"))
     sys.path.append(os.path.abspath("tests/parallel"))
+    sys.path.append(os.path.abspath("tests/upgrades"))
 
     tests = suite.get("tests")
     tcs = []
