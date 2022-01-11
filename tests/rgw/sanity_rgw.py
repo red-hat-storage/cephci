@@ -24,6 +24,9 @@ Below configs are needed in order to run the tests
                             max: 15M
         run_io_verify (optional):
                     true or false
+        env-vars (optional):
+                    - cleanup=False
+                    - objects_count: 500
         extra-pkgs (optional):
                     Packages to install
                     example:
@@ -157,8 +160,10 @@ def run(ceph_cluster, **kw):
         remote_fp = rgw_node.remote_file(file_name=f_name, file_mode="w")
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
+    cmd_env = " ".join(config.get("env-vars", []))
     out, err = rgw_node.exec_command(
-        cmd=f"sudo {python_cmd} "
+        cmd=cmd_env
+        + f"sudo {python_cmd} "
         + test_folder_path
         + script_dir
         + script_name
