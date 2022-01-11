@@ -161,12 +161,16 @@ class RadosScrubber(RadosOrchestrator):
 
     def set_osd_flags(self, flag, value):
         """
+        Command example: ceph osd set noscrub
+
         Used to set/unset the osd flags
 
         Args:
-            1.flag: set or unset the flags
+            1.flag: set or unset
+              example: set|unset
+
             2.value - value of the falg
-                example:pause|noup|nodown|noout|noin|nobackfill|
+              example:pause|noup|nodown|noout|noin|nobackfill|
                 norebalance|norecover|noscrub|nodeep-scrub|notieragent
         Returns: True/False
         """
