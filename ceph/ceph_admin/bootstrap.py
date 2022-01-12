@@ -5,6 +5,7 @@ import tempfile
 from typing import Dict
 
 from ceph.ceph import ResourceNotFoundError
+from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from utility.utils import get_cephci_config
 
 from .common import config_dict_to_string
@@ -188,6 +189,15 @@ class BootstrapMixin:
             self.set_tool_repo(repo=custom_repo)
         else:
             self.set_tool_repo()
+
+        ansible_run = config.get("cephadm-ansible", None)
+        if ansible_run:
+            cephadm_ansible = CephadmAnsible(cluster=self.cluster)
+            cephadm_ansible.execute_playbook(
+                playbook=ansible_run["playbook"],
+                extra_vars=ansible_run.get("extra-vars"),
+                extra_args=ansible_run.get("extra-args"),
+            )
 
         self.install()
 
