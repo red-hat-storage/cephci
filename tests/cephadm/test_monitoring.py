@@ -29,6 +29,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running Ceph-admin Provisioning test")
     config = kw.get("config")
+    config["overrides"] = kw.get("test_data", {}).get("custom-config")
 
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build

@@ -93,7 +93,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--xunit-results]
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
-        [--grafana-image <image-name>]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
@@ -154,9 +153,6 @@ Options:
                                     [default: false]
   --skip-enabling-rhel-rpms         skip adding rpms from subscription if using beta
                                     rhel images for Interop runs
-  --grafana-image <image_name>      Development purpose - provide custom grafana image
-                                    in conjunction with --skip-monitoring-stack during
-                                    cluster bootstrap via CephADM
 """
 log = Log(__name__)
 root = logging.getLogger()
@@ -562,7 +558,6 @@ def run(args):
     kernel_repo = args.get("--kernel-repo", None)
 
     docker_insecure_registry = args.get("--insecure-registry", False)
-    custom_grafana_image = args.get("--grafana-image", None)
 
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster", False)
@@ -913,9 +908,6 @@ def run(args):
 
             if osp_cred:
                 config["osp_cred"] = osp_cred
-
-            if custom_grafana_image:
-                config["grafana_image"] = custom_grafana_image
 
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:

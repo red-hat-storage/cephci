@@ -113,6 +113,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
     LOG.info("Starting Ceph cluster deployment.")
     config = kwargs["config"]
+    config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     try:
         steps = config.get("steps", [])

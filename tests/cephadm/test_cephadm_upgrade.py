@@ -39,6 +39,7 @@ def run(ceph_cluster, **kwargs) -> int:
     """
     LOG.info("Upgrade Ceph cluster...")
     config = kwargs["config"]
+    config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
     orch = Orch(cluster=ceph_cluster, **config)
 
     client = ceph_cluster.get_nodes(role="client")[0]

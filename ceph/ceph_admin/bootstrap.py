@@ -262,9 +262,10 @@ class BootstrapMixin:
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
 
-        # The path to ssh public key mentioned in either output-pub-ssh-key or ssh-public-key options
-        # will be considered for distributing the ssh public key, if these are not specified,
-        # then the default ssh key path /etc/ceph/ceph.pub will be considered.
+        # The path to ssh public key mentioned in either output-pub-ssh-key or
+        # ssh-public-key options will be considered for distributing the ssh public key,
+        # if these are not specified, then the default ssh key path /etc/ceph/ceph.pub
+        # will be considered.
         self.distribute_cephadm_gen_pub_key(
             args.get("output-pub-ssh-key") or args.get("ssh-public-key")
         )
@@ -273,12 +274,24 @@ class BootstrapMixin:
         # if they are already not present in the default path
         copy_ceph_configuration_files(self, args)
 
-        # The provided image is used by Grafana service only when
-        # --skip-monitoring-stack is set to True during bootstrap.
-        if self.config.get("grafana_image"):
-            cmd = "cephadm shell --"
-            cmd += " ceph config set mgr mgr/cephadm/container_image_grafana"
-            cmd += f" {self.config['grafana_image']}"
-            self.installer.exec_command(sudo=True, cmd=cmd)
+        # Check for image overrides
+        if self.config.get("overrides"):
+            override_dict = dict(item.split("=") for item in self.config["overrides"])
+            supported_overrides = [
+                "grafana",
+                "keepalived",
+                "haproxy",
+                "prometheus",
+                "node_exporter",
+                "alertmanager",
+            ]
+
+            for image in supported_overrides:
+                image_key = f"{image}_image"
+                if override_dict.get(image_key):
+                    cmd = "cephadm shell --"
+                    cmd += f" ceph config set mgr mgr/cephadm/container_image_{image}"
+                    cmd += f" {override_dict[image_key]}"
+                    self.installer.exec_command(sudo=True, cmd=cmd)
 
         return out, err
