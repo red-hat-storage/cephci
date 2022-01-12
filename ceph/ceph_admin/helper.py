@@ -1,11 +1,14 @@
 """
 Contains helper functions that can used across the module.
 """
+import datetime
 import json
 import logging
 import os
 import tempfile
+from datetime import timedelta
 from os.path import dirname
+from time import sleep
 
 from jinja2 import Template
 
@@ -572,6 +575,26 @@ def file_or_path_exists(node, file_or_path):
         LOG.error("Error: %s" % err)
         return False
     return True
+
+
+def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=120):
+    """Method to monitor a file existence.
+
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+        file_exist: checks file existence (default =True)
+        timeout (Int):  In seconds, the maximum allowed time (default=120)
+
+    Returns:
+        boolean
+    """
+    end_time = datetime.now() + timedelta(seconds=timeout)
+    while end_time > datetime.now():
+        if file_exist == file_or_path_exists(node, file_or_path):
+            return True
+        sleep(2)
+    return False
 
 
 def validate_log_file_after_enable(cls):

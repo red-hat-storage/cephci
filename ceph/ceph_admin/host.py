@@ -7,10 +7,12 @@ from ceph.ceph import CephNode
 from ceph.utils import get_node_by_id
 
 from .common import config_dict_to_string
+from .helper import monitoring_file_existence
 from .maintenance import MaintenanceMixin
 from .orch import Orch, ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
+DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 
 
 class HostOpFailure(Exception):
@@ -81,7 +83,6 @@ class Host(MaintenanceMixin, Orch):
 
         attach_address = args.get("attach_ip_address")
         _labels = args.get("labels")
-
         if isinstance(_labels, str) and _labels == "apply-all-labels":
             label_set = set(ceph_node.role.role_list)
             _labels = list(label_set)
@@ -118,6 +119,11 @@ class Host(MaintenanceMixin, Orch):
                 )
 
         if _labels:
+            if "_admin" in _labels:
+                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
+                if not monitoring_file_existence(node, DEFAULT_KEYRING_PATH):
+                    raise HostOpFailure("Ceph keyring not found")
+                logger.info("Ceph Keyring found")
             assert sorted(self.fetch_labels_by_hostname(ceph_node.shortname)) == sorted(
                 _labels
             )
@@ -278,6 +284,11 @@ class Host(MaintenanceMixin, Orch):
             _cmd = deepcopy(cmd)
             _cmd.extend(["host", "label", "add", node.shortname, label])
             self.shell(args=_cmd)
+            if label == "_admin":
+                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
+                if not monitoring_file_existence(node, DEFAULT_KEYRING_PATH):
+                    raise HostOpFailure("Ceph keyring not found")
+                logger.info("Ceph Keyring found")
             assert label in self.fetch_labels_by_hostname(node.shortname)
 
     def label_remove(self, config):
@@ -332,6 +343,11 @@ class Host(MaintenanceMixin, Orch):
             self.shell(args=_cmd)
             # BZ-1920979(cephadm allows duplicate labels attachment to node)
             # assert label not in self.fetch_labels_by_hostname(node.shortname)
+            if label == "_admin":
+                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
+                if monitoring_file_existence(node, DEFAULT_KEYRING_PATH):
+                    raise HostOpFailure("Ceph keyring found")
+                logger.info("Ceph Keyring not found")
 
     def set_address(self, config):
         """
