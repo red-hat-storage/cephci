@@ -14,6 +14,7 @@ from .orch import Orch, ResourceNotFoundError
 logger = logging.getLogger(__name__)
 log = logging.getLogger(__name__)
 
+
 class HostOpFailure(Exception):
     pass
 
