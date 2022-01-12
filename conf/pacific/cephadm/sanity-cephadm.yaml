@@ -37,10 +37,10 @@ globals:
         disk-size: 15
       node5:
         role:
+          - _admin
           - osd
           - node-exporter
           - crash
-          - _admin
         no-of-volumes: 4
         disk-size: 15
       node6:

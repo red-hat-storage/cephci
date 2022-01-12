@@ -1,8 +1,12 @@
 import logging
 
 from ceph.ceph_admin.common import fetch_method
-from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.host import Host
+from ceph.ceph_admin.helper import (
+    file_or_path_exists,
+    get_cluster_state,
+    get_hosts_deployed,
+)
 
 log = logging.getLogger(__name__)
 

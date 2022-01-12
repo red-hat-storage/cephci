@@ -7,11 +7,12 @@ from ceph.ceph import CephNode
 from ceph.utils import get_node_by_id
 
 from .common import config_dict_to_string
+from .helper import file_or_path_exists
 from .maintenance import MaintenanceMixin
 from .orch import Orch, ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
-
+log = logging.getLogger(__name__)
 
 class HostOpFailure(Exception):
     pass
@@ -199,6 +200,56 @@ class Host(MaintenanceMixin, Orch):
         cmd.extend(["host", "rm", node.shortname])
         self.shell(args=cmd)
         assert node.shortname not in self.fetch_host_names()
+
+    def verify_keyring_on_admin_node(self, config):
+        """
+        Verify ceph configuration output directory
+            - check ceph.keyring file exists
+        Args:
+            cls: cephadm instance object
+            keyring_path: ceph configuration directory
+            config: object
+        """
+        args = config["args"]
+        node = args.pop("node")
+        keyring = "/etc/ceph/ceph.client.admin.keyring"
+        ceph_node = get_node_by_id(self.cluster, node_name=node)
+        log.info("node : %s" % node)
+        log.info("node : %s" % ceph_node)
+        log.info(
+            "Ceph keyring - default: %s"
+            % keyring
+        )
+        validate = file_or_path_exists(ceph_node, keyring)
+        if not validate:
+            raise HostOpFailure("Ceph keyring not found")
+
+        log.info("Ceph Keyring found")
+
+    def verify_keyring_on_non_admin_node(self, config):
+        """
+        Verify ceph configuration output directory
+            - check ceph.keyring file exists
+        Args:
+            cls: cephadm instance object
+            keyring_path: ceph configuration directory
+            config: object
+        """
+        args = config["args"]
+        node = args.pop("node")
+        keyring = "/etc/ceph/ceph.client.admin.keyring"
+        ceph_node = get_node_by_id(self.cluster, node_name=node)
+        log.info("node : %s" % node)
+        log.info("node : %s" % ceph_node)
+        log.info(
+            "Ceph keyring - default: %s"
+            % keyring
+        )
+        validate = file_or_path_exists(ceph_node, keyring)
+        if validate:
+            raise HostOpFailure("Ceph keyring found")
+
+        log.info("Ceph Keyring not found")
 
     def remove_hosts(self, config):
         """

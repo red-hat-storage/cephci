@@ -30,7 +30,6 @@ globals:
         disk-size: 15
       node3:
         role:
-          - _admin
           - mon
           - osd
           - node-exporter
