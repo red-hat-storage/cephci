@@ -548,6 +548,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
+    config["overrides"] = kw.get("test_data", {}).get("custom-config")
 
     # Manage Ceph using ceph-admin orchestration
     command = config.pop("command")
