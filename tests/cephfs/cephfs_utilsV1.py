@@ -93,6 +93,21 @@ class FsUtils(object):
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
 
+    def get_fs_details(self, client, **kwargs):
+        """
+        Gets all filesystems information
+        Args:
+            client:
+        Returns:
+            json object with all fs
+        """
+        fs_details_cmd = "ceph fs ls --format json"
+        if kwargs.get("extra_params"):
+            fs_details_cmd += f"{kwargs.get('extra_params')}"
+        out, rc = client.exec_command(sudo=True, cmd=fs_details_cmd)
+        all_fs_info = json.loads(out.read().decode())
+        return all_fs_info
+
     def auth_list(self, clients, **kwargs):
         """
         Creates ceph.client.<hostname>.keyring file for the given clients
