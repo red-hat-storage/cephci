@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
     install_start_kafka_broker = config.get("install_start_kafka")
-    cloud_type = config.get("cloud_type")
+    cloud_type = config.get("cloud-type")
     test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     distro_version_id = rgw_node.distro_info["VERSION_ID"]
