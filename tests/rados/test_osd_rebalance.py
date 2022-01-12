@@ -13,7 +13,6 @@ from utility.utils import method_should_succeed
 
 log = logging.getLogger(__name__)
 
-
 def run(ceph_cluster, **kw):
     """
     Automates OSD re-balance test scenarios.
