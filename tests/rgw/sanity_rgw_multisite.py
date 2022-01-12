@@ -26,6 +26,9 @@ Below configs are needed in order to run the tests
                                 max: 15M
             verify-io-on-site (optional):
                         Primary node> or Secondary node
+            env-vars (optional):
+                        - cleanup=False
+                        - objects_count: 500
             extra-pkgs (optional):
                         Packages to install
                         example:
@@ -110,8 +113,10 @@ def run(**kw):
         )
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
+    cmd_env = " ".join(config.get("env-vars", []))
     out, err = test_site_node.exec_command(
-        cmd="sudo python3 "
+        cmd=cmd_env
+        + "sudo python3 "
         + test_folder_path
         + script_dir
         + script_name
