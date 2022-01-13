@@ -42,9 +42,7 @@ def run(ceph_cluster, **kw):
                     rados_obj.create_erasure_pool, name=cr_pool["pool_name"], **cr_pool
                 )
             else:
-                method_should_succeed(
-                    rados_obj.create_pool, pool_name=cr_pool["pool_name"], **cr_pool
-                )
+                method_should_succeed(rados_obj.create_pool, **cr_pool)
             method_should_succeed(rados_obj.bench_write, **cr_pool)
         pool = random.choice(pools)["create_pool"]
     if not pool:
