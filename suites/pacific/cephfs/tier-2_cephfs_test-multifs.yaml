@@ -6,6 +6,7 @@
 # Test-Case Covered:
 #   CEPH-83573878 - Verify the option to enable/disable multiFS support
 #   CEPH-83573873 - Try creating 2 Filesystem using same Pool(negative)
+#   CEPH-83573872 - Tests the file system with fstab entries with multiple file systems and reboots
 #=======================================================================================================================
 tests:
   -
@@ -123,4 +124,10 @@ tests:
         module: multifs.multifs_same_pool.py
         polarion-id: CEPH-83573873
         desc: Tests the file system with same pools
+        abort-on-fail: false
+  - test:
+        name: multifs reboot with fstab
+        module: multifs.multifs_kernelmounts.py
+        polarion-id: CEPH-83573872
+        desc: Tests the file system with fstab entries with multiple file systems and reboots
         abort-on-fail: false
