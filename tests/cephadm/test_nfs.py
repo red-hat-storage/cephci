@@ -1,10 +1,9 @@
-import logging
-
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.nfs import NFS
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
