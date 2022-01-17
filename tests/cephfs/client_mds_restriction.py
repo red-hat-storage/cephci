@@ -1,12 +1,12 @@
-import logging
 import secrets
 import string
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.subvolume_authorize import verify_mount_failure_on_root
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

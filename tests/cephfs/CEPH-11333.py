@@ -1,11 +1,10 @@
-import logging
 import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utils import FsUtils
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
