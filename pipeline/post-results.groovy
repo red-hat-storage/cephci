@@ -62,7 +62,7 @@ node(nodeName) {
 
         sh script: "${copyFiles} && ${rmTmpDir}"
         sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
-        sharedLib.uploadTestResultToReportPortal(rpPreprocDir, credsRpProc, metaData)
+        sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
 
         //Remove the sync results folder
         sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
