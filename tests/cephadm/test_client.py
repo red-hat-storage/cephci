@@ -1,11 +1,11 @@
 """Manage the client via cephadm CLI."""
-import logging
 from typing import Dict
 
 from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def add(cls, config: Dict) -> None:

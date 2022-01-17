@@ -1,11 +1,10 @@
 """Manage the ceph dashboard service via cephadm CLI."""
-import logging
-
 from ceph.ceph_admin import CephAdmin, dashboard
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
