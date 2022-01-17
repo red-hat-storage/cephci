@@ -51,7 +51,7 @@ import time
 
 import yaml
 
-from utility.utils import setup_cluster_access, sync_status_on_primary
+from utility.utils import setup_cluster_access, verify_sync_status
 
 log = logging.getLogger(__name__)
 
@@ -138,6 +138,7 @@ def run(**kw):
         copy_file_from_node_to_node(
             user_details_file, test_site_node, copy_user_to_site_node, user_details_file
         )
+        verify_sync_status(copy_user_to_site_node)
 
     verify_io_on_sites = config.get("verify-io-on-site", [])
     if verify_io_on_sites:
@@ -145,7 +146,7 @@ def run(**kw):
         for site in verify_io_on_sites:
             verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
             log.info(f"Check sync status on {site}")
-            sync_status_on_primary(verify_io_on_site_node)
+            verify_sync_status(verify_io_on_site_node)
             # adding sleep for 60 seconds before verification of data starts
             time.sleep(60)
             log.info(f"verification IO on {site}")
