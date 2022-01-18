@@ -68,6 +68,7 @@ node(nodeName) {
     }
 
     // Running the test suites in batches of 5
+    testStages.removeAll { it.contains("psi-only") }
     (testStages.keySet() as List).collate(5).each{
         def stages = testStages.subMap(it)
         parallel stages
