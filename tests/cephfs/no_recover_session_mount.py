@@ -1,5 +1,4 @@
 import json
-import logging
 import secrets
 import string
 import time
@@ -7,8 +6,9 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

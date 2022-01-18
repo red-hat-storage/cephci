@@ -1,11 +1,11 @@
-import logging
 import random
 import string
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

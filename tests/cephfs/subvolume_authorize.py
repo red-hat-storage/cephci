@@ -1,4 +1,3 @@
-import logging
 import secrets
 import string
 import traceback
@@ -6,9 +5,9 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.client_authorize import test_read_write_op, verify_write_failure
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def verify_mount_failure_on_root(
