@@ -60,6 +60,9 @@ node(nodeName) {
              rhcephversion
         )
 
+        // Removing suites that are meant to be executed only in RH network.
+        testStages = testStages.findAll { ! it.key.contains("psi-only") }
+
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test stages found.."
@@ -67,9 +70,7 @@ node(nodeName) {
         currentBuild.description = "${params.rhcephVersion} - ${buildPhase}"
     }
 
-    // Running the test suites in batches of 5
-    testStages.removeAll { it.contains("psi-only") }
-    (testStages.keySet() as List).collate(5).each{
+    (testStages.keySet() as List).collate(5).each {
         def stages = testStages.subMap(it)
         parallel stages
     }
