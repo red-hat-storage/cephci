@@ -1009,6 +1009,7 @@ def run(args):
     close_and_remove_filehandlers()
 
     test_run_metadata = {
+        "build": rhbuild,
         "polarion-project-id": "CEPH",
         "suite-name": suite_name,
         "distro": distro,
@@ -1020,13 +1021,14 @@ def run(args):
         "container-tag": docker_tag,
         "compose-id": compose_id,
         "log-dir": run_dir,
+        "run-id": run_id,
     }
 
     if post_to_report_portal:
         rp_logger.finish_launch()
 
     if xunit_results:
-        create_xunit_results(suite_name, tcs, run_dir, test_run_metadata)
+        create_xunit_results(suite_name, tcs, test_run_metadata)
 
     print("\nAll test logs located here: {base}".format(base=url_base))
     print_results(tcs)

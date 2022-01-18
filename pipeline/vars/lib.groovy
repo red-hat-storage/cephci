@@ -670,14 +670,15 @@ def configureRpPreProc(
     }
 }
 
-def uploadTestResultToReportPortal(def sourceDir, def credPreproc, def runProperties) {
+def uploadTestResults(def sourceDir, def credPreproc, def runProperties) {
     /*
-        upload Xunit Xml file to report portal
+        upload Xunit Xml file to report portal and polarion
 
         - move xml file to ${preprocDir}/payload/results
         - configure rp_preproc launch
         - upload xml file to report portal using rp_preproc
         - rclone delete xml file
+        - upload test run results to polarion
 
         Args:
             sourceDir       Working directory containing payload
@@ -703,6 +704,26 @@ def uploadTestResultToReportPortal(def sourceDir, def credPreproc, def runProper
     // Upload xml file to report portal
     sh(script: "./.venv/bin/rp_preproc -c ${credFile} -d ${sourceDir}/payload")
 
+    // Upload test result to polarion using xUnit Xml file
+    withCredentials([
+        usernamePassword(
+            credentialsId: 'psi-ceph-jenkins',
+            usernameVariable: 'OSPUSER',
+            passwordVariable: 'OSPCRED'
+        )
+    ]){
+        def polarionUrl = "https://polarion.engineering.redhat.com/polarion/import/xunit"
+        def xmlFiles = sh (returnStdout: true, script: "ls ${sourceDir}/payload/results/*.xml | cat")
+        if (! xmlFiles ){
+            return
+        }
+        def cmdArgs = "curl -k -u '${OSPUSER}:${OSPCRED}' -X POST -F file=@FILE_NAME ${polarionUrl}"
+        def xmlFileNames = xmlFiles.split("\\n")
+        for (filePath in xmlFileNames) {
+            def localCmd = cmdArgs.replace("FILE_NAME", filePath)
+            sh script: "${localCmd}"
+        }
+    }
 }
 
 return this;
