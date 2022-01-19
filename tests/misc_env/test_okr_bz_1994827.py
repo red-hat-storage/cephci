@@ -1,11 +1,11 @@
 import json
-import logging
 from datetime import datetime, timedelta
 from time import sleep
 
 from ceph.utils import get_node_by_id
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class PGStateError(Exception):

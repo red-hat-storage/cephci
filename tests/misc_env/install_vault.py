@@ -24,15 +24,16 @@ ToDo:
   - support token auth method
 """
 from json import loads
-from logging import getLogger
 from typing import Dict
 
 from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode
+from utility.log import Log
 from utility.utils import get_cephci_config
 
-LOG = getLogger(__name__)
+LOG = Log(__name__)
+
 AGENT_HCL = """pid_file = "/run/vault-agent-pid"
 
 auto_auth {
