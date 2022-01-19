@@ -1,14 +1,14 @@
 # Module to assist in executing a sequence of command.
 import json
-import logging
 import re
 from typing import Any, Tuple
 
 from paramiko.channel import ChannelFile
 
 from ceph.utils import get_node_by_id, translate_to_ip
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 def exec_command(node, **kwargs: Any) -> Tuple:
