@@ -469,7 +469,7 @@ def run(args):
                 base_url = composes[rhbuild or "latest"]["base_url"]
 
             else:
-                raise Exception("\nERROR: Require --v2 as one of argument, run exited.")
+                raise Exception("ERROR: Require --v2 as one of argument, run exited.")
 
         # Get ubuntu-repo
         if not ubuntu_repo and rhbuild.startswith("3"):
