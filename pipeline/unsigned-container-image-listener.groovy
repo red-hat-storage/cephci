@@ -90,7 +90,9 @@ node(nodeName) {
                 "email": "ceph-qe@redhat.com"
             ],
             "build": [
-                "repository": compose.repository
+                "repository": compose.repository,
+                "composes": releaseDetails.latest.composes,
+                "version": cephVersion
             ],
             "test": [
                 "phase": "tier-0"
