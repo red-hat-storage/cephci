@@ -5,13 +5,12 @@
     3. Set osd out
     3. Zap device path
 """
-import logging
-
 from ceph.ceph_admin.daemon import Daemon
 from ceph.ceph_admin.device import Device
 from ceph.ceph_admin.osd import OSD
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def set_osd_devices_unamanged(ceph_cluster, unmanaged):
