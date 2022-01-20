@@ -93,7 +93,7 @@ tests:
       name: Robust rebalancing - osd replacement with many pools
       module: test_osd_rebalance.py
       desc: Remove and add osd to verify data migration from the pools which have different replica and pg count
-      polarion-id: CEPH-9211
+      polarion-id: CEPH-9210
       abort-on-fail: true
       config:
         create_pools:
