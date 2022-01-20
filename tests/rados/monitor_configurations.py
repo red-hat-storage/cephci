@@ -14,13 +14,13 @@ elections
  configuration database.
 """
 
-import logging
 import re
 import time
 
 from ceph.rados.core_workflows import RadosOrchestrator
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class MonElectionStrategies:
