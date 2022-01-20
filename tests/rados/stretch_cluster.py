@@ -1,5 +1,4 @@
 import datetime
-import logging
 import re
 import time
 
@@ -9,8 +8,9 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonElectionStrategies
 from tests.rados.mute_alerts import get_alerts
 from tests.rados.test_9281 import do_rados_get, do_rados_put
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

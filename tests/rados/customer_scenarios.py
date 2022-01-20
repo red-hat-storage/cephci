@@ -17,14 +17,14 @@ Currently automated scenarios:
 """
 import datetime
 import json
-import logging
 import re
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

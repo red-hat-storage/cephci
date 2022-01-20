@@ -20,12 +20,12 @@
       happened or not.
 """
 import datetime
-import logging
 from collections import defaultdict
 
 from ceph.rados.core_workflows import RadosOrchestrator
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class RadosScrubber(RadosOrchestrator):
