@@ -6,7 +6,7 @@ instance_name="ci-${random_string}"
 
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/rgw/sanity_rgw_s3cmd.yaml"
+test_suite="suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
 test_conf="conf/pacific/rgw/tier-0_rgw.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
