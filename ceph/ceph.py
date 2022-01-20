@@ -384,7 +384,7 @@ class Ceph(object):
         """
         devs = []
         devchar = 98
-        if node.vm_node.node_type == "baremetal":
+        if hasattr(node, "vm_node") and node.vm_node.node_type == "baremetal":
             devs = [x.path for x in node.get_allocated_volumes()]
         else:
             devices = len(node.get_allocated_volumes())
