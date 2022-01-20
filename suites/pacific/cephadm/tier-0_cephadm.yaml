@@ -1,3 +1,18 @@
+#===============================================================================================
+#-------------------------------------
+#----- Ceph code changes in 5.0 ------
+#--------------------------------------
+#--------------------------------------
+#
+# Tier-0 test cases for
+#    - Bootstrap
+#    - Host management
+#      - Add/Remove nodes
+#      - SetAddress
+#      - Attach/remove node labels
+#    - Ceph role Service deployment with multiple options,
+#    - Removal of services
+#===============================================================================================
 tests:
   - test:
       name: Install ceph pre-requisites
@@ -5,16 +20,16 @@ tests:
       module: install_prereq.py
       abort-on-fail: true
   - test:
-      name: Cephadm Bootstrap
-      desc: cephadm cluster bootstrap
+      name: Cephadm Bootstrap with custom dashboard credentials
+      desc: Bootstrap with initial-dashboard user and password option
       module: test_bootstrap.py
-      polarion-id:
+      polarion-id: CEPH-83573719
       config:
         command: bootstrap
         base_cmd_args:
           verbose: true
         args:
-          registry-json: registry.redhat.io
+          registry-url: registry.redhat.io
           custom_image: true
           mon-ip: "node1"
           orphan-initial-daemons: true
@@ -28,7 +43,7 @@ tests:
       name: Add Host
       desc: Add host to Bootstrapped Cluster
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573729
       config:
         service: host
         command: add
@@ -38,10 +53,10 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: Add host
-      desc: Add new host node with IP address
+      name: Add new host node with IP address
+      desc: Add new host and validate using ceph orch host list
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573776
       config:
         service: host
         command: add
@@ -57,7 +72,7 @@ tests:
       name: Add host
       desc: Add new host node with IP address and labels
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573729
       config:
         service: host
         command: add
@@ -74,7 +89,7 @@ tests:
       name: Remove Host label
       desc: Remove host label osd from node3
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83574740
       config:
         service: host
         command: label_remove
@@ -89,7 +104,7 @@ tests:
       name: Remove Host label
       desc: Remove host label node-exporter from node4
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83574740
       config:
         service: host
         command: label_remove
@@ -105,7 +120,7 @@ tests:
       name: Add Host label
       desc: Add host label mon,osd to existing node
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83574739
       config:
         service: host
         command: label_add
@@ -122,7 +137,7 @@ tests:
       name: Attach Host label to installer
       desc: Add host label(s) to existing installer node
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83574739
       config:
         service: host
         command: label_add
@@ -137,7 +152,7 @@ tests:
       name: Set Host address
       desc: Set IP address to a existing node
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83574738
       config:
         service: host
         command: set_address
@@ -151,7 +166,7 @@ tests:
       name: Remove host
       desc: Remove node from cluster
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573747
       config:
         service: host
         command: remove
@@ -165,7 +180,7 @@ tests:
       name: Remove host
       desc: Remove node from cluster
       module: test_host.py
-      polarion-id:
+      polarion-id: CEPH-83573747
       config:
         service: host
         command: remove
@@ -236,7 +251,7 @@ tests:
       desc: Apply monitor service with placement and limit
       module: test_mon.py
       abort-on-fail: true
-      polarion-id:
+      polarion-id: CEPH-83573778
       config:
         command: apply
         service: mon
@@ -251,11 +266,11 @@ tests:
             limit: 3    # no of daemons
             sep: " "    # separator to be used for placements
   - test:
-      name: Apply Monitor with placement
-      desc: Apply monitor with placement only
+      name: Apply Monitor with host placement
+      desc: Apply monitor with placement option on specified hosts
       module: test_mon.py
       abort-on-fail: true
-      polarion-id:
+      polarion-id: CEPH-83573732
       config:
         command: apply
         service: mon
@@ -273,7 +288,7 @@ tests:
       desc: Apply monitor using label mon
       abort-on-fail: true
       module: test_mon.py
-      polarion-id:
+      polarion-id: CEPH-83573772
       config:
         command: apply
         service: mon
@@ -286,7 +301,7 @@ tests:
       name: Apply Manager service
       desc: Apply manager service with placement option
       module: test_mgr.py
-      polarion-id:
+      polarion-id: CEPH-83573734
       config:
         command: apply
         service: mgr
@@ -300,10 +315,26 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
+      name: Apply Manager service
+      desc: Apply manager service with label option
+      module: test_mgr.py
+      polarion-id: CEPH-83573777
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            label: mgr
+            sep: " "
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
       name: Apply OSD Service
       desc: Apply OSD service with all available devices
       module: test_osd.py
-      polarion-id:
+      polarion-id: CEPH-83573735
       config:
         command: apply
         service: osd
@@ -317,7 +348,7 @@ tests:
       name: Configure client
       desc: Configure client on node9
       module: test_client.py
-      polarion-id:
+      polarion-id: CEPH-83573758
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
@@ -334,7 +365,7 @@ tests:
       name: Remove client
       desc: remove client on node9
       module: test_client.py
-      polarion-id:
+      polarion-id: CEPH-83573759
       config:
         command: remove
         id: client.1                      # client Id (<type>.<Id>)
@@ -361,7 +392,7 @@ tests:
       name: Apply MDS Service
       desc: Apply MDS service on all mds nodes
       module: test_mds.py
-      polarion-id:
+      polarion-id: CEPH-83573737
       config:
         command: apply
         service: mds
@@ -441,7 +472,7 @@ tests:
       name: Apply Prometheus Service
       desc: Apply Prometheus service on role nodes
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573738
       config:
         command: apply
         service: prometheus
@@ -505,7 +536,7 @@ tests:
       name: Apply collocated RGW Service
       desc: Apply collocated RGW service using node placements
       module: test_rgw.py
-      polarion-id: CEPH-83574639
+      polarion-id: CEPH-83573751
       config:
         command: apply
         service: rgw
@@ -576,7 +607,7 @@ tests:
       name: Apply NFS Service
       desc: Apply NFS-Ganesha service on role nodes
       module: test_nfs.py
-      polarion-id:
+      polarion-id: CEPH-83573749
       config:
         command: apply
         service: nfs
@@ -629,7 +660,7 @@ tests:
       name: Remove RGW Service
       desc: Remove RGW service using orch remove option
       module: test_rgw.py
-      polarion-id:
+      polarion-id: CEPH-83573753
       config:
         command: remove
         service: rgw
@@ -644,7 +675,7 @@ tests:
       name: Remove ISCSI Service
       desc: Remove ISCSI service using orch remove option
       module: test_iscsi.py
-      polarion-id:
+      polarion-id: CEPH-83573757
       config:
         command: remove
         service: iscsi
@@ -707,7 +738,7 @@ tests:
       name: Remove MDS Service
       desc: Remove MDS service using orch remove option
       module: test_mds.py
-      polarion-id:
+      polarion-id: CEPH-83573748
       config:
         command: remove
         service: mds
@@ -753,7 +784,7 @@ tests:
       name: Remove Crash Service
       desc: Remove Crash service using orch remove option
       module: test_crash.py
-      polarion-id:
+      polarion-id: CEPH-83573784
       config:
         command: remove
         service: crash

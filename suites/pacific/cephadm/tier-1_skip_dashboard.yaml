@@ -58,7 +58,7 @@ tests:
       name: Cephadm Bootstrap with skip-dashboard
       desc: cephadm bootstrap with skip dashboard, output configuration files
       module: test_bootstrap.py
-      polarion-id:
+      polarion-id: CEPH-83573716,CEPH-83573715
       config:
         command: bootstrap
         base_cmd_args:
@@ -76,36 +76,69 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: Add Host, Service(s) deployment
-      desc: Host and service(s) deployment.
-      module: test_cephadm.py
+      name: Add all hosts to ceph cluster
+      desc: Add all host node with IP address and labels
+      module: test_host.py
       polarion-id:
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes: []
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Apply Monitor with limit
+      desc: Apply monitor service with limit count
+      module: test_mon.py
+      abort-on-fail: true
+      polarion-id: CEPH-83573731
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            limit: 3    # no of daemons
+  - test:
+      name: Apply Manager with limit
+      desc: Apply Manager service with limit count
+      module: test_mon.py
+      abort-on-fail: true
+      polarion-id: CEPH-83573733
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            limit: 3    # no of daemons
+  - test:
+      name: Discover devices and Apply OSD Service
+      desc: Discover devices using orch device ls and deploy OSD service
+      module: test_osd.py
+      polarion-id: CEPH-83573769
+      config:
+        command: apply
+        service: osd
+        base_cmd_args:
+          verbose: true
+        args:
+          all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Deploy Service(s) deployment and verify service
+      desc: Validate service(s) deployment using ceph orch ls.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573771
       config:
         verify_cluster_health: true
         steps:
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: mon
-              args:
-                placement:
-                  limit: 3
-          - config:
-              command: apply
-              service: mgr
-              args:
-                placement:
-                  limit: 3
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
           - config:
               command: shell
               args:
