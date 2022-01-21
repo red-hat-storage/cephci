@@ -35,6 +35,7 @@ from ceph.utils import (
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
 )
+from utility import sosreport
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
@@ -902,6 +903,7 @@ def run(args):
         else run_dir
     )
     log.info("\nAll test logs located here: {base}".format(base=url_base))
+
     close_and_remove_filehandlers()
 
     test_run_metadata = {
@@ -948,6 +950,14 @@ def run(args):
     }
 
     email_results(test_result=test_res)
+
+    if jenkins_rc:
+        log.info(
+            "\n\nGenerating sosreports for all the nodes due to failures in testcase"
+        )
+        installer_node = ceph_cluster_dict["ceph"].get_nodes(role="installer")[0]
+        sosreport.run(installer_node.ip_address, "cephuser", "cephuser", run_dir)
+        log.info(f"Generated sosreports location : {url_base}/sosreports")
 
     return jenkins_rc
 
