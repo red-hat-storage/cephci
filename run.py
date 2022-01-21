@@ -479,7 +479,7 @@ def run(args):
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     suite = init_suite.load_suites(suite_files)
-    log.info(f"Found the following valid test suites: {suite['tests']}")
+    log.debug(f"Found the following valid test suites: {suite['tests']}")
     if suite["nan"] and not suite["tests"]:
         raise Exception("Please provide valid test suite name")
 
