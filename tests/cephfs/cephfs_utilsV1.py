@@ -219,6 +219,29 @@ class FsUtils(object):
             mount_output = mount_output.split()
             log.info("validate kernel mount:")
             assert mount_point.rstrip("/") in mount_output, "Kernel mount failed"
+            if kwargs.get("fstab"):
+                out, rc = client.exec_command(
+                    sudo=True, cmd="ls -lrt /etc/fstab.backup", check_ec=False
+                )
+                if not rc == 0:
+                    client.exec_command(
+                        sudo=True, cmd="cp /etc/fstab /etc/fstab.backup"
+                    )
+                fstab = client.remote_file(
+                    sudo=True, file_name="/etc/fstab", file_mode="a+"
+                )
+                fstab_entry = (
+                    f"{mon_node_ip}:{kwargs.get('sub_dir', '/')}    {mount_point}    ceph    "
+                    f"name={kwargs.get('new_client_hostname', client.node.hostname)},"
+                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                )
+                if kwargs.get("extra_params"):
+                    fstab_entry += f"{kwargs.get('extra_params')}"
+                fstab_entry += ",_netdev,noatime      0       0"
+                print(dir(fstab))
+                fstab.write(fstab_entry + "\n")
+                fstab.flush()
+                fstab.close()
 
     def get_mon_node_ips(self):
         """
