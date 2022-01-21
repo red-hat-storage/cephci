@@ -7,7 +7,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
-from tests.rados.test_9281 import do_rados_put
+from tests.rados.test_9281 import do_rados_get, do_rados_put
 from utility.log import Log
 from utility.utils import method_should_succeed
 
@@ -43,7 +43,10 @@ def run(ceph_cluster, **kw):
                 )
             else:
                 method_should_succeed(rados_obj.create_pool, **cr_pool)
-            method_should_succeed(rados_obj.bench_write, **cr_pool)
+            if cr_pool.get("rados_put", False):
+                do_rados_put(mon=client_node, pool=cr_pool["pool_name"], nobj=100)
+            else:
+                method_should_succeed(rados_obj.bench_write, **cr_pool)
         pool = random.choice(pools)["create_pool"]
     if not pool:
         log.error("Failed to retrieve pool details")
@@ -91,6 +94,9 @@ def run(ceph_cluster, **kw):
     method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
     utils.osd_remove(ceph_cluster, osd_id)
+    if cr_pool.get("rados_put", False):
+        do_rados_get(client_node, pool["pool_name"], 1)
+
     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
     method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
     method_should_succeed(wait_for_device, host, container_id, osd_id, action="remove")
@@ -99,6 +105,8 @@ def run(ceph_cluster, **kw):
     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
     do_rados_put(mon=client_node, pool=pool["pool_name"], nobj=1000)
     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+    if cr_pool.get("rados_put", False):
+        do_rados_get(client_node, pool["pool_name"], 1)
     utils.set_osd_devices_unamanged(ceph_cluster, unmanaged=False)
     rados_obj.change_recover_threads(config=pool, action="rm")
 
