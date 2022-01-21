@@ -179,7 +179,7 @@ node(nodeName) {
             job: "tier-x",
             parameters: [string(name: 'rhcephVersion', value: rhcephVersion),
                         string(name: 'buildType', value: buildPhase),
-                        string(name: 'buildArtifacts' value: buildArtifacts)]
+                        string(name: 'buildArtifacts', value: buildArtifacts)]
         ])
 
         if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
