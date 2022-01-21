@@ -1,11 +1,12 @@
-import logging
-import traceback
+import json
 import random
 import string
-import json
-from tests.cephfs.cephfs_utilsV1 import FsUtils
+import traceback
 
-log = logging.getLogger(__name__)
+from tests.cephfs.cephfs_utilsV1 import FsUtils
+from utility.log import Log
+
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -35,14 +36,15 @@ def run(ceph_cluster, **kw):
             "subvol_name": f"subvol_{subvolume_name_generate}",
             "size": "5368706371",
         }
-        fs_util.create_subvolume(client1,**subvolume,check_ec=False)
-        c_out, c_err=client1.exec_command(sudo=True,cmd=f"ceph fs subvolume info cephfs subvol_{subvolume_name_generate}")
+        fs_util.create_subvolume(client1, **subvolume, check_ec=False)
+        c_out, c_err = client1.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume info cephfs subvol_{subvolume_name_generate}",
+        )
         c_out_decoded = json.loads(c_out.read().decode())
         gid = c_out_decoded["gid"]
         uid = c_out_decoded["uid"]
-        if gid != 0:
-            return 1
-        if uid != 0:
+        if gid != 0 or uid != 0:
             return 1
         return 0
     except Exception as e:
