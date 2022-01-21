@@ -77,9 +77,7 @@ def buildArtifactDetails(def sharedLib){
 
 node(nodeName){
     stage('Install pre req') {
-        if (env.WORKSPACE) {
-            sh script: "sudo rm -rf *"
-        }
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
         checkout([
             $class: 'GitSCM',
             branches: [[name: "*/${params.Branch}"]],

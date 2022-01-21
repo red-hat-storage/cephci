@@ -1,0 +1,4 @@
+clusters:
+  - ceph-pri
+  - ceph-sec
+

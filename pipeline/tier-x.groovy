@@ -18,20 +18,21 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
-            if (env.WORKSPACE) {
-                sh script: "sudo rm -rf *"
-            }
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: false,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
@@ -82,12 +83,16 @@ node(nodeName) {
         currentBuild.description = "${ciMap.artifact.nvr} - ${ciMap.artifact.version} - ${tierLevel}"
     }
 
-    parallel testStages
+    // Running the test suites in batches of 4
+    (testStages.keySet() as List).collate(4).each{
+        def stages = testStages.subMap(it)
+        parallel stages
+    }
 
     stage('Publish Results') {
         /* Publish results through E-mail and Google Chat */
 
-        if ( ! ("FAIL" in testResults.values()) ) {
+        if ( ! ("FAIL" in sharedLib.fetchStageStatus(testResults)) ) {
             def latestContent = sharedLib.readFromReleaseFile(
                 majorVersion, minorVersion
             )

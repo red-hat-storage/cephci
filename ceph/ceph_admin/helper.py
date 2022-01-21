@@ -371,8 +371,6 @@ class GenerateServiceSpec:
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
-        # ToDo: This works for only one host. Not sure, how cephadm handles SSL
-        #       certificate for multiple hosts.
         if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
             subject = {
                 "common_name": spec["placement"]["hosts"][0],
@@ -442,6 +440,32 @@ class GenerateServiceSpec:
         return temp_file.name
 
 
+def create_ceph_config_file(node, config):
+    """
+    Create config file based on config options and return file name
+
+    Returns:
+        temp_filename (Str)
+
+    """
+    path = dirname(__file__) + "/jinja_templates/config.jinja"
+    with open(path) as fd:
+        template = fd.read()
+
+    conf_content = Template(template).render(config=config)
+
+    LOG.info(f"Conf yaml file content:\n{conf_content}")
+    # Create conf yaml file
+    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+    conf_file = node.node.remote_file(
+        sudo=True, file_name=temp_file.name, file_mode="w"
+    )
+    conf_file.write(conf_content)
+    conf_file.flush()
+
+    return temp_file.name
+
+
 def get_cluster_state(cls, commands=[]):
     """
     fetch cluster state using commands provided along
@@ -463,6 +487,8 @@ def get_cluster_state(cls, commands=[]):
         "ceph orch ls -f yaml",
         "ceph orch ps -f json-pretty",
         "ceph health detail -f yaml",
+        "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
+        "ceph mon stat",
     ]
 
     __CLUSTER_STATE_COMMANDS.extend(commands)

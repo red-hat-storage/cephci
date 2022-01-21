@@ -15,24 +15,26 @@ def majorVersion
 def minorVersion
 
 
+
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
-            if (env.WORKSPACE) {
-                sh script: "sudo rm -rf *"
-            }
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: false,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
@@ -78,7 +80,7 @@ node(nodeName) {
         def sourceKey = "latest"
         def updateKey = "tier-0"
 
-        if ( ! ("FAIL" in testResults.values()) ) {
+        if ( ! ("FAIL" in sharedLib.fetchStageStatus(testResults)) ) {
             def latestContent = sharedLib.readFromReleaseFile(
                 majorVersion, minorVersion
             )
@@ -106,7 +108,7 @@ node(nodeName) {
 
     stage('Publish UMB') {
         /* send UMB message */
-        if ( "FAIL" in testResults.values() ) {
+        if ( "FAIL" in sharedLib.fetchStageStatus(testResults) ) {
             // As part of executing all tiers, we are not publishing this message when
             // there is a failure. This way we prevent execution of Tier-1 and
             // subsequently the other tiers in the pipeline.

@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import re
 from time import sleep
@@ -14,8 +13,9 @@ from ceph.ceph_admin.helper import (
     get_cluster_state,
     get_hosts_deployed,
 )
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 __DEFAULT_CEPH_DIR = "/etc/ceph"
 __DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"
@@ -548,6 +548,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
+    config["overrides"] = kw.get("test_data", {}).get("custom-config")
 
     # Manage Ceph using ceph-admin orchestration
     command = config.pop("command")

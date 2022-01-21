@@ -2,12 +2,11 @@
 Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 
 """
-import logging
-
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class UpgradeFailure(Exception):
@@ -37,8 +36,9 @@ def run(ceph_cluster, **kwargs) -> int:
 
     Since image are part of main config, no need of any args here.
     """
-    LOG.info("Upgrade Ceph cluster...")
+    log.info("Upgrade Ceph cluster...")
     config = kwargs["config"]
+    config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
     orch = Orch(cluster=ceph_cluster, **config)
 
     client = ceph_cluster.get_nodes(role="client")[0]
@@ -71,7 +71,7 @@ def run(ceph_cluster, **kwargs) -> int:
             ):
                 raise UpgradeFailure("Cluster is in HEALTH_ERR state")
     except BaseException as be:  # noqa
-        LOG.error(be, exc_info=True)
+        log.error(be, exc_info=True)
         return 1
     finally:
         executor.teardown()
@@ -83,6 +83,8 @@ def run(ceph_cluster, **kwargs) -> int:
                 "ceph orch ps -f yaml",
                 "ceph orch ls -f yaml",
                 "ceph orch upgrade status",
+                "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
+                "ceph mon stat",
             ]
         )
     return 0

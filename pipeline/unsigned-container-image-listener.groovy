@@ -15,17 +15,21 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Preparing') {
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: false,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
@@ -86,7 +90,9 @@ node(nodeName) {
                 "email": "ceph-qe@redhat.com"
             ],
             "build": [
-                "repository": compose.repository
+                "repository": compose.repository,
+                "composes": releaseDetails.latest.composes,
+                "version": cephVersion
             ],
             "test": [
                 "phase": "tier-0"
@@ -105,16 +111,6 @@ node(nodeName) {
         def msgType = "ProductBuildDone"
 
         lib.SendUMBMessage(msgContent, overrideTopic, msgType)
-    }
-
-    stage("Push Ceph Recipe") {
-        def recipeMap = [
-            "ceph-version": cephVersion,
-            "repository": compose.repository.tokenize(":")[-1],
-            "RHCephVersion": "RHCEPH-${versions.major_version}.${versions.minor_version}",
-            "platforms": releaseDetails.latest.composes.keySet().collect()
-        ]
-        lib.uploadBuildRecipe(recipeMap)
     }
 
 }
