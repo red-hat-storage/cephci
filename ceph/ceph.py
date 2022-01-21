@@ -1,6 +1,5 @@
 import datetime
 import json
-import logging
 import pickle
 import random
 import re
@@ -15,9 +14,10 @@ from paramiko.ssh_exception import SSHException
 
 from ceph.parallel import parallel
 from utility import lvm_utils
+from utility.log import Log
 from utility.utils import custom_ceph_config
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
 
 
 class ResourceNotFoundError(Exception):
@@ -384,7 +384,7 @@ class Ceph(object):
         """
         devs = []
         devchar = 98
-        if node.vm_node.node_type == "baremetal":
+        if hasattr(node, "vm_node") and node.vm_node.node_type == "baremetal":
             devs = [x.path for x in node.get_allocated_volumes()]
         else:
             devices = len(node.get_allocated_volumes())
@@ -1991,7 +1991,7 @@ class CephDemon(CephObject):
     def container_name(self):
         return (
             (
-                "ceph-{role}-{host}".format(role=self.role, host=self.node.hostname)
+                "ceph-{role}-{host}".format(role=self.role, host=self.node.shortname)
                 if not self.__custom_container_name
                 else self.__custom_container_name
             )

@@ -1,0 +1,22 @@
+---
+pull_request_rules:
+  - name: automatic merge
+    conditions:
+      - label!=DNM
+      - label!=work-in-progress
+      - base=master
+      - "approved-reviews-by=@red-hat-storage/cephci-top-level-reviewers"
+      - "check-success=tox (3.6)"
+      - check-success=WIP
+    actions:
+      merge:
+        method: merge
+  - name: ask to resolve conflict
+    conditions:
+      - conflict
+    actions:
+      comment:
+        message: >
+          "This pull request now has conflicts with the target branch.
+          Could you please resolve conflicts and force push the corrected
+          changes?"

@@ -1,13 +1,13 @@
 import hashlib
-import logging
 import random
 import time
 import traceback
 
 from ceph.parallel import parallel
 from ceph.rados_utils import RadosHelper
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 fcsum = "" """checksum to verify in read"""
 objlist = []

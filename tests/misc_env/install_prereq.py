@@ -2,15 +2,16 @@ import base64
 import datetime
 import itertools
 import json
-import logging
 import time
 import traceback
 
 from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
+from utility.log import Log
 from utility.utils import get_cephci_config
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
+
 
 rpm_packages = {
     "py2": [
@@ -37,6 +38,8 @@ deb_all_packages = " ".join(deb_packages)
 
 
 def run(**kw):
+    print(log.metadata)
+    print(log.log_level)
     log.info("Running test")
     ceph_nodes = kw.get("ceph_nodes")
     # skip subscription manager if testing beta RHEL

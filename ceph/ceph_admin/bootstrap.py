@@ -5,10 +5,11 @@ import tempfile
 from typing import Dict
 
 from ceph.ceph import ResourceNotFoundError
+from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from utility.utils import get_cephci_config
 
 from .common import config_dict_to_string
-from .helper import GenerateServiceSpec
+from .helper import GenerateServiceSpec, create_ceph_config_file
 from .typing_ import CephAdmProtocol
 
 logger = logging.getLogger(__name__)
@@ -179,7 +180,7 @@ class BootstrapMixin:
         args = config.get("args")
         custom_repo = args.pop("custom_repo", "")
         custom_image = args.pop("custom_image", True)
-        build_type = config.get("build_type")
+        build_type = self.config.get("build_type")
 
         if build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False
@@ -188,6 +189,15 @@ class BootstrapMixin:
             self.set_tool_repo(repo=custom_repo)
         else:
             self.set_tool_repo()
+
+        ansible_run = config.get("cephadm-ansible", None)
+        if ansible_run:
+            cephadm_ansible = CephadmAnsible(cluster=self.cluster)
+            cephadm_ansible.execute_playbook(
+                playbook=ansible_run["playbook"],
+                extra_vars=ansible_run.get("extra-vars"),
+                extra_args=ansible_run.get("extra-args"),
+            )
 
         self.install()
 
@@ -250,6 +260,11 @@ class BootstrapMixin:
             )
             args["apply-spec"] = spec_cls.create_spec_file()
 
+        # config
+        conf = args.get("config")
+        if conf:
+            args["config"] = create_ceph_config_file(node=self.installer, config=conf)
+
         cmd += config_dict_to_string(args)
         out, err = self.installer.exec_command(
             sudo=True,
@@ -262,9 +277,10 @@ class BootstrapMixin:
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
 
-        # The path to ssh public key mentioned in either output-pub-ssh-key or ssh-public-key options
-        # will be considered for distributing the ssh public key, if these are not specified,
-        # then the default ssh key path /etc/ceph/ceph.pub will be considered.
+        # The path to ssh public key mentioned in either output-pub-ssh-key or
+        # ssh-public-key options will be considered for distributing the ssh public key,
+        # if these are not specified, then the default ssh key path /etc/ceph/ceph.pub
+        # will be considered.
         self.distribute_cephadm_gen_pub_key(
             args.get("output-pub-ssh-key") or args.get("ssh-public-key")
         )
@@ -273,12 +289,24 @@ class BootstrapMixin:
         # if they are already not present in the default path
         copy_ceph_configuration_files(self, args)
 
-        # The provided image is used by Grafana service only when
-        # --skip-monitoring-stack is set to True during bootstrap.
-        if self.config.get("grafana_image"):
-            cmd = "cephadm shell --"
-            cmd += " ceph config set mgr mgr/cephadm/container_image_grafana"
-            cmd += f" {self.config['grafana_image']}"
-            self.installer.exec_command(sudo=True, cmd=cmd)
+        # Check for image overrides
+        if self.config.get("overrides"):
+            override_dict = dict(item.split("=") for item in self.config["overrides"])
+            supported_overrides = [
+                "grafana",
+                "keepalived",
+                "haproxy",
+                "prometheus",
+                "node_exporter",
+                "alertmanager",
+            ]
+
+            for image in supported_overrides:
+                image_key = f"{image}_image"
+                if override_dict.get(image_key):
+                    cmd = "cephadm shell --"
+                    cmd += f" ceph config set mgr mgr/cephadm/container_image_{image}"
+                    cmd += f" {override_dict[image_key]}"
+                    self.installer.exec_command(sudo=True, cmd=cmd)
 
         return out, err

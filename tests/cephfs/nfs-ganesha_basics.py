@@ -1,24 +1,23 @@
-import logging
 import time
 import traceback
 
 from ceph.ceph import CommandFailed
+from tests.cephfs.cephfs_volume_management import wait_for_process
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
     try:
+        log.info(f"MetaData Information {log.metadata} in {__name__}")
         tc = "nfs-ganesha"
         nfs_mounting_dir = "/mnt/nfs/"
         dir_name = "dir"
         log.info("Running cephfs %s test case" % (tc))
-
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         rhbuild = config.get("rhbuild")
-
         if "5." in rhbuild:
             from tests.cephfs.cephfs_utilsV1 import FsUtils
 
@@ -40,21 +39,27 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server_name}"
             )
-
             # Verify ceph nfs cluster is created
-            out, rc = nfs_client[0].exec_command(sudo=True, cmd="ceph nfs cluster ls")
-            output = out.read().decode()
-            output.split()
-            if nfs_name in output:
+            if wait_for_process(
+                client=nfs_client[0], process_name=nfs_name, ispresent=True
+            ):
                 log.info("ceph nfs cluster created successfully")
             else:
                 raise CommandFailed("Failed to create nfs cluster")
             # Create cephfs nfs export
-            nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"ceph nfs export create cephfs {fs_name} {nfs_name} "
-                f"{nfs_export_name} path={path}",
-            )
+            if "5.0" in rhbuild:
+                nfs_client[0].exec_command(
+                    sudo=True,
+                    cmd=f"ceph nfs export create cephfs {fs_name} {nfs_name} "
+                    f"{nfs_export_name} path={path}",
+                )
+            else:
+                nfs_client[0].exec_command(
+                    sudo=True,
+                    cmd=f"ceph nfs export create cephfs {nfs_name} "
+                    f"{nfs_export_name} {fs_name} path={path}",
+                )
+
             # Verify ceph nfs export is created
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
@@ -116,6 +121,10 @@ def run(ceph_cluster, **kw):
             )
             # Adding Delay to reflect in cluster list
             time.sleep(5)
+            if not wait_for_process(
+                client=nfs_client[0], process_name=nfs_name, ispresent=False
+            ):
+                raise CommandFailed("Cluster has not been deleted")
             # Verify nfs cluster is deleted
             out, rc = nfs_client[0].exec_command(sudo=True, cmd="ceph nfs cluster ls")
             output = out.read().decode()
@@ -189,9 +198,7 @@ def run(ceph_cluster, **kw):
             nfs_client[0].exec_command(sudo=True, cmd="rm -rf  %s" % (nfs_mounting_dir))
 
             log.info("Cleaning up successfull")
-
         return 0
-
     except CommandFailed as e:
         log.info(e)
         log.info(traceback.format_exc())

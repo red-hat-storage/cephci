@@ -1,11 +1,10 @@
-import logging
 import os
 import time
 
 from ceph.parallel import parallel
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(**kw):

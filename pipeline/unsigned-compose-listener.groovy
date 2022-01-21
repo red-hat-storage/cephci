@@ -6,23 +6,28 @@ def nodeName = "centos-7"
 def sharedLib
 def cephVersion
 def composeUrl
+def platform
 
 // Pipeline script entry point
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Preparing') {
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: false,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
@@ -90,6 +95,7 @@ node(nodeName) {
                 "email": "ceph-qe@redhat.com"
             ],
             "build": [
+                "platform": platform,
                 "compose-url": composeUrl
             ],
             "run": [

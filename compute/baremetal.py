@@ -123,3 +123,8 @@ class CephBaremetalNode:
     def role(self, roles: list) -> None:
         """Set the roles for the VM."""
         self._roles = deepcopy(roles)
+
+    @property
+    def shortname(self) -> str:
+        """Return the shortform of the hostname."""
+        return self.hostname.split(".")[0]

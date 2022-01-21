@@ -6,6 +6,8 @@
 
 echo "Initialize Node"
 sudo yum install -y git-core
+sudo yum install -y zip unzip
+sudo yum install -y p7zip
 
 # Workaround: Disable IPv6 to have quicker downloads
 sudo sysctl -w net.ipv6.conf.eth0.disable_ipv6=1
@@ -31,6 +33,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m pip install git+https://gitlab.cee.redhat.com/ccit/reportportal/rp_preproc.git@rpv5
 deactivate
+
+# Install rclone
+curl https://rclone.org/install.sh | sudo bash || echo 0
+mkdir -p ${HOME}/.config/rclone
+wget http://magna002.ceph.redhat.com/cephci-jenkins/.ibm-cos.conf -O ${HOME}/.config/rclone/rclone.conf
 
 echo "Done bootstrapping the Jenkins node."

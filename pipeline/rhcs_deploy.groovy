@@ -20,21 +20,22 @@ node ("centos-7") {
 
     timeout(unit: "MINUTES", time: 30) {
         stage("Prepare env") {
-            if (env.WORKSPACE) {
-                sh (script: "sudo rm -rf *")
-            }
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
 
-            checkout ([
+            checkout([
                 $class: 'GitSCM',
                 branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: true,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'

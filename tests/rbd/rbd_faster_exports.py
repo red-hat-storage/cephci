@@ -17,7 +17,9 @@ def run(**kw):
     clone = rbd.random_string()
 
     rbd.exec_cmd(cmd="mkdir {}".format(dir_name))
-    rbd.create_pool(poolname=pool)
+    if not rbd.create_pool(poolname=pool):
+        log.error(f"Pool : {pool} could not be created.. Exiting test....")
+        return 1
     rbd.exec_cmd(cmd="rbd create -s {} {}/{}".format("10G", pool, image))
     rbd.exec_cmd(
         cmd="rbd bench-write --io-total {} {}/{}".format(
@@ -89,7 +91,7 @@ def run(**kw):
             rbd.exec_cmd,
             cmd="rbd resize -s {} --allow-shrink {}/{}".format("8G", pool, image),
         )
-
-    rbd.clean_up(dir_name=dir_name, pools=[pool])
+    if config.get("cleanup", True):
+        rbd.clean_up(dir_name=dir_name, pools=[pool])
 
     return rbd.flag

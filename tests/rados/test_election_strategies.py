@@ -1,12 +1,12 @@
-import logging
 import re
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonElectionStrategies
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
