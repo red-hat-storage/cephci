@@ -267,16 +267,16 @@ def load_suites(test_suites):
 
     test_suite_catalogue = []
 
-    log.info(f"List of test suites: \n{test_suites}")
+    log.info(f"List of test suites provided: \n{test_suites}")
 
     for test_suite in test_suites:
         if os.path.isdir(test_suite):
-            log.info("suite is directory")
+            log.info("Provided suite is a directory")
             fragments = Directory(test_suite).fragments
             log.debug(f"got fragments: \n{fragments}")
             test_suite_catalogue.extend(fragments)
         else:
-            log.info("suite is file")
+            log.info("Provided suite is a file")
             test_suite_catalogue.append(test_suite)
 
     return Suite(test_suite_catalogue).suites

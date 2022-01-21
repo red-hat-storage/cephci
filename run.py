@@ -479,6 +479,9 @@ def run(args):
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     suite = init_suite.load_suites(suite_files)
+    log.debug(f"Found the following valid test suites: {suite['tests']}")
+    if suite["nan"] and not suite["tests"]:
+        raise Exception("Please provide valid test suite name")
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
