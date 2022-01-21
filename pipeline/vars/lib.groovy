@@ -303,7 +303,7 @@ def sendEmail(
                                             "product": "Redhat",
                                             "version": "RHCEPH-5.0",
                                             "ceph_version": "16.2.0-117",
-                                            "container_image": "repositoryname"]
+                                            "repository": "repositoryname"]
             tierLevel:
                 Example: Tier0, Tier1, CVP..
     */
@@ -336,8 +336,8 @@ def sendEmail(
     if (artifactDetails.composes) {
         body += "<tr><td>Composes</td><td>${artifactDetails.composes}</td></tr>"
     }
-    if (artifactDetails.container_image) {
-        body += "<tr><td>Container Image</td><td>${artifactDetails.container_image}</td></tr>"
+    if (artifactDetails.repository) {
+        body += "<tr><td>Container Image</td><td>${artifactDetails.repository}</td></tr>"
     }
     if (artifactDetails.log) {
         body += "<tr><td>Log</td><td>${artifactDetails.log}</td></tr>"
@@ -485,7 +485,7 @@ def buildArtifactsDetails(def content, def ciMsgMap, def phase) {
         "product": "Red Hat Ceph Storage",
         "version": ciMsgMap["artifact"]["nvr"],
         "ceph_version": content[phase]["ceph-version"],
-        "container_image": content[phase]["repository"]
+        "repository": content[phase]["repository"]
     ]
 }
 
