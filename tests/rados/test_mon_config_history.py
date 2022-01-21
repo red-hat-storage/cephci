@@ -3,13 +3,12 @@ This module tests :
 1. Changes to monitor config database by setting new config
 2. Verifies if the config change is successfully logged into the config history and a new version is created
 """
-import logging
-
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

@@ -6,6 +6,7 @@ def nodeName = "agent-01"
 def testStages = [:]
 def testResults = [:]
 def rhcephVersion
+def buildArtifacts
 def buildType
 def buildPhase
 def sharedLib
@@ -45,6 +46,12 @@ node(nodeName) {
         /* Prepare pipeline stages using RHCEPH version */
         rhcephVersion = "${params.rhcephVersion}" ?: ""
         buildType = "${params.buildType}" ?: ""
+        buildArtifacts = "${params.buildArtifacts}" ?: [:]
+
+        if ( buildArtifacts ){
+            buildArtifacts = readJSON text: "${buildArtifacts}"
+        }
+
         if ((! rhcephVersion?.trim()) && (! buildType?.trim())) {
             error "Required Parameters are not provided.."
         }
@@ -60,6 +67,9 @@ node(nodeName) {
              rhcephversion
         )
 
+        // Removing suites that are meant to be executed only in RH network.
+        testStages = testStages.findAll { ! it.key.contains("psi-only") }
+
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
             error "No test stages found.."
@@ -67,8 +77,7 @@ node(nodeName) {
         currentBuild.description = "${params.rhcephVersion} - ${buildPhase}"
     }
 
-    // Running the test suites in batches of 5
-    (testStages.keySet() as List).collate(5).each{
+    (testStages.keySet() as List).collate(5).each {
         def stages = testStages.subMap(it)
         parallel stages
     }
@@ -137,6 +146,7 @@ node(nodeName) {
                 "result": currentBuild.currentResult,
                 "object-prefix": dirName,
             ],
+            "recipe": buildArtifacts,
             "generated_at": env.BUILD_ID,
             "version": "1.1.0",
         ]
@@ -168,7 +178,8 @@ node(nodeName) {
             wait: false,
             job: "tier-x",
             parameters: [string(name: 'rhcephVersion', value: rhcephVersion),
-                        string(name: 'buildType', value: buildPhase)]
+                        string(name: 'buildType', value: buildPhase),
+                        string(name: 'buildArtifacts', value: buildArtifacts)]
         ])
 
         if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {

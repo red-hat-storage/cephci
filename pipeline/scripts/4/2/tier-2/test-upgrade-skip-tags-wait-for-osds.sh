@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Ceph RGW testing using S3Tests."
+echo "Beginning Red Hat Ceph RPM based upgrade with skip-tags-wait-for-osds-to-be-up - OKR bz 1994827 testing."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-7"
-rhbuild="4.3"
-test_suite="suites/nautilus/rgw/tier-2_rgw_s3tests.yaml"
-test_conf="conf/nautilus/rgw/5-node-cluster.yaml"
+rhbuild="4.2"
+test_suite="suites/nautilus/upgrades/tier-2_upgrade_skip-tags-wait-for-osds.yaml"
+test_conf="conf/nautilus/upgrades/tier-2_upgrade_skip-tags-wait-for-osds.yaml"
 test_inventory="conf/inventory/rhel-7-latest.yaml"
 return_code=0
 
@@ -19,7 +19,7 @@ else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
 
-$WORKSPACE/.venv/bin/python run.py --v2 \
+$WORKSPACE/.venv/bin/python run.py \
     --osp-cred $HOME/osp-cred-ci-2.yaml \
     --rhbuild $rhbuild \
     --platform $platform \
@@ -46,3 +46,4 @@ if [ $? -ne 0 ]; then
 fi
 
 exit ${return_code}
+

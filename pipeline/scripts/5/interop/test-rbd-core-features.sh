@@ -59,7 +59,7 @@ if [ -z "${OSP_CRED_FILE}" ] ; then
     exit 1
 fi
 
-${PY_CMD} run.py --v2 \
+${PY_CMD} run.py \
     --log-level DEBUG \
     --xunit-results \
     --skip-enabling-rhel-rpms \

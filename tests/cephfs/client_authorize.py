@@ -1,12 +1,11 @@
-import logging
 import secrets
 import string
 import traceback
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def verify_write_failure(client, kernel_mount_dir, fuse_mount_dir, client_name):

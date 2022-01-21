@@ -17,7 +17,6 @@ def getCLI(){
     def cli = "--rhbuild ${params.RHCS_Build}"
     cli += " --platform ${params.Platform}"
     cli += " --build ${params.Build}"
-    cli += " --v2"
     cli += " --global-conf conf/${cephVersion}/${params.Group}/${params.Conf}.yaml"
     cli += " --inventory conf/inventory/${params.Inventory}.yaml"
     cli += " --suite suites/${cephVersion}/${params.Group}/${params.Suite}.yaml"

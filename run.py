@@ -39,7 +39,6 @@ from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
     ReportPortal,
-    TestSetupFailure,
     close_and_remove_filehandlers,
     configure_logger,
     create_run_dir,
@@ -48,7 +47,6 @@ from utility.utils import (
     fetch_build_artifacts,
     generate_unique_id,
     get_cephci_config,
-    get_latest_container,
     magna_url,
 )
 from utility.xunit import create_xunit_results
@@ -58,9 +56,11 @@ A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
   run.py --rhbuild BUILD
+        (--platform <name>)
         (--suite <FILE>)...
         (--global-conf FILE | --cluster-conf FILE)
         [--cloud <openstack> | <ibmc> | <baremetal>]
+        [--build <name>]
         [--inventory FILE]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
@@ -68,9 +68,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--add-repo <repo>]
         [--kernel-repo <repo>]
         [--store | --reuse <file>]
-        [--v2]
-        [--platform <name>]
-        [--build <name>]
         [--skip-cluster]
         [--skip-subscription]
         [--docker-registry <registry>]
@@ -110,10 +107,8 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --v2                              select pipeline Version 2.0 execution workflow
   --build <latest>                  eg: latest|tier-0|tier-1|tier-2|cvp|released
-                                    [default: latest]
-  --platform <rhel-8>                 select platform version eg., rhel-8, rhel-7
+  --platform <rhel-8>               select platform version eg., rhel-8, rhel-7
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
                                     Top level location of compose
   --add-repo <repo>                 Any additional repo's need to be enabled
@@ -367,7 +362,6 @@ def run(args):
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
     cleanup_name = args.get("--cleanup", None)
 
-    version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
     # Set log directory and get absolute path
@@ -410,7 +404,6 @@ def run(args):
     run_start_time = datetime.datetime.now()
     trigger_user = getuser()
 
-    platform = None
     build = None
     base_url = None
     ubuntu_repo = None
@@ -443,110 +436,13 @@ def run(args):
     if inventory_file is None and not reuse and cloud_type in ["openstack", "ibmc"]:
         raise Exception("Require system configuration information to provision.")
 
-    if not version2:
-        # Get ceph cluster version name
-        with open("rhbuild.yaml") as fd:
-            rhbuild_file = yaml.safe_load(fd)
+    platform = args["--platform"]
+    build = args.get("--build", None)
 
-        ceph = rhbuild_file["ceph"]
-        rhbuild_ = None
-        try:
-            ceph_name, rhbuild_ = next(
-                filter(
-                    lambda x: x,
-                    [(ceph[x]["name"], x) for x in ceph if x == rhbuild.split(".")[0]],
-                )
-            )
-        except StopIteration:
-            print("\nERROR: Please provide correct RH build version, run exited.")
-            sys.exit(1)
-
-        # Get base-url
-        composes = ceph[rhbuild_]["composes"]
-        if not base_url:
-
-            if rhbuild in composes:
-                base_url = composes[rhbuild or "latest"]["base_url"]
-
-        # Get ubuntu-repo
-        if not ubuntu_repo and rhbuild.startswith("3"):
-            if rhbuild in composes:
-                ubuntu_repo = composes[rhbuild or "latest"]["ubuntu_repo"]
-
-        if os.environ.get("TOOL") is not None:
-            ci_message = json.loads(os.environ["CI_MESSAGE"])
-            compose_id = ci_message["compose_id"]
-            compose_url = ci_message["compose_url"] + "/"
-            product_name = ci_message.get("product_name", None)
-            product_version = ci_message.get("product_version", None)
-            log.info("COMPOSE_URL = %s ", compose_url)
-
-            if os.environ["TOOL"] == "pungi":
-                # is a rhel compose
-                log.info("trigger on CI RHEL Compose")
-            elif os.environ["TOOL"] == "rhcephcompose":
-                # is a ubuntu compose
-                log.info("trigger on CI Ubuntu Compose")
-                ubuntu_repo = compose_url
-                log.info("using ubuntu repo" + ubuntu_repo)
-            elif os.environ["TOOL"] == "bucko":
-                # is a docker compose
-                log.info("Trigger on CI Docker Compose")
-                docker_registry, docker_tag = ci_message["repository"].split(
-                    "/rh-osbs/rhceph:"
-                )
-                docker_image = "rh-osbs/rhceph"
-                log.info(
-                    f"\nUsing docker registry from ci message: {docker_registry} \n"
-                    f"Docker image: {docker_image}\nDocker tag:{docker_tag}"
-                )
-                log.warning("Using Docker insecure registry setting")
-                docker_insecure_registry = True
-
-            if product_name == "ceph":
-                # is a rhceph compose
-                base_url = compose_url
-                log.info("using base url" + base_url)
-
-        if not os.environ.get("TOOL") and not ignore_latest_nightly_container:
-            try:
-                latest_container = get_latest_container(rhbuild)
-            except ValueError:
-                print(
-                    "ERROR:No latest nightly container UMB msg at "
-                    "/ceph/cephci-jenkins/latest-rhceph-container-info/ "
-                    "specify using the cli args or use --ignore-latest-container"
-                )
-                sys.exit(1)
-            docker_registry = (
-                latest_container.get("docker_registry")
-                if not docker_registry
-                else docker_registry
-            )
-            docker_image = (
-                latest_container.get("docker_image")
-                if not docker_image
-                else docker_image
-            )
-            docker_tag = (
-                latest_container.get("docker_tag") if not docker_tag else docker_tag
-            )
-            log.info(
-                f"Using latest nightly docker image - {docker_registry}/{docker_image}:{docker_tag}"
-            )
-            docker_insecure_registry = True
-            log.warning("Using Docker insecure registry setting")
-    else:
-        platform = args.get("--platform", "rhel-8")
-        build = args.get("--build", "latest")
-
-        if not platform:
-            raise TestSetupFailure("please provide --platform [rhel-7|rhel-8]")
-
-        if build != "released":
-            base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-                build, rhbuild, platform
-            )
+    if build and build != "released":
+        base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
+            build, rhbuild, platform
+        )
 
     store = args.get("--store", False)
 
@@ -583,6 +479,9 @@ def run(args):
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     suite = init_suite.load_suites(suite_files)
+    log.debug(f"Found the following valid test suites: {suite['tests']}")
+    if suite["nan"] and not suite["tests"]:
+        raise Exception("Please provide valid test suite name")
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
@@ -621,7 +520,7 @@ def run(args):
             distro.append(image_name.replace(".iso", ""))
 
         # get COMPOSE ID and ceph version
-        if build not in ["released", "cvp"]:
+        if build not in ["released", "cvp", None]:
             if cloud_type == "openstack" or cloud_type == "baremetal":
                 resp = requests.get(base_url + "/COMPOSE_ID", verify=False)
                 compose_id = resp.text
@@ -858,7 +757,7 @@ def run(args):
             if not config.get("base_url"):
                 config["base_url"] = base_url
 
-            config["rhbuild"] = f"{rhbuild}-{platform}" if version2 else rhbuild
+            config["rhbuild"] = f"{rhbuild}-{platform}"
             config["cloud-type"] = cloud_type
             if "ubuntu_repo" in locals():
                 config["ubuntu_repo"] = ubuntu_repo
@@ -1009,6 +908,7 @@ def run(args):
     close_and_remove_filehandlers()
 
     test_run_metadata = {
+        "build": rhbuild,
         "polarion-project-id": "CEPH",
         "suite-name": suite_name,
         "distro": distro,
@@ -1020,13 +920,14 @@ def run(args):
         "container-tag": docker_tag,
         "compose-id": compose_id,
         "log-dir": run_dir,
+        "run-id": run_id,
     }
 
     if post_to_report_portal:
         rp_logger.finish_launch()
 
     if xunit_results:
-        create_xunit_results(suite_name, tcs, run_dir, test_run_metadata)
+        create_xunit_results(suite_name, tcs, test_run_metadata)
 
     print("\nAll test logs located here: {base}".format(base=url_base))
     print_results(tcs)

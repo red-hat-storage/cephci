@@ -131,7 +131,7 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
-def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
+def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     """
     verify multisite sync status on primary
     """
@@ -156,7 +156,7 @@ def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
     )
     if "behind" in check_sync_status or "recovering" in check_sync_status:
         log.info("sync is in progress")
-        log.info("sleep of 60 secs for sync to complete")
+        log.info(f"sleep of {delay}secs for sync to complete")
         for retry_count in range(retry):
             time.sleep(delay)
             check_sync_status, err = verify_io_on_site_node.exec_command(

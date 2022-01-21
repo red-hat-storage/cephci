@@ -1,7 +1,6 @@
 # datetime module supplies classes to work with date and time
 import datetime
 import json
-import logging
 import secrets
 import string
 import time
@@ -10,8 +9,9 @@ import traceback
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def check_clean_pgs(client, timeout=300):

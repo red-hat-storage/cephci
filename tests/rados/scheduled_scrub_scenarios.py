@@ -14,15 +14,15 @@
 """
 
 import datetime
-import logging
 import os
 import sys
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.rados_scrub import RadosScrubber
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def set_default_params(rados_obj):

@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Red Hat Ceph RPM based upgrade with ceph custom name - OKR bz 1876447 testing."
+echo "Beginning Ceph RGW testing using S3Tests."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-7"
-rhbuild="4.2"
-test_suite="suites/nautilus/upgrades/tier-2_upgrade_ceph-custom-name.yaml"
-test_conf="conf/nautilus/upgrades/upgrades.yaml"
+rhbuild="4.3"
+test_suite="suites/nautilus/rgw/tier-2_rgw_s3tests.yaml"
+test_conf="conf/nautilus/rgw/5-node-cluster.yaml"
 test_inventory="conf/inventory/rhel-7-latest.yaml"
 return_code=0
 
@@ -19,7 +19,7 @@ else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
 
-$WORKSPACE/.venv/bin/python run.py --v2 \
+$WORKSPACE/.venv/bin/python run.py \
     --osp-cred $HOME/osp-cred-ci-2.yaml \
     --rhbuild $rhbuild \
     --platform $platform \
@@ -46,4 +46,3 @@ if [ $? -ne 0 ]; then
 fi
 
 exit ${return_code}
-

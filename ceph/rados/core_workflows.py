@@ -11,13 +11,13 @@ More operations to be added as needed
 
 import datetime
 import json
-import logging
 import re
 import time
 
 from ceph.ceph_admin import CephAdmin
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class RadosOrchestrator:

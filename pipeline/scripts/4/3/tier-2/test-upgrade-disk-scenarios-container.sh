@@ -4,7 +4,7 @@ echo "Beginning Red Hat Ceph Container Based Cluster Upgrade With Ceph Disk OSD 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-7"
-rhbuild="4.2"
+rhbuild="4.3"
 test_suite="suites/nautilus/upgrades/tier-2_upgrade_test-disk-scenarios-container.yaml"
 test_conf="conf/nautilus/upgrades/tier-2_upgrade.yaml"
 test_inventory="conf/inventory/rhel-7-latest.yaml"
@@ -19,7 +19,7 @@ else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
 
-$WORKSPACE/.venv/bin/python run.py --v2 \
+$WORKSPACE/.venv/bin/python run.py \
     --osp-cred $HOME/osp-cred-ci-2.yaml \
     --rhbuild $rhbuild \
     --platform $platform \

@@ -5,6 +5,7 @@ def testStages = [:]
 def testResults = [:]
 def rhcephVersion
 def buildType
+def buildArtifacts
 def buildPhase = "tier-0"
 def sharedLib
 
@@ -44,6 +45,12 @@ node(nodeName) {
         /* Prepare pipeline stages using RHCEPH version */
         rhcephVersion = "${params.rhcephVersion}" ?: ""
         buildType = "${params.buildType}" ?: ""
+        buildArtifacts = "${params.buildArtifacts}" ?: [:]
+
+        if ( buildArtifacts ){
+            buildArtifacts = readJSON text: "${buildArtifacts}"
+        }
+
         if ( (! rhcephVersion?.trim()) && (! buildType?.trim()) ) {
             error "Required Prameters are not provided.."
         }
@@ -130,6 +137,7 @@ node(nodeName) {
                 "result": currentBuild.currentResult,
                 "object-prefix": dirName,
             ],
+            "recipe": buildArtifacts,
             "generated_at": env.BUILD_ID,
             "version": "1.1.0",
         ]
@@ -164,7 +172,8 @@ node(nodeName) {
                 wait: false,
                 job: "tier-x",
                 parameters: [string(name: 'rhcephVersion', value: rhcephVersion),
-                            string(name: 'buildType', value: buildPhase)]
+                            string(name: 'buildType', value: buildPhase),
+                            string(name: 'buildArtifacts', value: buildArtifacts)]
             ])
         }
     }

@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Begin testing of RGW Multisite 4.x CDN upgrade to latest development build."
+echo "Beginning Red Hat Ceph RPM Based Cluster Upgrade With Ceph Disk OSD Scenario."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-7"
 rhbuild="4.3"
-test_suite="suites/nautilus/rgw/tier-1_rgw_multisite_test-upgrade-4.x-to-latest.yaml"
-test_conf="conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+test_suite="suites/nautilus/upgrades/tier-2_upgrade_test-disk-scenarios-rpm.yaml"
+test_conf="conf/nautilus/upgrades/tier-2_upgrade.yaml"
 test_inventory="conf/inventory/rhel-7-latest.yaml"
 return_code=0
 
@@ -19,7 +19,7 @@ else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
 
-$WORKSPACE/.venv/bin/python run.py --v2 \
+$WORKSPACE/.venv/bin/python run.py \
     --osp-cred $HOME/osp-cred-ci-2.yaml \
     --rhbuild $rhbuild \
     --platform $platform \
@@ -46,3 +46,4 @@ if [ $? -ne 0 ]; then
 fi
 
 exit ${return_code}
+

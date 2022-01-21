@@ -62,10 +62,34 @@ node(nodeName) {
 
         sh script: "${copyFiles} && ${rmTmpDir}"
         sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
-        sharedLib.uploadTestResultToReportPortal(rpPreprocDir, credsRpProc, metaData)
+        sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
 
         //Remove the sync results folder
         sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
+
+        // Update RH recipe file
+        def testStatus = msgMap["test"]["result"]
+        def composeInfo = msgMap["recipe"]
+
+        if ( composeInfo && testStatus == "SUCCESS" ){
+            def tierLevel = msgMap["pipeline"]["name"]
+            def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
+            majorVersion = rhcsVersion["major_version"]
+            minorVersion = rhcsVersion["minor_version"]
+
+            def latestContent = sharedLib.readFromReleaseFile(
+                    majorVersion, minorVersion
+                )
+
+            if ( latestContent.containsKey(tierLevel) ) {
+                latestContent[tierLevel] = composeInfo
+            }
+            else {
+                def updateContent = ["${tierLevel}": composeInfo]
+                latestContent += updateContent
+            }
+            sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
+        }
     }
 
 }

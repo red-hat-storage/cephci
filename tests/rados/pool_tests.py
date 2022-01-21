@@ -5,15 +5,18 @@ Tests included:
 2. Effect on size of pools with and without compression
 """
 import datetime
-import logging
 import re
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
+from utility.log import Log
+from utility.utils import method_should_succeed
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -27,6 +30,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
+    pool_obj = PoolFunctions(node=cephadm)
 
     if config.get("ec_pool_recovery_improvement"):
         ec_config = config.get("ec_pool_recovery_improvement")
@@ -236,4 +240,124 @@ def run(ceph_cluster, **kw):
             log.debug(
                 f"The profile is already scale-up by default in release : {build}"
             )
+        return 0
+
+    if config.get("verify_pool_target_ratio"):
+        log.debug("Verifying target size ratio on pools")
+        target_configs = config["verify_pool_target_ratio"]["configurations"]
+        # Creating pools and starting the test
+        for entry in target_configs.values():
+            log.debug(f"Creating {entry['pool_type']} pool on the cluster")
+            if entry.get("pool_type", "replicated") == "erasure":
+                method_should_succeed(
+                    rados_obj.create_erasure_pool, name=entry["pool_name"], **entry
+                )
+            else:
+                method_should_succeed(
+                    rados_obj.create_pool,
+                    **entry,
+                )
+            rados_obj.bench_write(**entry)
+            if not pool_obj.verify_target_ratio_set(
+                pool_name=entry["pool_name"], ratio=entry["target_size_ratio"]
+            ):
+                log.error(
+                    f"Could not change the target ratio on the pool: {entry['pool_name']}"
+                )
+                return 1
+            log.debug("Set the ratio. getting the projected pg's")
+
+            rados_obj.change_recover_threads(config=config, action="set")
+            log.debug(
+                "Waiting for the rebalancing to complete on the cluster after the change"
+            )
+            # Sleeping for 2 minutes for rebalancing to start & for new PG count to be updated.
+            time.sleep(120)
+
+            new_pg_count = int(
+                pool_obj.get_pg_autoscaler_value(
+                    pool_name=entry["pool_name"], item="pg_num_target"
+                )
+            )
+            if new_pg_count <= entry["pg_num"]:
+                log.error(
+                    f"Count of PG's not increased on the pool: {entry['pool_name']}"
+                    f"Initial creation count : {entry['pg_num']}"
+                    f"New count after setting num target : {new_pg_count}"
+                )
+                return 1
+
+            res = wait_for_clean_pg_sets(rados_obj)
+            if not res:
+                log.error(
+                    "PG's in cluster are not active + Clean after the ratio change"
+                )
+                return 1
+            if not pool_obj.verify_target_ratio_set(
+                pool_name=entry["pool_name"], ratio=0.0
+            ):
+                log.error(
+                    f"Could not remove the target ratio on the pool: {entry['pool_name']}"
+                )
+                return 1
+
+            # Sleeping for 2 minutes for rebalancing to start & for new PG count to be updated.
+            time.sleep(120)
+            # Checking if after the removal of ratio, the PG count has reduced
+            end_pg_count = int(
+                pool_obj.get_pg_autoscaler_value(
+                    pool_name=entry["pool_name"], item="pg_num_target"
+                )
+            )
+            if end_pg_count >= new_pg_count:
+                log.error(
+                    f"Count of PG's not changed/ reverted on the pool: {entry['pool_name']}"
+                    f" after removing the target ratios"
+                )
+                return 1
+            rados_obj.change_recover_threads(config=config, action="rm")
+            if entry.get("delete_pool", False):
+                rados_obj.detete_pool(pool=entry["pool_name"])
+            log.info(
+                f"Completed the test of target ratio on pool: {entry['pool_name']} "
+            )
+        log.info("Target ratio tests completed")
+        return 0
+
+    if config.get("verify_mon_target_pg_per_osd"):
+        pg_conf = config.get("verify_mon_target_pg_per_osd")
+        if not mon_obj.set_config(**pg_conf):
+            log.error("Could not set the value for mon_target_pg_per_osd ")
+            return 1
+        mon_obj.remove_config(**pg_conf)
+        log.info("Set and verified the value for mon_target_pg_per_osd ")
+        return 0
+
+    if config.get("verify_pg_num_min"):
+        log.debug("Verifying pg_num_min on pools")
+        target_configs = config["verify_pg_num_min"]["configurations"]
+        # Creating pools and starting the test
+        for entry in target_configs.values():
+            log.debug(f"Creating {entry['pool_type']} pool on the cluster")
+            if entry.get("pool_type", "replicated") == "erasure":
+                method_should_succeed(
+                    rados_obj.create_erasure_pool, name=entry["pool_name"], **entry
+                )
+            else:
+                method_should_succeed(
+                    rados_obj.create_pool,
+                    **entry,
+                )
+            rados_obj.bench_write(**entry)
+
+            if not rados_obj.set_pool_property(
+                pool=entry["pool_name"], props="pg_num_min", value=entry["pg_num_min"]
+            ):
+                log.error("Could not set the pg_min_size on the pool")
+                return 1
+
+            if entry.get("delete_pool", False):
+                rados_obj.detete_pool(pool=entry["pool_name"])
+            log.info(f"Completed the test of pg_min_num on pool: {entry['pool_name']} ")
+        log.info("pg_min_num tests completed")
         return 0

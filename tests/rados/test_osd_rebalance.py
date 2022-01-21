@@ -1,6 +1,5 @@
 import datetime
 import json
-import logging
 import random
 import time
 
@@ -9,9 +8,10 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_9281 import do_rados_put
+from utility.log import Log
 from utility.utils import method_should_succeed
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -42,9 +42,7 @@ def run(ceph_cluster, **kw):
                     rados_obj.create_erasure_pool, name=cr_pool["pool_name"], **cr_pool
                 )
             else:
-                method_should_succeed(
-                    rados_obj.create_pool, pool_name=cr_pool["pool_name"], **cr_pool
-                )
+                method_should_succeed(rados_obj.create_pool, **cr_pool)
             method_should_succeed(rados_obj.bench_write, **cr_pool)
         pool = random.choice(pools)["create_pool"]
     if not pool:

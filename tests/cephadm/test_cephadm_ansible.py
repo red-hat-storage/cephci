@@ -5,11 +5,10 @@ Playbook supported
 - cephadm-purge-cluster.yaml
 - cephadm-clients.yaml
 """
-import logging
-
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kwargs) -> int:

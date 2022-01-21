@@ -1,14 +1,13 @@
 import datetime
-import logging
 import random
 import re
 import string
 import time
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 class FsUtils(object):

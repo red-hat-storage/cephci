@@ -440,6 +440,32 @@ class GenerateServiceSpec:
         return temp_file.name
 
 
+def create_ceph_config_file(node, config):
+    """
+    Create config file based on config options and return file name
+
+    Returns:
+        temp_filename (Str)
+
+    """
+    path = dirname(__file__) + "/jinja_templates/config.jinja"
+    with open(path) as fd:
+        template = fd.read()
+
+    conf_content = Template(template).render(config=config)
+
+    LOG.info(f"Conf yaml file content:\n{conf_content}")
+    # Create conf yaml file
+    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+    conf_file = node.node.remote_file(
+        sudo=True, file_name=temp_file.name, file_mode="w"
+    )
+    conf_file.write(conf_content)
+    conf_file.flush()
+
+    return temp_file.name
+
+
 def get_cluster_state(cls, commands=[]):
     """
     fetch cluster state using commands provided along
