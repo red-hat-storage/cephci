@@ -469,7 +469,7 @@ def create_ceph_config_file(node, config):
     return temp_file.name
 
 
-def get_cluster_state(cls, commands=[]):
+def get_cluster_state(cls, commands=None):
     """
     fetch cluster state using commands provided along
     with the default set of commands::
@@ -493,6 +493,8 @@ def get_cluster_state(cls, commands=[]):
         "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
         "ceph mon stat",
     ]
+
+    commands = commands if commands else list()
 
     __CLUSTER_STATE_COMMANDS.extend(commands)
 
@@ -527,7 +529,8 @@ def get_host_daemon_map(cls):
         cls: cephadm instance object
 
     Returns:
-        Dictionary with host names as keys and names of the daemons deployed as value list
+        Dictionary with host names as keys and names of the daemons deployed as value
+        list
     """
     out, _ = cls.shell(args=["ceph", "orch", "ps", "-f", "json"])
     daemon_obj = json.loads(out)
@@ -589,8 +592,8 @@ def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=120):
     Returns:
         boolean
     """
-    end_time = datetime.now() + timedelta(seconds=timeout)
-    while end_time > datetime.now():
+    end_time = datetime.datetime.now() + timedelta(seconds=timeout)
+    while end_time > datetime.datetime.now():
         if file_exist == file_or_path_exists(node, file_or_path):
             return True
         sleep(2)
@@ -599,7 +602,8 @@ def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=120):
 
 def validate_log_file_after_enable(cls):
     """
-    Method to verify generation of log files in default log directory when logging not enabled
+    Verify generation of log files in default log directory when logging not enabled.
+
     Args:
         cls: cephadm instance object
 
@@ -630,8 +634,8 @@ def validate_log_file_after_enable(cls):
                 LOG.info(
                     f"Verifying existence of log file {file} in host {node.hostname}"
                 )
-                fileExists = file_or_path_exists(node, file)
-                if not fileExists:
+                file_exists = file_or_path_exists(node, file)
+                if not file_exists:
                     LOG.error(
                         f"Log for {daemon} is not present in the node {node.ip_address}"
                     )
