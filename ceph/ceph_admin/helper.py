@@ -519,6 +519,7 @@ def get_host_osd_map(cls):
     for obj in osd_obj["nodes"]:
         if obj["type"] == "host":
             osd_dict[obj["name"]] = obj["children"]
+
     return osd_dict
 
 
@@ -541,6 +542,7 @@ def get_host_daemon_map(cls):
             daemon_dict[daemon["hostname"]].append(daemon_name)
         else:
             daemon_dict[daemon["hostname"]] = [daemon_name]
+
     return daemon_dict
 
 
@@ -558,6 +560,7 @@ def get_hosts_deployed(cls):
     host_obj = json.loads(out)
     for host in host_obj:
         hosts.append(host["hostname"])
+
     return hosts
 
 
@@ -573,11 +576,12 @@ def file_or_path_exists(node, file_or_path):
     """
     try:
         out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
-        LOG.info("Output : %s" % out.read().decode())
+        LOG.info(f"Output : {out.read().decode()}")
+        return True
     except CommandFailed as err:
-        LOG.error("Error: %s" % err)
-        return False
-    return True
+        LOG.error(f"Error: {err}")
+
+    return False
 
 
 def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=120):
@@ -644,4 +648,5 @@ def validate_log_file_after_enable(cls):
         except CommandFailed as err:
             LOG.error("Error: %s" % err)
             return False
+
     return True
