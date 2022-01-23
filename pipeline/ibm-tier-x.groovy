@@ -172,7 +172,7 @@ node(nodeName) {
             skipPublishingChecks: true ,
             allowEmptyResults: true
         )
-        buildArtifacts = writeJSON returnText: true json: buildArtifacts
+        buildArtifacts = writeJSON returnText: true, json: buildArtifacts
         // Update result to recipe file and execute post tier based on run execution
         build ([
             wait: false,
