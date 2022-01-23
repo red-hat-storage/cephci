@@ -120,10 +120,11 @@ class Host(MaintenanceMixin, Orch):
 
         if _labels:
             if "_admin" in _labels:
-                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
-                if not monitoring_file_existence(node, DEFAULT_KEYRING_PATH):
+                if not monitoring_file_existence(ceph_node, DEFAULT_KEYRING_PATH):
                     raise HostOpFailure("Ceph keyring not found")
+
                 logger.info("Ceph Keyring found")
+
             assert sorted(self.fetch_labels_by_hostname(ceph_node.shortname)) == sorted(
                 _labels
             )
