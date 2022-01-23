@@ -167,7 +167,7 @@ node(nodeName) {
         sharedLib.writeToRecipeFile(buildType, rhcephVersion, buildPhase)
         latestContent = sharedLib.readFromRecipeFile(rhcephVersion)
         println "Recipe file content is: ${latestContent}"
-        buildArtifacts = writeJSON returnText: true json: buildArtifacts
+        buildArtifacts = writeJSON returnText: true, json: buildArtifacts
         if (buildType == 'latest') {
             build ([
                 wait: false,
