@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 import re
 import time
@@ -1061,7 +1060,7 @@ def fetch_image_builds(version):
 
         return builds
     except AssertionError as err:
-        logging.warning(err)
+        log.warning(err)
         raise AssertionError(f"Ceph Image builds not found : {DEFAULT_OSBS_SERVER}")
 
 

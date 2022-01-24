@@ -1,11 +1,12 @@
 """Support VM lifecycle operation in an OpenStack Cloud."""
-import logging
 import socket
 from typing import Optional
 
 import SoftLayer
 
-LOG = logging.getLogger()
+from utility.log import Log
+
+LOG = Log(__name__)
 
 # libcloud does not have a timeout enabled for Openstack calls to
 # ``create_node``, and it uses the default timeout value from socket which is
