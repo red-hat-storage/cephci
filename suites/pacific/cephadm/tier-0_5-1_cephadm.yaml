@@ -148,6 +148,7 @@ tests:
         args:
           node: node1
           labels: apply-all-labels
+        validate_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -164,6 +165,7 @@ tests:
           node: node4
           labels:
             - _admin
+        validate_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -178,6 +180,7 @@ tests:
           node: node4
           labels:
             - _admin
+        validate_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -232,6 +235,7 @@ tests:
           node: node5
           labels:
             - _admin
+        validate_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
   - test:
