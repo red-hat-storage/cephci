@@ -1,9 +1,9 @@
 import datetime
-import logging
 
 from ceph.utils import get_public_network, set_container_info
+from utility.utils import Log
 
-log = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -12,7 +12,7 @@ def run(ceph_cluster, **kw):
     Args:
         ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
     """
-    log.info("Running ceph ansible deployment")
+    LOG.info("Running ceph ansible deployment")
     ceph_nodes = kw.get("ceph_nodes")
     config = kw.get("config")
     filestore = config.get("filestore", False)
@@ -66,7 +66,7 @@ def run(ceph_cluster, **kw):
     ceph_cluster.rhcs_version = build
 
     if config.get("skip_setup") is True:
-        log.info("Skipping setup of ceph cluster")
+        LOG.info("Skipping setup of ceph cluster")
         return 0
 
     test_data["install_version"] = build
@@ -100,7 +100,7 @@ def run(ceph_cluster, **kw):
     if test_data.get("luns_setting", None) and test_data.get("initiator_setting", None):
         ceph_installer.add_iscsi_settings(test_data)
 
-    log.info("Ceph ansible version " + ceph_installer.get_installed_ceph_versions())
+    LOG.info("Ceph ansible version " + ceph_installer.get_installed_ceph_versions())
 
     # ansible playbookk based on container or bare-metal deployment
     file_name = "site.yml"
@@ -118,11 +118,11 @@ def run(ceph_cluster, **kw):
     # manually handle client creation in a containerized deployment (temporary)
     if ceph_cluster.containerized:
         for node in ceph_cluster.get_ceph_objects("client"):
-            log.info("Manually installing client node")
+            LOG.info("Manually installing client node")
             node.exec_command(sudo=True, cmd="yum install -y ceph-common")
 
     if rc != 0:
-        log.error("Failed during deployment")
+        LOG.error("Failed during deployment")
         return rc
 
     # check if all osd's are up and in
