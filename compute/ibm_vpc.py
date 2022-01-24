@@ -1,5 +1,4 @@
 """IBM-Cloud VPC provider implementation for CephVMNode."""
-import logging
 import re
 import socket
 from copy import deepcopy
@@ -16,9 +15,11 @@ from ibm_cloud_sdk_core.api_exception import ApiException
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_vpc import VpcV1  # noqa
 
+from utility.log import Log
+
 from .exceptions import NodeDeleteFailure, NodeError, ResourceNotFound
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 def get_ibm_service(access_key: str, service_url: str):
