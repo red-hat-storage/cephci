@@ -1,12 +1,11 @@
 """Perform ceph install and upgrade according to the path given in a test suite"""
-import logging
 
 from tests.ceph_ansible import switch_rpm_to_container, test_ansible_upgrade
 from tests.ceph_installer import test_ansible, test_cephadm
 from tests.cephadm import test_cephadm_upgrade
-from utility.utils import get_release_repo
+from utility.utils import Log, get_release_repo
 
-log = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 def get_ansible_conf(config, version, is_repo_present, is_ceph_conf_present):
@@ -103,8 +102,8 @@ def run(ceph_cluster, **kw):
     Args:
         ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
     """
-    log.info("Running test")
-    log.info("Running ceph upgrade test")
+    LOG.info("Running test")
+    LOG.info("Running ceph upgrade test")
     config = kw.get("config")
     paths = config.get("paths")
     versions = list(paths)
