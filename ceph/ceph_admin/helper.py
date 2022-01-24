@@ -565,8 +565,8 @@ def get_hosts_deployed(cls):
 
 
 def file_or_path_exists(node, file_or_path):
-    """
-    Method to check abs path exists
+    """Method to check abs path exists.
+
     Args:
         node: node object where file should be exists
         file_or_path: ceph file or directory path
@@ -584,14 +584,14 @@ def file_or_path_exists(node, file_or_path):
     return False
 
 
-def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=120):
+def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=180):
     """Method to monitor a file existence.
 
     Args:
         node: node object where file should be exists
         file_or_path: ceph file or directory path
         file_exist: checks file existence (default =True)
-        timeout (Int):  In seconds, the maximum allowed time (default=120)
+        timeout (Int):  In seconds, the maximum allowed time (default=180)
 
     Returns:
         boolean
@@ -600,7 +600,7 @@ def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=120):
     while end_time > datetime.datetime.now():
         if file_exist == file_or_path_exists(node, file_or_path):
             return True
-        sleep(2)
+        sleep(3)
     return False
 
 
