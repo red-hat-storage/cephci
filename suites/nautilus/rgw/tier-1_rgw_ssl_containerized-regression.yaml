@@ -173,6 +173,7 @@ tests:
       desc: Indexless (blind) buckets
       polarion-id: CEPH-10354, CEPH-10357
       module: sanity_rgw.py
+      comments: Known issue BZ-2043366
       config:
         test-version: v2
         script-name: test_indexless_buckets.py
