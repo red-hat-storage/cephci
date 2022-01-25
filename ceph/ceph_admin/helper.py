@@ -1,11 +1,14 @@
 """
 Contains helper functions that can used across the module.
 """
+import datetime
 import json
 import logging
 import os
 import tempfile
+from datetime import timedelta
 from os.path import dirname
+from time import sleep
 
 from jinja2 import Template
 
@@ -466,7 +469,7 @@ def create_ceph_config_file(node, config):
     return temp_file.name
 
 
-def get_cluster_state(cls, commands=[]):
+def get_cluster_state(cls, commands=None):
     """
     fetch cluster state using commands provided along
     with the default set of commands::
@@ -491,6 +494,8 @@ def get_cluster_state(cls, commands=[]):
         "ceph mon stat",
     ]
 
+    commands = commands if commands else list()
+
     __CLUSTER_STATE_COMMANDS.extend(commands)
 
     for cmd in __CLUSTER_STATE_COMMANDS:
@@ -514,6 +519,7 @@ def get_host_osd_map(cls):
     for obj in osd_obj["nodes"]:
         if obj["type"] == "host":
             osd_dict[obj["name"]] = obj["children"]
+
     return osd_dict
 
 
@@ -524,7 +530,8 @@ def get_host_daemon_map(cls):
         cls: cephadm instance object
 
     Returns:
-        Dictionary with host names as keys and names of the daemons deployed as value list
+        Dictionary with host names as keys and names of the daemons deployed as value
+        list
     """
     out, _ = cls.shell(args=["ceph", "orch", "ps", "-f", "json"])
     daemon_obj = json.loads(out)
@@ -535,6 +542,7 @@ def get_host_daemon_map(cls):
             daemon_dict[daemon["hostname"]].append(daemon_name)
         else:
             daemon_dict[daemon["hostname"]] = [daemon_name]
+
     return daemon_dict
 
 
@@ -552,12 +560,13 @@ def get_hosts_deployed(cls):
     host_obj = json.loads(out)
     for host in host_obj:
         hosts.append(host["hostname"])
+
     return hosts
 
 
 def file_or_path_exists(node, file_or_path):
-    """
-    Method to check abs path exists
+    """Method to check abs path exists.
+
     Args:
         node: node object where file should be exists
         file_or_path: ceph file or directory path
@@ -567,16 +576,38 @@ def file_or_path_exists(node, file_or_path):
     """
     try:
         out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
-        LOG.info("Output : %s" % out.read().decode())
+        LOG.info(f"Output : {out.read().decode()}")
+        return True
     except CommandFailed as err:
-        LOG.error("Error: %s" % err)
-        return False
-    return True
+        LOG.error(f"Error: {err}")
+
+    return False
+
+
+def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=180):
+    """Method to monitor a file existence.
+
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+        file_exist: checks file existence (default =True)
+        timeout (Int):  In seconds, the maximum allowed time (default=180)
+
+    Returns:
+        boolean
+    """
+    end_time = datetime.datetime.now() + timedelta(seconds=timeout)
+    while end_time > datetime.datetime.now():
+        if file_exist == file_or_path_exists(node, file_or_path):
+            return True
+        sleep(3)
+    return False
 
 
 def validate_log_file_after_enable(cls):
     """
-    Method to verify generation of log files in default log directory when logging not enabled
+    Verify generation of log files in default log directory when logging not enabled.
+
     Args:
         cls: cephadm instance object
 
@@ -607,8 +638,8 @@ def validate_log_file_after_enable(cls):
                 LOG.info(
                     f"Verifying existence of log file {file} in host {node.hostname}"
                 )
-                fileExists = file_or_path_exists(node, file)
-                if not fileExists:
+                file_exists = file_or_path_exists(node, file)
+                if not file_exists:
                     LOG.error(
                         f"Log for {daemon} is not present in the node {node.ip_address}"
                     )
@@ -617,4 +648,5 @@ def validate_log_file_after_enable(cls):
         except CommandFailed as err:
             LOG.error("Error: %s" % err)
             return False
+
     return True

@@ -6,6 +6,7 @@ def versions
 def cephVersion
 def composeUrl
 def containerImage
+def releaseMap = [:]
 
 // Pipeline script entry point
 node(nodeName) {
@@ -54,7 +55,7 @@ node(nodeName) {
         println "repo url : ${composeUrl}"
 
         cephVersion = sharedLib.fetchCephVersion(composeUrl)
-        def releaseMap = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
+        releaseMap = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
 
         if ( releaseMap.isEmpty() || !releaseMap?.rc?."ceph-version" ) {
             sharedLib.unSetLock(majorVersion, minorVersion)
@@ -87,7 +88,9 @@ node(nodeName) {
                 "version": cephVersion
             ],
             "build": [
-                "repository": containerImage
+                "repository": containerImage,
+                "version": cephVersion,
+                "composes": releaseMap.rc.composes
             ],
             "contact": [
                 "email": "ceph-qe@redhat.com",
