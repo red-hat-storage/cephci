@@ -71,7 +71,7 @@ node(nodeName) {
         def testStatus = msgMap["test"]["result"]
         def composeInfo = msgMap["recipe"]
 
-        if ( composeInfo && testStatus == "SUCCESS" ){
+        if ( composeInfo != null && testStatus == "SUCCESS" ){
             def tierLevel = msgMap["pipeline"]["name"]
             def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
             majorVersion = rhcsVersion["major_version"]
