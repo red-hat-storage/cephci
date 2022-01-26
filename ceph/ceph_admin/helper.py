@@ -487,7 +487,7 @@ def get_cluster_state(cls, commands=None):
     __CLUSTER_STATE_COMMANDS = [
         "ceph status",
         "ceph orch host ls",
-        "ceph orch ls -f yaml",
+        "ceph orch ls -f json-pretty",  # https://bugzilla.redhat.com/show_bug.cgi?id=2044978
         "ceph orch ps -f json-pretty",
         "ceph health detail -f yaml",
         "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
