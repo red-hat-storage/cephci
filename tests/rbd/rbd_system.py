@@ -7,7 +7,9 @@ following things are done
 - Call the appropriate test script
 - Return the status code of the script.
 """
-import logging as log
+from utility.log import Log
+
+log = Log(__name__)
 
 
 def run(**kw):
