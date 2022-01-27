@@ -28,7 +28,6 @@ Entry Point:
 
 import binascii
 import json
-import logging
 import os
 from json import loads
 from time import sleep
@@ -38,8 +37,9 @@ from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode, CommandFailed
 from ceph.utils import open_firewall_port
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 S3CONF = """[DEFAULT]
 host = {{ data.host }}
 port = {{ data.port }}
