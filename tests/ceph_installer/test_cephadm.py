@@ -4,11 +4,9 @@ Test suite that verifies the deployment of RedHat Ceph Storage via the cephadm C
 The intent of the suite is to simulate a standard operating procedure expected by a
 customer.
 """
-import logging
-
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
-from ceph.ceph_admin.alert_manager import AlertManager
+from ceph.ceph_admin.alert_manager import AlertManagers
 from ceph.ceph_admin.cephfs_mirror import CephfsMirror
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.crash import Crash
@@ -27,8 +25,9 @@ from ceph.ceph_admin.osd import OSD
 from ceph.ceph_admin.prometheus import Prometheus
 from ceph.ceph_admin.rbd_mirror import RbdMirror
 from ceph.ceph_admin.rgw import RGW
+from utility.log import Log
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
 
 
 SERVICE_MAP = dict(
