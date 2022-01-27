@@ -11,12 +11,13 @@ This module will not install any pre-requisites of the repo.
 This module returns 0 on success else 1.
 """
 import json
-import logging
 from time import sleep
 
 from ceph.utils import get_nodes_by_ids
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+log = Log(__name__)
+
 TEST_REPO = "https://github.com/ceph/ceph.git"
 SCRIPT_PATH = "qa/workunits/rbd"
 
@@ -86,7 +87,7 @@ def run(ceph_cluster, **kwargs) -> int:
         0 - Success
         1 - Failure
     """
-    LOG.info("Running RBD Sanity tests.")
+    log.info("Running RBD Sanity tests.")
 
     config = kwargs["config"]
     script_dir = config["script_path"]
