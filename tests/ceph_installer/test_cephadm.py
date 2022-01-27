@@ -6,7 +6,7 @@ customer.
 """
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
-from ceph.ceph_admin.alert_manager import AlertManagers
+from ceph.ceph_admin.alert_manager import AlertManager
 from ceph.ceph_admin.cephfs_mirror import CephfsMirror
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.crash import Crash
