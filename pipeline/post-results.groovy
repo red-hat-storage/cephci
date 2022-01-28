@@ -63,7 +63,11 @@ node(nodeName) {
         if ( metaData["stage"] == "latest" ) { metaData["stage"] = "Tier-0" }
 
         sh script: "${copyFiles} && ${rmTmpDir}"
-        sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"], buildArtifacts=composeInfo)
+
+        if ( composeInfo ){
+            metaData["buildArtifacts"] = composeInfo
+        }
+        sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
         sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
 
         //Remove the sync results folder
