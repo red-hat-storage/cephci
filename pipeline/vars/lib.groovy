@@ -286,7 +286,7 @@ def sendEmail(
     def testResults,
     def artifactDetails,
     def tierLevel,
-    def toList="ceph-qe-list@redhat.com",
+    def toList="ceph-qe-list@redhat.com"
     ) {
     /*
         Send an Email
