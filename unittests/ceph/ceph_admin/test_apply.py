@@ -14,7 +14,7 @@ class MockApplyMixinTestWithShellOutput(ApplyMixin):
         return "Scheduled rgw update", 0
 
     def check_service_exists(self, service_name="rgw"):
-        return 1, 0
+        return True
 
 
 class MockApplyMixinTestWithOutShellOutput(ApplyMixin):
@@ -26,10 +26,10 @@ class MockApplyMixinTestWithOutShellOutput(ApplyMixin):
         return 0, 0
 
     def check_service_exists(self, service_name="rgw"):
-        return 1, 0
+        return True
 
 
-class MockApplyMixinTestWithOutSherviceOutput(ApplyMixin):
+class MockApplyMixinTestWithOutServiceOutput(ApplyMixin):
     def __init__(self):
         self.cluster = None
         self.service_name = "rgw"
@@ -38,7 +38,7 @@ class MockApplyMixinTestWithOutSherviceOutput(ApplyMixin):
         return 0, 0
 
     def check_service_exists(self, service_name="rgw"):
-        return 0, 0
+        return False
 
 
 class ApplyTest(unittest.TestCase):
@@ -98,7 +98,7 @@ class ApplyTest(unittest.TestCase):
         self.assertEqual(mock_config.call_count, 2)
 
     @mock.patch("ceph.ceph_admin.apply.config_dict_to_string")
-    def test_apply_without_servive_output(self, mock_config):
+    def test_apply_without_service_output(self, mock_config):
         try:
             config = {
                 "command": "apply",
@@ -118,9 +118,31 @@ class ApplyTest(unittest.TestCase):
                 "pos_args": ["node1", "dev/vdb", "dev"],
             }
             mock_config.return_value = ["ceph", "orch", " --verbose"]
-            self._apply = MockApplyMixinTestWithOutSherviceOutput()
+            self._apply = MockApplyMixinTestWithOutServiceOutput()
             self._apply.SERVICE_NAME = "rgw"
             self._apply.apply(config)
+        except OrchApplyServiceFailure:
+            self.assertEqual(self._apply.SERVICE_NAME, "rgw")
+        self.assertEqual(mock_config.call_count, 2)
+
+    @mock.patch("ceph.ceph_admin.apply.config_dict_to_string")
+    def test_apply_without_placement(self, mock_config):
+        try:
+            config_without_placement = {
+                "command": "apply",
+                "service": "rgw",
+                "args": {
+                    "all-available-devices": True,
+                    "dry-run": True,
+                },
+                "verify": False,
+                "base_cmd_args": {"verbose": True},
+                "pos_args": ["node1", "dev/vdb", "dev"],
+            }
+            mock_config.return_value = ["ceph", "orch", " --verbose"]
+            self._apply = MockApplyMixinTestWithOutServiceOutput()
+            self._apply.SERVICE_NAME = "rgw"
+            self._apply.apply(config_without_placement)
         except OrchApplyServiceFailure:
             self.assertEqual(self._apply.SERVICE_NAME, "rgw")
         self.assertEqual(mock_config.call_count, 2)

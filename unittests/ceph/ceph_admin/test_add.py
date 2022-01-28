@@ -36,6 +36,25 @@ class AddMixinTest(unittest.TestCase):
         config_mock.assert_called_once_with({"verbose": True})
         self.assertEqual(get_node_mock.call_count, 1)
 
+    @mock.patch("ceph.ceph_admin.add.get_node_by_id")
+    @mock.patch("ceph.ceph_admin.add.config_dict_to_string")
+    def test_add_witout_osd_service(self, config_mock, get_node_mock):
+        config = {
+            "command": "apply",
+            "service": "rgw",
+            "args": {"all-available-devices": True},
+            "verify": False,
+            "base_cmd_args": {"verbose": True},
+            "pos_args": ["node1", "dev/vdb", "dev"],
+        }
+        config_mock.return_value = ["ceph", "orch", "daemon", "add", "osd", "--verbose"]
+        obj = mock.Mock()
+        obj.shortname = "host"
+        get_node_mock.return_value = obj
+        self._add.add(config)
+        config_mock.assert_called_once_with({"verbose": True})
+        self.assertEqual(get_node_mock.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
