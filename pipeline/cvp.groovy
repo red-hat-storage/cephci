@@ -74,18 +74,21 @@ node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
-                branches: [[name: '*/master']],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'SubmoduleOption',
-                    disableSubmodules: false,
-                    parentCredentials: false,
-                    recursiveSubmodules: true,
-                    reference: '',
-                    trackingSubmodules: false
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
@@ -116,7 +119,7 @@ node(nodeName) {
 
     stage('Publish Results') {
         def status = 'PASSED'
-        if ("FAIL" in testResults.values()) {
+        if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
            status = 'FAILED'
         }
         def ciMsg = sharedLib.getCIMessageMap()

@@ -14,12 +14,13 @@ elections
  configuration database.
 """
 
-import logging
+import re
 import time
 
 from ceph.rados.core_workflows import RadosOrchestrator
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class MonElectionStrategies:
@@ -279,3 +280,60 @@ class MonConfigMethods:
                 return True
         log.error(f"The Config: {kwargs['name']} not listed under in the dump")
         return False
+
+    def get_ceph_log(self, count: int = None) -> dict:
+        """
+        Shows recent history of config changes. If count  option  is  omitted  it defaults to 10.
+        Args:
+            count: number of events to be fetched
+
+        Returns: dict of <count> events
+                {
+                    "version": 47,
+                    "timestamp": "2021-11-15 21:33:43.167172",
+                    "name": "reset to 44",
+                    "changes": [
+                        {
+                            "name": "osd/osd_max_backfills",
+                            "previous_value": "32"
+                        },
+                        {
+                            "name": "osd/osd_recovery_max_active",
+                            "previous_value": "32"
+                        }
+                    ]
+                }
+        """
+        cmd = "ceph config log"
+        if count:
+            cmd = f"{cmd} {count}"
+        config_log = self.rados_obj.run_ceph_command(cmd)
+        return config_log
+
+    def ceph_config_reset(self, version: int) -> bool:
+        """
+        this method reverts configuration to the specified historical version.
+        Args:
+            version: log version to be reverted to
+
+        Returns: True -> Pass, False -> fail
+
+        """
+        log.info(f"reverting to version : {version} ")
+        cmd = f"ceph config reset {version}"
+        self.rados_obj.run_ceph_command(cmd=cmd)
+
+        # Checking in the logs if the revert has been captured
+        conf_log = self.get_ceph_log(count=1)[0]
+        try:
+            if not re.search(conf_log["name"], f"reset to {version}"):
+                log.error(
+                    f"The log is not updated with new config changes."
+                    f"Changes made: {conf_log['changes']}"
+                )
+                return False
+            log.info(f"Successfully reverted to version : {version}\n Log: {conf_log}")
+            return True
+        except Exception:
+            log.error("The log collected does not contain the name of change made")
+            return False

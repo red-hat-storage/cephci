@@ -5,7 +5,7 @@ random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.0"
-test_suite="suites/pacific/rgw/sanity_rgw_s3cmd.yaml"
+test_suite="suites/pacific/rgw/tier-2_rgw_test-using-s3cmd-5-0-only.yaml"
 test_conf="conf/pacific/rgw/tier-0_rgw.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
@@ -19,7 +19,7 @@ else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
 
-$WORKSPACE/.venv/bin/python run.py --v2 \
+$WORKSPACE/.venv/bin/python run.py \
     --osp-cred $HOME/osp-cred-ci-2.yaml \
     --rhbuild $rhbuild \
     --platform $platform \

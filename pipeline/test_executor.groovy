@@ -17,7 +17,6 @@ def getCLI(){
     def cli = "--rhbuild ${params.RHCS_Build}"
     cli += " --platform ${params.Platform}"
     cli += " --build ${params.Build}"
-    cli += " --v2"
     cli += " --global-conf conf/${cephVersion}/${params.Group}/${params.Conf}.yaml"
     cli += " --inventory conf/inventory/${params.Inventory}.yaml"
     cli += " --suite suites/${cephVersion}/${params.Group}/${params.Suite}.yaml"
@@ -77,9 +76,7 @@ def buildArtifactDetails(def sharedLib){
 
 node(nodeName){
     stage('Install pre req') {
-        if (env.WORKSPACE) {
-            sh script: "sudo rm -rf *"
-        }
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
         checkout([
             $class: 'GitSCM',
             branches: [[name: "*/${params.Branch}"]],

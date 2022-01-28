@@ -3,7 +3,6 @@ This is cephfs testcase that perform MDSfailover on active-active mdss,
 performing client IOs with no pinning, then IO operation with pinning
 Which require 4 clients, 2 for fuse mount and rest2 for kernel mount
 """
-import logging
 import timeit
 import traceback
 
@@ -11,9 +10,9 @@ from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utils import FsUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

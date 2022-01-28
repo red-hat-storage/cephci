@@ -1,14 +1,14 @@
 import ast
 import datetime
 import json
-import logging
 import random
 import string
 import time
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class RbdMirror:

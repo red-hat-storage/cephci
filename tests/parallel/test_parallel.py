@@ -21,24 +21,34 @@ Requirement parameters
 Entry Point:
     def run(**kwargs):
 """
-
 import importlib
+import logging
+from time import sleep
 
 from ceph.parallel import parallel
 
+log = logging.getLogger(__name__)
+
 
 def run(**kwargs):
-    results = dict()
-
+    results = {}
     parallel_tests = kwargs["parallel"]
 
     with parallel() as p:
         for test in parallel_tests:
             p.spawn(execute, test, kwargs, results)
-    return 0
+            sleep(1)
+
+    test_rc = 0
+    for key, value in results.items():
+        log.info(f"{key} test result is {'PASS' if value == 0 else 'FAILED'}")
+        if value != 0:
+            test_rc = value
+
+    return test_rc
 
 
-def execute(test, args, results):
+def execute(test, args, results: dict):
     """
     Executes the test under parallel in module named 'Parallel run'  parallely.
 
@@ -50,6 +60,7 @@ def execute(test, args, results):
         test: The test module which needs to be executed
         cluster: Ceph cluster participating in the test.
         config:  The key/value pairs passed by the tester.
+        results: results in dictionary
 
     Returns:
         int: non-zero on failure, zero on pass
@@ -71,5 +82,6 @@ def execute(test, args, results):
         ceph_cluster_dict=args["ceph_cluster_dict"],
         clients=args["clients"],
     )
-    results.update(file_name=rc)
-    return 0
+
+    file_string = f"{test_mod}"
+    results.update({file_string: rc})

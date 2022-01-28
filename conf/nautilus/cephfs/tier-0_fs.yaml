@@ -6,6 +6,7 @@ globals:
           - mon
           - mgr
           - installer
+          - grafana
       node2:
         role:
           - mon

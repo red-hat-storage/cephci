@@ -10,7 +10,6 @@ placement:
 {%- if spec['placement']['hosts'] -%}{{ nlt }}hosts: {{ spec['placement']['hosts'] }}{%- endif -%}
 {%- if spec['placement']['label'] -%}{{ nlt }}label: {{ spec['placement']['label'] }}{%- endif -%}
 {%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif %}
-spec:
-  pool: {{ spec['spec']['pool'] }}
-  {%- if spec['spec']['namespace'] -%}{{ nlt }}namespace: {{ spec['spec']['namespace'] }}{%- endif %}
-
+{%+ if spec['spec'] -%}
+spec:{%+ for key, value in spec['spec'].items() -%}{{ nlt }}{{ key }}: {{ value }}{% endfor %}
+{% endif %}

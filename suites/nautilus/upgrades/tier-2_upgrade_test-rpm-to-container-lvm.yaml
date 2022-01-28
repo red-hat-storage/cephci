@@ -42,6 +42,7 @@ tests:
     polarion-id: CEPH-11110
     module: test_ansible_upgrade.py
     config:
+      build: '4.x'
       ansi_config:
         ceph_origin: distro
         ceph_stable_release: nautilus

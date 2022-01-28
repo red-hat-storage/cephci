@@ -28,7 +28,6 @@ Entry Point:
 
 import binascii
 import json
-import logging
 import os
 from json import loads
 from time import sleep
@@ -38,8 +37,9 @@ from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode, CommandFailed
 from ceph.utils import open_firewall_port
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 S3CONF = """[DEFAULT]
 host = {{ data.host }}
 port = {{ data.port }}
@@ -168,8 +168,7 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         tests = "s3tests"
 
         if build.startswith("5"):
-            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!fails_on_aws"
-            extra_args += ",!lifecycle_expiration"
+            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616"
 
             if not encryption:
                 extra_args += ",!encryption"
