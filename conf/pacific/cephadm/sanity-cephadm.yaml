@@ -12,6 +12,7 @@ globals:
           - grafana
           - prometheus
           - crash
+          - iscsi
       node2:
         role:
           - mon
@@ -31,6 +32,7 @@ globals:
           - osd
           - node-exporter
           - crash
+          - iscsi
         no-of-volumes: 4
         disk-size: 15
       node5:

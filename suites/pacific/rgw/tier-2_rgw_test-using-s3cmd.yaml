@@ -1,0 +1,128 @@
+# RHCS 5.x(5.1 and above) sanity test suite for RGW daemon with S3CMD.
+
+# Runs the Object Gateway tests from https://github.com/red-hat-storage/ceph-qe-scripts/tree/master/rgw
+# each script under the above repo has a yaml ( config defined ) which is actually a test
+# We are calling the script and associated yaml here.
+#
+# examples:
+# config:
+#    script-name: test_s3cmd.py
+#    config-file-name: test_s3cmd.yaml
+#    timeout: 300
+#
+# some of the other config option for this yamls are
+#
+# 1. To run verification of io generated.
+#  config:
+#    < script-name >
+#    < config-file-name >
+#    run_io_verify: true or false - to run
+#
+#  ---------------
+# 2. To specify any external packages to be installed for a particular test
+#  a. distro specific packages
+#  config:
+#    <script-name>
+#    <config-file-name>
+#    extra-pkgs:
+#      7:
+#        - pkg1
+#        - pkg2
+#      8:
+#        - pkg1
+#        - pkg2
+#
+#
+#  b. just list of packages which are not distro dependent
+#  config:
+#    <script-name>
+#    <config-file-name>
+#    extra-pkgs:
+#      - pkg1
+#      - pkg2
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#   S3CMD tests
+  - test:
+      name: S3CMD tests
+      desc: S3CMD basic  operations
+      polarion-id: CEPH-83573244
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd.yaml
+        timeout: 300
+
+  - test:
+      name: S3CMD tests
+      desc: S3CMD large object download with GC
+      polarion-id: CEPH-83574416
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_object_gc.py
+        config-file-name: ../../s3cmd/configs/test_large_object_gc.yaml
+        timeout: 300
+
+  - test:
+      name: S3CMD tests
+      desc: S3CMD bucket stats consistency
+      polarion-id: CEPH-83574668
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_bucket_stats.py
+        config-file-name: ../../s3cmd/configs/test_bucket_stats.yaml
+        timeout: 300

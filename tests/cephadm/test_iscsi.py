@@ -1,10 +1,9 @@
-import logging
-
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.iscsi import ISCSI
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -18,7 +17,7 @@ def run(ceph_cluster, **kw):
     check ceph.ceph_admin.iscsi for test config
     """
 
-    log.info("Running Ceph-admin MDS test")
+    log.info("Running Ceph-admin ISCSI test")
     config = kw.get("config")
 
     build = config.get("build", config.get("rhbuild"))

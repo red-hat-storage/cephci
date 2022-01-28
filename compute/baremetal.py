@@ -1,11 +1,11 @@
 """Collects the Baremetal information and creates the cephNode object."""
-import logging
 from copy import deepcopy
 from typing import List, Optional
 
 from ceph.ceph import SSHConnectionManager
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 class CephBaremetalNode:
@@ -123,3 +123,8 @@ class CephBaremetalNode:
     def role(self, roles: list) -> None:
         """Set the roles for the VM."""
         self._roles = deepcopy(roles)
+
+    @property
+    def shortname(self) -> str:
+        """Return the shortform of the hostname."""
+        return self.hostname.split(".")[0]

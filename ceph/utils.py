@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 import re
 import time
@@ -17,13 +16,14 @@ from libcloud.compute.types import Provider
 from compute.baremetal import CephBaremetalNode
 from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
+from utility.log import Log
 from utility.retry import retry
 from utility.utils import generate_node_name
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 DEFAULT_OSBS_SERVER = "http://file.rdu.redhat.com/~kdreyer/osbs/"
 
@@ -1060,7 +1060,7 @@ def fetch_image_builds(version):
 
         return builds
     except AssertionError as err:
-        logging.warning(err)
+        log.warning(err)
         raise AssertionError(f"Ceph Image builds not found : {DEFAULT_OSBS_SERVER}")
 
 
@@ -1095,3 +1095,59 @@ def fetch_build(version, custom_build):
         return get_build_details(builds[-1])
     else:
         raise NotImplementedError
+
+
+def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
+    """
+    Return the string after replacing node_ip: <node> pattern with IP address of <node>.
+
+    In this method, the pattern {node_ip:<cluster>#<node>} would be replaced with the
+    value of node.ipaddress.
+
+    Args:
+        clusters:       Ceph cluster instance
+        cluster_name:   Name of the cluster under test.
+        string:         String that needs to be searched
+
+    Return:
+        String with node IDs replaced with IP addresses
+    """
+    replaced_string = string
+    node_list = re.findall("{node_ip:(.+?)}", string)
+
+    for node in node_list:
+        node_ = node
+        if "#" in node:
+            cluster_name, node = node.split("#")
+
+        node_ip = get_node_by_id(clusters[cluster_name], node).ip_address
+        replacement_pattern = "{node_ip:" + node_ + "}"
+        replaced_string = re.sub(replacement_pattern, node_ip, replaced_string)
+
+    return replaced_string
+
+
+def set_container_info(ceph_cluster, config, use_cdn, containerized):
+    """
+    Set container information in ansible configuration
+    Args:
+        ceph_cluster: ceph cluster object
+        use_cdn: boolean to check CDN
+        config: test config
+        containerized: boolean indicates containerized build.
+    Returns:
+        ansi_config
+    """
+    ansi_config = dict()
+
+    if use_cdn:
+        ceph_cluster.use_cdn = True
+        config["use_cdn"] = True
+        ansi_config["ceph_origin"] = "repository"
+        ansi_config["ceph_repository_type"] = "cdn"
+    else:
+        if containerized:
+            ansi_config["ceph_docker_registry"] = config.get("ceph_docker_registry")
+            ansi_config["ceph_docker_image"] = config.get("ceph_docker_image")
+            ansi_config["ceph_docker_image_tag"] = config.get("ceph_docker_image_tag")
+    return ansi_config

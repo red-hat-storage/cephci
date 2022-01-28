@@ -2,11 +2,12 @@
 import binascii
 import os
 from json import loads
-from logging import getLogger
 
 import yaml
 
-LOG = getLogger(__name__)
+from utility.log import Log
+
+LOG = Log(__name__)
 
 
 def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:

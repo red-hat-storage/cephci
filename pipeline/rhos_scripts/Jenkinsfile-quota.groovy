@@ -5,8 +5,6 @@
 
 def nodeName = "centos-7"
 def sharedLib
-def rhosLib
-def projects = ["ceph-ci", "ceph-jenkins"]
 
 node(nodeName){
     stage('Install prereq') {
@@ -25,23 +23,18 @@ node(nodeName){
             submoduleCfg: [],
             userRemoteConfigs: [[url: 'https://github.com/red-hat-storage/cephci.git']]
         ])
-        script {
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
-            sharedLib.prepareNode()
-            rhosLib = load("${env.WORKSPACE}/pipeline/rhos_scripts/quota_stats.groovy")
-            rhosLib.installOpenStackClient()
-        }
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/common.groovy")
+        sharedLib.prepareNode()
     }
     stage('Fetch quota and Send Email') {
-        script{
-            args = ["osp-cred" : "${HOME}/osp-cred-ci-2.yaml",
-                    "projects": projects]
-            def quota_detail = rhosLib.fetch_quota(args)
-            def quota_string = writeJSON returnText: true, json: quota_detail
-            echo "quota detail fetched"
-            echo quota_string.toString()
-            rhosLib.sendEmail(quota_detail)
-            echo "Email sent"
+        echo "Fetch quota and Send Email"
+        cmd = "source ${env.WORKSPACE}/.venv/bin/activate;${env.WORKSPACE}/.venv/bin/python ${env.WORKSPACE}/rhos_quota.py --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
+        echo cmd
+        rc = sh(script: "${cmd}", returnStatus: true)
+        if (rc != 0)
+        {
+            sh "echo \"stage failed with exit code : ${rc}\""
+            currentBuild.result = 'FAILURE'
         }
     }
 }

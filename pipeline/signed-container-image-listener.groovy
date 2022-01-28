@@ -6,26 +6,28 @@ def versions
 def cephVersion
 def composeUrl
 def containerImage
+def releaseMap = [:]
 
 // Pipeline script entry point
 node(nodeName) {
 
     timeout(unit: "MINUTES", time: 30) {
         stage('Preparing') {
-            if (env.WORKSPACE) {
-                sh script: "sudo rm -rf *"
-            }
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout([
                 $class: 'GitSCM',
-                branches: [[ name: '*/master' ]],
+                branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: false,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
@@ -53,7 +55,7 @@ node(nodeName) {
         println "repo url : ${composeUrl}"
 
         cephVersion = sharedLib.fetchCephVersion(composeUrl)
-        def releaseMap = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
+        releaseMap = sharedLib.readFromReleaseFile(majorVersion, minorVersion)
 
         if ( releaseMap.isEmpty() || !releaseMap?.rc?."ceph-version" ) {
             sharedLib.unSetLock(majorVersion, minorVersion)
@@ -86,7 +88,9 @@ node(nodeName) {
                 "version": cephVersion
             ],
             "build": [
-                "repository": containerImage
+                "repository": containerImage,
+                "version": cephVersion,
+                "composes": releaseMap.rc.composes
             ],
             "contact": [
                 "email": "ceph-qe@redhat.com",

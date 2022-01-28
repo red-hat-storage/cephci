@@ -1,13 +1,12 @@
-import logging
-
 from ceph.ceph_admin.alert_manager import AlertManager
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.grafana import Grafana
 from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.node_exporter import NodeExporter
 from ceph.ceph_admin.prometheus import Prometheus
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 MONITORING = {
     "prometheus": Prometheus,
@@ -29,6 +28,7 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running Ceph-admin Provisioning test")
     config = kw.get("config")
+    config["overrides"] = kw.get("test_data", {}).get("custom-config")
 
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build

@@ -5,8 +5,8 @@ random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/cephadm/tier-1_cephadm_upgrade.yaml"
-test_conf="conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+test_suite="suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+test_conf="conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
@@ -19,7 +19,7 @@ else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
 
-$WORKSPACE/.venv/bin/python run.py --v2 \
+$WORKSPACE/.venv/bin/python run.py \
     --osp-cred $HOME/osp-cred-ci-2.yaml \
     --rhbuild $rhbuild \
     --platform $platform \

@@ -1,12 +1,11 @@
-import logging
 import secrets
 import string
 import traceback
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def verify_write_failure(client, kernel_mount_dir, fuse_mount_dir, client_name):
@@ -224,7 +223,7 @@ def run(ceph_cluster, **kw):
                 kernel_mount_dir,
                 mon_node_ip,
                 new_client_hostname=client_name,
-                sub_dir="dir_2",
+                sub_dir="/dir_2",
                 extra_params=kernel_fs_para,
             )
             fs_util.fuse_mount(
@@ -410,7 +409,7 @@ def run(ceph_cluster, **kw):
                 kernel_mount_dir,
                 mon_node_ip,
                 new_client_hostname=client_name,
-                sub_dir="dir_3",
+                sub_dir="/dir_3",
                 extra_params=kernel_fs_para,
             )
             fs_util.fuse_mount(
