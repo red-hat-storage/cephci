@@ -26,6 +26,9 @@ Below configs are needed in order to run the tests
                                 max: 15M
             verify-io-on-site (optional):
                         Primary node> or Secondary node
+            env-vars (optional):
+                        - cleanup=False
+                        - objects_count: 500
             extra-pkgs (optional):
                         Packages to install
                         example:
@@ -43,14 +46,14 @@ Below configs are needed in order to run the tests
                                     - pkg2
 """
 
-import logging
 import time
 
 import yaml
 
-from utility.utils import setup_cluster_access, sync_status_on_primary
+from utility.log import Log
+from utility.utils import setup_cluster_access, verify_sync_status
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 TEST_DIR = {
     "v2": {
@@ -69,8 +72,6 @@ def run(**kw):
     log.info(f"test site: {test_site.name}")
     test_site_node = test_site.get_ceph_object("rgw").node
 
-    # adding sleep for 60 seconds before another test starts, sync needs to complete
-    time.sleep(60)
     set_env = config.get("set-env", False)
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
@@ -106,12 +107,16 @@ def run(**kw):
 
     if test_config["config"]:
         log.info("creating custom config")
-        f_name = test_folder + config_dir + config_file_name
-        remote_fp = test_site_node.remote_file(file_name=f_name, file_mode="w")
+        f_name = test_folder_path + config_dir + config_file_name
+        remote_fp = test_site_node.remote_file(
+            file_name=f_name, file_mode="w", sudo=True
+        )
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
+    cmd_env = " ".join(config.get("env-vars", []))
     out, err = test_site_node.exec_command(
-        cmd="sudo python3 "
+        cmd=cmd_env
+        + "sudo python3 "
         + test_folder_path
         + script_dir
         + script_name
@@ -133,6 +138,7 @@ def run(**kw):
         copy_file_from_node_to_node(
             user_details_file, test_site_node, copy_user_to_site_node, user_details_file
         )
+        verify_sync_status(copy_user_to_site_node)
 
     verify_io_on_sites = config.get("verify-io-on-site", [])
     if verify_io_on_sites:
@@ -140,7 +146,7 @@ def run(**kw):
         for site in verify_io_on_sites:
             verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
             log.info(f"Check sync status on {site}")
-            sync_status_on_primary(verify_io_on_site_node)
+            verify_sync_status(verify_io_on_site_node)
             # adding sleep for 60 seconds before verification of data starts
             time.sleep(60)
             log.info(f"verification IO on {site}")
@@ -176,6 +182,7 @@ def set_test_env(config, rgw_node):
     log.info("flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
     rgw_node.exec_command(cmd="sudo yum install python3 -y", check_ec=False)
+    rgw_node.exec_command(cmd="yum install -y ceph-common", check_ec=False, sudo=True)
     rgw_node.exec_command(cmd="sudo rm -rf " + test_folder)
     rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
     clone_the_repo(config, rgw_node, test_folder_path)

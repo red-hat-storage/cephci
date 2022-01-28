@@ -1,5 +1,4 @@
 """Support VM lifecycle operation in an OpenStack Cloud."""
-import logging
 import socket
 from datetime import datetime, timedelta
 from time import sleep
@@ -15,6 +14,8 @@ from libcloud.compute.drivers.openstack import (
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
+from utility.log import Log
+
 from .exceptions import (
     ExactMatchFailed,
     NetworkOpFailure,
@@ -24,7 +25,7 @@ from .exceptions import (
     VolumeOpFailure,
 )
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 # libcloud does not have a timeout enabled for Openstack calls to
 # ``create_node``, and it uses the default timeout value from socket which is
@@ -195,14 +196,19 @@ class CephVMNodeV2:
         if self.node.state == "pending":
             raise NodeDeleteFailure(f"{self.node.name} cannot be deleted.")
 
-        logging.info("Removing the instance with name %s", self.node.name)
+        LOG.info("Removing the instance with name %s", self.node.name)
         for ip in self.floating_ips:
             self.driver.ex_detach_floating_ip_from_node(self.node, ip)
 
         # At this point self.node is stale
         for vol in self.volumes:
-            self.driver.detach_volume(volume=vol)
-            self.driver.destroy_volume(volume=vol)
+            try:
+                self.driver.detach_volume(volume=vol)
+                self.driver.destroy_volume(volume=vol)
+            except BaseException as e:
+                print(
+                    f"Volume detach/deletion failed, exception hit is {e}, Proceeding with destroying {self.node}"
+                )
 
         self.driver.destroy_node(self.node)
         self.node = None

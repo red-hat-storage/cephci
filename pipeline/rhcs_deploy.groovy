@@ -20,21 +20,22 @@ node ("centos-7") {
 
     timeout(unit: "MINUTES", time: 30) {
         stage("Prepare env") {
-            if (env.WORKSPACE) {
-                sh (script: "sudo rm -rf *")
-            }
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
 
-            checkout ([
+            checkout([
                 $class: 'GitSCM',
                 branches: [[name: 'origin/master']],
                 doGenerateSubmoduleConfigurations: false,
-                extensions: [[
-                    $class: 'CloneOption',
-                    shallow: true,
-                    noTags: true,
-                    reference: '',
-                    depth: 0
-                ]],
+                extensions: [
+                    [
+                        $class: 'CloneOption',
+                        shallow: true,
+                        noTags: true,
+                        reference: '',
+                        depth: 1
+                    ],
+                    [$class: 'CleanBeforeCheckout'],
+                ],
                 submoduleCfg: [],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
@@ -47,7 +48,7 @@ node ("centos-7") {
     }
 
     stage("Deploy") {
-        def cliArgs = "--v2"
+        def cliArgs = ""
         ciMap = sharedLib.getCIMessageMap()
 
         majorVersion = ciMap.build.substring(0,1)
@@ -77,7 +78,7 @@ node ("centos-7") {
         def platform = "${osName}-${osMajorVersion}"
 
         // Prepare the CLI arguments
-        cliArgs += " --rhbuild ${ciMap.build}"
+        cliArgs += "--rhbuild ${ciMap.build}"
         cliArgs += " --platform ${platform}"
         cliArgs += " --build tier-0"
         cliArgs += " --inventory ${baseInventoryPath}/${inventory}"

@@ -19,7 +19,10 @@ from jinja_markdown import MarkdownExtension
 from OpenSSL import crypto
 from reportportal_client import ReportPortalService
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
+
 
 # variables
 mounting_dir = "/mnt/cephfs/"
@@ -128,7 +131,7 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
-def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
+def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     """
     verify multisite sync status on primary
     """
@@ -153,7 +156,7 @@ def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
     )
     if "behind" in check_sync_status or "recovering" in check_sync_status:
         log.info("sync is in progress")
-        log.info("sleep of 60 secs for sync to complete")
+        log.info(f"sleep of {delay}secs for sync to complete")
         for retry_count in range(retry):
             time.sleep(delay)
             check_sync_status, err = verify_io_on_site_node.exec_command(
@@ -456,13 +459,13 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     return log_url
 
 
-def create_run_dir(run_id, log_dir="/tmp"):
+def create_run_dir(run_id, log_dir=""):
     """
     Create the directory where test logs will be placed.
 
     Args:
         run_id: id of the test run. used to name the directory
-        log_dir: log directory. default: "/tmp"
+        log_dir: log directory name.
     Returns:
         Full path of the created directory
     """
@@ -473,18 +476,23 @@ def create_run_dir(run_id, log_dir="/tmp"):
     print(msg)
     dir_name = "cephci-run-{run_id}".format(run_id=run_id)
     base_dir = "/ceph/cephci-jenkins"
-    if not os.path.isdir(base_dir):
-        if not os.path.isabs(log_dir):
-            log_dir = os.path.join(os.getcwd(), log_dir)
+
+    if log_dir:
         base_dir = log_dir
-    run_dir = os.path.join(base_dir, dir_name)
+        if not os.path.isabs(log_dir):
+            base_dir = os.path.join(os.getcwd(), log_dir)
+    elif not os.path.isdir(base_dir):
+        base_dir = f"/tmp/{dir_name}"
+    else:
+        base_dir = os.path.join(base_dir, dir_name)
+    print(f"log directory - {base_dir}")
     try:
-        os.makedirs(run_dir)
+        os.makedirs(base_dir)
     except OSError:
         if "jenkins" in getpass.getuser():
             raise
 
-    return run_dir
+    return base_dir
 
 
 def close_and_remove_filehandlers(logger=logging.getLogger()):
@@ -602,6 +610,32 @@ def get_latest_container(version):
         "docker_image": docker_image,
         "docker_tag": docker_tag,
     }
+
+
+def get_release_repo(version):
+    """
+    Retrieves the repo and image information for the RC build of the version specified from magna002.ceph.redhat.com
+
+    Args:
+        version: version to get the latest image tag, should match version in release.yaml at magna002
+                 storage
+
+    Returns:
+        Repo and Container details dictionary with given format:
+        {'composes': <RC release composes>, 'image': <CEPH and monitoring images related to the RC build>}"""
+    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    url = f"{recipe_url}release.yaml"
+    data = requests.get(url, verify=False)
+    repo_details = yaml.safe_load(data.text)[version]
+    return repo_details
+
+
+def yaml_to_dict(file_name):
+    """Retrieve yaml data content from file."""
+    file_path = os.path.abspath(file_name)
+    with open(file_path, "r") as conf_:
+        content = yaml.safe_load(conf_)
+    return content
 
 
 def custom_ceph_config(suite_config, custom_config, custom_config_file):
@@ -952,7 +986,11 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
 
 def get_cephqe_ca() -> Optional[Tuple]:
     """Retrieve CephCI QE CA certificate and key."""
-    base_uri = "http://magna002.ceph.redhat.com/cephci-jenkins"
+    base_uri = (
+        get_cephci_config()
+        .get("root-ca-location", "http://magna002.ceph.redhat.com/cephci-jenkins")
+        .rstrip("/")
+    )
     ca_cert = None
     ca_key = None
 
@@ -996,15 +1034,19 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
     cert.gmtime_adj_notBefore(0)
     cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
 
+    san_list = [
+        f"DNS:*.{subject['common_name']}",
+        f"DNS:{subject['common_name']}",
+        f"IP:{subject['ip_address']}",
+    ]
+    sans = ", ".join(san_list)
     extensions = [
         crypto.X509Extension(
             b"keyUsage", False, b"Digital Signature, Non Repudiation, Key Encipherment"
         ),
         crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
         crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth, clientAuth"),
-        crypto.X509Extension(
-            b"subjectAltName", False, f"IP:{subject['ip_address']}".encode()
-        ),
+        crypto.X509Extension(b"subjectAltName", False, sans.encode()),
     ]
     cert.add_extensions(extensions)
 
@@ -1171,3 +1213,63 @@ class ReportPortal:
             None
         """
         self.client.log(time=timestamp(), message=message, level="INFO")
+
+
+def install_start_kafka(rgw_node, cloud_type):
+    """
+    install kafka package and start zookeeper and kafka services
+    """
+    log.info("install kafka broker for bucket notification tests")
+    if cloud_type == "ibmc":
+        wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.4/kafka_2.13-2.8.0.tgz"
+    else:
+        wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
+    tar_cmd = "tar -zxvf /tmp/kafka.tgz -C /usr/local/"
+    rename_cmd = "mv /usr/local/kafka_2.13-2.8.0 /usr/local/kafka"
+    chown_cmd = "chown cephuser:cephuser /usr/local/kafka"
+    rgw_node.exec_command(
+        cmd=f"{wget_cmd} && {tar_cmd} && {rename_cmd} && {chown_cmd}", sudo=True
+    )
+
+    KAFKA_HOME = "/usr/local/kafka"
+
+    # start zookeeper service
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/zookeeper-server-start.sh -daemon {KAFKA_HOME}/config/zookeeper.properties",
+    )
+
+    # wait for zookeepeer service to start
+    time.sleep(30)
+
+    # start kafka servicee
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/kafka-server-start.sh -daemon {KAFKA_HOME}/config/server.properties",
+    )
+
+    # wait for kafka service to start
+    time.sleep(30)
+
+
+def method_should_succeed(function, *args, **kwargs):
+    """
+    Wrapper function to verify the return value of executed method.
+
+    This function will raise Assertion if return value is false, empty, or 0.
+    Args:
+        function: name of the function
+        args: arg list
+        kwargs: arg dict
+    Usage:
+        Basic usage is pass a function and it's list and/or dict arguments
+        ex:     method_should_succeed(set_osd_out, ceph_cluster, osd_id)
+                method_should_succeed(bench_write, **pool)
+    """
+    rc = function(*args, **kwargs)
+
+    log.debug(f"The {function} return status is {rc}")
+    if not rc:
+        raise AssertionError(f"Execution failed at function {function}")

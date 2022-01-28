@@ -6,11 +6,14 @@ It installs all the pre-requisites on client nodes
 """
 import datetime
 import json
-import logging
+import random
+import string
+from time import sleep
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class FsUtils(object):
@@ -89,6 +92,21 @@ class FsUtils(object):
                 output_dict["metadata_pool_name"] = fs["metadata_pool"]
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
+
+    def get_fs_details(self, client, **kwargs):
+        """
+        Gets all filesystems information
+        Args:
+            client:
+        Returns:
+            json object with all fs
+        """
+        fs_details_cmd = "ceph fs ls --format json"
+        if kwargs.get("extra_params"):
+            fs_details_cmd += f"{kwargs.get('extra_params')}"
+        out, rc = client.exec_command(sudo=True, cmd=fs_details_cmd)
+        all_fs_info = json.loads(out.read().decode())
+        return all_fs_info
 
     def auth_list(self, clients, **kwargs):
         """
@@ -184,7 +202,7 @@ class FsUtils(object):
             )
 
             kernel_cmd = (
-                f"mount -t ceph {mon_node_ip}:/{kwargs.get('sub_dir','')} {mount_point} "
+                f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir','/')} {mount_point} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
                 f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
             )
@@ -201,6 +219,29 @@ class FsUtils(object):
             mount_output = mount_output.split()
             log.info("validate kernel mount:")
             assert mount_point.rstrip("/") in mount_output, "Kernel mount failed"
+            if kwargs.get("fstab"):
+                out, rc = client.exec_command(
+                    sudo=True, cmd="ls -lrt /etc/fstab.backup", check_ec=False
+                )
+                if not rc == 0:
+                    client.exec_command(
+                        sudo=True, cmd="cp /etc/fstab /etc/fstab.backup"
+                    )
+                fstab = client.remote_file(
+                    sudo=True, file_name="/etc/fstab", file_mode="a+"
+                )
+                fstab_entry = (
+                    f"{mon_node_ip}:{kwargs.get('sub_dir', '/')}    {mount_point}    ceph    "
+                    f"name={kwargs.get('new_client_hostname', client.node.hostname)},"
+                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                )
+                if kwargs.get("extra_params"):
+                    fstab_entry += f"{kwargs.get('extra_params')}"
+                fstab_entry += ",_netdev,noatime      0       0"
+                print(dir(fstab))
+                fstab.write(fstab_entry + "\n")
+                fstab.flush()
+                fstab.close()
 
     def get_mon_node_ips(self):
         """
@@ -232,7 +273,7 @@ class FsUtils(object):
             log.info("Removing files:")
             client.exec_command(
                 sudo=True,
-                cmd=f"rm -rf {mounting_dir}/*",
+                cmd=f"rm -rf {mounting_dir}*",
                 long_running=True,
                 timeout=3600,
             )
@@ -492,9 +533,7 @@ class FsUtils(object):
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("target_group_name"):
-                listsubvolumes_cmd += (
-                    f" --target_group_name {kwargs.get('target_group_name')}"
-                )
+                listsubvolumes_cmd += f" --group_name {kwargs.get('target_group_name')}"
             out, rc = client.exec_command(
                 sudo=True, cmd=f"{listsubvolumes_cmd} --format json"
             )
@@ -816,6 +855,322 @@ class FsUtils(object):
 
         return cmd_out, cmd_rc
 
+    def clone_cancel(self, client, vol_name, clone_name, **kwargs):
+        """
+        Cancels the clone operation
+        Args:
+            clients: Client_nodes
+            vol_name:
+            clone_name:
+            **kwargs:
+                group_name
+
+        """
+        clone_status_cmd = f"ceph fs clone cancel {vol_name} {clone_name}"
+        if kwargs.get("group_name"):
+            clone_status_cmd += f" --group_name {kwargs.get('group_name')}"
+        clone_status_cmd += " --format json"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=clone_status_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+
+        return cmd_out, cmd_rc
+
+    def validate_clone_state(
+        self, client, clone, expected_state="complete", timeout=300
+    ):
+        """
+        Validates the clone status based on the expected_state
+        Args:
+            clients: Client_nodes
+            clone_obj:
+                "vol_name": Volume name where clone as been created Ex: cephfs,
+                "subvol_name": sub Volume name from where this clone has been created,
+                "snap_name": snapshot name,
+                "target_subvol_name": "clone_status_1",
+                "group_name": "subvolgroup_1",
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        clone_transistion_states = []
+        cmd_out, cmd_rc = self.get_clone_status(
+            client,
+            clone["vol_name"],
+            clone["target_subvol_name"],
+            group_name=clone.get("target_group_name", ""),
+        )
+        status = json.loads(cmd_out.read().decode())
+        if status["status"]["state"] not in clone_transistion_states:
+            clone_transistion_states.append(status["status"]["state"])
+        while status["status"]["state"] != expected_state:
+            cmd_out, cmd_rc = self.get_clone_status(
+                client,
+                clone["vol_name"],
+                clone["target_subvol_name"],
+                group_name=clone.get("target_group_name", ""),
+            )
+            status = json.loads(cmd_out.read().decode())
+            log.info(
+                f"Clone Status of {clone['vol_name']} : {status['status']['state']}"
+            )
+            if status["status"]["state"] not in [
+                "in-progress",
+                "complete",
+                "pending",
+                "canceled",
+            ]:
+                raise CommandFailed(f'{status["status"]["state"]} is not valid status')
+            if end_time < datetime.datetime.now():
+                raise CommandFailed(
+                    f"Clone creation has not reached to Complete state even after {timeout} sec"
+                    f'Current state of the clone is {status["status"]["state"]}'
+                )
+        return clone_transistion_states
+
+    def reboot_node(self, ceph_node, timeout=300):
+        ceph_node.exec_command(sudo=True, cmd="reboot", check_ec=False)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        while datetime.datetime.now() < endtime:
+            try:
+                ceph_node.node.reconnect()
+                return
+            except BaseException:
+                log.error(
+                    "Failed to reconnect to the node {node} after reboot ".format(
+                        node=ceph_node.node.ip_address
+                    )
+                )
+                sleep(5)
+        raise RuntimeError(
+            "Failed to reconnect to the node {node} after reboot ".format(
+                node=ceph_node.node.ip_address
+            )
+        )
+
+    def create_file_data(self, client, directory, no_of_files, file_name, data):
+        """
+        This function will write files to the directory with the data given
+        :param client:
+        :param directory:
+        :param no_of_files:
+        :param file_name:
+        :param data:
+        :return:
+        """
+        files = [f"{file_name}_{i}" for i in range(0, no_of_files)]
+        client.exec_command(
+            sudo=True,
+            cmd=f"cd {directory};echo {data * random.randint(100, 500)} | tee {' '.join(files)}",
+        )
+
+    def get_files_and_checksum(self, client, directory):
+        """
+        This will collect the filenames and their respective checksums and returns the dictionary
+        :param client:
+        :param directory:
+        :return:
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"cd {directory};ls -lrt |  awk {{'print $9'}}"
+        )
+        file_list = out.read().decode().strip().split()
+        file_dict = {}
+        for file in file_list:
+            out, rc = client.exec_command(sudo=True, cmd=f"md5sum {directory}/{file}")
+            md5sum = out.read().decode().strip().split()
+            file_dict[file] = md5sum[0]
+        return file_dict
+
+    def set_quota_attrs(self, client, file, bytes, directory, **kwargs):
+        """
+        Args:
+            file: sets the value as total number of files limit
+            bytes: sets the value as total number of bytes limit
+            directory: sets the above limits to this directory
+            **kwargs:
+
+        Returns:
+
+        """
+        if file:
+            quota_set_cmd = f"setfattr -n ceph.quota.max_files -v {file}"
+            client.exec_command(sudo=True, cmd=f"{quota_set_cmd} {directory}")
+        if bytes:
+            quota_set_cmd = f"setfattr -n ceph.quota.max_bytes -v {bytes}"
+            client.exec_command(sudo=True, cmd=f"{quota_set_cmd} {directory}")
+
+    def get_quota_attrs(self, client, directory, **kwargs):
+        """
+        Gets the quota of the given directory
+        Args:
+            client:
+            directory: Gets the quota values for the given directory
+            **kwargs:
+
+        Returns:
+            quota_dict
+            will have values in this format {file : 0, bytes: 0}
+        """
+        quota_dict = {}
+        out, rc = client.exec_command(
+            f"getfattr --only-values -n ceph.quota.max_files {directory}"
+        )
+        file_quota = out.read().decode()
+        quota_dict["files"] = int(file_quota)
+        out, rc = client.exec_command(
+            f"getfattr --only-values -n ceph.quota.max_bytes {directory}"
+        )
+        byte_quota = out.read().decode()
+        quota_dict["bytes"] = int(byte_quota)
+        return quota_dict
+
+    def file_quota_test(self, client, mounting_dir, quota_attrs):
+        """
+        Validates the files quota that has been set on mounting dir
+        it collects the quota_attrs from mounting dir.
+        it checks if we are able to create with in the set limit and
+        Also we are not able to create outside the limit
+        Args:
+            client:
+            mounting_dir: Gets the quota values for the given directory
+            quota_attrs : set quota values in dict
+            **kwargs:
+        Raises CommandFailed Exception anything fails
+        """
+        total_files = quota_attrs.get("files")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        files_in_dir = int(self.get_total_no_files(client, mounting_dir))
+        if files_in_dir >= total_files:
+            files = 1
+        else:
+            files = total_files - files_in_dir
+        for i in range(1, files + 15):
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=f"cd {mounting_dir};touch file_{temp_str}_{i}.txt",
+                long_running=True,
+                check_ec=False,
+            )
+            if rc == 1 and i < files:
+                raise CommandFailed(
+                    f"total allowed files {files} and current iteration {i}"
+                )
+            log.info(
+                f"Return value for file_{temp_str}_{i}.txt is {rc} and total_allowed_files: {files}"
+            )
+        if rc == 0 and total_files != 0:
+            raise CommandFailed("We are able to create more files than what we set")
+        elif rc == 1 and total_files == 0:
+            raise CommandFailed(
+                f"File Attribute is set to {total_files} still we are not able to create files"
+            )
+        else:
+            pass
+
+    def get_total_no_files(self, client, directory):
+        """
+        Returns the total number files in the directory
+        Args:
+            client:
+            directory: Gets the quota values for the given directory
+            **kwargs:
+        """
+        out, rc = client.exec_command(f"find {directory} -type f -print | wc -l")
+        total_files = out.read().decode()
+        out, rc = client.exec_command(f"find {directory} -type d -print | wc -l")
+        total_dir = out.read().decode()
+        print(f"total dir : {total_dir}")
+        return total_files
+
+    def byte_quota_test(self, client, mounting_dir, quota_attrs):
+        """
+        Validates the bytes quota that has been set on mounting dir
+        it collects the quota_attrs from mounting dir.
+        it checks if we are able to create with in the set limit and
+        Also we are not able to create outside the limit
+        Args:
+            client:
+            mounting_dir: Gets the quota values for the given directory
+            quota_attrs : set quota values in dict
+            **kwargs:
+        Raises CommandFailed Exception anything fails
+        """
+        total_bytes = quota_attrs.get("bytes")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        bytes_in_dir = int(self.get_total_no_bytes(client, mounting_dir))
+        if bytes_in_dir >= total_bytes:
+            bytes = 100000
+        else:
+            bytes = total_bytes - bytes_in_dir
+        client.exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int(bytes / 10240)}",
+            long_running=True,
+        )
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int((bytes * 3) / 10240)}",
+            check_ec=False,
+            long_running=True,
+        )
+        log.info(
+            f"Return value for cmd: "
+            f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int((bytes * 3) / 10240)}"
+            f" is {rc}"
+        )
+        if total_bytes != 0:
+            if rc == 0:
+                raise CommandFailed(
+                    "We are able to write more bytes than bytes quota set"
+                )
+
+    def get_total_no_bytes(self, client, directory):
+        out, rc = client.exec_command(f"du -sb  {directory}| awk '{{ print $1}}'")
+        total_bytes = out.read().decode()
+        return total_bytes
+
+    def file_byte_quota_test(self, client, mounting_dir, quota_attrs):
+
+        total_bytes = quota_attrs.get("bytes")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        bytes_in_dir = int(self.get_total_no_bytes(client, mounting_dir))
+        if bytes_in_dir >= total_bytes:
+            bytes = 1073741824
+        else:
+            bytes = total_bytes - bytes_in_dir
+
+        total_files = quota_attrs.get("files")
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
+        files_in_dir = int(self.get_total_no_files(client, mounting_dir))
+        if files_in_dir >= total_files:
+            files = 1
+        else:
+            files = total_files - files_in_dir
+
+        for i in range(1, files + 15):
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=f"cd {mounting_dir};touch file_bytes{temp_str}_{i}.txt;"
+                f"dd if=/dev/zero of={mounting_dir}/file_bytes{temp_str}_{i}.txt bs=1 "
+                f"count={int(int(bytes / files) / 10)}",
+                long_running=True,
+                check_ec=False,
+            )
+            if rc == 1 and i < files:
+                raise CommandFailed(
+                    f"total allowed files {files} and current iteration {i}"
+                )
+            log.info(
+                f"Return value for file_{temp_str}_{i}.txt is {rc} and total_allowed_files: {files}"
+            )
+        if rc == 0 and total_files != 0:
+            raise CommandFailed("We are able to create more files than what we set")
+        elif rc == 1 and total_files == 0:
+            raise CommandFailed(
+                f"File Attribute is set to {total_files} still we are not able to create files"
+            )
+        else:
+            pass
+
     def subvolume_authorize(self, client, vol_name, subvol_name, client_name, **kwargs):
         """
         Create client with permissions on cephfs subvolume
@@ -831,3 +1186,137 @@ class FsUtils(object):
         if kwargs.get("extra_params"):
             command += f" {kwargs.get('extra_params')}"
             client.exec_command(sudo=True, cmd=command)
+
+    def get_pool_df(self, client, pool_name, **kwargs):
+        """
+        Gets the pool Avaialble space and used space details
+        Args:
+            client: client node
+            pool_name: Name of the pool
+            **kwargs:
+                vol_name : Name of the fs volume for which we need the status
+        Return:
+            returns pool details if present else returns None
+        sample pool Return dictonary:
+            {
+            "avail": 33608753152,
+            "id": 5,
+            "name": "cephfs-metadata",
+            "type": "metadata",
+            "used": 278888448
+        },
+
+        """
+        fs_status_cmd = "ceph fs status"
+        if kwargs.get("vol_name"):
+            fs_status_cmd += f" {kwargs.get('vol_name')}"
+        fs_status_cmd += " --format json"
+        out, rc = client.exec_command(sudo=True, cmd=fs_status_cmd)
+        fs_status = json.loads(out.read().decode())
+        pool_status = fs_status["pools"]
+        for pool in pool_status:
+            if pool["name"] == pool_name:
+                return pool
+        else:
+            return None
+
+    def heartbeat_map(self, mds):
+        """
+        Verify "heartbeat_map" timeout is not in mds log
+        Args:
+            mds: mds node
+        """
+        try:
+            mds.exec_command(
+                sudo=True,
+                cmd=f"grep heartbeat_map /var/log/ceph/ceph-mds.{mds.node.shortname}.log",
+            )
+            log.error("heartbeat map timeout seen")
+            return 1
+        except CommandFailed as e:
+            log.info(e)
+            log.info("heartbeat map timeout not found")
+            return 0
+
+    def get_subvolume_info(
+        self, client, vol_name, subvol_name, validate=True, **kwargs
+    ):
+        """
+        Gets the info of subvolume.
+        Args:
+            client: client node
+            fs_name: name of thefilesystem or volume
+            subvol_name: name of the subvolume which is required to collect the info
+            **kwargs:
+                group_name : Name of the subvoumegroup
+        Return:
+            returns pool details if present else returns None
+            Sample output :
+
+            {
+            "atime": "2021-12-07 09:13:12",
+            "bytes_pcent": "0.00",
+            "bytes_quota": 2147483648,
+            "bytes_used": 0,
+            "created_at": "2021-12-07 09:13:12",
+            "ctime": "2021-12-07 10:00:45",
+            "data_pool": "cephfs.cephfs.data",
+            "features": [
+                "snapshot-clone",
+                "snapshot-autoprotect",
+                "snapshot-retention"
+            ],
+            "gid": 0,
+            "mode": 16877,
+            "mon_addrs": [
+                "10.0.208.74:6789",
+                "10.0.209.3:6789",
+                "10.0.208.178:6789"
+            ],
+            "mtime": "2021-12-07 09:13:12",
+            "path": "/volumes/subvolgroup_1/subvol_1/d4b4d20e-b8ed-4831-bb83-cf2bff91d109",
+            "pool_namespace": "",
+            "state": "complete",
+            "type": "subvolume",
+            "uid": 0
+
+        """
+
+        subvolume_info_cmd = f"ceph fs subvolume info {vol_name} {subvol_name}"
+        if kwargs.get("group_name"):
+            subvolume_info_cmd += f" --group_name {kwargs.get('group_name')}"
+        out, rc = client.exec_command(sudo=True, cmd=subvolume_info_cmd)
+        subvolume_info = json.loads(out.read().decode())
+        return subvolume_info
+
+    def get_stats(self, client, file_path, validate=True, **kwargs):
+        """
+        Gets the stat of a file.
+        Args:
+            client: client node
+            file_path: path of a file to collec the stats
+            **kwargs:
+                --printf : option to print a particular value
+        Return:
+            returns stat of a path(file or directory)
+            Sample output :
+
+            [root@ceph-hyelloji-9etpcf-node8 ~]# stat /mnt/cephfs_kernelqcnquvmv84_1/volumes/subvolgroup_1/
+              File: /mnt/cephfs_kernelqcnquvmv84_1/volumes/subvolgroup_1/
+              Size: 2         	Blocks: 0          IO Block: 65536  directory
+            Device: 31h/49d	Inode: 1099511627829  Links: 4
+            Access: (0755/drwxr-xr-x)  Uid: (   20/ UNKNOWN)   Gid: (   30/ UNKNOWN)
+            Context: system_u:object_r:cephfs_t:s0
+            Access: 2021-12-13 06:14:55.204505533 -0500
+            Modify: 2021-12-13 06:15:16.335938236 -0500
+            Change: 2021-12-13 06:15:16.335938236 -0500
+             Birth: -
+
+        """
+
+        stat_cmd = f"stat {file_path} "
+        if kwargs.get("format"):
+            stat_cmd += f" --printf {kwargs.get('format')}"
+        out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
+        stat_output = json.loads(out.read().decode())
+        return stat_output

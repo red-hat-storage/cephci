@@ -56,19 +56,30 @@ class OSD(ApplyMixin, Orch):
             if not node.get("devices"):
                 continue
 
-            devices = list()
+            devices = {"available": [], "unavailable": []}
             for device in node.get("devices"):
-                if device["available"]:
-                    devices.append(device["path"])
+                # avoid considering devices which is less than 5GB
+                if "Insufficient space (<5GB)" not in device.get(
+                    "rejected_reasons", []
+                ):
+                    if device["available"]:
+                        devices["available"].append(device["path"])
+                        continue
+                    devices["unavailable"].append(device["path"])
 
-            if devices:
+            if devices["available"]:
                 node_device_dict.update({node["addr"]: devices})
 
-        if not node_device_dict:
-            raise DevicesNotFound("No devices available to create OSD(s)")
+        if config.get("verify", True):
+            if not node_device_dict:
+                raise DevicesNotFound("No devices available to create OSD(s)")
 
         if not config.get("args", {}).get("all-available-devices"):
             config["args"]["all-available-devices"] = True
+
+        # print out discovered device list
+        out, _ = self.shell(args=["ceph orch device ls -f yaml"])
+        logging.info(f"Node device list : {out}")
 
         super().apply(config)
 
@@ -94,11 +105,13 @@ class OSD(ApplyMixin, Orch):
                     if dmn["hostname"] == node and dmn["status_desc"] == "running":
                         count += 1
 
+                count = count - len(devices["unavailable"])
+
                 LOG.info(
                     "%s %s/%s osd daemon(s) up... Retries: %s"
-                    % (node, count, len(devices), checks)
+                    % (node, count, len(devices["available"]), checks)
                 )
-                if count == len(devices):
+                if count == len(devices["available"]):
                     deployed += 1
 
             if deployed == len(node_device_dict):
@@ -200,3 +213,25 @@ class OSD(ApplyMixin, Orch):
                 LOG.error("OSD Removed ID found")
                 raise AssertionError("fail, OSD is present still after removing")
         LOG.info(f" OSD {osd_id} Removal is successfully")
+
+    def out(self, config: Dict):
+        """
+        Execute the command ceph osd out.
+        Args:
+            config (Dict): OSD Remove status configuration parameters
+        Returns:
+          output, error   returned by the command.
+        Example::
+            config:
+                command: out
+                base_cmd_args:
+                    verbose: true
+                pos_args:
+                    - 4
+        """
+        base_cmd = ["ceph", "osd", "out"]
+        if config.get("base_cmd_args"):
+            base_cmd.append(config_dict_to_string(config["base_cmd_args"]))
+        osd_id = config["pos_args"][0]
+        base_cmd.append(str(osd_id))
+        return self.shell(args=base_cmd)

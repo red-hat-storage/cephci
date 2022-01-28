@@ -11,13 +11,13 @@ More operations to be added as needed
 
 import datetime
 import json
-import logging
 import re
 import time
 
 from ceph.ceph_admin import CephAdmin
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class RadosOrchestrator:
@@ -98,7 +98,7 @@ class RadosOrchestrator:
         log.info("Email alerts configured on the cluster")
         return True
 
-    def run_ceph_command(self, cmd: str) -> dict:
+    def run_ceph_command(self, cmd: str):
         """
         Runs ceph commands with json tag for the action specified otherwise treats action as command
         and returns formatted output
@@ -108,7 +108,13 @@ class RadosOrchestrator:
         """
 
         cmd = f"{cmd} -f json"
-        out, err = self.node.shell([cmd])
+        try:
+            out, err = self.node.shell([cmd])
+        except Exception as er:
+            log.error(f"Exception hit while command execution. {er}")
+            return None
+        if out.isspace():
+            return {}
         status = json.loads(out)
         return status
 
@@ -870,24 +876,44 @@ class RadosOrchestrator:
             target: ID osd the target OSD
         Returns: Pass -> True, Fail -> False
         """
-
         cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
-        osd_nodes = self.ceph_cluster.get_nodes(role="osd")
-        flag = False
-        for onode in osd_nodes:
-            res = self.collect_osd_daemon_ids(osd_node=onode)
-            if target in res:
-                cmd = f"systemctl {action} ceph-{cluster_fsid}@osd.{target}.service"
-                flag = True
-                log.info(
-                    f"Performing {action} on osd-{target} on host {onode.hostname}. Command {cmd}"
-                )
-                onode.exec_command(sudo=True, cmd=cmd)
-                # Sleeping for 5 seconds for status to be updated
-                time.sleep(5)
-                return True
-        if not flag:
-            log.error(f"osd-{target} not found on cluster")
+        host = self.fetch_host_node(daemon_type="osd", daemon_id=str(target))
+        if not host:
+            log.error("failed to find host for the osd")
+            return False
+        cmd = f"systemctl {action} ceph-{cluster_fsid}@osd.{target}.service"
+        log.info(
+            f"Performing {action} on osd-{target} on host {host.hostname}. Command {cmd}"
+        )
+        host.exec_command(sudo=True, cmd=cmd)
+        # Sleeping for 5 seconds for status to be updated
+        time.sleep(5)
+        return True
+
+    def fetch_host_node(self, daemon_type: str, daemon_id: str = None):
+        """
+        Provides the Ceph cluster object for the given daemon. ceph_cluster
+        Args:
+            daemon_type: type of daemon
+                Allowed values: alertmanager, crash, mds, mgr, mon, osd, rgw, prometheus, grafana, node-exporter
+            daemon_id: name of the daemon, ID in case of OSD's
+
+        Returns: ceph object for the node
+
+        """
+        host_nodes = self.ceph_cluster.get_nodes()
+        cmd = f"ceph orch ps --daemon_type {daemon_type}"
+        if daemon_id:
+            cmd += f" --daemon_id {daemon_id}"
+        daemons = self.run_ceph_command(cmd=cmd)
+        try:
+            o_node = [entry["hostname"] for entry in daemons][0]
+            host = [node for node in host_nodes if re.search(o_node, node.hostname)][0]
+            return host
+        except Exception:
+            log.error(
+                f"Could not find host node for daemon {daemon_type} with name {daemon_id}"
+            )
             return False
 
     def verify_ec_overwrites(self, **kwargs) -> bool:
@@ -916,3 +942,51 @@ class RadosOrchestrator:
         out, err = self.node.shell([cmd])
         log.info(f"The image details are : {out}")
         return True
+
+    def check_compression_size(self, pool_name: str, **kwargs) -> bool:
+        """
+        Checks the given pool size against "compression_required_ratio" and verifies that data is
+        compressed in accordance to the ratio provided
+        Args:
+            pool_name: Name of the pool
+            **kwargs: additional params needed.
+                Allowed values:
+                    compression_required_ratio: ratio set on the pool for compression
+        Returns: True -> pass, False -> fail
+        """
+        log.info(f"Collecting stats about pool : {pool_name}")
+        pool_stats = self.run_ceph_command(cmd="ceph df detail")["pools"]
+        flag = False
+        for detail in pool_stats:
+            if detail["name"] == pool_name:
+                pool_1_stats = detail["stats"]
+                stored_data = pool_1_stats["stored_data"]
+                ratio_set = kwargs["compression_required_ratio"]
+                if pool_1_stats["data_bytes_used"] >= (stored_data * ratio_set):
+                    log.error(
+                        f"The data stored on pool is not compressed in accordance with the ratio set."
+                        f"Ideal size after compression <= {stored_data * ratio_set} \n"
+                        f"Stored: {pool_1_stats['data_bytes_used']}"
+                    )
+                    return False
+                flag = True
+                break
+        if not flag:
+            log.error(f"Pool {pool_name} not found on cluster.")
+            return False
+        log.info(f"data on pool is compressed in accordance of ratio : {ratio_set}")
+        return True
+
+    def get_cluster_date(self):
+
+        """
+        Used to get the osd parameter value
+        Args:
+            cmd: Command that needs to be run on container
+
+        Returns : string  value
+        """
+
+        cmd = f'{"date +%Y:%m:%d:%H:%u"}'
+        out, err = self.node.shell([cmd])
+        return out.strip()

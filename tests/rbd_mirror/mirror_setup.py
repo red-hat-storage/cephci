@@ -1,8 +1,7 @@
-import logging
-
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(**kw):

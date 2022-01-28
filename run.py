@@ -1,5 +1,9 @@
 #!/usr/bin/env python
+import logstash
 from gevent import monkey
+
+from utility.config import TestMetaData
+from utility.log import Log
 
 monkey.patch_all()
 import datetime
@@ -35,7 +39,6 @@ from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
     ReportPortal,
-    TestSetupFailure,
     close_and_remove_filehandlers,
     configure_logger,
     create_run_dir,
@@ -43,7 +46,7 @@ from utility.utils import (
     email_results,
     fetch_build_artifacts,
     generate_unique_id,
-    get_latest_container,
+    get_cephci_config,
     magna_url,
 )
 from utility.xunit import create_xunit_results
@@ -53,9 +56,11 @@ A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
   run.py --rhbuild BUILD
+        (--platform <name>)
         (--suite <FILE>)...
         (--global-conf FILE | --cluster-conf FILE)
         [--cloud <openstack> | <ibmc> | <baremetal>]
+        [--build <name>]
         [--inventory FILE]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
@@ -63,9 +68,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--add-repo <repo>]
         [--kernel-repo <repo>]
         [--store | --reuse <file>]
-        [--v2]
-        [--platform <name>]
-        [--build <name>]
         [--skip-cluster]
         [--skip-subscription]
         [--docker-registry <registry>]
@@ -88,7 +90,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--xunit-results]
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
-        [--grafana-image <image-name>]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
@@ -106,10 +107,8 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --v2                              select pipeline Version 2.0 execution workflow
   --build <latest>                  eg: latest|tier-0|tier-1|tier-2|cvp|released
-                                    [default: latest]
-  --platform <rhel-8>                 select platform version eg., rhel-8, rhel-7
+  --platform <rhel-8>               select platform version eg., rhel-8, rhel-7
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
                                     Top level location of compose
   --add-repo <repo>                 Any additional repo's need to be enabled
@@ -131,7 +130,7 @@ Options:
   --report-portal                   Post results to report portal. Requires config file,
                                     see README.
   --log-level <LEVEL>               Set logging level
-  --log-dir <LEVEL>                 Set log directory [default: /tmp]
+  --log-dir <LEVEL>                 Set log directory
   --instances-name <name>           Name that will be used for instances creation
   --osp-image <image>               Image for osp instances, default value is taken from
                                     conf file
@@ -149,11 +148,8 @@ Options:
                                     [default: false]
   --skip-enabling-rhel-rpms         skip adding rpms from subscription if using beta
                                     rhel images for Interop runs
-  --grafana-image <image_name>      Development purpose - provide custom grafana image
-                                    in conjunction with --skip-monitoring-stack during
-                                    cluster bootstrap via CephADM
 """
-log = logging.getLogger(__name__)
+log = Log(__name__)
 root = logging.getLogger()
 root.setLevel(logging.INFO)
 
@@ -366,15 +362,34 @@ def run(args):
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
     cleanup_name = args.get("--cleanup", None)
 
-    version2 = args.get("--v2", False)
     ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
-    log_directory = args.get("--log-dir", "/tmp")
+    log_directory = args.get("--log-dir")
 
     run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)
+    metadata = TestMetaData(
+        run_id=run_id,
+        rhbuild=rhbuild,
+        logstash=get_cephci_config().get("logstash", {}),
+    )
+    if log.config.get("logstash"):
+        host = log.config["logstash"]["host"]
+        port = log.config["logstash"]["port"]
+        version = log.config["logstash"].get("version", 1)
+        handler = logstash.TCPLogstashHandler(
+            host=host,
+            port=port,
+            version=version,
+        )
+        handler.setLevel(log.log_level)
+        root.addHandler(handler)
+
+        server = f"tcp://{host}:{port}"
+        log._logger.debug(f"Log events are also pushed to {server}")
+
     startup_log = os.path.join(run_dir, "startup.log")
 
     handler = logging.FileHandler(startup_log)
@@ -389,7 +404,6 @@ def run(args):
     run_start_time = datetime.datetime.now()
     trigger_user = getuser()
 
-    platform = None
     build = None
     base_url = None
     ubuntu_repo = None
@@ -422,110 +436,13 @@ def run(args):
     if inventory_file is None and not reuse and cloud_type in ["openstack", "ibmc"]:
         raise Exception("Require system configuration information to provision.")
 
-    if not version2:
-        # Get ceph cluster version name
-        with open("rhbuild.yaml") as fd:
-            rhbuild_file = yaml.safe_load(fd)
+    platform = args["--platform"]
+    build = args.get("--build", None)
 
-        ceph = rhbuild_file["ceph"]
-        rhbuild_ = None
-        try:
-            ceph_name, rhbuild_ = next(
-                filter(
-                    lambda x: x,
-                    [(ceph[x]["name"], x) for x in ceph if x == rhbuild.split(".")[0]],
-                )
-            )
-        except StopIteration:
-            print("\nERROR: Please provide correct RH build version, run exited.")
-            sys.exit(1)
-
-        # Get base-url
-        composes = ceph[rhbuild_]["composes"]
-        if not base_url:
-
-            if rhbuild in composes:
-                base_url = composes[rhbuild or "latest"]["base_url"]
-
-        # Get ubuntu-repo
-        if not ubuntu_repo and rhbuild.startswith("3"):
-            if rhbuild in composes:
-                ubuntu_repo = composes[rhbuild or "latest"]["ubuntu_repo"]
-
-        if os.environ.get("TOOL") is not None:
-            ci_message = json.loads(os.environ["CI_MESSAGE"])
-            compose_id = ci_message["compose_id"]
-            compose_url = ci_message["compose_url"] + "/"
-            product_name = ci_message.get("product_name", None)
-            product_version = ci_message.get("product_version", None)
-            log.info("COMPOSE_URL = %s ", compose_url)
-
-            if os.environ["TOOL"] == "pungi":
-                # is a rhel compose
-                log.info("trigger on CI RHEL Compose")
-            elif os.environ["TOOL"] == "rhcephcompose":
-                # is a ubuntu compose
-                log.info("trigger on CI Ubuntu Compose")
-                ubuntu_repo = compose_url
-                log.info("using ubuntu repo" + ubuntu_repo)
-            elif os.environ["TOOL"] == "bucko":
-                # is a docker compose
-                log.info("Trigger on CI Docker Compose")
-                docker_registry, docker_tag = ci_message["repository"].split(
-                    "/rh-osbs/rhceph:"
-                )
-                docker_image = "rh-osbs/rhceph"
-                log.info(
-                    f"\nUsing docker registry from ci message: {docker_registry} \n"
-                    f"Docker image: {docker_image}\nDocker tag:{docker_tag}"
-                )
-                log.warning("Using Docker insecure registry setting")
-                docker_insecure_registry = True
-
-            if product_name == "ceph":
-                # is a rhceph compose
-                base_url = compose_url
-                log.info("using base url" + base_url)
-
-        if not os.environ.get("TOOL") and not ignore_latest_nightly_container:
-            try:
-                latest_container = get_latest_container(rhbuild)
-            except ValueError:
-                print(
-                    "ERROR:No latest nightly container UMB msg at "
-                    "/ceph/cephci-jenkins/latest-rhceph-container-info/ "
-                    "specify using the cli args or use --ignore-latest-container"
-                )
-                sys.exit(1)
-            docker_registry = (
-                latest_container.get("docker_registry")
-                if not docker_registry
-                else docker_registry
-            )
-            docker_image = (
-                latest_container.get("docker_image")
-                if not docker_image
-                else docker_image
-            )
-            docker_tag = (
-                latest_container.get("docker_tag") if not docker_tag else docker_tag
-            )
-            log.info(
-                f"Using latest nightly docker image - {docker_registry}/{docker_image}:{docker_tag}"
-            )
-            docker_insecure_registry = True
-            log.warning("Using Docker insecure registry setting")
-    else:
-        platform = args.get("--platform", "rhel-8")
-        build = args.get("--build", "latest")
-
-        if not platform:
-            raise TestSetupFailure("please provide --platform [rhel-7|rhel-8]")
-
-        if build != "released":
-            base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-                build, rhbuild, platform
-            )
+    if build and build != "released":
+        base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
+            build, rhbuild, platform
+        )
 
     store = args.get("--store", False)
 
@@ -537,7 +454,6 @@ def run(args):
     kernel_repo = args.get("--kernel-repo", None)
 
     docker_insecure_registry = args.get("--insecure-registry", False)
-    custom_grafana_image = args.get("--grafana-image", None)
 
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster", False)
@@ -563,6 +479,9 @@ def run(args):
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
     suite = init_suite.load_suites(suite_files)
+    log.debug(f"Found the following valid test suites: {suite['tests']}")
+    if suite["nan"] and not suite["tests"]:
+        raise Exception("Please provide valid test suite name")
 
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
@@ -601,7 +520,7 @@ def run(args):
             distro.append(image_name.replace(".iso", ""))
 
         # get COMPOSE ID and ceph version
-        if build not in ["released", "cvp"]:
+        if build not in ["released", "cvp", None]:
             if cloud_type == "openstack" or cloud_type == "baremetal":
                 resp = requests.get(base_url + "/COMPOSE_ID", verify=False)
                 compose_id = resp.text
@@ -634,6 +553,7 @@ def run(args):
     distro = ",".join(list(set(distro)))
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
+    metadata["rhcs"] = ceph_version
     log.info("Testing Ceph Version: " + ceph_version)
     log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
 
@@ -797,6 +717,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/dashboard"))
     sys.path.append(os.path.abspath("tests/misc_env"))
     sys.path.append(os.path.abspath("tests/parallel"))
+    sys.path.append(os.path.abspath("tests/upgrades"))
 
     tests = suite.get("tests")
     tcs = []
@@ -824,8 +745,8 @@ def run(args):
 
         if tc.get("log-link"):
             print("Test logfile location: {log_url}".format(log_url=tc["log-link"]))
-
-        log.info("Running test %s", test_file)
+        log.info(f"Running test {test_file}")
+        # log.info("Running test %s", test_file)
         start = datetime.datetime.now()
         for cluster_name in test.get("clusters", ceph_cluster_dict):
             if test.get("clusters"):
@@ -836,7 +757,7 @@ def run(args):
             if not config.get("base_url"):
                 config["base_url"] = base_url
 
-            config["rhbuild"] = f"{rhbuild}-{platform}" if version2 else rhbuild
+            config["rhbuild"] = f"{rhbuild}-{platform}"
             config["cloud-type"] = cloud_type
             if "ubuntu_repo" in locals():
                 config["ubuntu_repo"] = ubuntu_repo
@@ -862,83 +783,14 @@ def run(args):
                 docker_image,
                 docker_tag,
             )
-            # For cdn container installation provide GAed container parameters
-            # in test suite file as below, In case cdn is not enabled the latest
-            # container details will be considered.
-            #
-            # config:
-            #     use_cdn: True
-            #     ansi_config:
-            #       ceph_repository_type: cdn
-            #       ceph_docker_image: "rhceph/rhceph-4-rhel8"
-            #       ceph_docker_image_tag: "latest"
-            #       ceph_docker_registry: "registry.redhat.io"
 
-            if (
-                config
-                and config.get("ansi_config")
-                and config.get("ansi_config").get("ceph_repository_type") != "cdn"
-            ):
-                if docker_registry:
-                    config.get("ansi_config")["ceph_docker_registry"] = str(
-                        docker_registry
-                    )
+            config["ceph_docker_registry"] = docker_registry
+            report_portal_description += f"docker registry: {docker_registry}"
+            config["ceph_docker_image"] = docker_image
+            report_portal_description += f"docker image: {docker_image}"
+            config["ceph_docker_image_tag"] = docker_tag
+            report_portal_description += f"docker registry: {docker_registry}"
 
-                if docker_image:
-                    config.get("ansi_config")["ceph_docker_image"] = str(docker_image)
-
-                if docker_tag:
-                    config.get("ansi_config")["ceph_docker_image_tag"] = str(docker_tag)
-                cluster_docker_registry = config.get("ansi_config").get(
-                    "ceph_docker_registry"
-                )
-                cluster_docker_image = config.get("ansi_config").get(
-                    "ceph_docker_image"
-                )
-                cluster_docker_tag = config.get("ansi_config").get(
-                    "ceph_docker_image_tag"
-                )
-
-                if cluster_docker_registry:
-                    cluster_docker_registry = config.get("ansi_config").get(
-                        "ceph_docker_registry"
-                    )
-                    report_portal_description = (
-                        report_portal_description
-                        + "\ndocker registry: {docker_registry}".format(
-                            docker_registry=cluster_docker_registry
-                        )
-                    )
-
-                if cluster_docker_image:
-                    cluster_docker_image = config.get("ansi_config").get(
-                        "ceph_docker_image"
-                    )
-                    report_portal_description = (
-                        report_portal_description
-                        + "\ndocker image: {docker_image}".format(
-                            docker_image=cluster_docker_image
-                        )
-                    )
-
-                if cluster_docker_tag:
-                    cluster_docker_tag = config.get("ansi_config").get(
-                        "ceph_docker_image_tag"
-                    )
-                    report_portal_description = (
-                        report_portal_description
-                        + "\ndocker tag: {docker_tag}".format(
-                            docker_tag=cluster_docker_tag
-                        )
-                    )
-                if cluster_docker_image and cluster_docker_registry:
-                    tc["docker-containers-list"].append(
-                        "{docker_registry}/{docker_image}:{docker_tag}".format(
-                            docker_registry=cluster_docker_registry,
-                            docker_image=cluster_docker_image,
-                            docker_tag=cluster_docker_tag,
-                        )
-                    )
             if filestore:
                 config["filestore"] = filestore
 
@@ -955,9 +807,6 @@ def run(args):
 
             if osp_cred:
                 config["osp_cred"] = osp_cred
-
-            if custom_grafana_image:
-                config["grafana_image"] = custom_grafana_image
 
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:
@@ -1058,11 +907,27 @@ def run(args):
     log.info("\nAll test logs located here: {base}".format(base=url_base))
     close_and_remove_filehandlers()
 
+    test_run_metadata = {
+        "build": rhbuild,
+        "polarion-project-id": "CEPH",
+        "suite-name": suite_name,
+        "distro": distro,
+        "ceph-version": ceph_version,
+        "ceph-ansible-version": ceph_ansible_version,
+        "base_url": base_url,
+        "container-registry": docker_registry,
+        "container-image": docker_image,
+        "container-tag": docker_tag,
+        "compose-id": compose_id,
+        "log-dir": run_dir,
+        "run-id": run_id,
+    }
+
     if post_to_report_portal:
         rp_logger.finish_launch()
 
     if xunit_results:
-        create_xunit_results(suite_name, tcs, run_dir)
+        create_xunit_results(suite_name, tcs, test_run_metadata)
 
     print("\nAll test logs located here: {base}".format(base=url_base))
     print_results(tcs)
