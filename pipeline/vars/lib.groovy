@@ -2,6 +2,7 @@
 
 import org.jsoup.Jsoup
 
+
 def fetchStageStatus(def testResults) {
     /*
         This method is to return list stage status(es).
@@ -285,7 +286,8 @@ def sendEmail(
     def testResults,
     def artifactDetails,
     def tierLevel,
-    def toList="ceph-qe-list@redhat.com"
+    def toList="ceph-qe-list@redhat.com",
+    def buildArtifacts=null
     ) {
     /*
         Send an Email
@@ -306,6 +308,12 @@ def sendEmail(
                                             "repository": "repositoryname"]
             tierLevel:
                 Example: Tier0, Tier1, CVP..
+            buildArtifacts: Actual Compose and container image reference from build
+                Example: buildArtifacts = ["composes": ["rhe-7": "composeurl1",
+                                                        "rhel-8": "composeurl2"],
+                                           "version": "RHCEPH-5.0",
+                                           "ceph_version": "16.2.0-117",
+                                           "repository": "repositoryname"]
     */
     def status = "STABLE"
     def body = readFile(file: "pipeline/vars/emailable-report.html")
@@ -343,6 +351,16 @@ def sendEmail(
         body += "<tr><td>Log</td><td>${artifactDetails.log}</td></tr>"
     } else {
         body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
+    }
+    if ( buildArtifacts ){
+        body += "</table><h3><u>Build Artifacts</u></h3><table>"
+
+        if (buildArtifacts.composes) {
+            body += "<tr><td>Build Composes</td><td>${buildArtifacts.composes}</td></tr>"
+        }
+        if (buildArtifacts.repository) {
+            body += "<tr><td>Container Image</td><td>${buildArtifacts.repository}</td></tr>"
+        }
     }
 
     body += "</table><br /></body></html>"
