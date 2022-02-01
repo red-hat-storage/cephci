@@ -966,7 +966,7 @@ def run(args):
             cluster_name = cluster.get("ceph-cluster").get("name", "ceph")
             installer = ceph_cluster_dict[cluster_name].get_nodes(role="installer")[0]
             sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
-        log.info(f"Generated sosreports location : {url_base}/sosreports")
+        log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
     return jenkins_rc
 
