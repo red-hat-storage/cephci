@@ -1,9 +1,9 @@
-import logging
 import random
 
 from tests.iscsi.iscsi_utils import IscsiUtils
+from utility.log import Log
 
-log = logging
+log = Log(__name__)
 
 
 def run(**kw):

@@ -1,11 +1,11 @@
 """Create xUnit result files."""
-
-import logging
 from datetime import timedelta
 
 from junitparser import Failure, JUnitXml, Properties, Property, TestCase, TestSuite
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
 
 
 def generate_test_case(name, duration, status, polarion_id=None):
