@@ -91,6 +91,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--xunit-results]
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
+        [--skip-sos-report]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
@@ -149,6 +150,8 @@ Options:
                                     [default: false]
   --skip-enabling-rhel-rpms         skip adding rpms from subscription if using beta
                                     rhel images for Interop runs
+  --skip-sos-report                 Enables to collect sos-report on test suite failures
+                                    [default: false]
 """
 log = Log(__name__)
 root = logging.getLogger()
@@ -476,6 +479,7 @@ def run(args):
 
     enable_eus = args.get("--enable-eus", False)
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms", False)
+    skip_sos_report = args.get("--skip-sos-report", False)
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
@@ -954,13 +958,14 @@ def run(args):
 
     email_results(test_result=test_res)
 
-    if jenkins_rc:
+    if jenkins_rc and not skip_sos_report:
         log.info(
             "\n\nGenerating sosreports for all the nodes due to failures in testcase"
         )
-        installer_node = ceph_cluster_dict["ceph"].get_nodes(role="installer")[0]
-        sosreport.run(installer_node.ip_address, "cephuser", "cephuser", run_dir)
-        log.info(f"Generated sosreports location : {url_base}/sosreports")
+        for cluster in ceph_cluster_dict.keys():
+            installer = ceph_cluster_dict[cluster].get_nodes(role="installer")[0]
+            sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
+        log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
     return jenkins_rc
 
