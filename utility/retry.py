@@ -1,8 +1,9 @@
-import logging
 import time
 from functools import wraps
 
-logger = logging.getLogger(__name__)
+from utility.log import Log
+
+logger = Log(__name__)
 
 
 def retry(exception_to_check, tries=4, delay=3, backoff=2):
