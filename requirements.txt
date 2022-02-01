@@ -4,6 +4,7 @@ black
 isort
 flake8
 tox
+python-openstackclient
 pyOpenSSL
 pytest
 mock
