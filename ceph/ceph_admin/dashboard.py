@@ -1,12 +1,13 @@
 """Manage the Ceph Dashboard service via ceph CLI."""
 import json
-import logging
 import tempfile
 from time import sleep
 
 import requests
 
-LOG = logging.getLogger(__name__)
+from utility.log import Log
+
+LOG = Log(__name__)
 
 
 def enable_dashboard(cls, config):

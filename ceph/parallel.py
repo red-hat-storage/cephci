@@ -1,10 +1,11 @@
-import logging
 import sys
 
 import gevent.pool
 import gevent.queue
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class ExceptionHolder(object):
