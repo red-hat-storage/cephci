@@ -1,11 +1,12 @@
 import datetime
 import json
-import logging
 import random
 import time
 import traceback
 
-logger = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class RadosHelper:
