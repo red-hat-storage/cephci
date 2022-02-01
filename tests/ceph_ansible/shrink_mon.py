@@ -1,9 +1,9 @@
 """Shrinks the Ceph monitors from the cluster"""
-
-import logging
 import re
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
