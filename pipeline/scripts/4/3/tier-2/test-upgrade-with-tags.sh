@@ -28,6 +28,7 @@ $WORKSPACE/.venv/bin/python run.py \
     --suite $test_suite \
     --inventory $test_inventory \
     --log-level DEBUG \
+    --skip-version-compare \
     $CLI_ARGS
 
 if [ $? -ne 0 ]; then
