@@ -10,13 +10,14 @@ Example:
 
 This module is inherited where orchestrator operations are resumed using resume command.
 """
-import logging
 from typing import Dict
+
+from utility.log import Log
 
 from .common import config_dict_to_string
 from .typing_ import ServiceProtocol
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
 
 
 class ResumeFailure(Exception):

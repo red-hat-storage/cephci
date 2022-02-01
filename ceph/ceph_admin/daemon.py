@@ -1,11 +1,11 @@
 """CephADM orchestration Daemon operations."""
-import logging
+from utility.log import Log
 
 from .add import AddMixin
 from .common import config_dict_to_string
 from .orch import Orch
 
-logger = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class Daemon(AddMixin, Orch):
