@@ -31,7 +31,7 @@ class AddMixin:
         service = config.pop("service")
         base_cmd = ["ceph", "orch"]
         base_cmd.extend(["daemon", "add", service])
-        if config["base_cmd_args"]:
+        if config.get("base_cmd_args"):
             base_cmd.append(config_dict_to_string(config["base_cmd_args"]))
 
         pos_args = config["pos_args"]
