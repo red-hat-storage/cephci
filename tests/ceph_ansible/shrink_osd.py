@@ -1,8 +1,7 @@
-import logging
-
 from ceph.ceph import NodeVolume
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
