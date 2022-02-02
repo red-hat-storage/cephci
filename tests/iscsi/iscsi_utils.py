@@ -1,12 +1,12 @@
 import datetime
-import logging
 import string
 import time
 from itertools import cycle
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-log = logging
+log = Log(__name__)
 
 
 class IscsiUtils(object):
