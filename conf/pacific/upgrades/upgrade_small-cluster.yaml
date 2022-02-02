@@ -12,7 +12,7 @@ globals:
          - osd
          - installer
        no-of-volumes: 1
-       disk-size: 40  
+       disk-size: 40
      node2:
        role:
          - mon

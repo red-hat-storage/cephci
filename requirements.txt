@@ -5,3 +5,4 @@ isort
 flake8
 tox
 python-openstackclient
+yamllint

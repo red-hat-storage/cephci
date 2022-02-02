@@ -82,7 +82,6 @@ tests:
             script-name: test_multitenant_user_access.py
             config-file-name: test_multitenant_access.yaml
             timeout: 300
-      desc: Perform rgw tests
 
    - test:
       name: Purge ceph dashboard

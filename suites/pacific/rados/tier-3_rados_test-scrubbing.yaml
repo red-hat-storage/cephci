@@ -43,7 +43,7 @@ tests:
       name: deploy cluster
 
   - test:
-      name: Default scheduled scrub 
+      name: Default scheduled scrub
       polarion-id: CEPH-9361
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation

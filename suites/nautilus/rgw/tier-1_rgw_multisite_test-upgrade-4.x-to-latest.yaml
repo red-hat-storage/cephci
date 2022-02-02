@@ -320,7 +320,7 @@ tests:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_check_sharding_enabled_brownfield.yaml
             timeout: 300
-  
+
   - test:
       clusters:
         ceph-rgw1:
