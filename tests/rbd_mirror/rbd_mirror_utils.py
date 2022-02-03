@@ -202,6 +202,8 @@ class RbdMirror:
     def wait_for_status(self, **kw):
         tout = datetime.timedelta(seconds=600)
         starttime = datetime.datetime.now()
+        # Waiting for cluster to be aware of new event
+        time.sleep(20)
         while True:
             if kw.get("poolname", False):
                 if kw.get("health_pattern"):
