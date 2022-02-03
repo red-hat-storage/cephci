@@ -1,7 +1,7 @@
 #
-# Objective: Test bucket notifications with kafka endpoint 
-#       - with ack_type broker/none 
-#       - w/o persistent flag 
+# Objective: Test bucket notifications with kafka endpoint
+#       - with ack_type broker/none
+#       - w/o persistent flag
 #
 ---
 tests:
@@ -34,7 +34,6 @@ tests:
         cmd: ceph -s
         sudo: True
       desc: Check for ceph health debug info
-
 
   # kafka broker type broker with persistent flag enabled
   - test:
@@ -71,6 +70,7 @@ tests:
         timeout: 300
 
   # kafka broker type none with persistent flag enabled
+
   - test:
       name: test bucket notifcation with kafka endpoint
       desc: notify put,delete events with kafka_none_persistent
@@ -101,7 +101,8 @@ tests:
         config-file-name: test_bucket_notification_kafka_none_multipart.yaml
         timeout: 300
 
-  # kafka broker type none 
+  # kafka broker type none
+
   - test:
       name: test bucket notifcation with kafka endpoint
       desc: notify put,delete events with kafka_none
@@ -132,7 +133,8 @@ tests:
         config-file-name: test_bucket_notification_kafka_none_multipart.yaml
         timeout: 300
 
-  # kafka broker type broker 
+  # kafka broker type broker
+
   - test:
       name: test bucket notifcation with kafka endpoint
       desc: notify put,delete events with kafka_broker
@@ -162,4 +164,3 @@ tests:
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_multipart.yaml
         timeout: 300
-

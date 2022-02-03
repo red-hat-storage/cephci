@@ -231,11 +231,11 @@ tests:
       clusters:
         ceph-pri:
           config:
-            config-file-name: test_data_omap_offload_multipart.yaml 
+            config-file-name: test_data_omap_offload_multipart.yaml
             script-name: test_data_omap_offload.py
             timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
-      desc: Execute datalog omap offload with multipart objects on primary 
+      desc: Execute datalog omap offload with multipart objects on primary
       module: sanity_rgw_multisite.py
       name: datalog omap offload
 
@@ -247,7 +247,7 @@ tests:
             script-name: test_data_omap_offload.py
             timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
-      desc: Execute datalog omap offload on versioned bucket on primary 
+      desc: Execute datalog omap offload on versioned bucket on primary
       module: sanity_rgw_multisite.py
       name: datalog omap offload
 

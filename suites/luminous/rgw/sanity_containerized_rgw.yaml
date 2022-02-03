@@ -331,7 +331,7 @@ tests:
          script-name: test_bucket_listing.py
          config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
          timeout: 30
-         
+
    - test:
       name: ceph ansible purge
       polarion-id: CEPH-83571498
