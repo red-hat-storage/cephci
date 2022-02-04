@@ -20,6 +20,7 @@ import traceback
 from getpass import getuser
 from typing import Optional
 
+import logdna
 import requests
 import yaml
 from docopt import docopt
@@ -393,6 +394,19 @@ def run(args):
 
         server = f"tcp://{host}:{port}"
         log._logger.debug(f"Log events are also pushed to {server}")
+
+    log_dna_config = get_cephci_config().get("log-dna", {})
+
+    if log_dna_config:
+        options = {
+            "hostname": "Cephci",
+            "url": log_dna_config.get("url"),
+            "index_meta": True,
+            "tags": run_id,
+        }
+        apiKey = log_dna_config.get("api-key")
+        logdna_handler = logdna.LogDNAHandler(apiKey, options)
+        root.addHandler(logdna_handler)
 
     startup_log = os.path.join(run_dir, "startup.log")
 
