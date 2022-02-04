@@ -1,14 +1,18 @@
-import unittest
-
 import mock
-from mock import Mock
+import pytest
 
 from ceph.ceph_admin.alert_manager import AlertManager
 
 
-class AlertManagerTest(unittest.TestCase):
+class MockAlertManager(AlertManager):
+    def __init__(self):
+        self.cluster = None
+
+
+class TestAlertManager:
+    @pytest.fixture(autouse=True)
     def setUp(self):
-        self._alertmanager = AlertManager(Mock())
+        self._alertmanager = MockAlertManager()
 
     @mock.patch("ceph.ceph_admin.alert_manager.ApplyMixin.apply")
     def test_apply(self, mock_apply):
@@ -21,9 +25,11 @@ class AlertManagerTest(unittest.TestCase):
             "pos_args": ["node1", "dev/vdb", "dev"],
         }
         mock_apply.return_value = None
+
         self._alertmanager.apply(config)
-        self.assertEqual(mock_apply.call_count, 1)
+
+        assert mock_apply.call_count == 1
 
 
 if __name__ == "__main__":
-    unittest.main()
+    pytest.main([__file__])

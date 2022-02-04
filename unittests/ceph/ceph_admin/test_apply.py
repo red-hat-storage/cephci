@@ -1,6 +1,5 @@
-import unittest
-
 import mock
+import pytest
 
 from ceph.ceph_admin.apply import ApplyMixin, OrchApplyServiceFailure
 
@@ -41,7 +40,7 @@ class MockApplyMixinTestWithOutServiceOutput(ApplyMixin):
         return False
 
 
-class ApplyTest(unittest.TestCase):
+class TestApply:
     @mock.patch("ceph.ceph_admin.apply.config_dict_to_string")
     def test_apply_with_shell_output(self, mock_config):
         config = {
@@ -66,7 +65,7 @@ class ApplyTest(unittest.TestCase):
         self._apply = MockApplyMixinTestWithShellOutput()
         self._apply.SERVICE_NAME = "rgw"
         self._apply.apply(config)
-        self.assertEqual(mock_config.call_count, 2)
+        assert mock_config.call_count == 2
 
     @mock.patch("ceph.ceph_admin.apply.config_dict_to_string")
     def test_apply_without_shell_output(self, mock_config):
@@ -94,8 +93,8 @@ class ApplyTest(unittest.TestCase):
             self._apply.SERVICE_NAME = "rgw"
             self._apply.apply(config)
         except OrchApplyServiceFailure:
-            self.assertEqual(self._apply.SERVICE_NAME, "rgw")
-        self.assertEqual(mock_config.call_count, 2)
+            assert self._apply.SERVICE_NAME == "rgw"
+        assert mock_config.call_count == 2
 
     @mock.patch("ceph.ceph_admin.apply.config_dict_to_string")
     def test_apply_without_service_output(self, mock_config):
@@ -122,8 +121,8 @@ class ApplyTest(unittest.TestCase):
             self._apply.SERVICE_NAME = "rgw"
             self._apply.apply(config)
         except OrchApplyServiceFailure:
-            self.assertEqual(self._apply.SERVICE_NAME, "rgw")
-        self.assertEqual(mock_config.call_count, 2)
+            assert self._apply.SERVICE_NAME == "rgw"
+        assert mock_config.call_count == 2
 
     @mock.patch("ceph.ceph_admin.apply.config_dict_to_string")
     def test_apply_without_placement(self, mock_config):
@@ -144,9 +143,9 @@ class ApplyTest(unittest.TestCase):
             self._apply.SERVICE_NAME = "rgw"
             self._apply.apply(config_without_placement)
         except OrchApplyServiceFailure:
-            self.assertEqual(self._apply.SERVICE_NAME, "rgw")
-        self.assertEqual(mock_config.call_count, 2)
+            assert self._apply.SERVICE_NAME == "rgw"
+        assert mock_config.call_count == 2
 
 
 if __name__ == "__main__":
-    unittest.main()
+    pytest.main()

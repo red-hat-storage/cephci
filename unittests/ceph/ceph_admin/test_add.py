@@ -1,6 +1,5 @@
-import unittest
-
 import mock
+import pytest
 
 from ceph.ceph_admin.add import AddMixin
 
@@ -13,7 +12,8 @@ class MockAddMixinTest(AddMixin):
         return 1, 0
 
 
-class AddMixinTest(unittest.TestCase):
+class TestAddMixin:
+    @pytest.fixture(autouse=True)
     def setUp(self):
         self._add = MockAddMixinTest()
 
@@ -34,7 +34,7 @@ class AddMixinTest(unittest.TestCase):
         get_node_mock.return_value = obj
         self._add.add(config)
         config_mock.assert_called_once_with({"verbose": True})
-        self.assertEqual(get_node_mock.call_count, 1)
+        assert get_node_mock.call_count == 1
 
     @mock.patch("ceph.ceph_admin.add.get_node_by_id")
     @mock.patch("ceph.ceph_admin.add.config_dict_to_string")
@@ -53,8 +53,8 @@ class AddMixinTest(unittest.TestCase):
         get_node_mock.return_value = obj
         self._add.add(config)
         config_mock.assert_called_once_with({"verbose": True})
-        self.assertEqual(get_node_mock.call_count, 1)
+        assert get_node_mock.call_count == 1
 
 
 if __name__ == "__main__":
-    unittest.main()
+    pytest.main([__file__])
