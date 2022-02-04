@@ -50,10 +50,11 @@ tests:
               args:
                 placement:
                   label: rgw
-      desc: RHCS cluster deployment using cephadm.
+      desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
+      polarion-id: CEPH-83573713
       module: test_cephadm.py
-      name: deploy cluster
+      name: RHCS deploy cluster using cephadm
 
   - test:
       abort-on-fail: true

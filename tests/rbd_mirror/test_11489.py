@@ -1,7 +1,8 @@
-import logging
 import time
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
 
 
 def check_entries(peercluster, imagespec):

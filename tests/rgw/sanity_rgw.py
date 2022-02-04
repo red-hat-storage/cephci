@@ -46,13 +46,12 @@ Below configs are needed in order to run the tests
 """
 
 
-import logging
-
 import yaml
 
+from utility.log import Log
 from utility.utils import install_start_kafka, setup_cluster_access
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 DIR = {
     "v1": {

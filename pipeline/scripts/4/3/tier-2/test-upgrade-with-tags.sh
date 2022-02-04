@@ -1,20 +1,20 @@
 #! /bin/sh
-echo "Beginning Ceph RADOS tests: Scheduled scrub."
+echo "Beginning Red Hat Ceph RPM based upgrade with tags and limit option -  OKR BZ 2014304 testing."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
-platform="rhel-8"
-rhbuild="5.0"
-test_suite="suites/pacific/rados/tier_3_rados_scrub.yaml"
-test_conf="conf/pacific/rados/tier_3_rados.yaml"
-test_inventory="conf/inventory/rhel-8-latest.yaml"
+platform="rhel-7"
+rhbuild="4.3"
+test_suite="suites/nautilus/upgrades/tier-2_upgrade_with-tags.yaml"
+test_conf="conf/nautilus/upgrades/tier-2_upgrade.yaml"
+test_inventory="conf/inventory/rhel-7-latest.yaml"
 return_code=0
 
 # Process the CLI arguments for IBM-C environment
 CLI_ARGS=$@
 cloud="ibmc"
 if [ -z "${CLI_ARGS##*$cloud*}" ] ; then
-    test_inventory="conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    test_inventory="conf/inventory/ibm-vpc-rhel-7-latest.yaml"
 else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
@@ -28,6 +28,7 @@ $WORKSPACE/.venv/bin/python run.py \
     --suite $test_suite \
     --inventory $test_inventory \
     --log-level DEBUG \
+    --skip-version-compare \
     $CLI_ARGS
 
 if [ $? -ne 0 ]; then

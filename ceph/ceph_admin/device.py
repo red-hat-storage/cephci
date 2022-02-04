@@ -1,14 +1,14 @@
 """CephADM orchestration Device operations."""
-import logging
 from time import sleep
 from typing import Dict, Optional, Tuple
 
 from ceph.utils import get_node_by_id
+from utility.log import Log
 
 from .common import config_dict_to_string
 from .orch import Orch
 
-LOG = logging.getLogger()
+log = Log(__name__)
 
 
 class Device(Orch):
@@ -90,7 +90,7 @@ class Device(Orch):
             cmd.append(config_dict_to_string(args))
 
         cmd.append("--refresh")
-        logging.info("Sleeping for 60 seconds for disks to be discovered")
+        log.info("Sleeping for 60 seconds for disks to be discovered")
         sleep(60)
 
         return self.shell(args=cmd)

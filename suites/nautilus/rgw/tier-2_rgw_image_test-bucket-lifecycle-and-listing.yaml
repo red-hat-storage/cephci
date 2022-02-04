@@ -211,7 +211,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket radoslist 
+      name: Bucket radoslist
       desc: radoslist on all buckets
       polarion-id: CEPH-83574480
       module: sanity_rgw.py
@@ -219,4 +219,3 @@ tests:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_radoslist.yaml
         timeout: 300
-
