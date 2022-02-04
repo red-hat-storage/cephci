@@ -157,6 +157,19 @@ tests:
       name: test unordered listing of buckets
       polarion-id: CEPH-83573545
 
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
+            timeout: 300
+      desc: Before upgrade create bucket and add objects for dynamic resharding brownfield scenario
+      module: sanity_rgw_multisite.py
+      name: Test M buckets with N objects
+      polarion-id: CEPH-83574736
+
+
   # Performing cluster upgrade
 
   - test:
@@ -299,3 +312,56 @@ tests:
       module: sanity_rgw_multisite.py
       name: test unordered listing of buckets
       polarion-id: CEPH-83573545
+
+  - test:
+      name: Verify DBR feature
+      desc: Check DBR feature enabled on upgraded cluster
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83573596
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_check_sharding_enabled_brownfield.yaml
+            timeout: 300
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
+            timeout: 300
+      desc: Test dynamic resharding brownfield scenario after upgrade
+      module: sanity_rgw_multisite.py
+      name: Test M buckets with N objects
+      polarion-id: CEPH-83574736
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            timeout: 300
+      desc: Test dynamic resharding brownfield scenario after upgrade on new bucket
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      name: Dynamic Resharding tests on Primary cluster
+      polarion-id: CEPH-83574737
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_manual_resharding_greenfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            timeout: 300
+      desc: Test manual resharding brownfield scenario after upgrade on new bucket
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      name: Manual Resharding tests on Primary cluster
+      polarion-id: CEPH-83574734

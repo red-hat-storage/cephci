@@ -63,9 +63,9 @@ tests:
       abort-on-fail: true
   - test:
       name: Cephadm Bootstrap with ssl-dashboard-port, ssh options
-      desc: bootstrap with ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key and apply-spec option.
+      desc: bootstrap with ssl-dashboard-port, ssh-public-key, ssh-private-key and apply-spec option.
       module: test_bootstrap.py
-      polarion-id: CEPH-83574674
+      polarion-id: CEPH-83573721,CEPH-83573718
       config:
         command: bootstrap
         base_cmd_args:
@@ -128,7 +128,7 @@ tests:
       name: Zap osd on single device
       desc: Zap osd on single device
       module: test_device.py
-      polarion-id:
+      polarion-id: CEPH-83573770
       config:
         command: zap
         base_cmd_args:
@@ -144,7 +144,7 @@ tests:
       name: Add osd on single device
       desc: Add osd on single device
       module: test_daemon.py
-      polarion-id:
+      polarion-id: CEPH-83573736
       config:
         command: add
         service: osd
@@ -157,7 +157,7 @@ tests:
       name: Apply OSD, MDS, RGW Service deployment
       desc: OSD, MDS, RGW service deployment using apply.
       module: test_cephadm.py
-      polarion-id:
+      polarion-id: CEPH-83573730
       config:
         verify_cluster_health: true
         verify_log_files: true
@@ -325,7 +325,7 @@ tests:
       name: Remove OSD daemon
       desc: Remove single OSD daemon from the cluster
       module: test_osd.py
-      polarion-id:
+      polarion-id: CEPH-83573745
       config:
         command: rm
         base_cmd_args:

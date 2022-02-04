@@ -1,11 +1,11 @@
 import json
-import logging
 import time
 
 from ceph.parallel import parallel
 from ceph.rados_utils import RadosHelper
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

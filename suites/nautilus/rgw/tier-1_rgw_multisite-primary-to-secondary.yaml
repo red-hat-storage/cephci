@@ -393,4 +393,3 @@ tests:
             config-file-name: test_bucket_policy_replace.yaml
             verify-io-on-site: ["ceph-rgw2"]
             timeout: 300
-            

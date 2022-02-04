@@ -3,7 +3,6 @@ Contains helper functions that can used across the module.
 """
 import datetime
 import json
-import logging
 import os
 import tempfile
 from datetime import timedelta
@@ -14,9 +13,10 @@ from jinja2 import Template
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
+from utility.log import Log
 from utility.utils import generate_self_signed_certificate
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 class UnknownSpecFound(Exception):
