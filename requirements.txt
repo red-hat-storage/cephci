@@ -8,3 +8,5 @@ python-openstackclient
 pyOpenSSL
 pytest
 mock
+yamllint
+logdna
