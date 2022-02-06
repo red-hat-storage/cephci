@@ -215,6 +215,31 @@ class FsUtils(object):
         args = parser.parse_args(str_args.split())
         return args
 
+    def wait_for_mds_process(
+        self, client, process_name, timeout=180, interval=5, ispresent=True
+    ):
+        """
+        Checks for the proccess and returns the status based on ispresent
+        :param client:
+        :param process_name:
+        :param timeout:
+        :param interval:
+        :param ispresent:
+        :return:
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the process to start or stop")
+        while end_time > datetime.datetime.now():
+            client.exec_command(
+                sudo=True, cmd=f"ceph orch ps | grep {process_name}", check_ec=False
+            )
+            if client.node.exit_status == 0 and ispresent:
+                return True
+            if client.node.exit_status == 1 and not ispresent:
+                return True
+            sleep(interval)
+        return False
+
     def wait_until_mount_succeeds(self, client, mount_point, timeout=180, interval=5):
         """
         Checks for the mount point and returns the status based on mount command
