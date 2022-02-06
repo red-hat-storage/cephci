@@ -80,6 +80,17 @@ def run(ceph_cluster, **kw):
         log.info(traceback.format_exc())
         return 1
     finally:
+        fs_util.client_clean_up(
+            "umount",
+            kernel_clients=[clients[0]],
+            mounting_dir=kernel_mounting_dir_1,
+        )
+        fs_util.client_clean_up(
+            "umount",
+            kernel_clients=[clients[0]],
+            mounting_dir=kernel_mounting_dir_2,
+        )
+
         commands = [
             "ceph config set mon mon_allow_pool_delete true",
             "ceph fs volume rm cephfs_new --yes-i-really-mean-it",
