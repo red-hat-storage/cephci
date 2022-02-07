@@ -230,16 +230,14 @@ tests:
       config:
         service: "client-keyring"
         command: "set"
+        nodes:
+          - "node4"
         entity: "client.2"
         placement: "client-2"
         owner: "107:107"
         mode: "640"
-        caps:
-          mon: "profile rbd"
-          osd: "profile rbd"
-          mgr: "profile rbd"
-        nodes:
-          - "node4"
+        pg_num: '128'
+        pgp_num: '128'
       desc: Configure client using client-keyring on node4
 
   - test:

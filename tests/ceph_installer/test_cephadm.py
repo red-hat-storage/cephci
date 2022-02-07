@@ -1,5 +1,5 @@
 """
-Test suite that verifies the deployment of RedHat Ceph Storage via the cephadm CLI.
+Test suite that verifies the deployment of Red Hat Ceph Storage via the cephadm CLI.
 
 The intent of the suite is to simulate a standard operating procedure expected by a
 customer.

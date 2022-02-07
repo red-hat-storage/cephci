@@ -11,15 +11,14 @@ CLUSTER_STATE = ["ceph orch client-keyring ls"]
 
 def run(ceph_cluster, **kw):
     """
-    Cephadm Bootstrap, Managing hosts with options and
-    full cluster deployment at single call are supported.
-    Args:
-        ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
-        kw: test data
-    - Manage client-keyring operations like,
+    Manage Cephadm client-keyring operations,
         - list
         - remove client-keyring
         - set client-keyring
+    Args:
+        ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
+        kw: test data
+
     for example.,
             config:
                 command: ls | rm | set
