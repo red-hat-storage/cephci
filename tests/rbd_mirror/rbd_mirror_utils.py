@@ -310,16 +310,15 @@ class RbdMirror:
             return mirroring_details.get("mode")
         return None
 
-    def schedule_snapshot_image(self, poolname, **kwargs):
+    def mirror_snapshot_schedule_add(self, poolname, **kwargs):
         """
         This will schedule snapshot based on below kwargs
         Args:
             poolname:
             **kwargs:
-                imagename : if imagename is specified scedule will done per image if not will done per pool
-                interval : if specidifed will be used or default it to 5 min
+                imagename : if image name is specified schedule will be done per image if not will done globally
+                interval : Positional argument need to be specified
                 starttime : optional if specified will be configured
-
         Returns:
         """
         cmd1 = f"rbd mirror snapshot schedule add --pool {poolname}"
@@ -354,6 +353,53 @@ class RbdMirror:
         if snapshot_ids != snapshot_ids_1:
             return 0
         raise Exception("snapshots not generated after the intervel")
+
+    def mirror_snapshot_schedule_list(self, poolname, **kwargs):
+        """
+        This will list the mirror snapshot schedule based on below kwargs
+        Args:
+            poolname:
+            **kwargs:
+                imagename : if imagename is specified list will be done per image if not will done globally
+        Returns:
+        """
+        cmd1 = f"rbd mirror snapshot schedule list --pool {poolname}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')} --format=json --recursive"
+        self.exec_cmd(cmd=cmd1)
+
+    def mirror_snapshot_schedule_status(self, poolname, **kwargs):
+        """
+        This will show the status of mirror snapshot schedule based on below kwargs
+        Args:
+            poolname:
+            **kwargs:
+                imagename : if imagename is specified status will be done per image if not will done globally
+
+        Returns:
+        """
+        cmd1 = f"rbd mirror snapshot schedule status --pool {poolname}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')} --format=json"
+        self.exec_cmd(cmd=cmd1)
+
+    def mirror_snapshot_schedule_remove(self, poolname, **kwargs):
+        """
+        This will remove the mirror snapshot schedule based on below kwargs
+        Args:
+            poolname:
+            **kwargs:
+                imagename : if imagename is specified schedule will be done per image if not will done globally
+                interval : optional if specified will be configured
+                starttime : optional if specified will be configured
+        Returns:
+        """
+        cmd1 = f"rbd mirror snapshot schedule remove --pool {poolname}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')}"
+        cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else ""
+        cmd1 += f" {kwargs.get('starttime')}" if kwargs.get("starttime") else ""
+        self.exec_cmd(cmd=cmd1)
 
     # Check data consistency
     def check_data(self, peercluster, imagespec):
