@@ -1273,3 +1273,15 @@ def method_should_succeed(function, *args, **kwargs):
     log.debug(f"The {function} return status is {rc}")
     if not rc:
         raise AssertionError(f"Execution failed at function {function}")
+
+
+def should_not_be_empty(variable, msg="Variable is empty"):
+    """
+    Function to raise assertion if variable is empty.
+    Works with strings, lists, dicts etc.
+    Args:
+        variable: variable that should be verified
+        msg: [optional] custom message
+    """
+    if not variable:
+        raise AssertionError(msg)
