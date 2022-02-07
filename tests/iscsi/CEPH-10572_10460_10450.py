@@ -1,11 +1,11 @@
 import datetime
-import logging
 from time import sleep
 
 from ceph.parallel import parallel
 from tests.iscsi.iscsi_utils import IscsiUtils
+from utility.log import Log
 
-log = logging
+log = Log(__name__)
 
 
 def run(**kw):

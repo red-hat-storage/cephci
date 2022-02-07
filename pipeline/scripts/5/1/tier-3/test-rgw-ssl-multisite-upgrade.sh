@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Ceph RADOS tests: Scheduled scrub."
+echo "Beginning RGW secure MultiSite RHCS 5 GA to the latest development build."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/rados/tier_3_rados_scrub.yaml"
-test_conf="conf/pacific/rados/tier_3_rados.yaml"
+test_suite="suites/pacific/rgw/tier-1_rgw_ssl_multisite_test-upgrade-5-to-latest.yaml"
+test_conf="conf/pacific/rgw/rgw_mutlisite.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 

@@ -1,16 +1,19 @@
 """Cephadm orchestration host operations."""
 import json
-import logging
 from copy import deepcopy
 
 from ceph.ceph import CephNode
 from ceph.utils import get_node_by_id
+from utility.log import Log
 
 from .common import config_dict_to_string
+from .helper import monitoring_file_existence
 from .maintenance import MaintenanceMixin
 from .orch import Orch, ResourceNotFoundError
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
+DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
+DEFAULT_CEPH_CONF_PATH = "/etc/ceph/ceph.conf"
 
 
 class HostOpFailure(Exception):
@@ -81,7 +84,6 @@ class Host(MaintenanceMixin, Orch):
 
         attach_address = args.get("attach_ip_address")
         _labels = args.get("labels")
-
         if isinstance(_labels, str) and _labels == "apply-all-labels":
             label_set = set(ceph_node.role.role_list)
             _labels = list(label_set)
@@ -122,9 +124,15 @@ class Host(MaintenanceMixin, Orch):
                 _labels
             )
 
+            if config.get("validate_admin_keyring") and "_admin" in _labels:
+                if not monitoring_file_existence(ceph_node, DEFAULT_KEYRING_PATH):
+                    raise HostOpFailure("Ceph keyring not found")
+                if not monitoring_file_existence(ceph_node, DEFAULT_CEPH_CONF_PATH):
+                    raise HostOpFailure("Ceph configuration file not found")
+                logger.info("Ceph configuration and Keyring found")
+
     def add_hosts(self, config):
-        """
-        Add host(s) to cluster
+        """Add host(s) to cluster.
 
           - Attach host to cluster
           - if nodes are empty, all nodes in cluster are considered
@@ -280,6 +288,14 @@ class Host(MaintenanceMixin, Orch):
             self.shell(args=_cmd)
             assert label in self.fetch_labels_by_hostname(node.shortname)
 
+            if config.get("validate_admin_keyring") and label == "_admin":
+                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
+                if not monitoring_file_existence(node, DEFAULT_KEYRING_PATH):
+                    raise HostOpFailure("Ceph keyring not found")
+                if not monitoring_file_existence(node, DEFAULT_CEPH_CONF_PATH):
+                    raise HostOpFailure("Ceph configuration file not found")
+                logger.info("Ceph configuration and Keyring found on admin node...")
+
     def label_remove(self, config):
         """
         Removes label from nodes
@@ -330,8 +346,19 @@ class Host(MaintenanceMixin, Orch):
             _cmd = deepcopy(cmd)
             _cmd.extend(["host", "label", "rm", node.shortname, label])
             self.shell(args=_cmd)
-            # BZ-1920979(cephadm allows duplicate labels attachment to node)
-            # assert label not in self.fetch_labels_by_hostname(node.shortname)
+            assert label not in self.fetch_labels_by_hostname(node.shortname)
+
+            if config.get("validate_admin_keyring") and label == "_admin":
+                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
+                if not monitoring_file_existence(
+                    node, DEFAULT_KEYRING_PATH, file_exist=False
+                ):
+                    raise HostOpFailure("Ceph keyring found")
+                if not monitoring_file_existence(
+                    node, DEFAULT_CEPH_CONF_PATH, file_exist=False
+                ):
+                    raise HostOpFailure("Ceph configuration file found")
+                logger.info("Ceph configuration and Keyring not found as expected")
 
     def set_address(self, config):
         """

@@ -42,7 +42,7 @@ tests:
       desc: osd with 6 osd scenarios with lvm
       destroy-cluster: False
       abort-on-fail: true
-               
+
    - test:
       name: check-ceph-health
       module: exec.py

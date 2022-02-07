@@ -1,9 +1,9 @@
-import logging
 import traceback
 
 from ceph.rados_utils import RadosHelper
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(**kw):

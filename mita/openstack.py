@@ -1,6 +1,5 @@
 """Module to interface with the OpenStack API."""
 import datetime
-import logging
 import socket
 from time import sleep
 from typing import Optional
@@ -10,7 +9,9 @@ from libcloud.compute.drivers.openstack import OpenStackNetwork, StorageVolume
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
-logger = logging.getLogger(__name__)
+from utility.log import Log
+
+logger = Log(__name__)
 
 # libcloud does not have a timeout enabled for Openstack calls to
 # ``create_node``, and it uses the default timeout value from socket which is

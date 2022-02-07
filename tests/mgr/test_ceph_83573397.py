@@ -1,9 +1,10 @@
 import json
-import logging
 from time import time
 
-logger = logging.getLogger(__name__)
-log = logger
+from utility.log import Log
+
+logger = Log(__name__)
+
 
 __script = """
 import requests
@@ -62,7 +63,7 @@ def run(ceph_cluster, **kw):
     # Get all OSD and MGR nodes
     osd_nodes = ceph_cluster.get_nodes("osd")
     mgr_nodes = ceph_cluster.get_nodes("mgr")
-    log.info("Get all OSD nodes : {}".format(osd_nodes))
+    logger.info("Get all OSD nodes : {}".format(osd_nodes))
     osd_node = osd_nodes[0]
     mgr_node = mgr_nodes[0]
 

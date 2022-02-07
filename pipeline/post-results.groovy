@@ -46,6 +46,8 @@ node(nodeName) {
 
     stage('uploadTestResult') {
         def msgMap = sharedLib.getCIMessageMap()
+        def composeInfo = msgMap["recipe"]
+
         def resultDir = msgMap["test"]["object-prefix"]
         println("Test results are available at ${resultDir}")
 
@@ -61,6 +63,10 @@ node(nodeName) {
         if ( metaData["stage"] == "latest" ) { metaData["stage"] = "Tier-0" }
 
         sh script: "${copyFiles} && ${rmTmpDir}"
+
+        if ( composeInfo ){
+            metaData["buildArtifacts"] = composeInfo
+        }
         sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
         sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
 
@@ -69,9 +75,8 @@ node(nodeName) {
 
         // Update RH recipe file
         def testStatus = msgMap["test"]["result"]
-        def composeInfo = msgMap["recipe"]
 
-        if ( composeInfo && testStatus == "SUCCESS" ){
+        if ( composeInfo != null && testStatus == "SUCCESS" ){
             def tierLevel = msgMap["pipeline"]["name"]
             def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
             majorVersion = rhcsVersion["major_version"]

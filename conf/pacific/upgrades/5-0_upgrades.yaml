@@ -43,4 +43,3 @@ globals:
        disk-size: 20
      node8:
        role: client
-# This conf doesn't have nfs as its not supported till 5.1 

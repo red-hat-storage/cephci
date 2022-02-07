@@ -109,7 +109,7 @@ tests:
            config-file-name: test_user_with_REST.yaml
            timeout: 300
 
-  - test:
+   - test:
        name: Swift based tests
        desc: RGW lifecycle operations using swift
        polarion-id: CEPH-11019

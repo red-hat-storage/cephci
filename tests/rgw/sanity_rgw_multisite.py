@@ -46,14 +46,14 @@ Below configs are needed in order to run the tests
                                     - pkg2
 """
 
-import logging
 import time
 
 import yaml
 
+from utility.log import Log
 from utility.utils import setup_cluster_access, verify_sync_status
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 TEST_DIR = {
     "v2": {

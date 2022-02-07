@@ -26,7 +26,7 @@ tests:
           ceph_conf_overrides:
             client:
               rgw crypt require ssl: false
-              rgw crypt s3 kms encryption keys: 
+              rgw crypt s3 kms encryption keys:
                 testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
                 testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
       desc: test cluster 4.x cdn setup using ceph-ansible
@@ -144,7 +144,6 @@ tests:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
         timeout: 300
-        
 
   # Swift basic operation
 
@@ -223,7 +222,7 @@ tests:
           ceph_conf_overrides:
             client:
               rgw crypt require ssl: false
-              rgw crypt s3 kms encryption keys: 
+              rgw crypt s3 kms encryption keys:
                 testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
                 testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
       desc: Test Ceph-Ansible rolling update 4.x cdn -> 4.x latest
@@ -285,8 +284,8 @@ tests:
         config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
         timeout: 300
 
-
   # Bucket Listing Tests
+
   - test:
       name: Bucket Listing tests
       desc: measure execution time for ordered listing of bucket with top level objects
@@ -332,7 +331,6 @@ tests:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
         timeout: 300
-        
 
   # Swift basic operation
 

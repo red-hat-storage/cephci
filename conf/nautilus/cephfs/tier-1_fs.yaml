@@ -46,6 +46,5 @@ globals:
         role:
           - client
       node11:
-        role: 
+        role:
           - client
-

@@ -1,18 +1,18 @@
 """Module that allows QE to interface with cephadm bootstrap CLI."""
 import json
-import logging
 import tempfile
 from typing import Dict
 
 from ceph.ceph import ResourceNotFoundError
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
+from utility.log import Log
 from utility.utils import get_cephci_config
 
 from .common import config_dict_to_string
 from .helper import GenerateServiceSpec, create_ceph_config_file
 from .typing_ import CephAdmProtocol
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
 
 __DEFAULT_CEPH_DIR = "/etc/ceph"
 __DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"

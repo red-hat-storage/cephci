@@ -43,11 +43,16 @@ def run(ceph_cluster, **kwargs) -> int:
 
     client = ceph_cluster.get_nodes(role="client")[0]
     clients = ceph_cluster.get_nodes(role="client")
-    executor = RadosBench(mon_node=client, clients=clients)
+    executor = None
+
+    # ToDo: Switch between the supported IO providers
+    if config.get("benchmark"):
+        executor = RadosBench(mon_node=client, clients=clients)
 
     try:
         # Initiate thread pool to run rados bench
-        executor.run(config=config["benchmark"])
+        if executor:
+            executor.run(config=config["benchmark"])
 
         # Set repo to newer RPMs
         orch.set_tool_repo()
@@ -74,7 +79,9 @@ def run(ceph_cluster, **kwargs) -> int:
         log.error(be, exc_info=True)
         return 1
     finally:
-        executor.teardown()
+        if executor:
+            executor.teardown()
+
         # Get cluster state
         orch.get_cluster_state(
             [
@@ -87,4 +94,5 @@ def run(ceph_cluster, **kwargs) -> int:
                 "ceph mon stat",
             ]
         )
+
     return 0

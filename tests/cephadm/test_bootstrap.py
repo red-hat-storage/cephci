@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime, timedelta
 from time import sleep
 
 import requests
@@ -25,6 +26,36 @@ __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 class BootStrapValidationFailure(Exception):
     pass
+
+
+def verify_dashboard_login(url, data):
+    """Verify Ceph dashboard login using API call.
+
+    Args:
+        url: server url path
+        data: credentials data in dict
+    Returns:
+        boolean
+    """
+    try:
+        session = requests.Session()
+        session.headers = {
+            "accept": "application/vnd.ceph.api.v1.0+json",
+            "content-type": "application/json",
+        }
+
+        resp = session.post(url, data=data, verify=False)
+        if not resp.ok:
+            raise BootStrapValidationFailure(
+                f"Status code: {resp.status_code}\nResponse: {resp.text}"
+            )
+        log.info(
+            "Dashboard API login is successful, status code : %s" % resp.status_code
+        )
+        return True
+    except requests.exceptions.ConnectionError:
+        log.info("connection timeout.. try again")
+    return False
 
 
 def validate_fsid(cls, fsid: str):
@@ -128,18 +159,16 @@ def validate_dashboard(cls, out, user=None, password=None, port=None):
     data = json.dumps({"password": passwd_, "username": user_})
     url_ = f"{host}/api/auth" if not host.endswith("/") else f"{host}api/auth"
 
-    session = requests.Session()
-    session.headers = {
-        "accept": "application/vnd.ceph.api.v1.0+json",
-        "content-type": "application/json",
-    }
+    timeout = 600
+    interval = 5
+    end_time = datetime.now() + timedelta(seconds=timeout)
 
-    resp = session.post(url_, data=data, verify=False)
-    if not resp.ok:
-        raise BootStrapValidationFailure(
-            f"Status code: {resp.status_code}\nResponse: {resp.text}"
-        )
-    log.info("Dashboard API login is successful, status code : %s" % resp.status_code)
+    while end_time > datetime.now():
+        if verify_dashboard_login(url=url_, data=data):
+            break
+        sleep(interval)
+    else:
+        raise BootStrapValidationFailure("Ceph dashboard API Login call failed....")
 
 
 def validate_dashboard_user(cls, user: str, out: str):
