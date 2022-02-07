@@ -38,12 +38,6 @@ tests:
               rgw_multisite_proto: "http"
               system_access_key: 86nBoQOGpQgKxh4BLMyq
               system_secret_key: NTnkbmkMuzPjgwsBpJ6o
-              ceph_conf_overrides:
-                global:
-                  osd_pool_default_pg_num: 64
-                  osd_default_pool_size: 2
-                  osd_pool_default_pgp_num: 64
-                  mon_max_pg_per_osd: 1024
         ceph-rgw2:
           config:
             ansi_config:
