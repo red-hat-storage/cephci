@@ -1,0 +1,4 @@
+blank_issues_enabled: false
+contact_links:
+    - name: 📃 Documentation Issue
+      url: https://github.com/reactjs/reactjs.org/issues/new
