@@ -35,8 +35,8 @@ tests:
        desc: test cluster ceph-disk 3.x cdn setup using ceph-ansible
        abort-on-fail: True
 
-      # Basic Bucket Operation Tests
-      
+   # Basic Bucket Operation Tests
+
    - test:
        name: Mbuckets
        desc: test to create "M" no of buckets
@@ -96,7 +96,7 @@ tests:
            timeout: 300
 
    # REST API test
-  
+
    - test:
        name: test REST api operation
        desc: test user operation using REST API
@@ -108,7 +108,7 @@ tests:
          timeout: 300
 
    # Swift basic operation
-   
+
    - test:
        name: Swift based tests
        desc: RGW lifecycle operations using swift
@@ -240,7 +240,7 @@ tests:
          timeout: 300
 
    # BucketPolicy Tests
-   
+
    - test:
        name: Bucket Policy Tests
        desc: CEPH-11215 Modify existing bucket policy to replace the existing policy
@@ -272,7 +272,7 @@ tests:
            timeout: 300
 
    # Bucket Lifecycle Tests
-   
+
    - test:
        name: Bucket Lifecycle Object_expiration_tests
        desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
@@ -393,8 +393,8 @@ tests:
        desc: Test Ceph-Ansible rolling update - 3.x on rhel7 -> 4.x on rhel7
        abort-on-fail: True
 
-      # Basic Bucket Operation Tests
-      
+  # Basic Bucket Operation Tests
+
    - test:
        name: Mbuckets
        desc: test to create "M" no of buckets
@@ -599,7 +599,7 @@ tests:
          timeout: 300
 
    # BucketPolicy Tests
-   
+
    - test:
        name: Bucket Policy Tests
        desc: CEPH-11215 Modify existing bucket policy to replace the existing policy
@@ -631,7 +631,7 @@ tests:
            timeout: 300
 
    # Bucket Lifecycle Tests
-  
+
    - test:
        name: Bucket Lifecycle Object_expiration_tests
        desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
@@ -670,9 +670,9 @@ tests:
        config:
            script-name: test_bucket_lifecycle_object_expiration.py
            config-file-name: test_lc_rule_delete_marker.yaml
-           timeout: 300 
+           timeout: 300
 
-   - test: 
+   - test:
        name: Bucket Lifecycle Object_expiration_tests
        desc: Test object expiration for non current version expiration
        polarion-id: CEPH-11190
@@ -728,4 +728,3 @@ tests:
        module: purge_cluster.py
        desc: Purge ceph cluster
        abort-on-fail: True
- 

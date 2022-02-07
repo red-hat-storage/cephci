@@ -91,7 +91,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-      
+
   - test:
       name: Change pg size of cephfs pools
       module: test_cephfs_pool_size_change.py

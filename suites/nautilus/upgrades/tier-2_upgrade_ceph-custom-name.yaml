@@ -31,7 +31,7 @@ tests:
         cluster: custom_ceph
         ceph_repository: rhcs
         ceph_repository_type: cdn
-        ceph_rhcs_version: 3 
+        ceph_rhcs_version: 3
         ceph_stable_release: luminous
         osd_scenario: lvm
         osd_auto_discovery: False

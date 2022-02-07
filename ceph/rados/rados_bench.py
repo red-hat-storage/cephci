@@ -5,13 +5,13 @@ It contains a benchmarking facility that exercises the cluster by way of librado
 the low level native object storage API provided by Ceph.
 
 """
-import logging
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from time import time
 
 from ceph.ceph_admin.common import config_dict_to_string
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 class ClientNotFoundError(Exception):

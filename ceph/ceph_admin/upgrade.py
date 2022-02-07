@@ -1,14 +1,15 @@
 """Module that interfaces with ceph orch upgrade CLI."""
-import logging
 from datetime import datetime, timedelta
 from json import loads
 from time import sleep
 from typing import Dict
 
+from utility.log import Log
+
 from .common import config_dict_to_string
 from .typing_ import OrchProtocol
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
 
 
 class UpgradeFailure(Exception):

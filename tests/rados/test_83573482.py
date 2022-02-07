@@ -1,8 +1,9 @@
 import json
-import logging
 from time import sleep
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
 
 ENABLE_MSGR2 = "ceph mon enable-msgr2"
 RESTART_MON_SERVICE = "systemctl restart ceph-mon@{HOSTNAME}.service"

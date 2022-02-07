@@ -1,14 +1,15 @@
 """Manage OSD service via cephadm CLI."""
 import json
-import logging
 from time import sleep
 from typing import Dict
+
+from utility.log import Log
 
 from .apply import ApplyMixin
 from .common import config_dict_to_string
 from .orch import Orch
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
 
 
 class OSDServiceFailure(Exception):
@@ -47,7 +48,7 @@ class OSD(ApplyMixin, Orch):
         """
         cmd = ["ceph orch device ls -f json"]
         self.shell(args=["ceph orch device ls --refresh"])
-        logging.info("Sleeping for 60 seconds for disks to be discovered")
+        LOG.info("Sleeping for 60 seconds for disks to be discovered")
         sleep(60)
         out, _ = self.shell(args=cmd)
 
@@ -79,7 +80,7 @@ class OSD(ApplyMixin, Orch):
 
         # print out discovered device list
         out, _ = self.shell(args=["ceph orch device ls -f yaml"])
-        logging.info(f"Node device list : {out}")
+        LOG.info(f"Node device list : {out}")
 
         super().apply(config)
 

@@ -126,7 +126,7 @@ tests:
       desc: add new containerized osd node
 
    - test:
-      name: config roll over osd 
+      name: config roll over osd
       polarion-id: CEPH-9582
       module: test_ansible_roll_over.py
       config:

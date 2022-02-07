@@ -50,7 +50,7 @@ tests:
       polarion-id: CEPH-83573538
       module: docker_to_podman.py
       desc: docker to podman with osd with collocated journal
- 
+
    - test:
       name: ceph ansible purge
       polarion-id: CEPH-83571493
@@ -506,4 +506,3 @@ tests:
             playbook-command: purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes
       desc: Purge ceph cluster
       destroy-cluster: True
-  

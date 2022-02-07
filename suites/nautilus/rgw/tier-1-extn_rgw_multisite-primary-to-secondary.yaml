@@ -126,7 +126,7 @@ tests:
 
   - test:
       name: datalog omap offload
-      desc: Execute datalog omap offload with multipart objects on primary 
+      desc: Execute datalog omap offload with multipart objects on primary
       module: sanity_rgw_multisite.py
       clusters:
         ceph-rgw1:

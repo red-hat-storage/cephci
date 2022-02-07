@@ -3,12 +3,12 @@ Module that interacts with the orchestrator CLI.
 
 Provide the interfaces to ceph orch and in turn manage the orchestration engine.
 """
-import logging
 from datetime import datetime, timedelta
 from json import loads
 from time import sleep
 
 from ceph.ceph import ResourceNotFoundError
+from utility.log import Log
 
 from .ceph import CephCLI
 from .common import config_dict_to_string
@@ -25,7 +25,7 @@ from .start import StartMixin
 from .stop import StopMixin
 from .upgrade import UpgradeMixin
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
 
 
 class Orch(

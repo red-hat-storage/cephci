@@ -82,7 +82,7 @@ tests:
       abort-on-fail: true
 
   # Test work flow
-  
+
   - test:
       clusters:
         ceph-rgw1:
