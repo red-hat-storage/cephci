@@ -24,7 +24,7 @@ tests:
 
   - test:
       name: containerized ceph ansible
-      polarion-id: CEPH-83571503
+      polarion-id: CEPH-83574748
       module: test_ansible.py
       config:
         ansi_config:
