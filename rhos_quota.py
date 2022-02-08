@@ -65,49 +65,58 @@ def map_userto_instances(os_nodes, os_cred):
         print(
             f"Fetching {instance_count} instance out of {len(os_nodes)} in project : {os_cred['project']}"
         )
-        os_node_detail_json = execute(
-            cmd=openstack_basecmd(**os_cred) + f" server show {instance_id} -f json"
-        )
-        state = os_node_detail_json["status"]
-        flavor = os_node_detail_json["flavor"]
-        if not user_detail.get(os_node_detail_json["user_id"]):
-            user_json = execute(
-                cmd=openstack_basecmd(**os_cred)
-                + f" user show {os_node_detail_json['user_id']} -f json"
+        try:
+            os_node_detail_json = execute(
+                cmd=openstack_basecmd(**os_cred) + f" server show {instance_id} -f json"
             )
-            user_detail[os_node_detail_json["user_id"]] = user_json["name"]
-        if state == "ACTIVE":
-            os_instance_usage_detail_json = execute(
-                cmd=openstack_basecmd(**os_cred)
-                + f" flavor show -c ram -c vcpus -c disk {flavor.split()[0]} -f json"
-            )
-            username = user_detail[os_node_detail_json["user_id"]]
-            if instance_detail.get(username):
-                instance_detail[username]["Instances"].append(instance["Name"])
-                instance_detail[username]["Instance States"].append(state)
-                instance_detail[username]["RAM Used Per Instance in MB"].append(
-                    os_instance_usage_detail_json["ram"]
+            if not os_node_detail_json:
+                continue
+            state = os_node_detail_json["status"]
+            flavor = os_node_detail_json["flavor"]
+            if not user_detail.get(os_node_detail_json["user_id"]):
+                user_json = execute(
+                    cmd=openstack_basecmd(**os_cred)
+                    + f" user show {os_node_detail_json['user_id']} -f json"
                 )
-                instance_detail[username]["VCPUs Used Per Instance"].append(
-                    os_instance_usage_detail_json["vcpus"]
+                if not user_json:
+                    continue
+                user_detail[os_node_detail_json["user_id"]] = user_json["name"]
+            if state == "ACTIVE":
+                os_instance_usage_detail_json = execute(
+                    cmd=openstack_basecmd(**os_cred)
+                    + f" flavor show -c ram -c vcpus -c disk {flavor.split()[0]} -f json"
                 )
-                instance_detail[username]["Volume Used Per Instance in GB"].append(
-                    os_instance_usage_detail_json["disk"]
-                )
-
-            else:
-                instance_dict = {
-                    "Instances": [instance["Name"]],
-                    "Instance States": [state],
-                    "RAM Used Per Instance in MB": [
+                username = user_detail[os_node_detail_json["user_id"]]
+                if instance_detail.get(username):
+                    instance_detail[username]["Instances"].append(instance["Name"])
+                    instance_detail[username]["Instance States"].append(state)
+                    instance_detail[username]["RAM Used Per Instance in MB"].append(
                         os_instance_usage_detail_json["ram"]
-                    ],
-                    "VCPUs Used Per Instance": [os_instance_usage_detail_json["vcpus"]],
-                    "Volume Used Per Instance in GB": [
+                    )
+                    instance_detail[username]["VCPUs Used Per Instance"].append(
+                        os_instance_usage_detail_json["vcpus"]
+                    )
+                    instance_detail[username]["Volume Used Per Instance in GB"].append(
                         os_instance_usage_detail_json["disk"]
-                    ],
-                }
-                instance_detail[username] = instance_dict
+                    )
+
+                else:
+                    instance_dict = {
+                        "Instances": [instance["Name"]],
+                        "Instance States": [state],
+                        "RAM Used Per Instance in MB": [
+                            os_instance_usage_detail_json["ram"]
+                        ],
+                        "VCPUs Used Per Instance": [
+                            os_instance_usage_detail_json["vcpus"]
+                        ],
+                        "Volume Used Per Instance in GB": [
+                            os_instance_usage_detail_json["disk"]
+                        ],
+                    }
+                    instance_detail[username] = instance_dict
+        except CommandFailed as cf:
+            print(f"Openstack command failed with {cf.args[-1]}")
     return instance_detail
 
 
@@ -148,17 +157,24 @@ def get_complete_quota(instance_detail, os_cred, project_name):
         total_ram_used += stat_map["RAM Used in GB"]
         total_vcpus_used += stat_map["VCPU Used"]
         total_volume_used += stat_map["Volume Used in GB"]
-    os_quota_json = execute(cmd=openstack_basecmd(**os_cred) + " quota show -f json")
-    ram_percent = round((total_ram_used * 100) / (os_quota_json["ram"] / 1024), 2)
-    vcpu_percent = round((total_vcpus_used * 100) / os_quota_json["cores"], 2)
-    storage_percent = round((total_volume_used * 100) / (os_quota_json["gigabytes"]), 2)
-    quota_usage_dict = {
-        "Project Name": project_name,
-        "RAM usage in %": ram_percent,
-        "VCPU usage in %": vcpu_percent,
-        "Storage usage in %": storage_percent,
-    }
-    quota_stats = {"project_stats": quota_usage_dict, "user_stats": user_stats}
+    try:
+        os_quota_json = execute(
+            cmd=openstack_basecmd(**os_cred) + " quota show -f json"
+        )
+        ram_percent = round((total_ram_used * 100) / (os_quota_json["ram"] / 1024), 2)
+        vcpu_percent = round((total_vcpus_used * 100) / os_quota_json["cores"], 2)
+        storage_percent = round(
+            (total_volume_used * 100) / (os_quota_json["gigabytes"]), 2
+        )
+        quota_usage_dict = {
+            "Project Name": project_name,
+            "RAM usage in %": ram_percent,
+            "VCPU usage in %": vcpu_percent,
+            "Storage usage in %": storage_percent,
+        }
+        quota_stats = {"project_stats": quota_usage_dict, "user_stats": user_stats}
+    except CommandFailed as cf:
+        print(f"Openstack Command failed while fetching the quota: {cf.args[-1]}")
 
     return quota_stats
 
@@ -203,10 +219,19 @@ def run(args: Dict) -> int:
     quota_details = []
     for project in projects:
         os_cred["project"] = project
-        os_nodes = execute(cmd=openstack_basecmd(**os_cred) + " server list -f json")
-        instance_detail = map_userto_instances(os_nodes, os_cred)
-        quota_stats = get_complete_quota(instance_detail, os_cred, project)
-        quota_details.append(quota_stats)
+        try:
+            os_nodes = execute(
+                cmd=openstack_basecmd(**os_cred) + " server list -f json"
+            )
+            if not os_nodes:
+                continue
+            instance_detail = map_userto_instances(os_nodes, os_cred)
+            quota_stats = get_complete_quota(instance_detail, os_cred, project)
+            quota_details.append(quota_stats)
+        except CommandFailed as cf:
+            print(
+                f"Openstack Command failed while fetcing the server details {cf.args[-1]}"
+            )
 
     project_dir = os.path.dirname(os.path.abspath(__file__))
     template_dir = os.path.join(project_dir, "templates")
