@@ -91,7 +91,7 @@ node(nodeName) {
                 ],
                 "build": [
                     "repository": containerImage,
-                    "version": cephVersion,
+                    "ceph-version": cephVersion,
                     "composes": releaseMap.rc.composes
                 ],
                 "contact": [
