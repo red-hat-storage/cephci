@@ -73,6 +73,7 @@ node(nodeName) {
         // Till the pipeline matures, using the build that has passed tier-0 suite.
         testStages = sharedLib.fetchStages(cliArgs, tierLevel, testResults)
         testStages = testStages.findAll { it.key.contains("psi-only")}
+        testResults = testResults.findAll { it.key.contains("psi-only")}
 
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"
@@ -95,7 +96,8 @@ node(nodeName) {
         sharedLib.sendEmail(
             testResults,
             sharedLib.buildArtifactsDetails(releaseContent, ciMap, "tier-0"),
-            tierLevel.capitalize()
+            tierLevel.capitalize(),
+            "ceph-qe@redhat.com"
         )
     }
 
