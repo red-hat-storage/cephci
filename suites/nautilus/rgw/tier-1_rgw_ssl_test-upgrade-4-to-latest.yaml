@@ -1,0 +1,267 @@
+#
+# Objective: Test rgw with ssl configured using ceph-ansible and upgrade
+# ceph_cluster: single site baremetal
+# ceph_conf_overrides:
+#       - rgw_override_bucket_index_max_shards = 17
+#
+---
+tests:
+#  - test:
+#      name: install ceph pre-requisities
+#      module: install_prereq.py
+#      abort-on-fail: true
+
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      config:
+        use_cdn: true
+        build: "4.x"
+        ansi_config:
+          ceph_origin: repository
+          ceph_repository_type: cdn
+          ceph_rhcs_version: 4
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: false
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          dashboard_enabled: false
+          radosgw_frontend_ssl_certificate: "/etc/ceph/server.pem"
+          radosgw_frontend_port: 443
+          ceph_conf_overrides:
+              client:
+                rgw_override_bucket_index_max_shards: 17
+      desc: test cluster setup using ceph-ansible
+      polarion-id: CEPH-83574750
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        commands:
+           - "ceph -s"
+           - "ceph versions"
+        sudo: True
+      desc: check for ceph status and version
+
+  # Swift basic operation
+
+  - test:
+      name: swift upload large object tests
+      desc: upload large object in swift
+      polarion-id: CEPH-9808
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_upload.yaml
+        timeout: 300
+  - test:
+      name: swift download large object tests
+      desc: download large object in swift
+      polarion-id: CEPH-9809
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_download.yaml
+        timeout: 300
+
+  #versioning tests
+  - test:
+      name: Versioning Tests
+      desc: Versioning with copy objects
+      polarion-id: CEPH-9221
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_versioning_copy_objects.yaml
+        timeout: 300
+
+  - test:
+      name: Test deletion of object versions
+      desc: test to delete versioning objects
+      polarion-id: CEPH-14262
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_delete.yaml
+        timeout: 300
+
+  #resharding tests
+  - test:
+      name: Resharding tests
+      desc: Reshading test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding.yaml
+        timeout: 500
+  - test:
+      name: Dynamic Resharding tests
+      desc: Reshading test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+        timeout: 500
+
+  - test:
+      name: Dynamic Resharding tests
+      desc: Reshading test on versioned buckets - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_with_version.yaml
+        timeout: 500
+
+  #lifecycle tests
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-11179, CEPH-11180
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        timeout: 300
+
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for non current version expiration
+      polarion-id: CEPH-11190
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_non_current_days.yaml
+        timeout: 300
+
+  #upgrade ceph cluster
+  - test:
+      name: Upgrade ceph cluster to 4.x latest
+      polarion-id: CEPH-83574678
+      module: test_ansible_upgrade.py
+      config:
+        ansi_config:
+          ceph_origin: distro
+          ceph_repository: rhcs
+          ceph_rhcs_version: 4
+          osd_scenario: lvm
+          osd_auto_discovery: false
+          copy_admin_key: true
+          radosgw_frontend_ssl_certificate: "/etc/ceph/server.pem"
+          radosgw_frontend_port: 443
+          upgrade_ceph_packages: true
+          dashboard_enabled: false
+          ceph_conf_overrides:
+              client:
+                rgw_override_bucket_index_max_shards: 17
+      desc: Test Ceph-Ansible rolling update 4.x cdn -> 4.x latest
+      abort-on-fail: true
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        commands:
+           - "ceph -s"
+           - "ceph versions"
+        sudo: True
+      desc: check for ceph health debug info
+
+
+  # Swift basic operation
+
+  - test:
+       name: Swift based tests
+       desc: Swift bulk delete operation
+       polarion-id: CEPH-9753
+       module: sanity_rgw.py
+       config:
+           script-name: test_swift_bulk_delete.py
+           config-file-name: test_swift_bulk_delete.yaml
+           timeout: 300
+  - test:
+      name: swift upload large object tests
+      desc: upload large object in swift
+      polarion-id: CEPH-9808
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_upload.yaml
+        timeout: 300
+  - test:
+      name: swift download large object tests
+      desc: download large object in swift
+      polarion-id: CEPH-9809
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_download.yaml
+        timeout: 300
+
+  # versioning tests
+  - test:
+      name: Versioning Tests
+      desc: Versioning with copy objects
+      polarion-id: CEPH-9221
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_versioning_copy_objects.yaml
+        timeout: 300
+
+  - test:
+      name: Test deletion of object versions
+      desc: test to delete versioning objects
+      polarion-id: CEPH-14262
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_delete.yaml
+        timeout: 300
+
+  #resharding tests
+  - test:
+      name: Resharding tests
+      desc: Reshading test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding.yaml
+        timeout: 500
+  - test:
+      name: Dynamic Resharding tests
+      desc: Reshading test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+        timeout: 500
+
+  #lifecycle tests
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-11179, CEPH-11180
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        timeout: 300
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for non current version expiration
+      polarion-id: CEPH-11190
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_non_current_days.yaml
+        timeout: 300
+
