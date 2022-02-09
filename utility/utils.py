@@ -1299,3 +1299,23 @@ def generate_self_signed_cert_on_rgw(rgw_node):
     server_pem_file.write(pem)
     server_pem_file.flush()
     log.info(pem)
+
+
+def clone_the_repo(config, node, path_to_clone):
+    """clone the repo on to test node
+
+    Args:
+        config: test config
+        node: ceph node
+        path_to_clone: the path to clone the repo
+
+    TODO: if path_to_clone is not given, make temporary dir on test
+          node and clone the repo in it.
+    """
+    log.info("cloning the repo")
+    branch = config.get("branch", "master")
+    log.info(f"branch: {branch}")
+    repo_url = config.get("git-url")
+    log.info(f"repo_url: {repo_url}")
+    git_clone_cmd = f"sudo git clone {repo_url} -b {branch}"
+    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
