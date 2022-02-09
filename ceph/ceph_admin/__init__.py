@@ -7,13 +7,14 @@ operations part of the cluster lifecycle.
 Over here, we create a glue between the CLI and CephCI to allow the QE to write test
 scenarios for verifying and validating cephadm.
 """
-import logging
 from typing import Dict
+
+from utility.log import Log
 
 from .bootstrap import BootstrapMixin
 from .shell import ShellMixin
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
 
 
 class CephAdmin(BootstrapMixin, ShellMixin):

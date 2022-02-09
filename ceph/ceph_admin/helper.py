@@ -3,7 +3,6 @@ Contains helper functions that can used across the module.
 """
 import datetime
 import json
-import logging
 import os
 import tempfile
 from datetime import timedelta
@@ -14,9 +13,10 @@ from jinja2 import Template
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
+from utility.log import Log
 from utility.utils import generate_self_signed_certificate
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 class UnknownSpecFound(Exception):
@@ -487,7 +487,7 @@ def get_cluster_state(cls, commands=None):
     __CLUSTER_STATE_COMMANDS = [
         "ceph status",
         "ceph orch host ls",
-        "ceph orch ls -f json-pretty",  # https://bugzilla.redhat.com/show_bug.cgi?id=2044978
+        "ceph orch ls -f yaml",
         "ceph orch ps -f json-pretty",
         "ceph health detail -f yaml",
         "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2

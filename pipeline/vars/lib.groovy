@@ -2,6 +2,7 @@
 
 import org.jsoup.Jsoup
 
+
 def fetchStageStatus(def testResults) {
     /*
         This method is to return list stage status(es).
@@ -343,6 +344,16 @@ def sendEmail(
         body += "<tr><td>Log</td><td>${artifactDetails.log}</td></tr>"
     } else {
         body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
+    }
+    if ( artifactDetails.buildArtifacts ){
+        body += "</table><h3><u>Build Artifacts</u></h3><table>"
+
+        if (artifactDetails.buildArtifacts.composes) {
+            body += "<tr><td>Build Composes</td><td>${artifactDetails.buildArtifacts.composes}</td></tr>"
+        }
+        if (artifactDetails.buildArtifacts.repository) {
+            body += "<tr><td>Container Image</td><td>${artifactDetails.buildArtifacts.repository}</td></tr>"
+        }
     }
 
     body += "</table><br /></body></html>"

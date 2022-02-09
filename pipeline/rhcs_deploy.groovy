@@ -48,7 +48,7 @@ node ("centos-7") {
     }
 
     stage("Deploy") {
-        def cliArgs = "--v2"
+        def cliArgs = ""
         ciMap = sharedLib.getCIMessageMap()
 
         majorVersion = ciMap.build.substring(0,1)
@@ -78,7 +78,7 @@ node ("centos-7") {
         def platform = "${osName}-${osMajorVersion}"
 
         // Prepare the CLI arguments
-        cliArgs += " --rhbuild ${ciMap.build}"
+        cliArgs += "--rhbuild ${ciMap.build}"
         cliArgs += " --platform ${platform}"
         cliArgs += " --build tier-0"
         cliArgs += " --inventory ${baseInventoryPath}/${inventory}"

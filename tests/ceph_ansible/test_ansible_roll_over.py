@@ -1,12 +1,11 @@
 """adds ceph daemons on existing cluster"""
 import datetime
-import logging
 import re
 
 from ceph.ceph import NodeVolume
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):

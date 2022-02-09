@@ -4,6 +4,7 @@ It contains all the re-useable functions related to cephfs
 It installs all the pre-requisites on client nodes
 
 """
+import argparse
 import datetime
 import json
 import random
@@ -171,11 +172,94 @@ class FsUtils(object):
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
             client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
-            out, rc = client.exec_command(cmd="mount")
+            self.wait_until_mount_succeeds(client, mount_point)
+            if kwargs.get("fstab"):
+                mon_node_ips = self.get_mon_node_ips()
+                mon_node_ip = ",".join(mon_node_ips)
+                try:
+                    client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
+                except CommandFailed:
+                    client.exec_command(
+                        sudo=True, cmd="cp /etc/fstab /etc/fstab.backup"
+                    )
+                fstab = client.remote_file(
+                    sudo=True, file_name="/etc/fstab", file_mode="a+"
+                )
+                fstab_entry = (
+                    f"{mon_node_ip}    {mount_point}    fuse.ceph    "
+                    f"ceph.name=client.{kwargs.get('new_client_hostname', client.node.hostname)},"
+                )
+                if kwargs.get("extra_params"):
+                    arguments = self.convert_string_args(kwargs.get("extra_params"))
+                    if arguments.client_fs:
+                        fstab_entry += f"ceph.client_fs={arguments.client_fs},"
+                    if arguments.r:
+                        fstab_entry += f"ceph.client_mountpoint={arguments.r},"
+                    if arguments.id:
+                        fstab_entry += f"ceph.id={arguments.id},"
+                fstab_entry += "_netdev,defaults      0       0"
+                fstab.write(fstab_entry + "\n")
+                fstab.flush()
+                fstab.close()
+
+    def convert_string_args(self, str_args):
+        """
+        This is support fucntion for adding fstab entry for fuse mounts.
+        it takes extra params given to fuse mount command and
+        returns it as Namespace where we can access then as variable
+        """
+        parser = argparse.ArgumentParser(add_help=False)
+        parser.add_argument("--client_fs")
+        parser.add_argument("-r")
+        parser.add_argument("--id")
+        args = parser.parse_args(str_args.split())
+        return args
+
+    def wait_for_mds_process(
+        self, client, process_name, timeout=180, interval=5, ispresent=True
+    ):
+        """
+        Checks for the proccess and returns the status based on ispresent
+        :param client:
+        :param process_name:
+        :param timeout:
+        :param interval:
+        :param ispresent:
+        :return:
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the process to start or stop")
+        while end_time > datetime.datetime.now():
+            client.exec_command(
+                sudo=True, cmd=f"ceph orch ps | grep {process_name}", check_ec=False
+            )
+            if client.node.exit_status == 0 and ispresent:
+                return True
+            if client.node.exit_status == 1 and not ispresent:
+                return True
+            sleep(interval)
+        return False
+
+    def wait_until_mount_succeeds(self, client, mount_point, timeout=180, interval=5):
+        """
+        Checks for the mount point and returns the status based on mount command
+        :param client:
+        :param mount_point:
+        :param timeout:
+        :param interval:
+        :return: boolean
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the mount to appear")
+        while end_time > datetime.datetime.now():
+            out, rc = client.exec_command(sudo=True, cmd="mount", check_ec=False)
             mount_output = out.read().decode().rstrip("\n")
             mount_output = mount_output.split()
             log.info("Validate Fuse Mount:")
-            assert mount_point.rstrip("/") in mount_output, "Fuse mount failed"
+            if mount_point.rstrip("/") in mount_output:
+                return True
+            sleep(interval)
+        return False
 
     def kernel_mount(self, kernel_clients, mount_point, mon_node_ip, **kwargs):
         """
@@ -218,12 +302,11 @@ class FsUtils(object):
             mount_output = out.read().decode()
             mount_output = mount_output.split()
             log.info("validate kernel mount:")
-            assert mount_point.rstrip("/") in mount_output, "Kernel mount failed"
+            self.wait_until_mount_succeeds(client, mount_point)
             if kwargs.get("fstab"):
-                out, rc = client.exec_command(
-                    sudo=True, cmd="ls -lrt /etc/fstab.backup", check_ec=False
-                )
-                if not rc == 0:
+                try:
+                    client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
+                except CommandFailed:
                     client.exec_command(
                         sudo=True, cmd="cp /etc/fstab /etc/fstab.backup"
                     )

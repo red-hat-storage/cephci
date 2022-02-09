@@ -70,3 +70,178 @@ class PoolFunctions:
         except Exception:
             log.error("Pool not found")
         return pool_details[item]
+
+    def fill_omap_entries(self, pool_name, **kwargs):
+        """
+        creates key-value entries for objects on ceph pools and increase the omap entries on the pool
+        eg : if obj_start, obj_end: 0, 3000 objects, with num_keys 1000,  the method would create 3000 objects with 1k
+        KW pairs each. so total 3000*1000 KW entries
+        Args:
+            pool_name: name of the pool where the KW pairs needed to be added to objects
+            **kwargs: other args that can be passed
+                Valid args:
+                1. obj_start: start count for object creation
+                2. obj_end : end count for object creation
+                3. num_keys_obj: Number of KW paris to be added to each object
+
+        Returns: True -> pass, False -> fail
+        """
+        # Getting the client node to perform the operations
+        client_node = self.rados_obj.ceph_cluster.get_nodes(role="client")[0]
+        obj_start = kwargs.get("obj_start", 0)
+        obj_end = kwargs.get("obj_end", 2000)
+        num_keys_obj = kwargs.get("num_keys_obj", 20000)
+        log.debug(
+            f"Writing {(obj_end - obj_start) * num_keys_obj} Key paris"
+            f" to increase the omap entries on pool {pool_name}"
+        )
+        script_loc = "https://raw.githubusercontent.com/red-hat-storage/cephci/master/utility/generate_omap_entries.py"
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"curl -k {script_loc} -O",
+        )
+        cmd_options = f"--pool {pool_name} --start {obj_start} --end {obj_end} --key-count {num_keys_obj}"
+        cmd = f"python3 generate_omap_entries.py {cmd_options}"
+        client_node.exec_command(sudo=True, cmd=cmd, long_running=True)
+
+        # removing the py file copied
+        client_node.exec_command(cmd="rm generate_omap_entries.py")
+
+        log.debug("Checking the amount of omap entries created on the pool")
+        pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
+        for detail in pool_stats:
+            if detail["name"] == pool_name:
+                pool_1_stats = detail["stats"]
+                total_omap_data = pool_1_stats["omap_bytes_used"]
+                omap_data = pool_1_stats["stored_omap"]
+                break
+        if omap_data < 0:
+            log.error("No omap entries written into pool")
+            return False
+        log.info(
+            f"Wrote {omap_data} bytes of omap data on the pool."
+            f"Total stored omap data on pool : {total_omap_data}"
+        )
+        return True
+
+    def do_rados_delete(self, pool_name: str, pg_id: str = None):
+        """
+        deletes all the objects from the given pool / PG ID
+        Args:
+            1. pool_name: name of the pool
+            2. [ pg_id ]: Pg ID (Optional, but when provided, should be passed along with pool name )
+
+        Returns: True -> pass, False -> fail
+        """
+        obj_cmd = f"rados -p {pool_name} ls"
+        if pg_id:
+            obj_cmd = f"rados --pgid {pg_id} ls"
+
+        delete_obj_list = self.rados_obj.run_ceph_command(cmd=obj_cmd)
+        for obj in delete_obj_list:
+            cmd = f"rados -p {pool_name} rm {obj['name']}"
+            self.rados_obj.node.shell([cmd])
+
+            # Sleeping for 3 seconds for object reference to be deleted
+            time.sleep(3)
+
+            # Checking if object is still present in the pool
+            out = self.rados_obj.run_ceph_command(cmd=obj_cmd)
+            rem_objs = [obj["name"] for obj in out]
+            if obj["name"] in rem_objs:
+                log.error(f"Object {obj['name']} not deleted in the pool")
+                return False
+            log.debug(f"deleted object: {obj['name']} from pool {pool_name}")
+        log.info(f"Completed deleting all objects from pool {pool_name}")
+        return True
+
+    def create_pool_snap(self, pool_name: str):
+        """
+        Creates snapshots of the given pool
+        Args:
+            pool_name: name of the pool
+        Returns: Pass -> name of the snapshot created, Fail -> False
+
+        """
+        # Checking if snapshots can be created on the supplied pool
+        cmd = "ceph osd dump"
+        pool_status = self.rados_obj.run_ceph_command(cmd=cmd)
+        for detail in pool_status["pools"]:
+            if detail["pool_name"] != pool_name:
+                continue
+            if "selfmanaged_snaps" in detail["flags_names"]:
+                # bz: https://bugzilla.redhat.com/show_bug.cgi?id=1425803#c2
+                log.error(
+                    f"Pool {pool_name} is a self managed pool, cannot create snaps manually"
+                )
+                return False
+
+        # Creating snaps on the pool provided
+        cmd = "uuidgen"
+        out, err = self.rados_obj.node.shell([cmd])
+        uuid = out[0:5]
+        snap_name = f"{pool_name}-snap-{uuid}"
+        cmd = f"ceph osd pool mksnap {pool_name} {snap_name}"
+        self.rados_obj.node.shell([cmd])
+
+        # Checking if snap was created successfully
+        if not self.check_snap_exists(snap_name=snap_name, pool_name=pool_name):
+            log.error("Snapshot of pool not created")
+            return False
+        log.debug(f"Created snapshot {snap_name} on pool {pool_name}")
+        return snap_name
+
+    def check_snap_exists(self, snap_name: str, pool_name: str) -> bool:
+        """
+        checks the existence of the snapshot name given on the pool
+        Args:
+            snap_name: Name of the snapshot
+            pool_name: Name of the pool
+
+        Returns: True -> Snapshot exists, False -> snapshot does not exist
+        """
+        snap_list = self.get_snap_names(pool_name=pool_name)
+        return True if snap_name in snap_list else False
+
+    def get_snap_names(self, pool_name: str) -> list:
+        """
+        Fetches the list of snapshots created on the given pool
+        Args:
+            pool_name: name of the pool
+
+        Returns: list of the snaps created
+        """
+        cmd = "ceph osd dump"
+        pool_status = self.rados_obj.run_ceph_command(cmd=cmd)
+        for detail in pool_status["pools"]:
+            if detail["pool_name"] == pool_name:
+                snap_list = [snap["name"] for snap in detail["pool_snaps"]]
+                log.debug(f"snapshots on pool : {snap_list}")
+        return snap_list
+
+    def delete_pool_snap(self, pool_name: str, snap_name: str = None) -> bool:
+        """
+        deletes snapshots of the given pool. If no snap name is provided, deletes all the snapshots on the pool
+        Args:
+            pool_name: name of the pool
+            snap_name: name of the snapshot
+        Returns: Pass -> snapshot Deleted, Fail -> snapshot not Deleted
+
+        """
+        if snap_name:
+            delete_list = list(snap_name)
+        else:
+            delete_list = self.get_snap_names(pool_name=pool_name)
+
+        # Deleting snaps on the pool provided
+        for snap in delete_list:
+            cmd = f"ceph osd pool rmsnap {pool_name} {snap}"
+            self.rados_obj.node.shell([cmd])
+
+            # Checking if snap was deleted successfully
+            if self.check_snap_exists(snap_name=snap_name, pool_name=pool_name):
+                log.error("Snapshot of pool exists")
+                return False
+            log.debug(f"deleted snapshot {snap} on pool {pool_name}")
+        log.debug("Deleted provided snapshots on the pool")
+        return True

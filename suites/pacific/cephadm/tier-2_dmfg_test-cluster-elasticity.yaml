@@ -1,20 +1,27 @@
-#===============================================================================================
+---
+# ==================================================================================
 # Tier-level: 2
 # Test-Suite: tier-2_cluster_scaleup_scaledown.yaml
 # Test-Case:
-#      Bootstrap cluster with all daemons and scale up and scale down the deployed daemons and verify
+# Bootstrap cluster with all daemons and scale up and scale down the deployed
+# daemons and verify
 #
 # Cluster Configuration:
 #   cephci/conf/pacific/cephadm/tier-2_10node_cephadm_scale.yaml
 #
 #    10-Node cluster(RHEL-8.3 and above)
-#    Initial cluster config - 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
-#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
-#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
-#     Node3 - Mon, OSD, MDS, RGW, node-exporter
-#     Node4 - Client
-#    Scale up cluster to 5 MONS, 5 MGRS, 4 RGWs, 4 MDSs, 2 NFSs, 2 ISCSIs and 10 OSD nodes
-#    Scale down cluster to initial configuration
+#    Initial cluster config
+#     - 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#
+# Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana,
+#         prometheus, node-exporter
+# Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+# Node3 - Mon, OSD, MDS, RGW, node-exporter
+# Node4 - Client
+#
+# Scale up cluster to 5 MONS, 5 MGRS, 4 RGWs, 4 MDSs, 2 NFSs,
+#                     2 ISCSIs and 10 OSD nodes
+# Scale down cluster to initial configuration
 #
 # Test steps:
 #   (1) Bootstrap cluster with options,
@@ -24,8 +31,10 @@
 ##       - fsid: <cluster-fsid>
 ##       - mon-ip: <monitor IP address: Required>
 ##   (2) Copy SSH keys to nodes.
-##   (3) Add nodes to cluster with address and role labels attached to it using Host spec yaml file.
-##   (4) Deploy services using apply spec option, (" ceph orch apply -i <spec_file>)
+##   (3) Add nodes to cluster with address and role labels attached to it using
+#        Host spec yaml file.
+##   (4) Deploy services using apply spec option,
+#        (" ceph orch apply -i <spec_file>)
 ##       - 3 Mon on node1, node2, node3 using host placements.
 ##       - MGR using placement using label(mgr).
 ##       - addition of OSD's using "all-avialable-devices" option.
@@ -55,7 +64,7 @@
 ##   (21) Scale down NFSs to 2 nodes
 ##   (22) Scale down ISCSIs to 2 nodes
 ##   (23) Run rados bench, RBD and RGW IOs
-#===============================================================================================
+# ==================================================================================
 tests:
   - test:
       name: Install ceph pre-requisites
@@ -118,31 +127,31 @@ tests:
           - config:
               command: apply
               service: rgw
-              base_cmd_args: # arguments to ceph orch
+              base_cmd_args:                # arguments to ceph orch
                 verbose: true
-              pos_args: # positional arguments
-                - myrgw                 # service id
+              pos_args:                     # positional arguments
+                - myrgw                     # service id
               args:
                 placement:
-                  nodes: # A list of strings that would looked up
+                  nodes:               # A list of strings that would looked up
                     - node7
                     - node8
-                  limit: 2            # no of daemons
-                  sep: ";"            # separator to be used for placements
+                  limit: 2                  # no of daemons
+                  sep: ";"             # separator to be used for placements
           - config:
               command: apply
               service: mds
-              base_cmd_args: # arguments to ceph orch
+              base_cmd_args:                # arguments to ceph orch
                 verbose: true
               pos_args:
-                - cephfs              # name of the filesystem
+                - cephfs                    # name of the filesystem
               args:
                 placement:
                   nodes:
                     - node7
                     - node8
-                  limit: 2            # no of daemons
-                  sep: " "            # separator to be used for placements
+                  limit: 2                  # no of daemons
+                  sep: " "              # separator to be used for placements
           - config:
               command: apply
               service: prometheus
@@ -202,11 +211,53 @@ tests:
       abort-on-fail: true
 
   - test:
+      name: List client-keyring
+      polarion-id: CEPH-83574703
+      module: test_client_keyring.py
+      config:
+        service: "client-keyring"
+        command: "ls"
+        args:
+          format: json-pretty
+        nodes:
+          - "node4"
+      desc: List client-keyring on node4
+
+  - test:
+      name: set client using client-keyring
+      polarion-id: CEPH-83574704
+      module: test_client_keyring.py
+      config:
+        service: "client-keyring"
+        command: "set"
+        nodes:
+          - "node4"
+        entity: "client.2"
+        placement: "client-2"
+        owner: "107:107"
+        mode: "640"
+        pg_num: '128'
+        pgp_num: '128'
+      desc: Configure client using client-keyring on node4
+
+  - test:
+      name: remove client using client-keyring
+      polarion-id: CEPH-83574705
+      module: test_client_keyring.py
+      config:
+        service: "client-keyring"
+        command: "rm"
+        entity: "client.2"
+        nodes:
+          - "node4"
+      desc: remove client using client-keyring on node4
+
+  - test:
       name: check-ceph-health
       module: exec.py
       config:
         cmd: ceph -s
-        sudo: True
+        sudo: true
       desc: Check for ceph health debug info
 
   - test:
@@ -266,11 +317,11 @@ tests:
         args:
           placement:
             nodes:
-                - node1
-                - node2
-                - node3
-                - node5
-                - node6
+              - node1
+              - node2
+              - node3
+              - node5
+              - node6
             sep: ";"    # separator to be used for placements
 
   - test:
@@ -286,11 +337,11 @@ tests:
         args:
           placement:
             nodes:
-                - node1
-                - node2
-                - node3
-                - node5
-                - node6
+              - node1
+              - node2
+              - node3
+              - node5
+              - node6
             sep: " "
       destroy-cluster: false
       abort-on-fail: true
@@ -325,10 +376,10 @@ tests:
         args:
           placement:
             nodes:              # A list of strings that would looked up
-                - node7
-                - node8
-                - node9
-                - node10
+              - node7
+              - node8
+              - node9
+              - node10
             limit: 4            # no of daemons
             sep: ";"            # separator to be used for placements
       destroy-cluster: false
@@ -399,7 +450,7 @@ tests:
         command: apply
         service: nfs
         base_cmd_args:
-            verbose: true
+          verbose: true
         pos_args:
           - mynfs                         # nfs service ID
           - nfs-ganesha-pool              # name of the pool
@@ -419,7 +470,7 @@ tests:
       module: test_bootstrap.py
       config:
         command: shell
-        args: # command arguments
+        args:               # command arguments
           - ceph
           - osd
           - pool
@@ -437,7 +488,7 @@ tests:
       module: test_bootstrap.py
       config:
         command: shell
-        args: # command arguments
+        args:           # command arguments
           - ceph
           - osd
           - pool
@@ -466,7 +517,7 @@ tests:
           placement:
             nodes:
               - node7
-              - node8 # either label or node.
+              - node8           # either label or node.
       destroy-cluster: false
       abort-on-fail: true
 
@@ -475,7 +526,7 @@ tests:
       module: exec.py
       config:
         cmd: ceph -s
-        sudo: True
+        sudo: true
       desc: Check for ceph health debug info
 
   - test:
@@ -568,17 +619,17 @@ tests:
       config:
         command: apply
         service: rgw
-        base_cmd_args: # arguments to ceph orch
+        base_cmd_args:               # arguments to ceph orch
           verbose: true
-        pos_args: # positional arguments
-          - myrgw                 # service id
+        pos_args:                    # positional arguments
+          - myrgw                    # service id
         args:
           placement:
-            nodes: # A list of strings that would looked up
+            nodes:                   # A list of strings that would looked up
               - node9
               - node10
-            limit: 2            # no of daemons
-            sep: ";"            # separator to be used for placements
+            limit: 2                 # no of daemons
+            sep: ";"                 # separator to be used for placements
       destroy-cluster: false
       abort-on-fail: true
 
@@ -590,7 +641,7 @@ tests:
       config:
         command: apply
         service: mds
-        base_cmd_args: # arguments to ceph orch
+        base_cmd_args:          # arguments to ceph orch
           verbose: true
         pos_args:
           - cephfs              # name of the filesystem
@@ -634,7 +685,7 @@ tests:
       config:
         command: apply
         service: iscsi
-        base_cmd_args: # arguments to ceph orch
+        base_cmd_args:            # arguments to ceph orch
           verbose: true
         pos_args:
           - iscsi                 # name of the pool
@@ -652,7 +703,7 @@ tests:
       module: exec.py
       config:
         cmd: ceph -s
-        sudo: True
+        sudo: true
       desc: Check for ceph health debug info
 
   - test:

@@ -5,11 +5,10 @@ playbooks supported,
 - cephadm-purge-cluster.yaml
 - cephadm-clients.yaml
 """
-import logging
-
 from ceph.ceph_admin.common import config_dict_to_string
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 ANSIBLE_RPM = "ansible-2.9-for-rhel-8-x86_64-rpms"
 

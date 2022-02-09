@@ -1,13 +1,13 @@
 """ Purges the Ceph the cluster"""
 
 import datetime
-import logging
 import re
 from time import sleep
 
 from ceph.parallel import parallel
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(**kw):

@@ -3,6 +3,7 @@ import yaml
 from ceph.ceph_admin.common import config_dict_to_string
 from ceph.utils import (
     get_ceph_versions,
+    get_node_by_id,
     get_public_network,
     set_container_info,
     translate_to_ip,
@@ -20,6 +21,7 @@ def run(ceph_cluster, **kw):
     test_data = kw.get("test_data")
     prev_install_version = test_data["install_version"]
     skip_version_compare = config.get("skip_version_compare")
+    limit_node = config.get("limit")
     containerized = config.get("ansi_config").get("containerized_deployment")
     build = config.get("build", config.get("rhbuild"))
     LOG.info("Build for upgrade: {build}".format(build=build))
@@ -143,6 +145,14 @@ def run(ceph_cluster, **kw):
 
     if config.get("ansi_cli_args"):
         cmd += config_dict_to_string(config["ansi_cli_args"])
+
+    short_names = []
+    if limit_node:
+        for node in limit_node:
+            short_name = get_node_by_id(ceph_cluster, node).shortname
+            short_names.append(short_name)
+            matched_short_names = ",".join(short_names)
+        cmd += f" --limit {matched_short_names}"
 
     out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 

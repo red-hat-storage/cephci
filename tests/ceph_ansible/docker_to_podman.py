@@ -1,8 +1,7 @@
 """Migrates from docker to podman"""
+from utility.log import Log
 
-import logging
-
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(**kw):

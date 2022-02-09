@@ -1,10 +1,10 @@
-import logging
 import time
 
 from ceph.parallel import parallel
 from ceph.utils import hard_reboot
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(**kw):
