@@ -7,7 +7,8 @@
 # CEPH-83574164 : Create cephfs subvolumegroup with desired data pool_layout
 # CEPH-83574193 - cephfs subvolume size expansion test
 # CEPH-83574166 - Create cephfs subvolumegroup with specific uid,gid test
-
+# CEPH-83574182 - Delete subvolume_group name that does not exist
+# CEPH-83574169 - Remove subvolume group name does not exist with force option
 #===============================================================================================
 tests:
   - test:
@@ -174,4 +175,16 @@ tests:
       module: cephfs_volume_management.cephfs_vol_mgmt_subvolgroup_gid_uid.py
       polarion-id: CEPH-83574166
       desc: subvolumegroup creation with uid and gid
+      abort-on-fail: true
+  - test:
+      name: Delete subvolume_group name that does not exist
+      module: cephfs_volume_management.cephfs_vol_mgmt_non_exist_subvol_group.py
+      polarion-id: CEPH-83574182
+      desc: Delete subvolume_group name that does not exist
+      abort-on-fail: true
+  - test:
+      name: Remove subvolume group name does not exist with force option
+      module: cephfs_volume_management.cephfs_vol_mgmt_subvolume_group_force.py
+      polarion-id: CEPH-83574169
+      desc: Remove subvolume group name does not exist with force option
       abort-on-fail: true

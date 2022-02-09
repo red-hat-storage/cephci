@@ -38,6 +38,7 @@ tests:
           copy_admin_key: true
           dashboard_enabled: false
       desc: test cluster setup using ceph-ansible
+      polarion-id: CEPH-83574747
       destroy-cluster: false
       abort-on-fail: true
 
