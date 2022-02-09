@@ -55,6 +55,18 @@ node(nodeName) {
         if ((! rhcephVersion?.trim()) && (! buildType?.trim())) {
             error "Required Parameters are not provided.."
         }
+
+        // Check ceph version to continue tier-x execution
+        def recipeFileContent = sharedLib.readFromRecipeFile(rhcephVersion)
+        def content = recipeFileContent['latest']
+        println "recipeFile ceph-version : ${content['ceph-version']}"
+        println "buildArtifacts ceph-version : ${buildArtifacts['ceph-version']}"
+        if ( buildArtifacts['ceph-version'] != content['ceph-version']) {
+            currentBuild.result = "ABORTED"
+            println "Aborting the execution as new builds are available.."
+            return
+        }
+
         def buildPhaseValue = buildType.split("-")
         buildPhase = buildPhaseValue[1].toInteger()+1
         buildPhase = buildPhaseValue[0]+"-"+buildPhase
