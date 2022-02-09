@@ -93,7 +93,7 @@ node(nodeName) {
                 "build": [
                     "repository": compose.repository,
                     "composes": releaseDetails.latest.composes,
-                    "version": cephVersion
+                    "ceph-version": cephVersion
                 ],
                 "test": [
                     "phase": "tier-0"
