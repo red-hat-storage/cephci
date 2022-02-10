@@ -595,7 +595,7 @@ def recipeFileExist(def rhcephVersion, def recipeFile, def infra) {
     }
 }
 
-def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.4") {
+def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.89") {
     /*
         Method to read content from the recipe file.
     */
@@ -611,7 +611,7 @@ def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.4") {
 }
 
 def writeToRecipeFile(
-    def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.4"
+    def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.89"
     ) {
     /*
         Method to update content to the recipe file
