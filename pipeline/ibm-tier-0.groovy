@@ -15,24 +15,34 @@ node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
         stage('prepareNode') {
             if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout([
-                $class: 'GitSCM',
-                branches: [[name: 'origin/master']],
-                doGenerateSubmoduleConfigurations: false,
-                extensions: [
-                    [$class: 'SubmoduleOption',
-                    disableSubmodules: false,
-                    parentCredentials: false,
-                    recursiveSubmodules: true,
-                    reference: '',
-                    trackingSubmodules: false],
-                    [$class: 'CleanBeforeCheckout'],
+            checkout(
+                scm: [
+                    $class: 'GitSCM',
+                    branches: [[name: 'origin/master']],
+                    extensions: [
+                        [
+                            $class: 'CleanBeforeCheckout',
+                            deleteUntrackedNestedRepositories: true
+                        ],
+                        [
+                            $class: 'WipeWorkspace'
+                        ],
+                        [
+                            $class: 'CloneOption',
+                            depth: 1,
+                            noTags: true,
+                            shallow: true,
+                            timeout: 10,
+                            reference: ''
+                        ]
+                    ],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/red-hat-storage/cephci.git'
+                    ]]
                 ],
-                submoduleCfg: [],
-                userRemoteConfigs: [[
-                    url: 'https://github.com/red-hat-storage/cephci.git'
-                ]]
-            ])
+                changelog: false,
+                poll: false
+            )
 
             // prepare the node
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
