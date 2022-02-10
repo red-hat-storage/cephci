@@ -15,25 +15,34 @@ node(nodeName) {
         timeout(unit: "MINUTES", time: 30) {
             stage('prepareJenkinsAgent') {
                 if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    doGenerateSubmoduleConfigurations: false,
-                    extensions: [
-                        [
-                            $class: 'CloneOption',
-                            shallow: true,
-                            noTags: true,
-                            reference: '',
-                            depth: 1
+                checkout(
+                    scm: [
+                        $class: 'GitSCM',
+                        branches: [[name: 'origin/master']],
+                        extensions: [
+                            [
+                                $class: 'CleanBeforeCheckout',
+                                deleteUntrackedNestedRepositories: true
+                            ],
+                            [
+                                $class: 'WipeWorkspace'
+                            ],
+                            [
+                                $class: 'CloneOption',
+                                depth: 1,
+                                noTags: true,
+                                shallow: true,
+                                timeout: 10,
+                                reference: ''
+                            ]
                         ],
-                        [$class: 'CleanBeforeCheckout'],
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/red-hat-storage/cephci.git'
+                        ]]
                     ],
-                    submoduleCfg: [],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
-                ])
+                    changelog: false,
+                    poll: false
+                )
 
                 // prepare the node
                 sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
@@ -68,15 +77,19 @@ node(nodeName) {
             if ( composeInfo ){
                 metaData["buildArtifacts"] = composeInfo
             }
-            sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
-            sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
+
+            def testStatus = "ABORTED"
+
+            if (metaData["results"]) {
+                sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
+                sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
+                testStatus = msgMap["test"]["result"]
+            }
 
             //Remove the sync results folder
             sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
 
             // Update RH recipe file
-            def testStatus = msgMap["test"]["result"]
-
             if ( composeInfo != null && testStatus == "SUCCESS" ){
                 def tierLevel = msgMap["pipeline"]["name"]
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
