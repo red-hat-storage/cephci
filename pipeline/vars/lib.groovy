@@ -603,7 +603,7 @@ def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.89") {
     recipeFileExist(rhcephVersion, recipeFile, infra)
 
     def content = sh(
-        script: "ssh ${infra} \"sudo yq e '.' ${recipeFile}\"", returnStdout: true
+        script: "ssh ${infra} \"yq e '.' ${recipeFile}\"", returnStdout: true
     )
     def contentMap = readYaml text: content
 
@@ -618,8 +618,7 @@ def writeToRecipeFile(
     */
     def recipeFile = "/data/site/recipe/${rhcephVersion}.yaml"
     recipeFileExist(rhcephVersion, recipeFile, infra)
-    sh "ssh $infra \"sudo yq eval -i '.$dataPhase = .$buildType' $recipeFile\""
-    sh "ssh $infra \"sudo chown apache:apache $recipeFile\""
+    sh "ssh $infra \"yq eval -i '.$dataPhase = .$buildType' $recipeFile\""
 }
 
 def executeTestSuite(
