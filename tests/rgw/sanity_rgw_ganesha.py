@@ -1,11 +1,11 @@
-import logging
 import re
 
 import yaml
 
+from utility.log import Log
 from utility.utils import setup_cluster_access
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 DIR = {
     "v2": {
