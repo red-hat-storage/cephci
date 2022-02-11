@@ -1,5 +1,5 @@
 """
-Test suite that verifies the deployment of RedHat Ceph Storage via the cephadm CLI.
+Test suite that verifies the deployment of Red Hat Ceph Storage via the cephadm CLI.
 
 The intent of the suite is to simulate a standard operating procedure expected by a
 customer.
@@ -8,6 +8,7 @@ from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.alert_manager import AlertManager
 from ceph.ceph_admin.cephfs_mirror import CephfsMirror
+from ceph.ceph_admin.client_keyring import ClientKeyring
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.crash import Crash
 from ceph.ceph_admin.daemon import Daemon
@@ -50,6 +51,7 @@ SERVICE_MAP = dict(
         "rbd-mirror": RbdMirror,
         "cephfs-mirror": CephfsMirror,
         "daemon": Daemon,
+        "client-keyring": ClientKeyring,
     }
 )
 

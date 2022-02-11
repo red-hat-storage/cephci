@@ -4,6 +4,14 @@ import random
 import string
 from time import sleep
 
+from rbd.exceptions import (
+    CreateCloneError,
+    CreateFileError,
+    ImportFileError,
+    ProtectSnapError,
+    SnapCreateError,
+)
+
 from ceph.ceph import CommandFailed
 from utility.log import Log
 
@@ -120,6 +128,66 @@ class Rbd:
                 return True
         log.info(f"pool {pool_name} does not exist on cluster")
         return False
+
+    def create_file_to_import(self, filename="dummy"):
+        """
+        Creates a dummy file on client node to import
+        Args:
+            filename: name of the dummy file
+        Returns:  True -> pass, False -> fail
+        """
+        cmd = f"dd if=/dev/urandom of={filename} bs=4 count=5M"
+        if not self.exec_cmd(cmd, long_running=True):
+            raise CreateFileError("Creating a file to import failed")
+
+    def import_file(self, filename="dummy", pool_name="dummy", image_name="dummy"):
+        """
+        Imports a file as an image to specified pool name and image name
+        Args:
+            filename   : name of the file to be imported
+            pool_name  : name of the pool where image is to be imported
+            image_name : name of the image file to be imported as
+
+        Note: run create_file_to_import before this module in positive scenarios
+        """
+        cmd = f"rbd import {filename} {pool_name}/{image_name}"
+        if not self.exec_cmd(cmd, long_running=True):
+            raise ImportFileError("Importing the file failed")
+
+    def snap_create(self, pool_name, image_name, snap_name):
+        """
+        Creates a snap of an image in a specified pool name and image name
+        Args:
+            pool_name  : name of the pool where image is to be imported
+            image_name : name of the image file to be imported as
+            snap_name  : name of the snapshot
+        """
+        cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
+        if not self.exec_cmd(cmd):
+            raise SnapCreateError("Creating the snapshot failed")
+
+    def protect_snapshot(self, snap_name):
+        """
+        Protects the provided snapshot
+        Args:
+            snap_name : snapshot name in pool/image@snap format
+        """
+        cmd = f"rbd snap protect {snap_name}"
+        if not self.exec_cmd(cmd):
+            raise ProtectSnapError("Protecting the snapshot Failed")
+
+    def create_clone(self, snap_name, pool_name, image_name):
+        """
+        Creates a clone of an image from its snapshot
+        in a specified pool name and image name
+        Args:
+            snap_name  : name of the snapshot of which a clone is to be created
+            pool_name  : name of the pool where clone is to be created
+            image_name : name of the cloned image
+        """
+        cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
+        if not self.exec_cmd(cmd):
+            raise CreateCloneError(f"Creating clone of {snap_name} failed")
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):

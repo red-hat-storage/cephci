@@ -1,0 +1,42 @@
+# Tier2: Extended RBD acceptance testing
+#
+# This test suite runs addition test scripts to evaluate the existing
+# functionality of Ceph RBD component.
+#
+# Conf file - conf/nautilus/rbd/tier-0_rbd.yaml
+#
+# The following tests are covered
+#   - CEPH-9230 - verification snap and clone on an imported image
+#
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: "install ceph pre-requisites"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        ansi_config:
+          ceph_conf_overrides:
+            mon:
+              mon_allow_pool_delete: true
+          ceph_origin: distro
+          ceph_repository: rhcs
+          copy_admin_key: true
+          dashboard_enabled: false
+          fetch_directory: ~/fetch
+          osd_auto_discovery: false
+          osd_scenario: lvm
+      desc: "setup four node cluster using ceph ansible"
+      destroy-cluster: false
+      module: test_ansible.py
+      name: "ceph ansible"
+  -
+    test:
+      desc: "snap and clone operations on imported image"
+      module: rbd_snap_clone_imported_image.py
+      name: "snap and clone on imported image"
+      polarion-id: CEPH-9230

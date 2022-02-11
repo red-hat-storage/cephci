@@ -1285,3 +1285,49 @@ def should_not_be_empty(variable, msg="Variable is empty"):
     """
     if not variable:
         raise AssertionError(msg)
+
+
+def generate_self_signed_cert_on_rgw(rgw_node):
+    """
+    generate self signed certifcate on given rgw node
+    """
+    SSL_CERT_PATH = "/etc/ceph/"
+    PEM_FILE_NAME = "server.pem"
+    #    rgw_node = ceph_nodes.get_ceph_object("rgw").node
+    subject = {
+        "common_name": rgw_node.hostname,
+        "ip_address": rgw_node.ip_address,
+    }
+    key, cert, ca = generate_self_signed_certificate(subject=subject)
+    pem = key + cert + ca
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="mkdir /etc/ceph; chown 755 /etc/ceph; touch /etc/ceph/server.pem",
+    )
+    PEM_FILE_PATH = os.path.join(SSL_CERT_PATH, PEM_FILE_NAME)
+    server_pem_file = rgw_node.remote_file(
+        sudo=True, file_name=PEM_FILE_PATH, file_mode="w+"
+    )
+    server_pem_file.write(pem)
+    server_pem_file.flush()
+    log.info(pem)
+
+
+def clone_the_repo(config, node, path_to_clone):
+    """clone the repo on to test node
+
+    Args:
+        config: test config
+        node: ceph node
+        path_to_clone: the path to clone the repo
+
+    TODO: if path_to_clone is not given, make temporary dir on test
+          node and clone the repo in it.
+    """
+    log.info("cloning the repo")
+    branch = config.get("branch", "master")
+    log.info(f"branch: {branch}")
+    repo_url = config.get("git-url")
+    log.info(f"repo_url: {repo_url}")
+    git_clone_cmd = f"sudo git clone {repo_url} -b {branch}"
+    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")

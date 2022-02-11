@@ -1,7 +1,7 @@
 import datetime
 
 from ceph.utils import get_public_network, set_container_info
-from utility.utils import Log
+from utility.utils import Log, generate_self_signed_cert_on_rgw
 
 LOG = Log(__name__)
 
@@ -64,6 +64,15 @@ def run(ceph_cluster, **kw):
 
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
+
+    # create ssl certificate
+    if (
+        config.get("ansi_config").get("radosgw_frontend_ssl_certificate")
+        == "/etc/ceph/server.pem"
+    ):
+        LOG.info("install self signed certificate on rgw node")
+        rgw_node = ceph_nodes.get_ceph_object("rgw").node
+        generate_self_signed_cert_on_rgw(rgw_node)
 
     if config.get("skip_setup") is True:
         LOG.info("Skipping setup of ceph cluster")

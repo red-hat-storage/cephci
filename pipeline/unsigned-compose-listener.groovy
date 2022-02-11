@@ -10,104 +10,133 @@ def platform
 
 // Pipeline script entry point
 node(nodeName) {
-
-    timeout(unit: "MINUTES", time: 30) {
-        stage('Preparing') {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout([
-                $class: 'GitSCM',
-                branches: [[name: 'origin/master']],
-                doGenerateSubmoduleConfigurations: false,
-                extensions: [
-                    [
-                        $class: 'CloneOption',
-                        shallow: true,
-                        noTags: true,
-                        reference: '',
-                        depth: 1
+    try {
+        timeout(unit: "MINUTES", time: 30) {
+            stage('Preparing') {
+                if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+                checkout(
+                    scm: [
+                        $class: 'GitSCM',
+                        branches: [[name: 'origin/master']],
+                        extensions: [
+                            [
+                                $class: 'CleanBeforeCheckout',
+                                deleteUntrackedNestedRepositories: true
+                            ],
+                            [
+                                $class: 'WipeWorkspace'
+                            ],
+                            [
+                                $class: 'CloneOption',
+                                depth: 1,
+                                noTags: true,
+                                shallow: true,
+                                timeout: 10,
+                                reference: ''
+                            ]
+                        ],
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/red-hat-storage/cephci.git'
+                        ]]
                     ],
-                    [$class: 'CleanBeforeCheckout'],
-                ],
-                submoduleCfg: [],
-                userRemoteConfigs: [[
-                    url: 'https://github.com/red-hat-storage/cephci.git'
-                ]]
-            ])
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
-            sharedLib.prepareNode()
-        }
-    }
-
-    stage('Updating') {
-        echo "${params.CI_MESSAGE}"
-
-        ciMsg = sharedLib.getCIMessageMap()
-        composeUrl = ciMsg["compose_url"]
-
-        cephVersion = sharedLib.fetchCephVersion(composeUrl)
-        versionInfo = sharedLib.fetchMajorMinorOSVersion("unsigned-compose")
-
-        majorVer = versionInfo['major_version']
-        minorVer = versionInfo['minor_version']
-        platform = versionInfo['platform']
-
-        releaseContent = sharedLib.readFromReleaseFile(majorVer, minorVer)
-        if ( releaseContent?.latest?."ceph-version") {
-            currentCephVersion = releaseContent["latest"]["ceph-version"]
-            def compare = sharedLib.compareCephVersion(currentCephVersion, cephVersion)
-
-            if (compare == -1) {
-                sharedLib.unSetLock(majorVer, minorVer)
-                currentBuild.result = "ABORTED"
-                println "Build Ceph Version: ${cephVersion}"
-                println "Found Ceph Version: ${currentCephVersion}"
-                error("The latest ceph version is lower than existing one.")
+                    changelog: false,
+                    poll: false
+                )
+                sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+                sharedLib.prepareNode()
             }
         }
 
-        if ( !releaseContent.containsKey("latest") ) {
-            releaseContent.latest = [:]
-            releaseContent.latest.composes = [:]
+        stage('Updating') {
+            echo "${params.CI_MESSAGE}"
+
+            ciMsg = sharedLib.getCIMessageMap()
+            composeUrl = ciMsg["compose_url"]
+
+            cephVersion = sharedLib.fetchCephVersion(composeUrl)
+            versionInfo = sharedLib.fetchMajorMinorOSVersion("unsigned-compose")
+
+            majorVer = versionInfo['major_version']
+            minorVer = versionInfo['minor_version']
+            platform = versionInfo['platform']
+
+            releaseContent = sharedLib.readFromReleaseFile(majorVer, minorVer)
+            if ( releaseContent?.latest?."ceph-version") {
+                currentCephVersion = releaseContent["latest"]["ceph-version"]
+                def compare = sharedLib.compareCephVersion(currentCephVersion, cephVersion)
+
+                if (compare == -1) {
+                    sharedLib.unSetLock(majorVer, minorVer)
+                    currentBuild.result = "ABORTED"
+                    println "Build Ceph Version: ${cephVersion}"
+                    println "Found Ceph Version: ${currentCephVersion}"
+                    error("The latest ceph version is lower than existing one.")
+                }
+            }
+
+            if ( !releaseContent.containsKey("latest") ) {
+                releaseContent.latest = [:]
+                releaseContent.latest.composes = [:]
+            }
+
+            releaseContent["latest"]["ceph-version"] = cephVersion
+            releaseContent["latest"]["composes"]["${platform}"] = composeUrl
+            sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
+
+            def bucket = "ceph-${majorVer}.${minorVer}-${platform}"
+            sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
+
         }
 
-        releaseContent["latest"]["ceph-version"] = cephVersion
-        releaseContent["latest"]["composes"]["${platform}"] = composeUrl
-        sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
+        stage('Messaging') {
 
-        def bucket = "ceph-${majorVer}.${minorVer}-${platform}"
-        sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
+            def msgMap = [
+                "artifact": [
+                    "type" : "product-build",
+                    "name": "Red Hat Ceph Storage",
+                    "version": cephVersion,
+                    "nvr": "RHCEPH-${majorVer}.${minorVer}",
+                    "build_action": "latest",
+                    "phase": "tier-0"
+                ],
+                "contact":[
+                    "name": "Downstream Ceph QE",
+                    "email": "ceph-qe@redhat.com"
+                ],
+                "build": [
+                    "platform": platform,
+                    "compose-url": composeUrl
+                ],
+                "run": [
+                    "url": env.BUILD_URL,
+                    "log": "${env.BUILD_URL}console"
+                ],
+                "version": "1.0.0"
+            ]
+            def topic = 'VirtualTopic.qe.ci.rhcephqe.product-build.update.complete'
 
+            //send UMB message notifying that a new build has arrived
+            sharedLib.SendUMBMessage(msgMap, topic, 'ProductBuildDone')
+        }
+    } catch(Exception err) {
+        if (currentBuild.result != "ABORTED") {
+            // notify about failure
+            currentBuild.result = "FAILURE"
+            def failureReason = err.getMessage()
+            def subject =  "[CEPHCI-PIPELINE-ALERT] [JOB-FAILURE] - ${env.JOB_NAME}/${env.BUILD_NUMBER}"
+            def body = "<body><h3><u>Job Failure</u></h3></p>"
+            body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
+            body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
+
+            emailext (
+                mimeType: 'text/html',
+                subject: "${subject}",
+                body: "${body}",
+                from: "cephci@redhat.com",
+                to: "ceph-qe@redhat.com"
+            )
+            subject += "\n Jenkins URL: ${env.BUILD_URL}"
+            googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
+        }
     }
-
-    stage('Messaging') {
-
-        def msgMap = [
-            "artifact": [
-                "type" : "product-build",
-                "name": "Red Hat Ceph Storage",
-                "version": cephVersion,
-                "nvr": "RHCEPH-${majorVer}.${minorVer}",
-                "build_action": "latest",
-                "phase": "tier-0"
-            ],
-            "contact":[
-                "name": "Downstream Ceph QE",
-                "email": "ceph-qe@redhat.com"
-            ],
-            "build": [
-                "platform": platform,
-                "compose-url": composeUrl
-            ],
-            "run": [
-                "url": env.BUILD_URL,
-                "log": "${env.BUILD_URL}console"
-            ],
-            "version": "1.0.0"
-        ]
-        def topic = 'VirtualTopic.qe.ci.rhcephqe.product-build.update.complete'
-
-        //send UMB message notifying that a new build has arrived
-        sharedLib.SendUMBMessage(msgMap, topic, 'ProductBuildDone')
-    }
-
 }
