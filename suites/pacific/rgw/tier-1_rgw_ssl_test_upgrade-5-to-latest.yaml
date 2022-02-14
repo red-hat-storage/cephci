@@ -1,0 +1,253 @@
+#Polarian ID - CEPH-83574764
+#Objective: Testing single site upgrade from RHCS 5 GA to latest build
+#platform : RHEL-8
+#conf: tier-0_rgw.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                custom_repo: cdn
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-dashboard: true
+              cephadm-ansible:
+                playbook: cephadm-preflight.yml
+                extra-vars:
+                  ceph_origin: rhcs
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.ssl
+                  placement:
+                    nodes:
+                      - node5
+                  spec:
+                    ssl: true
+                    rgw_frontend_ssl_certificate: create-cert
+      desc: bootstrap and deployment services with label placements.
+      destroy-cluster: false
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      name: Deploy RHCS cluster using cephadm
+
+# basic versioning tests
+  - test:
+      name: Versioning Tests
+      desc: Basic versioning test, also called as test to enable bucket versioning
+      polarion-id: CEPH-14261, CEPH-9222 # also applies to CEPH-10652
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_enable.yaml
+        timeout: 300
+  - test:
+      name: Versioning Tests
+      desc: test to overwrite objects after suspending versioning
+      polarion-id: CEPH-9199,CEPH-9223
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspend_re-upload.yaml
+        timeout: 300
+
+# bucket lifecycle tests
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-11179, CEPH-11180
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        timeout: 300
+
+# Dynamic resharding test
+  - test:
+      name: Dynamic Resharding tests
+      desc: Reshading test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+        timeout: 500
+# bucket listing tests (ordered and un-ordered listing)
+  - test:
+      name: bucket Listing tests
+      desc: test the duration for ordered listing of versioned buckets
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
+        timeout: 500
+  - test:
+      name: bucket Listing tests
+      desc: test duration for unordered listing of buckets
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_unordered.yaml
+        timeout: 500
+
+# basic swift ops test
+  - test:
+      name: swift versioning copy tests
+      desc: restore versioned object in swift
+      polarion-id: CEPH-10646
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_version_copy_op.yaml
+        timeout: 500
+
+# Perform upgrade and some parallel IOs
+  - test:
+      name: Parallel run
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
+        - test:
+            name: Upgrade ceph
+            desc: Upgrade cluster to latest version
+            module: test_cephadm_upgrade.py
+            polarion-id: CEPH-83573791,CEPH-83573790
+            config:
+              command: start
+              service: upgrade
+              verify_cluster_health: true
+            destroy-cluster: false
+            abort-on-fail: true
+      desc: Running upgrade and i/o's parallelly
+
+# Post upgrade, verify the ceph version
+  - test:
+      desc: Retrieve the versions of the cluster
+      module: exec.py
+      name: post upgrade gather version
+      config:
+        cephadm: true
+        commands:
+          - "ceph versions"
+
+# Post upgrade tests
+# basic versioning tests
+  - test:
+      name: Versioning Tests
+      desc: Basic versioning test, also called as test to enable bucket versioning
+      polarion-id: CEPH-14261, CEPH-9222 # also applies to CEPH-10652
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_enable.yaml
+        timeout: 300
+  - test:
+      name: Versioning Tests
+      desc: test to overwrite objects after suspending versioning
+      polarion-id: CEPH-9199,CEPH-9223
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspend_re-upload.yaml
+        timeout: 300
+
+# bucket lifecycle tests
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-11179, CEPH-11180
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        timeout: 300
+
+# Dynamic resharding test
+  - test:
+      name: Dynamic Resharding tests
+      desc: Reshading test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+        timeout: 500
+
+# bucket listing tests (ordered and un-ordered listing)
+  - test:
+      name: bucket Listing tests
+      desc: test the duration for ordered listing of versioned buckets
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
+        timeout: 500
+  - test:
+      name: bucket Listing tests
+      desc: test duration for unordered listing of buckets
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_unordered.yaml
+        timeout: 500
+
+
+# basic swift ops test
+  - test:
+      name: swift versioning copy tests
+      desc: restore versioned object in swift
+      polarion-id: CEPH-10646
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_version_copy_op.yaml
+        timeout: 500
