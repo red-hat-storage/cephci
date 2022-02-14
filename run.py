@@ -787,6 +787,9 @@ def run(args):
             if skip_subscription is True:
                 config["skip_subscription"] = True
 
+            if config.get("skip_version_compare"):
+                skip_version_compare = config.get("skip_version_compare")
+
             if args.get("--add-repo"):
                 repo = args.get("--add-repo")
                 if repo.startswith("http"):

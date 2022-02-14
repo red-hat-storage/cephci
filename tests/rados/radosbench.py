@@ -1,8 +1,8 @@
-import logging
 import random
 
-logger = logging.getLogger(__name__)
-log = logger
+from utility.log import Log
+
+log = Log(__name__)
 
 
 def run(**kw):

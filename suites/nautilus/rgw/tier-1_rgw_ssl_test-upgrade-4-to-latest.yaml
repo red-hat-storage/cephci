@@ -6,10 +6,10 @@
 #
 ---
 tests:
-#  - test:
-#      name: install ceph pre-requisities
-#      module: install_prereq.py
-#      abort-on-fail: true
+  - test:
+      name: install ceph pre-requisities
+      module: install_prereq.py
+      abort-on-fail: true
 
   - test:
       name: ceph ansible
@@ -68,7 +68,7 @@ tests:
         config-file-name: test_swift_large_download.yaml
         timeout: 300
 
-  #versioning tests
+  # versioning tests
   - test:
       name: Versioning Tests
       desc: Versioning with copy objects
@@ -89,7 +89,7 @@ tests:
         config-file-name: test_versioning_objects_delete.yaml
         timeout: 300
 
-  #resharding tests
+  # resharding tests
   - test:
       name: Resharding tests
       desc: Reshading test - manual
@@ -119,7 +119,7 @@ tests:
         config-file-name: test_dynamic_resharding_with_version.yaml
         timeout: 500
 
-  #lifecycle tests
+  # lifecycle tests
   - test:
       name: Bucket Lifecycle Object_expiration_tests
       desc: Test object expiration for Prefix and tag based filter and for more than one days
@@ -140,10 +140,10 @@ tests:
         config-file-name: test_lc_rule_prefix_non_current_days.yaml
         timeout: 300
 
-  #upgrade ceph cluster
+  # upgrade ceph cluster
   - test:
       name: Upgrade ceph cluster to 4.x latest
-      polarion-id: CEPH-83574678
+      polarion-id: CEPH-83574675
       module: test_ansible_upgrade.py
       config:
         ansi_config:
@@ -225,7 +225,7 @@ tests:
         config-file-name: test_versioning_objects_delete.yaml
         timeout: 300
 
-  #resharding tests
+  # resharding tests
   - test:
       name: Resharding tests
       desc: Reshading test - manual
@@ -245,7 +245,7 @@ tests:
         config-file-name: test_dynamic_resharding.yaml
         timeout: 500
 
-  #lifecycle tests
+  # lifecycle tests
   - test:
       name: Bucket Lifecycle Object_expiration_tests
       desc: Test object expiration for Prefix and tag based filter and for more than one days

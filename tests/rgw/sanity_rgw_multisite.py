@@ -50,6 +50,7 @@ import time
 
 import yaml
 
+from utility import utils
 from utility.log import Log
 from utility.utils import setup_cluster_access, verify_sync_status
 
@@ -71,6 +72,9 @@ def run(**kw):
     test_site = kw.get("ceph_cluster")
     log.info(f"test site: {test_site.name}")
     test_site_node = test_site.get_ceph_object("rgw").node
+    config["git-url"] = config.get(
+        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+    )
 
     set_env = config.get("set-env", False)
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
@@ -185,7 +189,7 @@ def set_test_env(config, rgw_node):
     rgw_node.exec_command(cmd="yum install -y ceph-common", check_ec=False, sudo=True)
     rgw_node.exec_command(cmd="sudo rm -rf " + test_folder)
     rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
-    clone_the_repo(config, rgw_node, test_folder_path)
+    utils.clone_the_repo(config, rgw_node, test_folder_path)
 
     rgw_node.exec_command(
         cmd=f"sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
@@ -242,22 +246,3 @@ def write_file_to_node(file_obj, file_name, node):
     dest_file_obj = node.remote_file(sudo=True, file_name=file_name, file_mode="w")
     dest_file_obj.write(file_obj)
     dest_file_obj.flush()
-
-
-def clone_the_repo(config, node, path_to_clone):
-    """
-    clone the repo on to test node
-    :param config: test config
-    :param node: ceph rgw node
-    :param path_to_clone: the path to clone the repo
-
-    """
-    log.info("cloning the repo")
-    branch = config.get("branch", "master")
-    log.info(f"branch: {branch}")
-    repo_url = config.get(
-        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
-    )
-    log.info(f"repo_url: {repo_url}")
-    git_clone_cmd = f"sudo git clone {repo_url} -b {branch}"
-    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")

@@ -80,7 +80,7 @@ def zap_device(ceph_cluster, host, device_path):
     log.info(f"Executing device {config.pop('command')} service")
     device = Device(cluster=ceph_cluster, **config)
     out, err = device.zap(config)
-    if "zap successful" in out or "zap successful" in err:
+    if "zap successful" in out or "" in out:
         return True
     return False
 

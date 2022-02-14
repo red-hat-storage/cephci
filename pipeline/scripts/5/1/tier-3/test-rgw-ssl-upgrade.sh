@@ -1,20 +1,20 @@
 #! /bin/sh
-echo "Beginning Red Hat Ceph RPM based upgrade with tags and limit option -  OKR BZ 2014304 testing."
+echo "Testing single site upgrade from 5.x GA to latest developmet build."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
-platform="rhel-7"
-rhbuild="4.3"
-test_suite="suites/nautilus/upgrades/tier-2_upgrade_with-tags.yaml"
-test_conf="conf/nautilus/upgrades/tier-2_upgrade.yaml"
-test_inventory="conf/inventory/rhel-7-latest.yaml"
+platform="rhel-8"
+rhbuild="5.1"
+test_suite="tier-1_rgw_ssl_test_upgrade-5-to-latest.yaml"
+test_conf="conf/pacific/rgw/tier-0_rgw.yaml"
+test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
 # Process the CLI arguments for IBM-C environment
 CLI_ARGS=$@
 cloud="ibmc"
 if [ -z "${CLI_ARGS##*$cloud*}" ] ; then
-    test_inventory="conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+    test_inventory="conf/inventory/ibm-vpc-rhel-8-latest.yaml"
 else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi
