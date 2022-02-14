@@ -1221,7 +1221,7 @@ def install_start_kafka(rgw_node, cloud_type):
     """
     log.info("install kafka broker for bucket notification tests")
     if cloud_type == "ibmc":
-        wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.4/kafka_2.13-2.8.0.tgz"
+        wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.89/kafka_2.13-2.8.0.tgz"
     else:
         wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
     tar_cmd = "tar -zxvf /tmp/kafka.tgz -C /usr/local/"
