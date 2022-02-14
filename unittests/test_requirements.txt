@@ -1,3 +1,6 @@
 pyOpenSSL
 pytest
 mock
+flake8
+tox
+yamllint

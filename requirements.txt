@@ -1,7 +1,4 @@
 -e .
 cos-aspera; python_version == '3.6'
-flake8
-tox
 python-openstackclient
-yamllint
 logdna
