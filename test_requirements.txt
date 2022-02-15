@@ -1,4 +1,4 @@
-pyOpenSSL
+-e .
 pytest
 mock
 flake8
