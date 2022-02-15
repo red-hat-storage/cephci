@@ -72,8 +72,7 @@ node(nodeName) {
         println "buildArtifacts ceph-version : ${buildArtifacts['ceph-version']}"
         if ( buildArtifacts['ceph-version'] != content['ceph-version']) {
             currentBuild.result = "ABORTED"
-            println "Aborting the execution as new builds are available.."
-            return
+            error "Aborting the execution as new builds are available.."
         }
 
         def buildPhaseValue = buildType.split("-")
