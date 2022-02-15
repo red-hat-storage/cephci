@@ -93,7 +93,10 @@ def run(ceph_cluster, **kw):
                 raise CommandFailed("Failed to create nfs export")
             # Mount ceph nfs exports
             nfs_client[0].exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
-            assert wait_for_cmd_to_succeed(nfs_client[0], cmd=f"ls {nfs_mounting_dir}")
+            assert wait_for_cmd_to_succeed(
+                nfs_client[0],
+                cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
+            )
             nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
