@@ -1,3 +1,4 @@
+import datetime
 import time
 import traceback
 
@@ -6,6 +7,26 @@ from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def wait_for_cmd_to_succeed(client, cmd, timeout=180, interval=5):
+    """
+    Checks for the mount point and returns the status based on mount command
+    :param client:
+    :param mount_point:
+    :param timeout:
+    :param interval:
+    :return: boolean
+    """
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+    log.info("Wait for the command to pass")
+    while end_time > datetime.datetime.now():
+        try:
+            client.exec_command(sudo=True, cmd=cmd)
+            return True
+        except CommandFailed:
+            time.sleep(interval)
+    return False
 
 
 def run(ceph_cluster, **kw):
@@ -72,6 +93,7 @@ def run(ceph_cluster, **kw):
                 raise CommandFailed("Failed to create nfs export")
             # Mount ceph nfs exports
             nfs_client[0].exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
+            assert wait_for_cmd_to_succeed(nfs_client[0], cmd=f"ls {nfs_mounting_dir}")
             nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
