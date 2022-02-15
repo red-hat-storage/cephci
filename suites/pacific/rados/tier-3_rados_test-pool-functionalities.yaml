@@ -106,8 +106,8 @@ tests:
               pool_name: ec_pool_1
               pool_type: erasure
               pg_num: 32
-              k: 3
-              m: 2
+              k: 8
+              m: 4
               plugin: jerasure
               crush-failure-domain: osd
               target_size_ratio: 0.005
@@ -146,8 +146,8 @@ tests:
               pool_name: ec_pool_2
               pool_type: erasure
               pg_num: 32
-              k: 3
-              m: 2
+              k: 8
+              m: 3
               plugin: jerasure
               crush-failure-domain: osd
               pg_num_min: 16
@@ -175,8 +175,8 @@ tests:
               pool_name: ec_pool_3
               pool_type: erasure
               pg_num: 1
-              k: 3
-              m: 2
+              k: 8
+              m: 4
               plugin: jerasure
               crush-failure-domain: osd
               disable_pg_autoscale: true
@@ -203,8 +203,8 @@ tests:
               pool_name: ec_pool_4
               pool_type: erasure
               pg_num: 1
-              k: 3
-              m: 2
+              k: 8
+              m: 3
               disable_pg_autoscale: true
             pool-2:
               pool_type: replicated
