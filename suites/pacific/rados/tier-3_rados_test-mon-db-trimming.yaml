@@ -128,9 +128,9 @@ tests:
         ec_pool:
           pool_name: test_ec_pool
           pg_num: 32
-          k: 4
+          k: 8
           byte_size: 200KB
-          m: 2
+          m: 3
           plugin: jerasure
           rados_write_duration: 200
           rados_read_duration: 100

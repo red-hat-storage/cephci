@@ -75,10 +75,17 @@ def run(**kw):
         # Check Data failing for snapshot mirroring looks like it is syncing snapshots
         # mirror1.check_data(peercluster=mirror2, imagespec=imagespec_1)
 
-        # schedule snapshot
-        mirror1.schedule_snapshot_image(poolname=poolname, imagename=imagename_1)
+        # schedule snapshot rbd-mirror
+        mirror1.mirror_snapshot_schedule_add(poolname=poolname, imagename=imagename_1)
         mirror1.verify_snapshot_schedule(imagespec_1)
-        # Cleans up the
+        mirror1.mirror_snapshot_schedule_list(poolname=poolname, imagename=imagename_1)
+        mirror1.mirror_snapshot_schedule_status(
+            poolname=poolname, imagename=imagename_1
+        )
+        mirror1.mirror_snapshot_schedule_remove(
+            poolname=poolname, imagename=imagename_1
+        )
+        # Cleans up the configuration
         mirror1.delete_image(imagespec_1)
         mirror1.clean_up(peercluster=mirror2, pools=[poolname])
         return 0

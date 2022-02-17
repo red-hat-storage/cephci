@@ -1,17 +1,15 @@
-# System Under Test environment configuration for Rados Tier-3 test suite.
+# 5 node Ceph cluster's with 2 COS Bench nodes for testing.
+---
 globals:
   - ceph-cluster:
       name: ceph
 
       node1:
-        disk-size: 20
-        no-of-volumes: 4
         role:
           - _admin
           - installer
           - mgr
           - mon
-          - osd
 
       node2:
         disk-size: 20
@@ -33,6 +31,7 @@ globals:
         no-of-volumes: 4
         role:
           - osd
+          - rgw
 
       node5:
         disk-size: 20
@@ -42,7 +41,7 @@ globals:
 
       node6:
         role:
-          - rgw
+          - client
 
       node7:
         role:

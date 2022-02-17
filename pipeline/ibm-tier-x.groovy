@@ -89,6 +89,7 @@ node(nodeName) {
 
         // Removing suites that are meant to be executed only in RH network.
         testStages = testStages.findAll { ! it.key.contains("psi-only") }
+        testResults = testResults.findAll { ! it.key.contains("psi-only") }
 
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"

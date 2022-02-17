@@ -172,7 +172,8 @@ class FsUtils(object):
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
             client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
-            self.wait_until_mount_succeeds(client, mount_point)
+            if not self.wait_until_mount_succeeds(client, mount_point):
+                raise CommandFailed("Failed to appear in mount cmd even after 5 min")
             if kwargs.get("fstab"):
                 mon_node_ips = self.get_mon_node_ips()
                 mon_node_ip = ",".join(mon_node_ips)
@@ -279,7 +280,7 @@ class FsUtils(object):
         for client in kernel_clients:
             log.info("Creating mounting dir:")
             client.exec_command(sudo=True, cmd="mkdir %s" % mount_point)
-            out, rc = client.exec_command(
+            client.exec_command(
                 sudo=True,
                 cmd=f"ceph auth get-key client.{kwargs.get('new_client_hostname', client.node.hostname)} -o "
                 f"/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret",
@@ -298,11 +299,9 @@ class FsUtils(object):
                 cmd=kernel_cmd,
                 long_running=True,
             )
-            out, rc = client.exec_command(cmd="mount")
-            mount_output = out.read().decode()
-            mount_output = mount_output.split()
             log.info("validate kernel mount:")
-            self.wait_until_mount_succeeds(client, mount_point)
+            if not self.wait_until_mount_succeeds(client, mount_point):
+                raise CommandFailed("Failed to appear in mount cmd even after 5 min")
             if kwargs.get("fstab"):
                 try:
                     client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
