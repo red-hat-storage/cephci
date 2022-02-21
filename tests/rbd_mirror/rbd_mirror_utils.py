@@ -6,6 +6,7 @@ import string
 import time
 
 from ceph.ceph import CommandFailed
+from tests.rbd.exceptions import IOonSecondaryError
 from utility.log import Log
 
 log = Log(__name__)
@@ -443,11 +444,6 @@ class RbdMirror:
                 long_running=True,
             )
 
-    def resize_image(self, **kw):
-        self.exec_cmd(cmd=f"rbd resize --size 5G {kw.get('imagespec')}")
-        cmd = self.exec_cmd(cmd=f"rbd info {kw.get('imagespec')} --format=json")
-        log.info(cmd)
-
     def create_pool(self, **kw):
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
@@ -666,3 +662,26 @@ class RbdMirror:
                 raise CommandFailed
 
         return 0
+
+    def resize_image(self, imagespec, size):
+        """
+        Resize given provided image
+        Args:
+            imagespec: image-spec of the image to be resized
+            size: size of the image to be updated to
+        Returns:
+            None
+        Note:
+            Function raises IOonSecondaryError if resize is tried on
+        secondary image
+        """
+        log.info(f"Resizing image {imagespec} to size {size}")
+        cmd = f"rbd resize {imagespec} -s {size} --allow-shrink"
+        try:
+            self.exec_cmd(sudo=True, cmd=cmd, output=True)
+
+        except CommandFailed as resize_failed:
+            if "Read-only file system" in resize_failed.args[0]:
+                raise IOonSecondaryError("Detected I/O Operation on secondary")
+            else:
+                raise
