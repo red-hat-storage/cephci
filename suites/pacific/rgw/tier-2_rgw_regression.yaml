@@ -578,20 +578,6 @@ tests:
         config-file-name: test_bucket_link_unlink.yaml
         timeout: 500
 
-  # Index-less buckets
-
-  - test:
-      name: Indexless buckets
-      desc: Indexless (blind) buckets
-      comments: Known issue BZ-2043366
-      polarion-id: CEPH-10354, CEPH-10357
-      module: sanity_rgw.py
-      config:
-        test-version: v2
-        script-name: test_indexless_buckets.py
-        config-file-name: test_indexless_buckets_s3.yaml
-        timeout: 500
-
   # Multifactor Authentication tests
   - test:
       name: MFA deletes
@@ -669,3 +655,18 @@ tests:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
         timeout: 300
+
+  # Index-less buckets
+
+  - test:
+      name: Indexless buckets
+      desc: Indexless (blind) buckets
+      comments: Known issue BZ-2043366
+      polarion-id: CEPH-10354, CEPH-10357
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_indexless_buckets.py
+        config-file-name: test_indexless_buckets_s3.yaml
+        timeout: 500
+
