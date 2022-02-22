@@ -187,9 +187,10 @@ class Orch(
             base_cmd.append(base_cmd_args_str)
 
         base_cmd.append("apply -i")
+        specs = config["specs"]
 
         spec_cls = GenerateServiceSpec(
-            node=self.installer, cluster=self.cluster, specs=config["specs"]
+            node=self.installer, cluster=self.cluster, specs=specs
         )
         spec_filename = spec_cls.create_spec_file()
         base_cmd.append(spec_filename)
@@ -201,6 +202,10 @@ class Orch(
 
         LOG.info(f"apply-spec command response :\n{out}")
         # todo: add verification part
+
+        # validate services
+        if config["validate-spec-services"]:
+            self.validate_spec_services(specs=specs)
 
     def op(self, op, config):
         """
@@ -294,4 +299,10 @@ class Orch(
         elif op == "resume" and not loads(out)["paused"]:
             LOG.info("The orch operations are resumed")
             return True
+        return False
+
+    def validate_spec_services(self, specs) -> bool:
+        LOG.info("Validating spec services")
+        for spec in specs:
+            self.check_service_exists(service_name=spec["service_type"])
         return False

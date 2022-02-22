@@ -75,6 +75,9 @@ class OrchProtocol(CephAdmProtocol, Protocol):
     def verify_status(self, op: str) -> None:
         ...
 
+    def validate_spec_services(self, steps) -> bool:
+        ...
+
 
 class DaemonProtocol(OrchProtocol, Protocol):
     """Daemon protocol object for supporting static duck typing hints."""
