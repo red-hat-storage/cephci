@@ -93,6 +93,11 @@ class Log:
         }
         extra = deepcopy(self.metadata)
         extra.update(kwargs.get("metadata", {}))
+        message = str(message)
+        if len(message.encode("utf-8")) > 16000:
+            chunks = [message[i : i + 16000] for i in range(0, len(message), 16000)]
+            for i in chunks:
+                log[level](i, *args, extra=extra, **kwargs)
         log[level](message, *args, extra=extra, **kwargs)
 
     def info(self, message: Any, *args, **kwargs) -> None:

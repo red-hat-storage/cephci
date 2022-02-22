@@ -399,12 +399,16 @@ def run(args):
 
     if log_dna_config:
         options = {
-            "hostname": "Cephci",
+            "hostname": f"Cephci-{run_id}",
             "url": log_dna_config.get("url"),
             "index_meta": True,
             "tags": run_id,
+            "buf_retention_limit": 419430400,
+            "flush_limit": 2 * 1024 * 1024 * 100,
+            "max_retry_attempts": 10,
         }
         apiKey = log_dna_config.get("api-key")
+
         logdna_handler = logdna.LogDNAHandler(apiKey, options)
         root.addHandler(logdna_handler)
 
