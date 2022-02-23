@@ -14,23 +14,26 @@ log = Log(__name__)
 
 
 rpm_packages = {
-    "py2": [
+    "7": [
         "wget",
-        "git",
+        "git-core",
         "python-virtualenv",
         "python-nose",
         "ntp",
         "python2-pip",
         "chrony",
     ],
-    "py3": [
+    "all": [
         "wget",
-        "git",
-        "python3-virtualenv",
-        "python3-nose",
-        "python3-pip",
+        "git-core",
+        "python3-devel",
         "chrony",
         "yum-utils",
+        "net-tools",
+        "lvm2",
+        "podman",
+        "net-snmp-utils",
+        "net-snmp",
     ],
 }
 deb_packages = ["wget", "git", "python-virtualenv", "lsb-release", "ntp"]
@@ -128,17 +131,14 @@ def install_prereq(
                     enable_rhel_rpms(ceph, distro_ver)
             else:
                 log.info("Skipped enabling the RHEL RPM's provided by Subscription")
+
         if repo:
             setup_addition_repo(ceph, repo)
-        # TODO enable only python3 rpms on both rhel7 &rhel8 once all component
-        #  suites(rhcs3,4) are compatible
-        if distro_ver.startswith("8"):
-            rpm_all_packages = rpm_packages.get("py3") + ["net-tools"]
-            if str(rhbuild).startswith("5"):
-                rpm_all_packages = rpm_packages.get("py3") + ["lvm2", "podman"]
-            rpm_all_packages = " ".join(rpm_all_packages)
-        else:
-            rpm_all_packages = " ".join(rpm_packages.get("py2"))
+
+        rpm_all_packages = " ".join(rpm_packages.get("all"))
+        if distro_ver.startswith("7"):
+            rpm_all_packages = " ".join(rpm_packages.get("7"))
+
         ceph.exec_command(
             cmd="sudo yum install -y " + rpm_all_packages, long_running=True
         )
@@ -147,7 +147,6 @@ def install_prereq(
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
         ceph.exec_command(cmd="sudo yum clean metadata")
         config_ntp(ceph, cloud_type)
-
     registry_login(ceph, distro_ver)
 
 
