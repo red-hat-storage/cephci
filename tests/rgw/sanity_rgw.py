@@ -131,7 +131,7 @@ def run(ceph_cluster, **kw):
             + f"-r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
         )
 
-        if ceph_cluster.rhcs_version.version[0] == 5:
+        if ceph_cluster.rhcs_version.version[0] > 4:
             setup_cluster_access(ceph_cluster, rgw_node)
             rgw_node.exec_command(
                 sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
