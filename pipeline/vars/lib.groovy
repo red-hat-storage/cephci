@@ -286,6 +286,7 @@ def sendEmail(
     def testResults,
     def artifactDetails,
     def tierLevel,
+    def subjectPrefix="Nightly Pipeline",
     def toList="ceph-qe-list@redhat.com"
     ) {
     /*
@@ -365,7 +366,7 @@ def sendEmail(
         status = "UNSTABLE"
     }
 
-    def subject = "${tierLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
+    def subject = "${subjectPrefix} ${tierLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
 
     emailext (
         mimeType: 'text/html',
@@ -428,7 +429,10 @@ def generateRandomString() {
     ).trim()
 }
 
-def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion=null) {
+def fetchStages(
+    def scriptArg, def tierLevel, def testResults,
+    def rhcephversion=null, def scriptPathPrefix='pipeline/scripts'
+    ) {
     /*
         Return all the scripts found under
         cephci/pipeline/scripts/<MAJOR>/<MINOR>/<TIER-x>/*.sh
@@ -453,7 +457,7 @@ def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion
     def majorVersion = RHCSVersion.major_version
     def minorVersion = RHCSVersion.minor_version
 
-    def scriptPath = "${env.WORKSPACE}/pipeline/scripts/${majorVersion}/${minorVersion}/${tierLevel}/"
+    def scriptPath = "${env.WORKSPACE}/${scriptPathPrefix}/${majorVersion}/${minorVersion}/${tierLevel}/"
 
     def testStages = [:]
     def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
