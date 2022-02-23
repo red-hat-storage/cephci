@@ -68,7 +68,7 @@ node(nodeName) {
             }
 
             testStages = sharedLib.fetchStages(
-                "--build ${buildType} --xunit-results",
+                "--build latest --xunit-results",
                 buildType,
                 testResults,
                 rhcephVersion,
