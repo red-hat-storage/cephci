@@ -1,11 +1,11 @@
 #! /bin/sh
-echo "Beginning Ceph RGW Bucket stats consistency functionality testing."
+echo "Beginning Ceph RGW functionality testing using S3CMD"
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="4.3"
-test_suite="suites/nautilus/rgw/tier-2_rgw_test-bucket-stats-consistency.yaml"
+test_suite="suites/nautilus/rgw/tier-2_rgw_s3cmd_test-bucket-object-stats.yaml"
 test_conf="conf/nautilus/rgw/5-node-cluster.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
