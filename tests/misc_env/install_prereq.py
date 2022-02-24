@@ -134,7 +134,7 @@ def install_prereq(
         #  suites(rhcs3,4) are compatible
         if distro_ver.startswith("8"):
             rpm_all_packages = rpm_packages.get("py3") + ["net-tools"]
-            if str(rhbuild).startswith("5"):
+            if rhbuild[0] > "5":
                 rpm_all_packages = rpm_packages.get("py3") + ["lvm2", "podman"]
             rpm_all_packages = " ".join(rpm_all_packages)
         else:
