@@ -211,9 +211,11 @@ def create_nodes(
             ceph_vmnodes = create_ibmc_ceph_nodes(
                 cluster, inventory, osp_cred, run_id, instances_name
             )
-
-        elif cloud_type == "baremetal":
+        elif "baremetal" in cloud_type:
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
+        else:
+            log.error(f"Unknown cloud type: {cloud_type}")
+            raise AssertionError("Unsupported test environment.")
 
         ceph_nodes = []
         root_password = None
@@ -223,7 +225,7 @@ def create_nodes(
 
             if cloud_type == "openstack":
                 private_ip = node.get_private_ip()
-            elif cloud_type == "baremetal":
+            elif "baremetal" in cloud_type:
                 private_key_path = node.private_key if node.private_key else ""
                 private_ip = node.ip_address
                 look_for_key = True if node.private_key else False
@@ -342,6 +344,17 @@ def get_tier_level(files: str) -> str:
     return "Unknown"
 
 
+def get_html_page(url: str) -> str:
+    """Returns the content of the provided link."""
+    resp = requests.get(url, verify=False)
+
+    try:
+        return resp.text
+    except BaseException as be:  # noqa
+        log.debug(f"Failed to retrieve contents at {url}")
+        return "Unknown"
+
+
 def run(args):
 
     import urllib3
@@ -393,7 +406,7 @@ def run(args):
         root.addHandler(handler)
 
         server = f"tcp://{host}:{port}"
-        log._logger.debug(f"Log events are also pushed to {server}")
+        log.debug(f"Log events are also pushed to {server}")
 
     log_dna_config = get_cephci_config().get("log-dna", {})
 
@@ -540,41 +553,31 @@ def run(args):
 
         # get COMPOSE ID and ceph version
         if build not in ["released", "cvp", "upstream", None]:
-            if cloud_type == "openstack" or cloud_type == "baremetal":
-                resp = requests.get(base_url + "/COMPOSE_ID", verify=False)
-                compose_id = resp.text
-            elif cloud_type == "ibmc":
-                compose_id = "UNKNOWN"
+            compose_id = get_html_page(url=f"{base_url}/COMPOSE_ID")
 
-            if "rhel" == inventory.get("id"):
-                if cloud_type == "ibmc":
-                    ceph_pkgs = requests.get(
-                        base_url + "/Tools/Packages/", verify=False
-                    )
-                elif cloud_type == "openstack" or cloud_type == "baremetal":
-                    ceph_pkgs = requests.get(
-                        base_url + "/compose/Tools/x86_64/os/Packages/", verify=False
-                    )
-                m = re.search(r"ceph-common-(.*?).x86", ceph_pkgs.text)
-                ceph_version.append(m.group(1))
-                m = re.search(r"ceph-ansible-(.*?).rpm", ceph_pkgs.text)
-                ceph_ansible_version.append(m.group(1))
-                log.info("Compose id is: " + compose_id)
-            else:
-                ubuntu_pkgs = requests.get(
-                    ubuntu_repo + "/Tools/dists/xenial/main/binary-amd64/Packages"
-                )
-                m = re.search(r"ceph\nVersion: (.*)", ubuntu_pkgs.text)
-                ceph_version.append(m.group(1))
-                m = re.search(r"ceph-ansible\nVersion: (.*)", ubuntu_pkgs.text)
-                ceph_ansible_version.append(m.group(1))
+            ver_url = f"{base_url}/compose/Tools/x86_64/os/Packages/"
+            if cloud_type.startswith("ibmc"):
+                ver_url = f"{base_url}/Tools/Packages/"
 
-    distro = ",".join(list(set(distro)))
+            # Ceph Version
+            ver_text = get_html_page(url=ver_url)
+            search_results = re.search(r"ceph-common-(.*?).x86", ver_text)
+            if search_results:
+                ceph_version.append(search_results.group(1))
+
+            # Ceph Ansible Version
+            search_results = re.search(r"ceph-ansible-(.*?).rpm", ver_text)
+            if search_results:
+                ceph_version.append(search_results.group(1))
+
+    distro = ", ".join(list(set(distro)))
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
+
     metadata["rhcs"] = ceph_version
-    log.info("Testing Ceph Version: " + ceph_version)
-    log.info("Testing Ceph Ansible Version: " + ceph_ansible_version)
+    log.info(f"Compose id is: {compose_id}")
+    log.info(f"Testing Ceph Version: {ceph_version}")
+    log.info(f"Testing Ceph Ansible Version: {ceph_ansible_version}")
 
     service = None
     suite_name = "::".join(suite_files)
@@ -764,9 +767,11 @@ def run(args):
 
         if tc.get("log-link"):
             print("Test logfile location: {log_url}".format(log_url=tc["log-link"]))
+
         log.info(f"Running test {test_file}")
         # log.info("Running test %s", test_file)
         start = datetime.datetime.now()
+
         for cluster_name in test.get("clusters", ceph_cluster_dict):
             if test.get("clusters"):
                 config = test.get("clusters").get(cluster_name).get("config", {})
