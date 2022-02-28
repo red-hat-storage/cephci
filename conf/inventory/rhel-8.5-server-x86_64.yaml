@@ -26,7 +26,7 @@ instance:
     chpasswd:
       list: |
         root:passwd
-        cephuser: pass123
+        cephuser:pass123
       expire: False
 
     runcmd:
