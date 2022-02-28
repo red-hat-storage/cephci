@@ -5,12 +5,11 @@
 # executing the cephci test suites. This script performs the required changes.
 
 echo "Initialize Node"
-sudo yum install -y git-core
-sudo yum install -y zip unzip
-sudo yum install -y p7zip
-
 # Workaround: Disable IPv6 to have quicker downloads
 sudo sysctl -w net.ipv6.conf.eth0.disable_ipv6=1
+
+sudo yum install -y git-core zip unzip epel-release
+sudo yum install -y p7zip
 
 # Mount reesi for storing logs
 if [ ! -d "/ceph" ]; then
