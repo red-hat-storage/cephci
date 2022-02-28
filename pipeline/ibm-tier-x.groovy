@@ -17,25 +17,34 @@ node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
         stage('prepareJenkinsAgent') {
             if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout([
-                $class: 'GitSCM',
-                branches: [[name: 'origin/master']],
-                doGenerateSubmoduleConfigurations: false,
-                extensions: [
-                    [
-                        $class: 'CloneOption',
-                        shallow: true,
-                        noTags: true,
-                        reference: '',
-                        depth: 1
+            checkout(
+                scm: [
+                    $class: 'GitSCM',
+                    branches: [[name: 'origin/master']],
+                    extensions: [
+                        [
+                            $class: 'CleanBeforeCheckout',
+                            deleteUntrackedNestedRepositories: true
+                        ],
+                        [
+                            $class: 'WipeWorkspace'
+                        ],
+                        [
+                            $class: 'CloneOption',
+                            depth: 1,
+                            noTags: true,
+                            shallow: true,
+                            timeout: 10,
+                            reference: ''
+                        ]
                     ],
-                    [$class: 'CleanBeforeCheckout'],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/red-hat-storage/cephci.git'
+                    ]]
                 ],
-                submoduleCfg: [],
-                userRemoteConfigs: [[
-                    url: 'https://github.com/red-hat-storage/cephci.git'
-                ]]
-            ])
+                changelog: false,
+                poll: false
+            )
             // prepare the node
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
             sharedLib.prepareIbmNode()
@@ -55,6 +64,17 @@ node(nodeName) {
         if ((! rhcephVersion?.trim()) && (! buildType?.trim())) {
             error "Required Parameters are not provided.."
         }
+
+        // Check ceph version to continue tier-x execution
+        def recipeFileContent = sharedLib.readFromRecipeFile(rhcephVersion)
+        def content = recipeFileContent['latest']
+        println "recipeFile ceph-version : ${content['ceph-version']}"
+        println "buildArtifacts ceph-version : ${buildArtifacts['ceph-version']}"
+        if ( buildArtifacts['ceph-version'] != content['ceph-version']) {
+            currentBuild.result = "ABORTED"
+            error "Aborting the execution as new builds are available.."
+        }
+
         def buildPhaseValue = buildType.split("-")
         buildPhase = buildPhaseValue[1].toInteger()+1
         buildPhase = buildPhaseValue[0]+"-"+buildPhase
@@ -69,6 +89,7 @@ node(nodeName) {
 
         // Removing suites that are meant to be executed only in RH network.
         testStages = testStages.findAll { ! it.key.contains("psi-only") }
+        testResults = testResults.findAll { ! it.key.contains("psi-only") }
 
         if ( testStages.isEmpty() ) {
             currentBuild.result = "ABORTED"

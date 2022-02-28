@@ -67,7 +67,7 @@ def execute(test, args, results: dict):
     """
 
     test = test.get("test")
-    config = test.get("config")
+    config = test.get("config", dict())
     config.update(args["config"])
     file_name = test.get("module")
 

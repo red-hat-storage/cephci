@@ -22,25 +22,34 @@ node ("centos-7") {
         stage("Prepare env") {
             if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
 
-            checkout([
-                $class: 'GitSCM',
-                branches: [[name: 'origin/master']],
-                doGenerateSubmoduleConfigurations: false,
-                extensions: [
-                    [
-                        $class: 'CloneOption',
-                        shallow: true,
-                        noTags: true,
-                        reference: '',
-                        depth: 1
+            checkout(
+                scm: [
+                    $class: 'GitSCM',
+                    branches: [[name: 'origin/master']],
+                    extensions: [
+                        [
+                            $class: 'CleanBeforeCheckout',
+                            deleteUntrackedNestedRepositories: true
+                        ],
+                        [
+                            $class: 'WipeWorkspace'
+                        ],
+                        [
+                            $class: 'CloneOption',
+                            depth: 1,
+                            noTags: true,
+                            shallow: true,
+                            timeout: 10,
+                            reference: ''
+                        ]
                     ],
-                    [$class: 'CleanBeforeCheckout'],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/red-hat-storage/cephci.git'
+                    ]]
                 ],
-                submoduleCfg: [],
-                userRemoteConfigs: [[
-                    url: 'https://github.com/red-hat-storage/cephci.git'
-                ]]
-            ])
+                changelog: false,
+                poll: false
+            )
 
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
             sharedLib.prepareNode()

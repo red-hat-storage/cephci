@@ -1,4 +1,4 @@
-# System Under Test environment configuration for Rados Tier-3 test suite.
+---
 globals:
   - ceph-cluster:
       name: ceph
@@ -7,7 +7,6 @@ globals:
         disk-size: 20
         no-of-volumes: 4
         role:
-          - _admin
           - installer
           - mgr
           - mon
@@ -35,15 +34,10 @@ globals:
           - osd
 
       node5:
-        disk-size: 20
-        no-of-volumes: 4
-        role:
-          - osd
-
-      node6:
         role:
           - rgw
+          - nfs
 
-      node7:
+      node6:
         role:
           - client

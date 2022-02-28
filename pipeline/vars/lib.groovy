@@ -286,6 +286,7 @@ def sendEmail(
     def testResults,
     def artifactDetails,
     def tierLevel,
+    def subjectPrefix="Nightly Pipeline",
     def toList="ceph-qe-list@redhat.com"
     ) {
     /*
@@ -428,7 +429,10 @@ def generateRandomString() {
     ).trim()
 }
 
-def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion=null) {
+def fetchStages(
+    def scriptArg, def tierLevel, def testResults,
+    def rhcephversion=null, def scriptPathPrefix='pipeline/scripts'
+    ) {
     /*
         Return all the scripts found under
         cephci/pipeline/scripts/<MAJOR>/<MINOR>/<TIER-x>/*.sh
@@ -453,7 +457,7 @@ def fetchStages(def scriptArg, def tierLevel, def testResults, def rhcephversion
     def majorVersion = RHCSVersion.major_version
     def minorVersion = RHCSVersion.minor_version
 
-    def scriptPath = "${env.WORKSPACE}/pipeline/scripts/${majorVersion}/${minorVersion}/${tierLevel}/"
+    def scriptPath = "${env.WORKSPACE}/${scriptPathPrefix}/${majorVersion}/${minorVersion}/${tierLevel}/"
 
     def testStages = [:]
     def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
@@ -595,7 +599,7 @@ def recipeFileExist(def rhcephVersion, def recipeFile, def infra) {
     }
 }
 
-def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.4") {
+def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.89") {
     /*
         Method to read content from the recipe file.
     */
@@ -603,7 +607,7 @@ def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.4") {
     recipeFileExist(rhcephVersion, recipeFile, infra)
 
     def content = sh(
-        script: "ssh ${infra} \"sudo yq e '.' ${recipeFile}\"", returnStdout: true
+        script: "ssh ${infra} \"yq e '.' ${recipeFile}\"", returnStdout: true
     )
     def contentMap = readYaml text: content
 
@@ -611,15 +615,14 @@ def readFromRecipeFile(def rhcephVersion, def infra="10.245.4.4") {
 }
 
 def writeToRecipeFile(
-    def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.4"
+    def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.89"
     ) {
     /*
         Method to update content to the recipe file
     */
     def recipeFile = "/data/site/recipe/${rhcephVersion}.yaml"
     recipeFileExist(rhcephVersion, recipeFile, infra)
-    sh "ssh $infra \"sudo yq eval -i '.$dataPhase = .$buildType' $recipeFile\""
-    sh "ssh $infra \"sudo chown apache:apache $recipeFile\""
+    sh "ssh $infra \"yq eval -i '.$dataPhase = .$buildType' $recipeFile\""
 }
 
 def executeTestSuite(

@@ -100,12 +100,17 @@ class PoolFunctions:
             sudo=True,
             cmd=f"curl -k {script_loc} -O",
         )
+        # Setup Script pre-requisites : docopt
+        client_node.exec_command(
+            sudo=True, cmd="pip3 install docopt", long_running=True
+        )
+
         cmd_options = f"--pool {pool_name} --start {obj_start} --end {obj_end} --key-count {num_keys_obj}"
         cmd = f"python3 generate_omap_entries.py {cmd_options}"
         client_node.exec_command(sudo=True, cmd=cmd, long_running=True)
 
         # removing the py file copied
-        client_node.exec_command(cmd="rm generate_omap_entries.py")
+        client_node.exec_command(sudo=True, cmd="rm -rf generate_omap_entries.py")
 
         log.debug("Checking the amount of omap entries created on the pool")
         pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]

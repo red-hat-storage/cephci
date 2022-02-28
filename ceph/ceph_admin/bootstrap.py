@@ -182,7 +182,12 @@ class BootstrapMixin:
         custom_image = args.pop("custom_image", True)
         build_type = self.config.get("build_type")
 
-        if build_type == "released" or custom_repo.lower() == "cdn":
+        if build_type == "upstream":
+            self.setup_upstream_repository()
+            # work-around to enable ceph x86_64 RPM pkgs.
+            # which is currently unavailable in upstream builds.
+            self.set_cdn_tool_repo()
+        elif build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False
             self.set_cdn_tool_repo()
         elif custom_repo:

@@ -6,7 +6,7 @@ instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.0"
 test_suite="suites/pacific/rados/tier-2_rados_basic_regression.yaml"
-test_conf="conf/pacific/rados/tier-2_rados.yaml"
+test_conf="conf/pacific/rados/7-node-cluster.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 

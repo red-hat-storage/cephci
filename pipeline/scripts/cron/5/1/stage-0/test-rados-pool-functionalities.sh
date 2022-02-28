@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Ceph RADOS regression testing for Scrubbing scenarios"
+echo "Beginning Ceph RADOS regression for testing various pool functionalities"
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
-test_conf="conf/pacific/rados/tier-2_rados.yaml"
+test_suite="suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
+test_conf="conf/pacific/rados/11-node-cluster.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 

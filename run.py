@@ -457,7 +457,7 @@ def run(args):
     platform = args["--platform"]
     build = args.get("--build", None)
 
-    if build and build != "released":
+    if build and build not in ["released"]:
         base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
             build, rhbuild, platform
         )
@@ -539,7 +539,7 @@ def run(args):
             distro.append(image_name.replace(".iso", ""))
 
         # get COMPOSE ID and ceph version
-        if build not in ["released", "cvp", None]:
+        if build not in ["released", "cvp", "upstream", None]:
             if cloud_type == "openstack" or cloud_type == "baremetal":
                 resp = requests.get(base_url + "/COMPOSE_ID", verify=False)
                 compose_id = resp.text
@@ -786,6 +786,9 @@ def run(args):
 
             if skip_subscription is True:
                 config["skip_subscription"] = True
+
+            if config.get("skip_version_compare"):
+                skip_version_compare = config.get("skip_version_compare")
 
             if args.get("--add-repo"):
                 repo = args.get("--add-repo")

@@ -1,0 +1,8 @@
+-e .
+pytest
+mock
+flake8
+tox
+isort
+black
+yamllint

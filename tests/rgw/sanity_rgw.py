@@ -48,6 +48,7 @@ Below configs are needed in order to run the tests
 
 import yaml
 
+from utility import utils
 from utility.log import Log
 from utility.utils import install_start_kafka, setup_cluster_access
 
@@ -103,17 +104,15 @@ def run(ceph_cluster, **kw):
 
     log.info("Flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
+    config["git-url"] = config.get(
+        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+    )
 
     test_folder = "rgw-tests"
     test_folder_path = f"~/{test_folder}"
-    git_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
-    git_clone = f"git clone {git_url} -b master"
-    rgw_node.exec_command(
-        cmd=f"sudo rm -rf {test_folder}"
-        + f" && mkdir {test_folder}"
-        + f" && cd {test_folder}"
-        + f" && {git_clone}"
-    )
+    rgw_node.exec_command(cmd=f"sudo rm -rf {test_folder}")
+    rgw_node.exec_command(cmd=f"sudo mkdir {test_folder}")
+    utils.clone_the_repo(config, rgw_node, test_folder_path)
 
     # Clone the repository once for the entire test suite
     pip_cmd = "venv/bin/pip"
@@ -132,7 +131,7 @@ def run(ceph_cluster, **kw):
             + f"-r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
         )
 
-        if ceph_cluster.rhcs_version.version[0] == 5:
+        if ceph_cluster.rhcs_version.version[0] > 4:
             setup_cluster_access(ceph_cluster, rgw_node)
             rgw_node.exec_command(
                 sudo=True, cmd="yum install -y ceph-common --nogpgcheck"

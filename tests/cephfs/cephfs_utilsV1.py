@@ -172,7 +172,8 @@ class FsUtils(object):
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
             client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
-            self.wait_until_mount_succeeds(client, mount_point)
+            if not self.wait_until_mount_succeeds(client, mount_point):
+                raise CommandFailed("Failed to appear in mount cmd even after 5 min")
             if kwargs.get("fstab"):
                 mon_node_ips = self.get_mon_node_ips()
                 mon_node_ip = ",".join(mon_node_ips)
@@ -215,6 +216,31 @@ class FsUtils(object):
         args = parser.parse_args(str_args.split())
         return args
 
+    def wait_for_mds_process(
+        self, client, process_name, timeout=180, interval=5, ispresent=True
+    ):
+        """
+        Checks for the proccess and returns the status based on ispresent
+        :param client:
+        :param process_name:
+        :param timeout:
+        :param interval:
+        :param ispresent:
+        :return:
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the process to start or stop")
+        while end_time > datetime.datetime.now():
+            client.exec_command(
+                sudo=True, cmd=f"ceph orch ps | grep {process_name}", check_ec=False
+            )
+            if client.node.exit_status == 0 and ispresent:
+                return True
+            if client.node.exit_status == 1 and not ispresent:
+                return True
+            sleep(interval)
+        return False
+
     def wait_until_mount_succeeds(self, client, mount_point, timeout=180, interval=5):
         """
         Checks for the mount point and returns the status based on mount command
@@ -254,7 +280,7 @@ class FsUtils(object):
         for client in kernel_clients:
             log.info("Creating mounting dir:")
             client.exec_command(sudo=True, cmd="mkdir %s" % mount_point)
-            out, rc = client.exec_command(
+            client.exec_command(
                 sudo=True,
                 cmd=f"ceph auth get-key client.{kwargs.get('new_client_hostname', client.node.hostname)} -o "
                 f"/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret",
@@ -273,11 +299,9 @@ class FsUtils(object):
                 cmd=kernel_cmd,
                 long_running=True,
             )
-            out, rc = client.exec_command(cmd="mount")
-            mount_output = out.read().decode()
-            mount_output = mount_output.split()
             log.info("validate kernel mount:")
-            self.wait_until_mount_succeeds(client, mount_point)
+            if not self.wait_until_mount_succeeds(client, mount_point):
+                raise CommandFailed("Failed to appear in mount cmd even after 5 min")
             if kwargs.get("fstab"):
                 try:
                     client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
