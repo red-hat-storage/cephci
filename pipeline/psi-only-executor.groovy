@@ -105,7 +105,7 @@ node(nodeName) {
         sharedLib.sendEmail(
             testResults,
             sharedLib.buildArtifactsDetails(releaseContent, ciMap, "tier-0"),
-            tierLevel.capitalize(),
+            tierLevel.capitalize(), "Nightly Pipeline",
             "ceph-qe@redhat.com"
         )
     }
