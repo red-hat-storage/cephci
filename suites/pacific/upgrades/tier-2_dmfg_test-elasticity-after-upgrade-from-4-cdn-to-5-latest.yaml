@@ -1,0 +1,585 @@
+#############################################################################
+# Tier-level: 2
+# Test-Suite: tier-2_dmfg_test-elasticity-after-upgrade-from-4-cdn-to-5-latest.yaml
+# Test-Case: Test elasticity of cluster after upgrade from prev released version to current latest build
+#
+# Cluster configuration: (conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml)
+# --------------------------------------------------------------------------
+# Nodes:
+#    10-Node cluster(RHEL-8.3 and above)
+#    Initial cluster config - 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+#    Post upgrade
+#    Scale up cluster to 5 MONS, 5 MGRS, 4 RGWs, 4 MDSs, 2 NFSs, 2 ISCSIs and 10 OSD nodes
+#    Scale down cluster to initial configuration
+#
+# Test steps:
+# ---------------------------------------------------------------------
+# - Deploy containerised Nautilus Ceph cluster using CDN RPMS
+# - Run some I/O's
+# - Upgrade to Pacific using ceph-ansible and parallel run I/O's
+# - adopt to cephadm using ceph-adopt playbook
+# - Run some I/O's
+# - Scale up the cluster to 5 MONS, 5 MGRS, 4 RGWs, 4 MDSs, 2 NFSs, 2 ISCSIs and 10 OSD nodes
+# - Run some I/O's
+# - Scale down the cluster to its initial configuration
+# - Run some I/O's
+#
+#############################################################################
+tests:
+- test:
+    name: install ceph pre-requisites
+    module: install_prereq.py
+    config:
+      is_production: True
+    abort-on-fail: True
+
+- test:
+    name: ceph ansible install containerized rhcs 4.x from cdn
+    module: test_ansible.py
+    config:
+      use_cdn: True
+      build: '4.x'
+      ansi_config:
+        ceph_origin: repository
+        ceph_repository: rhcs
+        ceph_repository_type: cdn
+        ceph_rhcs_version: 4
+        osd_scenario: lvm
+        osd_auto_discovery: False
+        ceph_stable_rh_storage: True
+        containerized_deployment: True
+        ceph_docker_image: "rhceph/rhceph-4-rhel8"
+        ceph_docker_image_tag: "latest"
+        ceph_docker_registry: "registry.redhat.io"
+        copy_admin_key: True
+        dashboard_enabled: True
+        dashboard_admin_user: admin
+        dashboard_admin_password: p@ssw0rd
+        grafana_admin_user: admin
+        grafana_admin_password: p@ssw0rd
+        node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+        grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+        prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+        alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+    desc: deploy ceph containerized 4.x cdn setup using ceph-ansible
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      commands:
+        - ceph -s
+        - ceph versions
+      sudo: True
+    desc: Check for ceph health debug info
+
+- test:
+    name: Parallel run
+    module: test_parallel.py
+    parallel:
+     - test:
+         name: rados_bench_test
+         module: radosbench.py
+         config:
+           pg_num: '128'
+           pool_type: 'normal'
+         desc: run rados bench for 360 - normal profile
+     - test:
+         name: rbd-io
+         module: rbd_faster_exports.py
+         config:
+           io-total: 100M
+           cleanup: False
+         desc: Perform export during read/write,resizing,flattening,lock operations
+     - test:
+         name: Upgrade containerized ceph to 5.x latest
+         module: test_ansible_upgrade.py
+         config:
+           build: '5.x'
+           ansi_config:
+             ceph_origin: distro
+             ceph_repository: rhcs
+             ceph_rhcs_version: 5
+             osd_scenario: lvm
+             osd_auto_discovery: False
+             fetch_directory: ~/fetch
+             copy_admin_key: True
+             containerized_deployment: True
+             upgrade_ceph_packages: True
+             dashboard_enabled: True
+             dashboard_admin_user: admin
+             dashboard_admin_password: p@ssw0rd
+             grafana_admin_user: admin
+             grafana_admin_password: p@ssw0rd
+             node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+             grafana_container_image: registry.redhat.io/rhceph/rhceph-5-dashboard-rhel8:5
+             prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+             alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+         desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
+         abort-on-fail: True
+    desc: Running upgrade and i/o's parallelly
+
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      commands:
+        - ceph -s
+        - ceph versions
+      sudo: True
+    desc: Check for ceph health debug info
+
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+
+- test:
+    name: rbd-io
+    module: rbd_faster_exports.py
+    config:
+        io-total: 100M
+    desc: Perform export during read/write,resizing,flattening,lock operations
+
+- test:
+    name: rgw sanity tests
+    module: sanity_rgw.py
+    config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+    desc: Perform rgw tests
+
+- test:
+    name: Add new nodes to the cluster
+    module: test_add_node.py
+    config:
+      command: add_node
+      base_cmd_args:
+        verbose: True
+      args:
+        role: pool
+    desc: Perform pre req on all nodes with given role to add them to the cluster
+
+- test:
+    name: Add hosts to ceph cluster
+    desc: Add host node(s) with IP address and labels
+    module: test_host.py
+    config:
+      service: host
+      command: add_hosts
+      args:
+        nodes:
+          - node5
+          - node6
+          - node7
+          - node8
+          - node9
+          - node10
+        attach_ip_address: True
+        labels: apply-all-labels
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Scale up Monitor with placement
+    desc: Scale up monitor nodes to 5 with placement
+    module: test_mon.py
+    abort-on-fail: True
+    config:
+      command: apply
+      service: mon
+      base_cmd_args:
+        verbose: True
+      args:
+        placement:
+          nodes:
+              - node1
+              - node2
+              - node3
+              - node5
+              - node6
+          sep: ";"    # separator to be used for placements
+
+- test:
+    name: Scale up Manager service
+    desc: Scale up manager nodes to 5 with placement option
+    module: test_mgr.py
+    config:
+      command: apply
+      service: mgr
+      base_cmd_args:
+        verbose: True
+      args:
+        placement:
+          nodes:
+              - node1
+              - node2
+              - node3
+              - node5
+              - node6
+          sep: " "
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Scale up RGW Service
+    desc: Scale up RGW service to 4 nodes
+    module: test_rgw.py
+    config:
+      command: apply
+      service: rgw
+      base_cmd_args:          # arguments to ceph orch
+        verbose: True
+      pos_args:               # positional arguments
+        - myrgw                 # service id
+      args:
+        placement:
+          nodes:              # A list of strings that would looked up
+              - node7
+              - node8
+              - node9
+              - node10
+          limit: 4            # no of daemons
+          sep: ";"            # separator to be used for placements
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Scale up MDS Service
+    desc: Scale up MDS service to 4 nodes
+    module: test_mds.py
+    config:
+      command: apply
+      service: mds
+      base_cmd_args:          # arguments to ceph orch
+        verbose: True
+      pos_args:
+        - cephfs              # name of the filesystem
+      args:
+        placement:
+          nodes:
+            - node7
+            - node8
+            - node9
+            - node10
+          limit: 4            # no of daemons
+          sep: " "            # separator to be used for placements
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Create replicated pool for NFS
+    desc: Add pool for NFS Ganesha service
+    module: test_bootstrap.py
+    config:
+      command: shell
+      args:                     # command arguments
+        - ceph
+        - osd
+        - pool
+        - create
+        - nfs-ganesha-pool
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Enable rgw application on nfs-ganesha pool
+    desc: enable rgw on nfs-ganesha pool
+    module: test_bootstrap.py
+    config:
+      command: shell
+      args:             # command arguments
+        - ceph
+        - osd
+        - pool
+        - application
+        - enable
+        - nfs-ganesha-pool
+        - rgw
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Apply NFS Service
+    desc: Apply NFS-Ganesha service on role nodes
+    module: test_nfs.py
+    config:
+      command: apply
+      service: nfs
+      base_cmd_args:
+          verbose: True
+      pos_args:
+        - mynfs                         # nfs service ID
+        - nfs-ganesha-pool              # name of the pool
+      args:
+        placement:
+          nodes:
+            - node9
+            - node10
+          limit: 2
+          sep: ";"
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Create replicated pool
+    desc: Add pool for ISCSI service
+    module: test_bootstrap.py
+    config:
+      command: shell
+      args: # command arguments
+        - ceph
+        - osd
+        - pool
+        - create
+        - iscsi
+        - "3"
+        - "3"
+        - replicated
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Enable rbd application on pool
+    desc: enable rbd on iscsi pool
+    module: test_bootstrap.py
+    config:
+      command: shell
+      args: # command arguments
+        - ceph
+        - osd
+        - pool
+        - application
+        - enable
+        - iscsi
+        - rbd
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Apply ISCSI Service
+    desc: Apply ISCSI target service on iscsi role nodes
+    module: test_iscsi.py
+    config:
+      command: apply
+      service: iscsi
+      base_cmd_args:            # arguments to ceph orch
+        verbose: True
+      pos_args:
+        - iscsi                 # name of the pool
+        - api_user              # name of the API user
+        - api_pass              # password of the api_user.
+      args:
+        placement:
+          nodes:
+            - node7
+            - node8 # either label or node.
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      commands:
+        - ceph -s
+        - ceph versions
+      sudo: True
+    desc: Check for ceph health debug info
+
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+
+- test:
+    name: rbd-io
+    module: rbd_faster_exports.py
+    config:
+      io-total: 100M
+    desc: Perform export during read/write,resizing,flattening,lock operations
+
+- test:
+    name: rgw sanity tests
+    module: sanity_rgw.py
+    config:
+      script-name: test_multitenant_user_access.py
+      config-file-name: test_multitenant_access.yaml
+      timeout: 300
+    desc: Perform rgw tests
+
+- test:
+    name: Scale down Monitor with placement
+    desc: Scale down monitor nodes to 3 with placement
+    module: test_mon.py
+    abort-on-fail: True
+    config:
+      command: apply
+      service: mon
+      base_cmd_args:
+        verbose: True
+      args:
+        placement:
+          nodes:
+            - node1
+            - node5
+            - node6
+          sep: ";"    # separator to be used for placements
+
+- test:
+    name: Scale down Manager service
+    desc: Scale down manager nodes to 3 with placement option
+    module: test_mgr.py
+    config:
+      command: apply
+      service: mgr
+      base_cmd_args:
+        verbose: True
+      args:
+        placement:
+          nodes:
+            - node1
+            - node5
+            - node6
+          sep: " "
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Scale down RGW Service
+    desc: Scale down RGW service to 2 nodes
+    module: test_rgw.py
+    config:
+      command: apply
+      service: rgw
+      base_cmd_args: # arguments to ceph orch
+        verbose: True
+      pos_args: # positional arguments
+        - myrgw                 # service id
+      args:
+        placement:
+          nodes: # A list of strings that would looked up
+            - node9
+            - node10
+          limit: 2            # no of daemons
+          sep: ";"            # separator to be used for placements
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Scale down MDS Service
+    desc: Scale down MDS service to 2 nodes
+    module: test_mds.py
+    config:
+      command: apply
+      service: mds
+      base_cmd_args: # arguments to ceph orch
+        verbose: True
+      pos_args:
+        - cephfs              # name of the filesystem
+      args:
+        placement:
+          nodes:
+            - node7
+            - node8
+          limit: 2            # no of daemons
+          sep: " "            # separator to be used for placements
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Scale down NFS Service
+    desc: Scale down NFS-Ganesha service to 1 node
+    module: test_nfs.py
+    config:
+      command: apply
+      service: nfs
+      base_cmd_args:
+        verbose: True
+      pos_args:
+        - mynfs                         # nfs service ID
+        - nfs-ganesha-pool              # name of the pool
+      args:
+        placement:
+          nodes:
+            - node10
+          limit: 1
+          sep: ";"
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: Scale down ISCSI Service
+    desc: Scale down ISCSI target service to 1 node
+    module: test_iscsi.py
+    polarion-id: CEPH-83574776
+    config:
+      command: apply
+      service: iscsi
+      base_cmd_args: # arguments to ceph orch
+        verbose: True
+      pos_args:
+        - iscsi                 # name of the pool
+        - api_user              # name of the API user
+        - api_pass              # password of the api_user.
+      args:
+        placement:
+          nodes:
+            - node7
+    destroy-cluster: False
+    abort-on-fail: True
+
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      commands:
+        - ceph -s
+        - ceph versions
+      sudo: True
+    desc: Check for ceph health debug info
+
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+
+- test:
+    name: rbd-io
+    module: rbd_faster_exports.py
+    config:
+      io-total: 100M
+    desc: Perform export during read/write,resizing,flattening,lock operations
+
+- test:
+    name: rgw sanity tests
+    module: sanity_rgw.py
+    config:
+      script-name: test_multitenant_user_access.py
+      config-file-name: test_multitenant_access.yaml
+      timeout: 300
+    desc: Perform rgw tests

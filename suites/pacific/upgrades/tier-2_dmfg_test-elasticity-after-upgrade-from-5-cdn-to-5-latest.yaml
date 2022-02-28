@@ -1,0 +1,633 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_dmfg_test-elasticity-after-upgrade-from-5-cdn-to-5-latest.yaml
+# Test-Case: Test elasticity of cluster after upgrade from Build-to-Build (B2B)
+#
+# Cluster Configuration:
+#    conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml
+#
+# Nodes:
+#    10-Node cluster(RHEL-8.3 and above)
+#    Initial cluster config - 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+#    Post upgrade
+#    Scale up cluster to 5 MONS, 5 MGRS, 4 RGWs, 4 MDSs, 2 NFSs, 2 ISCSIs and 10 OSD nodes
+#    Scale down cluster to initial configuration
+#
+# Test Steps:
+#   (1) Bootstrap cluster using latest released ceph 5.x with below options,
+#       - custom_repo: "cdn"
+#       - skip-monitoring stack
+#       - registry-url: <registry-URL>
+#       - mon-ip: <monitor address, Required>
+#   (2) Copy SSH keys to nodes and Add it to cluster with address and role labels attached to it.
+#   (3) Deploy services using apply option,
+#       - 3 Mon on node1, node2, Node3
+#       - addition of OSD's using "all-available-devices" option.
+#       - RGW on node2, node3 with india.south(realm.zone) using label.
+#       - MDS on node2, node3 with host placements.
+#   (4) Upgrade to distro build(N) by provided Ceph image version.
+#   (5) Scale up cluster to 5 MONS, 5 MGRS, 4 RGWs, 4 MDSs, 2 NFSs, 2 ISCSIs and 10 OSD nodes
+#   (6) Run some I/O's
+#   (7) Scale down the cluster to its initial configuration
+#   (8) Run some I/O's
+#
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      config:
+        is_production: True
+      abort-on-fail: True
+  - test:
+      name: Cluster deployment
+      desc: Cluster deployment
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: True
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: True
+              args:
+                fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+                custom_repo: "cdn"
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                skip-monitoring-stack: True
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                nodes:
+                  - node2
+                  - node3
+                  - node5
+                  - node6
+                  - node7
+                  - node8
+                attach_ip_address: True
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: True
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args: # arguments to ceph orch
+                verbose: True
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node7
+                    - node8
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+          - config:
+              command: apply
+              service: prometheus
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+                  sep: ";"
+          - config:
+              command: apply
+              service: grafana
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+                  sep: ";"
+          - config:
+              command: apply
+              service: alertmanager
+              args:
+                placement:
+                  nodes:
+                    - node1
+          - config:
+              command: apply
+              service: node-exporter
+              args:
+                placement:
+                  nodes: "*"
+          - config:
+              command: apply
+              service: crash
+              base_cmd_args:
+                verbose: True
+              args:
+                placement:
+                  nodes: "*"
+          - config:
+              command: apply
+              service: rgw
+              base_cmd_args: # arguments to ceph orch
+                verbose: True
+              pos_args: # positional arguments
+                - myrgw                 # service id
+              args:
+                placement:
+                  nodes: # A list of strings that would looked up
+                    - node7
+                    - node8
+                  limit: 2            # no of daemons
+                  sep: ";"            # separator to be used for placements
+      destroy-cluster: False
+      abort-on-fail: True
+  - test:
+      name: Configure client
+      desc: Configure client with admin keyring.
+      module: test_client.py
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>) --> /etc/ceph/ceph.{id}.keyring
+        node: node4                       # client node
+        copy_admin_keyring: True          # Copy admin keyring to node
+        store-keyring: /etc/ceph/ceph.client.1.keyring  # local copy at the installer
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: False
+      abort-on-fail: True
+  - test:
+      name: Parallel run
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+        - test:
+            name: rbd-io
+            module: rbd_faster_exports.py
+            config:
+              io-total: 100M
+            desc: Perform export during read/write,resizing,flattening,lock operations
+        - test:
+            name: Upgrade ceph
+            desc: Upgrade cluster to latest version
+            module: test_cephadm_upgrade.py
+            config:
+              command: start
+              service: upgrade
+              base_cmd_args:
+                verbose: True
+              benchmark:
+                type: rados                      # future-use
+                pool_per_client: True
+                pg_num: 128
+                duration: 10
+              verify_cluster_health: True
+            destroy-cluster: False
+            abort-on-fail: True
+      desc: Running upgrade and i/o's parallelly
+  - test:
+      name: Add hosts to ceph cluster
+      desc: Add host node(s) with IP address and labels
+      module: test_host.py
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes:
+            - node5
+            - node6
+            - node9
+            - node10
+          attach_ip_address: True
+          labels: apply-all-labels
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Scale up Monitor with placement
+      desc: Scale up monitor nodes to 5 with placement
+      module: test_mon.py
+      abort-on-fail: True
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: True
+        args:
+          placement:
+            nodes:
+                - node1
+                - node2
+                - node3
+                - node5
+                - node6
+            sep: ";"    # separator to be used for placements
+
+  - test:
+      name: Scale up Manager service
+      desc: Scale up manager nodes to 5 with placement option
+      module: test_mgr.py
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: True
+        args:
+          placement:
+            nodes:
+                - node1
+                - node2
+                - node3
+                - node5
+                - node6
+            sep: " "
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Scale up RGW Service
+      desc: Scale up RGW service to 4 nodes
+      module: test_rgw.py
+      config:
+        command: apply
+        service: rgw
+        base_cmd_args:          # arguments to ceph orch
+          verbose: True
+        pos_args:               # positional arguments
+          - myrgw                 # service id
+        args:
+          placement:
+            nodes:              # A list of strings that would looked up
+                - node7
+                - node8
+                - node9
+                - node10
+            limit: 4            # no of daemons
+            sep: ";"            # separator to be used for placements
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Scale up MDS Service
+      desc: Scale up MDS service to 4 nodes
+      module: test_mds.py
+      config:
+        command: apply
+        service: mds
+        base_cmd_args:          # arguments to ceph orch
+          verbose: True
+        pos_args:
+          - cephfs              # name of the filesystem
+        args:
+          placement:
+            nodes:
+              - node7
+              - node8
+              - node9
+              - node10
+            limit: 4            # no of daemons
+            sep: " "            # separator to be used for placements
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Create replicated pool for NFS
+      desc: Add pool for NFS Ganesha service
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args:                     # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - nfs-ganesha-pool
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Enable rgw application on nfs-ganesha pool
+      desc: enable rgw on nfs-ganesha pool
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - nfs-ganesha-pool
+          - rgw
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Apply NFS Service
+      desc: Apply NFS-Ganesha service on role nodes
+      module: test_nfs.py
+      config:
+        command: apply
+        service: nfs
+        base_cmd_args:
+            verbose: True
+        pos_args:
+          - mynfs                         # nfs service ID
+          - nfs-ganesha-pool              # name of the pool
+        args:
+          placement:
+            nodes:
+              - node9
+              - node10
+            limit: 2
+            sep: ";"
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Create replicated pool
+      desc: Add pool for ISCSI service
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args: # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - iscsi
+          - "3"
+          - "3"
+          - replicated
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Enable rbd application on pool
+      desc: enable rbd on iscsi pool
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args: # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - iscsi
+          - rbd
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Apply ISCSI Service
+      desc: Apply ISCSI target service on iscsi role nodes
+      module: test_iscsi.py
+      config:
+        command: apply
+        service: iscsi
+        base_cmd_args:            # arguments to ceph orch
+          verbose: True
+        pos_args:
+          - iscsi                 # name of the pool
+          - api_user              # name of the API user
+          - api_pass              # password of the api_user.
+        args:
+          placement:
+            nodes:
+              - node7
+              - node8 # either label or node.
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        commands:
+          - ceph -s
+          - ceph versions
+        sudo: True
+      desc: Check for ceph health debug info
+
+  - test:
+      name: rados_bench_test
+      module: radosbench.py
+      config:
+        pg_num: '128'
+        pool_type: 'normal'
+      desc: run rados bench for 360 - normal profile
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      name: Scale down Monitor with placement
+      desc: Scale down monitor nodes to 3 with placement
+      module: test_mon.py
+      abort-on-fail: True
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: True
+        args:
+          placement:
+            nodes:
+              - node1
+              - node5
+              - node6
+            sep: ";"    # separator to be used for placements
+
+  - test:
+      name: Scale down Manager service
+      desc: Scale down manager nodes to 3 with placement option
+      module: test_mgr.py
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: True
+        args:
+          placement:
+            nodes:
+              - node1
+              - node5
+              - node6
+            sep: " "
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Scale down RGW Service
+      desc: Scale down RGW service to 2 nodes
+      module: test_rgw.py
+      config:
+        command: apply
+        service: rgw
+        base_cmd_args: # arguments to ceph orch
+          verbose: True
+        pos_args: # positional arguments
+          - myrgw                 # service id
+        args:
+          placement:
+            nodes: # A list of strings that would looked up
+              - node9
+              - node10
+            limit: 2            # no of daemons
+            sep: ";"            # separator to be used for placements
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Scale down MDS Service
+      desc: Scale down MDS service to 2 nodes
+      module: test_mds.py
+      config:
+        command: apply
+        service: mds
+        base_cmd_args: # arguments to ceph orch
+          verbose: True
+        pos_args:
+          - cephfs              # name of the filesystem
+        args:
+          placement:
+            nodes:
+              - node7
+              - node8
+            limit: 2            # no of daemons
+            sep: " "            # separator to be used for placements
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Scale down NFS Service
+      desc: Scale down NFS-Ganesha service to 1 node
+      module: test_nfs.py
+      config:
+        command: apply
+        service: nfs
+        base_cmd_args:
+          verbose: True
+        pos_args:
+          - mynfs                         # nfs service ID
+          - nfs-ganesha-pool              # name of the pool
+        args:
+          placement:
+            nodes:
+              - node10
+            limit: 2
+            sep: ";"
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Scale down ISCSI Service
+      desc: Scale down ISCSI target service to 1 node
+      module: test_iscsi.py
+      polarion-id: CEPH-83574777
+      config:
+        command: apply
+        service: iscsi
+        base_cmd_args: # arguments to ceph orch
+          verbose: True
+        pos_args:
+          - iscsi                 # name of the pool
+          - api_user              # name of the API user
+          - api_pass              # password of the api_user.
+        args:
+          placement:
+            nodes:
+              - node7
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        commands:
+          - ceph -s
+          - ceph versions
+        sudo: True
+      desc: Check for ceph health debug info
+
+  - test:
+      name: rados_bench_test
+      module: radosbench.py
+      config:
+        pg_num: '128'
+        pool_type: 'normal'
+      desc: run rados bench for 360 - normal profile
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
