@@ -366,7 +366,7 @@ def sendEmail(
         status = "UNSTABLE"
     }
 
-    def subject = "${tierLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
+    def subject = "${subjectPrefix} ${tierLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
 
     emailext (
         mimeType: 'text/html',
