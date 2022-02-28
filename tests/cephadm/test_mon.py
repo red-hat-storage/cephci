@@ -1,15 +1,14 @@
-import logging
-
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.mon import Mon
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 CLUSTER_STATE = [
     "ceph status",
     "ceph orch ls mon -f json-pretty",
-    "ceph orch ps '' mon -f json-pretty",
+    "ceph orch ps '' --service_name mon -f json-pretty",
     "ceph health detail -f yaml",
 ]
 

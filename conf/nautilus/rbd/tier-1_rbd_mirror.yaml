@@ -1,0 +1,56 @@
+globals:
+  - ceph-cluster:
+     name: ceph-rbd1
+     node1:
+       role:
+          - mon
+          - mgr
+          - installer
+     node2:
+       role:
+         - client
+         - rbd-mirror
+     node3:
+       role: osd
+       no-of-volumes: 4
+       disk-size: 15
+     node4:
+       role:
+          - osd
+          - mds
+       no-of-volumes: 4
+       disk-size: 15
+     node5:
+       role:
+          - osd
+          - mds
+       no-of-volumes: 4
+       disk-size: 15
+
+  - ceph-cluster:
+      name: ceph-rbd2
+      node1:
+        role:
+          - mon
+          - mgr
+          - installer
+      node2:
+        role:
+          - client
+          - rbd-mirror
+      node3:
+        role: osd
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        role:
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15

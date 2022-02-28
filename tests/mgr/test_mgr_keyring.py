@@ -1,7 +1,6 @@
-import logging
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(**kw):

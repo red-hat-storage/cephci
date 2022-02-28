@@ -1,8 +1,58 @@
-import logging
+"""
+This module will allow us to run tests from ceph-qe-scritps repo.
+Repo: https://github.com/red-hat-storage/ceph-qe-scripts
+Folder: rgw
 
-from utility.utils import setup_cluster_access
+Below configs are needed in order to run the tests
 
-log = logging.getLogger(__name__)
+    config:
+        script-name:
+                    The script to run
+        config-file-name:
+                    Config file for the above script,
+                    use this file if custom test-config is not given
+        test-config (optional):
+                    Custom test config supported for the above script,
+                    refer structure in ceph-qe-scripts/rgw
+                    example:
+                        test-config:
+                            user_count: 1
+                            bucket_count: 10
+                            objects_count: 5
+                            objects_size_range:
+                            min: 5M
+                            max: 15M
+        run_io_verify (optional):
+                    true or false
+        env-vars (optional):
+                    - cleanup=False
+                    - objects_count: 500
+        extra-pkgs (optional):
+                    Packages to install
+                    example:
+                        a. distro specific packages
+                            extra-pkgs:
+                                7:
+                                    - pkg1
+                                    - pkg2
+                                8:
+                                    - pkg1
+                                    - pkg2
+                        b. list of packages which are not distro version specific
+                            extra-pkgs:
+                                - pkg1
+                                - pkg2
+
+"""
+
+
+import yaml
+
+from utility import utils
+from utility.log import Log
+from utility.utils import install_start_kafka, setup_cluster_access
+
+log = Log(__name__)
 
 DIR = {
     "v1": {
@@ -30,6 +80,9 @@ def run(ceph_cluster, **kw):
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
+    install_start_kafka_broker = config.get("install_start_kafka")
+    cloud_type = config.get("cloud-type")
+    test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     distro_version_id = rgw_node.distro_info["VERSION_ID"]
 
@@ -46,19 +99,20 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
         )
 
+    if install_start_kafka_broker:
+        install_start_kafka(rgw_node, cloud_type)
+
     log.info("Flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
+    config["git-url"] = config.get(
+        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+    )
 
     test_folder = "rgw-tests"
     test_folder_path = f"~/{test_folder}"
-    git_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
-    git_clone = f"git clone {git_url} -b master"
-    rgw_node.exec_command(
-        cmd=f"sudo rm -rf {test_folder}"
-        + f" && mkdir {test_folder}"
-        + f" && cd {test_folder}"
-        + f" && {git_clone}"
-    )
+    rgw_node.exec_command(cmd=f"sudo rm -rf {test_folder}")
+    rgw_node.exec_command(cmd=f"sudo mkdir {test_folder}")
+    utils.clone_the_repo(config, rgw_node, test_folder_path)
 
     # Clone the repository once for the entire test suite
     pip_cmd = "venv/bin/pip"
@@ -77,15 +131,18 @@ def run(ceph_cluster, **kw):
             + f"-r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
         )
 
-        # Ceph object's containerized attribute is not initialized and bound to err
-        # as a workaround for 5.x, checking if the environment is 5.0
-        if ceph_cluster.rhcs_version == "5.0" or ceph_cluster.containerized:
-            if ceph_cluster.rhcs_version == "5.0":
-                setup_cluster_access(ceph_cluster, rgw_node)
-
+        if ceph_cluster.rhcs_version.version[0] > 4:
+            setup_cluster_access(ceph_cluster, rgw_node)
             rgw_node.exec_command(
-                sudo=True, cmd="yum install -y ceph-radosgw --nogpgcheck"
+                sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
             )
+
+        if ceph_cluster.rhcs_version.version[0] in [3, 4]:
+            if ceph_cluster.containerized:
+                # install ceph-common on the host hosting the container
+                rgw_node.exec_command(
+                    sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
+                )
 
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
@@ -95,8 +152,16 @@ def run(ceph_cluster, **kw):
     lib_dir = DIR[test_version]["lib"]
     timeout = config.get("timeout", 300)
 
+    if test_config["config"]:
+        log.info("creating custom config")
+        f_name = test_folder + config_dir + config_file_name
+        remote_fp = rgw_node.remote_file(file_name=f_name, file_mode="w")
+        remote_fp.write(yaml.dump(test_config, default_flow_style=False))
+
+    cmd_env = " ".join(config.get("env-vars", []))
     out, err = rgw_node.exec_command(
-        cmd=f"sudo {python_cmd} "
+        cmd=cmd_env
+        + f"sudo {python_cmd} "
         + test_folder_path
         + script_dir
         + script_name

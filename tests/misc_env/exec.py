@@ -1,14 +1,14 @@
 # Module to assist in executing a sequence of command.
 import json
-import logging
 import re
 from typing import Any, Tuple
 
 from paramiko.channel import ChannelFile
 
-from ceph.utils import get_node_by_id
+from ceph.utils import get_node_by_id, translate_to_ip
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 def exec_command(node, **kwargs: Any) -> Tuple:
@@ -33,36 +33,6 @@ def exec_command(node, **kwargs: Any) -> Tuple:
     out = out.read().decode() if isinstance(out, ChannelFile) else out
     err = err.read().decode() if isinstance(err, ChannelFile) else err
     return out, err
-
-
-def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
-    """
-    Return the string after replacing ip: <node> pattern with the IP address of <node>.
-
-    In this method, the pattern {ip:<cluster>#<node>} would be replaced with the value
-    of node.ipaddress.
-
-    Args:
-        clusters:       Ceph cluster instance
-        cluster_name:   Name of the cluster under test.
-        string:         String that needs to be searched
-
-    Return:
-        String with node IDs replaced with IP addresses
-    """
-    replaced_string = string
-    node_list = re.findall("{node_ip:(.+?)}", string)
-
-    for node in node_list:
-        node_ = node
-        if "#" in node:
-            cluster_name, node = node.split("#")
-
-        node_ip = get_node_by_id(clusters[cluster_name], node).ip_address
-        replacement_pattern = "{node_ip:" + node_ + "}"
-        replaced_string = re.sub(replacement_pattern, node_ip, replaced_string)
-
-    return replaced_string
 
 
 def translate_to_hostname(cluster, string: str) -> str:
@@ -112,11 +82,14 @@ def translate_to_service_name(node, string: str) -> str:
     """
     replaced_string = string
     names = re.findall("{service_name:(.+?)}", string)
+    if not names:
+        return replaced_string
+    cmd = "ceph orch ls --format json"
 
-    out, _ = exec_command(
-        node, sudo=True, cmd="cephadm shell -- ceph orch ls --format json"
-    )
+    if "installer" in node.role:
+        cmd = f"cephadm shell {cmd}"
 
+    out, _ = exec_command(node, sudo=True, cmd=cmd)
     services_dict = json.loads(out)
 
     for name in names:
@@ -147,11 +120,14 @@ def translate_to_daemon_id(node, string: str) -> str:
     """
     replaced_string = string
     ids_ = re.findall("{daemon_id:(.+?)}", string)
+    if not ids_:
+        return replaced_string
+    cmd = "ceph orch ps --format json"
 
-    out, _ = exec_command(
-        node, sudo=True, cmd="cephadm shell -- ceph orch ps --format json"
-    )
+    if "installer" in node.role:
+        cmd = f"cephadm shell {cmd}"
 
+    out, _ = exec_command(node, sudo=True, cmd=cmd)
     daemon_details = json.loads(out)
 
     for id_ in ids_:
@@ -172,7 +148,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
 
     Args:
         ceph_cluster:   The participating Ceph cluster object
-        kwargs:         Supported key value pairs are
+        kwargs:         Supported key value pairs for the key config are
                         cmd             | Depreciated - command to be executed
                         idx             | Default 0, index to be used
                         sudo            | Execute in the privileged mode
@@ -203,6 +179,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     """
     LOG.info("Executing command")
     config = kwargs["config"]
+    build = config.get("build", config.get("rhbuild"))
 
     command = config.get("cmd")
     LOG.warning("Usage of cmd is deprecated instead use commands.")
@@ -213,7 +190,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     sudo = config.get("sudo", False)
     long_running = config.get("long_running", False)
 
-    role = kwargs.get("role", "client")
+    role = config.get("role", "client")
     if cephadm:
         role = "installer"
 
@@ -230,7 +207,8 @@ def run(ceph_cluster, **kwargs: Any) -> int:
             sudo = True
             long_running = False
 
-            # Reconstruct cephadm specific lookups
+        # Reconstruct cephadm specific lookups
+        if not build.startswith("4"):
             cmd = translate_to_daemon_id(node, cmd)
             cmd = translate_to_service_name(node, cmd)
 

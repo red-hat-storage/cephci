@@ -18,8 +18,9 @@ isort:skip_file
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(".."))
+from sphinx.ext import apidoc
 
+sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
@@ -34,12 +35,13 @@ author = "RHCS-QE"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "sphinx.ext.napoleon",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.coverage",
-    "sphinx.ext.napoleon",
     "sphinx_rtd_theme",
 ]
+autosummary_generate = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -68,3 +70,14 @@ source_parsers = {
     ".md": "recommonmark.parser.CommonMarkParser",
 }
 source_suffix = [".rst", ".md"]
+
+
+def run_apidoc(_):
+    """Generate API Documentation"""
+    ignore_paths = []
+    argv = ["-f", "-e", "-o", "apidoc", "../ceph"] + ignore_paths
+    apidoc.main(argv)
+
+
+def setup(app):
+    app.connect("builder-inited", run_apidoc)

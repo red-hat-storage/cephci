@@ -1,9 +1,7 @@
 """Filestore to bluestore migrations"""
+from utility.log import Log
 
-import logging
-
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(**kw):

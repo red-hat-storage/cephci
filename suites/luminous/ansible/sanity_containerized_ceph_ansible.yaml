@@ -795,7 +795,7 @@ tests:
                   daemon:
                       - osd
       desc: add new containerized osd node
- 
+
    - test:
       name: config roll over client daemon
       polarion-id: CEPH-83573550
@@ -885,7 +885,7 @@ tests:
             playbook-command: purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes
       desc: Purge ceph cluster
       destroy-cluster: True
-  
+
    - test:
 ￼      name: User access to mgr keyring
 ￼      module: test_mgr_keyring.py

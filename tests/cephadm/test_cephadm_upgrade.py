@@ -2,12 +2,11 @@
 Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 
 """
-import logging
-
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class UpgradeFailure(Exception):
@@ -37,17 +36,23 @@ def run(ceph_cluster, **kwargs) -> int:
 
     Since image are part of main config, no need of any args here.
     """
-    LOG.info("Upgrade Ceph cluster...")
+    log.info("Upgrade Ceph cluster...")
     config = kwargs["config"]
+    config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
     orch = Orch(cluster=ceph_cluster, **config)
 
     client = ceph_cluster.get_nodes(role="client")[0]
     clients = ceph_cluster.get_nodes(role="client")
-    executor = RadosBench(mon_node=client, clients=clients)
+    executor = None
+
+    # ToDo: Switch between the supported IO providers
+    if config.get("benchmark"):
+        executor = RadosBench(mon_node=client, clients=clients)
 
     try:
         # Initiate thread pool to run rados bench
-        executor.run(config=config["benchmark"])
+        if executor:
+            executor.run(config=config["benchmark"])
 
         # Set repo to newer RPMs
         orch.set_tool_repo()
@@ -71,10 +76,12 @@ def run(ceph_cluster, **kwargs) -> int:
             ):
                 raise UpgradeFailure("Cluster is in HEALTH_ERR state")
     except BaseException as be:  # noqa
-        LOG.error(be, exc_info=True)
+        log.error(be, exc_info=True)
         return 1
     finally:
-        executor.teardown()
+        if executor:
+            executor.teardown()
+
         # Get cluster state
         orch.get_cluster_state(
             [
@@ -83,6 +90,9 @@ def run(ceph_cluster, **kwargs) -> int:
                 "ceph orch ps -f yaml",
                 "ceph orch ls -f yaml",
                 "ceph orch upgrade status",
+                "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
+                "ceph mon stat",
             ]
         )
+
     return 0

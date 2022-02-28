@@ -1,0 +1,12 @@
+# Perform uploading object after suspending versioning feature
+---
+tests:
+  - test:
+      name: Versioning Tests
+      desc: test to overwrite objects after suspending versioning
+      polarion-id: CEPH-9199,CEPH-9223
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspend_re-upload.yaml
+        timeout: 300

@@ -37,20 +37,29 @@ def prepareNode() {
     sh (script: "bash ${env.WORKSPACE}/pipeline/vars/node_bootstrap.bash")
 }
 
+def getCvpVariable() {
+    /*
+        Returns the cvp variable after processing the CI message
+    */
+    def ciMessage = "${params.CI_MESSAGE}" ?: ""
+    if (ciMessage?.trim() ) {
+        def ciMap = getCIMessageMap()
+        if (ciMap.containsKey("CVP")) {
+            return ciMap.CVP
+        }
+    }
+    return false
+}
+
 def getCLIArgsFromMessage() {
     /*
         Returns the arguments required for CLI after processing the CI message
     */
     // Processing CI_MESSAGE parameter, it can be empty
-    def ciMessage = "${params.CI_MESSAGE}" ?: ""
-    println "ciMessage : " + ciMessage
-
     def cmd = ""
+    def jsonCIMsg = getCIMessageMap()
 
-    if (ciMessage?.trim()) {
-        // Process the CI Message
-        def jsonCIMsg = readJSON text: "${params.CI_MESSAGE}"
-
+    if (! getCvpVariable()) {
         env.composeId = jsonCIMsg.compose_id
 
         // Don't use Elvis operator
@@ -65,7 +74,6 @@ def getCLIArgsFromMessage() {
         }
 
         cmd += " --rhs-ceph-repo ${env.composeUrl}"
-        cmd += " --ignore-latest-container"
 
         if (!env.containerized || (env.containerized && "${env.containerized}" == "true")) {
             def (dockerDTR, dockerImage1, dockerImage2Tag) = (jsonCIMsg.repository).split('/')
@@ -79,8 +87,24 @@ def getCLIArgsFromMessage() {
                 cmd += " --insecure-registry"
             }
         }
+    } else {
+        env.buildTarget = jsonCIMsg.artifact.brew_build_target
 
+        // Don't use Elvis operator
+        if (! env.rhcephVersion ) {
+            // get rhbuild value from ceph-4.2-rhel-8-containers-candidate
+            env.rhcephVersion = env.buildTarget.substring(5,15).toLowerCase()
+        }
+
+        def dockerRegistry = jsonCIMsg.artifact.registry_url
+        def dockerImage = jsonCIMsg.artifact.namespace + "/" + jsonCIMsg.artifact.name
+        def dockerTag = jsonCIMsg.artifact.image_tag
+        cmd += " --docker-registry ${dockerRegistry}"
+        cmd += " --docker-image ${dockerImage}"
+        cmd += " --docker-tag ${dockerTag}"
     }
+
+    cmd += " --ignore-latest-container"
 
     if (! env.rhcephVersion ) {
         error "Unable to determine the value for CLI option --rhbuild value"
@@ -178,9 +202,8 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
         Return the Email body with the the test results in a tabular form.
     */
     def to_list = "ceph-qe-list@redhat.com"
-    def jobStatus = "stable"
+    def jobStatus = "STABLE"
     def failureCount = 0
-    
     def body = "<table>"
 
     if(isStage) {
@@ -210,28 +233,70 @@ def fetchEmailBodyAndReceiver(def test_results, def isStage) {
 
     if (failureCount > 0) {
         to_list = "cephci@redhat.com"
-        jobStatus = 'unstable'
+        jobStatus = 'UNSTABLE'
     }
     return ["to_list" : to_list, "jobStatus" : jobStatus, "body" : body]
+}
+
+def sendGChatNotification(def tier){
+    /*
+        Send a GChat notification.
+        Plugin used:
+            googlechatnotification which allows to post build notifications to a Google Chat Messenger groups.
+            parameter:
+                url: Mandatory String parameter.
+                     Single/multiple comma separated HTTP URLs or/and single/multiple comma separated Credential IDs.
+                message: Mandatory String parameter.
+                         Notification message to be sent.
+    */
+
+    currentBuild.result = currentBuild.currentResult
+    def msg= "Run for ${env.composeId}:${tier} is ${currentBuild.result}. log:${env.BUILD_URL}"
+    googlechatnotification(url: "id:rhcephCIGChatRoom",
+                           message: msg
+                          )
 }
 
 def sendEMail(def subjectPrefix, def test_results, def isStage=true) {
     /*
         Send an email notification.
     */
+    def versionFileExists = sh(
+        returnStatus: true, script: "ls -l version_info.json"
+    )
+    def version_info = [:]
     def body = readFile(file: "pipeline/vars/emailable-report.html")
+    if(getCvpVariable()) {
+        def ciMsg = getCIMessageMap()
+        body += "<tr><td> REPOSITORY </td><td>${ciMsg.artifact.nvr}</td></tr>"
+    } else {
+        body += "<h2><u>Test Artifacts</h2></u><table><tr><td> COMPOSE_URL </td><td>${env.composeUrl}</td></tr><td>COMPOSE_ID</td><td> ${env.composeId}</td></tr>"
+        body += "<tr><td> REPOSITORY </td><td>${env.repository}</td></tr>"
+    }
+    if (versionFileExists == 0) {
+        version_info = jsonToMap("version_info.json")
+        for (def key in version_info.keySet()) {
+            body += "<tr><td> ${key} </td><td> ${version_info[key]}</td></tr>"
+        }
+    }
+    body += "</table>"
     body += "<body><u><h3>Test Summary</h3></u><br />"
     body += "<p>Logs are available at ${env.BUILD_URL}</p><br />"
-
     def params = fetchEmailBodyAndReceiver(test_results, isStage)
     body += params["body"]
 
     def to_list = params["to_list"]
     def jobStatus = params["jobStatus"]
+    def subject = "${subjectPrefix} test execution is ${jobStatus}."
+
+    if (!getCvpVariable()) {
+        def rh_ceph_version = env.rhcephVersion.substring(0,3)
+        subject = "Test report status of RH Ceph ${rh_ceph_version} for ${subjectPrefix} is ${jobStatus}"
+    }
 
     emailext (
         mimeType: 'text/html',
-        subject: "${env.composeId} build is ${jobStatus} at QE ${subjectPrefix} stage.",
+        subject: "${subject}",
         body: "${body}",
         from: "cephci@redhat.com",
         to: "${to_list}"
@@ -400,8 +465,12 @@ def getRHCSVersion() {
         Returns the RHCEPH version from the compose ID in CI_MESSAGE.
     */
     def compose = getCIMessageMap()
-    def ver = compose.compose_id.substring(7,10).toLowerCase()
-
+    def ver
+    if ( getCvpVariable() ) {
+        ver = compose.artifact.brew_build_target.substring(5,8).toLowerCase()
+    } else {
+        ver = compose.compose_id.substring(7,10).toLowerCase()
+    }
     return ver
 }
 

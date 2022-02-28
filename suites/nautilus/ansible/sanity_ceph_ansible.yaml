@@ -89,7 +89,7 @@ tests:
       desc: osd with 6 osd scenarios with lvm
       destroy-cluster: False
       abort-on-fail: true
-               
+
    - test:
       name: rbd cli image
       module: rbd_system.py
@@ -230,7 +230,7 @@ tests:
                   daemon:
                       - client
       desc: add client daemon
-   
+
    - test:
       name: config roll over rgw daemon
       polarion-id: CEPH-9581
@@ -288,6 +288,12 @@ tests:
           osd-to-kill:
             - 2
       desc: shrink osd
+
+   - test:
+      name: Purge ceph dashboard
+      polarion-id: CEPH-83573277
+      module: purge_dashboard.py
+      desc: Purges ceph dashboard
 
    - test:
       name: ceph ansible purge

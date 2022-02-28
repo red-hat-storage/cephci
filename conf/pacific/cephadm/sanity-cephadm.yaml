@@ -3,6 +3,7 @@ globals:
       name: ceph
       node1:
         role:
+          - _admin
           - mon
           - mgr
           - installer
@@ -11,6 +12,7 @@ globals:
           - grafana
           - prometheus
           - crash
+          - iscsi
       node2:
         role:
           - mon
@@ -30,6 +32,7 @@ globals:
           - osd
           - node-exporter
           - crash
+          - iscsi
         no-of-volumes: 4
         disk-size: 15
       node5:
@@ -42,9 +45,12 @@ globals:
       node6:
         role:
           - mon
+          - osd
           - rgw
           - node-exporter
           - crash
+        no-of-volumes: 4
+        disk-size: 15
       node7:
         role:
           - rgw

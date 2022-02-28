@@ -1,9 +1,9 @@
 import datetime
-import logging
 
-from ceph.utils import get_public_network
+from ceph.utils import get_public_network, set_container_info
+from utility.utils import Log, generate_self_signed_cert_on_rgw
 
-log = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -12,14 +12,14 @@ def run(ceph_cluster, **kw):
     Args:
         ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
     """
-    log.info("Running test")
-    log.info("Running ceph ansible test")
+    LOG.info("Running ceph ansible deployment")
     ceph_nodes = kw.get("ceph_nodes")
     config = kw.get("config")
     filestore = config.get("filestore", False)
     k_and_m = config.get("ec-pool-k-m")
     hotfix_repo = config.get("hotfix_repo")
     test_data = kw.get("test_data")
+    cloud_type = config.get("cloud-type", "openstack")
 
     ubuntu_repo = config.get("ubuntu_repo", None)
     base_url = config.get("base_url", None)
@@ -31,24 +31,51 @@ def run(ceph_cluster, **kw):
     ceph_cluster.custom_config = test_data.get("custom-config")
     ceph_cluster.custom_config_file = test_data.get("custom-config-file")
     cluster_name = config.get("ansi_config").get("cluster")
+    use_cdn = (
+        config.get("build_type") == "released"
+        or config.get("use_cdn")
+        or config.get("ansi_config").get("ceph_repository_type") == "cdn"
+    )
+    containerized = config.get("ansi_config").get("containerized_deployment")
+
+    # For cdn container installation GAed container parameters
+    # needs to override as below,
+    #
+    # config:
+    #     use_cdn: True
+    #     ansi_config:
+    #       ceph_origin: repository
+    #       ceph_repository_type: cdn
 
     if all(
         key in ceph_cluster.ansible_config
         for key in ("rgw_multisite", "rgw_zonesecondary")
     ):
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
-        primary_node = "ceph-rgw1"
+        primary_node = config.get("primary_node", "ceph-rgw1")
         primary_rgw_node = (
             ceph_cluster_dict.get(primary_node).get_ceph_object("rgw").node
         )
         config["ansi_config"]["rgw_pullhost"] = primary_rgw_node.ip_address
 
-    ceph_cluster.use_cdn = config.get("use_cdn")
+    config["ansi_config"].update(
+        set_container_info(ceph_cluster, config, use_cdn, containerized)
+    )
+
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
 
+    # create ssl certificate
+    if (
+        config.get("ansi_config").get("radosgw_frontend_ssl_certificate")
+        == "/etc/ceph/server.pem"
+    ):
+        LOG.info("install self signed certificate on rgw node")
+        rgw_node = ceph_nodes.get_ceph_object("rgw").node
+        generate_self_signed_cert_on_rgw(rgw_node)
+
     if config.get("skip_setup") is True:
-        log.info("Skipping setup of ceph cluster")
+        LOG.info("Skipping setup of ceph cluster")
         return 0
 
     test_data["install_version"] = build
@@ -61,7 +88,7 @@ def run(ceph_cluster, **kw):
     ceph_cluster.setup_ssh_keys()
 
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
     )
 
     ceph_installer.install_ceph_ansible(build)
@@ -82,7 +109,7 @@ def run(ceph_cluster, **kw):
     if test_data.get("luns_setting", None) and test_data.get("initiator_setting", None):
         ceph_installer.add_iscsi_settings(test_data)
 
-    log.info("Ceph ansible version " + ceph_installer.get_installed_ceph_versions())
+    LOG.info("Ceph ansible version " + ceph_installer.get_installed_ceph_versions())
 
     # ansible playbookk based on container or bare-metal deployment
     file_name = "site.yml"
@@ -100,11 +127,11 @@ def run(ceph_cluster, **kw):
     # manually handle client creation in a containerized deployment (temporary)
     if ceph_cluster.containerized:
         for node in ceph_cluster.get_ceph_objects("client"):
-            log.info("Manually installing client node")
+            LOG.info("Manually installing client node")
             node.exec_command(sudo=True, cmd="yum install -y ceph-common")
 
     if rc != 0:
-        log.error("Failed during deployment")
+        LOG.error("Failed during deployment")
         return rc
 
     # check if all osd's are up and in

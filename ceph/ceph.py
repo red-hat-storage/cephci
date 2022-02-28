@@ -1,6 +1,5 @@
 import datetime
 import json
-import logging
 import pickle
 import random
 import re
@@ -15,9 +14,10 @@ from paramiko.ssh_exception import SSHException
 
 from ceph.parallel import parallel
 from utility import lvm_utils
+from utility.log import Log
 from utility.utils import custom_ceph_config
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
 
 
 class ResourceNotFoundError(Exception):
@@ -382,16 +382,21 @@ class Ceph(object):
             list: devices
 
         """
-        devices = len(node.get_allocated_volumes())
-        devchar = 98
         devs = []
-        for vol in range(0, devices):
-            dev = "/dev/vd" + chr(devchar)
-            devs.append(dev)
-            devchar += 1
+        devchar = 98
+        if hasattr(node, "vm_node") and node.vm_node.node_type == "baremetal":
+            devs = [x.path for x in node.get_allocated_volumes()]
+        else:
+            devices = len(node.get_allocated_volumes())
+            for vol in range(0, devices):
+                dev = "/dev/vd" + chr(devchar)
+                devs.append(dev)
+                devchar += 1
+
         reserved_devs = []
         collocated = self.ansible_config.get("osd_scenario") == "collocated"
         lvm = self.ansible_config.get("osd_scenario") == "lvm"
+
         if not collocated and not lvm:
             reserved_devs = [
                 raw_journal_device
@@ -399,9 +404,11 @@ class Ceph(object):
                     self.ansible_config.get("dedicated_devices")
                 )
             ]
+
         if len(node.get_free_volumes()) >= len(reserved_devs):
             for _ in reserved_devs:
                 node.get_free_volumes()[0].status = NodeVolume.ALLOCATED
+
         devs = [_dev for _dev in devs if _dev not in reserved_devs]
         return devs
 
@@ -561,45 +568,49 @@ class Ceph(object):
 
     def get_osd_metadata(self, osd_id, client=None):
         """
-        Retruns metadata for osd by given id
+        Returns metadata for osd by given id
+
         Args:
-            osd_id(int): osd id
-            client(CephObject): Client with keyring and ceph-common
+            osd_id (int): osd id
+            client (CephObject): Client with keyring and ceph-common
 
         Returns:
-            dict: osd metadata like:
-                 {
-                    "id": 8,
-                    "arch": "x86_64",
-                    "back_addr": "172.16.115.29:6801/1672",
-                    "back_iface": "eth0",
-                    "backend_filestore_dev_node": "vdd",
-                    "backend_filestore_partition_path": "/dev/vdd1",
-                    "ceph_version": "ceph version 12.2.5-42.el7cp (82d52d7efa6edec70f6a0fc306f40b89265535fb) luminous
-                            (stable)",
-                    "cpu": "Intel(R) Xeon(R) CPU E5-2690 v3 @ 2.60GHz",
-                    "default_device_class": "hdd",
-                    "distro": "rhel",
-                    "distro_description": "Red Hat Enterprise Linux",
-                    "distro_version": "7.5",
-                    "filestore_backend": "xfs",
-                    "filestore_f_type": "0x58465342",
-                    "front_addr": "172.16.115.29:6800/1672",
-                    "front_iface": "eth0",
-                    "hb_back_addr": "172.16.115.29:6802/1672",
-                    "hb_front_addr": "172.16.115.29:6803/1672",
-                    "hostname": "ceph-shmohan-1537910194970-node2-osd",
-                    "journal_rotational": "1",
-                    "kernel_description": "#1 SMP Wed Mar 21 18:14:51 EDT 2018",
-                    "kernel_version": "3.10.0-862.el7.x86_64",
-                    "mem_swap_kb": "0",
-                    "mem_total_kb": "3880928",
-                    "os": "Linux",
-                    "osd_data": "/var/lib/ceph/osd/ceph-8",
-                    "osd_journal": "/var/lib/ceph/osd/ceph-8/journal",
-                    "osd_objectstore": "filestore",
-                    "rotational": "1"
-                 }
+            metadata (Dict): osd metadata
+
+        Example::
+
+             {
+                "id": 8,
+                "arch": "x86_64",
+                "back_addr": "172.16.115.29:6801/1672",
+                "back_iface": "eth0",
+                "backend_filestore_dev_node": "vdd",
+                "backend_filestore_partition_path": "/dev/vdd1",
+                "ceph_version": "ceph version 12.2.5-42.el7cp (82d52d7efa6edec70f6a0fc306f40b89265535fb) luminous
+                        (stable)",
+                "cpu": "Intel(R) Xeon(R) CPU E5-2690 v3 @ 2.60GHz",
+                "default_device_class": "hdd",
+                "distro": "rhel",
+                "distro_description": "Red Hat Enterprise Linux",
+                "distro_version": "7.5",
+                "filestore_backend": "xfs",
+                "filestore_f_type": "0x58465342",
+                "front_addr": "172.16.115.29:6800/1672",
+                "front_iface": "eth0",
+                "hb_back_addr": "172.16.115.29:6802/1672",
+                "hb_front_addr": "172.16.115.29:6803/1672",
+                "hostname": "ceph-shmohan-1537910194970-node2-osd",
+                "journal_rotational": "1",
+                "kernel_description": "#1 SMP Wed Mar 21 18:14:51 EDT 2018",
+                "kernel_version": "3.10.0-862.el7.x86_64",
+                "mem_swap_kb": "0",
+                "mem_total_kb": "3880928",
+                "os": "Linux",
+                "osd_data": "/var/lib/ceph/osd/ceph-8",
+                "osd_journal": "/var/lib/ceph/osd/ceph-8/journal",
+                "osd_objectstore": "filestore",
+                "rotational": "1"
+             }
 
         """
         metadata_list = self.get_metadata_list("osd", client)
@@ -701,15 +712,23 @@ class Ceph(object):
 
         # attempt luminous pattern first, if it returns none attempt jewel pattern
         if not pacific:
-            match = re.search(r"(\d+) daemons, quorum", lines)
-            if not match:
-                match = re.search(r"(\d+) mons at", lines)
-            all_mons = int(match.group(1))
-            logger.info(all_mons)
-            logger.info(self.ceph_demon_stat["mon"])
-            if all_mons != self.ceph_demon_stat["mon"]:
+            cmd = "ceph quorum_status -f json"
+            if cluster_name is not None:
+                cmd += f" --cluster {cluster_name}"
+            if pacific:
+                cmd = f"cephadm shell -- {cmd}"
+
+            out, err = client.exec_command(cmd=cmd, sudo=True)
+            mons = json.loads(out.read().decode())
+            logger.info(
+                f"Expected MONS: {self.ceph_demon_stat['mon']}, MON quorum : {mons}"
+            )
+
+            if len(mons.get("quorum")) != self.ceph_demon_stat["mon"]:
                 logger.error("Not all monitors are in cluster")
                 return 1
+        logger.info("Expected MONs is in quorum")
+
         if "HEALTH_ERR" in lines:
             logger.error("HEALTH in ERROR STATE")
             return 1
@@ -735,7 +754,13 @@ class Ceph(object):
         self.ansible_config = installer.get_all_yml()
 
     def setup_packages(
-        self, base_url, hotfix_repo, installer_url, ubuntu_repo, build=None
+        self,
+        base_url,
+        hotfix_repo,
+        installer_url,
+        ubuntu_repo,
+        build=None,
+        cloud_type="openstack",
     ):
         """
         Setup packages required for ceph-ansible istallation
@@ -794,7 +819,9 @@ class Ceph(object):
                                     not self.ansible_config.get("ceph_repository_type")
                                     == "cdn"
                                 ):
-                                    node.setup_rhceph_repos(base_url, installer_url)
+                                    node.setup_rhceph_repos(
+                                        base_url, installer_url, cloud_type
+                                    )
                     if (
                         self.ansible_config.get("ceph_repository_type") == "iso"
                         and node.role == "installer"
@@ -863,7 +890,7 @@ class Ceph(object):
             str:  iso file url
         """
         iso_file_path = base_url + "compose/Tools/x86_64/iso/"
-        iso_dir_html = requests.get(iso_file_path, timeout=10).content
+        iso_dir_html = requests.get(iso_file_path, timeout=10, verify=False).content
         match = re.search('<a href="(.*?)">(.*?)-x86_64-dvd.iso</a>', iso_dir_html)
         iso_file_name = match.group(1)
         logger.info("Using {}".format(iso_file_name))
@@ -871,7 +898,7 @@ class Ceph(object):
         return iso_file
 
     @staticmethod
-    def generate_repository_file(base_url, repos):
+    def generate_repository_file(base_url, repos, cloud_type="openstack"):
         """
         Generate rhel repository file for given repos
         Args:
@@ -884,8 +911,13 @@ class Ceph(object):
         repo_file = ""
         for repo in repos:
             base_url = base_url.rstrip("/")
-            repo_to_use = f"{base_url}/compose/{repo}/x86_64/os"
-            r = requests.get(repo_to_use, timeout=10)
+            if cloud_type == "ibmc":
+                repo_to_use = f"{base_url}/{repo}/"
+            else:
+                repo_to_use = f"{base_url}/compose/{repo}/x86_64/os/"
+
+            logger.info(f"repo to use is {repo_to_use}")
+            r = requests.get(repo_to_use, timeout=10, verify=False)
             logger.info("Checking %s", repo_to_use)
             if r.status_code == 200:
                 logger.info("Using %s", repo_to_use)
@@ -1082,18 +1114,27 @@ class NodeVolume(object):
     FREE = "free"
     ALLOCATED = "allocated"
 
-    def __init__(self, status):
+    def __init__(self, status, path=None):
         self.status = status
+        self.path = path
 
 
 class SSHConnectionManager(object):
     def __init__(
-        self, ip_address, username, password, look_for_keys=False, outage_timeout=300
+        self,
+        ip_address,
+        username,
+        password,
+        look_for_keys=False,
+        private_key_file_path="",
+        outage_timeout=300,
     ):
         self.ip_address = ip_address
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
+        if look_for_keys:
+            self.pkey = paramiko.RSAKey.from_private_key_file(private_key_file_path)
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.__transport = None
@@ -1171,6 +1212,8 @@ class CephNode(object):
         self.username = kw["username"]
         self.password = kw["password"]
         self.root_passwd = kw["root_password"]
+        self.look_for_key = kw["look_for_key"]
+        self.private_key_path = kw["private_key_path"]
         self.root_login = kw["root_login"]
         self.private_ip = kw["private_ip"]
         self.ip_address = kw["ip_address"]
@@ -1178,11 +1221,21 @@ class CephNode(object):
         self.vmname = kw["hostname"]
         vmshortname = self.vmname.split(".")
         self.vmshortname = vmshortname[0]
+
+        if kw.get("ceph_vmnode"):
+            self.vm_node = kw["ceph_vmnode"]
+            self.osd_scenario = self.vm_node.osd_scenario
+
         self.volume_list = []
         if kw["no_of_volumes"]:
-            self.volume_list = [
-                NodeVolume(NodeVolume.FREE) for vol_id in range(kw["no_of_volumes"])
-            ]
+            if self.vm_node.node_type == "baremetal":
+                self.volume_list = [
+                    NodeVolume(NodeVolume.FREE, vol) for vol in self.vm_node.volumes
+                ]
+            else:
+                self.volume_list = [
+                    NodeVolume(NodeVolume.FREE) for _ in range(kw["no_of_volumes"])
+                ]
 
         self.ceph_object_list = [
             CephObjectFactory(self).create_ceph_object(role)
@@ -1196,14 +1249,19 @@ class CephNode(object):
                 CephObjectFactory(self).create_ceph_object("osd")
             )
 
-        if kw.get("ceph_vmnode"):
-            self.vm_node = kw["ceph_vmnode"]
-            self.osd_scenario = self.vm_node.osd_scenario
         self.root_connection = SSHConnectionManager(
-            self.ip_address, "root", self.root_passwd
+            self.ip_address,
+            "root",
+            self.root_passwd,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.connection = SSHConnectionManager(
-            self.ip_address, self.username, self.password
+            self.ip_address,
+            self.username,
+            self.password,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.rssh = self.root_connection.get_client
         self.rssh_transport = self.root_connection.get_transport
@@ -1285,6 +1343,7 @@ class CephNode(object):
         self.hostname = out.read().strip().decode()
         shortname = self.hostname.split(".")
         self.shortname = shortname[0]
+        self.exec_command(cmd=f"sudo hostname {self.shortname}")
         logger.info(
             "hostname and shortname set to %s and %s", self.hostname, self.shortname
         )
@@ -1328,12 +1387,19 @@ class CephNode(object):
     def exec_command(self, **kw):
         """
         execute a command on the vm
-        eg: self.exec_cmd(cmd='uptime')
+
+        Attributes:
+            kw (Dict): execute command configuration
+            check_ec: False will run the command and not wait for exit code
+
+        Example::
+
+            eg: self.exec_cmd(cmd='uptime')
             or
             self.exec_cmd(cmd='background_cmd', check_ec=False)
 
-        Attributes:
-        check_ec: False will run the command and not wait for exit code
+            kw:
+                check_ec: False will run the command and not wait for exit code
 
         """
 
@@ -1441,10 +1507,18 @@ class CephNode(object):
     def __setstate__(self, pickle_dict):
         self.__dict__.update(pickle_dict)
         self.root_connection = SSHConnectionManager(
-            self.ip_address, "root", self.root_passwd
+            self.ip_address,
+            "root",
+            self.root_passwd,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.connection = SSHConnectionManager(
-            self.ip_address, self.username, self.password
+            self.ip_address,
+            self.username,
+            self.password,
+            look_for_keys=self.look_for_key,
+            private_key_file_path=self.private_key_path,
         )
         self.rssh = self.root_connection.get_client
         self.ssh = self.connection.get_client
@@ -1688,7 +1762,7 @@ class CephNode(object):
             self.exec_command(cmd=wget_cmd)
             self.exec_command(cmd="sudo apt-get update")
 
-    def setup_rhceph_repos(self, base_url, installer_url=None):
+    def setup_rhceph_repos(self, base_url, installer_url=None, cloud_type="openstack"):
         """
         Setup repositories for rhel
         Args:
@@ -1696,7 +1770,7 @@ class CephNode(object):
             installer_url (str): installer repos url
         """
         repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
-        base_repo = Ceph.generate_repository_file(base_url, repos)
+        base_repo = Ceph.generate_repository_file(base_url, repos, cloud_type)
         base_file = self.remote_file(
             sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
         )
@@ -1704,7 +1778,9 @@ class CephNode(object):
         base_file.flush()
         if installer_url is not None:
             installer_repos = ["Agent", "Main", "Installer"]
-            inst_repo = Ceph.generate_repository_file(installer_url, installer_repos)
+            inst_repo = Ceph.generate_repository_file(
+                installer_url, installer_repos, cloud_type
+            )
             logger.info("Setting up repo on %s", self.hostname)
             inst_file = self.remote_file(
                 sudo=True, file_name="/etc/yum.repos.d/rh_ceph_inst.repo", file_mode="w"
@@ -1915,7 +1991,7 @@ class CephDemon(CephObject):
     def container_name(self):
         return (
             (
-                "ceph-{role}-{host}".format(role=self.role, host=self.node.hostname)
+                "ceph-{role}-{host}".format(role=self.role, host=self.node.shortname)
                 if not self.__custom_container_name
                 else self.__custom_container_name
             )
@@ -2034,6 +2110,9 @@ class CephInstaller(CephObject):
         )
         all_yml_file.write(content)
         all_yml_file.flush()
+        self.exec_command(
+            sudo=True, cmd="chmod 644 {}/group_vars/all.yml".format(self.ansible_dir)
+        )
 
     def get_all_yml(self):
         """
@@ -2136,6 +2215,10 @@ class CephInstaller(CephObject):
                 ansible_dir=self.ansible_dir, file_name=file_name
             ),
         )
+
+        cmd1 = r" -type f -exec chmod 644 {} \;"
+        cmd = f"find {self.ansible_dir}" + cmd1
+        self.exec_command(sudo=True, cmd=cmd)
 
     def install_ceph_ansible(self, rhbuild, **kw):
         """

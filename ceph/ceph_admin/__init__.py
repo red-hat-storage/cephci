@@ -7,13 +7,14 @@ operations part of the cluster lifecycle.
 Over here, we create a glue between the CLI and CephCI to allow the QE to write test
 scenarios for verifying and validating cephadm.
 """
-import logging
 from typing import Dict
+
+from utility.log import Log
 
 from .bootstrap import BootstrapMixin
 from .shell import ShellMixin
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
 
 
 class CephAdmin(BootstrapMixin, ShellMixin):
@@ -32,12 +33,14 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Initialize Cephadm with ceph_cluster object
 
         Args:
-            cluster: Ceph cluster object
-            config: test data configuration
+            cluster (Ceph.Ceph): Ceph cluster object
+            config (Dict): test data configuration
 
-        config:
-            base_url: ceph compose URL
-            container_image: custom ceph container image
+        Example::
+
+            config:
+                base_url (Str): ceph compose URL
+                container_image (Str): custom ceph container image
         """
         self.cluster = cluster
         self.config = config
@@ -48,10 +51,10 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Read cephadm generated public key.
 
         Arg:
-            ssh_key_path: custom ssh public key path
+            ssh_key_path ( Str ): custom ssh public key path
 
         Returns:
-            Public Key string
+            Public Key string (Str)
         """
         path = ssh_key_path if ssh_key_path else "/etc/ceph/ceph.pub"
         ceph_pub_key, _ = self.installer.exec_command(sudo=True, cmd=f"cat {path}")
@@ -62,8 +65,8 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Distribute cephadm generated public key to all nodes in the list.
 
         Args:
-            ssh_key_path: custom SSH ceph public key path(default: None)
-            nodes: node list to add ceph public key(default: None)
+            ssh_key_path (Str): custom SSH ceph public key path (default: None)
+            nodes (List): node list to add ceph public key (default: None)
         """
         ceph_pub_key = self.read_cephadm_gen_pub_key(ssh_key_path)
 
@@ -87,7 +90,15 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             )
 
     def set_tool_repo(self, repo=None):
-        """Add the given repo on every node part of the cluster."""
+        """
+        Add the given repo on every node part of the cluster.
+
+        Args:
+            repo (Str): repository (default: None)
+
+        """
+        cloud_type = self.config.get("cloud-type", "openstack")
+        logger.info(f"cloud type is {cloud_type}")
         hotfix_repo = self.config.get("hotfix_repo")
         if hotfix_repo:
             for node in self.cluster.get_nodes():
@@ -108,25 +119,59 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             base_url = self.config["base_url"]
             if not base_url.endswith("/"):
                 base_url += "/"
-            base_url += "compose/Tools/x86_64/os/"
+            if cloud_type == "ibmc":
+                base_url += "Tools"
+            else:
+                base_url += "compose/Tools/x86_64/os/"
+
             if repo:
-                # provide whole path till "/x86_64/os/"
+                # provide whole path till "/x86_64/os/" for openstack,
+                # "/Tools" for IBM
                 base_url = repo
             cmd = f"yum-config-manager --add-repo {base_url}"
             for node in self.cluster.get_nodes():
                 node.exec_command(sudo=True, cmd=cmd)
+
+    def set_cdn_tool_repo(self):
+        """
+        Enable the cdn Tools repo on all ceph node.
+        """
+        cdn_repo = "rhceph-5-tools-for-rhel-8-x86_64-rpms"
+        cmd = f"subscription-manager repos --enable={cdn_repo}"
+        for node in self.cluster.get_nodes():
+            node.exec_command(sudo=True, cmd=cmd)
+
+    def setup_upstream_repository(self, repo_url=None):
+        """Download upstream repository to inidividual nodes.
+
+        Args:
+            repo_url: repo file URL link (default: None)
+        """
+        if not repo_url:
+            repo_url = self.config["base_url"]
+
+        for node in self.cluster.get_nodes():
+            node.exec_command(
+                sudo=True, cmd=f"curl -o /etc/yum.repos.d/upstream_ceph.repo {repo_url}"
+            )
+            node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
     def install(self, **kwargs: Dict) -> None:
         """
         Install the cephadm package in the installer node.
 
         Args:
-          kwargs: Key/value pairs that needs to be provided to the installer
+          kwargs (Dict): Key/value pairs that needs to be provided to the installer
 
-        Supported keys:
-            Note: At present, they are prefixed with -- hence use long options
-          upgrade: boolean # to upgrade cephadm RPM package
-          gpgcheck: boolean
+
+        Example::
+
+            Supported keys:
+              upgrade: boolean # to upgrade cephadm RPM package
+              gpgcheck: boolean
+
+
+        :Note: At present, they are prefixed with -- hence use long options
 
         """
         cmd = "yum install cephadm -y"
@@ -150,6 +195,9 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         """
         Display cluster state by executing commands provided
         Just used for sanity.
+
+        Args:
+            commands (List): list of commands
         """
         for cmd in commands:
             out, err = self.shell(args=[cmd])

@@ -1,18 +1,17 @@
 """
-Rados Bench module to execute benchmark tests
 
 RADOS bench testing uses the rados binary that comes with the ceph-common package.
 It contains a benchmarking facility that exercises the cluster by way of librados,
 the low level native object storage API provided by Ceph.
 
 """
-import logging
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from time import time
 
 from ceph.ceph_admin.common import config_dict_to_string
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+LOG = Log(__name__)
 
 
 class ClientNotFoundError(Exception):
@@ -34,6 +33,12 @@ class RadosBenchExecutionFailure(Exception):
 def create_id(prefix=""):
     """
     Return unique name with prefix
+
+    Args:
+        prefix (Str): required prefix
+
+    Returns:
+        Unique Id (Str)
     """
     return f"{prefix or 'test_run'}-{int(time())}"
 
@@ -43,12 +48,12 @@ def create_osd_pool(node, pool_name=None, pg_num=16):
     Create OSD pool
 
     Args:
-        node: node with Ceph CLI accessibility
-        pool_name: pool name # preferred pool name else self.create_id()
-        pg_num: placement group number
+        node (CephNode): node with Ceph CLI accessibility
+        pool_name (Str): pool name # preferred pool name else self.create_id()
+        pg_num (Int): placement group number
 
     Returns:
-        pool_name
+        pool name (Str)
     """
     name = pool_name if pool_name else create_id("pool")
     node.exec_command(cmd=f"ceph osd pool create {name} {pg_num} {pg_num}", sudo=True)
@@ -61,12 +66,12 @@ def create_pools(node, num_pools, pg_num=16):
     Return list of OSD pools
 
     Args:
-        node: node with Ceph CLI accessibility
-        num_pools: required number of pool
-        pg_num: placement group number
+        node (CephNode): node with Ceph CLI accessibility
+        num_pools (Int): required number of pool
+        pg_num (Int): placement group number
 
     Returns:
-        pool_name
+        pool names (List)
     """
     return [create_osd_pool(node=node, pg_num=pg_num) for _ in range(num_pools)]
 
@@ -74,9 +79,10 @@ def create_pools(node, num_pools, pg_num=16):
 def delete_osd_pool(node, pool_name):
     """
     Delete OSD pool
+
     Args:
-        node: node with Ceph CLI accessibility
-        pool_name: pool name
+        node (CephNode): node with Ceph CLI accessibility
+        pool_name (Str): pool name
     """
     node.exec_command(
         cmd="ceph config set global mon_allow_pool_delete true", sudo=True
@@ -88,13 +94,16 @@ def delete_osd_pool(node, pool_name):
 
 
 class RadosBench:
+    """Rados Bench class to execute benchmark tests"""
+
     def __init__(self, mon_node, clients=[]):
         """
         Initialize Rados Benchmark
 
         Args:
-            mon_node: monitor node
-            clients: list of clients
+            mon_node (CephNode): monitor node
+            clients (List): list of clients
+
         """
         self.SIGStop = False
         self.mon = mon_node
@@ -106,9 +115,11 @@ class RadosBench:
         Returns node if node name provided else self.clients[0]
 
         Args:
-            node: node name
+            node (Str): node name
+
         Returns:
-            node
+            node (CephNode)
+
         """
         if not node:
             return self.clients[0]
@@ -122,23 +133,26 @@ class RadosBench:
         """
         Rados bench write test for provided time duration
 
-        ex., rados bench 10 write -p test_bench  --no-cleanup --run-name test2
-
         Args:
-            client: client node
-            pool_name: osd pool name
-            config: write ops command arguments
-
-        config:
-            seconds: duration of write ops (Default:10)
-            run-name: benchmark run-name created based on (Boolean value : Optional)
-            no-cleanup: no clean-up option (Boolean value, Default: false(clean-up))
-            no-hints:  no-hint option (Boolean value, Default: false(hints))
-            concurrent-ios: integer (String value)
-            reuse-bench: bench name (String value)
+            client (CephVMNode): client node
+            pool_name (Str): osd pool name
+            config (Dict): write ops command arguments
 
         Returns:
-            run_name
+            run_name (Str)
+
+        Example::
+
+            rados bench 10 write -p test_bench  --no-cleanup --run-name test2
+
+            config:
+                seconds (Int) : duration of write ops (Default:10)
+                run-name (Str) : benchmark run-name created based on (Optional)
+                no-cleanup (Bool) : no clean-up option (Default: false (clean-up))
+                no-hints (Bool) :  no-hint option (Default: false(hints))
+                concurrent-ios (Str) : integer (String value)
+                reuse-bench (Str) : bench name (String value)
+
         """
         base_cmd = ["rados", "bench"]
 
@@ -161,25 +175,29 @@ class RadosBench:
     def sequential_read(client, pool_name, **config):
         """
         Rados bench sequential read test for provided time duration
-            Note: there should be a write operation pre-executed.
-
-        ex., rados bench 10 seq -p test_bench 10 seq --run-name test2
 
         Args:
-            config: sequential read ops command arguments
-            client: client node (CephVMNode)
-            pool_name: osd pool name
-
-        config:
-            seconds: duration of write ops (Default:10)
-            run-name: benchmark run-name created based on (Boolean value : Optional)
-            no-cleanup: no clean-up option (Boolean value, Default: false(clean-up))
-            no-hints:  no-hint option (Boolean value, Default: false(hints))
-            concurrent-ios: integer (String value)
-            reuse-bench: bench name (String value)
+            config (dict) : sequential read ops command arguments
+            client (CephVMNode) : client node
+            pool_name (str): osd pool name
 
         Returns:
-            run_name
+            run_name (str)
+
+        Example::
+
+            rados bench 10 seq -p test_bench 10 seq --run-name test2
+
+            config:
+                seconds: duration of write ops (Default:10)
+                run-name: benchmark run-name created based on (Boolean value : Optional)
+                no-cleanup: no clean-up option (Boolean value, Default: false(clean-up))
+                no-hints:  no-hint option (Boolean value, Default: false(hints))
+                concurrent-ios: integer (String value)
+                reuse-bench: bench name (String value)
+
+        :warning: there should be a write operation pre-executed.
+
         """
         base_cmd = ["rados", "bench"]
 
@@ -200,12 +218,15 @@ class RadosBench:
         """
         clean up benchmark operation
 
-        ex., rados cleanup -p test_bench --run-name test1
-
         Args:
-            client: client node to execute rados bench
-            pool_name: osd pool name
-            run_name: Rados benchmark run-name(Optional)
+            client (CephNode): client node to execute rados bench
+            pool_name (Str): osd pool name
+            run_name (Str): Rados benchmark run-name(Optional)
+
+        Example::
+
+            rados cleanup -p test_bench --run-name test1
+
         """
         cmd = f"rados cleanup -p {pool_name}"
         cmd += "" if not run_name else f" --run-name {run_name}"
@@ -221,13 +242,15 @@ class RadosBench:
     def continuous_run(self, client, pool_name, duration):
         """
         run indefinite loop of rados bench IOs with data provided
-            - write
-            - sequential read
-            - cleanup
+          - write
+          - sequential read
+          - cleanup
+
         Args:
-            client: client node to execute rados benchmark commands
-            pool_name: ceph OSD pool name
-            duration: duration of benchmark run in seconds
+            client (CephNode): client node to execute rados benchmark commands
+            pool_name (Str): ceph OSD pool name
+            duration (Int): duration of benchmark run in seconds
+
         """
         try:
             LOG.info(
@@ -274,21 +297,23 @@ class RadosBench:
 
     def run(self, config):
         """
-        Execute benchmark,
+
+        Execute benchmark
+
            - Create necessary pools
            - Initiate executor
            - Submit thread
            - return
 
         Args:
-            config: benchmark execution config
+            config (dict): benchmark execution config
 
-        config:
-            duration: benchmark duration
-            pg_num: placement group number
-            pool_per_client: boolean
-                # True - pool per client
-                # False - one pool used by all clients
+        Example::
+
+            config:
+                duration (int): benchmark duration
+                pg_num (int): placement group number
+                pool_per_client (bool): True - pool per client, False - one pool used by all clients
         """
         LOG.info("RadosBench Execution Started ......")
         duration = config.get("duration")

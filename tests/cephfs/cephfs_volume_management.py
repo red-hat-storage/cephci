@@ -1,12 +1,12 @@
-import logging
 import traceback
 from datetime import datetime, timedelta
 from time import sleep
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utils import FsUtils
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def wait_for_process(client, process_name, timeout=180, interval=5, ispresent=True):

@@ -1,11 +1,21 @@
-import logging
+import datetime
+import json
 import random
 import string
 from time import sleep
 
-from ceph.ceph import CommandFailed
+from rbd.exceptions import (
+    CreateCloneError,
+    CreateFileError,
+    ImportFileError,
+    ProtectSnapError,
+    SnapCreateError,
+)
 
-log = logging.getLogger(__name__)
+from ceph.ceph import CommandFailed
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class Rbd:
@@ -64,8 +74,12 @@ class Rbd:
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
         self.exec_cmd(cmd="ceph osd pool create {} 64 64".format(poolname))
+        if not self.check_pool_exists(pool_name=poolname):
+            log.error("Pool not created")
+            return False
         if self.ceph_version >= 3:
             self.exec_cmd(cmd="rbd pool init {}".format(poolname))
+        return True
 
     def set_ec_profile(self, profile):
         self.exec_cmd(cmd="ceph osd erasure-code-profile rm {}".format(profile))
@@ -81,10 +95,99 @@ class Rbd:
         self.exec_cmd(
             cmd="ceph osd pool create {} 12 12 erasure {}".format(poolname, profile)
         )
+        if not self.check_pool_exists(pool_name=poolname):
+            log.error("Pool not created")
+            return False
         self.exec_cmd(cmd="rbd pool init {}".format(poolname))
         self.exec_cmd(
             cmd="ceph osd pool set {} allow_ec_overwrites true".format(poolname)
         )
+        return True
+
+    def check_pool_exists(self, pool_name: str) -> bool:
+        """
+        recursively checks if the specified pool exists in the cluster
+        Args:
+            pool_name: Name of the pool to be checked
+
+        Returns:  True -> pass, False -> fail
+
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=200)
+        while end_time > datetime.datetime.now():
+            out = self.exec_cmd(cmd="ceph df -f json", output=True)
+            existing_pools = json.loads(out)
+            if pool_name not in [ele["name"] for ele in existing_pools["pools"]]:
+                log.error(
+                    f"Pool:{pool_name} not populated yet\n"
+                    f"sleeping for 2 seconds and checking status again"
+                )
+                sleep(2)
+            else:
+                log.info(f"pool {pool_name} exists in the cluster")
+                return True
+        log.info(f"pool {pool_name} does not exist on cluster")
+        return False
+
+    def create_file_to_import(self, filename="dummy"):
+        """
+        Creates a dummy file on client node to import
+        Args:
+            filename: name of the dummy file
+        Returns:  True -> pass, False -> fail
+        """
+        cmd = f"dd if=/dev/urandom of={filename} bs=4 count=5M"
+        if not self.exec_cmd(cmd, long_running=True):
+            raise CreateFileError("Creating a file to import failed")
+
+    def import_file(self, filename="dummy", pool_name="dummy", image_name="dummy"):
+        """
+        Imports a file as an image to specified pool name and image name
+        Args:
+            filename   : name of the file to be imported
+            pool_name  : name of the pool where image is to be imported
+            image_name : name of the image file to be imported as
+
+        Note: run create_file_to_import before this module in positive scenarios
+        """
+        cmd = f"rbd import {filename} {pool_name}/{image_name}"
+        if not self.exec_cmd(cmd, long_running=True):
+            raise ImportFileError("Importing the file failed")
+
+    def snap_create(self, pool_name, image_name, snap_name):
+        """
+        Creates a snap of an image in a specified pool name and image name
+        Args:
+            pool_name  : name of the pool where image is to be imported
+            image_name : name of the image file to be imported as
+            snap_name  : name of the snapshot
+        """
+        cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
+        if not self.exec_cmd(cmd):
+            raise SnapCreateError("Creating the snapshot failed")
+
+    def protect_snapshot(self, snap_name):
+        """
+        Protects the provided snapshot
+        Args:
+            snap_name : snapshot name in pool/image@snap format
+        """
+        cmd = f"rbd snap protect {snap_name}"
+        if not self.exec_cmd(cmd):
+            raise ProtectSnapError("Protecting the snapshot Failed")
+
+    def create_clone(self, snap_name, pool_name, image_name):
+        """
+        Creates a clone of an image from its snapshot
+        in a specified pool name and image name
+        Args:
+            snap_name  : name of the snapshot of which a clone is to be created
+            pool_name  : name of the pool where clone is to be created
+            image_name : name of the cloned image
+        """
+        cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
+        if not self.exec_cmd(cmd):
+            raise CreateCloneError(f"Creating clone of {snap_name} failed")
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):

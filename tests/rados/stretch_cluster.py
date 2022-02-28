@@ -1,16 +1,16 @@
 import datetime
-import json
-import logging
 import re
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
+from ceph.rados.core_workflows import RadosOrchestrator
+from tests.rados.monitor_configurations import MonElectionStrategies
 from tests.rados.mute_alerts import get_alerts
-from tests.rados.rados_prep import create_pool, run_ceph_command
 from tests.rados.test_9281 import do_rados_get, do_rados_put
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -26,7 +26,6 @@ def run(ceph_cluster, **kw):
     7. Create a test pool, write some data and perform add capacity. ( add osd nodes into two sites )
     8. Check for the bump in election epochs throughout.
     9. Check the acting set in PG for 4 OSD's. 2 from each site.
-
     Verifies bugs:
     [1]. https://bugzilla.redhat.com/show_bug.cgi?id=1937088
     [2]. https://bugzilla.redhat.com/show_bug.cgi?id=1952763
@@ -37,6 +36,8 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
+    mon_obj = MonElectionStrategies(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     tiebreaker_node = ceph_cluster.get_nodes(role="installer")[0]
 
@@ -57,6 +58,73 @@ def run(ceph_cluster, **kw):
             f"Minimum of 4 osd daemons needed to deploy a stretch cluster, found : {len(osd_details.keys())}"
         )
         return 1
+
+    if config.get("verify_forced_recovery"):
+        log.info("Verifying forced recovery and healthy in stretch environment")
+
+        pool_name = "stretch_pool_recovery"
+        if not rados_obj.create_pool(pool_name=pool_name, pg_num=16):
+            log.error("Failed to create the replicated Pool")
+            return 1
+
+        # getting the acting set for the created pool
+        acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+
+        log.info(
+            f"Killing 2 OSD's from acting set : {acting_pg_set} to verify recovery"
+        )
+        stop_osds = [acting_pg_set.pop() for _ in range(2)]
+        for osd_id in stop_osds:
+            if not rados_obj.change_osd_state(action="stop", target=osd_id):
+                log.error(f"Unable to stop the OSD : {osd_id}")
+                return 1
+
+        # Sleeping for 25 seconds ( "osd_heartbeat_grace": "20" ) for osd's to be marked down
+        time.sleep(25)
+
+        log.info("Stopped 2 OSD's from acting set, starting to wait for recovery")
+        rados_obj.change_recover_threads(config=config, action="set")
+
+        if not rados_obj.bench_write(pool_name=pool_name, **config):
+            log.error("Failed to write objects into the Pool")
+            return 1
+
+        log.debug("Triggering forced recovery in stretch mode")
+        cmd = "ceph osd force_recovery_stretch_mode --yes-i-really-mean-it"
+        rados_obj.run_ceph_command(cmd)
+        log.info("Triggered the recovery in stretch mode")
+
+        log.debug("Starting the stopped OSD's")
+        for osd_id in stop_osds:
+            if not rados_obj.change_osd_state(action="restart", target=osd_id):
+                log.error(f"Unable to restart the OSD : {osd_id}")
+                return 1
+
+        # there was data written into pool when the OSD's were down.
+        # Verifying if data is recovered and placed into the OSD's after bringing them back
+        res = wait_for_clean_pg_sets(rados_obj)
+        if not res:
+            log.error("PG's in cluster are not active + Clean ")
+            return 1
+
+        log.debug("Forcing the stretch cluster into healthy mode")
+        cmd = "ceph osd force_healthy_stretch_mode --yes-i-really-mean-it"
+        rados_obj.run_ceph_command(cmd)
+
+        log.info("Cluster has successfully recovered and is in healthy state")
+        return 0
+
+    # Finding and Deleting any stray EC pools that might have been left on cluster
+    pool_dump = rados_obj.run_ceph_command(cmd="ceph osd dump")
+    for entry in pool_dump["pools"]:
+        if entry["type"] != 1 and entry["crush_rule"] != 0:
+            log.info(
+                f"A non-replicated pool found : {entry['pool_name']}, proceeding to delete pool"
+            )
+            if not rados_obj.detete_pool(pool=entry["pool_name"]):
+                log.error(f"the pool {entry['pool_name']} could not be deleted")
+                return 1
+        log.debug("No pools other than replicated found on cluster")
 
     # disabling automatic crush update
     cmd = "ceph config set osd osd_crush_update_on_start false"
@@ -100,8 +168,9 @@ def run(ceph_cluster, **kw):
         return 1
 
     # Setting the election strategy to connectivity mode
-    cmd = "/bin/ceph mon set election_strategy connectivity"
-    cephadm.shell([cmd])
+    if not mon_obj.set_election_strategy(mode="connectivity"):
+        log.error("could not set election strategy to connectivity mode")
+        return 1
 
     # Sleeping for 5 sec for the strategy to be active
     time.sleep(5)
@@ -113,9 +182,10 @@ def run(ceph_cluster, **kw):
         return 1
 
     # Checking updated election strategy in mon map
-    if init_mon_state["election_strategy"] != 3:
+    strategy = mon_obj.get_election_strategy()
+    if strategy != 3:
         log.error(
-            f"Election strategy is not connectivity mode.\n Currently set {mon_state['election_strategy']}"
+            f"cluster created election strategy other than connectivity, i.e {strategy}"
         )
         return 1
     log.info("Enabled connectivity mode on the cluster")
@@ -129,9 +199,7 @@ def run(ceph_cluster, **kw):
 
     # All the existing pools should be automatically changed with stretch rule. Creating a test pool
     pool_name = "test_pool_1"
-    if not create_pool(
-        node=cephadm, disable_pg_autoscale=True, pool_name=pool_name, pg_num=16
-    ):
+    if not rados_obj.create_pool(pool_name=pool_name, pg_num=16):
         log.error("Failed to create the replicated Pool")
         return 1
 
@@ -150,20 +218,32 @@ def run(ceph_cluster, **kw):
         log.error("Election epoch not bumped up after Enabling strech mode")
         return 1
 
+    # Increasing backfill/rebalance threads so that cluster will re-balance it faster
+    rados_obj.change_recover_threads(config=config, action="set")
+
+    # wait for active + clean after deployment of stretch mode
+    # checking the state after deployment coz of BZ : https://bugzilla.redhat.com/show_bug.cgi?id=2025800
+    res = wait_for_clean_pg_sets(rados_obj)
+    if not res:
+        status_report = rados_obj.run_ceph_command(cmd="ceph report")
+        # Proceeding to check if all PG's are in active + clean
+        for entry in status_report["num_pg_by_state"]:
+            rec = ("remapped", "peering")
+            if any(key in rec for key in entry["state"].split("+")):
+                log.error(
+                    "PG's in cluster are stuck in remapped+peering after stretch deployment."
+                )
+                return 1
+
     if config.get("perform_add_capacity"):
         pool_name = "test_stretch_pool"
-        if not create_pool(
-            node=cephadm,
-            disable_pg_autoscale=True,
+        if not rados_obj.create_pool(
             pool_name=pool_name,
             crush_rule=stretch_rule_name,
         ):
             log.error("Failed to create the replicated Pool")
             return 1
-        do_rados_put(mon=client_node, pool=pool_name, nobj=1000)
-
-        # Increasing backfill/rebalance threads so that cluster will re-balance it faster after add capacity
-        change_recover_threads(node=cephadm, config=config, action="set")
+        do_rados_put(mon=client_node, pool=pool_name, nobj=100)
 
         log.info("Performing add Capacity after the deployment of stretch cluster")
         site_a_osds = [osd for osd in sorted_osds[0] if osd not in site_a_osds]
@@ -186,43 +266,7 @@ def run(ceph_cluster, **kw):
             log.error("Failed to move the OSD's into sites")
             return 1
 
-        # Waiting for up to 2.5 hours for the PG's to enter active + Clean state after add capacity
-        # Automation for bug : [1] & [2]
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
-        flag = True
-        while end_time > datetime.datetime.now():
-            status_report = run_ceph_command(node=cephadm, cmd="ceph report")
-
-            # Proceeding to check if all PG's are in active + clean
-            for entry in status_report["num_pg_by_state"]:
-                rec = (
-                    "remapped",
-                    "backfilling",
-                    "degraded",
-                    "incomplete",
-                    "peering",
-                    "recovering",
-                    "recovery_wait",
-                    "peering",
-                    "undersized",
-                    "backfilling_wait",
-                )
-                flag = (
-                    False
-                    if any(key in rec for key in entry["state"].split("+"))
-                    else True
-                )
-
-            if flag:
-                log.info("The recovery and back-filling of the OSD is completed")
-                break
-            log.info(
-                f"Waiting for active + clean. Active aletrs: {status_report['health']['checks'].keys()},"
-                f"PG States : {status_report['num_pg_by_state']}"
-                f" checking status again in 2 minutes"
-            )
-            time.sleep(120)
-        change_recover_threads(node=cephadm, config=config, action="rm")
+        flag = wait_for_clean_pg_sets(rados_obj)
         if not flag:
             log.error(
                 "The cluster did not reach active + Clean state after add capacity"
@@ -233,9 +277,12 @@ def run(ceph_cluster, **kw):
             p.spawn(do_rados_get, client_node, pool_name, 10)
             for res in p:
                 log.info(res)
+        log.info("Successfully completed Add Capacity scenario")
+
+    rados_obj.change_recover_threads(config=config, action="rm")
 
     # Checking if the pools have been updated with the new crush rules
-    acting_set = get_pg_acting_set(node=cephadm, pool_name=pool_name)
+    acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
     if len(acting_set) != 4:
         log.error(
             f"There are {len(acting_set)} OSD's in PG. OSDs: {acting_set}. Stretch cluster requires 4"
@@ -246,55 +293,49 @@ def run(ceph_cluster, **kw):
     return 0
 
 
-def change_recover_threads(node: CephAdmin, config: dict, action: str):
+def wait_for_clean_pg_sets(rados_obj: RadosOrchestrator) -> bool:
     """
-    increases or decreases the recovery threads based on the action sent
+    Waiting for up to 2.5 hours for the PG's to enter active + Clean state after stretch changes
+    Automation for bug : [1] & [2]
     Args:
-        node: Cephadm node where the commands need to be executed
-        config: Config from the suite file for the run
-        action: Set or remove increase the backfill / recovery threads
-            Values : "set" -> set the threads to specified value
-                     "rm" -> remove the config changes made
+        rados_obj: RadosOrchestrator object to run commands
+
+    Returns:  True -> pass, False -> fail
 
     """
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
+    while end_time > datetime.datetime.now():
+        flag = True
+        status_report = rados_obj.run_ceph_command(cmd="ceph report")
 
-    cfg_map = {
-        "osd_max_backfills": f"ceph config {action} osd osd_max_backfills",
-        "osd_recovery_max_active": f"ceph config {action} osd osd_recovery_max_active",
-    }
-    for cmd in cfg_map:
-        if action == "set":
-            command = f"{cfg_map[cmd]} {config.get(cmd, 8)}"
-        else:
-            command = cfg_map[cmd]
-        node.shell([command])
+        # Proceeding to check if all PG's are in active + clean
+        for entry in status_report["num_pg_by_state"]:
+            rec = (
+                "remapped",
+                "backfilling",
+                "degraded",
+                "incomplete",
+                "peering",
+                "recovering",
+                "recovery_wait",
+                "undersized",
+                "backfilling_wait",
+            )
+            if any(key in rec for key in entry["state"].split("+")):
+                flag = False
 
+        if flag:
+            log.info("The recovery and back-filling of the OSD is completed")
+            return True
+        log.info(
+            f"Waiting for active + clean. Active aletrs: {status_report['health']['checks'].keys()},"
+            f"PG States : {status_report['num_pg_by_state']}"
+            f" checking status again in 2 minutes"
+        )
+        time.sleep(120)
 
-def get_pg_acting_set(node: CephAdmin, pool_name: str) -> list:
-    """
-    Fetches the PG details about the given pool and then returns the acting set of OSD's from sample PG of the pool
-    Args:
-        node: Cephadm node where the commands need to be executed
-        pool_name: name of the pool whose one of the acting OSD set is needed
-
-    Returns: list osd's part of acting set
-    eg : [3,15,20]
-
-    """
-    # Collecting details about the cluster
-    cmd = "ceph osd dump --format=json"
-    out, err = node.shell([cmd])
-    res = json.loads(out)
-    for val in res["pools"]:
-        if val["pool_name"] == pool_name:
-            pool_id = val["pool"]
-            break
-    # Collecting the details of the 1st PG in the pool <ID>.0
-    pg_num = f"{pool_id}.0"
-    cmd = f"ceph pg map {pg_num} --format=json"
-    out, err = node.shell([cmd])
-    res = json.loads(out)
-    return res["up"]
+    log.error("The cluster did not reach active + Clean state")
+    return False
 
 
 def setup_crush_rule(node, rule_name: str, site1: str, site2: str) -> bool:
@@ -306,7 +347,6 @@ def setup_crush_rule(node, rule_name: str, site1: str, site2: str) -> bool:
         site1: Name the 1st site
         site2: Name of the 2nd site
     Returns: True -> pass, False -> fail
-
     """
     rule = rule_name
     rules = f"""id 111
@@ -332,9 +372,7 @@ def add_crush_rules(node, rule_name: str, rules: str) -> bool:
         node: ceph client node where the commands need to be executed
         rule_name: Name of the crush rule to add
         rules: The rules for crush
-
     Returns: True -> pass, False -> fail
-
     """
     try:
         # Getting the crush map
@@ -376,10 +414,8 @@ def sort_osd_sites(all_osd_details: dict) -> tuple:
         all_osd_details: dictionary of OSD's containing the details
             eg : {'2': {'weight': 0.01459, 'state': 'up', 'name': 'osd.2'},
                 '7': {'weight': 0.01459, 'state': 'up', 'name': 'osd.7'}}
-
     Returns: Tuple of lists, containing the OSD list for the 2 sites
         eg : ([1, 2, 3, 4, 5], [6, 7, 8, 9, 0])
-
     """
     site_a_osds = []
     site_b_osds = []
@@ -390,7 +426,7 @@ def sort_osd_sites(all_osd_details: dict) -> tuple:
         site_a_osd = osd_list.pop()
         if not all_osd_details[site_a_osd]["state"] == "up":
             log.error(f"OSD : {site_a_osd} is not up")
-            break
+            continue
         flag = 0
         for osd in osd_list:
             if all_osd_details[osd]["state"] == "up":
@@ -426,7 +462,6 @@ def set_osd_sites(
         all_osd_details: dictionary of OSD's containing the details
             eg : {'2': {'weight': 0.01459, 'state': 'up', 'name': 'osd.2'},
                 '7': {'weight': 0.01459, 'state': 'up', 'name': 'osd.7'}}
-
     Returns: True -> pass, False -> fail
     """
     # adding the identified OSD's into the respective sites
@@ -512,7 +547,6 @@ def set_mon_sites(node: CephAdmin, tiebreaker_node, site1: str, site2: str) -> b
         site1: Name the 1st site
         site2: Name of the 2nd site
     Returns: True -> pass, False -> fail
-
     """
     # Collecting the mon details
     mon_state = get_mon_details(node=node)
@@ -539,17 +573,15 @@ def set_mon_sites(node: CephAdmin, tiebreaker_node, site1: str, site2: str) -> b
     return True
 
 
-def wait_for_alert(node: CephAdmin, alert: str, duration: int):
+def wait_for_alert(node: CephAdmin, alert: str, duration: int) -> bool:
     """
     This method checks for a particular alert on the cluster and waits until it's cleared.
     Args:
         node: Cephadm node where the commands need to be executed
         alert: name of the alert to wait until cleared
         duration: time duration for the wait
-
     Returns: True -> pass ( Alert cleared within given time)
             False -> fail ( Alert was not cleared within given time)
-
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=duration)
     while end_time > datetime.datetime.now():

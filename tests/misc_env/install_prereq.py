@@ -1,14 +1,17 @@
+import base64
 import datetime
 import itertools
-import logging
+import json
 import time
 import traceback
 
 from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
+from utility.log import Log
 from utility.utils import get_cephci_config
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
+
 
 rpm_packages = {
     "py2": [
@@ -18,6 +21,7 @@ rpm_packages = {
         "python-nose",
         "ntp",
         "python2-pip",
+        "chrony",
     ],
     "py3": [
         "wget",
@@ -25,6 +29,8 @@ rpm_packages = {
         "python3-virtualenv",
         "python3-nose",
         "python3-pip",
+        "chrony",
+        "yum-utils",
     ],
 }
 deb_packages = ["wget", "git", "python-virtualenv", "lsb-release", "ntp"]
@@ -32,6 +38,8 @@ deb_all_packages = " ".join(deb_packages)
 
 
 def run(**kw):
+    print(log.metadata)
+    print(log.log_level)
     log.info("Running test")
     ceph_nodes = kw.get("ceph_nodes")
     # skip subscription manager if testing beta RHEL
@@ -42,6 +50,11 @@ def run(**kw):
     rhbuild = config.get("rhbuild")
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
     is_production = config.get("is_production", False)
+    build_type = config.get("build_type", None)
+    # when build set to released subscribing nodes with CDN credentials
+    if build_type == "released":
+        is_production = True
+    cloud_type = config.get("cloud-type", "openstack")
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
@@ -54,6 +67,7 @@ def run(**kw):
                 enable_eus,
                 skip_enabling_rhel_rpms,
                 is_production,
+                cloud_type,
             )
             time.sleep(20)
     return 0
@@ -68,6 +82,7 @@ def install_prereq(
     enable_eus=False,
     skip_enabling_rhel_rpms=False,
     is_production=False,
+    cloud_type="openstack",
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
@@ -78,6 +93,15 @@ def install_prereq(
         node=ceph,
         cert_url="https://password.corp.redhat.com/RH-IT-Root-CA.crt",
         out_file="RH-IT-Root-CA.crt",
+        check_ec=False,
+    )
+
+    # Update CephCI Cert to all nodes. Useful when creating self-signed certificates.
+    update_ca_cert(
+        node=ceph,
+        cert_url="http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem",
+        out_file="cephqe-ca.pem",
+        check_ec=False,
     )
     distro_info = ceph.distro_info
     distro_ver = distro_info["VERSION_ID"]
@@ -95,20 +119,22 @@ def install_prereq(
         # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
         ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
         if not skip_subscription:
-            setup_subscription_manager(ceph, is_production)
+            setup_subscription_manager(ceph, is_production, cloud_type)
+
             if not skip_enabling_rhel_rpms:
                 if enable_eus:
-                    enable_rhel_eus_rpms(ceph, distro_ver)
+                    enable_rhel_eus_rpms(ceph, distro_ver, cloud_type)
                 else:
                     enable_rhel_rpms(ceph, distro_ver)
             else:
                 log.info("Skipped enabling the RHEL RPM's provided by Subscription")
         if repo:
             setup_addition_repo(ceph, repo)
-        # TODO enable only python3 rpms on both rhel7 &rhel8 once all component suites(rhcs3,4) are comptatible
+        # TODO enable only python3 rpms on both rhel7 &rhel8 once all component
+        #  suites(rhcs3,4) are compatible
         if distro_ver.startswith("8"):
             rpm_all_packages = rpm_packages.get("py3") + ["net-tools"]
-            if str(rhbuild).startswith("5"):
+            if rhbuild[0] > "4":
                 rpm_all_packages = rpm_packages.get("py3") + ["lvm2", "podman"]
             rpm_all_packages = " ".join(rpm_all_packages)
         else:
@@ -120,7 +146,8 @@ def install_prereq(
             ceph.exec_command(cmd="sudo yum install -y attr", long_running=True)
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
         ceph.exec_command(cmd="sudo yum clean metadata")
-        config_ntp(ceph)
+        config_ntp(ceph, cloud_type)
+
     registry_login(ceph, distro_ver)
 
 
@@ -133,7 +160,9 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
-def setup_subscription_manager(ceph, is_production=False, timeout=1800):
+def setup_subscription_manager(
+    ceph, is_production=False, cloud_type="openstack", timeout=1800
+):
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
     log.info(
@@ -158,7 +187,7 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
             # and then test it with --baseurl=cdn.stage.redhat.com.
             config_ = get_cephci_config()
             command = "sudo subscription-manager --force register "
-            if is_production:
+            if is_production or cloud_type == "ibmc":
                 command += "--serverurl=subscription.rhsm.redhat.com:443/subscription "
                 username_ = config_["cdn_credentials"]["username"]
                 password_ = config_["cdn_credentials"]["password"]
@@ -172,36 +201,38 @@ def setup_subscription_manager(ceph, is_production=False, timeout=1800):
                 password_ = config_["stage_credentials"]["password"]
                 pool_id = "8a99f9af795d57ab01797e572e860569"
 
-            command += f"--baseurl=https://cdn.redhat.com --username={username_} --password={password_}"
+            command += f"--baseurl=https://cdn.redhat.com --username={username_}"
+            command += f" --password={password_}"
 
-            ceph.exec_command(
-                cmd=command,
-                timeout=720,
-            )
+            ceph.exec_command(cmd=command, timeout=720, long_running=True)
 
             ceph.exec_command(
                 cmd=f"sudo subscription-manager attach --pool {pool_id}",
                 timeout=720,
+                long_running=True,
             )
             break
         except (KeyError, AttributeError):
-            raise RuntimeError(
-                "Require the {} to be set in ~/.cephci.yaml, Please refer cephci.yaml.template".format(
-                    "cdn_credentials" if is_production else "stage_credentails"
-                )
-            )
+            required_key = "stage_credentials"
+            if is_production or cloud_type == "ibmc":
+                required_key = "cdn_credentials"
 
-        except BaseException:
+            raise RuntimeError(
+                f"Require the {required_key} to be set in ~/.cephci.yaml, "
+                "Please refer cephci.yaml.template"
+            )
+        except BaseException:  # noqa
             if datetime.datetime.now() - starttime > timeout:
                 try:
                     out, err = ceph.exec_command(
                         cmd="cat /var/log/rhsm/rhsm.log", timeout=120
                     )
                     rhsm_log = out.read().decode()
-                except BaseException:
+                except BaseException:  # noqa
                     rhsm_log = "No Log Available"
                 raise RuntimeError(
-                    "Failed to subscribe {ip} with {timeout} timeout:\n {stack_trace}\n\n rhsm.log:\n{log}".format(
+                    "Failed to subscribe {ip} with {timeout} timeout:"
+                    "\n {stack_trace}\n\n rhsm.log:\n{log}".format(
                         ip=ceph.ip_address,
                         timeout=timeout,
                         stack_trace=traceback.format_exc(),
@@ -220,6 +251,7 @@ def enable_rhel_rpms(ceph, distro_ver):
     """
     Setup cdn repositories for rhel systems
     Args:
+        ceph:       cluster instance
         distro_ver: distro version details
     """
 
@@ -236,26 +268,28 @@ def enable_rhel_rpms(ceph, distro_ver):
         )
 
 
-def enable_rhel_eus_rpms(ceph, distro_ver):
+def enable_rhel_eus_rpms(ceph, distro_ver, cloud_type="openstack"):
     """
     Setup cdn repositories for rhel systems
     reference: http://wiki.test.redhat.com/CEPH/SubscriptionManager
     Args:
-        distro_ver: distro version - example: 7.7
-        ceph: ceph object
+        distro_ver:     distro version - example: 7.7
+        ceph:           ceph object
+        cloud_type:     System deployment environment
     """
 
     eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
 
-    ceph.exec_command(
-        sudo=True,
-        cmd="subscription-manager attach --pool 8a99f9ad77a7d7290177ce3852fc0c44",
-        timeout=720,
-    )
-
-    ceph.exec_command(
-        sudo=True, cmd="subscription-manager repos --disable=*", long_running=True
-    )
+    if cloud_type != "ibmc":
+        # This pool ID would not work for production.
+        ceph.exec_command(
+            sudo=True,
+            cmd="subscription-manager attach --pool 8a99f9ad77a7d7290177ce3852fc0c44",
+            timeout=720,
+        )
+        ceph.exec_command(
+            sudo=True, cmd="subscription-manager repos --disable=*", long_running=True
+        )
 
     for repo in eus_repos.get(distro_ver[0]):
         ceph.exec_command(
@@ -285,22 +319,10 @@ def enable_rhel_eus_rpms(ceph, distro_ver):
 
 def registry_login(ceph, distro_ver):
     """
-    login to this registry 'registry.redhat.io' on all nodes
-        docker for RHEL 7.x and podman for RHEL 8.x
-    """
-    cdn_cred = get_cephci_config().get("cdn_credentials")
-    if not cdn_cred:
-        log.warning(
-            "no cdn_credentials in ~/.cephci.yaml."
-            " Not logging into registry.redhat.io."
-        )
-        return
-    user = cdn_cred.get("username")
-    pwd = cdn_cred.get("password")
-    if not (user and pwd):
-        log.warning("username and password not found for cdn_credentials")
-        return
+    Login to the given Container registries provided in the configuration.
 
+    In this method, docker or podman is installed based on OS.
+    """
     container = "docker"
     if distro_ver.startswith("8"):
         container = "podman"
@@ -312,9 +334,41 @@ def registry_login(ceph, distro_ver):
     if container == "docker":
         ceph.exec_command(cmd="sudo systemctl restart docker", long_running=True)
 
-    ceph.exec_command(
-        cmd="sudo {c} login -u {u} -p {p} registry.redhat.io".format(
-            c=container, u=user, p=pwd
-        ),
-        check_ec=True,
+    config = get_cephci_config()
+    registries = [
+        {
+            "registry": "registry.redhat.io",
+            "user": config["cdn_credentials"]["username"],
+            "passwd": config["cdn_credentials"]["password"],
+        }
+    ]
+
+    if (
+        config.get("registry_credentials")
+        and config["registry_credentials"]["registry"] != "registry.redhat.io"
+    ):
+        registries.append(
+            {
+                "registry": config["registry_credentials"]["registry"],
+                "user": config["registry_credentials"]["username"],
+                "passwd": config["registry_credentials"]["password"],
+            }
+        )
+    auths = {}
+    for r in registries:
+        b64_auth = base64.b64encode(f"{r['user']}:{r['passwd']}".encode("ascii"))
+        auths[r["registry"]] = {"auth": b64_auth.decode("utf-8")}
+    auths_dict = {"auths": auths}
+    ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
+    ceph.exec_command(cmd="mkdir -p ~/.docker")
+    auths_file_sudo = ceph.remote_file(
+        sudo=True, file_name="/root/.docker/config.json", file_mode="w"
     )
+    auths_file = ceph.remote_file(
+        file_name="/home/cephuser/.docker/config.json", file_mode="w"
+    )
+    files = [auths_file_sudo, auths_file]
+    for file in files:
+        file.write(json.dumps(auths_dict, indent=4))
+        file.flush()
+        file.close()

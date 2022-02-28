@@ -7,20 +7,26 @@ from .typing_ import DaemonProtocol
 
 
 class AddMixin:
+    """Mixin Class for orch daemon add"""
+
     def add(self: DaemonProtocol, config: Dict):
         """
         Execute the add method using the object's service name.
+
         Args:
-            config:     Key/value pairs passed from the test suite.
-        Example:
+            config (Dict): Key/value pairs passed from the test suite.
+
+        Example::
+
             config:
-              service: osd
-              command: add
-              base_cmd_args:
-                verbose: true
-              pos_args:
-                - node1
-                - /dev/vdb
+                service: osd
+                command: add
+                base_cmd_args:
+                    verbose: true
+                pos_args:
+                    - node1
+                    - /dev/vdb
+
         """
         service = config.pop("service")
         base_cmd = ["ceph", "orch"]

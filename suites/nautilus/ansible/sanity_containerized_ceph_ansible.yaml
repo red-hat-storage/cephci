@@ -83,7 +83,7 @@ tests:
                   daemon:
                       - mon
       desc: add containerized monitor
-   
+
    - test:
       name: config roll over new osd daemon
       polarion-id: CEPH-9583
@@ -122,7 +122,7 @@ tests:
                   daemon:
                       - client
       desc: add client
-   
+
    - test:
       name: config roll over rgw daemon
       polarion-id: CEPH-83573550

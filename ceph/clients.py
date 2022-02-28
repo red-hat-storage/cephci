@@ -1,10 +1,11 @@
-import logging
 import string
 from time import sleep
 
 import paramiko
 
-log = logging
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class TimeoutException(Exception):

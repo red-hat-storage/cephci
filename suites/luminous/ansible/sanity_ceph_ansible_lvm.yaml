@@ -181,7 +181,7 @@ tests:
                   daemon:
                       - rgw
       desc: add rgw
-   
+
    - test:
       name: config roll over mds
       polarion-id: CEPH-9581

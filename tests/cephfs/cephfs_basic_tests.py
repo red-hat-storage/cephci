@@ -1,17 +1,17 @@
-import logging
 import random
 import string
 import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
     try:
+        log.info(f"MetaData Information {log.metadata} in {__name__}")
         fs_util = FsUtils(ceph_cluster)
 
         config = kw.get("config")
@@ -33,6 +33,7 @@ def run(ceph_cluster, **kw):
         fs_util.kernel_mount(clients, kernel_mounting_dir, ",".join(mon_node_ips))
 
         mount_test_case(clients, kernel_mounting_dir)
+
         log.info("Cleaning up!-----")
         rc = fs_util.client_clean_up(
             [],
@@ -62,88 +63,90 @@ def run(ceph_cluster, **kw):
 
 
 def mount_test_case(clients, mounting_dir):
-    try:
-        tc1 = "11293"
-        tc2 = "11296"
-        tc3 = "11297"
-        tc4 = "11295"
-        dir1 = "".join(
-            random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+    tc1 = "11293"
+    tc2 = "11296"
+    tc3 = "11297"
+    tc4 = "11295"
+    dir1 = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+    )
+    dir2 = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+    )
+    dir3 = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+    )
+    results = []
+    return_counts = []
+    log.info("Create files and directories of 1000 depth and 1000 breadth")
+    for client in clients:
+        client.exec_command(
+            sudo=True,
+            cmd=f"mkdir -p {mounting_dir}{dir1} {mounting_dir}{dir2} {mounting_dir}{dir3}",
         )
-        dir2 = "".join(
-            random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+        log.info(f"Execution of testcase {tc1} started")
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
+            f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
+            f"{mounting_dir}{dir1}",
+            long_running=True,
         )
-        dir3 = "".join(
-            random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+        log.info(f"Execution of testcase {tc1} ended")
+        results.append(f"TC {tc1} passed")
+
+        log.info(f"Execution of testcase {tc2} started")
+        client.exec_command(
+            sudo=True, cmd=f"cp -r  {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
         )
-        results = []
-        return_counts = []
-        log.info("Create files and directories of 1000 depth and 1000 breadth")
+        client.exec_command(
+            sudo=True, cmd=f"diff -qr  {mounting_dir}{dir1} {mounting_dir}{dir2}/"
+        )
+        log.info(f"Execution of testcase {tc2} ended")
+        results.append(f"TC {tc2} passed")
+
+        log.info(f"Execution of testcase {tc3} started")
+        client.exec_command(
+            sudo=True, cmd=f"mv  -t {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
+        )
+        log.info(f"Execution of testcase {tc3} ended")
+        results.append(f"TC {tc3} passed")
+        log.info(f"Execution of testcase {tc4} started")
         for client in clients:
-            client.exec_command(
-                cmd=f"sudo mkdir -p {mounting_dir}{dir1} {mounting_dir}{dir2} {mounting_dir}{dir3}"
-            )
-            log.info(f"Execution of testcase {tc1} started")
-            out, rc = client.exec_command(
-                sudo=True,
-                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
-                f"{mounting_dir}{dir1}",
-                long_running=True,
-            )
-            log.info(f"Execution of testcase {tc1} ended")
-            results.append(f"TC {tc1} passed")
-
-            log.info(f"Execution of testcase {tc2} started")
-            client.exec_command(
-                cmd=f"sudo cp -r  {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
-            )
-            client.exec_command(
-                cmd=f"diff -qr  {mounting_dir}{dir1} {mounting_dir}{dir2}/"
-            )
-            log.info(f"Execution of testcase {tc2} ended")
-            results.append(f"TC {tc2} passed")
-
-            log.info(f"Execution of testcase {tc3} started")
-            client.exec_command(
-                cmd=f"sudo mv  -t {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
-            )
-            log.info(f"Execution of testcase {tc3} ended")
-            results.append(f"TC {tc3} passed")
-            log.info(f"Execution of testcase {tc4} started")
-            for client in clients:
-                if client.pkg_type != "deb":
-                    client.exec_command(
-                        cmd=f"sudo dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=100M "
-                        "count=5"
-                    )
-                    out1, rc1 = client.exec_command(
-                        cmd=f"sudo  ls -c -ltd -- {mounting_dir}{client.node.hostname}.*"
-                    )
-                    client.exec_command(
-                        cmd=f"sudo dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=200M "
-                        "count=5"
-                    )
-                    out2, rc2 = client.exec_command(
-                        cmd=f"sudo  ls -c -ltd -- {mounting_dir}{client.node.hostname}.*"
-                    )
-                    a = out1.read().decode()
-                    b = out2.read().decode()
-                    if a != b:
-                        return_counts.append(out1.channel.recv_exit_status())
-                        return_counts.append(out2.channel.recv_exit_status())
-                    else:
-                        raise CommandFailed("Metadata info command failed")
-                    break
-            log.info(f"Execution of testcase {tc4} ended")
-            log.info(return_counts)
-            rc_set = set(return_counts)
-            if len(rc_set) == 1:
-                results.append(f"TC {tc4} passed")
-            log.info("Testcase Results:")
-            for res in results:
-                log.info(res)
-            break
-    except CommandFailed as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+            if client.pkg_type != "deb":
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=100M "
+                    "count=5",
+                )
+                out1, rc1 = client.exec_command(
+                    sudo=True,
+                    cmd=f" ls -c -ltd -- {mounting_dir}{client.node.hostname}.*",
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=200M "
+                    "count=5",
+                )
+                out2, rc2 = client.exec_command(
+                    sudo=True,
+                    cmd=f" ls -c -ltd -- {mounting_dir}{client.node.hostname}.*",
+                )
+                a = out1.read().decode()
+                b = out2.read().decode()
+                if a != b:
+                    return_counts.append(out1.channel.recv_exit_status())
+                    return_counts.append(out2.channel.recv_exit_status())
+                else:
+                    raise CommandFailed("Metadata info command failed")
+                break
+        log.info(f"Execution of testcase {tc4} ended")
+        log.info(return_counts)
+        rc_set = set(return_counts)
+        if len(rc_set) == 1:
+            results.append(f"TC {tc4} passed")
+        log.info("Testcase Results:")
+        for res in results:
+            log.info(res)
+        break
+    return 0

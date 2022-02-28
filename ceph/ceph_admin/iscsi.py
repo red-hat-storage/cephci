@@ -1,6 +1,8 @@
 """Module to deploy and manage Ceph's iSCSI service."""
 from typing import Dict
 
+from ceph.utils import get_nodes_by_ids
+
 from .apply import ApplyMixin
 from .orch import Orch
 
@@ -15,9 +17,10 @@ class ISCSI(ApplyMixin, Orch):
         Deploy ISCSI client daemon using the provided arguments.
 
         Args:
-            config: Key/value pairs provided from the test scenario
+            config (Dict) : Key/value pairs provided from the test scenario
 
-        Example:
+        Example::
+
             config:
                 command: apply
                 service: iscsi
@@ -29,8 +32,11 @@ class ISCSI(ApplyMixin, Orch):
                     - india             # name of the pool
                     - api_user          # name of the API user
                     - api_pass          # password of the api_user.
-                    - trusted_ip_list   # space separate list of IPs
+
                 args:
+                    trusted_ip_list:       #it can be used both as positional/keyword arg in 5.x
+                        - node1
+                        - node2               # space separate list of IPs
                     placement:
                         label: iscsi    # either label or node.
                         nodes:
@@ -39,12 +45,13 @@ class ISCSI(ApplyMixin, Orch):
                         sep: " "    # separator to be used for placements
                     dry-run: true
                     unmanaged: true
+
         """
-        pos_args = config.pop("pos_args")
-
-        if isinstance(pos_args[-1], list):
-            trusted_list = repr(" ".join(pos_args.pop()))
-            pos_args.append(trusted_list)
-
-        config["pos_args"] = pos_args
+        args = config.get("args")
+        trusted_ip_list = args.get("trusted_ip_list")
+        if trusted_ip_list:
+            node_ips = get_nodes_by_ids(self.cluster, trusted_ip_list)
+            args["trusted_ip_list"] = repr(
+                " ".join([node.ip_address for node in node_ips])
+            )
         super().apply(config=config)

@@ -9,16 +9,20 @@ import traceback
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from string import ascii_uppercase, digits
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
+from urllib import request
 
 import requests
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
 from OpenSSL import crypto
-from reportportal_client import ReportPortalServiceAsync
+from reportportal_client import ReportPortalService
 
-log = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
+
 
 # variables
 mounting_dir = "/mnt/cephfs/"
@@ -35,7 +39,13 @@ active_mdss = []
 RC = []
 failure = {}
 output = []
-magna_url = "http://magna002.ceph.redhat.com/cephci-jenkins/"
+magna_server = "http://magna002.ceph.redhat.com"
+magna_url = f"{magna_server}/cephci-jenkins/"
+magna_rhcs_artifacts = f"{magna_server}/cephci-jenkins/latest-rhceph-container-info/"
+
+
+class TestSetupFailure(Exception):
+    pass
 
 
 # function for getting the clients
@@ -121,7 +131,7 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
-def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
+def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     """
     verify multisite sync status on primary
     """
@@ -146,7 +156,7 @@ def sync_status_on_primary(verify_io_on_site_node, retry=10, delay=60):
     )
     if "behind" in check_sync_status or "recovering" in check_sync_status:
         log.info("sync is in progress")
-        log.info("sleep of 60 secs for sync to complete")
+        log.info(f"sleep of {delay}secs for sync to complete")
         for retry_count in range(retry):
             time.sleep(delay)
             check_sync_status, err = verify_io_on_site_node.exec_command(
@@ -475,13 +485,13 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     return log_url
 
 
-def create_run_dir(run_id, log_dir="/tmp"):
+def create_run_dir(run_id, log_dir=""):
     """
     Create the directory where test logs will be placed.
 
     Args:
         run_id: id of the test run. used to name the directory
-        log_dir: log directory. default: "/tmp"
+        log_dir: log directory name.
     Returns:
         Full path of the created directory
     """
@@ -492,18 +502,23 @@ def create_run_dir(run_id, log_dir="/tmp"):
     print(msg)
     dir_name = "cephci-run-{run_id}".format(run_id=run_id)
     base_dir = "/ceph/cephci-jenkins"
-    if not os.path.isdir(base_dir):
-        if not os.path.isabs(log_dir):
-            log_dir = os.path.join(os.getcwd(), log_dir)
+
+    if log_dir:
         base_dir = log_dir
-    run_dir = os.path.join(base_dir, dir_name)
+        if not os.path.isabs(log_dir):
+            base_dir = os.path.join(os.getcwd(), log_dir)
+    elif not os.path.isdir(base_dir):
+        base_dir = f"/tmp/{dir_name}"
+    else:
+        base_dir = os.path.join(base_dir, dir_name)
+    print(f"log directory - {base_dir}")
     try:
-        os.makedirs(run_dir)
+        os.makedirs(base_dir)
     except OSError:
         if "jenkins" in getpass.getuser():
             raise
 
-    return run_dir
+    return base_dir
 
 
 def close_and_remove_filehandlers(logger=logging.getLogger()):
@@ -532,12 +547,15 @@ def create_report_portal_session():
     """
     cfg = get_cephci_config()["report-portal"]
 
-    return ReportPortalServiceAsync(
-        endpoint=cfg["endpoint"],
-        project=cfg["project"],
-        token=cfg["token"],
-        error_handler=error_handler,
-    )
+    try:
+        return ReportPortalService(
+            endpoint=cfg["endpoint"],
+            project=cfg["project"],
+            token=cfg["token"],
+            verify_ssl=False,
+        )
+    except BaseException:  # noqa
+        print("Encountered an issue in connecting to report portal.")
 
 
 def timestamp():
@@ -610,7 +628,7 @@ def get_latest_container(version):
     url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json".format(
         version
     )
-    data = requests.get(url)
+    data = requests.get(url, verify=False)
     docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
     docker_image = "rh-osbs/rhceph"
     return {
@@ -618,6 +636,32 @@ def get_latest_container(version):
         "docker_image": docker_image,
         "docker_tag": docker_tag,
     }
+
+
+def get_release_repo(version):
+    """
+    Retrieves the repo and image information for the RC build of the version specified from magna002.ceph.redhat.com
+
+    Args:
+        version: version to get the latest image tag, should match version in release.yaml at magna002
+                 storage
+
+    Returns:
+        Repo and Container details dictionary with given format:
+        {'composes': <RC release composes>, 'image': <CEPH and monitoring images related to the RC build>}"""
+    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    url = f"{recipe_url}release.yaml"
+    data = requests.get(url, verify=False)
+    repo_details = yaml.safe_load(data.text)[version]
+    return repo_details
+
+
+def yaml_to_dict(file_name):
+    """Retrieve yaml data content from file."""
+    file_path = os.path.abspath(file_name)
+    with open(file_path, "r") as conf_:
+        content = yaml.safe_load(conf_)
+    return content
 
 
 def custom_ceph_config(suite_config, custom_config, custom_config_file):
@@ -690,13 +734,7 @@ def email_results(test_result):
         send_to_cephci (optional [bool]): send to cephci@redhat.com as well as user email
     Returns: None
     """
-    cfg = get_cephci_config().get("email")
-    if not cfg:
-        return
-    sender = "cephci@redhat.com"
-    recipients = []
-    address = cfg.get("address")
-    send_to_cephci = test_result.get("send_to_cephci", False)
+
     try:
         run_id = test_result["run_id"]
         results_list = test_result["result"]
@@ -704,6 +742,34 @@ def email_results(test_result):
         log.error(f"Key not found : {kerr}")
         exit(1)
 
+    run_name = "cephci-run-{id}".format(id=run_id)
+    msg = MIMEMultipart("alternative")
+    run_status = get_run_status(results_list)
+    msg["Subject"] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
+        suite=results_list[0]["suite-name"],
+        compose=results_list[0]["compose-id"],
+        run_status=run_status,
+        id=run_id,
+    )
+    test_result["run_name"] = run_name
+    html = create_html_file(test_result=test_result)
+    part1 = MIMEText(html, "html")
+    msg.attach(part1)
+    props_content = f"""
+    run_status=\"{run_status}\"
+    compose=\"{results_list[0]['compose-id']}\"
+    suite=\"{results_list[0]['suite-name']}\"
+    """
+    # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
+    abs_path = os.path.join(os.getcwd(), "result.props")
+    write_to_file(data=props_content.strip(), abs_path=abs_path)
+    cfg = get_cephci_config().get("email")
+    if not cfg:
+        return
+    sender = "cephci@redhat.com"
+    recipients = []
+    address = cfg.get("address")
+    send_to_cephci = test_result.get("send_to_cephci", False)
     if cfg and address:
         recipients = re.split(r",\s*", cfg["address"])
     if address.count("@") != len(recipients):
@@ -716,34 +782,9 @@ def email_results(test_result):
     if send_to_cephci:
         recipients.append(sender)
         recipients = list(set(recipients))
-
     if recipients:
-        run_name = "cephci-run-{id}".format(id=run_id)
-        msg = MIMEMultipart("alternative")
-        run_status = get_run_status(results_list)
-        msg[
-            "Subject"
-        ] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
-            suite=results_list[0]["suite-name"],
-            compose=results_list[0]["compose-id"],
-            run_status=run_status,
-            id=run_id,
-        )
         msg["From"] = sender
         msg["To"] = ", ".join(recipients)
-
-        test_result["run_name"] = run_name
-        html = create_html_file(test_result=test_result)
-        part1 = MIMEText(html, "html")
-        msg.attach(part1)
-        props_content = f"""
-run_status=\"{run_status}\"
-compose=\"{results_list[0]['compose-id']}\"
-suite=\"{results_list[0]['suite-name']}\"
-"""
-        # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
-        abs_path = os.path.join(os.getcwd(), "result.props")
-        write_to_file(data=props_content.strip(), abs_path=abs_path)
         try:
             s = smtplib.SMTP("localhost")
             s.sendmail(sender, recipients, msg.as_string())
@@ -969,6 +1010,28 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
     return node_name
 
 
+def get_cephqe_ca() -> Optional[Tuple]:
+    """Retrieve CephCI QE CA certificate and key."""
+    base_uri = (
+        get_cephci_config()
+        .get("root-ca-location", "http://magna002.ceph.redhat.com/cephci-jenkins")
+        .rstrip("/")
+    )
+    ca_cert = None
+    ca_key = None
+
+    try:
+        with request.urlopen(url=f"{base_uri}/.cephqe-ca.pem") as fd:
+            ca_cert = crypto.load_certificate(crypto.FILETYPE_PEM, fd.read())
+
+        with request.urlopen(url=f"{base_uri}/.cephqe-ca.key") as fd:
+            ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, fd.read())
+    except BaseException as be:
+        log.debug(be)
+
+    return ca_key, ca_cert
+
+
 def generate_self_signed_certificate(subject: Dict) -> Tuple:
     """
     Create and return a self-signed certificate using the provided subject information.
@@ -977,11 +1040,15 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
         subject     Dictionary holding the certificate subject key/value pair
 
     Returns:
-        cert, key   Tuple as strings
+        device_key, device_cert, ca_cert   Tuple as strings
     """
+    ca_key, ca_cert = get_cephqe_ca()
+
+    # Generate the private key
     keyout = crypto.PKey()
     keyout.generate_key(crypto.TYPE_RSA, 2048)
 
+    # Create CSR
     cert = crypto.X509()
     cert.get_subject().C = subject.get("country", "IN")
     cert.get_subject().ST = subject.get("state", "Karnataka")
@@ -989,14 +1056,304 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
     cert.get_subject().O = subject.get("company", "Red Hat Inc")
     cert.get_subject().OU = subject.get("department", "Storage")
     cert.get_subject().CN = subject["common_name"]
-    cert.set_serial_number(1000)
+    cert.set_serial_number(random.randint(200, 50000))
     cert.gmtime_adj_notBefore(0)
     cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
+
+    san_list = [
+        f"DNS:*.{subject['common_name']}",
+        f"DNS:{subject['common_name']}",
+        f"IP:{subject['ip_address']}",
+    ]
+    sans = ", ".join(san_list)
+    extensions = [
+        crypto.X509Extension(
+            b"keyUsage", False, b"Digital Signature, Non Repudiation, Key Encipherment"
+        ),
+        crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
+        crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth, clientAuth"),
+        crypto.X509Extension(b"subjectAltName", False, sans.encode()),
+    ]
+    cert.add_extensions(extensions)
+
     cert.set_issuer(cert.get_subject())
     cert.set_pubkey(keyout)
     cert.sign(keyout, "sha256")
 
+    # Sign CSR
+    if ca_cert and ca_key:
+        signed_cert = crypto.X509()
+        signed_cert.set_serial_number(random.randint(10, 10000))
+        signed_cert.gmtime_adj_notBefore(0)
+        signed_cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
+        signed_cert.set_subject(cert.get_subject())
+        signed_cert.add_extensions(extensions)
+        signed_cert.set_issuer(ca_cert.get_subject())
+        signed_cert.set_pubkey(cert.get_pubkey())
+        signed_cert.sign(ca_key, "sha256")
+
+        return (
+            crypto.dump_privatekey(crypto.FILETYPE_PEM, keyout).decode("utf-8"),
+            crypto.dump_certificate(crypto.FILETYPE_PEM, signed_cert).decode("utf-8"),
+            crypto.dump_certificate(crypto.FILETYPE_PEM, ca_cert).decode("utf-8"),
+        )
+
     return (
-        crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"),
         crypto.dump_privatekey(crypto.FILETYPE_PEM, keyout).decode("utf-8"),
+        crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"),
+        "",
     )
+
+
+def fetch_build_artifacts(build, ceph_version, platform):
+    """Retrieves build details from magna002.ceph.redhat.com.
+
+    "RHCEPH-{ceph_version}.yaml" would be file name which is
+    searched in magna002 Ceph artifacts location.
+
+    Args:
+        ceph_version: RHCS version
+        build: build section to be fetched
+        platform: OS distribution name with major Version(ex., rhel-8)
+
+    Returns:
+        base_url, container_registry, image-name, image-tag
+    """
+    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    url = f"{recipe_url}RHCEPH-{ceph_version}.yaml"
+    data = requests.get(url, verify=False)
+    yml_data = yaml.safe_load(data.text)
+
+    build_info = yml_data.get(build)
+    if not build_info:
+        raise TestSetupFailure(f"{build} did not found in {url}.")
+
+    container_image = build_info["repository"]
+    registry, image_name = container_image.split(":")[0].split("/", 1)
+    image_tag = container_image.split(":")[-1]
+    base_url = build_info["composes"][platform]
+
+    return base_url, registry, image_name, image_tag
+
+
+def rp_deco(func):
+    def inner_method(cls, *args, **kwargs):
+        if not cls.client:
+            return
+
+        try:
+            func(cls, *args, **kwargs)
+        except BaseException as be:  # noqa
+            log.debug(be, exc_info=True)
+            log.warning("Encountered an error during report portal operation.")
+
+    return inner_method
+
+
+class ReportPortal:
+    """Handles logging to report portal."""
+
+    def __init__(self):
+        """Initializes the instance."""
+        cfg = get_cephci_config()
+        access = cfg.get("report-portal")
+
+        self.client = None
+        self._test_id = None
+
+        if access:
+            try:
+                self.client = ReportPortalService(
+                    endpoint=access["endpoint"],
+                    project=access["project"],
+                    token=access["token"],
+                    verify_ssl=False,
+                )
+            except BaseException:  # noqa
+                log.warning("Unable to connect to Report Portal.")
+
+    @rp_deco
+    def start_launch(self, name: str, description: str, attributes: dict) -> None:
+        """
+        Initiates a test execution with the provided details
+
+        Args:
+            name (str):         Name of test execution.
+            description (str):  Meta data information to be added to the launch.
+            attributes (dict):  Meta data information as dict
+
+        Returns:
+             None
+        """
+        self.client.start_launch(
+            name, start_time=timestamp(), description=description, attributes=attributes
+        )
+
+    @rp_deco
+    def start_test_item(self, name: str, description: str, item_type: str) -> None:
+        """
+        Records a entry within the initiated launch.
+
+        Args:
+            name (str):         Name to be set for the test step
+            description (str):  Meta information to be used.
+            item_type (str):    Type of entry to be created.
+
+        Returns:
+            None
+        """
+        self._test_id = self.client.start_test_item(
+            name, start_time=timestamp(), item_type=item_type, description=description
+        )
+
+    @rp_deco
+    def finish_test_item(self, status: Optional[str] = "PASSED") -> None:
+        """
+        Ends a test entry with the given status.
+
+        Args:
+            status (str):
+        """
+        if not self._test_id:
+            return
+
+        self.client.finish_test_item(
+            item_id=self._test_id, end_time=timestamp(), status=status
+        )
+
+    @rp_deco
+    def finish_launch(self) -> None:
+        """Closes the Report Portal execution run."""
+        self.client.finish_launch(end_time=timestamp())
+        self.client.terminate()
+
+    @rp_deco
+    def log(self, message: str) -> None:
+        """
+        Adds log records to the event.
+
+        Args:
+            message (str):  Message to be logged.
+
+        Returns:
+            None
+        """
+        self.client.log(time=timestamp(), message=message, level="INFO")
+
+
+def install_start_kafka(rgw_node, cloud_type):
+    """
+    install kafka package and start zookeeper and kafka services
+    """
+    log.info("install kafka broker for bucket notification tests")
+    if cloud_type == "ibmc":
+        wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.89/kafka_2.13-2.8.0.tgz"
+    else:
+        wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
+    tar_cmd = "tar -zxvf /tmp/kafka.tgz -C /usr/local/"
+    rename_cmd = "mv /usr/local/kafka_2.13-2.8.0 /usr/local/kafka"
+    chown_cmd = "chown cephuser:cephuser /usr/local/kafka"
+    rgw_node.exec_command(
+        cmd=f"{wget_cmd} && {tar_cmd} && {rename_cmd} && {chown_cmd}", sudo=True
+    )
+
+    KAFKA_HOME = "/usr/local/kafka"
+
+    # start zookeeper service
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/zookeeper-server-start.sh -daemon {KAFKA_HOME}/config/zookeeper.properties",
+    )
+
+    # wait for zookeepeer service to start
+    time.sleep(30)
+
+    # start kafka servicee
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/kafka-server-start.sh -daemon {KAFKA_HOME}/config/server.properties",
+    )
+
+    # wait for kafka service to start
+    time.sleep(30)
+
+
+def method_should_succeed(function, *args, **kwargs):
+    """
+    Wrapper function to verify the return value of executed method.
+
+    This function will raise Assertion if return value is false, empty, or 0.
+    Args:
+        function: name of the function
+        args: arg list
+        kwargs: arg dict
+    Usage:
+        Basic usage is pass a function and it's list and/or dict arguments
+        ex:     method_should_succeed(set_osd_out, ceph_cluster, osd_id)
+                method_should_succeed(bench_write, **pool)
+    """
+    rc = function(*args, **kwargs)
+
+    log.debug(f"The {function} return status is {rc}")
+    if not rc:
+        raise AssertionError(f"Execution failed at function {function}")
+
+
+def should_not_be_empty(variable, msg="Variable is empty"):
+    """
+    Function to raise assertion if variable is empty.
+    Works with strings, lists, dicts etc.
+    Args:
+        variable: variable that should be verified
+        msg: [optional] custom message
+    """
+    if not variable:
+        raise AssertionError(msg)
+
+
+def generate_self_signed_cert_on_rgw(rgw_node):
+    """
+    generate self signed certifcate on given rgw node
+    """
+    SSL_CERT_PATH = "/etc/ceph/"
+    PEM_FILE_NAME = "server.pem"
+    #    rgw_node = ceph_nodes.get_ceph_object("rgw").node
+    subject = {
+        "common_name": rgw_node.hostname,
+        "ip_address": rgw_node.ip_address,
+    }
+    key, cert, ca = generate_self_signed_certificate(subject=subject)
+    pem = key + cert + ca
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="mkdir /etc/ceph; chown 755 /etc/ceph; touch /etc/ceph/server.pem",
+    )
+    PEM_FILE_PATH = os.path.join(SSL_CERT_PATH, PEM_FILE_NAME)
+    server_pem_file = rgw_node.remote_file(
+        sudo=True, file_name=PEM_FILE_PATH, file_mode="w+"
+    )
+    server_pem_file.write(pem)
+    server_pem_file.flush()
+    log.info(pem)
+
+
+def clone_the_repo(config, node, path_to_clone):
+    """clone the repo on to test node
+
+    Args:
+        config: test config
+        node: ceph node
+        path_to_clone: the path to clone the repo
+
+    TODO: if path_to_clone is not given, make temporary dir on test
+          node and clone the repo in it.
+    """
+    log.info("cloning the repo")
+    branch = config.get("branch", "master")
+    log.info(f"branch: {branch}")
+    repo_url = config.get("git-url")
+    log.info(f"repo_url: {repo_url}")
+    git_clone_cmd = f"sudo git clone {repo_url} -b {branch}"
+    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")

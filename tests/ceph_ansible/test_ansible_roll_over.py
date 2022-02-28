@@ -1,12 +1,11 @@
 """adds ceph daemons on existing cluster"""
 import datetime
-import logging
 import re
 
 from ceph.ceph import NodeVolume
+from utility.log import Log
 
-logger = logging.getLogger(__name__)
-log = logger
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -30,6 +29,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     filestore = config.get("filestore")
     hotfix_repo = config.get("hotfix_repo")
+    cloud_type = config.get("cloud-type", "openstack")
     test_data = kw.get("test_data")
     cluster_name = config.get("cluster")
 
@@ -55,14 +55,10 @@ def run(ceph_cluster, **kw):
             matched_short_names = list(filter(matcher.match, short_name_list))
             if len(matched_short_names) > 1:
                 raise RuntimeError(
-                    "Multiple nodes are matching node-name {node_name}: \n{matched_short_names}".format(
-                        node_name=node_name, matched_short_names=matched_short_names
-                    )
+                    f"Multiple nodes are matching node-name {node_name}: \n{matched_short_names}"
                 )
             if len(matched_short_names) == 0:
-                raise RuntimeError(
-                    "No match for {node_name}".format(node_name=node_name)
-                )
+                raise RuntimeError(f"No match for {node_name}")
             for ceph_node in ceph_cluster:
                 if ceph_node.shortname == matched_short_names[0]:
                     matched_ceph_node = ceph_node
@@ -70,16 +66,11 @@ def run(ceph_cluster, **kw):
             free_volumes = matched_ceph_node.get_free_volumes()
             if len(osds_required) > len(free_volumes):
                 raise RuntimeError(
-                    "Insufficient volumes on the {node_name} node. Required: {required} - Found: {found}".format(
-                        node_name=matched_ceph_node.shortname,
-                        required=len(osds_required),
-                        found=len(free_volumes),
-                    )
+                    f"Insufficient volumes on the {matched_ceph_node.shortname} \
+                    node. Required: {len(osds_required)} - Found: {len(free_volumes)}"
                 )
-            log.debug("osds_required: {}".format(osds_required))
-            log.debug(
-                "matched_ceph_node.shortname: {}".format(matched_ceph_node.shortname)
-            )
+            log.debug(f"osds_required: {osds_required}")
+            log.debug(f"matched_ceph_node.shortname: {matched_ceph_node.shortname}")
             for osd in osds_required:
                 free_volumes.pop().status = NodeVolume.ALLOCATED
             for daemon in daemon_list:
@@ -94,7 +85,7 @@ def run(ceph_cluster, **kw):
     ceph_cluster.setup_ceph_firewall()
 
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build
+        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
     )
 
     ceph_installer.install_ceph_ansible(build)
@@ -127,7 +118,6 @@ def run(ceph_cluster, **kw):
         "3": {"mon": "%s" % yaml, "osd": "add-osd.yml"},
         "4": {
             "mon": "infrastructure-playbooks/add-mon.yml",
-            "osd": "infrastructure-playbooks/add-osd.yml",
         },
     }
     yaml_file = yaml_dict[build_starts].get(daemon, "%s --limit %ss" % (yaml, daemon))
@@ -136,15 +126,17 @@ def run(ceph_cluster, **kw):
         if daemon == "osd":
             ceph_installer.exec_command(
                 sudo=True,
-                cmd="cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{yaml_file} .".format(
-                    ansible_dir=ansible_dir, yaml_file=yaml_file
-                ),
+                cmd=f"cd {ansible_dir}; cp {ansible_dir}/infrastructure-playbooks/{yaml_file} .",
             )
 
-    cmd = "cd {} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {}".format(
-        ansible_dir, yaml_file
-    )
+    cmd = f"cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {yaml_file}"
     out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+
+    if "4.2" in build:
+        if daemon == "mon":
+            cmd = f"cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook \
+                  -vvvv -i hosts {yaml} --limit mons"
+        out1, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:
         log.error("Failed during deployment")

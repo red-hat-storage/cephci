@@ -1,11 +1,12 @@
 import datetime
 import json
-import logging
 import random
 import time
 import traceback
 
-logger = logging.getLogger(__name__)
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class RadosHelper:
@@ -66,11 +67,14 @@ class RadosHelper:
     ):
         """
         Create a pool named from the pool_name parameter.
-        :param pool_name: name of the pool being created.
-        :param pg_num: initial number of pgs.
-        :param erasure_code_profile_name: if set and !None create an
-            erasure coded pool using the profile
-        :param erasure_code_use_overwrites: if true, allow overwrites
+
+        Args:
+            pool_name (Str): name of the pool being created.
+            pg_num (Int): initial number of pgs.
+            erasure_code_profile_name (Str): if set and
+                !None create an erasure coded pool using the profile
+            erasure_code_use_overwrites (Bool): if true, allow overwrites
+
         """
         assert isinstance(pool_name, str)
         assert isinstance(pg_num, int)
@@ -211,11 +215,13 @@ class RadosHelper:
     def wait_until_osd_state(self, osd_id, down=False) -> bool:
         """
         Checks the state of given osd and waits for 120 seconds for the same state to be achieved
+
         Args:
             osd_id: ID of the osd to be checked
             down: If True, Specifies that the OSD should be down
 
-        Returns: True -> Pass, False -> Fail
+        Returns:
+            Boolean True -> Pass, False -> Fail
 
         """
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=120)

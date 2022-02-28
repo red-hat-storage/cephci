@@ -1,10 +1,9 @@
-import logging
-
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.osd import OSD
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 CLUSTER_STATE = [
@@ -33,6 +32,7 @@ def run(ceph_cluster, **kw):
     command = config.pop("command")
     log.info("Executing OSD %s service" % command)
     osd = OSD(cluster=ceph_cluster, **config)
+
     try:
         method = fetch_method(osd, command)
         method(config)

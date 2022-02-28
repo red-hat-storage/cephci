@@ -29,6 +29,11 @@
 #  username: <user_name>
 #  password: <user_password>
 
+# registry_credentials:
+#  registry: <registry_url>
+#  username: <user_name>
+#  password: <user_password>
+
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn
 # To completely disable all email, remove the "email:" and "address:" settings
@@ -36,3 +41,16 @@
 
 # email:
 #  address: cephci@redhat.com
+
+# Provide IBM Cloud Object Storage API Key for uploading objects.
+# cos:
+#  api-key: <service-or-user-api-key>
+#  endpoint: <resource-public-endpoint>
+#  resource-id: <deployed-instance-resource-id>
+#  location-constraint: <storage-class>
+
+# URI to be used for retrieving the RHCS build details
+# build-url: <URI to fileserver>
+
+# Web based location to retrieve root CA key and cert
+root-ca-location: <URL to base location of rootCA cert>

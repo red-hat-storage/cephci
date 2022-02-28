@@ -1,0 +1,164 @@
+# Tier1: Extended RBD acceptance testing
+#
+# This test suite runs addition test scripts to evaluate the existing functionality of
+# Ceph RBD component.
+#
+# The following testing is carried out
+#   - verification of librbd
+#   - verification of permissions
+#   - verification of read flag configurations
+#   - verification of QOS
+#   - verification of Journal entries
+#   - verification of Kernel RBD settings
+#   - verification of KBRD exclusive options
+tests:
+
+  # Setup the cluster
+
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - "ceph fs volume create cephfs"
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  nodes:
+                    - node4
+                    - node5
+          - config:
+              command: shell
+              args:
+                - "ceph osd pool create rbd"
+          - config:
+              command: shell
+              args:
+                - "rbd pool init rbd"
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+        copy_admin_keyring: true
+      desc: Configure the client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # Test cases to be executed
+
+  - test:
+      config:
+        branch: master
+        script_path: qa/workunits/rbd
+        script: test_librbd_python.sh
+      desc: Executig upstream LibRBD scenarios
+      module: test_rbd.py
+      name: 1_librbd_python
+      polarion-id: CEPH-83574524
+  - test:
+      config:
+        branch: master
+        script_path: qa/workunits/rbd
+        script: permissions.sh
+      desc: Executig upstream RBD permissions scenarios
+      module: test_rbd.py
+      name: 2_rbd_permissions
+      polarion-id: CEPH-83574525
+  - test:
+      config:
+        branch: master
+        script_path: qa/workunits/rbd
+        script: read-flags.sh
+      desc: Executig upstream RBD Read Flag scenarios
+      module: test_rbd.py
+      name: 3_rbd_read_flags
+      polarion-id: CEPH-83574526
+  - test:
+      config:
+        branch: master
+        script_path: qa/workunits/rbd
+        script: qos.sh
+      desc: Executig upstream RBD QOS scenarios
+      module: test_rbd.py
+      name: 4_rbd_qos
+  - test:
+      config:
+        branch: master
+        script_path: qa/workunits/rbd
+        script: journal.sh
+      desc: Executig upstream RBD Journal scenarios
+      module: test_rbd.py
+      name: 5_journal
+      polarion-id: CEPH-83574527
+  - test:
+      config:
+        branch: master
+        script_path: qa/workunits/rbd
+        script: kernel.sh
+      desc: Executig upstream RBD Kernal scenarios
+      module: test_rbd.py
+      name: 6_rbd_kernel
+      polarion-id: CEPH-83574528
+  - test:
+      config:
+        branch: master
+        script_path: qa/workunits/rbd
+        script: krbd_exclusive_option.sh
+      desc: Executig upstream RBD kernel exclusive scenarios
+      module: test_rbd.py
+      name: 7_rbd_krbd_exclusive
+      polarion-id: CEPH-83574531

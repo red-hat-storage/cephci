@@ -1,0 +1,197 @@
+---
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_test-volume-management.yaml
+# Conf file : conf/pacific/cephfs/tier_2_cephfs_9-node-cluster.yaml
+# Test-Case Covered:
+# CEPH-83574164 : Create cephfs subvolumegroup with desired data pool_layout
+# CEPH-83574193 - cephfs subvolume size expansion test
+# CEPH-83574166 - Create cephfs subvolumegroup with specific uid,gid test
+# CEPH-83574182 - Delete subvolume_group name that does not exist
+# CEPH-83574169 - Remove subvolume group name does not exist with force option
+# CEPH-83574168 - Delete_non_exist_subvol_group
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-data-ec
+                - "64"
+                - erasure
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-metadata
+                - "64"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - set
+                - cephfs-data-ec
+                - allow_ec_overwrites
+                - "true"
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - new
+                - cephfs-ec
+                - cephfs-metadata
+                - cephfs-data-ec
+                - --force
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  label: mds
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Add Active Active configuration of MDS
+      desc: Add Active Active configuration of MDS for cephfs
+      module: test_bootstrap.py
+      polarion-id: CEPH-11344
+      config:
+        command: shell
+        args: # arguments to ceph orch
+          - ceph
+          - fs
+          - set
+          - cephfs
+          - max_mds
+          - "2"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: subvolumegroup creation on desired data pool
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_pool_layout.py
+      polarion-id: CEPH-83574164
+      desc: subvolumegroup creation with desired data pool_layout
+      abort-on-fail: true
+  - test:
+      name: Subvolume Resize
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_resize.py
+      polarion-id: CEPH-83574193
+      desc: subvolume resize
+      abort-on-fail: true
+  - test:
+      name: subvolumegroup creation with uid and gid
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_gid_uid.py
+      polarion-id: CEPH-83574166
+      desc: subvolumegroup creation with uid and gid
+      abort-on-fail: true
+  - test:
+      name: Delete subvolume_group name that does not exist
+      module: cephfs_vol_management.cephfs_vol_mgmt_non_exist_subvol_group.py
+      polarion-id: CEPH-83574182
+      desc: Delete subvolume_group name that does not exist
+      abort-on-fail: true
+  - test:
+      name: Remove subvolume group name does not exist with force option
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_group_force.py
+      polarion-id: CEPH-83574169
+      desc: Remove subvolume group name does not exist with force option
+      abort-on-fail: true
+  - test:
+      name: delete_non_exist_subvol_group
+      module: cephfs_vol_management.cephfs_vol_mgmt_delete_non_exist_subvol_group.py
+      polarion-id: CEPH-83574168
+      desc: delete_non_exist_subvol_group
+      abort-on-fail: true

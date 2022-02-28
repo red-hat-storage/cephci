@@ -1,0 +1,45 @@
+# This conf to have a minimal handy conf which can be used for executions to get an upgraded cluster within short amount of time and resources
+# This conf is not to be used in jenkins runs as it would cause failure of some TCs because of lesser OSDs
+
+globals:
+  - ceph-cluster:
+     name: ceph
+     node1:
+       role:
+         - _admin
+         - mon
+         - mgr
+         - osd
+         - installer
+       no-of-volumes: 1
+       disk-size: 40
+     node2:
+       role:
+         - mon
+         - mgr
+         - osd
+         - grafana
+       no-of-volumes: 1
+       disk-size: 40
+     node3:
+       role:
+         - mon
+         - mgr
+         - osd
+         - mds
+       no-of-volumes: 1
+       disk-size: 40
+     node4:
+       role:
+         - rgw
+         - iscsi-gw
+
+     node5:
+       role:
+         - rgw
+         - iscsi-gw
+         - client
+
+     node6:
+       role:
+         - nfs

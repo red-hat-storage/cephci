@@ -118,6 +118,26 @@ isort
     # Example
     $ isort mita/openstack.py
 
+Checkers
+--------
+As a first step to ensure no breakage of the functionality, the following linters
+are introduced
+
+- yamllint
+
+yamllint
+========
+This linter checks all YAML files for syntax issues. One can locally execute it
+by doing the following
+
+.. code-block::
+
+    # yamllint is installed either through cephci requirements or using the below command
+
+    $ python -m pip install yamllint
+
+    # Running the checker
+    $ yamllint -d relaxed <absolute-path-to-yaml-file>
 
 .. _`PEP328`: https://www.python.org/dev/peps/pep-0328/
 .. _`PEP257`: https://www.python.org/dev/peps/pep-0257/

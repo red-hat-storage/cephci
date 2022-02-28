@@ -1,0 +1,237 @@
+#
+# Objective: Test rgw with ssl configured using ceph-ansible and upgrade
+# Polarion ID: CEPH-83574678
+#
+---
+tests:
+  - test:
+      name: install ceph pre-requisities
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      config:
+        use_cdn: true
+        build: "4.x"
+        ansi_config:
+          ceph_origin: repository
+          ceph_repository_type: cdn
+          ceph_rhcs_version: 4
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: false
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          dashboard_enabled: false
+          ceph_docker_image: "rhceph/rhceph-4-rhel8"
+          ceph_docker_image_tag: "latest"
+          ceph_docker_registry: "registry.redhat.io"
+          radosgw_frontend_ssl_certificate: "/etc/ceph/server.pem"
+          radosgw_frontend_port: 443
+      desc: test cluster setup using ceph-ansible
+      destroy-cluster: false
+      polarion-id: CEPH-83574766
+      abort-on-fail: true
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        commands:
+          - "ceph -s"
+          - "ceph versions"
+        sudo: true
+      desc: check for ceph status and version
+
+  # Bucket Listing Tests
+  - test:
+      name: Bucket Listing tests
+      desc: measure execution time for ordered listing with top level objects
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+        timeout: 300
+
+  # versioning tests
+  - test:
+      name: Test deletion of object versions
+      desc: test to delete versioning objects
+      polarion-id: CEPH-14262
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_delete.yaml
+        timeout: 300
+
+  # resharding tests
+  - test:
+      name: Resharding tests
+      desc: Reshading test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding.yaml
+        timeout: 500
+  - test:
+      name: Dynamic Resharding tests
+      desc: Reshading test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+        timeout: 500
+
+  # lifecycle tests
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for Prefix and tag based filter for >1 days
+      polarion-id: CEPH-11179, CEPH-11180
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        timeout: 300
+
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for non current version expiration
+      polarion-id: CEPH-11190
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_non_current_days.yaml
+        timeout: 300
+
+  # switch from rpm to container
+  - test:
+      name: switch-from-non-containerized-to-containerized-ceph-daemons
+      polarion-id: CEPH-83573510
+      module: switch_rpm_to_container.py
+      abort-on-fail: true
+
+  # upgrade ceph cluster
+  - test:
+      name: Upgrade ceph cluster to 5.x latest
+      polarion-id: CEPH-83574678
+      module: test_ansible_upgrade.py
+      config:
+        build: '5.x'
+        ansi_config:
+          ceph_origin: distro
+          ceph_stable_release: pacific
+          ceph_repository: rhcs
+          ceph_rhcs_version: 5
+          osd_scenario: lvm
+          osd_auto_discovery: false
+          ceph_stable: true
+          ceph_stable_rh_storage: true
+          fetch_directory: ~/fetch
+          radosgw_frontend_ssl_certificate: "/etc/ceph/server.pem"
+          radosgw_frontend_port: 443
+          copy_admin_key: true
+          containerized_deployment: true
+          upgrade_ceph_packages: true
+          dashboard_enabled: false
+      desc: Test Ceph-Ansible rolling update 4.x cdn-> 5.x latest
+      abort-on-fail: true
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        commands:
+          - "ceph -s"
+          - "ceph versions"
+        sudo: true
+      desc: check for ceph status and version
+
+  # swift basic operation
+  - test:
+      name: swift upload large object tests
+      desc: upload large object in swift
+      polarion-id: CEPH-9808
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_upload.yaml
+        timeout: 300
+
+  - test:
+      name: swift download large object tests
+      desc: download large object in swift
+      polarion-id: CEPH-9809
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_download.yaml
+        timeout: 300
+
+  # versioning tests
+  - test:
+      name: Test deletion of object versions
+      desc: test to delete versioning objects
+      polarion-id: CEPH-14262
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_delete.yaml
+        timeout: 300
+
+  # resharding tests
+  - test:
+      name: Resharding tests
+      desc: Reshading test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding.yaml
+        timeout: 500
+
+  - test:
+      name: Dynamic Resharding tests
+      desc: Reshading test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+        timeout: 500
+
+  # lifecycle tests
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for Prefix and tag based filter for >1 days
+      polarion-id: CEPH-11179, CEPH-11180
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        timeout: 300
+
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests
+      desc: Test object expiration for non current version expiration
+      polarion-id: CEPH-11190
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_rule_prefix_non_current_days.yaml
+        timeout: 300
+
+  # Bucket Listing Tests
+  - test:
+      name: Bucket Listing tests
+      desc: measure execution time for ordered listing with top level objects
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+        timeout: 300

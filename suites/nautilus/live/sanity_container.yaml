@@ -37,7 +37,7 @@ tests:
     abort-on-fail: True
     config:
         is_production: True
- 
+
 - test:
     name: ceph ansible install containerized rhcs 4.x from cdn
     polarion-id: CEPH-83573686
@@ -89,7 +89,7 @@ tests:
     desc: deploy ceph containerized 4.x cdn setup using ceph-ansible
     destroy-cluster: False
     abort-on-fail: true
- 
+
 - test:
     name: check-ceph-health
     module: exec.py
@@ -97,7 +97,7 @@ tests:
           cmd: ceph -s
           sudo: True
     desc: Check for ceph health debug info
- 
+
 - test:
     name: rados_bench_test
     module: radosbench.py
@@ -105,14 +105,14 @@ tests:
           pg_num: '128'
           pool_type: 'normal'
     desc: run rados bench for 360 - normal profile
- 
+
 - test:
     name: rbd-io
     module: rbd_faster_exports.py
     config:
           io-total: 100M
     desc: Perform export during read/write,resizing,flattening,lock operations
- 
+
 - test:
     name: Mbuckets_with_Nobjects
     desc: test to create "M" no of buckets and "N" no of objects
@@ -122,7 +122,7 @@ tests:
       script-name: test_Mbuckets_with_Nobjects.py
       config-file-name: test_Mbuckets_with_Nobjects.yaml
       timeout: 300
- 
+
 - test:
     name: ceph ansible purge
     module: purge_cluster.py
@@ -130,7 +130,7 @@ tests:
          ansible-dir: /usr/share/ceph-ansible
          playbook-command: purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes
     desc: Purge ceph cluster
- 
+
 - test:
     name: Check for old container directories
     module: bug_1834974.py

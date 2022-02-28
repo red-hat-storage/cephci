@@ -1,0 +1,128 @@
+# Tier 0: RGW build evaluation
+#
+# This test suite is auto triggered via the tier0 Jenkins pipeline to determine if the
+# newly available binary of RHCS 5.0 meets the minimum acceptance criteria set forth by
+# the Object QE FG team.
+#
+# The following evaluations are carried out
+# - Build can be deployed using CephADM
+# - The cluster health is good
+# - End users can perform object operations.
+
+# RHCS 5.0 sanity test suite for RGW daemon.
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # Testing stage
+
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects
+      module: sanity_rgw.py
+      name: Test M buckets with N objects
+      polarion-id: CEPH-9789
+
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects with delete
+      module: sanity_rgw.py
+      name: Test delete using M buckets with N objects
+      polarion-id: CEPH-14237
+
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw.py
+      name: Test download with M buckets with N objects
+      polarion-id: CEPH-14237
+
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+      module: sanity_rgw.py
+      name: Test multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
+
+  - test:
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+        timeout: 300
+      desc: Test object operations with swift
+      module: sanity_rgw.py
+      name: Swift based tests
+      polarion-id: CEPH-11019
+
+  - test:
+      name: generate sosreport
+      module: sosreport.py
+      desc: generate sosreport

@@ -1,15 +1,22 @@
 import json
-import logging
+import os
 import re
+from datetime import datetime, timedelta
+from time import sleep
 
 import requests
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.ceph_admin.helper import get_cluster_state
+from ceph.ceph_admin.helper import (
+    file_or_path_exists,
+    get_cluster_state,
+    get_hosts_deployed,
+)
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 __DEFAULT_CEPH_DIR = "/etc/ceph"
 __DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"
@@ -21,6 +28,36 @@ class BootStrapValidationFailure(Exception):
     pass
 
 
+def verify_dashboard_login(url, data):
+    """Verify Ceph dashboard login using API call.
+
+    Args:
+        url: server url path
+        data: credentials data in dict
+    Returns:
+        boolean
+    """
+    try:
+        session = requests.Session()
+        session.headers = {
+            "accept": "application/vnd.ceph.api.v1.0+json",
+            "content-type": "application/json",
+        }
+
+        resp = session.post(url, data=data, verify=False)
+        if not resp.ok:
+            raise BootStrapValidationFailure(
+                f"Status code: {resp.status_code}\nResponse: {resp.text}"
+            )
+        log.info(
+            "Dashboard API login is successful, status code : %s" % resp.status_code
+        )
+        return True
+    except requests.exceptions.ConnectionError:
+        log.info("connection timeout.. try again")
+    return False
+
+
 def validate_fsid(cls, fsid: str):
     """
     Method to validate fsid
@@ -29,7 +66,7 @@ def validate_fsid(cls, fsid: str):
         fsid: fsid
 
     """
-    out, err = cls.shell(args=["ceph", "fsid"])
+    out, _ = cls.shell(args=["ceph", "fsid"])
     log.info("custom fsid provided for bootstrap: %s" % fsid)
     log.info("cluster fsid : %s" % out)
     if out.strip() != fsid:
@@ -122,18 +159,16 @@ def validate_dashboard(cls, out, user=None, password=None, port=None):
     data = json.dumps({"password": passwd_, "username": user_})
     url_ = f"{host}/api/auth" if not host.endswith("/") else f"{host}api/auth"
 
-    session = requests.Session()
-    session.headers = {
-        "accept": "application/vnd.ceph.api.v1.0+json",
-        "content-type": "application/json",
-    }
+    timeout = 600
+    interval = 5
+    end_time = datetime.now() + timedelta(seconds=timeout)
 
-    resp = session.post(url_, data=data, verify=False)
-    if not resp.ok:
-        raise BootStrapValidationFailure(
-            f"Status code: {resp.status_code}\nResponse: {resp.text}"
-        )
-    log.info("Dashboard API login is successful, status code : %s" % resp.status_code)
+    while end_time > datetime.now():
+        if verify_dashboard_login(url=url_, data=data):
+            break
+        sleep(interval)
+    else:
+        raise BootStrapValidationFailure("Ceph dashboard API Login call failed....")
 
 
 def validate_dashboard_user(cls, user: str, out: str):
@@ -232,25 +267,6 @@ def validate_orphan_intial_daemons(cls, flag):
                 )
 
     log.info("orphan-initial-daemons validation is successful")
-
-
-def file_or_path_exists(node, file_or_path):
-    """
-    Method to check abs path exists
-    Args:
-        node: node object where file should be exists
-        file_or_path: ceph file or directory path
-
-    Returns:
-        boolean
-    """
-    try:
-        out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
-        log.info("Output : %s" % out.read().decode())
-    except CommandFailed as err:
-        log.error("Error: %s" % err)
-        return False
-    return True
 
 
 def fetch_file_content(node, file):
@@ -366,7 +382,7 @@ def validate_skip_dashboard(cls, flag, response):
         flag: skip-dashboard bootstrap option
         response: bootstrap command response
     """
-    out, _ = cls.shell(args=["ceph", "mgr", "module", "ls"])
+    out, _ = cls.shell(args=["ceph", "mgr", "module", "ls", "-f", "json"])
     dashboard = "dashboard" in json.loads(out)["enabled_modules"]
     log.info(
         "skip-dashboard Enabled : %s, Dashboard configured: %s" % (flag, dashboard)
@@ -451,6 +467,52 @@ def validate_ssh_private_key(cls, ssh_private_key):
     log.info("ssh-private-key validation is successful")
 
 
+def validate_log_file_generation(cls):
+    """
+    Method to verify generation of log files in default log directory
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        string
+    """
+    out, _ = cls.shell(args=["ceph", "fsid"])
+    fsid = out.strip()
+    log_file_path = "/var/log/ceph"
+    hosts = get_hosts_deployed(cls)
+    retry_count = 3
+    for node in cls.cluster.get_nodes():
+        try:
+            if node.hostname not in hosts:
+                continue
+            file = os.path.join(log_file_path, "cephadm.log")
+            fileExists = file_or_path_exists(node, file)
+            if not fileExists:
+                raise BootStrapValidationFailure(
+                    f"cephadm.log is not present in the node {node.ip_address}"
+                )
+            count = 0
+            fileExists = False
+            while count < retry_count:
+                count += 1
+                sleep(60)
+                file = os.path.join(log_file_path, fsid, "ceph-volume.log")
+                fileExists = file_or_path_exists(node, file)
+                if fileExists:
+                    break
+            if not fileExists:
+                raise BootStrapValidationFailure(
+                    f"ceph-volume.log is not present in the node {node.ip_address}"
+                )
+            log.info(f"Log verification on node {node.ip_address} successful")
+        except CommandFailed as err:
+            log.error("Error: %s" % err)
+            raise BootStrapValidationFailure(
+                f"ceph-volume.log is not present in the node {node.ip_address}"
+            )
+    log.info("Log file validation successful")
+
+
 def verify_bootstrap(cls, args, response):
     """
     Verify bootstrap based on the parameter(s) provided.
@@ -486,6 +548,9 @@ def verify_bootstrap(cls, args, response):
     if args.get("ssh-private-key"):
         validate_ssh_private_key(cls, args.get("ssh-private-key"))
 
+    # Log file validations
+    validate_log_file_generation(cls)
+
 
 def run(ceph_cluster, **kw):
     """
@@ -512,6 +577,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
+    config["overrides"] = kw.get("test_data", {}).get("custom-config")
 
     # Manage Ceph using ceph-admin orchestration
     command = config.pop("command")

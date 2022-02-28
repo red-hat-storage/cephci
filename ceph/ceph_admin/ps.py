@@ -13,9 +13,13 @@ class PSMixin:
         Execute the command ceph orch ps <args>.
 
         Args:
-            config: The key/value pairs passed from the test case.
+            config (Dict): The key/value pairs passed from the test case.
 
-        Example:
+        Returns:
+            output, error   returned by the command.
+
+        Example::
+
             Testing ceph orch ps
 
             config:
@@ -24,14 +28,12 @@ class PSMixin:
                     verbose: true
                     format: json | json-pretty | xml | xml-pretty | plain | yaml
                 args:
-                    host: <hostname>
+                    hostname: <hostname>
                     service_name: <name of service>
                     daemon_type: <type of daemon>
                     daemon_id: <id of the daemon>
                     refresh: true
 
-        Returns:
-            output, error   returned by the command.
         """
         cmd = ["ceph", "orch"]
 

@@ -1,7 +1,7 @@
 Introduction
 ************
-CEPH-CI is a framework coupled with CentralCI and Redhat Builds for testing Ceph downstream builds with Jenkins.
-It makes use of PSI(RedHat OpenStack) lab to create/destroy Ceph resources dynamically.
+CEPH-CI is a framework coupled with CentralCI and Red Hat Builds for testing Ceph downstream builds with Jenkins.
+It makes use of PSI (Red Hat OpenStack) lab to create/destroy Ceph resources dynamically.
 
 Currently the RHCS-QE team uses this environment to test and qualify the downstream builds everyday using automated jenkins workflow.
 
@@ -11,7 +11,7 @@ High Level Architecture
 
 
 * Infrastructure
-    - CI-RHOS: RedHat OpenStack
+    - CI-RHOS: Red Hat OpenStack
 * Test configuration
     - configuration: ceph cluster configuration
     - suites: test suites

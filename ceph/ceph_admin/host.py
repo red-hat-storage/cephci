@@ -1,22 +1,26 @@
 """Cephadm orchestration host operations."""
 import json
-import logging
 from copy import deepcopy
 
 from ceph.ceph import CephNode
 from ceph.utils import get_node_by_id
+from utility.log import Log
 
 from .common import config_dict_to_string
+from .helper import monitoring_file_existence
+from .maintenance import MaintenanceMixin
 from .orch import Orch, ResourceNotFoundError
 
-logger = logging.getLogger(__name__)
+logger = Log(__name__)
+DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
+DEFAULT_CEPH_CONF_PATH = "/etc/ceph/ceph.conf"
 
 
 class HostOpFailure(Exception):
     pass
 
 
-class Host(Orch):
+class Host(MaintenanceMixin, Orch):
     """Interface for executing ceph host <options> operations."""
 
     SERVICE_NAME = "host"
@@ -24,8 +28,10 @@ class Host(Orch):
     def list(self):
         """
         List the cluster hosts
+
         Returns:
-            json output of hosts list
+            json output of hosts list (List)
+
         """
         return self.shell(
             args=["ceph", "orch", "host", "ls", "--format=json"],
@@ -34,25 +40,28 @@ class Host(Orch):
     def add(self, config):
         """
         Add host to cluster
-        - add_label: host added with labels(roles assigned are considered)
-        - attach_address: host added with ip address(host ip address used)
 
         Args:
-            config
+            config (Dict):  host addition configuration
 
-        config:
-            service: host
-            command: add
-            base_cmd_args:                          # arguments to ceph orch
-                concise: true
-                block: true
-            args:
-                node: "node2"                         # node-name or object
-                attach_ip_address: bool               # true or false
-                labels: [mon, osd] or apply-all-labels
+        Example::
 
-        labels are considered if list of strings are provided or all roles associated
-        with node will be considered if string "apply-all-labels"
+            config:
+                service: host
+                command: add
+                base_cmd_args:                          # arguments to ceph orch
+                    concise: true
+                    block: true
+                args:
+                    node: "node2"                         # node-name or object
+                    attach_ip_address: bool               # true or false
+                    labels: [mon, osd] or apply-all-labels
+
+            add_label: host added with labels(roles assigned are considered)
+            attach_address: host added with ip address(host ip address used)
+
+            labels are considered if list of strings are provided or all roles associated
+            with node will be considered if string "apply-all-labels"
 
         """
         cmd = ["ceph", "orch"]
@@ -75,7 +84,6 @@ class Host(Orch):
 
         attach_address = args.get("attach_ip_address")
         _labels = args.get("labels")
-
         if isinstance(_labels, str) and _labels == "apply-all-labels":
             label_set = set(ceph_node.role.role_list)
             _labels = list(label_set)
@@ -116,27 +124,36 @@ class Host(Orch):
                 _labels
             )
 
+            if config.get("validate_admin_keyring") and "_admin" in _labels:
+                if not monitoring_file_existence(ceph_node, DEFAULT_KEYRING_PATH):
+                    raise HostOpFailure("Ceph keyring not found")
+                if not monitoring_file_existence(ceph_node, DEFAULT_CEPH_CONF_PATH):
+                    raise HostOpFailure("Ceph configuration file not found")
+                logger.info("Ceph configuration and Keyring found")
+
     def add_hosts(self, config):
-        """
-        Add host(s) to cluster.
+        """Add host(s) to cluster.
 
-        - Attach host to cluster
-        - if nodes are empty, all nodes in cluster are considered
-        - add_label: host added with labels(roles assigned are considered)
-        - attach_address: host added with ip address(host ip address used)
-        - by default add_label and attach_address are set to True
-
-        config:
-            base_cmd_args:
-                concise: true
-                block: true
-            args:
-                nodes: ["node1", "node2", ...]
-                labels: [mon, osd] or apply-all-labels
-                attach_ip_address: boolean
+          - Attach host to cluster
+          - if nodes are empty, all nodes in cluster are considered
+          - add_label: host added with labels(roles assigned are considered)
+          - attach_address: host added with ip address(host ip address used)
+          - by default add_label and attach_address are set to True
 
         Args:
-            config
+            config (Dict): hosts configuration
+
+        Example::
+
+            config:
+                base_cmd_args:
+                    concise: true
+                    block: true
+                args:
+                    nodes: ["node1", "node2", ...]
+                    labels: [mon, osd] or apply-all-labels
+                    attach_ip_address: boolean
+
         """
         args = config.get("args")
         nodes = args.pop("nodes", None)
@@ -155,15 +172,17 @@ class Host(Orch):
         Remove host from cluster
 
         Args:
-            config
+            config (Dict): Remove host configuration
 
-        config:
-            service: host
-            command: remove
-            base_cmd_args:
-              verbose: true                        # arguments to ceph orch
-            args:
-              node: "node2"                         # node-name or object
+        Example::
+
+            config:
+                service: host
+                command: remove
+                base_cmd_args:
+                  verbose: true                        # arguments to ceph orch
+                args:
+                  node: "node2"                         # node-name or object
         """
         cmd = ["ceph", "orch"]
         if config.get("base_cmd_args"):
@@ -193,16 +212,19 @@ class Host(Orch):
         """
         Remove host(s) from cluster
 
-        - Removal of hosts from cluster with provided nodes
-        - if nodes are empty, all cluster nodes are considered
-        - Otherwise all node will be considered, except Installer node
-
-        config:
-            args:
-                nodes: ["node1", "node2", ...]
+          - Removal of hosts from cluster with provided nodes
+          - if nodes are empty, all cluster nodes are considered
+          - Otherwise all node will be considered, except Installer node
 
         Args:
-            config
+            config (Dict): Remove hosts configuration
+
+        Example::
+
+            config:
+                args:
+                    nodes: ["node1", "node2", ...]
+
         """
         args = config.get("args", {})
         nodes = args.pop("nodes", None)
@@ -220,22 +242,25 @@ class Host(Orch):
         """
         Add/Attach label to nodes
 
-        - Attach labels to existing nodes
-        - if nodes are empty, all cluster nodes are considered
-        - roles defined to each node used as labels( eg., [mon, mgr])
+          - Attach labels to existing nodes
+          - if nodes are empty, all cluster nodes are considered
+          - roles defined to each node used as labels( eg., [mon, mgr])
 
-        config:
-            service: host
-            command: label_add
-            base_cmd_args:
-                verbose: true
-            args:
-                node: node1
-                labels:
-                    - mon
-                    - osd
         Args:
-            config
+            config (Dict): label add configuration
+
+        Example::
+
+            config:
+                service: host
+                command: label_add
+                base_cmd_args:
+                    verbose: true
+                args:
+                    node: node1
+                    labels:
+                        - mon
+                        - osd
         """
         cmd = ["ceph", "orch"]
         if config.get("base_cmd_args"):
@@ -263,26 +288,36 @@ class Host(Orch):
             self.shell(args=_cmd)
             assert label in self.fetch_labels_by_hostname(node.shortname)
 
+            if config.get("validate_admin_keyring") and label == "_admin":
+                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
+                if not monitoring_file_existence(node, DEFAULT_KEYRING_PATH):
+                    raise HostOpFailure("Ceph keyring not found")
+                if not monitoring_file_existence(node, DEFAULT_CEPH_CONF_PATH):
+                    raise HostOpFailure("Ceph configuration file not found")
+                logger.info("Ceph configuration and Keyring found on admin node...")
+
     def label_remove(self, config):
         """
         Removes label from nodes
 
-        - remove labels from existing nodes
-        - if nodes are empty, all cluster nodes are considered
+          - remove labels from existing nodes
+          - if nodes are empty, all cluster nodes are considered
 
         Args:
-            config
+            config (Dict): label remove configuration
 
-        config:
-            service: host
-            command: label_remove
-            base_cmd_args:
-                verbose: true
-            args:
-                node: node1
-                labels:
-                    - mon
-                    - osd
+        Example::
+
+            config:
+                service: host
+                command: label_remove
+                base_cmd_args:
+                    verbose: true
+                args:
+                    node: node1
+                    labels:
+                        - mon
+                        - osd
         """
         cmd = ["ceph", "orch"]
         if config.get("base_cmd_args"):
@@ -311,24 +346,39 @@ class Host(Orch):
             _cmd = deepcopy(cmd)
             _cmd.extend(["host", "label", "rm", node.shortname, label])
             self.shell(args=_cmd)
-            # BZ-1920979(cephadm allows duplicate labels attachment to node)
-            # assert label not in self.fetch_labels_by_hostname(node.shortname)
+            assert label not in self.fetch_labels_by_hostname(node.shortname)
+
+            if config.get("validate_admin_keyring") and label == "_admin":
+                logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
+                if not monitoring_file_existence(
+                    node, DEFAULT_KEYRING_PATH, file_exist=False
+                ):
+                    raise HostOpFailure("Ceph keyring found")
+                if not monitoring_file_existence(
+                    node, DEFAULT_CEPH_CONF_PATH, file_exist=False
+                ):
+                    raise HostOpFailure("Ceph configuration file found")
+                logger.info("Ceph configuration and Keyring not found as expected")
 
     def set_address(self, config):
         """
         Set IP address to node
-        - Attach address to existing nodes
 
-        config:
-            service: host
-            command: set_address
-            base_cmd_args:
-                verbose: true
-            args:
-                node: node1
+          - Attach address to existing nodes
 
         Args:
-            config
+            config (Dict): set address configuration
+
+        Example::
+
+            config:
+                service: host
+                command: set_address
+                base_cmd_args:
+                    verbose: true
+                args:
+                    node: node1
+
         """
         cmd = ["ceph", "orch"]
         if config.get("base_cmd_args"):
@@ -351,8 +401,9 @@ class Host(Orch):
     def fetch_labels_by_hostname(self, node_name):
         """
         Fetch labels attach to a node by hostname
+
         Returns:
-            labels: list of labels
+            labels (List): list of labels
         """
         nodes, _ = self.list()
         for node in json.loads(nodes):
@@ -363,8 +414,9 @@ class Host(Orch):
     def fetch_host_names(self):
         """
         Returns host-names attached to a cluster
+
         Returns:
-            list of host names
+            list of host names (List)
         """
         out, _ = self.list()
         return [i["hostname"] for i in json.loads(out)]
@@ -372,8 +424,9 @@ class Host(Orch):
     def get_addrs(self):
         """
         Returns IP addresses of hosts attached to a cluster
+
         Returns:
-            list of IP addresses
+            list of IP addresses (List)
         """
         out, _ = self.list()
         return [i["addr"] for i in json.loads(out)]
@@ -382,8 +435,11 @@ class Host(Orch):
         """
         Returns ip address of attached node using hostname
 
+        Args:
+            node_name (Str): node name
+
         Returns:
-            ip_address: IP address of host name
+            ip_address (Str): IP address of host name
         """
         out, _ = self.list()
         for node in json.loads(out):
@@ -391,3 +447,30 @@ class Host(Orch):
                 return node["addr"]
 
         return None
+
+    def get_host(self, hostname: str):
+        """Fetches the host with given hostname is deployed in the cluster.
+
+        Args:
+            hostname (str): hostname of the host to be verified
+
+        Returns:
+            host with the given hostname
+        """
+        out, _ = self.list()
+        for node in json.loads(out):
+            if hostname in node["hostname"]:
+                return node
+        raise AssertionError("Node not found")
+
+    def get_host_status(self, hostname) -> str:
+        """Fetches the status of the host with given hostname as present in ceph orch host ls output
+
+        Args:
+            hostname: hostname of the host whose status needs to be fetched
+
+        Returns:
+            status of the host as given in ceph orch host ls output
+        """
+        node = self.get_host(hostname)
+        return node["status"]

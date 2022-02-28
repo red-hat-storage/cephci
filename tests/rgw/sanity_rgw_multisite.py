@@ -1,10 +1,60 @@
-# from _typeshed import SupportsRead
-import logging
+"""
+This module will allow us to run tests from ceph-qe-scritps repo.
+We tests multisite scenarios here
+Repo: https://github.com/red-hat-storage/ceph-qe-scripts
+Folder: rgw
+
+Below configs are needed in order to run the tests
+
+    clusters: Primary node or Secondary node
+        config:
+            script-name:
+                        The script to run
+            config-file-name:
+                        Config file for the above script,
+                        use this file if custom test-config is not given
+            test-config (optional):
+                        Custom test config supported for the above script,
+                        refer structure in ceph-qe-scripts/rgw
+                        example:
+                            test-config:
+                                user_count: 1
+                                bucket_count: 10
+                                objects_count: 5
+                                objects_size_range:
+                                min: 5M
+                                max: 15M
+            verify-io-on-site (optional):
+                        Primary node> or Secondary node
+            env-vars (optional):
+                        - cleanup=False
+                        - objects_count: 500
+            extra-pkgs (optional):
+                        Packages to install
+                        example:
+                            a. distro specific packages
+                                extra-pkgs:
+                                    7:
+                                        - pkg1
+                                        - pkg2
+                                    8:
+                                        - pkg1
+                                        - pkg2
+                            b. list of packages without distro version
+                                extra-pkgs:
+                                    - pkg1
+                                    - pkg2
+"""
+
 import time
 
-from utility.utils import setup_cluster_access, sync_status_on_primary
+import yaml
 
-log = logging.getLogger(__name__)
+from utility import utils
+from utility.log import Log
+from utility.utils import setup_cluster_access, verify_sync_status
+
+log = Log(__name__)
 
 TEST_DIR = {
     "v2": {
@@ -22,9 +72,10 @@ def run(**kw):
     test_site = kw.get("ceph_cluster")
     log.info(f"test site: {test_site.name}")
     test_site_node = test_site.get_ceph_object("rgw").node
+    config["git-url"] = config.get(
+        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+    )
 
-    # adding sleep for 60 seconds before another test starts, sync needs to complete
-    time.sleep(60)
     set_env = config.get("set-env", False)
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
@@ -41,13 +92,14 @@ def run(**kw):
         set_test_env(config, primary_rgw_node)
         set_test_env(config, secondary_rgw_node)
 
-        if primary_cluster.rhcs_version == "5.0":
+        if primary_cluster.rhcs_version.version[0] == 5:
             setup_cluster_access(primary_cluster, primary_rgw_node)
             setup_cluster_access(secondary_cluster, secondary_rgw_node)
 
     # run the test
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
+    test_config = {"config": config.get("test-config", {})}
     test_version = config.get("test-version", "v2")
     script_dir = TEST_DIR[test_version]["script"]
     config_dir = TEST_DIR[test_version]["config"]
@@ -57,8 +109,18 @@ def run(**kw):
     log.info("flushing iptables")
     test_site_node.exec_command(cmd="sudo iptables -F", check_ec=False)
 
+    if test_config["config"]:
+        log.info("creating custom config")
+        f_name = test_folder_path + config_dir + config_file_name
+        remote_fp = test_site_node.remote_file(
+            file_name=f_name, file_mode="w", sudo=True
+        )
+        remote_fp.write(yaml.dump(test_config, default_flow_style=False))
+
+    cmd_env = " ".join(config.get("env-vars", []))
     out, err = test_site_node.exec_command(
-        cmd="sudo python3 "
+        cmd=cmd_env
+        + "sudo python3 "
         + test_folder_path
         + script_dir
         + script_name
@@ -80,6 +142,7 @@ def run(**kw):
         copy_file_from_node_to_node(
             user_details_file, test_site_node, copy_user_to_site_node, user_details_file
         )
+        verify_sync_status(copy_user_to_site_node)
 
     verify_io_on_sites = config.get("verify-io-on-site", [])
     if verify_io_on_sites:
@@ -87,7 +150,7 @@ def run(**kw):
         for site in verify_io_on_sites:
             verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
             log.info(f"Check sync status on {site}")
-            sync_status_on_primary(verify_io_on_site_node)
+            verify_sync_status(verify_io_on_site_node)
             # adding sleep for 60 seconds before verification of data starts
             time.sleep(60)
             log.info(f"verification IO on {site}")
@@ -123,9 +186,10 @@ def set_test_env(config, rgw_node):
     log.info("flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
     rgw_node.exec_command(cmd="sudo yum install python3 -y", check_ec=False)
+    rgw_node.exec_command(cmd="yum install -y ceph-common", check_ec=False, sudo=True)
     rgw_node.exec_command(cmd="sudo rm -rf " + test_folder)
     rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
-    clone_the_repo(config, rgw_node, test_folder_path)
+    utils.clone_the_repo(config, rgw_node, test_folder_path)
 
     rgw_node.exec_command(
         cmd=f"sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
@@ -182,22 +246,3 @@ def write_file_to_node(file_obj, file_name, node):
     dest_file_obj = node.remote_file(sudo=True, file_name=file_name, file_mode="w")
     dest_file_obj.write(file_obj)
     dest_file_obj.flush()
-
-
-def clone_the_repo(config, node, path_to_clone):
-    """
-    clone the repo on to test node
-    :param config: test config
-    :param node: ceph rgw node
-    :param path_to_clone: the path to clone the repo
-
-    """
-    log.info("cloning the repo")
-    branch = config.get("branch", "master")
-    log.info(f"branch: {branch}")
-    repo_url = config.get(
-        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
-    )
-    log.info(f"repo_url: {repo_url}")
-    git_clone_cmd = f"sudo git clone {repo_url} -b {branch}"
-    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")

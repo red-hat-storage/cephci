@@ -1,14 +1,14 @@
 import ast
 import datetime
 import json
-import logging
 import random
 import string
 import time
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class RbdMirror:
@@ -23,6 +23,7 @@ class RbdMirror:
         self.cluster_spec = self.rbd_client + "@" + self.cluster_name
         self.datapool = None
         self.flag = 0
+        self.ceph_rbdmirror = self.ceph_nodes.get_ceph_objects("rbd-mirror")[0]
 
         # Identifying Monitor And Client node
         for node in self.ceph_nodes:
@@ -201,6 +202,8 @@ class RbdMirror:
     def wait_for_status(self, **kw):
         tout = datetime.timedelta(seconds=600)
         starttime = datetime.datetime.now()
+        # Waiting for cluster to be aware of new event
+        time.sleep(20)
         while True:
             if kw.get("poolname", False):
                 if kw.get("health_pattern"):
@@ -307,16 +310,15 @@ class RbdMirror:
             return mirroring_details.get("mode")
         return None
 
-    def schedule_snapshot_image(self, poolname, **kwargs):
+    def mirror_snapshot_schedule_add(self, poolname, **kwargs):
         """
         This will schedule snapshot based on below kwargs
         Args:
             poolname:
             **kwargs:
-                imagename : if imagename is specified scedule will done per image if not will done per pool
-                interval : if specidifed will be used or default it to 5 min
+                imagename : if image name is specified schedule will be done per image if not will done globally
+                interval : Positional argument need to be specified
                 starttime : optional if specified will be configured
-
         Returns:
         """
         cmd1 = f"rbd mirror snapshot schedule add --pool {poolname}"
@@ -351,6 +353,53 @@ class RbdMirror:
         if snapshot_ids != snapshot_ids_1:
             return 0
         raise Exception("snapshots not generated after the intervel")
+
+    def mirror_snapshot_schedule_list(self, poolname, **kwargs):
+        """
+        This will list the mirror snapshot schedule based on below kwargs
+        Args:
+            poolname:
+            **kwargs:
+                imagename : if imagename is specified list will be done per image if not will done globally
+        Returns:
+        """
+        cmd1 = f"rbd mirror snapshot schedule list --pool {poolname}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')} --format=json --recursive"
+        self.exec_cmd(cmd=cmd1)
+
+    def mirror_snapshot_schedule_status(self, poolname, **kwargs):
+        """
+        This will show the status of mirror snapshot schedule based on below kwargs
+        Args:
+            poolname:
+            **kwargs:
+                imagename : if imagename is specified status will be done per image if not will done globally
+
+        Returns:
+        """
+        cmd1 = f"rbd mirror snapshot schedule status --pool {poolname}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')} --format=json"
+        self.exec_cmd(cmd=cmd1)
+
+    def mirror_snapshot_schedule_remove(self, poolname, **kwargs):
+        """
+        This will remove the mirror snapshot schedule based on below kwargs
+        Args:
+            poolname:
+            **kwargs:
+                imagename : if imagename is specified schedule will be done per image if not will done globally
+                interval : optional if specified will be configured
+                starttime : optional if specified will be configured
+        Returns:
+        """
+        cmd1 = f"rbd mirror snapshot schedule remove --pool {poolname}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')}"
+        cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else ""
+        cmd1 += f" {kwargs.get('starttime')}" if kwargs.get("starttime") else ""
+        self.exec_cmd(cmd=cmd1)
 
     # Check data consistency
     def check_data(self, peercluster, imagespec):
@@ -559,3 +608,35 @@ class RbdMirror:
             for pool in pool_list:
                 self.delete_pool(poolname=pool)
                 peercluster.delete_pool(poolname=pool)
+
+    def get_rbd_service_name(self, service_name):
+        """
+        Gets the rbd mirror service name where the rbd mirror daemon running
+        Args:
+            service_name:
+
+        Returns:
+            service_name --> str
+        """
+        out, rc = self.ceph_rbdmirror.exec_command(
+            sudo=True,
+            cmd=f"systemctl list-units --all | grep {service_name} | awk {{'print $1'}}",
+        )
+        service_name = out.read().decode()
+        log.info(f"Service name : {service_name} ")
+        return service_name
+
+    def change_service_state(self, service_name, operation):
+        """
+        Starts or Stops the given service name
+        Args:
+            service_name:
+            operation:
+
+        Returns:
+            None
+        """
+        log.info(f"{operation}ing the service : {service_name} ")
+        self.ceph_rbdmirror.exec_command(
+            sudo=True, cmd=f"systemctl {operation} {service_name}"
+        )

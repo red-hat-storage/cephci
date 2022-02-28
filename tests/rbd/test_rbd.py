@@ -11,12 +11,13 @@ This module will not install any pre-requisites of the repo.
 This module returns 0 on success else 1.
 """
 import json
-import logging
 from time import sleep
 
 from ceph.utils import get_nodes_by_ids
+from utility.log import Log
 
-LOG = logging.getLogger(__name__)
+log = Log(__name__)
+
 TEST_REPO = "https://github.com/ceph/ceph.git"
 SCRIPT_PATH = "qa/workunits/rbd"
 
@@ -49,7 +50,7 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
         )
 
     try:
-        node.exec_command(cmd="rpm -qa | grep epel-release")
+        node.exec_command(cmd="rpm -qa | grep xmlstarlet")
         return
     except BaseException:  # noqa
         pass
@@ -86,7 +87,7 @@ def run(ceph_cluster, **kwargs) -> int:
         0 - Success
         1 - Failure
     """
-    LOG.info("Running RBD Sanity tests.")
+    log.info("Running RBD Sanity tests.")
 
     config = kwargs["config"]
     script_dir = config["script_path"]
@@ -108,15 +109,17 @@ def run(ceph_cluster, **kwargs) -> int:
             cmd="sudo /usr/sbin/alternatives --set python /usr/bin/python3"
         )
 
-    if "5." in rhbuild:
+    if rhbuild[0] > "4":
         out, err = nodes[0].exec_command(
             sudo=True, cmd="ceph config get mon mon_allow_pool_delete --format json"
         )
 
         out = out.read().decode()
         if not json.loads(out):
-            nodes[0].exec_command(cmd="ceph config set mon mon_allow_pool_delete true")
-            nodes[0].exec_command(cmd="ceph orch restart mon")
+            nodes[0].exec_command(
+                sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+            )
+            nodes[0].exec_command(sudo=True, cmd="ceph orch restart mon")
 
     for node in nodes:
         one_time_setup(node, rhbuild, branch=branch)

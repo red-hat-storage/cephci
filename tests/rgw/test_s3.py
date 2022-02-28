@@ -8,14 +8,14 @@ https://github.com/ceph/s3-tests. Over here, we have three stages
     - Execute Tests
     - Test Teardown
 
-In the test setup stage, the test suite is clone and the necessary steps to execute it
-is carried out here.
+In the test setup stage, the test suite is cloned and the necessary steps to execute it
+is carried out.
 
 In the execute test stage, the test suite is executed using tags based on the RHCS
 build version.
 
-In the test teardown, the cloned repository is removed and the configurations done are
-reverted.
+In the test teardown, the cloned repository is removed and the configuration changes
+undone.
 
 Requirement parameters
      ceph_nodes:    The list of node participating in the RHCS environment.
@@ -28,13 +28,70 @@ Entry Point:
 
 import binascii
 import json
-import logging
 import os
+from json import loads
+from time import sleep
+from typing import Dict, Optional, Tuple
+
+from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode, CommandFailed
 from ceph.utils import open_firewall_port
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
+S3CONF = """[DEFAULT]
+host = {{ data.host }}
+port = {{ data.port }}
+is_secure = {{ data.secure }}
+ssl_verify = false
+
+[fixtures]
+bucket_prefix = cephci-{random}-
+
+[s3 main]
+api_name = default
+display_name = {{ data.main.name }}
+user_id = {{ data.main.id }}
+access_key = {{ data.main.access_key }}
+secret_key = {{ data.main.secret_key }}
+email = {{ data.main.email }}
+{%- if data.main.kms_keyid %}
+kms_keyid = {{ data.main.kms_keyid }}
+{% endif %}
+
+[s3 alt]
+display_name = {{ data.alt.name }}
+user_id = {{ data.alt.id }}
+access_key = {{ data.alt.access_key }}
+secret_key = {{ data.alt.secret_key }}
+email = {{ data.alt.email }}
+
+[s3 tenant]
+display_name = {{ data.tenant.name }}
+user_id = {{ data.tenant.id }}
+access_key = {{ data.tenant.access_key }}
+secret_key = {{ data.tenant.secret_key }}
+email = {{ data.tenant.email }}
+
+{%- if data.iam %}
+[iam]
+display_name = {{ data.iam.name }}
+user_id = {{ data.iam.id }}
+access_key = {{ data.iam.access_key }}
+secret_key = {{ data.iam.secret_key }}
+email = {{ data.iam.email }}
+{% endif %}
+
+{%- if data.webidentity %}
+[webidentity]
+token = {{ data.webidentity.token }}
+aud = {{ data.webidentity.aud }}
+thumbprint = {{ data.webidentity.thumbprint }}
+KC_REALM = {{ data.webidentity.realm }}
+{% endif %}
+
+"""
 
 
 def run(**kw):
@@ -46,7 +103,8 @@ def run(**kw):
     client_node = cluster.get_nodes(role="client")[0]
 
     execute_setup(cluster, config)
-    exit_status = execute_s3_tests(client_node, build)
+    _, secure, _ = get_rgw_frontend(cluster)
+    exit_status = execute_s3_tests(client_node, build, secure)
     execute_teardown(cluster, build)
 
     log.info("Returning status code of %s", exit_status)
@@ -81,9 +139,9 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
     install_s3test_requirements(client_node, branch)
 
     host = rgw_node.shortname
-    secure = config.get("is_secure", "no")
-    port = "443" if secure.lower() == "yes" else rgw_frontend_port(cluster, build)
-    create_s3_conf(cluster, build, host, port, secure)
+    lib, secure, port = get_rgw_frontend(cluster)
+    kms_keyid = config.get("kms_keyid")
+    create_s3_conf(cluster, build, host, port, secure, kms_keyid)
 
     if not build.startswith("5"):
         open_firewall_port(rgw_node, port=port, protocol="tcp")
@@ -91,14 +149,14 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
     add_lc_debug(cluster, build)
 
 
-def execute_s3_tests(node: CephNode, build: str) -> int:
+def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> int:
     """
     Return the result of S3 test run.
 
     Args:
-        node: The node from which the test execution is triggered.
-        build: the RH build version
-
+        node        The node from which the test execution is triggered.
+        build       The RH build version
+        encryption  include encryption test or not
     Returns:
         0 - Success
         1 - Failure
@@ -110,9 +168,12 @@ def execute_s3_tests(node: CephNode, build: str) -> int:
         tests = "s3tests"
 
         if build.startswith("5"):
-            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption"
-            extra_args += ",!test_of_sts,!lifecycle,!s3select,!user-policy"
-            extra_args += ",!webidentity_test'"
+            extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616"
+
+            if not encryption:
+                extra_args += ",!encryption"
+
+            extra_args += ",!test_of_sts,!s3select,!user-policy,!webidentity_test'"
             tests = "s3tests_boto3"
 
         cmd = f"{base_cmd} {extra_args} {tests}"
@@ -145,7 +206,7 @@ def execute_teardown(cluster: Ceph, build: str) -> None:
 def clone_s3_tests(node: CephNode, branch="ceph-luminous") -> None:
     """Clone the S3 repository on the given node."""
     repo_url = "https://github.com/ceph/s3-tests.git"
-    node.exec_command(sudo=True, cmd="if test -d s3-tests; then rm -r s3-tests; fi")
+    node.exec_command(cmd="if test -d s3-tests; then sudo rm -r s3-tests; fi")
     node.exec_command(cmd=f"git clone -b {branch} {repo_url}")
 
 
@@ -163,55 +224,82 @@ def install_s3test_requirements(node: CephNode, branch: str) -> None:
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
-    rhel8, err = node.exec_command(
-        cmd="grep -i 'release 8' /etc/redhat-release", check_ec=False
-    )
-    rhel8 = rhel8.read().decode()
-
-    if branch == "ceph-nautilus" and rhel8:
+    if branch in ["ceph-nautilus", "ceph-luminous"]:
         return _s3tests_req_install(node)
 
     _s3tests_req_bootstrap(node)
 
 
-def rgw_frontend_port(cluster: Ceph, build: str) -> str:
+def get_rgw_frontend(cluster: Ceph) -> Tuple:
     """
-    Return the configured port number of RadosGW.
+    Returns the RGW frontend information.
 
-    For prior versions of RHCS 5.0, the port number is determined using the ceph.conf
-    and for the higher versions, the value is retrieved from cephadm.
-
-    Note: In case of RHCS 5.0, we assume that the installer node is provided.
+    The frontend information is found by
+        - getting the config dump (or)
+        - reading the config file
 
     Args:
-        cluster:    The cluster participating in the test.
-        build:      RHCS version string.
+         cluster     The cluster participating in the test
 
     Returns:
-        port_number:    The configured port number
+         Tuple(str, bool, int)
+            lib         beast or civetweb
+            secure      True if secure else False
+            port        the configured port
     """
-    node = cluster.get_nodes(role="rgw")[0]
+    frontend_value = None
 
-    if build.startswith("5"):
+    try:
         node = cluster.get_nodes(role="client")[0]
-        # Allow realm & zone variability hence using config dump instead of config-key
-        cmd1 = "ceph config dump | grep client.rgw | grep port | head -n 1"
-        cmd2 = "cut -d '=' -f 2 | cut -d ' ' -f 1"
-        command = f"{cmd1} | {cmd2}"
-    else:
-        # To determine the configured port, the line must start with rgw frontends
-        # in ceph.conf. An example is given below,
-        #
+        out, err = node.exec_command(sudo=True, cmd="ceph config dump --format json")
+        configs = loads(out.read().decode())
+
+        for config in configs:
+            if config.get("name").lower() != "rgw_frontends":
+                continue
+
+            frontend_value = config.get("value").split()
+
+        # the command would work but may not have the required values
+        if not frontend_value:
+            raise AttributeError("Config has no frontend information. Trying conf file")
+
+    except BaseException as e:
+        log.debug(e)
+
+        # Process via config
+        node = cluster.get_nodes(role="rgw")[0]
+
         # rgw frontends = civetweb port=192.168.122.199:8080 num_threads=100
-        cmd1 = "grep -e '^rgw frontends' /etc/ceph/ceph.conf"
-        cmd2 = "cut -d ':' -f 2 | cut -d ' ' -f 1"
-        command = f"{cmd1} | {cmd2}"
+        command = "grep -e '^rgw frontends' /etc/ceph/ceph.conf"
+        out, err = node.exec_command(sudo=True, cmd=command)
+        out = out.read().decode()
+        key, sep, value = out.partition("=")
+        frontend_value = value.lstrip().split()
 
-    out, _ = node.exec_command(sudo=True, cmd=command)
-    return out.read().decode().strip()
+        if not frontend_value:
+            raise AttributeError("RGW frontend details not found in conf.")
+
+    lib = "beast" if "beast" in frontend_value else "civetweb"
+    secure = False
+    port = 80
+
+    # Double check the port number
+    for value in frontend_value:
+        # support values like endpoint=x.x.x.x:port ssl_port=443 port=x.x.x.x:8080
+        if "port" in value or "endpoint" in value:
+            sep = ":" if ":" in value else "="
+            port = value.split(sep)[-1]
+            continue
+
+        if not secure and "ssl" in value.lower():
+            secure = True
+            continue
+
+    return lib, secure, port
 
 
-def create_s3_user(node, display_name, email=False):
+def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
     """
     Create a S3 user with the given display_name.
 
@@ -219,40 +307,52 @@ def create_s3_user(node, display_name, email=False):
 
     Args:
         node: node in the cluster to create the user on
-        display_name: display name for the new user
-        email: (optional) generate fake email address for user
+        user_prefix: Prefix to be added to the new user
+        data: a reference to the payload that needs to be updated.
 
     Returns:
         user_info dict
     """
     uid = binascii.hexlify(os.urandom(32)).decode()
+    display_name = f"{user_prefix}-user"
     log.info("Creating user: {display_name}".format(display_name=display_name))
 
     cmd = f"radosgw-admin user create --uid={uid} --display_name={display_name}"
-
-    if email:
-        cmd += " --email={email}@foo.bar".format(email=uid)
+    cmd += " --email={email}@foo.bar".format(email=uid)
 
     out, err = node.exec_command(sudo=True, cmd=cmd)
     user_info = json.loads(out.read().decode())
 
-    return user_info
+    data[user_prefix] = {
+        "id": user_info["keys"][0]["user"],
+        "access_key": user_info["keys"][0]["access_key"],
+        "secret_key": user_info["keys"][0]["secret_key"],
+        "name": user_info["display_name"],
+        "email": user_info["email"],
+    }
 
 
 def create_s3_conf(
-    cluster: Ceph, build: str, host: str, port: str, secure: str
+    cluster: Ceph,
+    build: str,
+    host: str,
+    port: str,
+    secure: bool,
+    kms_keyid: Optional[str] = None,
 ) -> None:
     """
     Generate the S3TestConf for test execution.
 
     Args:
-        cluster:    The cluster participating in the test
-        build:      The RHCS version string
-        host:       The RGW hostname to be set in the conf
-        port:       The RGW port number to be used in the conf
-        secure:     If the connection is secure or unsecure.
+        cluster     The cluster participating in the test
+        build       The RHCS version string
+        host        The RGW hostname to be set in the conf
+        port        The RGW port number to be used in the conf
+        secure      If the connection is secure or unsecure.
+        kms_keyid   key to be used for encryption
     """
     log.info("Creating the S3TestConfig file")
+    data = dict({"host": host, "port": int(port), "secure": secure})
 
     rgw_node = cluster.get_nodes(role="rgw")[0]
     client_node = cluster.get_nodes(role="client")[0]
@@ -260,60 +360,15 @@ def create_s3_conf(
     if build.startswith("5"):
         rgw_node = client_node
 
-    main_user = create_s3_user(node=rgw_node, display_name="main-user", email=True)
-    alt_user = create_s3_user(node=rgw_node, display_name="alt-user", email=True)
-    tenant_user = create_s3_user(node=rgw_node, display_name="tenant", email=True)
+    create_s3_user(node=rgw_node, user_prefix="main", data=data)
+    create_s3_user(node=rgw_node, user_prefix="alt", data=data)
+    create_s3_user(node=rgw_node, user_prefix="tenant", data=data)
 
-    _config = """
-[DEFAULT]
-host = {host}
-port = {port}
-is_secure = {secure}
+    if kms_keyid:
+        data["main"]["kms_keyid"] = kms_keyid
 
-[fixtures]
-bucket prefix = cephuser-{random}-
-
-[s3 main]
-user_id = {main_id}
-display_name = {main_name}
-access_key = {main_access_key}
-secret_key = {main_secret_key}
-email = {main_email}
-api_name = default
-
-[s3 alt]
-user_id = {alt_id}
-display_name = {alt_name}
-email = {alt_email}
-access_key = {alt_access_key}
-secret_key = {alt_secret_key}
-
-[s3 tenant]
-user_id = {tenant_id}
-display_name = {tenant_name}
-email = {tenant_email}
-access_key = {tenant_access_key}
-secret_key = {tenant_secret_key}""".format(
-        host=host,
-        port=port,
-        secure=secure,
-        random="{random}",
-        main_id=main_user["user_id"],
-        main_name=main_user["display_name"],
-        main_access_key=main_user["keys"][0]["access_key"],
-        main_secret_key=main_user["keys"][0]["secret_key"],
-        main_email=main_user["email"],
-        alt_id=alt_user["user_id"],
-        alt_name=alt_user["display_name"],
-        alt_email=alt_user["email"],
-        alt_access_key=alt_user["keys"][0]["access_key"],
-        alt_secret_key=alt_user["keys"][0]["secret_key"],
-        tenant_id=tenant_user["user_id"],
-        tenant_name=tenant_user["display_name"],
-        tenant_email=tenant_user["email"],
-        tenant_access_key=tenant_user["keys"][0]["access_key"],
-        tenant_secret_key=tenant_user["keys"][0]["secret_key"],
-    )
+    templ = Template(S3CONF)
+    _config = templ.render(data=data)
 
     conf_file = client_node.remote_file(file_name="s3-tests/config.yaml", file_mode="w")
     conf_file.write(_config)
@@ -331,22 +386,12 @@ def add_lc_debug(cluster: Ceph, build: str) -> None:
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
-    node = cluster.get_nodes(role="rgw")[0]
-    commands = [
-        "sed -i -e '$argw_lc_debug_interval = 10' /etc/ceph/ceph.conf",
-        "systemctl restart ceph-radosgw.target",
-    ]
-
+    log.debug("Setting the lifecycle interval for all RGW daemons")
     if build.startswith("5"):
-        node = cluster.get_nodes(role="client")[0]
-        rgw_service_name = _get_rgw_service_name(cluster)
-        commands = [
-            "ceph config set client.rgw.* rgw_lc_debug_interval 10",
-            f"ceph orch restart {rgw_service_name}",
-        ]
+        _rgw_lc_debug(cluster, add=True)
+        return
 
-    for cmd in commands:
-        node.exec_command(sudo=True, cmd=cmd)
+    _rgw_lc_debug_conf(cluster, add=True)
 
 
 def del_lc_debug(cluster: Ceph, build: str) -> None:
@@ -360,22 +405,12 @@ def del_lc_debug(cluster: Ceph, build: str) -> None:
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
-    node = cluster.get_nodes(role="rgw")[0]
-    commands = [
-        "sed -i '/rgw_lc_debug_interval/d' /etc/ceph/ceph.conf",
-        "systemctl restart ceph-radosgw.target",
-    ]
-
+    log.debug("Removing the lifecycle configuration")
     if build.startswith("5"):
-        node = cluster.get_nodes(role="client")[0]
-        rgw_service_name = _get_rgw_service_name(cluster)
-        commands = [
-            "ceph config rm client.rgw.* rgw_lc_debug_interval",
-            f"ceph orch restart {rgw_service_name}",
-        ]
+        _rgw_lc_debug(cluster, add=False)
+        return
 
-    for cmd in commands:
-        node.exec_command(sudo=True, cmd=cmd)
+    _rgw_lc_debug_conf(cluster, add=False)
 
 
 # Private functions
@@ -392,6 +427,9 @@ def _s3tests_req_install(node: CephNode) -> None:
         "libxslt-devel",
         "zlib-devel",
     ]
+    node.exec_command(
+        sudo=True, cmd="yum groupinstall -y 'Development Tools'", check_ec=False
+    )
     node.exec_command(
         sudo=True, cmd=f"yum install -y --nogpgcheck {' '.join(packages)}"
     )
@@ -411,11 +449,72 @@ def _s3tests_req_bootstrap(node: CephNode) -> None:
     node.exec_command(cmd="cd s3-tests; ./bootstrap")
 
 
-def _get_rgw_service_name(cluster: Ceph) -> str:
-    """Return the RGW service name."""
-    node = cluster.get_nodes(role="client")[0]
-    cmd_ = "ceph orch ls rgw --format json"
-    out, err = node.exec_command(sudo=True, cmd=cmd_)
+def _rgw_lc_debug_conf(cluster: Ceph, add: bool = True) -> None:
+    """
+    Modifies the LC debug config entry based on add being set or unset.
 
-    json_out = json.loads(out.read().decode().strip())
-    return json_out[0]["service_name"]
+    The LC debug value is set in ceph conf file
+
+    Args:
+        cluster     The cluster participating in the tests.
+        add         If set, the config flag is added else removed
+
+    Returns:
+        None
+    """
+    if add:
+        command = "sed -i '/global/a rgw lc debug interval = 10' /etc/ceph/ceph.conf"
+    else:
+        command = "sed -i '/rgw lc debug interval/d' /etc/ceph/ceph.conf"
+
+    command += " && systemctl restart ceph-radosgw@rgw.`hostname -s`.rgw0.service"
+
+    for node in cluster.get_nodes(role="rgw"):
+        node.exec_command(sudo=True, cmd=command)
+
+    # Service restart can take time
+    sleep(60)
+
+    log.debug("Lifecycle dev configuration set to 10")
+
+
+def _rgw_lc_debug(cluster: Ceph, add: bool = True) -> None:
+    """
+    Modifies the Lifecycle interval parameter used for testing.
+
+    The configurable is enable if add is set else disabled. In case of CephAdm, the
+    value has to set for every daemon.
+
+    Args:
+        cluster     The cluster participating in the test
+        add         If set adds the configurable else unsets it.
+
+    Returns:
+        None
+    """
+    node = cluster.get_nodes(role="client")[0]
+
+    out, err = node.exec_command(
+        sudo=True, cmd="ceph orch ps --daemon_type rgw --format json"
+    )
+    rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out.read().decode())]
+
+    out, err = node.exec_command(
+        sudo=True, cmd="ceph orch ls --service_type rgw --format json"
+    )
+    rgw_services = [x["service_name"] for x in loads(out.read().decode())]
+
+    # Set (or) Unset the lc_debug_interval for all daemons
+    for daemon in rgw_daemons:
+        if add:
+            command = f"ceph config set {daemon} rgw_lc_debug_interval 10"
+        else:
+            command = f"ceph config rm {daemon} rgw_lc_debug_interval"
+
+        node.exec_command(sudo=True, cmd=command)
+
+    for service in rgw_services:
+        node.exec_command(sudo=True, cmd=f"ceph orch restart {service}")
+
+    # Restart can take time
+    sleep(60)

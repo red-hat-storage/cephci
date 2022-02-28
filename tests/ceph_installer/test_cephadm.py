@@ -1,19 +1,19 @@
 """
-Test suite that verifies the deployment of RedHat Ceph Storage via the cephadm CLI.
+Test suite that verifies the deployment of Red Hat Ceph Storage via the cephadm CLI.
 
 The intent of the suite is to simulate a standard operating procedure expected by a
 customer.
 """
-import logging
-
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.alert_manager import AlertManager
+from ceph.ceph_admin.cephfs_mirror import CephfsMirror
+from ceph.ceph_admin.client_keyring import ClientKeyring
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.crash import Crash
 from ceph.ceph_admin.daemon import Daemon
 from ceph.ceph_admin.grafana import Grafana
-from ceph.ceph_admin.helper import get_cluster_state
+from ceph.ceph_admin.helper import get_cluster_state, validate_log_file_after_enable
 from ceph.ceph_admin.host import Host
 from ceph.ceph_admin.iscsi import ISCSI
 from ceph.ceph_admin.mds import MDS
@@ -26,8 +26,11 @@ from ceph.ceph_admin.osd import OSD
 from ceph.ceph_admin.prometheus import Prometheus
 from ceph.ceph_admin.rbd_mirror import RbdMirror
 from ceph.ceph_admin.rgw import RGW
+from utility.log import Log
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
+
+
 SERVICE_MAP = dict(
     {
         "alertmanager": AlertManager,
@@ -46,7 +49,9 @@ SERVICE_MAP = dict(
         "rgw": RGW,
         "orch": Orch,
         "rbd-mirror": RbdMirror,
+        "cephfs-mirror": CephfsMirror,
         "daemon": Daemon,
+        "client-keyring": ClientKeyring,
     }
 )
 
@@ -109,6 +114,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
     LOG.info("Starting Ceph cluster deployment.")
     config = kwargs["config"]
+    config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     try:
         steps = config.get("steps", [])
@@ -127,6 +133,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             cephadm.cluster.check_health(
                 rhbuild=config.get("rhbuild"), client=cephadm.installer
             )
+        if config.get("verify_log_files"):
+            isvalid = validate_log_file_after_enable(cephadm)
+            if not isvalid:
+                LOG.error("Log file validation failure")
+                return 1
 
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)

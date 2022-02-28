@@ -24,7 +24,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from ceph.parallel import parallel
-from mita.v2 import CephVMNodeV2, Node
+from compute.openstack import CephVMNodeV2, Node
 from utility.retry import retry
 
 doc = """
@@ -126,7 +126,8 @@ def cleanup(
             return
 
         add_key_to_ref(results, "deleted", user_.email, node.name, tenant)
-    except BaseException:  # noqa
+    except BaseException as e:  # noqa
+        print(f"For Node:{node.name} exception occurred is {e}")
         add_key_to_ref(results, "marked", user_.email, node.name, tenant)
 
 
@@ -251,7 +252,11 @@ def run(args: Dict) -> int:
 
     response = send_email(results)
 
-    return 1 if response else 0
+    if response:
+        print(f"Failed to delete Instances/nodes: {response}")
+        return 1
+    else:
+        return 0
 
 
 if __name__ == "__main__":

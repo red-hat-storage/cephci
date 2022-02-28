@@ -1,14 +1,15 @@
 """Module that interfaces with ceph orch upgrade CLI."""
-import logging
 from datetime import datetime, timedelta
 from json import loads
 from time import sleep
 from typing import Dict
 
+from utility.log import Log
+
 from .common import config_dict_to_string
 from .typing_ import OrchProtocol
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
 
 
 class UpgradeFailure(Exception):
@@ -23,9 +24,10 @@ class UpgradeMixin:
         Execute the command ceph orch start <args>.
 
         Args:
-            config: The key/value pairs passed from the test case.
+            config (Dict): The key/value pairs passed from the test case.
 
-        Example:
+        Example::
+
             Testing ceph orch upgrade
 
             config:
@@ -37,6 +39,7 @@ class UpgradeMixin:
                 args:
                     image: "latest"         # pick latest image from config
                     version: 16.0.0         # Not supported
+
         """
         cmd = ["ceph", "orch"]
 
@@ -55,6 +58,10 @@ class UpgradeMixin:
     def upgrade_status(self: OrchProtocol):
         """
         Execute the command ceph orch status.
+
+        Returns:
+            upgrade Status (Dict)
+
         """
         out, _ = self.shell(args=["ceph", "orch", "upgrade", "status"])
         return loads(out)
@@ -62,10 +69,12 @@ class UpgradeMixin:
     def upgrade_check(self: OrchProtocol, image):
         """
         Check the service versions available against targeted version
+
         Args:
-            image: image name
+            image (Str): image name
+
         Returns:
-            status
+            status (Dict)
         """
         out, _ = self.shell(
             args=["ceph", "orch", "upgrade", "check", f"--image {image}"]
@@ -76,6 +85,10 @@ class UpgradeMixin:
     def monitor_upgrade_status(self, timeout=3600):
         """
         Monitor upgrade status
+
+        Args:
+            timeout (int):  Timeout in seconds (default:3600)
+
         """
         interval = 5
         end_time = datetime.now() + timedelta(seconds=timeout)

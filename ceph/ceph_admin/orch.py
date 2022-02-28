@@ -3,27 +3,29 @@ Module that interacts with the orchestrator CLI.
 
 Provide the interfaces to ceph orch and in turn manage the orchestration engine.
 """
-import logging
 from datetime import datetime, timedelta
 from json import loads
 from time import sleep
 
 from ceph.ceph import ResourceNotFoundError
+from utility.log import Log
 
 from .ceph import CephCLI
 from .common import config_dict_to_string
 from .helper import GenerateServiceSpec
 from .ls import LSMixin
+from .pause import PauseMixin
 from .ps import PSMixin
 from .reconfig import ReconfigMixin
 from .redeploy import RedeployMixin
 from .remove import RemoveMixin
 from .restart import RestartMixin
+from .resume import ResumeMixin
 from .start import StartMixin
 from .stop import StopMixin
 from .upgrade import UpgradeMixin
 
-LOG = logging.getLogger()
+LOG = Log(__name__)
 
 
 class Orch(
@@ -36,9 +38,10 @@ class Orch(
     StartMixin,
     StopMixin,
     UpgradeMixin,
+    PauseMixin,
+    ResumeMixin,
     CephCLI,
 ):
-
     """Represent ceph orch command."""
 
     direct_calls = ["ls", "ps"]
@@ -46,10 +49,12 @@ class Orch(
     def get_hosts_by_label(self, label: str):
         """
         Fetch host object by label attached to it.
+
         Args:
-            label: name of the label
+            label (Str): name of the label
+
         Returns:
-            hosts
+            hosts (List)
         """
         out, _ = self.shell(args=["ceph", "orch", "host", "ls", "--format=json"])
         return [node for node in loads(out) if label in node.get("labels")]
@@ -61,12 +66,13 @@ class Orch(
         Verify the provided service is running for the given list of ids.
 
         Args:
-            service_name:   The name of the service to be checked.
-            timeout:        In seconds, the maximum allowed time. By default 5 minutes
-            interval:      In seconds, the polling interval time.
+            service_name (Str): The name of the service to be checked.
+            timeout (Int):  In seconds, the maximum allowed time (default=300)
+            interval (int): In seconds, the polling interval time (default=5)
 
         Returns:
-            True if the service and the list of daemons are running else False.
+            Boolean: True if the service and the list of daemons are running else False.
+
         """
         end_time = datetime.now() + timedelta(seconds=timeout)
         check_status_dict = {
@@ -98,10 +104,10 @@ class Orch(
         Get service info by name.
 
         Args:
-            service_name: service name
+            service_name (Str): service name
 
         Returns:
-            service
+            service (Dict)
 
         Raises:
             ResourceNotFound: when no resource with the provided is matched.
@@ -118,18 +124,17 @@ class Orch(
         self, service_name: str, timeout: int = 300, interval: int = 5, exist=True
     ) -> bool:
         """
-        check service existence based on the exist parameter
-
-        if exist is set, then validate its presence.
-        otherwise, for its removal.
+        check service existence based on the exist parameter.
+        if exist is set, then validate its presence. otherwise, for its removal.
 
         Args:
-            service_name: service name
-            timeout: timeout in seconds
-            interval: interval in seconds
-            exist: boolean
+            service_name (Str): service name
+            timeout (Int): timeout in seconds
+            interval (Int): interval in seconds
+            exist (Bool): exists or not
+
         Returns:
-            service
+            Boolean
 
         """
         end_time = datetime.now() + timedelta(seconds=timeout)
@@ -153,11 +158,10 @@ class Orch(
         Execute the apply_spec method using the object's service name and provided input.
 
         Args:
-            config:     Key/value pairs passed from the test suite.
-                        base_cmd_args   - key/value pairs to set for base command
-                        specs           - service specifications.
+            config (Dict):     Key/value pairs passed from the test suite.
 
-        Example:
+        Example::
+
             config:
                 command: apply_spec
                 service: orch
@@ -171,6 +175,10 @@ class Orch(
                    nodes:
                      - node2
                      - node3
+
+            base_cmd_args   - key/value pairs to set for base command
+            specs           - service specifications.
+
         """
         base_cmd = ["ceph", "orch"]
 
@@ -197,18 +205,24 @@ class Orch(
     def op(self, op, config):
         """
         Execute the command ceph orch <start|stop|restart|reconfigure|redeploy> <service>.
-        Args:
-            config: command and service are passed from the test case.
-            op: operation parameters ex: restart|start|stop|reconfigure|redeploy
-        Example:
-            Testing ceph orch restart mon
-        config:
-          command: restart
-          service: mon
-        Returns:
-          output, error   returned by the command.
 
-        example
+        Args:
+            config (Dict): command and service are passed from the test case.
+            op (Str): operation parameters.
+
+        Returns:
+          output (Str), error (Str)  returned by the command.
+
+        Example::
+
+            Testing ceph orch restart mon
+            op: restart|start|stop|reconfigure|redeploy
+
+            config:
+              command: restart
+              service: mon
+            ...
+
             config:
                 command: start
                 base_cmd_args:
@@ -226,3 +240,58 @@ class Orch(
         base_cmd.extend(config.get("pos_args"))
 
         return self.shell(args=base_cmd)
+
+    def status(self, config) -> bool:
+        """Execute the command ceph orch status <args>.
+
+        Args:
+            config (Dict): The key/value pairs passed from the test case.
+
+        Returns:
+            output, error   returned by the command.
+
+        Example::
+
+            Testing ceph orch status
+
+            config:
+                command: status
+                base_cmd_args:
+                    verbose: true
+                    format: json | json-pretty | xml | xml-pretty | plain | yaml
+                args:
+                    detail: true
+
+        """
+        cmd = ["ceph", "orch"]
+
+        if config and config.get("base_cmd_args"):
+            base_cmd_args = config_dict_to_string(config["base_cmd_args"])
+            cmd.append(base_cmd_args)
+
+        cmd.append("status")
+
+        if config and config.get("args"):
+            args = config.get("args")
+            if args["detail"]:
+                cmd.append("--detail")
+
+        return self.shell(args=cmd)
+
+    def verify_status(self, op) -> None:
+        """Verify the status of the orchestrator for the operation specified.
+
+        Args:
+            op (str): pause/resume based on whether the pause or resume status to be checked
+        """
+        config = {"command": "status", "base_cmd_args": {"format": "json"}}
+        out, _ = self.status(config)
+        status = loads(out)
+
+        if op == "pause" and status["paused"]:
+            LOG.info("The orch operations are paused")
+            return True
+        elif op == "resume" and not loads(out)["paused"]:
+            LOG.info("The orch operations are resumed")
+            return True
+        return False

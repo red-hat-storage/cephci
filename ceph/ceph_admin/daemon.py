@@ -1,31 +1,29 @@
 """CephADM orchestration Daemon operations."""
-import logging
+from utility.log import Log
 
 from .add import AddMixin
 from .common import config_dict_to_string
 from .orch import Orch
 
-logger = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 class Daemon(AddMixin, Orch):
     def op(self, op, config):
         """
         Execute the command ceph orch daemon <start|stop|restart|reconfigure|redeploy> <service>.
-        Args:
-            config: command and service are passed from the test case.
-            op: operation parameters ex: restart|start|stop|reconfigure|redeploy
-        Example:
-            Testing ceph orch daemon restart mon
-        config:
-          command: restart
-          service: mon
-        Returns:
-          output, error   returned by the command.
 
-        example
+        Args:
+            config (Dict): command and service are passed from the test case.
+            op (Str): operation parameters
+
+        Returns:
+          output (Str), error (Str) returned by the command.
+
+        Example::
+
             config:
-                command: start
+                command: start   # (restart | start | stop | reconfigure | redeploy)
                 base_cmd_args:
                     verbose: true
                 pos_args:

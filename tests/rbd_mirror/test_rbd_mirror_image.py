@@ -1,8 +1,7 @@
-import logging
-
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
+from utility.log import Log
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 
 
 def run(**kw):
@@ -28,6 +27,7 @@ def run(**kw):
     try:
         log.info("Starting RBD mirroring test case")
         config = kw.get("config")
+        build = config.get("build", config.get("rhbuild"))
         mirror1, mirror2 = [
             rbdmirror.RbdMirror(cluster, config)
             for cluster in kw.get("ceph_cluster_dict").values()
@@ -46,6 +46,20 @@ def run(**kw):
         mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
+
+        # Stop the rdb-mirror service and cehck the status
+        if build.startswith("5"):
+            service_name = mirror2.get_rbd_service_name("rbd-mirror")
+        if build.startswith("4"):
+            service_name = mirror2.get_rbd_service_name("rbd-mirror@admin.service")
+        mirror2.change_service_state(service_name=service_name, operation="stop")
+        mirror2.wait_for_status(imagespec=imagespec, state_pattern="down+stopped")
+        mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total"))
+        mirror2.change_service_state(service_name=service_name, operation="start")
+        mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
+        mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
+        mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
+
         mirror1.delete_image(imagespec)
         # Add check of the image in secondary cluster
 
@@ -61,10 +75,17 @@ def run(**kw):
         # Check Data failing for snapshot mirroring looks like it is syncing snapshots
         # mirror1.check_data(peercluster=mirror2, imagespec=imagespec_1)
 
-        # schedule snapshot
-        mirror1.schedule_snapshot_image(poolname=poolname, imagename=imagename_1)
+        # schedule snapshot rbd-mirror
+        mirror1.mirror_snapshot_schedule_add(poolname=poolname, imagename=imagename_1)
         mirror1.verify_snapshot_schedule(imagespec_1)
-        # Cleans up the
+        mirror1.mirror_snapshot_schedule_list(poolname=poolname, imagename=imagename_1)
+        mirror1.mirror_snapshot_schedule_status(
+            poolname=poolname, imagename=imagename_1
+        )
+        mirror1.mirror_snapshot_schedule_remove(
+            poolname=poolname, imagename=imagename_1
+        )
+        # Cleans up the configuration
         mirror1.delete_image(imagespec_1)
         mirror1.clean_up(peercluster=mirror2, pools=[poolname])
         return 0
