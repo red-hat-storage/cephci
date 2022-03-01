@@ -60,7 +60,7 @@ class Orch(
         return [node for node in loads(out) if label in node.get("labels")]
 
     def check_service_exists(
-        self, service_type: str, timeout: int = 300, interval: int = 5
+        self, service_name: str, timeout: int = 300, interval: int = 5
     ) -> bool:
         """
         Verify the provided service is running for the given list of ids.
@@ -77,7 +77,7 @@ class Orch(
         end_time = datetime.now() + timedelta(seconds=timeout)
         check_status_dict = {
             "base_cmd_args": {"format": "json"},
-            "args": {"service_type": service_type, "refresh": True},
+            "args": {"service_name": service_name, "refresh": True},
         }
 
         while end_time > datetime.now():
@@ -87,7 +87,7 @@ class Orch(
             running = out["status"]["running"]
             count = out["status"]["size"]
 
-            LOG.info("%s/%s %s daemon(s) up... retrying", running, count, service_type)
+            LOG.info("%s/%s %s daemon(s) up... retrying", running, count, service_name)
 
             if count == running:
                 return True
@@ -95,7 +95,7 @@ class Orch(
         # Identify the failure
         out, err = self.ls(check_status_dict)
         out = loads(out)
-        LOG.error(f"{service_type} failed with \n{out[0]['events']}")
+        LOG.error(f"{service_name} failed with \n{out[0]['events']}")
 
         return False
 
@@ -204,10 +204,8 @@ class Orch(
         # todo: add verification part
 
         # validate services
-        validate_spec_services = config.get("validate-spec-services")
-        if validate_spec_services:
+        if config["validate-spec-services"]:
             self.validate_spec_services(specs=specs)
-            LOG.info("Validation of service created using a spec file is completed")
 
     def op(self, op, config):
         """
@@ -303,8 +301,8 @@ class Orch(
             return True
         return False
 
-    def validate_spec_services(self, specs) -> None:
+    def validate_spec_services(self, specs) -> bool:
         LOG.info("Validating spec services")
         for spec in specs:
-            self.check_service_exists(service_type=spec["service_type"])
+            self.check_service_exists(service_name=spec["service_type"])
         return False
