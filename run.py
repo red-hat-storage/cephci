@@ -568,7 +568,7 @@ def run(args):
             # Ceph Ansible Version
             search_results = re.search(r"ceph-ansible-(.*?).rpm", ver_text)
             if search_results:
-                ceph_version.append(search_results.group(1))
+                ceph_ansible_version.append(search_results.group(1))
 
     distro = ", ".join(list(set(distro)))
     ceph_version = ", ".join(list(set(ceph_version)))
