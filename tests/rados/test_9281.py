@@ -46,14 +46,14 @@ def do_rados_put(mon, pool, nobj):
     write nobjs to cluster with sdata as source
     """
     src = prepare_sdata(mon)
-    log.info("src file is {src}".format(src=src))
+    log.debug("src file is {src}".format(src=src))
 
     for i in range(nobj):
         print("running command on {mon}".format(mon=mon.hostname))
         put_cmd = "sudo rados put -p {pname} obj{i} {src}".format(
             pname=pool, i=i, src=src
         )
-        log.info("cmd is {pcmd}".format(pcmd=put_cmd))
+        log.debug("cmd is {pcmd}".format(pcmd=put_cmd))
         try:
             (out, err) = mon.exec_command(cmd=put_cmd)
             out.read().decode()
@@ -96,7 +96,7 @@ def do_rados_get(mon, pool, niter):
                 log.error(traceback.format_exc)
             dfd = mon.remote_file(file_name=file_name, file_mode="r")
             dcsum = hashlib.md5(dfd.read()).hexdigest()
-            log.info("csum of obj {objname}={dcsum}".format(objname=obj, dcsum=dcsum))
+            log.debug("csum of obj {objname}={dcsum}".format(objname=obj, dcsum=dcsum))
             print(type(fcsum))
             print("fcsum=", fcsum)
             print(type(dcsum))
