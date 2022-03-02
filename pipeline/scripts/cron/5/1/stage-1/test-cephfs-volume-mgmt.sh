@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Ceph RADOS regression testing for Scrubbing scenarios"
+echo "Testing Cephfs Volume management Functionality"
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
-test_conf="conf/pacific/rados/7-node-cluster.yaml"
+test_suite="suites/pacific/cephfs/tier-2_cephfs_test-volume-management.yaml"
+test_conf="conf/pacific/cephfs/tier_2_cephfs_9-node-cluster.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
@@ -46,3 +46,4 @@ if [ $? -ne 0 ]; then
 fi
 
 exit ${return_code}
+

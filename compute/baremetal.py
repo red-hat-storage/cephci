@@ -1,5 +1,6 @@
 """Collects the Baremetal information and creates the cephNode object."""
 from copy import deepcopy
+from os.path import expanduser
 from typing import List, Optional
 
 from ceph.ceph import SSHConnectionManager
@@ -34,6 +35,7 @@ class CephBaremetalNode:
         self.params = params
         self.private_key = params.get("root_private_key")
         if self.private_key:
+            self.private_key = expanduser(self.private_key)
             self.root_connection = SSHConnectionManager(
                 self.params.get("ip"),
                 "root",
@@ -53,28 +55,42 @@ class CephBaremetalNode:
 
         # Check if user exists
         try:
-            self.rssh().exec_command(command="id -u cephuser")
-        except BaseException:  # noqa
-            LOG.info("Creating cephuser...")
+            _, out, err = self.rssh().exec_command(
+                command="id -u cephuser",
+            )
 
-            self.rssh().exec_command(
-                command="useradd cephuser -p '$1$1fsNAJ7G$bx4Sz9VnpOnIygVKVaGCT.'"
-            )
-            self.rssh().exec_command(command="mkdir /home/cephuser/.ssh")
-            self.rssh().exec_command(
-                command="cp ~/.ssh/authorized_keys /home/cephuser/.ssh/ || true"
-            )
-            self.rssh().exec_command(
-                command="chown -R cephuser:cephuser /home/cephuser/"
-            )
-            self.rssh().exec_command(
-                command="chmod 600 /home/cephuser.ssh/authorized_keys || true"
-            )
+            if err.read().decode():
+                self._create_user(name="cephuser")
+            else:
+                LOG.debug("Reusing existing user account of cephuser.")
+        except BaseException:  # noqa
+            self._create_user(name="cephuser")
 
         self.rssh().exec_command(
             'echo "cephuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/cephuser'
         )
         self.rssh().exec_command(command="touch /ceph-qa-ready")
+
+    def _create_user(self, name: str = "cephuser") -> None:
+        """
+        Create a Linux user account using the provided name.
+
+        Args:
+            name (str):     Name of the user account
+
+        Raises:
+            CommandError
+        """
+        LOG.info(f"Creating user account with {name} ...")
+
+        self.rssh().exec_command(
+            command=f"useradd {name} -p '$1$1fsNAJ7G$bx4Sz9VnpOnIygVKVaGCT.'"
+        )
+        self.rssh().exec_command(command=f"install -d -m 700  /home/{name}/.ssh")
+        self.rssh().exec_command(
+            command=f"install -m 600 ~/.ssh/authorized_keys /home/{name}/.ssh/ || true"
+        )
+        self.rssh().exec_command(command=f"chown -R {name}:{name} /home/{name}/")
 
     @property
     def ip_address(self) -> str:

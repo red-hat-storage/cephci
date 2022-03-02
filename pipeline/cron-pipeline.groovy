@@ -54,21 +54,28 @@ node(nodeName) {
                 returnStdout: true,
                 script: "find ${defaultFileDir} -name RHCEPH-*.yaml -mtime -7 -ls"
             )
+            if (!updatedFiles) {
+                currentBuild.result = "ABORTED"
+                error "Recipe file updates are not available."
+            }
             def filePaths = updatedFiles.split("\\n")
             for (filePath in filePaths) {
                 def fileName = filePath.tokenize("/")[-1]
-                def latestBuild = sharedLib.yamlToMap(fileName, defaultFileDir).latest
-                println "latestBuild : ${latestBuild}"
-                buildArtifacts = writeJSON returnText: true, json: latestBuild
-                release = fileName.split(".yaml")[0]
-                println "Release : ${release}"
-                build ([
-                    wait: false,
-                    job: "rhceph-cron-pipeline-test-executor",
-                    parameters: [string(name: 'rhcephVersion', value: release),
-                                string(name: 'buildType', value: 'stage-0'),
-                                string(name: 'buildArtifacts', value: buildArtifacts)]
-                ])
+                def latestContent = sharedLib.yamlToMap(fileName, defaultFileDir)
+                if (latestContent.containsKey('latest')) {
+                    def latestBuild = latestContent.latest
+                    println "latestBuild : ${latestBuild}"
+                    buildArtifacts = writeJSON returnText: true, json: latestBuild
+                    release = fileName.split(".yaml")[0]
+                    println "Release : ${release}"
+                    build ([
+                        wait: false,
+                        job: "rhceph-cron-pipeline-test-executor",
+                        parameters: [string(name: 'rhcephVersion', value: release),
+                                    string(name: 'buildType', value: 'stage-0'),
+                                    string(name: 'buildArtifacts', value: buildArtifacts)]
+                    ])
+                }
             }
 
         }

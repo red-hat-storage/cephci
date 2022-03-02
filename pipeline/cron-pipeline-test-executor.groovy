@@ -182,7 +182,6 @@ node(nodeName) {
 
             if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
                 currentBuild.result = "FAILED"
-                error "Failure occurred in current run.."
             }
 
         }

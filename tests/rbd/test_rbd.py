@@ -109,7 +109,7 @@ def run(ceph_cluster, **kwargs) -> int:
             cmd="sudo /usr/sbin/alternatives --set python /usr/bin/python3"
         )
 
-    if "5." in rhbuild:
+    if rhbuild[0] > "4":
         out, err = nodes[0].exec_command(
             sudo=True, cmd="ceph config get mon mon_allow_pool_delete --format json"
         )

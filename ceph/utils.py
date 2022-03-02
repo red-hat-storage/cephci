@@ -748,20 +748,21 @@ def config_ntp(ceph_node, cloud_type="openstack"):
     """
     distro_info = ceph_node.distro_info
     distro_ver = distro_info["VERSION_ID"]
+    key = "7" if distro_ver.split(".")[0] == "7" else "all"
 
     ntp_config = {
         "7": [
             "sed -i '/server*/d' /etc/ntp.conf",
             "echo 'server clock.corp.redhat.com iburst' | tee -a /etc/ntp.conf",
         ],
-        "8": [
+        "all": [
             "sed -i '/pool*/d;/server*/d' /etc/chrony.conf",
             "sed -i '1i server clock.corp.redhat.com iburst' /etc/chrony.conf",
         ],
     }
     if cloud_type not in ["ibmc", "baremetal"]:
         # IBM-Cloud hosted environments are configured via the DHCP client.
-        commands = ntp_config[distro_ver.split(".")[0]]
+        commands = ntp_config[key]
         for cmd in commands:
             ceph_node.exec_command(sudo=True, cmd=cmd, long_running=True)
 
@@ -773,14 +774,14 @@ def config_ntp(ceph_node, cloud_type="openstack"):
             "ntpq -p",
             "ntpstat",
         ],
-        "8": [
+        "all": [
             "systemctl stop chronyd.service",
             "systemctl start chronyd.service",
             "chronyc makestep",
             "chronyc sources",
         ],
     }
-    commands = ntp_run[distro_ver.split(".")[0]]
+    commands = ntp_run[key]
 
     for cmd in commands:
         ceph_node.exec_command(sudo=True, cmd=cmd, long_running=True)

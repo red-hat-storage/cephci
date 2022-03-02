@@ -8,7 +8,7 @@ log = Log(__name__)
 CLUSTER_STATE = [
     "ceph status",
     "ceph orch ls mon -f json-pretty",
-    "ceph orch ps '' mon -f json-pretty",
+    "ceph orch ps '' --service_name mon -f json-pretty",
     "ceph health detail -f yaml",
 ]
 

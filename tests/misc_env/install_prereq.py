@@ -36,7 +36,7 @@ rpm_packages = {
         "net-snmp",
     ],
 }
-deb_packages = ["wget", "git", "python-virtualenv", "lsb-release", "ntp"]
+deb_packages = ["wget", "git-core", "python-virtualenv", "lsb-release", "ntp"]
 deb_all_packages = " ".join(deb_packages)
 
 
@@ -140,11 +140,12 @@ def install_prereq(
             rpm_all_packages = " ".join(rpm_packages.get("7"))
 
         ceph.exec_command(
-            cmd="sudo yum install -y " + rpm_all_packages, long_running=True
+            cmd=f"sudo yum install -y {rpm_all_packages}", long_running=True
         )
         if ceph.role == "client":
-            ceph.exec_command(cmd="sudo yum install -y attr", long_running=True)
+            ceph.exec_command(cmd="sudo yum install -y attr gcc", long_running=True)
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
+
         ceph.exec_command(cmd="sudo yum clean metadata")
         config_ntp(ceph, cloud_type)
     registry_login(ceph, distro_ver)
@@ -257,6 +258,7 @@ def enable_rhel_rpms(ceph, distro_ver):
     repos = {
         "7": ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"],
         "8": ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"],
+        "9": ["rhel-9-for-x86_64-appstream-rpms", "rhel-9-for-x86_64-baseos-rpms"],
     }
 
     for repo in repos.get(distro_ver[0]):
@@ -322,9 +324,9 @@ def registry_login(ceph, distro_ver):
 
     In this method, docker or podman is installed based on OS.
     """
-    container = "docker"
-    if distro_ver.startswith("8"):
-        container = "podman"
+    container = "podman"
+    if distro_ver.startswith("7"):
+        container = "docker"
 
     ceph.exec_command(
         cmd="sudo yum install -y {c}".format(c=container), long_running=True

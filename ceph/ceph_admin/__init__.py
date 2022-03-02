@@ -141,6 +141,21 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         for node in self.cluster.get_nodes():
             node.exec_command(sudo=True, cmd=cmd)
 
+    def setup_upstream_repository(self, repo_url=None):
+        """Download upstream repository to inidividual nodes.
+
+        Args:
+            repo_url: repo file URL link (default: None)
+        """
+        if not repo_url:
+            repo_url = self.config["base_url"]
+
+        for node in self.cluster.get_nodes():
+            node.exec_command(
+                sudo=True, cmd=f"curl -o /etc/yum.repos.d/upstream_ceph.repo {repo_url}"
+            )
+            node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
+
     def install(self, **kwargs: Dict) -> None:
         """
         Install the cephadm package in the installer node.
