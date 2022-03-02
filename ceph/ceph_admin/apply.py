@@ -124,5 +124,5 @@ class ApplyMixin:
         if not verify_service:
             return
 
-        if not self.check_service_exists(service_type=service_name):
+        if not self.check_service_exists(service_name=service_name):
             raise OrchApplyServiceFailure(self.SERVICE_NAME)

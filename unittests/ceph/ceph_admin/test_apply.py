@@ -12,7 +12,7 @@ class MockApplyMixinTestWithShellOutput(ApplyMixin):
     def shell(self, args):
         return "Scheduled rgw update", 0
 
-    def check_service_exists(self, service_type="rgw"):
+    def check_service_exists(self, service_name="rgw"):
         return True
 
 
@@ -24,7 +24,7 @@ class MockApplyMixinTestWithOutShellOutput(ApplyMixin):
     def shell(self, args):
         return 0, 0
 
-    def check_service_exists(self, service_type="rgw"):
+    def check_service_exists(self, service_name="rgw"):
         return True
 
 
@@ -36,7 +36,7 @@ class MockApplyMixinTestWithOutServiceOutput(ApplyMixin):
     def shell(self, args):
         return 0, 0
 
-    def check_service_exists(self, service_type="rgw"):
+    def check_service_exists(self, service_name="rgw"):
         return False
 
 
