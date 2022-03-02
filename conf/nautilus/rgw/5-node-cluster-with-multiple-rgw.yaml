@@ -1,4 +1,4 @@
-# System Under Test environment configuration for RGW regression suite.
+# Bare minimal configuration with 2 RGW nodes co-located with OSD along with one client.
 globals:
   - ceph-cluster:
       name: ceph
@@ -26,6 +26,7 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node4:
         disk-size: 20
@@ -35,9 +36,5 @@ globals:
           - rgw
 
       node5:
-        role:
-          - rgw
-
-      node6:
         role:
           - client
