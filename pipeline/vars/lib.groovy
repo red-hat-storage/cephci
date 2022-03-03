@@ -546,8 +546,8 @@ def uploadResults(def objKey, def dirName, def bucketName="qe-ci-reports") {
 
         sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
     } catch(Exception exc) {
-        println "Encountered a failure during uploading of results."
         println exc
+        error "Encountered a failure during uploading of results."
     }
 }
 
