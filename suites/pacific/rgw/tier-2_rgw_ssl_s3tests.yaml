@@ -1,7 +1,5 @@
 # Tier - 2: Execute S3Tests using self-signed certificate
 #
-# Depends on: https://github.com/ceph/s3-tests/pull/405
-#
 # Requires the following keys in cephci.yaml
 #
 #   vault:
@@ -13,6 +11,7 @@
 #          secret-id: <secret-id>
 #          prefix: /v1/<path>
 #
+---
 tests:
   - test:
       abort-on-fail: true
@@ -29,7 +28,6 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -57,6 +55,30 @@ tests:
               args:
                 all-available-devices: true
           - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwecprofile01 k=4 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwecprofile01"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.index 32 32"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.index rgw"
+              command: shell
+          - config:
               command: apply_spec
               service: orch
               specs:
@@ -64,7 +86,7 @@ tests:
                   service_id: rgw.ssl
                   placement:
                     nodes:
-                      - node5
+                      - node7
                   spec:
                     ssl: true
                     rgw_frontend_ssl_certificate: create-cert
@@ -78,7 +100,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node6
+        node: node8
         install_packages:
           - ceph-common
         copy_admin_keyring: true

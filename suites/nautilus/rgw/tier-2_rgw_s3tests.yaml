@@ -1,6 +1,7 @@
 # Objective: Execute external S3Tests
 # Conf: 5-node-cluster.yaml
 # Platform: independent
+# Ceph: RGW using EC pool 4+2 configuration for data.
 ---
 tests:
   - test:
@@ -13,12 +14,23 @@ tests:
       module: test_ansible.py
       config:
         ansi_config:
+          ceph_test: true
           ceph_origin: distro
           ceph_repository: rhcs
           ceph_rhcs_version: 4
           osd_scenario: lvm
           copy_admin_key: true
           dashboard_enabled: false
+          rgw_create_pools:
+            "{{ rgw_zone }}.rgw.buckets.data":
+              type: ec
+              ec_profile: rgwecprofile01
+              ec_k: 4
+              ec_m: 2
+          ceph_conf_overrides:
+            global:
+              mon_warn_on_insecure_global_id_reclaim_allowed: false
+              osd_pool_default_pg_autoscale_mode: "on"
       desc: test deploying of cluster setup using ceph-ansible
       destroy-cluster: false
       abort-on-fail: true
@@ -28,7 +40,9 @@ tests:
       name: check-ceph-health
       module: exec.py
       config:
-        cmd: ceph -s
+        commands:
+          - "ceph -s"
+          - "ceph osd dump"
         sudo: true
       desc: Check for ceph health debug info
 

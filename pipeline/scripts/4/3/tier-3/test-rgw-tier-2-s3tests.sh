@@ -6,7 +6,7 @@ instance_name="ci-${random_string}"
 platform="rhel-7"
 rhbuild="4.3"
 test_suite="suites/nautilus/rgw/tier-2_rgw_s3tests.yaml"
-test_conf="conf/nautilus/rgw/5-node-cluster.yaml"
+test_conf="conf/nautilus/rgw/ec-profile-4+2-cluster.yaml"
 test_inventory="conf/inventory/rhel-7-latest.yaml"
 return_code=0
 
