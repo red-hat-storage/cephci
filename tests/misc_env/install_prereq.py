@@ -32,6 +32,8 @@ rpm_packages = {
         "net-tools",
         "lvm2",
         "podman",
+        "net-snmp-utils",
+        "net-snmp",
     ],
 }
 deb_packages = ["wget", "git-core", "python-virtualenv", "lsb-release", "ntp"]
@@ -146,7 +148,6 @@ def install_prereq(
 
         ceph.exec_command(cmd="sudo yum clean metadata")
         config_ntp(ceph, cloud_type)
-
     registry_login(ceph, distro_ver)
 
 

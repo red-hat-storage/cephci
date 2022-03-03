@@ -10,6 +10,7 @@ from os.path import dirname
 from time import sleep
 
 from jinja2 import Template
+from paramiko.channel import ChannelFile
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
@@ -391,6 +392,80 @@ class GenerateServiceSpec:
 
         return template.render(spec=spec)
 
+    def generate_snmp_spec(self, spec):
+        """
+        Return spec content for snmp-destination
+
+        Args:
+            spec (Dict): snmp-destination service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+        specs:
+              - service_type: snmp-destination
+                spec:
+                  credentials:
+                    snmp_v3_auth_username: myadmin
+                    snmp_v3_auth_password: mypassword
+        """
+        template = self._get_template("snmp")
+        destination_node = spec["spec"].pop("snmp_destination", None)
+        node = get_node_by_id(self.cluster, destination_node)
+        if destination_node:
+            spec["spec"]["snmp_destination"] = self.get_addr(node) + ":162"
+        node_installer = get_node_by_id(self.cluster, "node1")
+        cmd = "cephadm shell ceph fsid"
+        out, err = node_installer.exec_command(sudo=True, cmd=cmd)
+        out = out.read().decode() if isinstance(out, ChannelFile) else out
+        LOG.info(f"fsid: {out}")
+        engine_id = out.replace("-", "")
+        if engine_id:
+            spec["spec"]["engine_id"] = engine_id
+        return template.render(spec=spec)
+
+    def generate_snmp_dest_conf(self, spec):
+        """
+        Return conf content for snmp-gateway service
+
+        Args:
+            spec (Dict): snmp-gateway service config
+
+        Returns:
+            destination_conf (Str)
+
+        Example::
+
+            spec:
+                - service_type: snmp-gateway
+                  service_name: snmp-gateway
+                  placement:
+                    count: 1
+                  spec:
+                    credentials:
+                      snmp_v3_auth_username: <user_name>
+                      snmp_v3_auth_password: <password>
+                    port: 9464
+                    snmp_destination: node
+                    snmp_version: V3
+
+        """
+        template = self._get_template("snmp_destination")
+        node = get_node_by_id(self.cluster, "node1")
+        cmd = "cephadm shell ceph fsid"
+        out, err = node.exec_command(sudo=True, cmd=cmd)
+        out = out.read().decode() if isinstance(out, ChannelFile) else out
+        LOG.info(f"fsid: {out}")
+        fsid = out.replace("-", "")
+        engine_id = fsid[0:32]
+        if engine_id:
+            spec["spec"]["engine_id"] = engine_id
+        LOG.info(f"fsid:{engine_id}")
+
+        return template.render(spec=spec)
+
     def _get_render_method(self, service_type):
         """
         Return render definition based on service_type
@@ -407,6 +482,8 @@ class GenerateServiceSpec:
             "mds": self.generate_mds_spec,
             "nfs": self.generate_nfs_spec,
             "rgw": self.generate_rgw_spec,
+            "snmp-gateway": self.generate_snmp_spec,
+            "snmp-destination": self.generate_snmp_dest_conf,
         }
 
         try:
@@ -440,6 +517,29 @@ class GenerateServiceSpec:
         spec_file.write(spec_content)
         spec_file.flush()
 
+        return temp_file.name
+
+    def create_snmp_conf_file(self):
+        """
+        Create snmp conf file based on spec config and return file name
+
+        Returns:
+            temp_filename (Str)
+
+        """
+        spec_content = ""
+        for spec in self.specs:
+            method = self._get_render_method(spec["service_type"])
+            if not method:
+                raise UnknownSpecFound(f"unknown spec found - {spec}")
+            spec_content += method(spec=spec)
+        LOG.info(f"SNMP Conf file content:\n{spec_content}")
+        temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+        conf_file = self.node.remote_file(
+            sudo=True, file_name=temp_file.name, file_mode="w"
+        )
+        conf_file.write(spec_content)
+        conf_file.flush()
         return temp_file.name
 
 
