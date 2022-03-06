@@ -199,8 +199,8 @@ tests:
           config:
             imagesize: 2G
             io-total: 200M
-      polarion-id: CEPH-83573329
-      desc: Create RBD mirrored image and run IOs
+      polarion-id: CEPH-83573332
+      desc: Create RBD mirrored image in pools  and run IOs
   - test:
       name: test_rbd_mirror_image
       module: test_rbd_mirror_image.py
@@ -209,5 +209,5 @@ tests:
           config:
             imagesize: 2G
             io-total: 200M
-      polarion-id: CEPH-83573329
-      desc: Create RBD mirrored images in pool and run IOs
+      polarion-id: CEPH-83573618,CEPH-83573619,CEPH-83573620
+      desc: Create RBD mirrored images and run IOs
