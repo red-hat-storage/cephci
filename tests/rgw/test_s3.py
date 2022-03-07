@@ -136,7 +136,7 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
 
     branch = config.get("branch", "ceph-luminous")
     clone_s3_tests(node=client_node, branch=branch)
-    install_s3test_requirements(client_node, branch)
+    install_s3test_requirements(client_node, branch, os_ver=build[-1])
 
     host = rgw_node.shortname
     lib, secure, port = get_rgw_frontend(cluster)
@@ -210,7 +210,9 @@ def clone_s3_tests(node: CephNode, branch="ceph-luminous") -> None:
     node.exec_command(cmd=f"git clone -b {branch} {repo_url}")
 
 
-def install_s3test_requirements(node: CephNode, branch: str) -> None:
+def install_s3test_requirements(
+    node: CephNode, branch: str, os_ver: Optional[str] = "8"
+) -> None:
     """
     Install the required packages required by S3tests.
 
@@ -220,12 +222,13 @@ def install_s3test_requirements(node: CephNode, branch: str) -> None:
     Args:
         node:   The node that is consider for running S3Tests.
         branch: The branch to be installed
+        os_ver: The OS major version
 
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
     if branch in ["ceph-nautilus", "ceph-luminous"]:
-        return _s3tests_req_install(node)
+        return _s3tests_req_install(node, os_ver)
 
     _s3tests_req_bootstrap(node)
 
@@ -416,7 +419,7 @@ def del_lc_debug(cluster: Ceph, build: str) -> None:
 # Private functions
 
 
-def _s3tests_req_install(node: CephNode) -> None:
+def _s3tests_req_install(node: CephNode, os_ver: str) -> None:
     """Install S3 prerequisites via pip."""
     packages = [
         "python2-virtualenv",
@@ -434,8 +437,9 @@ def _s3tests_req_install(node: CephNode) -> None:
         sudo=True, cmd=f"yum install -y --nogpgcheck {' '.join(packages)}"
     )
 
+    venv_cmd = "virtualenv" if os_ver == "7" else "virtualenv-2"
     commands = [
-        "virtualenv -p python2 --no-site-packages --distribute s3-tests/virtualenv",
+        f"{venv_cmd} -p python2 --no-site-packages --distribute s3-tests/virtualenv",
         "s3-tests/virtualenv/bin/pip install --upgrade pip setuptools",
         "s3-tests/virtualenv/bin/pip install -r s3-tests/requirements.txt",
         "s3-tests/virtualenv/bin/python s3-tests/setup.py develop",
@@ -463,7 +467,9 @@ def _rgw_lc_debug_conf(cluster: Ceph, add: bool = True) -> None:
         None
     """
     if add:
-        command = "sed -i '/global/a rgw lc debug interval = 10' /etc/ceph/ceph.conf"
+        command = (
+            r"sed -i '/\[global\]/a rgw lc debug interval = 10' /etc/ceph/ceph.conf"
+        )
     else:
         command = "sed -i '/rgw lc debug interval/d' /etc/ceph/ceph.conf"
 
