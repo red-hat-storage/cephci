@@ -4,9 +4,6 @@
 # Maintainers: cephci@redhat.com
 # Version: 1.0
 
-# DEFAULT VARIABLES
-RHCS_VERSION="5.0"
-
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 VM_PREFIX="ci-${random_string}"
 
@@ -16,6 +13,8 @@ PY_CMD=${PY_CMD:-"${HOME}/cephci-venv/bin/python"}
 OSP_CRED_FILE=${OSP_CRED_FILE:-}
 REPO_FILE=${REPO_FILE:-}
 VM_SPEC=${VM_SPEC:-}
+RHCS_VERSION=${RHCS_VERSION:-"5.0"}
+BUILD_TYPE=${BUILD_TYPE:-"rc"}
 
 echo "Red Hat Ceph Storage 5 Ceph RBD tier-0 test suite execution."
 
@@ -65,7 +64,7 @@ ${PY_CMD} run.py \
     --skip-enabling-rhel-rpms \
     --rhbuild ${RHCS_VERSION} \
     --platform ${CEPH_PLATFORM} \
-    --build rc \
+    --build ${BUILD_TYPE} \
     --suite ${TEST_SUITE} \
     --global-conf ${TEST_CONF} \
     --instances-name ${VM_PREFIX} \
