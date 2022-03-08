@@ -349,10 +349,12 @@ def get_html_page(url: str) -> str:
     resp = requests.get(url, verify=False)
 
     try:
-        return resp.text
+        if resp.ok:
+            return resp.text
     except BaseException as be:  # noqa
         log.debug(f"Failed to retrieve contents at {url}")
-        return "Unknown"
+
+    return ""
 
 
 def run(args):
