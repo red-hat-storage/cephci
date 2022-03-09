@@ -14,8 +14,10 @@ from ibm_cloud_networking_services.dns_svcs_v1 import (
 from ibm_cloud_sdk_core.api_exception import ApiException
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_vpc import VpcV1  # noqa
+from requests.exceptions import ReadTimeout
 
 from utility.log import Log
+from utility.retry import retry
 
 from .exceptions import NodeDeleteFailure, NodeError, ResourceNotFound
 
@@ -194,6 +196,7 @@ class CephVMNodeIBM:
         return volume_attachments
 
     @property
+    @retry(ReadTimeout, tries=5, delay=15)
     def subnet(self) -> str:
         """Return the subnet information."""
         subnet_details = self.service.get_subnet(
