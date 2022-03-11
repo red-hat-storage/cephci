@@ -564,7 +564,7 @@ def create_unique_test_name(test_name, name_list):
     Returns:
         unique name for the test case
     """
-    base = "_".join(test_name.split())
+    base = "_".join(str(test_name).split())
     num = 0
     while "{base}_{num}".format(base=base, num=num) in name_list:
         num += 1
