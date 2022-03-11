@@ -32,7 +32,6 @@ setup(
         "ibm-cos-sdk-s3transfer",
         "ibm-vpc>=0.8.0",
         "ibm-cloud-networking-services",
-        "python-logstash",
         "softlayer",
     ],
     zip_safe=True,
