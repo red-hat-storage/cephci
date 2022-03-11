@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning execution of S3Tests against Red Hat RGW with SSL."
+echo "Test multiple path upgrade to 4x latest"
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
-rhbuild="5.1"
-test_suite="suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
-test_conf="conf/pacific/rgw/ec-profile-4+2-cluster.yaml"
+rhbuild="4.3"
+test_suite="suites/nautilus/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-4-latest.yaml"
+test_conf="conf/nautilus/upgrades/tier-2_upgrade.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 

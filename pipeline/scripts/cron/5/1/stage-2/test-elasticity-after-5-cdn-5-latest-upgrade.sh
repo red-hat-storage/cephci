@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning execution of S3Tests against Red Hat RGW with SSL."
+echo "Testing scale up and scale down functionality after upgrade from 5x cdn to 5x latest"
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
-test_conf="conf/pacific/rgw/ec-profile-4+2-cluster.yaml"
+test_suite="suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-5-cdn-to-5-latest.yaml"
+test_conf="conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
@@ -46,3 +46,4 @@ if [ $? -ne 0 ]; then
 fi
 
 exit ${return_code}
+
