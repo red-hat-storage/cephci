@@ -67,8 +67,18 @@ node(nodeName) {
                 error "Required Prameters are not provided.."
             }
 
+            /*
+                Temporary work-around to set grafana_image and will be removed as soon
+                as beta is available.
+                Ref: https://bugzilla.redhat.com/show_bug.cgi?id=2062627
+            */
+            def cliArgs = "--build latest --xunit-results "
+            if ( rhcephVersion == "5.1" ){
+                cliArgs += "--custom-config grafana_image=registry-proxy.engineering.redhat.com/rh-osbs/grafana:ceph-5.1-rhel-8-containers-candidate-30294-20220307225425"
+            }
+
             testStages = sharedLib.fetchStages(
-                "--build latest --xunit-results",
+                cliArgs,
                 buildType,
                 testResults,
                 rhcephVersion,
