@@ -761,6 +761,7 @@ class Ceph(object):
         ubuntu_repo,
         build=None,
         cloud_type="openstack",
+        exclude_ansible=False,
     ):
         """
         Setup packages required for ceph-ansible istallation
@@ -770,6 +771,8 @@ class Ceph(object):
             installer_url (str): installer url
             ubuntu_repo (str): deb repo url
             build (str):  ansible_config.build or rhbuild cli argument
+            cloud_type (str): IaaS provider - defaults to OpenStack.
+            exclude_ansible (bool): Excludes the ansible package from being upgraded
         """
         if not build:
             build = self.rhcs_version
@@ -841,12 +844,18 @@ class Ceph(object):
                     node.exec_command(
                         sudo=True, cmd="yum update metadata", check_ec=False
                     )
+
+                    cmd = "yum update -y"
+                    if exclude_ansible:
+                        cmd += " --exclude=ansible*"
+
                     p.spawn(
                         node.exec_command,
                         sudo=True,
-                        cmd="yum update -y",
+                        cmd=cmd,
                         long_running=True,
                     )
+
                 sleep(10)
 
     def create_rbd_pool(self, k_and_m, cluster_name=None):

@@ -142,12 +142,22 @@ def install_prereq(
         ceph.exec_command(
             cmd=f"sudo yum install -y {rpm_all_packages}", long_running=True
         )
+
+        if skip_enabling_rhel_rpms and distro_ver.startswith("8"):
+            # Workaround for ansible install failure in RHEL-8.6 inter op runs.
+            ceph.exec_command(
+                sudo=True,
+                cmd="dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+            )
+            ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el8")
+
         if ceph.role == "client":
             ceph.exec_command(cmd="sudo yum install -y attr gcc", long_running=True)
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
 
         ceph.exec_command(cmd="sudo yum clean metadata")
         config_ntp(ceph, cloud_type)
+
     registry_login(ceph, distro_ver)
 
 
@@ -186,7 +196,7 @@ def setup_subscription_manager(
             # you can push content to the staging CDN through the Errata Tool,
             # and then test it with --baseurl=cdn.stage.redhat.com.
             config_ = get_cephci_config()
-            command = "sudo subscription-manager --force register "
+            command = "sudo subscription-manager register --force "
             if is_production or cloud_type == "ibmc":
                 command += "--serverurl=subscription.rhsm.redhat.com:443/subscription "
                 username_ = config_["cdn_credentials"]["username"]

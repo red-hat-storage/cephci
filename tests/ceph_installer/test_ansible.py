@@ -21,6 +21,10 @@ def run(ceph_cluster, **kw):
     test_data = kw.get("test_data")
     cloud_type = config.get("cloud-type", "openstack")
 
+    # In case of Interop, we would like to avoid updating the packages... mainly, the
+    # ansible package.
+    exclude_ansible = config.get("skip_enabling_rhel_rpms", False)
+
     ubuntu_repo = config.get("ubuntu_repo", None)
     base_url = config.get("base_url", None)
     installer_url = config.get("installer_url", None)
@@ -88,7 +92,13 @@ def run(ceph_cluster, **kw):
     ceph_cluster.setup_ssh_keys()
 
     ceph_cluster.setup_packages(
-        base_url, hotfix_repo, installer_url, ubuntu_repo, build, cloud_type
+        base_url,
+        hotfix_repo,
+        installer_url,
+        ubuntu_repo,
+        build,
+        cloud_type,
+        exclude_ansible,
     )
 
     ceph_installer.install_ceph_ansible(build)
