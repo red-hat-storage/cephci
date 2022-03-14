@@ -443,6 +443,11 @@ class RbdMirror:
                 long_running=True,
             )
 
+    def resize_image(self, **kw):
+        self.exec_cmd(cmd="rbd resize {} {}".format(kw.get("size", "5G"), kw.get("imagespec"))
+        )
+        log.info(self.exec_cmd(cmd="rbd info {} {}".format(kw.get("imagespec")))) 
+
     def create_pool(self, **kw):
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
