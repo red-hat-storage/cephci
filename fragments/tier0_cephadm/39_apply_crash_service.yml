@@ -1,0 +1,16 @@
+tests:
+  - test:
+      name: Apply Crash Service
+      desc: Apply Crash service on all nodes
+      module: test_crash.py
+      polarion-id:
+      config:
+        command: apply
+        service: crash
+        base_cmd_args:
+            verbose: true
+        args:
+          placement:
+            nodes: "*"
+      destroy-cluster: false
+      abort-on-fail: true

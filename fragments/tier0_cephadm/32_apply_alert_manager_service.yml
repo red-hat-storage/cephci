@@ -1,0 +1,18 @@
+tests:
+  - test:
+      name: Apply Alert-manager Service
+      desc: Apply Alert-manager service on role nodes
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: apply
+        service: alertmanager
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node2
+      destroy-cluster: false
+      abort-on-fail: true

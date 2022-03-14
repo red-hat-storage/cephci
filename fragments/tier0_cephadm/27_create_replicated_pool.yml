@@ -1,0 +1,19 @@
+tests:
+  - test:
+      name: Create replicated pool
+      desc: Add pool for ISCSI service
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - iscsi
+          - "3"
+          - "3"
+          - replicated
+      destroy-cluster: false
+      abort-on-fail: true

@@ -1,0 +1,17 @@
+tests:
+  - test:
+      name: Apply Manager service
+      desc: Apply manager service with label option
+      module: test_mgr.py
+      polarion-id: CEPH-83573777
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            label: mgr
+            sep: " "
+      destroy-cluster: false
+      abort-on-fail: true

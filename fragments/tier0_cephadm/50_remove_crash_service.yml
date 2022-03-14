@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Remove Crash Service
+      desc: Remove Crash service using orch remove option
+      module: test_crash.py
+      polarion-id: CEPH-83573784
+      config:
+        command: remove
+        service: crash
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: crash
+      destroy-cluster: false
+      abort-on-fail: true

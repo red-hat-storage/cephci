@@ -1,0 +1,13 @@
+tests:
+  - test:
+      name: Remove Grafana Service
+      desc: Remove Grafana service using orch remove option
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: remove
+        service: grafana
+        args:
+          service_name: grafana
+      destroy-cluster: false
+      abort-on-fail: true

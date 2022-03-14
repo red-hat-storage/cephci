@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Apply OSD Service
+      desc: Apply OSD service with all available devices
+      module: test_osd.py
+      polarion-id: CEPH-83573735
+      config:
+        command: apply
+        service: osd
+        base_cmd_args:
+          verbose: true
+        args:
+          all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true

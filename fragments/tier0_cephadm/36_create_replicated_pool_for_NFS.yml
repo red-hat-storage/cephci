@@ -1,0 +1,16 @@
+tests:
+  - test:
+      name: Create replicated pool for NFS
+      desc: Add pool for NFS Ganesha service
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:                     # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - nfs-ganesha-pool
+      destroy-cluster: false
+      abort-on-fail: true

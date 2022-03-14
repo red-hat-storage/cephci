@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Add all hosts to ceph cluster
+      desc: Add all host node with IP address and labels
+      module: test_host.py
+      polarion-id:
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes: []
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true

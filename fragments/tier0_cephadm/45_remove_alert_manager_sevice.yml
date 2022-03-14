@@ -1,0 +1,13 @@
+tests:
+  - test:
+      name: Remove Alert-manager Service
+      desc: Remove Alert-manager service using orch remove option
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: remove
+        service: alertmanager
+        args:
+          service_name: alertmanager
+      destroy-cluster: false
+      abort-on-fail: true

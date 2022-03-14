@@ -1,0 +1,15 @@
+tests:
+      name: Apply Node-exporter Service
+      desc: Apply Node-exporter service on role nodes
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: apply
+        service: node-exporter
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes: "*"
+      destroy-cluster: false
+      abort-on-fail: true

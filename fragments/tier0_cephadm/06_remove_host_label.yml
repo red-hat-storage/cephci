@@ -1,0 +1,16 @@
+tests:
+  - test:
+      name: Remove Host label
+      desc: Remove host label osd from node3
+      module: test_host.py
+      polarion-id: CEPH-83574740
+      config:
+        service: host
+        command: label_remove
+        args:
+          node: node4
+          labels:
+            - osd
+            - mon
+      destroy-cluster: false
+      abort-on-fail: true

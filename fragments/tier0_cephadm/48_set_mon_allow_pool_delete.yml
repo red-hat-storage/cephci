@@ -1,0 +1,17 @@
+tests:
+  - test:
+      name: set mon_allow_pool_delete
+      desc: set mon_allow_pool_delete to true
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:
+          - ceph
+          - config
+          - set
+          - mon
+          - mon_allow_pool_delete
+          - "true"
+      destroy-cluster: false
+      abort-on-fail: true

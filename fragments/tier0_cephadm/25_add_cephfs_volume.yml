@@ -1,0 +1,16 @@
+tests:
+  - test:
+      name: Add cephfs file system volume
+      desc: Add file system for MDS service
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:          # arguments to ceph orch
+          - ceph
+          - fs
+          - volume
+          - create
+          - cephfs
+      destroy-cluster: false
+      abort-on-fail: true

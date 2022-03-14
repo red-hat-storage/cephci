@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Set Host address
+      desc: Set IP address to a existing node
+      module: test_host.py
+      polarion-id: CEPH-83574738
+      config:
+        service: host
+        command: set_address
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node1
+      destroy-cluster: false
+      abort-on-fail: true

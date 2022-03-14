@@ -1,0 +1,13 @@
+tests:
+  - test:
+      name: Remove Node-exporter Service
+      desc: Remove Node-exporter service using orch remove option
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: remove
+        service: node-exporter
+        args:
+          service_name: node-exporter
+      destroy-cluster: false
+      abort-on-fail: true

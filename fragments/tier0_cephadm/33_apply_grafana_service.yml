@@ -1,0 +1,17 @@
+tests:
+  - test:
+      name: Apply Grafana Service
+      desc: Apply Grafana service on role nodes
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: apply
+        service: grafana
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+      destroy-cluster: false
+      abort-on-fail: true

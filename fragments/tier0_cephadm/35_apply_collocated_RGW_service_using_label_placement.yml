@@ -1,0 +1,19 @@
+tests:
+  - test:
+      name: Apply collocated RGW Service
+      desc: Apply collocated RGW service using label placement
+      module: test_rgw.py
+      polarion-id: CEPH-83574639
+      config:
+        command: apply
+        service: rgw
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:               # positional arguments
+          - foo                 # service id
+        args:
+          placement:
+            count-per-host: 2
+            label: rgw
+      destroy-cluster: false
+      abort-on-fail: true

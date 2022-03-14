@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Remove Prometheus Service
+      desc: Remove Prometheus service using orch remove option
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: remove
+        service: prometheus
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: prometheus
+      destroy-cluster: false
+      abort-on-fail: true

@@ -1,0 +1,20 @@
+tests:
+  - test:
+      name: Apply Monitor with placement and limit
+      desc: Apply monitor service with placement and limit
+      module: test_mon.py
+      abort-on-fail: true
+      polarion-id: CEPH-83573778
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+                - node1
+                - node2
+                - node6
+            limit: 3    # no of daemons
+            sep: " "    # separator to be used for placements

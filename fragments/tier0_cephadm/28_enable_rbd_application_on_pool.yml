@@ -1,0 +1,18 @@
+tests:
+  - test:
+      name: Enable rbd application on pool
+      desc: enable rbd on iscsi pool
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - iscsi
+          - rbd
+      destroy-cluster: false
+      abort-on-fail: true

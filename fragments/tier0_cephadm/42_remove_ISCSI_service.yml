@@ -1,0 +1,14 @@
+tests:
+  - test:
+      name: Remove ISCSI Service
+      desc: Remove ISCSI service using orch remove option
+      module: test_iscsi.py
+      polarion-id: CEPH-83573757
+      config:
+        command: remove
+        service: iscsi
+        args:
+            service_name: iscsi.iscsi
+            verify: true
+      destroy-cluster: false
+      abort-on-fail: true

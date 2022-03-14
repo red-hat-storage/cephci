@@ -1,0 +1,18 @@
+tests:
+  - test:
+      name: Configure client
+      desc: Configure client on node9
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node9                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"

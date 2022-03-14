@@ -1,0 +1,24 @@
+tests:
+  - test:
+      name: Apply NFS Service
+      desc: Apply NFS-Ganesha service on role nodes
+      module: test_nfs.py
+      polarion-id: CEPH-83573749
+      config:
+        command: apply
+        service: nfs
+        base_cmd_args:
+            verbose: true
+        pos_args:
+          - mynfs                         # nfs service ID
+          - nfs-ganesha-pool              # name of the pool
+        args:
+          # namespace: mynfs-ns           # specify namespace(supported only in RHCeph 5.0)
+          placement:
+            nodes:
+              - node8
+              - node6
+            limit: 2
+            sep: ";"
+      destroy-cluster: false
+      abort-on-fail: true

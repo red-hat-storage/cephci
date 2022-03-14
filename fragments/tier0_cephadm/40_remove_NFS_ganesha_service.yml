@@ -1,0 +1,16 @@
+tests:
+  - test:
+      name: Remove NFS-Ganesha Service
+      desc: Remove NFS-Ganesha service using orch remove option
+      module: test_nfs.py
+      polarion-id:
+      config:
+        command: remove
+        service: nfs
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: nfs.mynfs
+          verify: true
+      destroy-cluster: false
+      abort-on-fail: true

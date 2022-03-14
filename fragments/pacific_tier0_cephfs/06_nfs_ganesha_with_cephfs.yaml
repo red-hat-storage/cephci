@@ -1,0 +1,8 @@
+tests:
+  -
+    test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-11308
+      abort-on-fail: false

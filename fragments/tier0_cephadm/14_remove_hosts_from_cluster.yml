@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Remove Hosts from cluster
+      desc: Remove nodes from cluster execpt installer
+      module: test_host.py
+      polarion-id:
+      config:
+        service: host
+        command: remove_hosts
+        args:
+          nodes:
+            - node5
+            - node6
+      destroy-cluster: false
+      abort-on-fail: true

@@ -1,0 +1,17 @@
+tests:
+      name: Add host
+      desc: Add new host node with IP address and labels
+      module: test_host.py
+      polarion-id: CEPH-83573729
+      config:
+        service: host
+        command: add
+        args:
+          node: node4
+          attach_ip_address: true
+          labels:
+            - osd
+            - node-exporter
+            - mon
+      destroy-cluster: false
+      abort-on-fail: true

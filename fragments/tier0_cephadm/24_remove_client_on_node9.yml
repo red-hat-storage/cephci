@@ -1,0 +1,13 @@
+tests:
+  - test:
+      name: Remove client
+      desc: remove client on node9
+      module: test_client.py
+      polarion-id: CEPH-83573759
+      config:
+        command: remove
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node9                       # client node
+        remove_packages:
+          - ceph-common                   # Remove ceph common packages
+        remove_admin_keyring: true        # Copy admin keyring to node

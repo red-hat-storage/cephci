@@ -1,0 +1,18 @@
+tests:
+  - test:
+      name: Enable rgw application on nfs-ganesha pool
+      desc: enable rgw on nfs-ganesha pool
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - nfs-ganesha-pool
+          - rgw
+      destroy-cluster: false
+      abort-on-fail: true

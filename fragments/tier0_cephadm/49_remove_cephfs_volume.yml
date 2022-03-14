@@ -1,0 +1,17 @@
+tests:
+  - test:
+      name: remove cephfs file system volume
+      desc: remove file system
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:
+          - ceph
+          - fs
+          - volume
+          - rm
+          - cephfs
+          - "--yes-i-really-mean-it"
+      destroy-cluster: false
+      abort-on-fail: true

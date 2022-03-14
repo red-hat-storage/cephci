@@ -1,0 +1,16 @@
+tests:
+  - test:
+      name: Remove RGW Service
+      desc: Remove RGW service using orch remove option
+      module: test_rgw.py
+      polarion-id: CEPH-83573753
+      config:
+        command: remove
+        service: rgw
+        base_cmd_args:
+          verbose: true
+        args:
+            service_name: rgw.foo
+            verify: true
+      destroy-cluster: false
+      abort-on-fail: true

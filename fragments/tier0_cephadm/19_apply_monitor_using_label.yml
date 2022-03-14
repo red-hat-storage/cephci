@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Apply Monitor using label
+      desc: Apply monitor using label mon
+      abort-on-fail: true
+      module: test_mon.py
+      polarion-id: CEPH-83573772
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            label: mon

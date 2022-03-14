@@ -1,0 +1,15 @@
+tests:
+  - test:
+      name: Remove MDS Service
+      desc: Remove MDS service using orch remove option
+      module: test_mds.py
+      polarion-id: CEPH-83573748
+      config:
+        command: remove
+        service: mds
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: 'mds.cephfs'
+      destroy-cluster: false
+      abort-on-fail: true

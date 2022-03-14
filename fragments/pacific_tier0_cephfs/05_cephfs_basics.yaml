@@ -1,0 +1,8 @@
+tests:
+  -
+    test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
