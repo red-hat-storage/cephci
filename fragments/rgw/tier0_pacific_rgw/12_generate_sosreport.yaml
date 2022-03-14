@@ -1,0 +1,6 @@
+tests:
+
+  - test:
+      name: generate sosreport
+      module: sosreport.py
+      desc: generate sosreport
