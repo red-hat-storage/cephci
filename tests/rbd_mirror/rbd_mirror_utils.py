@@ -444,7 +444,7 @@ class RbdMirror:
             )
 
     def resize_image(self, **kw):
-        self.exec_cmd(cmd=f"rbd resize --size 5G {kw.get('imagespec')}")
+        self.exec_cmd(cmd=f"rbd resize --size 5G {kw.get('imagespec')}"
         )
         cmd = self.exec_cmd(cmd=f"rbd info {kw.get('imagespec')} --format=json")
         log.info(cmd)
