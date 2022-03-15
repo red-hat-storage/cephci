@@ -73,7 +73,9 @@ class Rbd:
     def create_pool(self, poolname):
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
-        self.exec_cmd(cmd="ceph osd pool create {} 64 64".format(poolname))
+        if not self.exec_cmd(cmd="ceph osd pool create {} 64 64".format(poolname)):
+            log.error("Pool creation failed")
+            return False
         if not self.check_pool_exists(pool_name=poolname):
             log.error("Pool not created")
             return False
