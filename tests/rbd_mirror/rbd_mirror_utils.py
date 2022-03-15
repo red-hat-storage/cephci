@@ -444,9 +444,10 @@ class RbdMirror:
             )
 
     def resize_image(self, **kw):
-        self.exec_cmd(cmd="rbd resize --size 5G {}".format(kw.get("imagespec"))
+        self.exec_cmd(cmd=f"rbd resize --size 5G {kw.get('imagespec')}")
         )
-        log.info(self.exec_cmd(cmd="rbd info {}".format(kw.get("imagespec")))) 
+        cmd = self.exec_cmd(cmd=f"rbd info {kw.get('imagespec')} --format=json")
+        log.info(cmd)
 
     def create_pool(self, **kw):
         if self.ceph_version > 2 and self.k_m:
