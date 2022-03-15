@@ -85,7 +85,7 @@ node(nodeName) {
             Ref: https://bugzilla.redhat.com/show_bug.cgi?id=2062627
         */
         def cliArgs = "--build tier-0 --cloud ibmc --xunit-results "
-        if ( rhcephVersion == "5.1" ){
+        if ( rhcephVersion == "RHCEPH-5.1" ){
             cliArgs += "--custom-config grafana_image=ceph-qe-registry.syd.qe.rhceph.local/rh-osbs/grafana:ceph-5.1-rhel-8-containers-candidate-30294-20220307225425"
         }
 
