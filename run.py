@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from gevent import monkey
-from utility.config import TestMetaData
 
+from utility.config import TestMetaData
 from utility.log import Log
 
 monkey.patch_all()
