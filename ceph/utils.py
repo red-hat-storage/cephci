@@ -43,8 +43,22 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
         access_key=ibmc["access-key"], service_url=ibmc["service-url"]
     )
     resp = ibmc_client.list_instances(vpc_name=ibmc["vpc_name"])
-    resources = resp.get_result()
-    instances = [i for i in resources["instances"] if pattern in i["name"]]
+    if resp.get_status_code() != 200:
+        log.warn("Failed to retrieve instances")
+        return 1
+
+    instances = [i for i in resp.get_result()["instances"] if pattern in i["name"]]
+
+    while "next" in resp.get_result().keys():
+        start = resp.get_result()["next"]["href"].split("start=")[-1]
+        resp = ibmc_client.list_instances(start=start, vpc_name=ibmc["vpc_name"])
+        if resp.get_status_code() != 200:
+            log.warn("Failed to fetch instance details, breaking out.")
+            break
+        instance_list = [
+            i for i in resp.get_result()["instances"] if pattern in i["name"]
+        ]
+        instances += instance_list
 
     # Throttling removal otherwise Cloudflare will blacklist us
     counter = 0
