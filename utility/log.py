@@ -73,7 +73,7 @@ class Log:
                 "testing_tool": "cephci",
                 "rhcs": self.config.get("rhcs"),
                 "test_build": self.config.get("rhbuild", "released"),
-                "rp_logger": self.rp_logger
+                "rp_logger": self.rp_logger,
             }
         )
 

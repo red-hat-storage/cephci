@@ -385,9 +385,7 @@ def run(args):
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
 
-    metadata = TestMetaData(
-        rp_logger=None
-    )
+    metadata = TestMetaData(rp_logger=None)
 
     run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)
