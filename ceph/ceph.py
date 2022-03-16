@@ -634,7 +634,7 @@ class Ceph(object):
         if cluster_name is not None:
             cmd += f" --cluster {cluster_name}"
 
-        if rhbuild and rhbuild.startswith("5"):
+        if rhbuild and rhbuild.split(".")[0] >= "5":
             cmd = f"cephadm shell -- {cmd}"
 
         out, err = client.exec_command(cmd=cmd, sudo=True)
@@ -675,7 +675,7 @@ class Ceph(object):
         Returns:
            int: return 0 when ceph is in healthy state, else 1
         """
-        pacific = True if (rhbuild and rhbuild.startswith("5")) else False
+        pacific = True if (rhbuild and rhbuild.split(".")[0] >= "5") else False
         if not client:
             client = (
                 self.get_ceph_object("client")
