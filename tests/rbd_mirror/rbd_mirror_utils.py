@@ -443,6 +443,11 @@ class RbdMirror:
                 long_running=True,
             )
 
+    def resize_image(self, **kw):
+        self.exec_cmd(cmd=f"rbd resize --size 5G {kw.get('imagespec')}")
+        cmd = self.exec_cmd(cmd=f"rbd info {kw.get('imagespec')} --format=json")
+        log.info(cmd)
+
     def create_pool(self, **kw):
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
@@ -640,3 +645,24 @@ class RbdMirror:
         self.ceph_rbdmirror.exec_command(
             sudo=True, cmd=f"systemctl {operation} {service_name}"
         )
+
+    def image_exists(self, imagespec):
+        """
+        Checks whether given image exists or not
+        Args:
+            imagespec: image spec of image to be checked for existence
+        Returns:
+            0 : if image exists
+            1 : if image doesn't exist
+        """
+        cmd = f"rbd --image {imagespec} info"
+        try:
+            self.exec_cmd(sudo=True, cmd=cmd, output=True)
+
+        except CommandFailed as failed:
+            if "No such file" in failed.args[0]:
+                return 1
+            else:
+                raise CommandFailed
+
+        return 0

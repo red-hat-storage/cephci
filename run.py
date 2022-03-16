@@ -1,8 +1,6 @@
 #!/usr/bin/env python
-import logstash
 from gevent import monkey
 
-from utility.config import TestMetaData
 from utility.log import Log
 
 monkey.patch_all()
@@ -20,7 +18,6 @@ import traceback
 from getpass import getuser
 from typing import Optional
 
-import logdna
 import requests
 import yaml
 from docopt import docopt
@@ -48,7 +45,6 @@ from utility.utils import (
     email_results,
     fetch_build_artifacts,
     generate_unique_id,
-    get_cephci_config,
     magna_url,
 )
 from utility.xunit import create_xunit_results
@@ -390,39 +386,6 @@ def run(args):
 
     run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)
-    metadata = TestMetaData(
-        run_id=run_id,
-        rhbuild=rhbuild,
-        logstash=get_cephci_config().get("logstash", {}),
-    )
-    if log.config.get("logstash"):
-        host = log.config["logstash"]["host"]
-        port = log.config["logstash"]["port"]
-        version = log.config["logstash"].get("version", 1)
-        handler = logstash.TCPLogstashHandler(
-            host=host,
-            port=port,
-            version=version,
-        )
-        handler.setLevel(log.log_level)
-        root.addHandler(handler)
-
-        server = f"tcp://{host}:{port}"
-        log.debug(f"Log events are also pushed to {server}")
-
-    log_dna_config = get_cephci_config().get("log-dna", {})
-
-    if log_dna_config:
-        options = {
-            "hostname": "Cephci",
-            "url": log_dna_config.get("url"),
-            "index_meta": True,
-            "tags": run_id,
-        }
-        apiKey = log_dna_config.get("api-key")
-        logdna_handler = logdna.LogDNAHandler(apiKey, options)
-        root.addHandler(logdna_handler)
-
     startup_log = os.path.join(run_dir, "startup.log")
 
     handler = logging.FileHandler(startup_log)
@@ -493,6 +456,8 @@ def run(args):
     skip_subscription = args.get("--skip-subscription", False)
     post_to_report_portal = args.get("--report-portal", False)
     rp_logger = ReportPortal()
+    # setting logger for ReportPortal
+    log.set_rp_logger(rp_logger)
 
     instances_name = args.get("--instances-name")
     if instances_name:
@@ -582,7 +547,6 @@ def run(args):
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
 
-    metadata["rhcs"] = ceph_version
     log.info(f"Compose id is: {compose_id}")
     log.info(f"Testing Ceph Version: {ceph_version}")
     log.info(f"Testing Ceph Ansible Version: {ceph_ansible_version}")
@@ -872,9 +836,6 @@ def run(args):
                     clients=clients,
                 )
             except BaseException:  # noqa
-                if post_to_report_portal:
-                    rp_logger.log(message=traceback.format_exc(), level="ERROR")
-
                 log.error(traceback.format_exc())
                 rc = 1
             finally:

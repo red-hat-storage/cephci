@@ -59,6 +59,11 @@ node(nodeName) {
 
             containerImage = repoDetails.index.pull.find({ x -> !(x.contains("sha")) })
 
+            if(! repoDetails.containsKey("yum_repourls")){
+                sharedLib.unSetLock(majorVersion, minorVersion)
+                currentBuild.result = "ABORTED"
+                error "Unable to retrieve compose url."
+            }
             def repoUrl = repoDetails.yum_repourls.find({ x -> x.contains("Tools") })
             composeUrl = repoUrl.split("work").find({
                 x -> x.contains("RHCEPH-${majorVersion}.${minorVersion}")
