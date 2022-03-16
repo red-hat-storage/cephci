@@ -60,6 +60,11 @@ class Log:
         return self.config.get("run_id")
 
     @property
+    def rp_logger(self):
+        """Return the ReportPortal class object."""
+        return self.config.get("rp_logger", None)
+
+    @property
     def metadata(self) -> Dict:
         """Return the metadata of the execution run."""
         return dict(
@@ -68,6 +73,7 @@ class Log:
                 "testing_tool": "cephci",
                 "rhcs": self.config.get("rhcs"),
                 "test_build": self.config.get("rhbuild", "released"),
+                "rp_logger": self.rp_logger
             }
         )
 
@@ -163,6 +169,8 @@ class Log:
             None
         """
         kwargs["exc_info"] = kwargs.get("exc_info", True)
+        if self.rp_logger:
+            self.rp_logger.log(message=message, level="ERROR")
         self._log("error", message, *args, **kwargs)
 
     def exception(
