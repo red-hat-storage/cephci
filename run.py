@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from gevent import monkey
 
-from utility.config import TestMetaData
 from utility.log import Log
 
 monkey.patch_all()
@@ -384,8 +383,6 @@ def run(args):
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
-
-    metadata = TestMetaData(rp_logger=None)
 
     run_id = generate_unique_id(length=6)
     run_dir = create_run_dir(run_id, log_directory)
