@@ -126,3 +126,13 @@ tests:
         script-name: ../s3cmd/test_bucket_stats.py
         config-file-name: ../../s3cmd/configs/test_bucket_stats.yaml
         timeout: 300
+
+  - test:
+      name: S3CMD tests
+      desc: S3CMD object header size check
+      polarion-id: CEPH-83574691
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_header_size.py
+        config-file-name: ../../s3cmd/configs/test_header_size.yaml
+        timeout: 300

@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Ceph RGW Bucket stats consistency functionality testing."
+echo "Testing Cephfs MultiFS fucntionality"
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
-rhbuild="4.3"
-test_suite="suites/nautilus/rgw/tier-2_rgw_test-bucket-stats-consistency.yaml"
-test_conf="conf/nautilus/rgw/5-node-cluster.yaml"
+rhbuild="5.1"
+test_suite="suites/pacific/cephfs/tier-2_cephfs_test-multifs.yaml"
+test_conf="conf/pacific/cephfs/tier-0_fs.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
@@ -46,3 +46,4 @@ if [ $? -ne 0 ]; then
 fi
 
 exit ${return_code}
+

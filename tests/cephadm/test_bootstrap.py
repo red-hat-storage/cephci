@@ -382,7 +382,7 @@ def validate_skip_dashboard(cls, flag, response):
         flag: skip-dashboard bootstrap option
         response: bootstrap command response
     """
-    out, _ = cls.shell(args=["ceph", "mgr", "module", "ls"])
+    out, _ = cls.shell(args=["ceph", "mgr", "module", "ls", "-f", "json"])
     dashboard = "dashboard" in json.loads(out)["enabled_modules"]
     log.info(
         "skip-dashboard Enabled : %s, Dashboard configured: %s" % (flag, dashboard)

@@ -71,7 +71,7 @@
             <th>VCPU Used</th>
             <th>Volume Used in GB</th>
         </tr>
-    {% for user in quota['user_stats'] if user.User != "psi-ceph-jenkins"%}
+    {% for user in quota['user_stats'] %}
         {% set u_range = user["Instance Count"] %}
         {% if u_range > user_range[0] %}
             {% set color = "F1948A" %}

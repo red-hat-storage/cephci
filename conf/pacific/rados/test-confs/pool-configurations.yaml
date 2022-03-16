@@ -1,0 +1,41 @@
+# yaml containing the configurations for pools
+replicated:
+  sample-pool-1:
+    pool_type: replicated
+    pool_name: re_pool_10
+    pg_num: 64
+    size: 4
+    disable_pg_autoscale: true
+  sample-pool-2:
+    pool_type: replicated
+    pool_name: re_pool_20
+    pg_num: 32
+  sample-pool-3:
+    pool_type: replicated
+    pool_name: re_pool_30
+    pg_num: 128
+    size: 2
+erasure:
+  sample-pool-1:
+    pool_name: ec_pool_10
+    pool_type: erasure
+    pg_num: 64
+    k: 8
+    m: 3
+    plugin: jerasure
+    crush-failure-domain: osd
+  sample-pool-2:
+    pool_name: ec_pool_20
+    pool_type: erasure
+    pg_num: 32
+    k: 4
+    m: 2
+    plugin: jerasure
+    crush-failure-domain: osd
+  sample-pool-3:
+    pool_name: ec_pool_30
+    pool_type: erasure
+    pg_num: 64
+    k: 8
+    m: 4
+    plugin: jerasure

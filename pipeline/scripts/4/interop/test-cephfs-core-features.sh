@@ -63,6 +63,7 @@ ${PY_CMD} run.py \
     --log-level DEBUG \
     --xunit-results \
     --skip-enabling-rhel-rpms \
+    --skip-subscription \
     --rhbuild ${RHCS_VERSION} \
     --platform ${CEPH_PLATFORM} \
     --build rc \

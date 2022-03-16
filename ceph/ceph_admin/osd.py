@@ -48,8 +48,8 @@ class OSD(ApplyMixin, Orch):
         """
         cmd = ["ceph orch device ls -f json"]
         self.shell(args=["ceph orch device ls --refresh"])
-        LOG.info("Sleeping for 60 seconds for disks to be discovered")
-        sleep(60)
+        LOG.info("Sleeping for 120 seconds for disks to be discovered")
+        sleep(120)
         out, _ = self.shell(args=cmd)
 
         node_device_dict = dict()
