@@ -126,22 +126,6 @@ tests:
                   args:
                     all-available-devices: true
               - config:
-                  command: shell
-                  args:                             # arguments to ceph orch
-                    - "ceph fs volume create cephfs"
-              - config:
-                  command: apply
-                  service: mds
-                  base_cmd_args:                    # arguments to ceph orch
-                    verbose: true
-                  pos_args:
-                    - cephfs                        # name of the filesystem
-                  args:
-                    placement:
-                      nodes:
-                        - node4
-                        - node5
-              - config:
                   command: apply
                   service: rbd-mirror
                   args:
@@ -171,7 +155,7 @@ tests:
                 install_packages:
                     - ceph-common
                 copy_admin_keyring: true
-        desc: Configure the Cephfs client system 1
+        desc: Configure the client system 1
         destroy-cluster: false
         module: test_client.py
         name: configure client
