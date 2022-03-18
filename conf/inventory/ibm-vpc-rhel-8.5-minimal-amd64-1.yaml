@@ -1,3 +1,4 @@
+---
 version_id: 8.5
 id: rhel
 instance:
@@ -35,4 +36,5 @@ instance:
       - curl -k -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem https://10.245.4.89/.ceph-qe-ca.pem
       - curl -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://10.245.4.89/.RH-IT-Root-CA.crt
       - update-ca-trust
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
       - touch /ceph-qa-ready

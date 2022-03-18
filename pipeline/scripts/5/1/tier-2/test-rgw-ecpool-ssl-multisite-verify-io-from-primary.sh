@@ -1,20 +1,20 @@
 #! /bin/sh
-echo "Beginning Red Hat Ceph RGW multisite io verification on secondary."
+echo "Beginning Ceph RGW Multisite with SSL testing."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
-platform="rhel-7"
-rhbuild="4.3"
-test_suite="suites/nautilus/rgw/tier-1_rgw_multisite-primary-to-secondary.yaml"
-test_conf="conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
-test_inventory="conf/inventory/rhel-7.9-server-x86_64.yaml"
+platform="rhel-8"
+rhbuild="5.1"
+test_suite="suites/pacific/rgw/tier-2_rgw_ssl_ecpool_test-ms-verify-io-from-primary.yaml"
+test_conf="conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
 # Process the CLI arguments for IBM-C environment
 CLI_ARGS=$@
 cloud="ibmc"
 if [ -z "${CLI_ARGS##*$cloud*}" ] ; then
-    test_inventory="conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+    test_inventory="conf/inventory/ibm-vpc-rhel-8-latest.yaml"
 else
     CLI_ARGS="$CLI_ARGS --post-results --report-portal"
 fi

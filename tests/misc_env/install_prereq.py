@@ -34,6 +34,8 @@ rpm_packages = {
         "podman",
         "net-snmp-utils",
         "net-snmp",
+        "kernel-modules-extra",
+        "iproute-tc",
     ],
 }
 deb_packages = ["wget", "git-core", "python-virtualenv", "lsb-release", "ntp"]
@@ -41,10 +43,9 @@ deb_all_packages = " ".join(deb_packages)
 
 
 def run(**kw):
-    print(log.metadata)
-    print(log.log_level)
     log.info("Running test")
     ceph_nodes = kw.get("ceph_nodes")
+
     # skip subscription manager if testing beta RHEL
     config = kw.get("config")
     skip_subscription = config.get("skip_subscription", False)
@@ -54,9 +55,11 @@ def run(**kw):
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
     is_production = config.get("is_production", False)
     build_type = config.get("build_type", None)
+
     # when build set to released subscribing nodes with CDN credentials
     if build_type == "released":
         is_production = True
+
     cloud_type = config.get("cloud-type", "openstack")
     with parallel() as p:
         for ceph in ceph_nodes:
@@ -73,6 +76,7 @@ def run(**kw):
                 cloud_type,
             )
             time.sleep(20)
+
     return 0
 
 
@@ -118,9 +122,9 @@ def install_prereq(
             cmd="sudo apt-get install -y " + deb_all_packages, long_running=True
         )
     else:
-        # workaround: rhel 7.7's cloud-init has a bug:
-        # https://bugzilla.redhat.com/show_bug.cgi?id=1748015
-        ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
+        if distro_ver.startswith("7"):
+            ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
+
         if not skip_subscription:
             setup_subscription_manager(ceph, is_production, cloud_type)
 
@@ -135,6 +139,8 @@ def install_prereq(
         if repo:
             setup_addition_repo(ceph, repo)
 
+        ceph.exec_command(cmd="sudo yum -y upgrade", check_ec=False)
+
         rpm_all_packages = " ".join(rpm_packages.get("all"))
         if distro_ver.startswith("7"):
             rpm_all_packages = " ".join(rpm_packages.get("7"))
@@ -143,19 +149,39 @@ def install_prereq(
             cmd=f"sudo yum install -y {rpm_all_packages}", long_running=True
         )
 
-        if skip_enabling_rhel_rpms and distro_ver.startswith("8"):
-            # Workaround for ansible install failure in RHEL-8.6 inter op runs.
+        # Restarting the node for qdisc filter to be loaded. This is required for
+        # RHEL-8
+        if not distro_ver.startswith("7"):
+            # Avoiding early channel close and ignoring channel exception thrown during
+            # reboot
+            time.sleep(10)
+            ceph.exec_command(sudo=True, cmd="reboot", check_ec=False)
+
+            # Sleep before and after reconnect
+            time.sleep(60)
+            ceph.reconnect()
+            time.sleep(10)
+
+        if skip_enabling_rhel_rpms and skip_subscription:
+            # Ansible is required for RHCS 4.x
+            epel_pkg = "epel-release-latest-8.noarch.rpm"
+            ansible_pkg = "ansible-2.9.27-1.el8"
+            if distro_ver.startswith("7"):
+                epel_pkg = "epel-release-latest-7.noarch.rpm"
+                ansible_pkg = "ansible-2.9.27-1.el7"
+
             ceph.exec_command(
                 sudo=True,
-                cmd="dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+                cmd=f"yum install -y https://dl.fedoraproject.org/pub/epel/{epel_pkg}",
+                check_ec=False,
             )
-            ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el8")
+            ceph.exec_command(sudo=True, cmd=f"yum install -y {ansible_pkg}")
 
         if ceph.role == "client":
             ceph.exec_command(cmd="sudo yum install -y attr gcc", long_running=True)
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
 
-        ceph.exec_command(cmd="sudo yum clean metadata")
+        ceph.exec_command(cmd="sudo yum clean all")
         config_ntp(ceph, cloud_type)
 
     registry_login(ceph, distro_ver)
@@ -197,11 +223,11 @@ def setup_subscription_manager(
             # and then test it with --baseurl=cdn.stage.redhat.com.
             config_ = get_cephci_config()
             command = "sudo subscription-manager register --force "
-            if is_production or cloud_type == "ibmc":
+            if is_production or cloud_type.startswith("ibmc"):
                 command += "--serverurl=subscription.rhsm.redhat.com:443/subscription "
                 username_ = config_["cdn_credentials"]["username"]
                 password_ = config_["cdn_credentials"]["password"]
-                pool_id = "8a85f98960dbf6510160df23eb447470"
+                pool_id = "8a85f99a7db4827d017dc5134ff800ba"
 
             else:
                 command += (
@@ -224,7 +250,7 @@ def setup_subscription_manager(
             break
         except (KeyError, AttributeError):
             required_key = "stage_credentials"
-            if is_production or cloud_type == "ibmc":
+            if is_production or cloud_type.startswith("ibmc"):
                 required_key = "cdn_credentials"
 
             raise RuntimeError(
@@ -291,7 +317,7 @@ def enable_rhel_eus_rpms(ceph, distro_ver, cloud_type="openstack"):
 
     eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
 
-    if cloud_type != "ibmc":
+    if not cloud_type.startswith("ibmc"):
         # This pool ID would not work for production.
         ceph.exec_command(
             sudo=True,

@@ -1162,7 +1162,9 @@ class SSHConnectionManager(object):
         return self.__client
 
     def __connect(self):
-        while True:
+        """Establishes a connection with the remote host using the IP Address."""
+        end_time = datetime.datetime.now() + self.outage_timeout
+        while end_time > datetime.datetime.now():
             try:
                 self.__client.connect(
                     self.ip_address,
@@ -1171,18 +1173,17 @@ class SSHConnectionManager(object):
                     look_for_keys=self.look_for_keys,
                     allow_agent=False,
                 )
-                break
+                self.__outage_start_time = None
+                return
             except Exception as e:
                 logger.warning(f"Connection outage to {self.ip_address}: \n{e}")
                 if not self.__outage_start_time:
                     self.__outage_start_time = datetime.datetime.now()
-                if (
-                    datetime.datetime.now() - self.__outage_start_time
-                    > self.outage_timeout
-                ):
-                    raise e
+
+                logger.debug("Retrying connection in 10 seconds")
                 sleep(10)
-        self.__outage_start_time = None
+
+        raise AssertionError(f"Unable to establish connection with {self.ip_address}")
 
     @property
     def transport(self):
@@ -1499,8 +1500,10 @@ class CephNode(object):
             sleep(60)
 
     def reconnect(self):
-        # TODO: Deprecated. Left for compatibility with exisitng tests. Should be removed on refactoring.
-        pass
+        """Re-establish the connections."""
+        logger.info(f"Re-establishing the connection to {self.ip_address}.")
+        self.root_connection.get_client()
+        self.connection.get_client()
 
     def __getstate__(self):
         d = dict(self.__dict__)

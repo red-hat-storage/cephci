@@ -5,8 +5,8 @@ random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
-test_suite="suites/pacific/rgw/tier-1_rgw_multisite-primary-to-secondary.yaml"
-test_conf="conf/pacific/rgw/rgw_mutlisite.yaml"
+test_suite="suites/pacific/rgw/tier-1_rgw_ecpool_test-ms-verify-io-from-primary.yaml"
+test_conf="conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
