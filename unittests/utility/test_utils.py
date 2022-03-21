@@ -1,4 +1,5 @@
 import os
+from unittest import mock
 
 import pytest
 
@@ -139,12 +140,12 @@ def test_get_cephi_config(monkeypatch, fixtures_dir):
     assert ceph_cfg.get("email", {}).get("address") == "cephci@redhat.com"
 
 
-def test_get_cephci_config_raises(monkeypatch):
+@mock.patch("os.path.expanduser")
+def test_get_cephci_config_raises(mock_expanduser):
     """Test exception thrown when invalid file is provided."""
-
-    def mock_return(x):
-        return "./"
-
-    monkeypatch.setattr(os.path, "expanduser", mock_return)
-    with pytest.raises(IOError):
+    try:
+        mock_expanduser.return_value = "./"
         get_cephci_config()
+    except IOError as exception:
+        assert mock_expanduser.call_count == 1
+        assert exception.errno == 2
