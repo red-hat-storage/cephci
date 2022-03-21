@@ -1202,7 +1202,7 @@ class ReportPortal:
         self.client.terminate()
 
     @rp_deco
-    def log(self, message: str) -> None:
+    def log(self, message: str, level="INFO") -> None:
         """
         Adds log records to the event.
 
@@ -1212,7 +1212,7 @@ class ReportPortal:
         Returns:
             None
         """
-        self.client.log(time=timestamp(), message=message, level="INFO")
+        self.client.log(time=timestamp(), message=message, level=level)
 
 
 def install_start_kafka(rgw_node, cloud_type):

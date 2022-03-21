@@ -456,6 +456,8 @@ def run(args):
     skip_subscription = args.get("--skip-subscription", False)
     post_to_report_portal = args.get("--report-portal", False)
     rp_logger = ReportPortal()
+    # setting logger for ReportPortal
+    log.set_rp_logger(rp_logger)
 
     instances_name = args.get("--instances-name")
     if instances_name:
@@ -834,9 +836,6 @@ def run(args):
                     clients=clients,
                 )
             except BaseException:  # noqa
-                if post_to_report_portal:
-                    rp_logger.log(message=traceback.format_exc(), level="ERROR")
-
                 log.error(traceback.format_exc())
                 rc = 1
             finally:

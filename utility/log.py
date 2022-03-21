@@ -38,6 +38,10 @@ class Log:
         self._log_level = logging.DEBUG
         self._log_dir = None
         self.log_format = LOG_FORMAT
+        self.rp_logger = None
+
+    def set_rp_logger(self, logger):
+        self.rp_logger = logger
 
     @property
     def log_dir(self) -> str:
@@ -163,6 +167,8 @@ class Log:
             None
         """
         kwargs["exc_info"] = kwargs.get("exc_info", True)
+        if self.rp_logger:
+            self.rp_logger.log(message=message, level="ERROR")
         self._log("error", message, *args, **kwargs)
 
     def exception(
