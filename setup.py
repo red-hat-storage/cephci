@@ -27,6 +27,7 @@ setup(
         "junitparser==1.4.0",
         "jinja_markdown",
         "htmllistparse==0.5.2",
+        "ibm-cloud-sdk-core==3.15.0",
         "ibm-cos-sdk",
         "ibm-cos-sdk-core",
         "ibm-cos-sdk-s3transfer",
