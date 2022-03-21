@@ -448,6 +448,14 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
     )
     _handler.setFormatter(formatter)
     _root.addHandler(_handler)
+
+    # error file handler
+    err_logfile = os.path.join(run_dir, f"{test_name}.err")
+    _err_handler = logging.FileHandler(err_logfile)
+    _err_handler.setLevel(logging.ERROR)
+    _err_handler.setFormatter(formatter)
+    _root.addHandler(_err_handler)
+
     url_base = (
         magna_url + run_dir.split("/")[-1]
         if "/ceph/cephci-jenkins" in run_dir
