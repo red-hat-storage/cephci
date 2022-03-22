@@ -3,9 +3,11 @@
 # This suite deploys a single realm (India) spanning across two RHCS clusters. It has a
 # zonegroup (shared) which also spans across the clusters. There exists a master (pri)
 # and secondary (sec) zones within this group. The master zone is part of the pri
-# cluster whereas the sec zone is part of the sec datacenter (cluster).
+# cluster whereas the sec zone is part of the sec datacenter (cluster). It also uses
+# EC pool 4+2 configuration
 
 # The deployment is evaluated by running IOs across the environments.
+---
 tests:
 
   # Cluster deployment stage
@@ -27,7 +29,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     skip-dashboard: true
@@ -54,6 +55,21 @@ tests:
                   service: osd
                   args:
                     all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec01 k=4 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create primary.rgw.buckets.data 32 32"
+                    - "erasure rgwec01"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "primary.rgw.buckets.data rgw"
+                  command: shell
               - config:
                   command: apply_spec
                   service: orch
@@ -65,7 +81,7 @@ tests:
                         rgw_frontend_ssl_certificate: create-cert
                       placement:
                         nodes:
-                          - node5
+                          - node7
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -74,7 +90,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     skip-dashboard: true
@@ -102,6 +117,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec01 k=4 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "erasure rgwec01"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "secondary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply_spec
                   service: orch
                   specs:
@@ -109,7 +139,7 @@ tests:
                       service_id: shared.sec
                       placement:
                         nodes:
-                          - node5
+                          - node7
                       spec:
                         ssl: true
                         rgw_frontend_ssl_certificate: create-cert
@@ -124,7 +154,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node8
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -132,7 +162,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node8
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -147,8 +177,8 @@ tests:
           config:
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node5} --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node5} --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node7} --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node7} --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
@@ -163,9 +193,9 @@ tests:
           config:
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node5} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node5} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node5} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
