@@ -85,6 +85,8 @@ node(nodeName) {
                 sharedLib.unSetLock(majorVersion, minorVersion)
                 println "Current Ceph Version : ${currentCephVersion}"
                 println "New Ceph Version : ${cephVersion}"
+                currentBuild.result = "ABORTED"
+                error "Abort: Compose information is not updated yet for the current ceph version."
             }
 
             releaseMap.rc.repository = containerImage
