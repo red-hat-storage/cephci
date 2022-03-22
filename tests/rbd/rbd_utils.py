@@ -43,6 +43,13 @@ class Rbd:
             self.set_ec_profile(profile=self.ec_profile)
 
     def exec_cmd(self, **kw):
+        """
+        exec_command wrapper for rbd functions
+        Args:
+            pool_name: configs along with `cmd` - command
+
+        Returns:  0 -> pass, 1 -> fail
+        """
         try:
             cmd = kw.get("cmd")
             node = kw.get("node") if kw.get("node") else self.ceph_client
@@ -73,7 +80,7 @@ class Rbd:
     def create_pool(self, poolname):
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
-        if not self.exec_cmd(cmd="ceph osd pool create {} 64 64".format(poolname)):
+        if self.exec_cmd(cmd="ceph osd pool create {} 64 64".format(poolname)):
             log.error("Pool creation failed")
             return False
         if not self.check_pool_exists(pool_name=poolname):
