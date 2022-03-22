@@ -27,6 +27,7 @@ setup(
         "junitparser==1.4.0",
         "jinja_markdown",
         "htmllistparse==0.5.2",
+        # 3.15.0 is the last ibm-cloud-sdk-core version supporting python 3.6
         "ibm-cloud-sdk-core==3.15.0",
         "ibm-cos-sdk",
         "ibm-cos-sdk-core",
