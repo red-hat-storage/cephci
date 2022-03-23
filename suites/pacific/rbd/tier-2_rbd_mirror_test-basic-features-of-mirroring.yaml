@@ -1,0 +1,83 @@
+# Tier2: Extended RBD Mirror basic features testing
+#
+# This test suite runs addition test scripts to evaluate the existing functionality of
+# Ceph RBD component.
+#
+# Conf File - conf/pacific/rbd/tier-0_rbd.yaml
+#
+# The following tests are covered
+#   Verification snap and clone on an imported image
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the client system 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      abort-on-fail: true
+      name: snap and clone operations on imported image
+      desc: Snap and clone operations on imported image
+      module: test_rbdV2.py
+      clusters:
+        ceph-rbd1:
+          config:
+            node: node6
+            test_config: test_snap_clone_imported_image.yaml
