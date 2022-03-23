@@ -1,0 +1,27 @@
+name: test-rbd-snap-clone-imported-image
+description: 'Workflow to snapshot and clone on an imported image'
+sequential: True
+steps:
+  - method: create_pool
+    class: rbdmirror
+    args:
+      size: '128'
+      pool_name: 'test_rbd_pool'
+  - operation: shell
+    command: "dd if=/dev/urandom of='dummy' bs=4 count=5M"
+  - method: create
+    class: RbdSnapShot
+    args:
+      snap_name: "test_rbd_snap"
+      pool_name: ""
+      image_name: ""
+  - method: protect
+    class: RbdSnapShot
+    args:
+      snap_name: "test_rbd_snap"
+  - method: clone
+    class: RbdSnapShot
+    args:
+      snap_name: "test_rbd_snap"
+      pool_name: ""
+      image_name: ""

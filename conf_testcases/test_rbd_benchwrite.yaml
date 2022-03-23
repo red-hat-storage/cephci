@@ -1,0 +1,28 @@
+name: test-image-shrink
+description: 'Workflow to shrink image'
+parallel: True
+steps:
+  - method: create_pool
+    class: rbdmirror
+    args:
+      size: '128'
+      pool_name: 'test_rbd_pool'
+  - method: enable_image_jouraling_feature
+    class: rbdmirror
+    args:
+      size: '128'
+      image_name: 'test_rbd_image'
+  - method: enable_pool_image
+    class: rbdmirror
+    args:
+      mode: "pool"
+  - method: shell
+    command: 'sleep 15'
+  - method: wait_for_operation
+    class: rbdmirror
+    args:
+      response: "up+stopped"
+  - method: benchwrite
+    class: rbdmirror
+    args:
+      total-io: '1G'
