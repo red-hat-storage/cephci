@@ -103,6 +103,7 @@ def run(**kw):
             for cnode in ceph_nodes:
                 if cnode.role != "installer":
                     p.spawn(reboot_node, cnode)
+        sleep(10)
         return 0
     else:
         log.info("ansible-playbook failed to purge cluster")
