@@ -1,0 +1,16 @@
+# The purpose of this test is to deploy MON daemons using cephadm with
+# all-available-devices option enabled.
+---
+tests:
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+	  placement:
+            label: mon
+        command: apply
+        service: mon
+      desc: Test deploying MON daemons with all-available-devices enabled.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Test MON daemon deployment with all-available-devices enabled.

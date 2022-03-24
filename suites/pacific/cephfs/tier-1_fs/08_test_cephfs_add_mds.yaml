@@ -1,0 +1,16 @@
+# The purpose of this test is to deploy MDS daemons using cephadm with
+# all-available-devices option enabled.
+---
+tests:
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          placement:
+            label: mds
+        command: apply
+        service: mds
+      desc: Test deploying MDS daemons with all-available-devices enabled.
+      destroy-cluster: false
+      module: test_MDS.py
+      name: Test MDS daemon deployment with all-available-devices enabled.

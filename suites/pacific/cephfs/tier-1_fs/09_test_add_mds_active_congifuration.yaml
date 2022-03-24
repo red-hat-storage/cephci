@@ -1,0 +1,17 @@
+tests:
+  - test:
+      name: Add Active Active configuration of MDS
+      desc: Add Active Active configuration of MDS for cephfs
+      module: test_bootstrap.py
+      polarion-id: CEPH-11344
+      config:
+        command: shell
+        args: # arguments to ceph orch
+          - ceph
+          - fs
+          - set
+          - cephfs
+          - max_mds
+          - "2"
+      destroy-cluster: false
+      abort-on-fail: true

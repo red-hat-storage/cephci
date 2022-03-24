@@ -1,0 +1,6 @@
+- test:
+      name: cephfs subvolume authorize test
+      desc: Test cephfs subvolume client authorize
+      module: subvolume_authorize.py
+      polarion-id: CEPH-83574596
+      abort-on-fail: true
