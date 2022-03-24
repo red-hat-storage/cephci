@@ -103,34 +103,27 @@ def run(**kw):
             for cnode in ceph_nodes:
                 if cnode.role != "installer":
                     p.spawn(reboot_node, cnode)
-        sleep(10)
         return 0
-    else:
-        log.info("ansible-playbook failed to purge cluster")
-        return 1
 
-
-# Rebooting node after purge
+    log.info("ansible-playbook failed to purge cluster")
+    return 1
 
 
 def reboot_node(ceph_node, timeout=300):
+    """Reboot the given node."""
+    # Allow things to settle before performing a reboot
+    sleep(10)
     ceph_node.exec_command(sudo=True, cmd="reboot", check_ec=False)
-    timeout = datetime.timedelta(seconds=timeout)
-    starttime = datetime.datetime.now()
-    while True:
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+
+    while end_time > datetime.datetime.now():
         try:
+            sleep(20)
             ceph_node.reconnect()
-            break
-        except BaseException:
-            if datetime.datetime.now() - starttime > timeout:
-                log.error(
-                    "Failed to reconnect to the node {node} after reboot ".format(
-                        node=ceph_node.ip_address
-                    )
-                )
-                sleep(5)
-                raise RuntimeError(
-                    "Failed to reconnect to the node {node} after reboot ".format(
-                        node=ceph_node.ip_address
-                    )
-                )
+            # Connecting early could lead to connection reset
+            sleep(10)
+            return
+        except BaseException as be:  # noqa
+            log.debug(f"Waiting for node {ceph_node.vmshortname} to reboot.")
+
+    raise RuntimeError(f"Failed to reconnect {ceph_node.ip_address}")
