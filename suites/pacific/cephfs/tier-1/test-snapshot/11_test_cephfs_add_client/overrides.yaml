@@ -1,0 +1,13 @@
+tests:
+  - test:
+        index: 1
+        config:
+            id: client.2
+  - test:
+        index: 2
+        config:
+            id: client.3
+  - test:
+        index: 3
+        config:
+            id: client.4

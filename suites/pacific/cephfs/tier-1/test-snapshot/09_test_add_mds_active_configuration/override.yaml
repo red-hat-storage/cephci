@@ -1,0 +1,4 @@
+tests:
+  - test:
+        index: 1
+        args: "ceph fs set cephfs max_mds 2"
