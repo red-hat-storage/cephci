@@ -79,3 +79,10 @@ tests:
       module: rbd_snap_clone_imported_image.py
       name: snap and clone on imported image
       polarion-id: CEPH-9230
+
+  - test:
+      desc: Verify that clones can be created without protecting snapshot
+      destroy-cluster: false
+      module: rbd_clonev2.py
+      name: clones creation with v2clone format
+      polarion-id: CEPH-83573308

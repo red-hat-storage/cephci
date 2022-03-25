@@ -4,13 +4,7 @@ import random
 import string
 from time import sleep
 
-from rbd.exceptions import (
-    CreateCloneError,
-    CreateFileError,
-    ImportFileError,
-    ProtectSnapError,
-    SnapCreateError,
-)
+from rbd.exceptions import CreateFileError, ImportFileError, ProtectSnapError
 
 from ceph.ceph import CommandFailed
 from utility.log import Log
@@ -47,6 +41,7 @@ class Rbd:
         exec_command wrapper for rbd functions
         Args:
             pool_name: configs along with `cmd` - command
+
 
         Returns:  0 -> pass, 1 -> fail
         """
@@ -89,6 +84,9 @@ class Rbd:
         if self.ceph_version >= 3:
             self.exec_cmd(cmd="rbd pool init {}".format(poolname))
         return True
+
+    def create_image(self, pool_name, image_name, size):
+        self.exec_cmd(cmd=f"rbd create {pool_name}/{image_name} --size {size}")
 
     def set_ec_profile(self, profile):
         self.exec_cmd(cmd="ceph osd erasure-code-profile rm {}".format(profile))
@@ -171,9 +169,9 @@ class Rbd:
             image_name : name of the image file to be imported as
             snap_name  : name of the snapshot
         """
+
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
-        if not self.exec_cmd(cmd):
-            raise SnapCreateError("Creating the snapshot failed")
+        self.exec_cmd(cmd=cmd)
 
     def protect_snapshot(self, snap_name):
         """
@@ -195,8 +193,7 @@ class Rbd:
             image_name : name of the cloned image
         """
         cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
-        if not self.exec_cmd(cmd):
-            raise CreateCloneError(f"Creating clone of {snap_name} failed")
+        self.exec_cmd(cmd=cmd)
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):
