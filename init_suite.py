@@ -34,12 +34,16 @@ def process_override(dir_name: str) -> List:
     The directory must contain two files if you want to override.
         - <test_suite>.yaml
         - overrides.yaml
-    The directory may contain more than one test suite file and their order of execution is in ascending order of filenames
-    The directory must contain only one overrides file within that it may contain any number of 'test' under 'tests' as shown below
+
     overrides.yaml could have
         tests:
           - test:
-              testno : <no of the test we want to update>       #testno starts from 1 refering to the first test of first test suite file. It is optional. default is 1
+              index : <index of the test we want to update>  
+                #index starts from 1 refering to the first test in test suite file.
+                #It is optional. default is 1
+
+              <key>: <override_value>
+          - test:
               <key>: <override_value>
 
         clusters:
@@ -57,27 +61,22 @@ def process_override(dir_name: str) -> List:
     # At this point, the entry/item is a directory. Inside this folder, we
     # support only three files
     override_data = dict()
-    #test_data = dict()
-    test_data = dict({'tests':list()})
+    test_data = dict({'tests': list()})
 
     log.debug(f"Processing overrides of {dir_name}")
 
     files = glob(os.path.join(dir_name, "*"))
-    files.sort()
     for file in files:
         if file.endswith("overrides.yaml"):
             override_data = read_yaml(file)
             continue
-
-        #test_data = read_yaml(file)
-        test_data['tests'].extend(read_yaml(file).get('tests',list()))
+        test_data['tests'].extend(read_yaml(file).get('tests', list()))
 
     if not override_data:
         return test_data["tests"]
     for test in override_data.get('tests'):
-        index=test['test'].pop('testno',1)-1
+        index=test['test'].pop('index', 1) - 1
         test_data['tests'][index]['test'].update(test['test'])
-        #test_data.update(override_data.get("tests", {}))
 
     if not override_data.get("clusters"):
         return test_data["tests"]

@@ -1,1 +1,1 @@
-../../../../../fragments/install/ceph-ansible/deploy_cluster_with_lvm.yaml
+../../../../../fragments/install/ceph-ansible/deploy_cluster_containerized_override.yaml
