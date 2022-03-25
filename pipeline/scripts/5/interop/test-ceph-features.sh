@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-# Script to execute install Tier-0 test suite of Red Hat Ceph.
+# Script to execute sanity test suite of Red Hat Ceph Storage.
 # Maintainers: cephci@redhat.com
 # Version: 1.0
 
@@ -13,14 +13,16 @@ PY_CMD=${PY_CMD:-"${HOME}/cephci-venv/bin/python"}
 OSP_CRED_FILE=${OSP_CRED_FILE:-}
 REPO_FILE=${REPO_FILE:-}
 VM_SPEC=${VM_SPEC:-}
-RHCS_VERSION=${RHCS_VERSION:-"5.0"}
+RHCS_VERSION=${RHCS_VERSION:-"5.1"}
 BUILD_TYPE=${BUILD_TYPE:-"rc"}
 
-echo "Red Hat Ceph Storage 5 Ceph deploy tier-0 test suite execution."
+echo "Red Hat Ceph Storage 5 sanity test suite execution."
 
-TEST_SUITE="suites/pacific/cephadm/tier-0_cephadm.yaml"
-TEST_CONF="conf/pacific/cephadm/sanity-cephadm.yaml"
+TEST_SUITE="suites/pacific/interop/test-ceph-sanity.yaml"
+TEST_CONF="conf/pacific/integrations/6node-all-roles.yaml"
 return_code=0
+
+echo test suite is $TEST_SUITE
 
 while [[ $# -gt 0 ]] ; do
     key=$1
