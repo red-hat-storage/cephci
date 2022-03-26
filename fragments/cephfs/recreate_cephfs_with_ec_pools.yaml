@@ -1,0 +1,7 @@
+tests:
+  - test:
+      name: recreate cephfs with ec pools
+      module: recreate-cephfs-ecpool.py
+      polarion-id: CEPH-83573633
+      desc: Creates ec pools and Creates Filesystem using ec pools
+      abort-on-fail: false
