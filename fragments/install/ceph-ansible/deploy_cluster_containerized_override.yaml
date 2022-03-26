@@ -1,0 +1,46 @@
+tests:
+  - test:
+      abort-on-fail: true
+      config:
+        ansi_config:
+          ceph_conf_overrides:
+            client:
+              rgw crypt require ssl: false
+              rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+            global:
+              mon_max_pg_per_osd: 1024
+              osd_default_pool_size: 2
+              osd_pool_default_pg_num: 64
+              osd_pool_default_pgp_num: 64
+            mon:
+              mon_allow_pool_delete: true
+          ceph_origin: distro
+          ceph_repository: rhcs
+          ceph_stable: true
+          ceph_stable_release: nautilus
+          ceph_stable_rh_storage: true
+          ceph_test: true
+          cephfs_pools:
+            -
+              name: cephfs_data
+              pgs: "8"
+            -
+              name: cephfs_metadata
+              pgs: "8"
+          copy_admin_key: true
+          dashboard_admin_password: p@ssw0rd
+          dashboard_admin_user: admin
+          dashboard_enabled: true
+          fetch_directory: ~/fetch
+          grafana_admin_password: p@ssw0rd
+          grafana_admin_user: admin
+          grafana_container_image: "registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4"
+          journal_size: 1024
+          node_exporter_container_image: "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6"
+          osd_scenario: lvm
+          prometheus_container_image: "registry.redhat.io/openshift4/ose-prometheus:v4.6"
+      desc: "ceph deployment using site.yaml(RPM) playbook with lvm scenario"
+      destroy-cluster: false
+      module: test_ansible.py
+      name: "ceph ansible"
