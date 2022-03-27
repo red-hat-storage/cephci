@@ -66,13 +66,14 @@ node(nodeName) {
 
             def metaData = readYaml file: "${tmpDir}/${resultDir}/metadata.yaml"
             def copyFiles = "cp -a ${tmpDir}/${resultDir}/results ${rpPreprocDir}/payload/"
+            def copyAttachments = "cp -a ${tmpDir}/${resultDir}/attachments ${rpPreprocDir}/payload/"
             def rmTmpDir = "rm -rf ${tmpDir}"
 
             // Modifications to reuse methods
             metaData["ceph_version"] = metaData["ceph-version"]
             if ( metaData["stage"] == "latest" ) { metaData["stage"] = "Tier-0" }
 
-            sh script: "${copyFiles} && ${rmTmpDir}"
+            sh script: "${copyFiles} && ${copyAttachments} && ${rmTmpDir}"
 
             if ( composeInfo ){
                 metaData["buildArtifacts"] = composeInfo

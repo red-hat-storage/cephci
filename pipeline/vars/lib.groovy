@@ -716,7 +716,7 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties) {
     writeJSON file: credFile, json: credPreproc
 
     // Upload xml file to report portal
-    sh(script: "./.venv/bin/rp_preproc -c ${credFile} -d ${sourceDir}/payload")
+    sh(script: ".venv/bin/python utility/rp_client.py -c ${credFile} -d ${sourceDir}/payload")
 
     // Upload test result to polarion using xUnit Xml file
     withCredentials([
