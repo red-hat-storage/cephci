@@ -13,4 +13,4 @@ tests:
       args: "ceph osd pool set cephfs-data-ec allow_ec_overwrites true"
   - test:
       index: 5
-      args: "cepj fs new cephfs-ec cephfs-metadata cephfs-data-ec --force"
+      args: "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force"
