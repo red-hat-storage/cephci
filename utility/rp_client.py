@@ -186,12 +186,18 @@ def process_testcase(xunit_xml, testcase, tsuite):
     tcase.start()
     fqpath = os.path.join(tcase._configs.payload_dir, "attachments")
     log.info(f"{fqpath}/{tcase.tc_name}.err")
-    if os.path.exists(f"{fqpath}/{tsuite.xml_name}/{tcase.tc_name}.err"):
-        with open(f"{fqpath}/{tsuite.xml_name}/{tcase.tc_name}.err", "r") as file:
-            error = file.read()
-        tcase.rplog.add_message(
-            message=error, level="ERROR", test_item_id=tcase.test_item_id
-        )
+    if tcase.status == "FAILED" and os.path.exists(
+        f"{fqpath}/{tsuite.xml_name}/{tcase.tc_name.replace(' ', '_')}_0.err"
+    ):
+        with open(
+            f"{fqpath}/{tsuite.xml_name}/{tcase.tc_name.replace(' ', '_')}_0.err", "r"
+        ) as file:
+            error = file.readline()
+            while error:
+                tcase.rplog.add_message(
+                    message=error, level="ERROR", test_item_id=tcase.test_item_id
+                )
+                error = file.readline()
     tcase.finish()
 
 

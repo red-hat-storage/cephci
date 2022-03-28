@@ -1,0 +1,16 @@
+tests:
+  - test:
+      index: 1
+      args: "ceph fs volume create cephfs"
+  - test:
+      index: 2
+      args: "ceph osd pool create cephfs-data-ec 64 erasure"
+  - test:
+      index: 3
+      args: "ceph osd pool create cephfs-metadata 64"
+  - test:
+      index: 4
+      args: "ceph osd pool set cephfs-data-ec allow_ec_overwrites true"
+  - test:
+      index: 5
+      args: "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force"

@@ -1,0 +1,10 @@
+tests:
+  - test:
+      - config:
+          command: apply
+          service: cephfs-mirror
+          args:
+            placement:
+              nodes:
+                - node6
+
