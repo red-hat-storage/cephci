@@ -1,0 +1,6 @@
+tests:
+  - test:
+      config:
+        ansi_config:
+          alertmanager_container_image: "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6"
+      polarion-id: CEPH-83571467
