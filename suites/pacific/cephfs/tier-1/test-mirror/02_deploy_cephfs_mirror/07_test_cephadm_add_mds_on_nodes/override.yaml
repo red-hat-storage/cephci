@@ -1,0 +1,17 @@
+tests:
+  - test:
+        config:
+          command: apply
+          service: mds
+          base_cmd_args: # arguments to ceph orch
+            verbose: true
+            pos_args:
+              - cephfs # name of the filesystem
+            args:
+              placement:
+                nodes:
+                  - node4
+                  - node5
+            clusters:
+              - ceph1
+              - ceph2
