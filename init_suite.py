@@ -20,7 +20,6 @@ def merge_dicts(dict1, dict2):
         else:
             dict1[k] = dict2[k]
         if dict1[k] == None:
-            print(k," ",dict1[k])
             del dict1[k]
     return dict1
 
@@ -90,7 +89,7 @@ def process_override(dir_name: str) -> List:
         return test_data["tests"]
     for test in override_data.get('tests'):
         index=test['test'].pop('index', 1) - 1
-        merge_dicts(test_data['tests'][index]['test'] , test['test'])
+        merge_dicts(test_data['tests'][index]['test'], test['test'])
 
     if not override_data.get("clusters"):
         return test_data["tests"]
