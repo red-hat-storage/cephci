@@ -256,3 +256,13 @@ tests:
         pool-1-conf: sample-pool-2
         pool-2-conf: sample-pool-3
       desc: Migrating data between different pools. Scenario-4. Ec -> EC
+
+  - test:
+      name: Pg autoscaler bulk flag
+      module: pool_tests.py
+      polarion-id: CEPH-83573412
+      desc: Ceph PG autoscaler bulk flag tests
+      config:
+        test_autoscaler_bulk_feature: true
+        pool_name: test_bulk_features
+        delete_pool: true

@@ -250,3 +250,93 @@ class PoolFunctions:
             log.debug(f"deleted snapshot {snap} on pool {pool_name}")
         log.debug("Deleted provided snapshots on the pool")
         return True
+
+    def get_bulk_details(self, pool_name: str) -> bool:
+        """
+        Checks the status of bulk flag on the pool given
+        Args:
+            pool_name: Name of the pool
+        Returns: True -> pass, False -> fail
+
+        """
+        # Checking if the sent pool already exists.
+        if pool_name not in self.rados_obj.list_pools():
+            log.error(f"Pool {pool_name} does not exist")
+            return False
+
+        # Getting the bulk status
+        obj = self.rados_obj.get_pool_property(pool=pool_name, props="bulk")
+        return obj["bulk"]
+
+    def set_bulk_flag(self, pool_name: str) -> bool:
+        """
+        Sets the bulk flag to true on existing pools
+        Args:
+            pool_name: Name of the pool
+        Returns: True -> pass, False -> fail
+
+        """
+        # Checking if the sent pool already exists. If does not, creating new pool
+        if pool_name not in self.rados_obj.list_pools():
+            log.info(
+                f"Pool {pool_name} does not exist, creating new pool with bulk enabled"
+            )
+            if not self.rados_obj.create_pool(pool_name=pool_name, bulk=True):
+                log.error("Failed to create the replicated Pool")
+                return False
+
+        # Enabling bulk on already existing pool
+        if not self.rados_obj.set_pool_property(
+            pool=pool_name, props="bulk", value="true"
+        ):
+            log.error(f"Could not set the bulk flag on pool {pool_name}")
+            return False
+
+        # Sleeping for 2 seconds after pool create/Modify for PG's to be calculated with bulk
+        time.sleep(2)
+
+        # Checking if the bulk is enabled or not
+        return self.get_bulk_details(pool_name=pool_name)
+
+    def rm_bulk_flag(self, pool_name: str) -> bool:
+        """
+        Removes the bulk flag on existing pools
+        Args:
+            pool_name: Name of the pool
+        Returns: True -> pass, False -> fail
+
+        """
+        # Checking if the sent pool already exists.
+        if pool_name not in self.rados_obj.list_pools():
+            log.info(f"Pool {pool_name} does not exist")
+            return False
+
+        # Enabling bulk on already existing pool
+        if not self.rados_obj.set_pool_property(
+            pool=pool_name, props="bulk", value="false"
+        ):
+            log.error(f"Could not unset the bulk flag on pool {pool_name}")
+            return False
+
+        # Sleeping for 2 seconds after pool create/Modify for PG's to be calculated with bulk
+        time.sleep(2)
+
+        # Checking if the bulk is enabled or not
+        return not self.get_bulk_details(pool_name=pool_name)
+
+    def get_target_pg_num_bulk_flag(self, pool_name: str) -> int:
+        """
+        Fetches the target PG counts for the given pool from the autoscaler status
+        Args:
+            pool_name: Name of the pool
+
+        Returns: PG Count
+
+        """
+        # Checking the autoscaler status, final PG counts, bulk flags
+        cmd = "ceph osd pool autoscale-status"
+        pool_status = self.rados_obj.run_ceph_command(cmd=cmd)
+
+        for entry in pool_status:
+            if entry["pool_name"] == pool_name:
+                return int(entry["pg_num_final"])
