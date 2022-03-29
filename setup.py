@@ -20,7 +20,7 @@ setup(
         "greenlet==0.4.16",
         "reportportal-client",
         "requests",
-        "paramiko==2.4.2",
+        "paramiko==2.10.1",
         "pyOpenSSL==20.0.1",
         "pyyaml>=4.2b1",
         "jinja2",
