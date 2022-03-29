@@ -1,0 +1,12 @@
+tests:
+  - test:
+      name: Set Host address
+      polarion-id: CEPH-83574738
+      config:
+        command: set_address
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node1
+          attach_ip_address: null
+          labels: null

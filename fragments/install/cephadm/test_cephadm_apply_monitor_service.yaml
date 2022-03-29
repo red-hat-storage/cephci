@@ -1,0 +1,22 @@
+# The purpose of this test is to verify adding of hosts to an existing cluster with
+# labels and ip addresses
+---
+tests:
+  - test:
+      name: Apply Monitor with host placement
+      desc: Apply monitor with placement option on specified hosts
+      module: test_mon.py
+      abort-on-fail: true
+      polarion-id: CEPH-83573732
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+                - node1
+                - node2
+                - node6
+            sep: ";"

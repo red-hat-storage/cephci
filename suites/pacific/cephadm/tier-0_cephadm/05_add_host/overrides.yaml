@@ -1,0 +1,10 @@
+tests:
+  - test:
+      polarion-id: CEPH-83573729
+      config:
+        args:
+          node: node4
+          labels:
+            - osd
+            - node-exporter
+            - mon

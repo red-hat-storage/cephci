@@ -8,7 +8,7 @@ tests:
         args:
           attach_ip_address: true
           labels: apply-all-labels
-        command: add_hosts
+        command: add
         service: host
       desc: Adding hosts to the cluster with labels and IP information.
       destroy-cluster: false

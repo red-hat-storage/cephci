@@ -1,0 +1,8 @@
+tests:
+  - test:
+      polarion-id: CEPH-83573747
+      config:
+        command: remove
+        args:
+          node: node4
+          labels: null

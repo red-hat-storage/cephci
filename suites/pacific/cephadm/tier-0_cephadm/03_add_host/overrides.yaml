@@ -1,0 +1,8 @@
+tests:
+  - test:
+      polarion-id: CEPH-83573729
+      config:
+        command: add
+        args:                     # arguments to ceph orch
+          node: node2
+          labels: null

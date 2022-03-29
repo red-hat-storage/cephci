@@ -1,0 +1,9 @@
+tests:
+  - test:
+      name: Remove all Hosts
+      config:
+        base_cmd_args: null
+        command: remove_hosts
+        args:
+          nodes: []
+          labels: null

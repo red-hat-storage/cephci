@@ -1,0 +1,7 @@
+tests:
+  - test:
+      config:
+        args:
+          labels:
+            - osd
+            - mon

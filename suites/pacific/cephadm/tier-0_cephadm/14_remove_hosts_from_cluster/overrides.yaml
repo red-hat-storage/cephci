@@ -1,0 +1,11 @@
+tests:
+  - test:
+      name: Remove Hosts from cluster
+      config:
+        base_cmd_args: null
+        command: remove_hosts
+        args:
+          nodes:
+            - node5
+            - node6
+          labels: null

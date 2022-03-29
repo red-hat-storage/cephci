@@ -1,0 +1,13 @@
+tests:
+  - test:
+      polarion-id: CEPH-83574739
+      config:
+        command: label_add
+        base_cmd_args:
+          verbose: true
+        args:
+          attach_ip_address: true
+          node: node4
+          labels:
+            - mon
+            - osd

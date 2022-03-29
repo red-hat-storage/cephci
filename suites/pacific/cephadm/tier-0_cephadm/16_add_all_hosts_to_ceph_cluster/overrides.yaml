@@ -1,0 +1,8 @@
+tests:
+  - test:
+      name: Add all hosts to ceph cluster
+      polarion-id:
+      config:
+        command: add_hosts
+        args:
+          nodes: []

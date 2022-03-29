@@ -1,0 +1,10 @@
+tests:
+  - test:
+      polarion-id: CEPH-83573776
+      config:
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node3
+          add_label: false
+          labels: null
