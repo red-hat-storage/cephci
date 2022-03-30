@@ -59,7 +59,7 @@ class Rbd:
             )
 
             if kw.get("output", False):
-                return out.read().decode()
+                return out
 
             return 0
 

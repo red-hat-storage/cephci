@@ -80,7 +80,7 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
+            sub_dir=f"{subvol_path.strip()}",
         )
         fs_util.create_file_data(
             client1, kernel_mounting_dir_1, 3, "snap1", "snap_1_data "
@@ -105,7 +105,7 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_2,
             ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
+            sub_dir=f"{subvol_path.strip()}",
         )
         client1.exec_command(
             sudo=True, cmd=f"cd {kernel_mounting_dir_2};cp .snap/_snap_1_*/* ."

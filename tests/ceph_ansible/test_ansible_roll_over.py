@@ -130,13 +130,13 @@ def run(ceph_cluster, **kw):
             )
 
     cmd = f"cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {yaml_file}"
-    out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+    rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if "4.2" in build:
         if daemon == "mon":
             cmd = f"cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook \
                   -vvvv -i hosts {yaml} --limit mons"
-        out1, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+        rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:
         log.error("Failed during deployment")

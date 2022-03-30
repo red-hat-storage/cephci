@@ -85,7 +85,7 @@ def mount_test_case(clients, mounting_dir):
             cmd=f"mkdir -p {mounting_dir}{dir1} {mounting_dir}{dir2} {mounting_dir}{dir3}",
         )
         log.info(f"Execution of testcase {tc1} started")
-        out, rc = client.exec_command(
+        client.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
@@ -119,7 +119,7 @@ def mount_test_case(clients, mounting_dir):
                     cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=100M "
                     "count=5",
                 )
-                out1, rc1 = client.exec_command(
+                out1, err = client.exec_command(
                     sudo=True,
                     cmd=f" ls -c -ltd -- {mounting_dir}{client.node.hostname}.*",
                 )
@@ -128,15 +128,13 @@ def mount_test_case(clients, mounting_dir):
                     cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}.txt bs=200M "
                     "count=5",
                 )
-                out2, rc2 = client.exec_command(
+                out2, err = client.exec_command(
                     sudo=True,
                     cmd=f" ls -c -ltd -- {mounting_dir}{client.node.hostname}.*",
                 )
-                a = out1.read().decode()
-                b = out2.read().decode()
-                if a != b:
-                    return_counts.append(out1.channel.recv_exit_status())
-                    return_counts.append(out2.channel.recv_exit_status())
+                if out1 != out2:
+                    return_counts.append(0)
+                    return_counts.append(0)
                 else:
                     raise CommandFailed("Metadata info command failed")
                 break

@@ -3,8 +3,6 @@ import json
 import re
 from typing import Any, Tuple
 
-from paramiko.channel import ChannelFile
-
 from ceph.utils import get_node_by_id, translate_to_ip
 from utility.log import Log
 
@@ -29,9 +27,6 @@ def exec_command(node, **kwargs: Any) -> Tuple:
         CommandFailed   when there is an execution failure
     """
     out, err = node.exec_command(**kwargs)
-
-    out = out.read().decode() if isinstance(out, ChannelFile) else out
-    err = err.read().decode() if isinstance(err, ChannelFile) else err
     return out, err
 
 
@@ -180,7 +175,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     LOG.info("Executing command")
     config = kwargs["config"]
     build = config.get("build", config.get("rhbuild"))
-
+    timeout = config.get("timeout")
     command = config.get("cmd")
     LOG.warning("Usage of cmd is deprecated instead use commands.")
     commands = [command] if command else config["commands"]
@@ -219,6 +214,7 @@ def run(ceph_cluster, **kwargs: Any) -> int:
                 cmd=cmd,
                 check_ec=check_status,
                 long_running=long_running,
+                timeout=timeout,
             )
             LOG.info(out)
         except BaseException as be:

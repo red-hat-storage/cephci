@@ -46,7 +46,7 @@ enabled=1
     kernel_repo.write(kernel_repo_file)
     kernel_repo.flush()
     o, e = client.exec_command(cmd="uname -a")
-    log.info(o.read().decode())
+    log.info(o)
     client.exec_command(
         cmd="sudo subscription-manager repos --disable=*", long_running=True
     )
@@ -56,4 +56,4 @@ enabled=1
     time.sleep(300)
     client.reconnect()
     o, e = client.exec_command(cmd="uname -a")
-    log.info(o.read().decode())
+    log.info(o)

@@ -23,12 +23,12 @@ def check_clean_pgs(client, timeout=300):
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
     out, rc = client[0].exec_command(sudo=True, cmd="ceph pg stat --format json")
-    output = json.loads(out.read().decode())
+    output = json.loads(out)
     total_pgs = output["pg_summary"]["num_pgs"]
     log.info(f"total pgs = {total_pgs}")
     while datetime.datetime.now() - starttime <= timeout:
         out, rc = client[0].exec_command(sudo=True, cmd="ceph pg stat --format json")
-        out = json.loads(out.read().decode())
+        out = json.loads(out)
         output = out["pg_summary"]["num_pg_by_state"]
         active_clean_pgs = ""
         for item in output:
@@ -106,15 +106,13 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             clients[0].exec_command(sudo=True, cmd=command, long_running=True)
-        out, rc = clients[0].exec_command(
+        data_pool_pg_num, rc = clients[0].exec_command(
             sudo=True, cmd=f"ceph osd pool get {data_pool} pg_num | awk '{{print $2}}'"
         )
-        data_pool_pg_num = out.read().decode()
-        out, rc = clients[0].exec_command(
+        metadata_pool_pg_num, rc = clients[0].exec_command(
             sudo=True,
             cmd=f"ceph osd pool get {metadata_pool} pg_num | awk '{{print $2}}'",
         )
-        metadata_pool_pg_num = out.read().decode()
         for num in range(1, 7):
             log.info("Creating Directories")
             out, rc = clients[0].exec_command(

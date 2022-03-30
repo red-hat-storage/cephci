@@ -46,7 +46,7 @@ def run(ceph_cluster, **kw):
             out, rc = client1.exec_command(
                 sudo=True, cmd="ceph orch ps --daemon_type mds -f json"
             )
-            daemon_ls_before = json.loads(out.read().decode())
+            daemon_ls_before = json.loads(out)
             daemon_count_before = len(daemon_ls_before)
             client1.exec_command(
                 sudo=True,
@@ -57,7 +57,7 @@ def run(ceph_cluster, **kw):
             out_after, rc = client1.exec_command(
                 sudo=True, cmd="ceph orch ps --daemon_type mds -f json"
             )
-            daemon_ls_after = json.loads(out_after.read().decode())
+            daemon_ls_after = json.loads(out_after)
             daemon_count_after = len(daemon_ls_after)
             assert daemon_count_after > daemon_count_before, (
                 f"daemon count is reduced after creating FS. Demons count before : {daemon_count_before} ;"

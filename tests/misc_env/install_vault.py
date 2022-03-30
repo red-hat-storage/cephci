@@ -280,12 +280,12 @@ def _configure_rgw_daemons(node: CephNode, config: Dict) -> None:
     out, err = node.exec_command(
         sudo=True, cmd="ceph orch ps --daemon_type rgw --format json"
     )
-    rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out.read().decode())]
+    rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out)]
 
     out, err = node.exec_command(
         sudo=True, cmd="ceph orch ls --service_type rgw --format json"
     )
-    rgw_services = [x["service_name"] for x in loads(out.read().decode())]
+    rgw_services = [x["service_name"] for x in loads(out)]
 
     configs = [
         ("rgw_crypt_s3_kms_backend", "vault"),

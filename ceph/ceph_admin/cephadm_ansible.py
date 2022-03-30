@@ -101,7 +101,7 @@ class CephadmAnsible:
         if extra_args:
             cmd += config_dict_to_string(extra_args)
 
-        _, rc = self.admin.exec_command(
+        rc = self.admin.exec_command(
             cmd=cmd,
             long_running=True,
         )

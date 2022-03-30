@@ -38,7 +38,7 @@ def run(**kw):
         sudo = ""
 
     cmd1 = "{env} {sudo} {cmd}".format(env=env, sudo=sudo, cmd=cmd)
-    output, ec = client.exec_command(cmd=cmd1, long_running=True)
+    ec = client.exec_command(cmd=cmd1, long_running=True)
     if ec == 0:
         log.info("Exec {cmd} completed successfully".format(cmd=cmd1))
     else:

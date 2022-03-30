@@ -299,8 +299,7 @@ def get_mondb_size(mon_node, mon_daemons) -> int:
     log.info(
         f"Collecting the size of the DB on node: {mon_node.hostname} by executing the command : {cmd}"
     )
-    out, err = mon_node.exec_command(sudo=True, cmd=cmd)
-    output = out.read().decode()
+    output, err = mon_node.exec_command(sudo=True, cmd=cmd)
     regex = r"\s*([\d]*)[M|G]\s+[\w\W]*store.db"
     match = re.search(regex, output)
     size = match.groups()[0] if match else 0

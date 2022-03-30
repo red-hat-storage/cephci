@@ -86,7 +86,7 @@ def run(ceph_cluster, **kw):
                 cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir1)
             )
             log.info("Creating directories with breadth and depth:")
-            out, rc = client.exec_command(
+            client.exec_command(
                 sudo=True,
                 cmd=f"python3 smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 --files 1000 "
                 f"--files-per-dir 10 --dirs-per-dir 2 --top {client_info['mounting_dir']}{dir1}",
@@ -149,7 +149,7 @@ def run(ceph_cluster, **kw):
 
         for client in client_info["clients"]:
             log.info("Creating directories with breadth and depth:")
-            out, rc = client.exec_command(
+            client.exec_command(
                 sudo=True,
                 cmd="python3 smallfile/smallfile_cli.py "
                 "--operation create --threads 10 "
@@ -163,7 +163,7 @@ def run(ceph_cluster, **kw):
             result = fs_util.rc_verify("", return_counts)
             print(result)
             log.info("Renaming the dirs:")
-            out, rc = client.exec_command(
+            client.exec_command(
                 sudo=True,
                 cmd="python3 smallfile/smallfile_cli.py "
                 "--operation rename --threads 10 --file-size 4"

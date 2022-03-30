@@ -61,7 +61,7 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
+            sub_dir=f"{subvol_path.strip()}",
         )
         for i in range(250):
             client1.exec_command(
@@ -87,7 +87,7 @@ def run(ceph_cluster, **kw):
             out1, err1 = client1.exec_command(
                 sudo=True, cmd=f"ceph fs clone status cephfs {new_subvolume_name}"
             )
-            output1 = json.loads(out1.read().decode())
+            output1 = json.loads(out1)
             output2 = output1["status"]["state"]
             log.info(new_subvolume_name + " status: " + str(output2))
             result, error = client1.exec_command(
@@ -96,8 +96,7 @@ def run(ceph_cluster, **kw):
                 check_ec=False,
             )
             log.info("Subvolume Remove Executed")
-            error_result = error.read().decode()
-            if "clone in-progress" in error_result:
+            if "clone in-progress" in error:
                 log.info("Clone is in-progress as expected")
             if output2 == "in-progress":
                 client1.exec_command(
@@ -106,7 +105,7 @@ def run(ceph_cluster, **kw):
             result2, error2 = client1.exec_command(
                 sudo=True, cmd=f"ceph fs clone status cephfs {new_subvolume_name}"
             )
-            out1 = json.loads(result2.read().decode())
+            out1 = json.loads(result2)
             out2 = out1["status"]["state"]
             if out2 == "canceled":
                 fs_util.remove_subvolume(

@@ -21,7 +21,7 @@ def exec_cmd_status(ceph_node, command, sudo=False):
         Boolean
     """
     out, err = ceph_node.exec_command(sudo=sudo, cmd=command)
-    out, err = out.read().decode().strip(), err.read().decode().strip()
+    out, err = out.strip(), err.strip()
     log.info("Command Response : {} {}".format(out, err))
     return out, err
 

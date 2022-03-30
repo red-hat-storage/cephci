@@ -285,7 +285,6 @@ class BootstrapMixin:
             check_ec=True,
         )
 
-        out, err = out.read().decode(), err.read().decode()
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
 

@@ -47,7 +47,7 @@ def generate_sosreport(cnode, results):
         cnode.exec_command(cmd="sudo yum -y install sos", check_ec=False)
 
         out, err = cnode.exec_command(
-            sudo=True, cmd="sosreport -a --all-logs -e ceph --batch", long_running=True
+            sudo=True, cmd="sosreport -a --all-logs -e ceph --batch", timeout=1200
         )
         sosreport = re.search(r"/var/tmp/sosreport-.*.tar.xz", out)
         if err and not sosreport:

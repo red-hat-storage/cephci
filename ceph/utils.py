@@ -543,44 +543,41 @@ def check_ceph_healthly(
 
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
-    lines = None
     pending_states = ["peering", "activating", "creating"]
     valid_states = ["active+clean"]
 
+    out = None
     while datetime.datetime.now() - starttime <= timeout:
         if mon_container:
             distro_info = ceph_mon.distro_info
             distro_ver = distro_info["VERSION_ID"]
             if distro_ver.startswith("8"):
-                out, err = ceph_mon.exec_command(
+                out, _ = ceph_mon.exec_command(
                     cmd="sudo podman exec {container} ceph -s".format(
                         container=mon_container
                     )
                 )
             else:
-                out, err = ceph_mon.exec_command(
+                out, _ = ceph_mon.exec_command(
                     cmd="sudo docker exec {container} ceph -s".format(
                         container=mon_container
                     )
                 )
         else:
-            out, err = ceph_mon.exec_command(cmd="sudo ceph -s")
-        lines = out.read().decode()
+            out, _ = ceph_mon.exec_command(cmd="sudo ceph -s")
 
-        if not any(state in lines for state in pending_states):
-            if all(state in lines for state in valid_states):
+        if not any(state in out for state in pending_states):
+            if all(state in out for state in valid_states):
                 break
         sleep(5)
-    log.info(lines)
-    if not all(state in lines for state in valid_states):
+    log.info(out)
+    if not all(state in out for state in valid_states):
         log.error("Valid States are not found in the health check")
         return 1
     if build.startswith("4"):
-        match = re.search(
-            r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", lines
-        )
+        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", out)
     else:
-        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
+        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", out)
     all_osds = int(match.group(1))
     up_osds = int(match.group(2))
     in_osds = int(match.group(3))
@@ -592,14 +589,14 @@ def check_ceph_healthly(
         return 1
 
     # attempt luminous pattern first, if it returns none attempt jewel pattern
-    match = re.search(r"(\d+) daemons, quorum", lines)
+    match = re.search(r"(\d+) daemons, quorum", out)
     if not match:
-        match = re.search(r"(\d+) mons at", lines)
+        match = re.search(r"(\d+) mons at", out)
     all_mons = int(match.group(1))
     if all_mons != num_mons:
         log.error("Not all monitors are in cluster")
         return 1
-    if "HEALTH_ERR" in lines:
+    if "HEALTH_ERR" in out:
         log.error("HEALTH in ERROR STATE")
         return 1
     return 0
@@ -823,9 +820,8 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                     out, rc = node.exec_command(cmd="rpm -qa | grep ceph-ansible")
                 else:
                     out, rc = node.exec_command(cmd="dpkg -s ceph-ansible")
-                output = out.read().decode().rstrip()
-                log.info(output)
-                versions_dict.update({node.shortname: output})
+                log.info(out)
+                versions_dict.update({node.shortname: out.rstrip()})
 
             else:
                 if containerized:
@@ -844,10 +840,9 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                             out, rc = node.exec_command(
                                 sudo=True, cmd='docker ps --format "{{.Names}}"'
                             )
-                        output = out.read().decode()
                         containers = [
                             container
-                            for container in output.split("\n")
+                            for container in out.split("\n")
                             if container != ""
                         ]
                         log.info("Containers: {}".format(containers))
@@ -869,16 +864,15 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                                         container=container_name
                                     ),
                                 )
-                        output = out.read().decode().rstrip()
-                        log.info(output)
-                        versions_dict.update({container_name: output})
+                        log.info(out)
+                        versions_dict.update({container_name: out.rstrip()})
 
                 else:
                     #  client and grafana role not supported for ceph commands
                     if node.role == "client" or node.role == "grafana":
                         pass
                     out, rc = node.exec_command(cmd="ceph --version")
-                    output = out.read().decode().rstrip()
+                    output = out.rstrip()
                     log.info(output)
                     versions_dict.update({node.shortname: output})
 
@@ -965,7 +959,6 @@ def get_disk_info(node):
 
     # get boot disk
     out, _ = node.exec_command(cmd="%s" % _BOOT_DISK)
-    out = out.read().decode().strip()
 
     boot_disk = re.sub(r"\d", "", out)
     log.info("Boot disk found : %s", boot_disk)
@@ -975,7 +968,7 @@ def get_disk_info(node):
     out, _ = node.exec_command(
         cmd="{} | grep disk".format(_GET_DISKS.format(",".join(headers)))
     )
-    disks_info = out.read().decode().strip().split("\n")
+    disks_info = out.strip().split("\n")
 
     disks = []
     for disk in list([x for x in disks_info if x]):

@@ -41,7 +41,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume info cephfs subvol_{subvolume_name_generate}",
         )
-        c_out_decoded = json.loads(c_out.read().decode())
+        c_out_decoded = json.loads(c_out)
         gid = c_out_decoded["gid"]
         uid = c_out_decoded["uid"]
         if gid != 0 or uid != 0:

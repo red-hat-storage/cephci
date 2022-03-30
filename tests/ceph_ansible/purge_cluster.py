@@ -83,7 +83,7 @@ def run(**kw):
     )
 
     # executing the command to purge cluster
-    out, err = installer_node.exec_command(cmd=cmd, long_running=True)
+    err = installer_node.exec_command(cmd=cmd, long_running=True)
 
     # remove ceph-ansible after successful purge
     if err == 0:

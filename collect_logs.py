@@ -58,7 +58,7 @@ def upload_logs(
         stdin, stdout, stderr = ssh_install.exec_command(
             f"[ -d tmp/cephci-jenkins/{directory} ]; echo $?"
         )
-        if not directory or json.loads(stdout.read().decode()):
+        if not directory or json.loads(stdout):
             print("Either directory is not provided or given diretory does not exist")
             ssh_install.exec_command("mkdir -p tmp/cephci-jenkins/ceph_logs")
             ssh_install.exec_command(f"mv {log_dir} tmp/cephci-jenkins/ceph_logs/")
@@ -93,7 +93,7 @@ def collect_logs(
     """
     try:
         stdin, stdout, stderr = ssh_install.exec_command("sudo ceph --version")
-        if not stderr.read().decode():
+        if not stderr:
             file_name = "cephansible.sh"
         else:
             file_name = "cephadm.sh"
@@ -134,7 +134,7 @@ def generate_sosreport_in_node(
         stdin, stdout, stderr = ssh_d.exec_command(
             "sudo sosreport -a --all-logs -e ceph --batch"
         )
-        sosreport = re.search(r"/var/tmp/sosreport-.*.tar.xz", stdout.read().decode())
+        sosreport = re.search(r"/var/tmp/sosreport-.*.tar.xz", stdout)
         print(f"Successfully generated sosreport in node {nodeip} :{sosreport.group()}")
         ssh_d.exec_command(f"sudo chmod 755 {sosreport.group()}")
         ssh_install.exec_command(f"scp {nodeip}:{sosreport.group()} {log_dir}")
@@ -172,7 +172,7 @@ def run(args: dict) -> int:
 
     ssh_install = SSHConnectionManager(ip, uname, pword).get_client()
     stdin, stdout, stderr = ssh_install.exec_command("hostname")
-    if "installer" not in stdout.read().decode():
+    if "installer" not in stdout:
         raise AssertionError("Please provide installer node details")
 
     ssh_install.exec_command(f"sudo mkdir -p {log_dir}")
@@ -180,7 +180,7 @@ def run(args: dict) -> int:
     stdin, stdout, stderr = ssh_install.exec_command(
         "cut -f 1 /etc/hosts | cut -d ' ' -f 3"
     )
-    nodes = stdout.read().decode().split("\n")
+    nodes = stdout.splitlines()
     print(f"Host that are obtained from given host: {nodes}")
     collect_logs(ip, ssh_install, uname, log_dir, results)
     with parallel() as p:

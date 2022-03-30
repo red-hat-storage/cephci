@@ -40,7 +40,7 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     # Get admin key
     cmd = f"{base_cmd} ceph auth get client.admin --format json"
     out, err = installer.exec_command(cmd=cmd)
-    cmd_resp = loads(out.read().decode())
+    cmd_resp = loads(out)
     admin_key = cmd_resp[0]["key"]
 
     # Create rgw-admin-ops-user
@@ -50,7 +50,7 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     cmd += " --email rgw-admin-ops-user@foo.bar"
 
     out, err = installer.exec_command(cmd=cmd)
-    cmd_resp = loads(out.read().decode())
+    cmd_resp = loads(out)
     access_key = cmd_resp["keys"][0]["access_key"]
     secret_key = cmd_resp["keys"][0]["secret_key"]
 

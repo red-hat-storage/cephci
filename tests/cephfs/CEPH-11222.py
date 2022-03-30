@@ -83,7 +83,7 @@ def run(ceph_cluster, **kw):
                 cmd="sudo crefi %s%s --fop create --multi -b 10 -d 10 "
                 "--random --min=1K --max=10K" % (client_info["mounting_dir"], dir1)
             )
-            print(out.read().decode())
+            print(out)
             break
 
         with parallel() as p:
@@ -140,14 +140,14 @@ def run(ceph_cluster, **kw):
                 cmd="sudo crefi %s%s --fop create --multi -b 10 -d 10 "
                 "--random --min=1K --max=10K" % (client_info["mounting_dir"], dir1)
             )
-            print(out.read().decode())
+            print(out)
             log.info("Renaming the dirs:")
             out, rc = client.exec_command(
                 cmd="sudo crefi "
                 "%s%s --fop rename --multi -b 10 -d 10 --random "
                 "--min=1K --max=10K" % (client_info["mounting_dir"], dir1)
             )
-            print(out.read().decode())
+            print(out)
 
             break
         with parallel() as p:

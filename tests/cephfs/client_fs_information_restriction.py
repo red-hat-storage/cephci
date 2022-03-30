@@ -69,7 +69,7 @@ def run(ceph_cluster, **kw):
             f"ceph orch apply mds {fs3} --placement='2 {mds1} {mds2}'",
         ]
         for command in commands:
-            _, err = clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+            err = clients[0].exec_command(sudo=True, cmd=command, long_running=True)
             if err:
                 return 1
             wait_for_process(client=clients[0], process_name=fs3, ispresent=True)
@@ -86,7 +86,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd=command)
         command = "ceph fs ls -n client.client1 -k /etc/ceph/ceph.client.client1.keyring --format json"
         out, rc = client1.exec_command(sudo=True, cmd=command)
-        output = json.loads(out.read().decode())
+        output = json.loads(out)
         validate_fs_info(fs1, output)
         log.info("Verifying file system information for client2")
         command = (
@@ -95,7 +95,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd=command)
         command = "ceph fs ls -n client.client2 -k /etc/ceph/ceph.client.client2.keyring --format json"
         out, rc = client1.exec_command(sudo=True, cmd=command)
-        output = json.loads(out.read().decode())
+        output = json.loads(out)
         validate_fs_info(fs2, output)
         log.info("Verifying file system information for client3")
         command = (
@@ -104,7 +104,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd=command)
         command = "ceph fs ls -n client.client3 -k /etc/ceph/ceph.client.client3.keyring --format json"
         out, rc = client1.exec_command(sudo=True, cmd=command)
-        output = json.loads(out.read().decode())
+        output = json.loads(out)
         validate_fs_info(fs3, output)
         return 0
 

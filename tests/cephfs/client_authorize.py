@@ -67,7 +67,7 @@ def test_read_write_op(client, kernel_mount_dir, fuse_mount_dir, client_name):
         f"dd if={fuse_mount_dir}/file of={fuse_mount_dir}/file2 bs=10M count=10",
     ]
     for command in commands:
-        _, err = client.exec_command(sudo=True, cmd=command, long_running=True)
+        err = client.exec_command(sudo=True, cmd=command, long_running=True)
         if err:
             log.error(f"Permissions set for {client_name} is not working")
             return 1
@@ -138,10 +138,10 @@ def run(ceph_cluster, **kw):
             # Create directories & files inside them for this & next test scenarios
             for num in range(1, 4):
                 log.info("Creating Directories")
-                out, rc = client[0].exec_command(
+                client[0].exec_command(
                     sudo=True, cmd="mkdir %s/%s_%d" % (kernel_mount_dir, "dir", num)
                 )
-                out, rc = client[0].exec_command(
+                client[0].exec_command(
                     sudo=True,
                     cmd=f"dd if=/dev/zero of={kernel_mount_dir}/dir_{num}/file_{num} bs=10M count=10",
                 )
@@ -194,9 +194,7 @@ def run(ceph_cluster, **kw):
                 f"dd if={kernel_mount_dir}/file of={kernel_mount_dir}/dir_1/file_copy_3 bs=10M count=10",
             ]
             for command in commands:
-                _, err = client[0].exec_command(
-                    sudo=True, cmd=command, long_running=True
-                )
+                err = client[0].exec_command(sudo=True, cmd=command, long_running=True)
                 if err:
                     log.error(
                         f"Permissions set for client {client_name} is not working"
@@ -314,9 +312,7 @@ def run(ceph_cluster, **kw):
                 f"dd if={fuse_mount_dir}/file of={fuse_mount_dir}/file bs=10M count=10",
             ]
             for command in commands:
-                _, err = client[0].exec_command(
-                    sudo=True, cmd=command, long_running=True
-                )
+                err = client[0].exec_command(sudo=True, cmd=command, long_running=True)
                 if err:
                     log.error(
                         f"Permissions set for client {client_name} is not working"
@@ -430,9 +426,7 @@ def run(ceph_cluster, **kw):
                 f"dd if={kernel_mount_dir}/file_3 of=~/file_33 bs=10M count=10",
             ]
             for command in commands:
-                _, err = client[0].exec_command(
-                    sudo=True, cmd=command, long_running=True
-                )
+                err = client[0].exec_command(sudo=True, cmd=command, long_running=True)
                 if err:
                     log.error(
                         f"Permissions set for client {client_name} is not working"
@@ -440,35 +434,27 @@ def run(ceph_cluster, **kw):
                     return 1
             log.info(f"Permissions set for client {client_name} is working")
             log.info(f"Clean up the system for {fs_name}")
-            out, rc = client[0].exec_command(
-                sudo=True, cmd=f"rm -rf {mount_points[1]}/*"
+            client[0].exec_command(
+                sudo=True, cmd=f"rm -rf {mount_points[1]}/*", long_running=True
             )
             for mount_point in mount_points:
-                out, rc = client[0].exec_command(sudo=True, cmd=f"umount {mount_point}")
+                client[0].exec_command(sudo=True, cmd=f"umount {mount_point}")
                 if "5." in rhbuild:
-                    out, err = client[1].exec_command(
-                        sudo=True, cmd=f"umount {mount_point}"
-                    )
+                    client[1].exec_command(sudo=True, cmd=f"umount {mount_point}")
             for mount_point in mount_points:
-                out, rc = client[0].exec_command(
-                    sudo=True, cmd=f"rm -rf {mount_point}/"
-                )
+                client[0].exec_command(sudo=True, cmd=f"rm -rf {mount_point}/")
                 if "5." in rhbuild:
-                    out, err = client[1].exec_command(
-                        sudo=True, cmd=f"rm -rf {mount_point}/"
-                    )
+                    client[1].exec_command(sudo=True, cmd=f"rm -rf {mount_point}/")
             if "4." in rhbuild:
                 break
             fs_name = "cephfs-ec"
             fs_count += 1
             client_number += 1
         for num in range(1, 5):
-            out, err = client[0].exec_command(
-                sudo=True, cmd=f"ceph auth rm client.client_{num}"
-            )
+            client[0].exec_command(sudo=True, cmd=f"ceph auth rm client.client_{num}")
         if "5." in rhbuild:
             for num in range(5, 9):
-                out, err = client[0].exec_command(
+                client[0].exec_command(
                     sudo=True, cmd=f"ceph auth rm client.client_{num}"
                 )
         return 0
