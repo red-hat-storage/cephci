@@ -1,0 +1,3 @@
+clusters:
+  - ceph1
+  - ceph2
