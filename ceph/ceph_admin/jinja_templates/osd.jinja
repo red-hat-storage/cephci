@@ -22,3 +22,6 @@ data_devices:
 {%- for key, data in spec['wal_devices'].items() -%}{{ nlt }}{{ key }}: {{ data }}
 {%- endfor %}
 {% endif %}
+{%- if spec['extra_container_args'] -%}extra_container_args: {{ spec['extra_container_args'] }}
+
+{% endif -%}

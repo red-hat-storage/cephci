@@ -10,3 +10,6 @@ placement:
 {%- if spec['placement']['hosts'] -%}{{ nlt }}hosts: {{ spec['placement']['hosts'] }}{%- endif -%}
 {%- if spec['placement']['label'] -%}{{ nlt }}label: {{ spec['placement']['label'] }}{%- endif -%}
 {%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif -%}{{ newline }}
+{%- if spec['extra_container_args'] -%}extra_container_args: {{ spec['extra_container_args'] }}
+
+{% endif -%}
