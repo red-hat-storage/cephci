@@ -58,26 +58,21 @@ def do_failover(iscsi_initiators, device_list, ceph_nodes):
         " '{print $(NF - 4)}'",
     )
 
-    active_device = out.read().decode()
-    active_device = active_device.rstrip("\n")
-    active_device = active_device.split()
-    out, err = iscsi_initiators.exec_command(
+    active_device = out.rstrip("\n").split()
+    ip_to_restart, err = iscsi_initiators.exec_command(
         sudo=True,
         cmd="ls -l /dev/disk/by-path | grep "
         "" + active_device[1] + " |awk -F "
         '" "'
         " '{print $(NF - 2)}' |cut -d: -f1 | uniq",
-        long_running=True,
     )
-    ip_to_restart = out
 
     ip_to_restart = ip_to_restart.rstrip("\n")
     ip_to_restart = ip_to_restart.split("-")
     for node in ceph_nodes:
         if node.role == "osd":
             out, err = node.exec_command(cmd="hostname -I")
-            output = out.read().decode()
-            output = output.rstrip()
+            output = out.rstrip()
             if output == ip_to_restart[1]:
                 node.exec_command(sudo=True, cmd="reboot", check_ec=False)
                 sleep(5)
@@ -98,9 +93,7 @@ def do_failover(iscsi_initiators, device_list, ceph_nodes):
                 '" "'
                 " '{print $(NF - 2)}'",
             )
-            active_device_status = out.read().decode()
-            active_device_status = active_device_status.rstrip("\n")
-            active_device_status = active_device_status.split()
+            active_device_status = out.rstrip("\n").split()
             print(active_device_status)
             if active_device_status[1] == "active":
                 rc = "active"
@@ -109,8 +102,7 @@ def do_failover(iscsi_initiators, device_list, ceph_nodes):
                 for node in ceph_nodes:
                     if node.role == "osd":
                         out, err = node.exec_command(cmd="hostname -I")
-                        output = out.read().decode()
-                        output = output.rstrip()
+                        output = out.rstrip()
                         if output == ip_to_restart[1]:
                             node.exec_command(sudo=True, cmd="iptables -F")
                             sleep(5)

@@ -1,6 +1,3 @@
-import time
-
-from ceph.utils import keep_alive
 from utility.log import Log
 
 log = Log(__name__)
@@ -45,7 +42,7 @@ def run(**kw):
     cmd1 = "mkdir cephtest ; cd cephtest ; {git_cmd}".format(git_cmd=git_cmd)
     client.exec_command(cmd="rm -rf cephtest", timeout=60)
     out, err = client.exec_command(cmd=cmd1, timeout=600)
-    log.info(out.read().decode())
+    log.info(out)
     if client.exit_status != 0:
         log.error("Failed during git clone")
         return 1
@@ -56,22 +53,8 @@ def run(**kw):
         cmd2 = "CEPH_REF={ref} sudo -E sh cephtest/workunits/{name}".format(
             ref=branch, name=test_name
         )
-    out, err = client.exec_command(cmd=cmd2, check_ec=False)
-    running = True
-    while running:
-        keep_alive(ceph_nodes)
-        log.info("Wait for 160 seconds before next check")
-        time.sleep(160)
-        if out.channel.exit_status_ready():
-            log.info(
-                "Command completed on remote node %d", out.channel.recv_exit_status()
-            )
-            running = False
-            log.info(out.read().decode())
-            log.info(err.read().decode())
-        else:
-            log.info("Still running...")
-    ec = client.exit_status
+    ec = client.exec_command(cmd=cmd2, long_running=True)
+
     if ec == 0:
         log.info("Workunit completed successfully")
     else:

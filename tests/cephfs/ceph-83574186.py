@@ -47,14 +47,14 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume resize cephfs {subvolume_name} {new_size}",
         )
-        c_out_result = json.loads(c_out.read().decode())
+        c_out_result = json.loads(c_out)
         target_size = c_out_result[1]["bytes_quota"]
         if int(target_size) != int(new_size):
             return 1
         c_out2, c_err2 = client1.exec_command(
             sudo=True, cmd=f"ceph fs subvolume info cephfs {subvolume_name} -f json"
         )
-        c_out2_result = json.loads(c_out2.read().decode())
+        c_out2_result = json.loads(c_out2)
         target_quota = c_out2_result["bytes_quota"]
         if int(target_quota) != int(new_size):
             return 1

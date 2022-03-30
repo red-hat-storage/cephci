@@ -53,16 +53,14 @@ def run(ceph_cluster, **kw):
             cmd = f"ceph orch apply mds {fs_name} --placement='2 {mds1} {mds2}'"
             client1.exec_command(sudo=True, cmd=cmd)
         out, err = client1.exec_command(sudo=True, cmd="ceph fs ls | grep cephfs")
-        output = out.read().decode()
-        if "cephfs" in output:
+        if "cephfs" in out:
             log.info("CephFs is successfully created")
         else:
             log.error("CephFs creation failed")
             return 1
         cmd = f"ceph fs dump | grep Filesystem | grep {fs_name}"
         out, err = client1.exec_command(sudo=True, cmd=cmd)
-        output = out.read().decode()
-        if fscid in output:
+        if fscid in out:
             log.info("CephFs is successfully created with specific fscid")
         else:
             log.error("custom fscid setting failed")

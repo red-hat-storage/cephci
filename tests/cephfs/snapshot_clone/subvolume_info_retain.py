@@ -86,7 +86,7 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
+            sub_dir=f"{subvol_path.strip()}",
         )
         client1.exec_command(
             sudo=True,
@@ -111,7 +111,7 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph fs subvolume info {default_fs} subvol_retain_info subvolgroup_info_retain --format json",
             check_ec=False,
         )
-        subvol_info_state = json.loads(subvol_info.read().decode())
+        subvol_info_state = json.loads(subvol_info)
         log.info(
             f"subvol state before removing the volume with --retain-snapshots {subvol_info_state['state']}"
         )
@@ -142,7 +142,7 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph fs subvolume info {default_fs} subvol_retain_info subvolgroup_info_retain --format json",
             check_ec=False,
         )
-        subvol_info_state = json.loads(subvol_info.read().decode())
+        subvol_info_state = json.loads(subvol_info)
         if subvol_info_state["state"] != "snapshot-retained":
             raise CommandFailed(
                 f"subvol state should be in snapshot-retained state "

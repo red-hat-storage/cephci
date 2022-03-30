@@ -18,8 +18,7 @@ def get_ms_type(osd, osds, ceph_cluster):
                 config show --format json".format(
         oid=osd
     )
-    (out, err) = tosd.exec_command(cmd=probe_ms)
-    outbuf = out.read().decode()
+    (outbuf, err) = tosd.exec_command(cmd=probe_ms)
     log.info(outbuf)
     jconfig = json.loads(outbuf)
     return jconfig["ms_type"]
@@ -66,8 +65,7 @@ def run(ceph_cluster, **kw):
     log.info("pool {pname} create".format(pname=pname))
     time.sleep(5)
     cmd = "osd map {pname} {obj} --format json".format(pname=pname, obj="obj1")
-    (out, err) = helper.raw_cluster_cmd(cmd)
-    outbuf = out.read().decode()
+    (outbuf, err) = helper.raw_cluster_cmd(cmd)
     log.info(outbuf)
     cmdout = json.loads(outbuf)
     targt_osd = cmdout["up"][0]
@@ -86,7 +84,7 @@ def run(ceph_cluster, **kw):
     """switch to simple and do IO"""
     inject_osd = "tell osd.* injectargs --ms_type simple"
     (out, err) = helper.raw_cluster_cmd(inject_osd)
-    log.info(out.read().decode())
+    log.info(out)
 
     time.sleep(4)
     """check whether ms_type changed"""
@@ -100,7 +98,7 @@ def run(ceph_cluster, **kw):
     """change ms_type back to async"""
     inject_osd = "tell osd.* injectargs --ms_type async+posix"
     (out, err) = helper.raw_cluster_cmd(inject_osd)
-    log.info(out.read().decode())
+    log.info(out)
     time.sleep(4)
     """check whether ms_type changed"""
     mstype = get_ms_type(targt_osd, osds, ceph_cluster)

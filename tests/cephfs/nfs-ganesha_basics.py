@@ -50,7 +50,7 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd="ceph fs ls | awk {' print $2'} "
             )
-            fs_name = out.read().decode().rstrip()
+            fs_name = out.rstrip()
             fs_name = fs_name.strip(",")
             nfs_export_name = "/export1"
             path = "/"
@@ -85,9 +85,7 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
             )
-            output = out.read().decode()
-            output.split()
-            if nfs_export_name in output:
+            if nfs_export_name in out:
                 log.info("ceph nfs export created successfully")
             else:
                 raise CommandFailed("Failed to create nfs export")
@@ -102,22 +100,21 @@ def run(ceph_cluster, **kw):
                 cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
             )
             out, rc = nfs_client[0].exec_command(cmd="mount")
-            mount_output = out.read().decode()
-            mount_output = mount_output.split()
+            mount_output = out.split()
             log.info("Checking if nfs mount is is passed of failed:")
             assert nfs_mounting_dir.rstrip("/") in mount_output
             log.info("Creating Directory")
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"mkdir {nfs_mounting_dir}{dir_name}"
             )
-            out, rc = nfs_client[0].exec_command(
+            nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
             )
-            out, rc = nfs_client[0].exec_command(
+            nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
@@ -134,9 +131,8 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
             )
-            output = out.read().decode()
-            output.split()
-            if nfs_export_name not in output:
+
+            if nfs_export_name not in out:
                 log.info("cephf nfs export deleted successfully")
             else:
                 raise CommandFailed("Failed to delete cephfs nfs export")
@@ -152,9 +148,7 @@ def run(ceph_cluster, **kw):
                 raise CommandFailed("Cluster has not been deleted")
             # Verify nfs cluster is deleted
             out, rc = nfs_client[0].exec_command(sudo=True, cmd="ceph nfs cluster ls")
-            output = out.read().decode()
-            output.split()
-            if nfs_name not in output:
+            if nfs_name not in out:
                 log.info("ceph nfs cluster deleted successfully")
             else:
                 raise CommandFailed("Failed to delete nfs cluster")
@@ -199,14 +193,14 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"mkdir {mounting_dir}{dir_name}"
             )
-            out, rc = nfs_client[0].exec_command(
+            nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{mounting_dir}{dir_name}",
                 long_running=True,
             )
-            out, rc = nfs_client[0].exec_command(
+            nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "

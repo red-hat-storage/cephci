@@ -34,8 +34,7 @@ def run(ceph_cluster, **kw):
     check_inventory = f"sudo cat {ansible_dir}/hosts"
 
     # Display inventory before shrinking
-    out1, _ = ceph_installer.exec_command(cmd=check_inventory)
-    outbuf = out1.read().decode()
+    outbuf, _ = ceph_installer.exec_command(cmd=check_inventory)
     log.info(f"Inventory {outbuf}")
 
     # Based of RHCS version, use the playbook path
@@ -58,7 +57,7 @@ def run(ceph_cluster, **kw):
         cmd += f" -e {daemon}_to_kill={node_name} -i hosts"
 
     # Executing shrink playbook depending on provided daemon
-    out, err = ceph_installer.exec_command(cmd=cmd, long_running=True)
+    err = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     # If playbook execution fails log error
     if err != 0:

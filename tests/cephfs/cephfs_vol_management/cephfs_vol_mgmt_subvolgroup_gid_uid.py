@@ -166,12 +166,12 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolumegroup getpath {default_fs} subvolgroup_1",
         )
-        subvolgroup_default_path = subvolgroup_default.read().decode().strip()
+        subvolgroup_default_path = subvolgroup_default.strip()
         subvolgroup_ec, rc = clients[0].exec_command(
             sudo=True,
             cmd="ceph fs subvolumegroup getpath cephfs-ec subvolgroup_ec1",
         )
-        subvolgroup_ec_path = subvolgroup_ec.read().decode().strip()
+        subvolgroup_ec_path = subvolgroup_ec.strip()
 
         def get_defined_uid(group_name, subvolumegroup_list):
             for subvolumegroup in subvolumegroup_list:

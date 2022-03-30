@@ -988,7 +988,7 @@ def collect_recipe(ceph_cluster):
     out, rc = installer_node[0].exec_command(
         sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
     )
-    output = out.read().decode().rstrip()
+    output = out.rstrip()
     if output:
         log.info(f"Podman Version {output}")
         version_datails["PODMAN"] = output
@@ -996,7 +996,7 @@ def collect_recipe(ceph_cluster):
     out, rc = installer_node[0].exec_command(
         sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
     )
-    output = out.read().decode().rstrip()
+    output = out.rstrip()
     if output:
         log.info(f"Docker Version {output}")
         version_datails["DOCKER"] = output
@@ -1005,7 +1005,7 @@ def collect_recipe(ceph_cluster):
         out, rc = client_node[0].exec_command(
             sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
         )
-        output = out.read().decode().rstrip()
+        output = out.rstrip()
         log.info(f"ceph Version {output}")
         version_datails["CEPH"] = output
 

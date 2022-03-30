@@ -65,9 +65,7 @@ class FsUtils(object):
                 sudo=True, cmd="pip3 install xattr", long_running=True
             )
             out, rc = client.node.exec_command(sudo=True, cmd="ls /home/cephuser")
-            output = out.read().decode()
-            output.split()
-            if "smallfile" not in output:
+            if "smallfile" not in out:
                 client.node.exec_command(
                     cmd="git clone https://github.com/bengland2/smallfile.git"
                 )
@@ -85,7 +83,7 @@ class FsUtils(object):
             dictonary with fs_name, metadata_pool,data_pool
         """
         out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json-pretty")
-        all_fs_info = json.loads(out.read().decode())
+        all_fs_info = json.loads(out)
         output_dict = {}
         for fs in all_fs_info:
             if fs_name == fs["name"]:
@@ -106,7 +104,7 @@ class FsUtils(object):
         if kwargs.get("extra_params"):
             fs_details_cmd += f"{kwargs.get('extra_params')}"
         out, rc = client.exec_command(sudo=True, cmd=fs_details_cmd)
-        all_fs_info = json.loads(out.read().decode())
+        all_fs_info = json.loads(out)
         return all_fs_info
 
     def auth_list(self, clients, **kwargs):
@@ -267,8 +265,7 @@ class FsUtils(object):
         log.info("Wait for the mount to appear")
         while end_time > datetime.datetime.now():
             out, rc = client.exec_command(sudo=True, cmd="mount", check_ec=False)
-            mount_output = out.read().decode().rstrip("\n")
-            mount_output = mount_output.split()
+            mount_output = out.rstrip("\n").split()
             log.info("Validate Fuse Mount:")
             if mount_point.rstrip("/") in mount_output:
                 return True
@@ -422,14 +419,14 @@ class FsUtils(object):
         """
         if not fs_list:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
-            all_fs_info = json.loads(out.read().decode())
+            all_fs_info = json.loads(out)
             fs_list = [i["name"] for i in all_fs_info]
         subvolumes = []
         for fs in fs_list:
             out, rc = client.exec_command(
                 sudo=True, cmd=f"ceph fs subvolume ls {fs} --format json"
             )
-            all_sub_info = json.loads(out.read().decode())
+            all_sub_info = json.loads(out)
             subvolumes.extend([i["name"] for i in all_sub_info])
         return subvolumes
 
@@ -453,7 +450,7 @@ class FsUtils(object):
         )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
-            volname_ls = json.loads(out.read().decode())
+            volname_ls = json.loads(out)
             if vol_name not in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
         return cmd_out, cmd_rc
@@ -493,7 +490,7 @@ class FsUtils(object):
             out, rc = client.exec_command(
                 sudo=True, cmd=f"ceph fs subvolumegroup ls {vol_name} --format json"
             )
-            subvolumegroup_ls = json.loads(out.read().decode())
+            subvolumegroup_ls = json.loads(out)
             if group_name not in [i["name"] for i in subvolumegroup_ls]:
                 raise CommandFailed(f"Creation of subvolume group: {group_name} failed")
         return cmd_out, cmd_rc
@@ -544,7 +541,7 @@ class FsUtils(object):
             out, rc = client.exec_command(
                 sudo=True, cmd=f"{listsubvolumes_cmd} --format json"
             )
-            subvolume_ls = json.loads(out.read().decode())
+            subvolume_ls = json.loads(out)
             if subvol_name not in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Creation of subvolume : {subvol_name} failed")
         return cmd_out, cmd_rc
@@ -582,7 +579,7 @@ class FsUtils(object):
             out, rc = client.exec_command(
                 sudo=True, cmd=f"{listsnapshot_cmd} --format json"
             )
-            snapshot_ls = json.loads(out.read().decode())
+            snapshot_ls = json.loads(out)
             if snap_name not in [i["name"] for i in snapshot_ls]:
                 raise CommandFailed(f"Creation of subvolume : {snap_name} failed")
         return cmd_out, cmd_rc
@@ -632,7 +629,7 @@ class FsUtils(object):
             out, rc = client.exec_command(
                 sudo=True, cmd=f"{listsubvolumes_cmd} --format json"
             )
-            subvolume_ls = json.loads(out.read().decode())
+            subvolume_ls = json.loads(out)
             if target_subvol_name not in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Creation of clone : {target_subvol_name} failed")
         return cmd_out, cmd_rc
@@ -674,7 +671,7 @@ class FsUtils(object):
             out, rc = client.exec_command(
                 sudo=True, cmd=f"{listsnapshot_cmd} --format json"
             )
-            snapshot_ls = json.loads(out.read().decode())
+            snapshot_ls = json.loads(out)
             if snap_name in [i["name"] for i in snapshot_ls]:
                 raise CommandFailed(f"Remove of snapshot : {snap_name} failed")
         return cmd_out, cmd_rc
@@ -713,7 +710,7 @@ class FsUtils(object):
             out, rc = client.exec_command(
                 sudo=True, cmd=f"{listsubvolumes_cmd} --format json"
             )
-            subvolume_ls = json.loads(out.read().decode())
+            subvolume_ls = json.loads(out)
             if subvol_name in [i["name"] for i in subvolume_ls]:
                 raise CommandFailed(f"Deletion of clone : {subvol_name} failed")
         return cmd_out, cmd_rc
@@ -746,7 +743,7 @@ class FsUtils(object):
             out, rc = client.exec_command(
                 sudo=True, cmd=f"ceph fs subvolumegroup ls {vol_name} --format json"
             )
-            subvolumegroup_ls = json.loads(out.read().decode())
+            subvolumegroup_ls = json.loads(out)
             if group_name in [i["name"] for i in subvolumegroup_ls]:
                 raise CommandFailed(f"Deletion of subvolume group: {group_name} failed")
         return cmd_out, cmd_rc
@@ -771,7 +768,7 @@ class FsUtils(object):
         )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
-            volname_ls = json.loads(out.read().decode())
+            volname_ls = json.loads(out)
             if vol_name in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
         return cmd_out, cmd_rc
@@ -857,7 +854,7 @@ class FsUtils(object):
             out, rc = node.exec_command(
                 sudo=True, cmd=f"ceph fs status {fs_name} --format json"
             )
-            output = json.loads(out.read().decode())
+            output = json.loads(out)
             active_mds = [
                 mds["name"] for mds in output["mdsmap"] if mds["state"] == "active"
             ]
@@ -914,8 +911,7 @@ class FsUtils(object):
             for num in range(int(range1), int(range2)):
                 working_dir = dir_name + "_" + str(num)
                 out, rc = client.exec_command(f"sudo ls {mounting_dir}")
-                output = out.read().strip().decode()
-                if working_dir not in output:
+                if working_dir not in out:
                     client.exec_command(cmd=f"mkdir {mounting_dir}{dir_name}_{num}")
                 log.info("Performing MDS failover:")
                 mds_fail_over(client)
@@ -993,7 +989,7 @@ class FsUtils(object):
             clone["target_subvol_name"],
             group_name=clone.get("target_group_name", ""),
         )
-        status = json.loads(cmd_out.read().decode())
+        status = json.loads(cmd_out)
         if status["status"]["state"] not in clone_transistion_states:
             clone_transistion_states.append(status["status"]["state"])
         while status["status"]["state"] != expected_state:
@@ -1003,7 +999,7 @@ class FsUtils(object):
                 clone["target_subvol_name"],
                 group_name=clone.get("target_group_name", ""),
             )
-            status = json.loads(cmd_out.read().decode())
+            status = json.loads(cmd_out)
             log.info(
                 f"Clone Status of {clone['vol_name']} : {status['status']['state']}"
             )
@@ -1067,11 +1063,11 @@ class FsUtils(object):
         out, rc = client.exec_command(
             sudo=True, cmd=f"cd {directory};ls -lrt |  awk {{'print $9'}}"
         )
-        file_list = out.read().decode().strip().split()
+        file_list = out.strip().split()
         file_dict = {}
         for file in file_list:
             out, rc = client.exec_command(sudo=True, cmd=f"md5sum {directory}/{file}")
-            md5sum = out.read().decode().strip().split()
+            md5sum = out.strip().split()
             file_dict[file] = md5sum[0]
         return file_dict
 
@@ -1106,15 +1102,13 @@ class FsUtils(object):
             will have values in this format {file : 0, bytes: 0}
         """
         quota_dict = {}
-        out, rc = client.exec_command(
+        file_quota, rc = client.exec_command(
             f"getfattr --only-values -n ceph.quota.max_files {directory}"
         )
-        file_quota = out.read().decode()
         quota_dict["files"] = int(file_quota)
-        out, rc = client.exec_command(
+        byte_quota, rc = client.exec_command(
             f"getfattr --only-values -n ceph.quota.max_bytes {directory}"
         )
-        byte_quota = out.read().decode()
         quota_dict["bytes"] = int(byte_quota)
         return quota_dict
 
@@ -1139,7 +1133,7 @@ class FsUtils(object):
         else:
             files = total_files - files_in_dir
         for i in range(1, files + 15):
-            out, rc = client.exec_command(
+            rc = client.exec_command(
                 sudo=True,
                 cmd=f"cd {mounting_dir};touch file_{temp_str}_{i}.txt",
                 long_running=True,
@@ -1169,10 +1163,10 @@ class FsUtils(object):
             directory: Gets the quota values for the given directory
             **kwargs:
         """
-        out, rc = client.exec_command(f"find {directory} -type f -print | wc -l")
-        total_files = out.read().decode()
-        out, rc = client.exec_command(f"find {directory} -type d -print | wc -l")
-        total_dir = out.read().decode()
+        total_files, rc = client.exec_command(
+            f"find {directory} -type f -print | wc -l"
+        )
+        total_dir, rc = client.exec_command(f"find {directory} -type d -print | wc -l")
         print(f"total dir : {total_dir}")
         return total_files
 
@@ -1201,7 +1195,7 @@ class FsUtils(object):
             cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int(bytes / 10240)}",
             long_running=True,
         )
-        out, rc = client.exec_command(
+        rc = client.exec_command(
             sudo=True,
             cmd=f"dd if=/dev/zero of={mounting_dir}/bytes_{temp_str}.txt bs=10M count={int((bytes * 3) / 10240)}",
             check_ec=False,
@@ -1219,8 +1213,9 @@ class FsUtils(object):
                 )
 
     def get_total_no_bytes(self, client, directory):
-        out, rc = client.exec_command(f"du -sb  {directory}| awk '{{ print $1}}'")
-        total_bytes = out.read().decode()
+        total_bytes, rc = client.exec_command(
+            f"du -sb  {directory}| awk '{{ print $1}}'"
+        )
         return total_bytes
 
     def file_byte_quota_test(self, client, mounting_dir, quota_attrs):
@@ -1242,7 +1237,7 @@ class FsUtils(object):
             files = total_files - files_in_dir
 
         for i in range(1, files + 15):
-            out, rc = client.exec_command(
+            rc = client.exec_command(
                 sudo=True,
                 cmd=f"cd {mounting_dir};touch file_bytes{temp_str}_{i}.txt;"
                 f"dd if=/dev/zero of={mounting_dir}/file_bytes{temp_str}_{i}.txt bs=1 "
@@ -1307,7 +1302,7 @@ class FsUtils(object):
             fs_status_cmd += f" {kwargs.get('vol_name')}"
         fs_status_cmd += " --format json"
         out, rc = client.exec_command(sudo=True, cmd=fs_status_cmd)
-        fs_status = json.loads(out.read().decode())
+        fs_status = json.loads(out)
         pool_status = fs_status["pools"]
         for pool in pool_status:
             if pool["name"] == pool_name:
@@ -1381,7 +1376,7 @@ class FsUtils(object):
         if kwargs.get("group_name"):
             subvolume_info_cmd += f" --group_name {kwargs.get('group_name')}"
         out, rc = client.exec_command(sudo=True, cmd=subvolume_info_cmd)
-        subvolume_info = json.loads(out.read().decode())
+        subvolume_info = json.loads(out)
         return subvolume_info
 
     def get_stats(self, client, file_path, validate=True, **kwargs):
@@ -1413,7 +1408,7 @@ class FsUtils(object):
         if kwargs.get("format"):
             stat_cmd += f" --printf {kwargs.get('format')}"
         out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
-        stat_output = json.loads(out.read().decode())
+        stat_output = json.loads(out)
         return stat_output
 
     def wait_for_cmd_to_succeed(client, cmd, timeout=180, interval=5):

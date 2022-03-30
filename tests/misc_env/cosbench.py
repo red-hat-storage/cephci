@@ -101,7 +101,6 @@ def enable_ports(node: CephNode, port: int = 18088) -> None:
     try:
         out, err = node.exec_command(sudo=True, cmd="firewall-cmd --state")
 
-        out = out.read().decode()
         if out.lower() != "running":
             return
     except CommandFailed:
@@ -164,14 +163,14 @@ def get_or_create_user(node: CephNode) -> Dict:
     user = "cosbench01"
     try:
         out, err = node.exec_command(cmd=f"radosgw-admin user info --uid {user}")
-        out = loads(out.read().decode())
+        out = loads(out)
         return out["keys"][0]
     except CommandFailed:
         out, err = node.exec_command(
             cmd=f"radosgw-admin user create --uid {user} --display-name {user}"
             f" --email {user}@noreply.com"
         )
-        out = loads(out.read().decode())
+        out = loads(out)
         return out["keys"][0]
 
 

@@ -134,7 +134,7 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
+            sub_dir=f"{subvol_path.strip()}",
         )
 
         subvol_path, rc = clients[0].exec_command(
@@ -145,7 +145,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,
-            extra_params=f" -r {subvol_path.read().decode().strip()}",
+            extra_params=f" -r {subvol_path.strip()}",
         )
 
         log.info(
@@ -164,7 +164,7 @@ def run(ceph_cluster, **kw):
                 [clients[1]],
                 kernel_mounting_dir_2,
                 ",".join(mon_node_ips),
-                sub_dir=f"{subvol_path.read().decode().strip()}",
+                sub_dir=f"{subvol_path.strip()}",
                 extra_params=",fs=cephfs-ec",
             )
 
@@ -176,7 +176,7 @@ def run(ceph_cluster, **kw):
             fs_util.fuse_mount(
                 [clients[1]],
                 fuse_mounting_dir_2,
-                extra_params=f" -r {subvol_path.read().decode().strip()} --client_fs cephfs-ec",
+                extra_params=f" -r {subvol_path.strip()} --client_fs cephfs-ec",
             )
 
         log.info(

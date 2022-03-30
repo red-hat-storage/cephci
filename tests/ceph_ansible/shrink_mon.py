@@ -53,10 +53,9 @@ def run(ceph_cluster, **kw):
     ceph_installer.node.obtain_root_permissions("/var/log")
     ansible_dir = ceph_installer.ansible_dir
     # Getting inventory
-    out1, rc = ceph_installer.exec_command(
+    outbuf, rc = ceph_installer.exec_command(
         sudo=True, cmd="cd {ansible_dir};cat hosts".format(ansible_dir=ansible_dir)
     )
-    outbuf = out1.read().decode()
     inventory = outbuf.split("\n")
     log.info("\nInventory before shrink-mon playbook\n")
     log.info(outbuf)
@@ -79,7 +78,7 @@ def run(ceph_cluster, **kw):
         ansible_dir=ansible_dir, playbook=playbook, mon_to_kill=mon_to_kill
     )
 
-    out, err = ceph_installer.exec_command(cmd=cmd, long_running=True)
+    err = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if err != 0:
         log.error("Failed during ansible playbook run\n")

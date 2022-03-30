@@ -44,7 +44,7 @@ def run(ceph_cluster, **kw):
     python_cmd = "venv/bin/python"
     out, err = rgw_node.exec_command(cmd="ls -l venv", check_ec=False)
 
-    if not out.read().decode():
+    if not out:
         rgw_node.exec_command(
             cmd="yum install python3 -y --nogpgcheck", check_ec=False, sudo=True
         )
@@ -88,14 +88,13 @@ def run(ceph_cluster, **kw):
     rgw_node.exec_command(cmd=mount_cmd, check_ec=False, sudo=True)
     log.info("nfs ganesha mounted successfully on the mountpoint")
     # To parse the nfs-ganesha configuration file : /etc/ganesha/ganesha.conf
-    v_as_out, err = rgw_node.exec_command(
+    ganesha_conf_out, err = rgw_node.exec_command(
         cmd="cat /etc/ganesha/ganesha.conf", check_ec=False, sudo=True
     )
 
     def clean(x):
         return re.sub("[^A-Za-z0-9]+", "", x)
 
-    ganesha_conf_out = v_as_out.read().decode()
     ganesha_conf = ganesha_conf_out.split("\n")
     for content in ganesha_conf:
         if "Access_Key_Id" in content:
@@ -151,7 +150,7 @@ def run(ceph_cluster, **kw):
         + local_file,
         timeout=timeout,
     )
-    log.info(out.read().decode())
-    log.error(err.read().decode())
+    log.info(out)
+    log.error(err)
 
     return 0

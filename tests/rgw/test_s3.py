@@ -178,8 +178,8 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
 
         cmd = f"{base_cmd} {extra_args} {tests}"
         out, err = node.exec_command(cmd=cmd, timeout=3600)
-        log.info(out.read().decode())
-        log.error(err.read().decode())
+        log.info(out)
+        log.error(err)
     except CommandFailed as e:
         log.warning("Received CommandFailed")
         log.warning(e)
@@ -255,7 +255,7 @@ def get_rgw_frontend(cluster: Ceph) -> Tuple:
     try:
         node = cluster.get_nodes(role="client")[0]
         out, err = node.exec_command(sudo=True, cmd="ceph config dump --format json")
-        configs = loads(out.read().decode())
+        configs = loads(out)
 
         for config in configs:
             if config.get("name").lower() != "rgw_frontends":
@@ -276,7 +276,6 @@ def get_rgw_frontend(cluster: Ceph) -> Tuple:
         # rgw frontends = civetweb port=192.168.122.199:8080 num_threads=100
         command = "grep -e '^rgw frontends' /etc/ceph/ceph.conf"
         out, err = node.exec_command(sudo=True, cmd=command)
-        out = out.read().decode()
         key, sep, value = out.partition("=")
         frontend_value = value.lstrip().split()
 
@@ -324,7 +323,7 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
     cmd += " --email={email}@foo.bar".format(email=uid)
 
     out, err = node.exec_command(sudo=True, cmd=cmd)
-    user_info = json.loads(out.read().decode())
+    user_info = json.loads(out)
 
     data[user_prefix] = {
         "id": user_info["keys"][0]["user"],
@@ -503,12 +502,12 @@ def _rgw_lc_debug(cluster: Ceph, add: bool = True) -> None:
     out, err = node.exec_command(
         sudo=True, cmd="ceph orch ps --daemon_type rgw --format json"
     )
-    rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out.read().decode())]
+    rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out)]
 
     out, err = node.exec_command(
         sudo=True, cmd="ceph orch ls --service_type rgw --format json"
     )
-    rgw_services = [x["service_name"] for x in loads(out.read().decode())]
+    rgw_services = [x["service_name"] for x in loads(out)]
 
     # Set (or) Unset the lc_debug_interval for all daemons
     for daemon in rgw_daemons:

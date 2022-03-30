@@ -19,7 +19,7 @@ class ShellMixin:
         args: List[str],
         base_cmd_args: Dict = None,
         check_status: bool = True,
-        timeout: int = 300,
+        timeout: int = 600,
     ):
         """
         Ceph orchestrator shell interface to run ceph commands.
@@ -49,7 +49,5 @@ class ShellMixin:
             check_ec=check_status,
         )
 
-        out = out.read().decode()
-        err = err.read().decode()
         LOG.debug(out)
         return out, err

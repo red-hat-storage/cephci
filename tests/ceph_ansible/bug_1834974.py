@@ -16,8 +16,6 @@ def run(**kw):
             sudo=True,
             cmd="df -h | grep -v shm | grep -i containers | wc -l",
         )
-        out = out.read().decode()
-        err = err.read().decode()
 
         if int(out) != 0:
             LOG.debug(err)

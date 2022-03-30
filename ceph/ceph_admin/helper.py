@@ -10,7 +10,6 @@ from os.path import dirname
 from time import sleep
 
 from jinja2 import Template
-from paramiko.channel import ChannelFile
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
@@ -419,7 +418,6 @@ class GenerateServiceSpec:
         node_installer = get_node_by_id(self.cluster, "node1")
         cmd = "cephadm shell ceph fsid"
         out, err = node_installer.exec_command(sudo=True, cmd=cmd)
-        out = out.read().decode() if isinstance(out, ChannelFile) else out
         LOG.info(f"fsid: {out}")
         engine_id = out.replace("-", "")
         if engine_id:
@@ -456,7 +454,6 @@ class GenerateServiceSpec:
         node = get_node_by_id(self.cluster, "node1")
         cmd = "cephadm shell ceph fsid"
         out, err = node.exec_command(sudo=True, cmd=cmd)
-        out = out.read().decode() if isinstance(out, ChannelFile) else out
         LOG.info(f"fsid: {out}")
         fsid = out.replace("-", "")
         engine_id = fsid[0:32]
@@ -676,7 +673,7 @@ def file_or_path_exists(node, file_or_path):
     """
     try:
         out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
-        LOG.info(f"Output : {out.read().decode()}")
+        LOG.info(f"Output : {out}")
         return True
     except CommandFailed as err:
         LOG.error(f"Error: {err}")

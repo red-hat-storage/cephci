@@ -67,18 +67,17 @@ def run(ceph_cluster, **kw):
     out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
     container_id = [
         item["Names"][0]
-        for item in json.loads(out.read().decode())
+        for item in json.loads(out)
         if f"osd.{osd_id}" in item["Command"]
     ][0]
     if not container_id:
         log.error("Failed to retrieve container id")
         return 1
     # fetch device path by osd_id
-    vol_out, _ = host.exec_command(
+    volume_out, _ = host.exec_command(
         sudo=True,
         cmd=f"podman exec {container_id} ceph-volume lvm list --format json",
     )
-    volume_out = vol_out.read().decode()
     dev_path = [
         v[0]["devices"][0]
         for k, v in json.loads(volume_out).items()
@@ -134,19 +133,16 @@ def wait_for_device(host, container_id, osd_id, action: str) -> bool:
 
         out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
         container = [
-            item["Names"][0]
-            for item in json.loads(out.read().decode())
-            if "ceph" in item["Command"]
+            item["Names"][0] for item in json.loads(out) if "ceph" in item["Command"]
         ]
         if not container:
             log.error("Failed to retrieve container ids")
             return False
 
-        vol_out, _ = host.exec_command(
+        volume_out, _ = host.exec_command(
             sudo=True,
             cmd=f"podman exec {container[0]} ceph-volume lvm list --format json",
         )
-        volume_out = vol_out.read().decode()
         dev_path = [
             v[0]["devices"][0]
             for k, v in json.loads(volume_out).items()

@@ -104,9 +104,9 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir_1,
-            extra_params=f" -r {subvol_path.read().decode().strip()}",
+            extra_params=f" -r {subvol_path.strip()}",
         )
-        out, rc = client1.exec_command(
+        client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4000 "
             f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
@@ -142,7 +142,7 @@ def run(ceph_cluster, **kw):
                 cmd_out, cmd_rc = fs_util.get_clone_status(
                     client1, clone["vol_name"], clone["target_subvol_name"]
                 )
-                status = json.loads(cmd_out.read().decode())
+                status = json.loads(cmd_out)
                 status_list.append(status["status"]["state"])
                 log.info(
                     f"{clone['target_subvol_name']} status is {status['status']['state']}"
@@ -175,7 +175,7 @@ def run(ceph_cluster, **kw):
                 cmd_out, cmd_rc = fs_util.get_clone_status(
                     client1, clone["vol_name"], clone["target_subvol_name"]
                 )
-                status = json.loads(cmd_out.read().decode())
+                status = json.loads(cmd_out)
                 status_list.append(status["status"]["state"])
                 log.info(
                     f"{clone['target_subvol_name']} status is {status['status']['state']}"

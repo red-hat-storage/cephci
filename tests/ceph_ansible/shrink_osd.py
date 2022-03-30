@@ -78,10 +78,10 @@ def run(ceph_cluster, **kw):
             ansible_dir=ansible_dir, osd_to_kill=osd_to_kill
         )
 
-    out, err = ceph_installer.exec_command(cmd=cmd, long_running=True)
+    rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
-    if err != 0:
+    if rc != 0:
         log.error("Failed during ansible playbook run")
-        return err
+        return rc
 
     return ceph_cluster.check_health(build, cluster_name=cluster_name)

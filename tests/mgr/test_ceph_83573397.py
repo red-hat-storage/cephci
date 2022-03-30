@@ -43,7 +43,7 @@ def exec_cmd_status(ceph_installer, commands):
     """
     for cmd in commands:
         out, err = ceph_installer.exec_command(sudo=True, cmd=cmd)
-        out, err = out.read().decode().strip(), err.read().decode().strip()
+        out, err = out.strip(), err.strip()
         logger.info("Command Response : {} {}".format(out, err))
     return True
 
@@ -106,7 +106,7 @@ def run(ceph_cluster, **kw):
     out, err = ceph_installer.exec_command(
         cmd="python {SCRIPT_FILE}".format(SCRIPT_FILE=file_name)
     )
-    out, err = out.read().decode().strip(), err.read().decode().strip()
+    out, err = out.strip(), err.strip()
 
     json_data = json.loads(out)
     logger.info("Status Code : {}".format(json_data.get("status_code")))
