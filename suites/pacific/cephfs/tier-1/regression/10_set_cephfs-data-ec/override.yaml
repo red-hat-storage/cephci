@@ -1,0 +1,3 @@
+tests:
+  - test:
+      args: "ceph osd pool set cephfs-data-ec allow_ec_overwrites true"

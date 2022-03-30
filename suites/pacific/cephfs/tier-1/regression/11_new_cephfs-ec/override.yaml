@@ -1,0 +1,3 @@
+tests:
+  - test:
+      args: "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force"

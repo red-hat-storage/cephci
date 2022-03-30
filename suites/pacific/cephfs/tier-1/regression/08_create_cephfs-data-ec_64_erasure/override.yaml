@@ -1,0 +1,3 @@
+tests:
+  - test:
+      args: "ceph osd pool create cephfs-data-ec 64 erasure"

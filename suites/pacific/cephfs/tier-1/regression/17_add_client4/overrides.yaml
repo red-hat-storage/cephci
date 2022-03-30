@@ -1,0 +1,4 @@
+tests:
+  - test:
+      config:
+        id: client.4
