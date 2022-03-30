@@ -13,3 +13,6 @@ placement:
 {%+ if spec['spec'] -%}
 spec:{%+ for key, value in spec['spec'].items() -%}{{ nlt }}{{ key }}: {{ value }}{% endfor %}
 {% endif %}
+{%- if spec['extra_container_args'] -%}extra_container_args: {{ spec['extra_container_args'] }}
+
+{% endif -%}
