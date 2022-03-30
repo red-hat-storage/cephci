@@ -16,6 +16,7 @@
 # CEPH-83574162 - cephfs_vol_mgmt_non_exist_subvol_group_deletetion
 # CEPH-83573528 - cephfs_vol_mgmt_pool_name_option_test
 # CEPH-83574181 - Checking default subvolume group gid and uid
+# CEPH-83574163 - cephfs_vol_mgmt_invalid_pool_layout
 #===============================================================================================
 tests:
   - test:
@@ -236,4 +237,10 @@ tests:
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_gid_uid.py
       polarion-id: CEPH-83574181
       desc: Checking default subvolume group gid and uid
+      abort-on-fail: true
+  - test:
+      name: cephfs_vol_mgmt_invalid_pool_layout
+      module: cephfs_vol_management.cephfs_vol_mgmt_invalid_pool_layout.py
+      polarion-id: CEPH-83574163
+      desc: cephfs_vol_mgmt_invalid_pool_layout
       abort-on-fail: true
