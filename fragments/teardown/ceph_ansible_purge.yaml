@@ -1,0 +1,9 @@
+tests:
+  -
+    test:
+      config:
+        ansible-dir: /usr/share/ceph-ansible
+      desc: "Purge ceph cluster"
+      module: purge_cluster.py
+      name: "ceph ansible purge"
+      polarion-id: CEPH-83571498
