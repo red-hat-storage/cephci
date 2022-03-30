@@ -60,12 +60,16 @@ def run(**kw):
     script_name = config["test_name"]
     timeout = config.get("timeout", 1800)
 
+    command = f"{python_cmd} {test_folder}/{script_folder}/{script_name}"
+
     if config.get("ec-pool-k-m", None):
         ec_pool_arg = " --ec-pool-k-m " + config.get("ec-pool-k-m")
-    else:
-        ec_pool_arg = ""
+        command = command + f" {ec_pool_arg}"
 
-    command = f"{python_cmd} {test_folder}/{script_folder}/{script_name} {ec_pool_arg}"
+    if config.get("test_case_name", None):
+        test_case_name = "--test-case " + config.get("test_case_name")
+        command = command + f" {test_case_name}"
+
     out, err = client_node.exec_command(cmd=command, check_ec=False, timeout=timeout)
 
     out = out.read().decode()
