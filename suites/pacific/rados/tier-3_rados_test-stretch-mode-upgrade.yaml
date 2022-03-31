@@ -1,0 +1,209 @@
+# Suite contains tests related to election strategy and Stretched mode
+# Commenting the CDN build for cluster installation, & subsequent upgrade to latest builds
+# Rationale : This suite Verifies the install the cluster with stretch mode, & upgrade the cluster to latest builds.
+# Stretch mode deployment with CDN builds fails with bug : https://bugzilla.redhat.com/show_bug.cgi?id=2025800,
+# which fixed in 5.1 builds. Current suite tests deployment of stretch clusters on latest builds.
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                custom_repo: "cdn"
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node8                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Replicated pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      config:
+        replicated_pool:
+          create: true
+          pool_name: test_re_pool
+          pg_num: 16
+          disable_pg_autoscale: true
+          rados_write_duration: 100
+          rados_read_duration: 30
+        set_pool_configs:
+          pool_name: test_re_pool
+          configurations:
+            pg_num: 32
+            pgp_num: 32
+            pg_autoscale_mode: 'on'
+            compression_mode: aggressive
+            compression_algorithm: zlib
+      desc: Create replicated pools and run IO
+
+  - test:
+      name: Deploy stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573621
+      config:
+        site1: site-A
+        site2: site-B
+        perform_add_capacity: true
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+      abort-on-fail: true
+
+  - test:
+      name: Verify stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573630
+      config:
+        verify_forced_recovery: true
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+        rados_write_duration: 200
+      desc: Verify forced recovery and healthy on a stretch configured cluster
+
+  # Running basic rbd and rgw tests after deployment of stretch cluster
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+          io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+          script-name: test_multitenant_user_access.py
+          config-file-name: test_multitenant_access.yaml
+          timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      name: Upgrade ceph
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        benchmark:
+          type: rados                      # future-use
+          pool_per_client: true
+          pg_num: 128
+          duration: 10
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  # Running basic rbd and rgw tests after upgrade
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+          io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+          script-name: test_multitenant_user_access.py
+          config-file-name: test_multitenant_access.yaml
+          timeout: 300
+      desc: Perform rgw tests

@@ -117,12 +117,29 @@ node(nodeName) {
         // Copy all the results into one folder before upload
         def dirName = "ibm_${currentBuild.projectName}_${currentBuild.number}"
         def targetDir = "${env.WORKSPACE}/${dirName}/results"
+        def attachDir = "${env.WORKSPACE}/${dirName}/attachments"
         sh(script: "mkdir -p ${targetDir}")
         testResults.each { key, value ->
             sh(
                 script: "cp ${value['log-dir']}/xunit.xml ${targetDir}/${key}.xml",
                 returnStatus: true
             )
+        }
+        sh(script: "mkdir -p ${attachDir}")
+        testResults.each { key, value ->
+            sh(
+                script: "mkdir -p ${attachDir}/${key} && tar -zcvf ${value['log-dir']}/${key}.tar.gz ${value['log-dir']}/*.log && cp ${value['log-dir']}/${key}.tar.gz ${attachDir}/${key}/",
+                returnStatus: true
+            )
+            def scriptFiles = sh (returnStdout: true, script: "ls ${value['log-dir']}/*.err | cat")
+            if (scriptFiles){
+                def fileNames = scriptFiles.split("\\n")
+                for (filePath in fileNames) {
+                sh(
+                    script: "mkdir -p ${attachDir}/${key} && cp ${filePath} ${attachDir}/${key}/"
+                )
+                }
+            }
         }
 
         // Adding metadata information

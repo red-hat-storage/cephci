@@ -1,12 +1,12 @@
 #! /bin/sh
-echo "Beginning Ceph RADOS regression testing for stretched Clusters"
+echo "Beginning Ceph RGW Multisite primary site verification testing."
 
 random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
 instance_name="ci-${random_string}"
 platform="rhel-8"
-rhbuild="5.0"
-test_suite="suites/pacific/rados/tier-2_rados_test-stretch-mode-upgrade.yaml"
-test_conf="conf/pacific/rados/11-node-cluster.yaml"
+rhbuild="4.3"
+test_suite="suites/nautilus/rgw/tier-2_rgw_singlesite_to_multisite.yaml"
+test_conf="conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 

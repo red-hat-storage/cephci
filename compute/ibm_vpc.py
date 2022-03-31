@@ -291,7 +291,7 @@ class CephVMNodeIBM:
             )
 
             # Construct a dict representation of a ImageIdentityById model
-            images = self.service.list_images()
+            images = self.service.list_images(name=image_name)
             image_id = get_resource_id(image_name, images.get_result())
             image_identity_model = dict({"id": image_id})
 
