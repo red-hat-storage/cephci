@@ -19,6 +19,7 @@ the resources when complete.
    source/development_guidelines.rst
    source/contribution_guidelines.rst
    source/getting_started.rst
+   source/github_guidelines.rst
 
 
 Indices and tables
