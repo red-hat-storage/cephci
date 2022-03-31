@@ -167,4 +167,6 @@ def run(ceph_cluster, **kw):
             )
         fs_util.remove_snapshot(client1, **snapshot, validate=False, force=True)
         for subvolumegroup in subvolumegroup_list:
-            fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)
+            fs_util.remove_subvolumegroup(
+                client1, **subvolumegroup, force=True, check_ec=False, validate=False
+            )
