@@ -23,7 +23,7 @@ setup(
         "paramiko==2.10.1",
         "pyOpenSSL==20.0.1",
         "pyyaml>=4.2b1",
-        "jinja2",
+        "jinja2<3.1.0",
         "junitparser==1.4.0",
         "jinja_markdown",
         "htmllistparse==0.5.2",

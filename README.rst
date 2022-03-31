@@ -1,4 +1,4 @@
-|build-status|
+|build-status|  |docbuild-status|
 
 CEPH-CI project documentation
 =============================
@@ -17,3 +17,7 @@ documentation in markdown_ or rst_ formats.
 .. |build-status| image:: https://github.com/red-hat-storage/cephci/workflows/tests/badge.svg
     :alt: build status
     :target: https://github.com/red-hat-storage/cephci/actions
+
+.. |docbuild-status| image:: https://readthedocs.org/projects/cephci/badge/?version=latest
+    :alt: docbuild-status
+    :target: https://readthedocs.org/projects/cephci/builds
