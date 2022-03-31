@@ -1,0 +1,10 @@
+tests:
+  -
+    test:
+      config:
+        ansible-dir: /usr/share/ceph-ansible
+        playbook-command: "purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes"
+      desc: "Purge ceph cluster"
+      module: purge_cluster.py
+      name: "ceph ansible purge"
+      polarion-id: CEPH-83571493
