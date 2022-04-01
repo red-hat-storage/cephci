@@ -181,7 +181,7 @@ class BootstrapMixin:
         custom_repo = args.pop("custom_repo", "")
         custom_image = args.pop("custom_image", True)
         build_type = self.config.get("build_type")
-        rhbuild = config.get("rhbuild")
+        rhbuild = self.config.get("rhbuild")
 
         if build_type == "upstream":
             self.setup_upstream_repository()
