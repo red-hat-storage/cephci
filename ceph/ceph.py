@@ -1708,9 +1708,9 @@ class CephNode(object):
         ]
 
         repos_3x = [
-            "rhel-7-server-rhceph-3-tools-rpms",
-            "rhel-7-server-rhceph-3-osd-rpms",
-            "rhel-7-server-rhceph-3-mon-rpms",
+            "rhel-7-server-rhceph-3-tools-els-rpms",
+            "rhel-7-server-rhceph-3-osd-els-rpms",
+            "rhel-7-server-rhceph-3-mon-els-rpms",
         ]
 
         repos_4x_rhel7 = [
