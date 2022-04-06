@@ -1,0 +1,62 @@
+---
+name: temp-image-mirroring
+description: 'Workflow to create an image & allow it to replicate to secondary'
+steps:
+  - method: create
+    class: Pool
+    cluster_name: 'ceph-rbd1'
+    args:
+      size: '64'
+      pool_name: 'test_rbd_pool'
+  - method: init
+    class: Pool
+    cluster_name: 'ceph-rbd1'
+    args:
+      pool_name: 'test_rbd_pool'
+  - method: create
+    class: Pool
+    cluster_name: 'ceph-rbd2'
+    args:
+      size: '64'
+      pool_name: 'test_rbd_pool'
+  - method: init
+    class: Pool
+    cluster_name: 'ceph-rbd2'
+    args:
+      pool_name: 'test_rbd_pool'
+  - method: create
+    class: Rbd
+    cluster_name: 'ceph-rbd1'
+    args:
+      pool_name: 'test_rbd_pool'
+      image_name: 'image'
+      size: 1G
+  - method: enable
+    class: Mpool
+    cluster_name: 'ceph-rbd1'
+    args:
+      pool_name: 'test_rbd_pool'
+      mode: 'image'
+  - method: enable
+    class: Mpool
+    cluster_name: 'ceph-rbd2'
+    args:
+      pool_name: 'test_rbd_pool'
+      mode: 'image'
+  - method: enable
+    class: Image
+    cluster_name: 'ceph-rbd1'
+    args:
+      pool_name: 'test_rbd_pool'
+      image_name: 'image'
+  - bootstrap:
+    args:
+      pool_name: 'test_rbd_pool'
+      mode: 'rx-tx'
+  - method: bench
+    class: Rbd
+    args:
+      pool_name: 'test_rbd_pool'
+      image_name: 'image'
+      io_type: write
+      io_total: 1G

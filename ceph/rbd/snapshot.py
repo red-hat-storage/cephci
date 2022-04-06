@@ -1,5 +1,5 @@
 from ceph.rbd.rbd import Rbd
-from tests.rbd.exceptions import CreateCloneError, ProtectSnapError, SnapCreateError
+from tests.rbd.exceptions import ProtectSnapError, SnapCreateError
 from utility.log import Log
 
 log = Log(__name__)
@@ -22,7 +22,7 @@ class Snapshot(Rbd):
         pool_name = args["pool_name"]
         image_name = args["image_name"]
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
-        if self.exec_cmd(cmd=cmd):
+        if not self.exec_cmd(cmd=cmd):
             raise SnapCreateError("Creating the snapshot failed")
 
     def protect(self, args):
@@ -31,26 +31,10 @@ class Snapshot(Rbd):
         Args:
             snap_name : snapshot name in pool/image@snap format
         """
-        snap_name = args["snap_name"]
-        cmd = f"rbd snap protect {snap_name}"
+        snap_spec = args["snapshot_spec"]
+        cmd = f"rbd snap protect {snap_spec}"
         if self.exec_cmd(cmd=cmd):
             raise ProtectSnapError("Protecting the snapshot Failed")
-
-    def clone(self, args):
-        """
-        Creates a clone of an image from its snapshot
-        in a specified pool name and image name
-        Args:
-            snap_name  : name of the snapshot of which a clone is to be created
-            pool_name  : name of the pool where clone is to be created
-            image_name : name of the cloned image
-        """
-        snap_name = args["snap_name"]
-        pool_name = args["pool_name"]
-        image_name = args["clone"]
-        cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
-        if self.exec_cmd(cmd=cmd):
-            raise CreateCloneError(f"Creating clone of {snap_name} failed")
 
     def unprotect():
         pass
