@@ -1,0 +1,14 @@
+tests:
+  - test:
+      config:
+        args:
+          base_cmd_args:
+            verbose: true
+          command: apply
+          placement:
+            nodes:
+              - node4
+              - node5
+          pos_args:
+            - cephfs
+          service: mds

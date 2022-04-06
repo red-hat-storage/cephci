@@ -11,12 +11,29 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def merge_dicts(dict1, dict2):
+    """
+    Returns dict1 by recursively merging dict2 into dict1
+    Args:
+        dict1 (dict):     The dictionary corressponding to test in <test_suite>.
+        dict2 (dict):     The dictionary corressponding to test in <overrides>.
+    Returns:
+        Dict -> dictionary after merging overrides dict into test_suite dict
+    """
+    if not isinstance(dict1, dict) or not isinstance(dict2, dict):
+        return dict2
+    for k in dict2:
+        if k in dict1:
+            dict1[k] = merge_dicts(dict1[k], dict2[k])
+        else:
+            dict1[k] = dict2[k]
+    return dict1
+
+
 def read_yaml(file_name):
     """read the given yaml
-
     Args:
         file_name: yaml file to read
-
     Returns:
         dict: data from yaml
     """
@@ -30,24 +47,26 @@ def read_yaml(file_name):
 def process_override(dir_name: str) -> List:
     """
     Returns a readable dictionary based on the files found in dir_name.
-
     The directory must contain two files if you want to override.
         - <test_suite>.yaml
         - overrides.yaml
-
     overrides.yaml could have
         tests:
-          <key>: <override_value>
-
+          - test:
+              index : <index of the test we want to update>
+                # index starts from 1 refering to the first test in test suite file.
+                # It is optional. default is 1
+              <key>: <override_value>
+                # give override_value as null if you want to ignore the existing key in test
+          - test:
+              <key>: <override_value>
         clusters:
           - <cluster_name>
           - <cluster_name>:
               <config>:
                 <key>: <override_value>
-
     Args:
         dir_name (str):     The directory to be processed.
-
     Returns:
         Dict -> Test case after processing the override section.
     """
@@ -69,7 +88,9 @@ def process_override(dir_name: str) -> List:
     if not override_data:
         return test_data["tests"]
 
-    test_data.update(override_data.get("tests", {}))
+    for test in override_data.get("tests"):
+        index = test["test"].pop("index", 1) - 1
+        merge_dicts(test_data["tests"][index]["test"], test["test"])
 
     if not override_data.get("clusters"):
         return test_data["tests"]
@@ -105,7 +126,6 @@ class Directory:
     @property
     def fragments(self):
         """fragments of the suite directory
-
         Returns:
             list: sorted fragments in the suite directory
         """
@@ -137,18 +157,14 @@ class Suite:
     def __collate(self):
         """
         Collate the data from the given test suites into a dictionary.
-
         A supported files contents are appended to the list of test information being
         gathered. The recommended file extension of is yaml though we do support yml.
-
         There is support for overrides with the help of python dict merge. Hence, there
         would be cases that we don't support. At the time of implementation, we agreed
         not to complicate it by performing deep merge of dictionaries.
-
         How to override
             Create a directory with link to the test suite (and or) overrides.yaml
             (and or) clusters.yaml
-
         - Direct
             # cat suite.yaml
             tests:
@@ -157,12 +173,10 @@ class Suite:
                 desc: Install software pre-requisites
                 module: install_prereq.py
                 name: setup pre-requisites
-
             # cat overrides.yaml
             tests:
               - test:
                 abort-on-fail: false
-
             # Final output should be
             # cat suite.yaml
             tests:
@@ -171,22 +185,18 @@ class Suite:
                 desc: Install software pre-requisites
                 module: install_prereq.py
                 name: setup pre-requisites
-
         - Adding new keys
-
             tests:
               - test:
                 abort-on-fail: true
                 desc: Install software pre-requisites
                 module: install_prereq.py
                 name: setup pre-requisites
-
             # cat overrides.yaml
             tests:
               - test:
                 config:
                   is_production: true
-
             # final output should be
             # cat suite.yaml
             tests:
@@ -197,9 +207,7 @@ class Suite:
                 desc: Install software pre-requisites
                 module: install_prereq.py
                 name: setup pre-requisites
-
         Adding cluster overrides
-
             # cat suite.yaml
             tests:
                - test:
@@ -211,11 +219,9 @@ class Suite:
                     script-name: test_Mbuckets_with_Nobjects.py
                     config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
                     timeout: 300
-
             # cat overrides.yaml
             clusters:
               - site1
-
             # final output should be
               - test:
                   name: Buckets and Objects test
@@ -228,7 +234,6 @@ class Suite:
                         script-name: test_Mbuckets_with_Nobjects.py
                         config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
                         timeout: 300
-
         Returns:
             dict:
                 suite = {
@@ -256,12 +261,10 @@ class Suite:
 
 def load_suites(test_suites):
     """high level wrapper to process list of test_suites
-
     Args:
         test_suites [list]: test_suites list may contain elements of
                             a. list of directory(s) AKA suites
                             b. list of suite file(yaml)
-
     Returns:
         dict: suite of tests and nan
     """

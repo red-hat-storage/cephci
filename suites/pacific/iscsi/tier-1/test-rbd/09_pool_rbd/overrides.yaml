@@ -1,0 +1,4 @@
+tests:
+  - test:
+      args:
+       - "ceph osd pool create rbd"

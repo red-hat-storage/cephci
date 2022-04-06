@@ -1,0 +1,4 @@
+tests:
+  - test:
+      args:
+       - "rbd pool init rbd"

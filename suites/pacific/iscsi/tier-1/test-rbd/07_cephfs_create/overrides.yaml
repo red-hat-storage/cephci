@@ -1,0 +1,4 @@
+tests:
+  - test:
+      args: # arguments to ceph orch
+        - "ceph fs volume create cephfs"
