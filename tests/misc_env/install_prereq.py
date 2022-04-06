@@ -164,18 +164,21 @@ def install_prereq(
 
         if skip_enabling_rhel_rpms and skip_subscription:
             # Ansible is required for RHCS 4.x
-            epel_pkg = "epel-release-latest-8.noarch.rpm"
-            ansible_pkg = "ansible-2.9.27-1.el8"
-            if distro_ver.startswith("7"):
-                epel_pkg = "epel-release-latest-7.noarch.rpm"
-                ansible_pkg = "ansible-2.9.27-1.el7"
+            if distro_ver.startswith("8"):
+                ceph.exec_command(
+                    sudo=True,
+                    cmd="yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+                    check_ec=False,
+                )
+                ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el8")
 
-            ceph.exec_command(
-                sudo=True,
-                cmd=f"yum install -y https://dl.fedoraproject.org/pub/epel/{epel_pkg}",
-                check_ec=False,
-            )
-            ceph.exec_command(sudo=True, cmd=f"yum install -y {ansible_pkg}")
+            if distro_ver.startswith("7"):
+                ceph.exec_command(
+                    sudo=True,
+                    cmd="yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
+                    check_ec=False,
+                )
+                ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el7")
 
         if ceph.role == "client":
             ceph.exec_command(cmd="sudo yum install -y attr gcc", long_running=True)
