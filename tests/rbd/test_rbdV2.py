@@ -14,8 +14,10 @@ import yaml
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
+from ceph.cephV2.pool import Pool
 from ceph.parallel import parallel
-from ceph.rbd.mirroring import RbdMirror
+from ceph.rbd.feature import Feature
+from ceph.rbd.mirror.mirror import Mirror
 from ceph.rbd.rbd import Rbd
 from ceph.rbd.snapshot import Snapshot
 from utility.log import Log
@@ -23,7 +25,15 @@ from utility.log import Log
 log = Log(__name__)
 
 
-CLASS_MAP = dict({"RbdMirror": RbdMirror, "Snapshot": Snapshot, "Rbd": Rbd})
+CLASS_MAP = dict(
+    {
+        "RbdMirror": Mirror,
+        "Snapshot": Snapshot,
+        "Rbd": Rbd,
+        "Pool": Pool,
+        "Feature": Feature,
+    }
+)
 
 
 def operator(test_config, step_config, **kw):
@@ -45,7 +55,11 @@ def operator(test_config, step_config, **kw):
     else:
         # maintain dictionary to map to classes based on service
         # instantiate class
-        instance = CLASS_MAP[step_config["class"]](nodes=kw["ceph_nodes"])
+        cluster_name = step_config.get("cluster_name", None)
+        ceph_nodes = (
+            kw["ceph_cluster_dict"][cluster_name] if cluster_name else kw["ceph_nodes"]
+        )
+        instance = CLASS_MAP[step_config["class"]](nodes=ceph_nodes)
         method = getattr(instance, step_config["method"])
         log.info(method)
         method(step_config["args"])
