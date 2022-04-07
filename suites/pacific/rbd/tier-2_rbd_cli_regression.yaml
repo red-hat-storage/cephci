@@ -1,7 +1,7 @@
 # Tier2: Extended RBD acceptance testing
 #
-# This test suite runs addition test scripts to evaluate the existing functionality of
-# Ceph RBD component.
+# This test suite runs addition test scripts to evaluate the existing
+# functionality of Ceph RBD component.
 #
 # Conf File - conf/pacific/rbd/tier-0_rbd.yaml
 #
@@ -74,15 +74,31 @@ tests:
       name: configure client
 
   - test:
-      desc: snap and clone operations on imported image
+      desc: CLI Validation(+ve cases) rbd mirror image enable
       destroy-cluster: false
-      module: rbd_snap_clone_imported_image.py
-      name: snap and clone on imported image
-      polarion-id: CEPH-9230
+      module: rbd_system.py
+      name: CEPH-10247
+      config:
+        test_name: cli/rbd_cli_testcase_handler.py
+        test_case_name: mirror_image_enable
+      polarion-id: CEPH-10247
 
   - test:
-      desc: Verify that clones can be created without protecting snapshot
+      desc: CLI Validation(+ve cases) rbd mirror pool enable
       destroy-cluster: false
-      module: rbd_clonev2.py
-      name: clones creation with v2clone format
-      polarion-id: CEPH-83573308
+      module: rbd_system.py
+      name: CEPH-10249
+      config:
+        test_name: cli/rbd_cli_testcase_handler.py
+        test_case_name: mirror_pool_enable
+      polarion-id: CEPH-10249
+
+  - test:
+      desc: CLI Validation(+ve cases) rbd mirror pool disable
+      destroy-cluster: false
+      module: rbd_system.py
+      name: CEPH-10250
+      config:
+        test_name: cli/rbd_cli_testcase_handler.py
+        test_case_name: mirror_pool_disable
+      polarion-id: CEPH-10250

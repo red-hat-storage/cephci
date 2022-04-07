@@ -6,7 +6,7 @@ instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
 test_suite="suites/pacific/rgw/tier-1_rgw_ssl_multisite_test-upgrade-5-to-latest.yaml"
-test_conf="conf/pacific/rgw/rgw_mutlisite.yaml"
+test_conf="conf/pacific/rgw/rgw_multisite.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 

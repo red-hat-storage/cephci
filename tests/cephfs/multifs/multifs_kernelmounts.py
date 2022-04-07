@@ -98,5 +98,5 @@ def run(ceph_cluster, **kw):
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
         client1.exec_command(
-            sudo=True, cmd="cp /etc/fstab.backup /etc/fstab", check_ec=False
+            sudo=True, cmd="mv /etc/fstab.backup /etc/fstab", check_ec=False
         )

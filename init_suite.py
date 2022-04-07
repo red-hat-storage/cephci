@@ -14,9 +14,11 @@ log = Log(__name__)
 def merge_dicts(dict1, dict2):
     """
     Returns dict1 by recursively merging dict2 into dict1
+
     Args:
         dict1 (dict):     The dictionary corressponding to test in <test_suite>.
         dict2 (dict):     The dictionary corressponding to test in <overrides>.
+
     Returns:
         Dict -> dictionary after merging overrides dict into test_suite dict
     """
@@ -56,10 +58,12 @@ def process_override(dir_name: str) -> List:
               index : <index of the test we want to update>
                 # index starts from 1 refering to the first test in test suite file.
                 # It is optional. default is 1
+
               <key>: <override_value>
                 # give override_value as null if you want to ignore the existing key in test
           - test:
               <key>: <override_value>
+
         clusters:
           - <cluster_name>
           - <cluster_name>:

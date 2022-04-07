@@ -217,7 +217,13 @@ class FsUtils(object):
         return args
 
     def wait_for_mds_process(
-        self, client, process_name, timeout=180, interval=5, ispresent=True
+        self,
+        client,
+        process_name,
+        timeout=180,
+        interval=5,
+        ispresent=True,
+        desired_state="running",
     ):
         """
         Checks for the proccess and returns the status based on ispresent
@@ -231,13 +237,20 @@ class FsUtils(object):
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         log.info("Wait for the process to start or stop")
         while end_time > datetime.datetime.now():
-            client.exec_command(
-                sudo=True, cmd=f"ceph orch ps | grep {process_name}", check_ec=False
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd="ceph orch ps --daemon_type=mds --format json",
+                check_ec=False,
             )
-            if client.node.exit_status == 0 and ispresent:
-                return True
-            if client.node.exit_status == 1 and not ispresent:
-                return True
+            mds_hosts = json.loads(out.read().decode())
+            for mds in mds_hosts:
+                log.info(mds)
+                if process_name in mds["daemon_id"] and ispresent:
+                    if mds["status_desc"] == desired_state:
+                        log.info(mds)
+                        return True
+                if process_name not in mds["daemon_id"] and not ispresent:
+                    return True
             sleep(interval)
         return False
 
@@ -1402,3 +1415,60 @@ class FsUtils(object):
         out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
         stat_output = json.loads(out.read().decode())
         return stat_output
+
+    def wait_for_cmd_to_succeed(client, cmd, timeout=180, interval=5):
+        """
+        Checks for the mount point and returns the status based on mount command
+        :param client:
+        :param mount_point:
+        :param timeout:
+        :param interval:
+        :return: boolean
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the command to pass")
+        while end_time > datetime.datetime.now():
+            try:
+                client.exec_command(sudo=True, cmd=cmd)
+                return True
+            except CommandFailed:
+                sleep(interval)
+        return False
+
+    def run_ios(client, mounting_dir):
+        def smallfile():
+            client.exec_command(
+                sudo=True,
+                cmd=f"for i in create read append read delete create overwrite rename delete-renamed mkdir rmdir "
+                f"create symlink stat chmod ls-l delete cleanup  ; "
+                f"do python3 /home/cephuser/smallfile/smallfile_cli.py "
+                f"--operation $i --threads 8 --file-size 10240 "
+                f"--files 10 --top {mounting_dir} ; done",
+            )
+
+        def file_extract():
+            client.exec_command(
+                sudo=True,
+                cmd=f"cd {mounting_dir};wget -O linux.tar.gz http://download.ceph.com/qa/linux-5.4.tar.gz",
+            )
+            client.exec_command(
+                sudo=True,
+                cmd="tar -xzf linux.tar.gz tardir/ ; sleep 10 ; rm -rf  tardir/ ; sleep 10 ; done",
+            )
+
+        def wget():
+            client.exec_command(
+                sudo=True,
+                cmd=f"cd {mounting_dir};wget -O linux.tar.gz http://download.ceph.com/qa/linux-5.4.tar.gz",
+            )
+
+        def dd():
+            client.exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}_dd bs=100M "
+                f"count=5",
+            )
+
+        io_tools = [dd, smallfile]
+        f = random.choice(io_tools)
+        f()

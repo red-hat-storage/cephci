@@ -165,63 +165,63 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-#  - test:
-#      name: Files-quota-test
-#      module: quota.quota_files.py
-#      polarion-id: CEPH-83573399
-#      desc: Tests the file attributes on the directory
-#      abort-on-fail: false
-#  - test:
-#        name: Files-quota-increase-test
-#        module: quota.quota_files_increase.py
-#        polarion-id: CEPH-83573400
-#        desc: Tests the increase of file attributes  on the directory
-#        abort-on-fail: false
-#  - test:
-#      name: Files-quota-decrease-test
-#      module: quota.quota_files_decrease.py
-#      polarion-id: CEPH-83573403
-#      desc: Tests the increase of file attributes  on the directory
-#      abort-on-fail: false
-#  - test:
-#      name: Files-quota-remove-test
-#      module: quota.quota_files_remove.py
-#      polarion-id: CEPH-83573405
-#      desc: Tests the remove of file attributes on the directory
-#      abort-on-fail: false
-#  - test:
-#        name: Bytes-quota-test
-#        module: quota.quota_bytes.py
-#        polarion-id: CEPH-83573399
-#        desc: Tests the Byte attributes on the directory
-#        abort-on-fail: false
-#  - test:
-#      name: Bytes-quota-increase-test
-#      module: quota.quota_bytes_increase.py
-#      polarion-id: CEPH-83573401
-#      desc: Tests the increase of Byte attributes  on the directory
-#      abort-on-fail: false
-#  - test:
-#      name: Bytes-quota-decrease-test
-#      module: quota.quota_bytes_decrease.py
-#      polarion-id: CEPH-83573407
-#      desc: Tests the decrease of Byte attributes  on the directory
-#      abort-on-fail: false
-#  - test:
-#      name: Bytes-quota-remove-test
-#      module: quota.quota_bytes_remove.py
-#      polarion-id: CEPH-83573409
-#      desc: Tests the remove of Byte attributes on the directory
-#      abort-on-fail: false
-#  - test:
-#        name: Quota-Reboot-test
-#        module: quota.quota_reboot.py
-#        polarion-id: CEPH-83573408
-#        desc: Tests the remove of Byte attributes on the directory
-#        abort-on-fail: false
-#  - test:
-#      name: Quota-file-byte-test
-#      module: quota.quota_files_bytes.py
-#      polarion-id: CEPH-83573406
-#      desc: Tests the file and byte attributes on the directory
-#      abort-on-fail: false
+  - test:
+      name: Files-quota-test
+      module: quota.quota_files.py
+      polarion-id: CEPH-83573399
+      desc: Tests the file attributes on the directory
+      abort-on-fail: false
+  - test:
+        name: Files-quota-increase-test
+        module: quota.quota_files_increase.py
+        polarion-id: CEPH-83573400
+        desc: Tests the increase of file attributes  on the directory
+        abort-on-fail: false
+  - test:
+      name: Files-quota-decrease-test
+      module: quota.quota_files_decrease.py
+      polarion-id: CEPH-83573403
+      desc: Tests the increase of file attributes  on the directory
+      abort-on-fail: false
+  - test:
+      name: Files-quota-remove-test
+      module: quota.quota_files_remove.py
+      polarion-id: CEPH-83573405
+      desc: Tests the remove of file attributes on the directory
+      abort-on-fail: false
+  - test:
+        name: Bytes-quota-test
+        module: quota.quota_bytes.py
+        polarion-id: CEPH-83573399
+        desc: Tests the Byte attributes on the directory
+        abort-on-fail: false
+  - test:
+      name: Bytes-quota-increase-test
+      module: quota.quota_bytes_increase.py
+      polarion-id: CEPH-83573401
+      desc: Tests the increase of Byte attributes  on the directory
+      abort-on-fail: false
+  - test:
+      name: Bytes-quota-decrease-test
+      module: quota.quota_bytes_decrease.py
+      polarion-id: CEPH-83573407
+      desc: Tests the decrease of Byte attributes  on the directory
+      abort-on-fail: false
+  - test:
+      name: Bytes-quota-remove-test
+      module: quota.quota_bytes_remove.py
+      polarion-id: CEPH-83573409
+      desc: Tests the remove of Byte attributes on the directory
+      abort-on-fail: false
+  - test:
+        name: Quota-Reboot-test
+        module: quota.quota_reboot.py
+        polarion-id: CEPH-83573408
+        desc: Tests the remove of Byte attributes on the directory
+        abort-on-fail: false
+  - test:
+      name: Quota-file-byte-test
+      module: quota.quota_files_bytes.py
+      polarion-id: CEPH-83573406
+      desc: Tests the file and byte attributes on the directory
+      abort-on-fail: false

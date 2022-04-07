@@ -181,6 +181,7 @@ class BootstrapMixin:
         custom_repo = args.pop("custom_repo", "")
         custom_image = args.pop("custom_image", True)
         build_type = self.config.get("build_type")
+        rhbuild = self.config.get("rhbuild")
 
         if build_type == "upstream":
             self.setup_upstream_repository()
@@ -271,6 +272,12 @@ class BootstrapMixin:
             args["config"] = create_ceph_config_file(node=self.installer, config=conf)
 
         cmd += config_dict_to_string(args)
+
+        # Todo: This patch is specific to 5.1 release,
+        #   should be removed for next 5.x development builds or release.
+        if rhbuild.startswith("5.1"):
+            cmd += " --yes-i-know"
+
         out, err = self.installer.exec_command(
             sudo=True,
             cmd=cmd,
