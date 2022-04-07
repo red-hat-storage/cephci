@@ -1,0 +1,4 @@
+tests:
+  - test:
+      config:
+        playbook-command: "purge-docker-cluster.yml -e ireallymeanit=yes -e remove_packages=yes"
