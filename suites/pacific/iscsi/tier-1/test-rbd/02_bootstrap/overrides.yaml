@@ -1,0 +1,7 @@
+tests:
+  - test:
+      config:
+        args:
+          orphan-initial-daemons: true
+          registry-url: registry.redhat.io
+          skip-monitoring-stack: true

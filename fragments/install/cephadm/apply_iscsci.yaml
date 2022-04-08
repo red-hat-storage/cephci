@@ -1,0 +1,25 @@
+tests:
+  - test:
+      name: Apply ISCSI Service
+      desc: Installing ISCSI service and gateway on iscsi role nodes
+      module: test_iscsi.py
+      polarion-id: CEPH-83573756
+      config:
+        command: apply
+        service: iscsi
+        base_cmd_args:            # arguments to ceph orch
+          verbose: true
+        pos_args:
+          - rbd                 # name of the pool
+          - api_user              # name of the API user
+          - api_pass              # password of the api_user.
+        args:
+          trusted_ip_list:      #it can be used both as keyword/positional arg in 5.x
+            - node1
+            - node4
+          placement:
+            nodes:
+              - node1
+              - node4                   # either label or node.
+      destroy-cluster: false
+      abort-on-fail: true

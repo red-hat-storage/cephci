@@ -1,0 +1,4 @@
+tests:
+  - test:
+      args:
+        - "ceph fs volume create cephfs"
