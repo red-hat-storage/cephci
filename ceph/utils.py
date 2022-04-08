@@ -18,7 +18,7 @@ from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import generate_node_name
+from utility.utils import generate_node_name, get_latest_container
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
@@ -1142,14 +1142,15 @@ def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
     return replaced_string
 
 
-def set_container_info(ceph_cluster, config, use_cdn, containerized):
+def set_container_info(ceph_cluster, config, use_cdn, containerized, build):
     """
     Set container information in ansible configuration
     Args:
         ceph_cluster: ceph cluster object
         use_cdn: boolean to check CDN
         config: test config
-        containerized: boolean indicates containerized build.
+        containerized: boolean indicates containerized build
+        build: rhbuild version
     Returns:
         ansi_config
     """
@@ -1160,9 +1161,14 @@ def set_container_info(ceph_cluster, config, use_cdn, containerized):
         config["use_cdn"] = True
         ansi_config["ceph_origin"] = "repository"
         ansi_config["ceph_repository_type"] = "cdn"
+    elif containerized:
+        ansi_config["ceph_docker_registry"] = config.get("ceph_docker_registry")
+        ansi_config["ceph_docker_image"] = config.get("ceph_docker_image")
+        ansi_config["ceph_docker_image_tag"] = config.get("ceph_docker_image_tag")
     else:
-        if containerized:
-            ansi_config["ceph_docker_registry"] = config.get("ceph_docker_registry")
-            ansi_config["ceph_docker_image"] = config.get("ceph_docker_image")
-            ansi_config["ceph_docker_image_tag"] = config.get("ceph_docker_image_tag")
+        container = get_latest_container(build)
+        ansi_config["ceph_docker_registry"] = container.get("docker_registry")
+        ansi_config["ceph_docker_image"] = container.get("docker_image")
+        ansi_config["ceph_docker_image_tag"] = container.get("docker_tag")
+
     return ansi_config

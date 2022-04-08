@@ -607,11 +607,13 @@ def get_latest_container(version):
         Container details dictionary with given format:
         {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
     """
-    url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json".format(
+    url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/RHCEPH-{}.yaml".format(
         version
     )
     data = requests.get(url, verify=False)
-    docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
+    repo_details = yaml.safe_load(data.text)
+    image_info = repo_details["latest"]["repository"].split("/rh-osbs/rhceph:")
+    docker_registry, docker_tag = image_info[0], image_info[1]
     docker_image = "rh-osbs/rhceph"
     return {
         "docker_registry": docker_registry,

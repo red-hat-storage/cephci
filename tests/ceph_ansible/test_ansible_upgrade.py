@@ -40,7 +40,9 @@ def run(ceph_cluster, **kw):
     ceph_cluster.use_cdn = config.get("use_cdn")
 
     config["ansi_config"].update(
-        set_container_info(ceph_cluster, config, ceph_cluster.use_cdn, containerized)
+        set_container_info(
+            ceph_cluster, config, ceph_cluster.use_cdn, containerized, build
+        )
     )
 
     # Translate RGW node to ip address for Multisite

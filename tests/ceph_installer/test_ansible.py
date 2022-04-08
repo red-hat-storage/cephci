@@ -62,12 +62,12 @@ def run(ceph_cluster, **kw):
         )
         config["ansi_config"]["rgw_pullhost"] = primary_rgw_node.ip_address
 
-    config["ansi_config"].update(
-        set_container_info(ceph_cluster, config, use_cdn, containerized)
-    )
-
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
+
+    config["ansi_config"].update(
+        set_container_info(ceph_cluster, config, use_cdn, containerized, build[0:3])
+    )
 
     # create ssl certificate
     if (
