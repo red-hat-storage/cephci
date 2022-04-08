@@ -1,0 +1,18 @@
+#Deploy cluster with lvm scenario
+---
+tests:
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      config:
+        ansi_config:
+          ceph_origin: repository
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          dashboard_enabled: False
+      desc: test cluster setup using ceph-ansible  #Change proper description
+      destroy-cluster: false
+      abort-on-fail: true

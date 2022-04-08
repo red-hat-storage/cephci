@@ -1,0 +1,13 @@
+tests:
+  - test:
+      config:
+        ansi_config:
+          containerized_deployment: true
+          ceph_docker_image: rhceph/rhceph-4-rhel8
+          ceph_docker_image_tag: latest
+          ceph_docker_registry: registry.redhat.io
+          osd_auto_discovery: false
+          osd_scenario: collocated
+      name: "containerized ceph ansible"
+      desc: "ceph deployment using site.yaml(container) playbook"
+      polarion-id: CEPH-83571503

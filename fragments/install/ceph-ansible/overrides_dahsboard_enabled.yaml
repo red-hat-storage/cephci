@@ -1,0 +1,15 @@
+tests:
+  - test:
+      config:
+        ansi_config:
+          dashboard_enabled: true
+          dashboard_admin_user: admin
+          dashboard_admin_password: p@ssw0rd
+          alertmanager_container_image: "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6"
+          grafana_admin_password: p@ssw0rd
+          grafana_admin_user: admin
+          grafana_container_image: "registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4"
+          node_exporter_container_image: "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6"
+          prometheus_container_image: "registry.redhat.io/openshift4/ose-prometheus:v4.6"
+      desc: "ceph deployment using site.yaml(RPM) playbook with lvm scenario"
+      polarion-id: CEPH-83571467
