@@ -126,7 +126,7 @@ node(nodeName) {
             sh "tar -zcvf ${logDir}/${key}.tar.gz ${logDir}/*.log"
             sh "mkdir -p ${attachDir}/${key}"
             sh "cp ${logDir}/${key}.tar.gz ${attachDir}/${key}/"
-            sh "find ${logDir} -maxdepth 1 -type f -not -size 0 -exec cp '{}' ${attachDir}/${key}/"
+            sh "find ${logDir} -maxdepth 1 -type f -not -size 0 -name '*.err' -exec cp '{}' ${attachDir}/${key}/ \\;"
         }
 
         // Adding metadata information
