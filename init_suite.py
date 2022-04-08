@@ -22,6 +22,9 @@ def merge_dicts(dict1, dict2):
     Returns:
         Dict -> dictionary after merging overrides dict into test_suite dict
     """
+    if isinstance(dict1, list) and isinstance(dict2, list):
+        dict1.extend(dict2)
+        return dict1
     if not isinstance(dict1, dict) or not isinstance(dict2, dict):
         return dict2
     for k in dict2:
@@ -98,7 +101,7 @@ def process_override(dir_name: str) -> List:
     if not override_data:
         return test_data["tests"]
 
-    for test in override_data.get("tests"):
+    for test in override_data.get("tests", list()):
         index = test["test"].pop("index", 1) - 1
         merge_dicts(test_data["tests"][index]["test"], test["test"])
 
@@ -113,9 +116,9 @@ def process_override(dir_name: str) -> List:
             if isinstance(cluster, str):
                 cluster_name = cluster
             else:
-                cluster_name = cluster.keys()[0]
+                cluster_name = [key for key in cluster.keys()][0]
                 override_config = cluster[cluster_name].get("config", {})
-                config.update(override_config)
+                merge_dicts(config, override_config)
 
             if "clusters" not in test["test"].keys():
                 test["test"]["clusters"] = dict()
