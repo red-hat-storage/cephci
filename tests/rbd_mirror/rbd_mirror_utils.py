@@ -665,7 +665,7 @@ class RbdMirror:
 
     def resize_image(self, imagespec, size):
         """
-        Resize given provided image
+        Resize provided image
         Args:
             imagespec: image-spec of the image to be resized
             size: size of the image to be updated to
