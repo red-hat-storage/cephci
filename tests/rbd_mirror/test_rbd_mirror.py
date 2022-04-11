@@ -32,7 +32,7 @@ def run(**kw):
         mirror1.config_mirror(mirror2, poolname=poolname, mode="pool")
         mirror2.wait_for_status(poolname=poolname, images_pattern=1)
         mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total"))
-        mirror1.resize_image(imagespec=imagespec, size=config.get("imagesize"))
+        mirror1.resize_image(imagespec=imagespec, size=config.get("resize_to"))
         mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
