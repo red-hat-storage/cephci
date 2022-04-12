@@ -214,6 +214,44 @@ class FsUtils(object):
         args = parser.parse_args(str_args.split())
         return args
 
+    def wait_for_nfs_process(
+        self,
+        client,
+        process_name,
+        timeout=180,
+        interval=5,
+        ispresent=True,
+        desired_state="running",
+    ):
+        """
+        Checks for the proccess and returns the status based on ispresent
+        :param client:
+        :param process_name:
+        :param timeout:
+        :param interval:
+        :param ispresent:
+        :return:
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the process to start or stop")
+        while end_time > datetime.datetime.now():
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd="ceph orch ps --daemon_type=nfs --format json",
+                check_ec=False,
+            )
+            nfs_hosts = json.loads(out.read().decode())
+            for nfs in nfs_hosts:
+                log.info(nfs)
+                if process_name in nfs["daemon_id"] and ispresent:
+                    if nfs["status_desc"] == desired_state:
+                        log.info(nfs)
+                        return True
+                if process_name not in nfs["daemon_id"] and not ispresent:
+                    return True
+            sleep(interval)
+        return False
+
     def wait_for_mds_process(
         self,
         client,
@@ -1425,7 +1463,7 @@ class FsUtils(object):
         stat_output = json.loads(out)
         return stat_output
 
-    def wait_for_cmd_to_succeed(client, cmd, timeout=180, interval=5):
+    def wait_for_cmd_to_succeed(self, client, cmd, timeout=180, interval=5):
         """
         Checks for the mount point and returns the status based on mount command
         :param client:
@@ -1453,6 +1491,7 @@ class FsUtils(object):
                 f"do python3 /home/cephuser/smallfile/smallfile_cli.py "
                 f"--operation $i --threads 8 --file-size 10240 "
                 f"--files 10 --top {mounting_dir} ; done",
+                long_running=True,
             )
 
         def file_extract():
@@ -1476,6 +1515,7 @@ class FsUtils(object):
                 sudo=True,
                 cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}_dd bs=100M "
                 f"count=5",
+                long_running=True,
             )
 
         io_tools = [dd, smallfile]
