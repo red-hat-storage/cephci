@@ -20,6 +20,7 @@ from ceph.rbd.feature import Feature
 from ceph.rbd.mirror.mirror import Mirror
 from ceph.rbd.rbd import Rbd
 from ceph.rbd.snapshot import Snapshot
+from ceph.util_map import UTIL_MAP
 from utility.log import Log
 
 log = Log(__name__)
@@ -52,6 +53,15 @@ def operator(test_config, step_config, **kw):
     if step_config.get("method") == "shell":
         cephadm = CephAdmin(kw["ceph_cluster_dict"], test_config)
         cephadm.shell(args=step_config["args"])
+
+    elif step_config.get("method", None) is None:
+        util = list(step_config)[0]
+        if UTIL_MAP.get(util, None) is None:
+            log.error(f"Utility {util} has not been implemented yet")
+            return 1
+
+        UTIL_MAP[util].run(kw, step_config["args"])
+
     else:
         # maintain dictionary to map to classes based on service
         # instantiate class

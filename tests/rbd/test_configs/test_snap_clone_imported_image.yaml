@@ -7,10 +7,12 @@ steps:
     args:
       size: '64'
       pool_name: 'test_rbd_pool'
-  - method: create_file_to_import
-    class: Rbd
+  - create_dummy_file: true
     args:
-      file_name: 'dummy'
+      cluster_name: ceph-rbd1
+      path: ./dummy_file
+      size: 1
+      long_running: false
   - method: import_file
     class: Rbd
     args:
