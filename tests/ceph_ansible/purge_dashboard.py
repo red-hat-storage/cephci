@@ -33,7 +33,7 @@ def run(ceph_cluster, **kw):
     cmd = f"cd {ansible_dir} ; ansible-playbook -vvvv -i {inventory} {playbook_command}"
 
     # executing the command to purge dashboard
-    out, rc = installer_node.exec_command(cmd=cmd, long_running=True)
+    rc = installer_node.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:
         log.info("ansible-playbook failed to purge ceph dashboard")
@@ -56,7 +56,7 @@ def validate_purge_dashboard(node):
     """
     log.info("Validating purge dashboard")
     out, rc = node.exec_command(sudo=True, cmd="ceph mgr module ls")
-    output = json.loads(out.read().decode().rstrip())
+    output = json.loads(out.rstrip())
     if "dashboard" in output["enabled_modules"]:
         raise DashboardValidationFailure(
             "Dashboard module is still enabled after purge-dashboard"

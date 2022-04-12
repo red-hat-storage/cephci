@@ -58,7 +58,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         """
         path = ssh_key_path if ssh_key_path else "/etc/ceph/ceph.pub"
         ceph_pub_key, _ = self.installer.exec_command(sudo=True, cmd=f"cat {path}")
-        return ceph_pub_key.read().decode().strip()
+        return ceph_pub_key.strip()
 
     def distribute_cephadm_gen_pub_key(self, ssh_key_path=None, nodes=None):
         """

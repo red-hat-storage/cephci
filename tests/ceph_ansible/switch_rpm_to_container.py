@@ -23,7 +23,7 @@ def run(**kw):
                 ansible_dir=ansible_dir, playbook=playbook
             ),
         )
-        out, err = installer_node.exec_command(
+        rc = installer_node.exec_command(
             cmd="cd {ansible_dir};ansible-playbook -vvvv {playbook}"
             " -e ireallymeanit=yes -i hosts".format(
                 ansible_dir=ansible_dir, playbook=playbook
@@ -32,7 +32,7 @@ def run(**kw):
         )
 
     else:
-        out, err = installer_node.exec_command(
+        rc = installer_node.exec_command(
             cmd="cd {ansible_dir};ansible-playbook -vvvv"
             " infrastructure-playbooks/{playbook} -e ireallymeanit=yes -i hosts".format(
                 ansible_dir=ansible_dir, playbook=playbook
@@ -40,7 +40,7 @@ def run(**kw):
             long_running=True,
         )
 
-    if err == 0:
+    if rc == 0:
         log.info(
             "ansible-playbook switch-from-non-containerized-to-containerized-ceph-daemons.yml successful"
         )

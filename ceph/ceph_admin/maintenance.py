@@ -66,7 +66,7 @@ class MaintenanceMixin:
                 stdout, stderr = node.exec_command(
                     sudo=True, cmd="podman ps --format json"
                 )
-                container_out = stdout.read().decode().replace("\n", "")
+                container_out = stdout.replace("\n", "")
                 containers = loads(container_out) if container_out else list()
                 if not containers:
                     active_daemon = False
@@ -85,7 +85,7 @@ class MaintenanceMixin:
                 stdout, stderr = node.exec_command(
                     sudo=True, cmd="podman ps --format json"
                 )
-                container_out = stdout.read().decode().replace("\n", "")
+                container_out = stdout.replace("\n", "")
                 containers = loads(container_out) if container_out else list()
                 if not containers:
                     count += 1

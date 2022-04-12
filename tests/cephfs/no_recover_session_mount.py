@@ -56,9 +56,9 @@ def run(ceph_cluster, **kw):
             f"mount -t ceph {mon_node_ip}:/ {mount_dir} -o name=admin,recover_session=no",
             f"ls {mount_dir}",
         ]
+        output = None
         for command in commands:
-            out, rc = client1.exec_command(sudo=True, cmd=command)
-        output = out.read().decode()
+            output, rc = client1.exec_command(sudo=True, cmd=command)
         if "volumes" in output:
             log.info("Cephfs mount is accessible")
         else:
@@ -75,7 +75,7 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             out, rc = client1.exec_command(sudo=True, cmd=command)
-        output = json.loads(out.read().decode())
+        output = json.loads(out)
         for item in output:
             client_metadata = item["client_metadata"]
             kernel_client = 0
@@ -98,7 +98,7 @@ def run(ceph_cluster, **kw):
             log.info("Mount point is inaccessible as expected")
             return 0
         else:
-            output = out.read().decode()
+            output = out
             if "volumes" in output:
                 log.error("Mount point is accessible")
                 return 1
@@ -121,17 +121,15 @@ def run(ceph_cluster, **kw):
         client2.exec_command(sudo=True, cmd=command)
         client2.exec_command(sudo=True, cmd=f"rm -rf {mount_dir_2}/*")
         client2.exec_command(sudo=True, cmd=f"umount {mount_dir_2}")
-        out, rc = client1.exec_command(
+        ip, rc = client1.exec_command(
             sudo=True, cmd="ifconfig eth0 | grep 'inet ' | awk '{{print $2}}'"
         )
-        ip = out.read().decode()
         log.info("Unblocking the Cephfs client")
         if "4." in rhbuild:
             out, rc = client1.exec_command(
                 sudo=True, cmd=f"ceph osd blacklist ls | grep {ip}"
             )
-            output = out.read().decode()
-            out = output.split()
+            out = out.split()
             blocked_client = out[0]
             client1.exec_command(
                 sudo=True, cmd=f"ceph osd blacklist rm {blocked_client}"
@@ -140,8 +138,7 @@ def run(ceph_cluster, **kw):
             out, rc = client1.exec_command(
                 sudo=True, cmd=f"ceph osd blocklist ls | grep {ip}"
             )
-            output = out.read().decode()
-            blocked_client = output.split()
+            blocked_client = out.split()
             client = blocked_client[0]
             log.info(f"client_list - {client}")
             client1.exec_command(sudo=True, cmd=f"ceph osd blocklist rm {client}")

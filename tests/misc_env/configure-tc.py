@@ -19,7 +19,7 @@ def exec_command(
     LOG.debug(f"Output: {out}")
     LOG.debug(f"Error: {err}")
 
-    return out.read().decode(), err.read().decode()
+    return out, err
 
 
 def get_network_device(node: CephNode) -> str:

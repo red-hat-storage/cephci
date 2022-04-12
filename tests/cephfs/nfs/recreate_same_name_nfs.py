@@ -57,8 +57,7 @@ def run(ceph_cluster, **kw):
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
         out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.read().decode()
-        output.split()
+        output = out.split()
         if nfs_name in output:
             log.info("ceph nfs cluster is present")
         else:
@@ -68,8 +67,7 @@ def run(ceph_cluster, **kw):
         )
         time.sleep(5)
         out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.read().decode()
-        output.split()
+        output = out.split()
         if nfs_name not in output:
             log.info("ceph nfs cluster deleted successfully")
         else:
@@ -79,8 +77,7 @@ def run(ceph_cluster, **kw):
         )
         time.sleep(5)
         out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.read().decode()
-        output.split()
+        output = out.split()
         if nfs_name in output:
             log.info("ceph nfs cluster created successfully")
         else:

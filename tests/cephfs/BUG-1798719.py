@@ -40,7 +40,7 @@ def run(ceph_cluster, **kw):
             out, rc = client.exec_command(
                 cmd="sudo ceph auth get-key client.%s" % (user_name)
             )
-            secret_key = out.read().decode().rstrip("\n")
+            secret_key = out.rstrip("\n")
             key_file = client.remote_file(
                 sudo=True, file_name="/etc/ceph/%s.secret" % (user_name), file_mode="w"
             )
@@ -59,8 +59,7 @@ def run(ceph_cluster, **kw):
                 )
             )
             out, rc = client.exec_command(cmd="mount")
-            mount_output = out.read().decode()
-            mount_output = mount_output.split()
+            mount_output = out.split()
             log.info("Checking if kernel mount is passed or failed:")
             assert mounting_dir.rstrip("/") in mount_output
             log.info("mount is passed")

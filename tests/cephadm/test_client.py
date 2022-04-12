@@ -67,7 +67,7 @@ def add(cls, config: Dict) -> None:
                 node.exec_command(cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True)
 
         out, _ = node.exec_command(cmd="ls -ltrh /etc/ceph/", sudo=True)
-        log.info(out.read().decode().strip())
+        log.info(out)
 
     # Hold local copy of the client key-ring in the installer node
     if config.get("store-keyring"):
@@ -110,7 +110,7 @@ def remove(cls, config: Dict) -> None:
     )
 
     out, _ = node.exec_command(cmd="ls -ltrh /etc/ceph/", sudo=True)
-    log.info(out.read().decode().strip())
+    log.info(out)
 
     # Remove packages like ceph-common
     # Be-careful it may remove entire /etc/ceph directory

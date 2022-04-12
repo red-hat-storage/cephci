@@ -50,7 +50,7 @@ def run(**kw):
 
     # Optimizing the installation of prerequisites so that they are executed once
     check_venv, err = client_node.exec_command(cmd="ls -l venv", check_ec=False)
-    if not check_venv.read().decode():
+    if not check_venv:
         commands = ["sudo yum install -y python3", f"python3 -m venv {venv_folder}"]
 
         for command in commands:
@@ -71,9 +71,6 @@ def run(**kw):
         command = command + f" {test_case_name}"
 
     out, err = client_node.exec_command(cmd=command, check_ec=False, timeout=timeout)
-
-    out = out.read().decode()
-    err = err.read().decode()
 
     if out:
         log.info(out)

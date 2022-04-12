@@ -64,7 +64,7 @@ def run(ceph_cluster, **kw):
 
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph-fuse -r {subvol_path.read().decode().strip()} /mnt/mycephfs1 --client_fs cephfs_new",
+            cmd=f"ceph-fuse -r {subvol_path.strip()} /mnt/mycephfs1 --client_fs cephfs_new",
         )
         fs_util.create_file_data(client1, "/mnt/mycephfs1", 3, "snap1", "snap_1_data ")
         client1.exec_command(

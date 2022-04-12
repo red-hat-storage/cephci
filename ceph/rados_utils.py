@@ -54,8 +54,7 @@ class RadosHelper:
         """
         (out, err) = self.raw_cluster_cmd("osd", "dump", "--format=json")
         print(type(out))
-        outbuf = out.read().decode()
-        return json.loads("\n".join(outbuf.split("\n")[1:]))
+        return json.loads("\n".join(out.split("\n")[1:]))
 
     def create_pool(
         self,
@@ -130,8 +129,7 @@ class RadosHelper:
         assert isinstance(pool_name, str)
         assert isinstance(prop, str)
         (output, err) = self.raw_cluster_cmd("osd", "pool", "get", pool_name, prop)
-        outbuf = output.read().decode()
-        return int(outbuf.split()[1])
+        return int(output.split()[1])
 
     def get_pool_dump(self, pool):
         """
@@ -165,8 +163,7 @@ class RadosHelper:
         """
         pg_str = self.get_pgid(pool, pgnum)
         (output, err) = self.raw_cluster_cmd("pg", "map", pg_str, "--format=json")
-        outbuf = output.read().decode()
-        j = json.loads("\n".join(outbuf.split("\n")[1:]))
+        j = json.loads("\n".join(output.split("\n")[1:]))
         return int(j["acting"][0])
         assert False
 
@@ -176,8 +173,7 @@ class RadosHelper:
         """
         pg_str = self.get_pgid(pool, pgnum)
         (output, err) = self.raw_cluster_cmd("pg", "map", pg_str, "--format=json")
-        outbuf = output.read().decode()
-        j = json.loads("\n".join(outbuf.split("\n")[1:]))
+        j = json.loads("\n".join(output.split("\n")[1:]))
         return int(j["acting"][random.randint(0, len(j["acting"]) - 1)])
         assert False
 
@@ -204,8 +200,7 @@ class RadosHelper:
         :return 1 if up, 0 if down
         """
         (output, err) = self.raw_cluster_cmd("osd", "dump", "--format=json")
-        outbuf = output.read().decode()
-        jbuf = json.loads(outbuf)
+        jbuf = json.loads(output)
         self.log(jbuf)
 
         for osd in jbuf["osds"]:
@@ -269,7 +264,7 @@ class RadosHelper:
             cmd="sudo docker inspect {container}".format(container=proxy_container),
             check_ec=False,
         )
-        if err.read():
+        if err:
             node.exec_command(
                 cmd="sudo /usr/bin/docker-current run -d --rm --net=host --privileged=true --pid=host --memory=1839m "
                 "--cpu-quota=100000 -v /dev:/dev -v /etc/localtime:/etc/localtime:ro -v "
@@ -343,4 +338,4 @@ class RadosHelper:
             f"Collecting the OSD details from node {mon_node.hostname} by executing the command : {cmd}"
         )
         out, err = mon_node.exec_command(cmd=cmd)
-        return [int(ids) for ids in out.read().decode().split()]
+        return [int(ids) for ids in out.split()]

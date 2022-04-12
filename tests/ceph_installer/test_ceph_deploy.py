@@ -22,7 +22,7 @@ def run(**kw):
         return 0
     ceph1 = ceph_nodes[0]
     out, _ = ceph1.exec_command(cmd="uuidgen")
-    uuid = out.read().strip().decode()
+    uuid = out.strip()
     ceph_mon_nodes = []
     mon_names = ""
     all_nodes = ""
@@ -100,8 +100,8 @@ def run(**kw):
                 "Command completed on remote node %d", out.channel.recv_exit_status()
             )
             running = False
-            log.info(out.read().decode())
-            log.info(err.read().decode())
+            log.info(out)
+            log.info(err)
         else:
             log.info("Command still running")
     out, err = ceph1.exec_command(
