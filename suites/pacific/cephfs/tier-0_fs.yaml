@@ -120,6 +120,12 @@ tests:
       desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
       polarion-id: CEPH-11308
       abort-on-fail: false
+  - test:
+      name: Clone Operations
+      module: bug-1980920.py
+      desc: Cancel the clone operation and validate error message
+      polarion-id: CEPH-83574681
+      abort-on-fail: false
   -
     test:
       desc: "generate sosreport"
