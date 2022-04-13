@@ -99,7 +99,7 @@ node(nodeName) {
         sh (script: "mkdir -p ${targetDir} ${attachDir}")
         testResults.each { key, value ->
             def logDir = value["log-dir"]
-            sh "cp ${logDir}/xunit.xml ${targetDir}/${key}.xml"
+            sh "find ${logDir} -maxdepth 1 -type f -name xunit.xml -exec cp '{}' ${targetDir}/${key}.xml \\;"
             sh "tar -zcvf ${logDir}/${key}.tar.gz ${logDir}/*.log"
             sh "mkdir -p ${attachDir}/${key}"
             sh "cp ${logDir}/${key}.tar.gz ${attachDir}/${key}/"
