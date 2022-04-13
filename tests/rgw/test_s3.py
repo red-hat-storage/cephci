@@ -177,15 +177,11 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
             tests = "s3tests_boto3"
 
         cmd = f"{base_cmd} {extra_args} {tests}"
-        out, err = node.exec_command(cmd=cmd, timeout=3600)
-        log.info(out)
-        log.error(err)
+        return node.exec_command(cmd=cmd, long_running=True)
     except CommandFailed as e:
         log.warning("Received CommandFailed")
         log.warning(e)
         return 1
-
-    return 0
 
 
 def execute_teardown(cluster: Ceph, build: str) -> None:

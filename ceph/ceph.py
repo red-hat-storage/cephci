@@ -1414,27 +1414,27 @@ class CephNode(object):
         while end_time > datetime.datetime.now():
             try:
                 if channel.exit_status_ready():
-                    ec = channel.recv_exit_status()
-                    break
+                    logger.info(f"end-time: {datetime.datetime.now()}")
+                    return channel.recv_exit_status()
 
-                rl, wl, xl = select([channel], [], [channel], 4200)
+                r, w, e = select([channel], [], [channel])
 
-                if len(rl) > 0:
+                if r:
                     data = channel.recv(1024)
                     data = data.decode(errors="ignore")
                     logger.info(data)
 
-                if len(xl) > 0:
-                    data = channel.recv(1024)
+                if w:
+                    data = channel.recv_stderr(1024)
                     data = data.decode(errors="ignore")
                     logger.error(data)
+
             except socket.timeout as sock_err:
                 logger.error("socket.timeout doesn't give an error message")
                 raise SocketTimeoutException(sock_err)
         else:
+            logger.error("Allocated execution duration exceeded.")
             raise SocketTimeoutException("Timeout")
-        logger.info(f"end-time: {datetime.datetime.now()}")
-        return ec
 
     def exec_command(self, **kw):
         """
