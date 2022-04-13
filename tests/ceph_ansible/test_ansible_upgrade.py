@@ -156,7 +156,7 @@ def run(ceph_cluster, **kw):
             matched_short_names = ",".join(short_names)
         cmd += f" --limit {matched_short_names}"
 
-    out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+    rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     if rc != 0:
         LOG.error("Failed during upgrade (rc = {})".format(rc))
@@ -209,7 +209,7 @@ def run(ceph_cluster, **kw):
             "ansible-playbook -e ireallymeanit=yes -vvvv -i "
             "hosts infrastructure-playbooks/cephadm-adopt.yml".format(ansible_dir)
         )
-        out, rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
+        rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
         if rc != 0:
             LOG.error("Failed during cephadm adopt (rc = {})".format(rc))
@@ -290,8 +290,8 @@ def get_container_counts(ceph_cluster):
             crash, rc = node.exec_command(
                 sudo=True, cmd="docker ps |grep ceph-crash| wc -l"
             )
-        count = int(out.read().decode().rstrip())
-        crash_count = int(crash.read().decode().rstrip())
+        count = int(out.rstrip())
+        crash_count = int(crash.rstrip())
         count -= crash_count
         LOG.info("{} has {} containers running".format(node.shortname, count))
         container_counts.update({node.shortname: count})

@@ -222,8 +222,7 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"ceph fs subvolume authorized_list {fs_name} {subvolume_name} {subvolgroup_name}",
             )
-            output = out.read().decode().strip()
-            if client_name in output:
+            if client_name in out:
                 log.info("Client creation successful")
             else:
                 log.error("Client creation failed")
@@ -233,7 +232,7 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"ceph fs subvolume getpath {fs_name} {subvolume_name} {subvolgroup_name}",
             )
-            subvol_path = subvol_path.read().decode().strip()
+            subvol_path = subvol_path.strip()
             log.info(f"Testing kernel & fuse mount for {client_name}")
             fs_util.kernel_mount(
                 client,
@@ -316,8 +315,7 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"ceph fs subvolume authorized_list {fs_name} {subvolume_name} {subvolgroup_name}",
             )
-            output = out.read().decode().strip()
-            if client_name in output:
+            if client_name in out:
                 log.info("Client creation successful")
             else:
                 log.error("Client creation failed")
@@ -342,9 +340,7 @@ def run(ceph_cluster, **kw):
                 f"dd if={fuse_mount_dir}/file  of=~/file2 bs=10M count=10",
             ]
             for command in commands:
-                _, err = client[0].exec_command(
-                    sudo=True, cmd=command, long_running=True
-                )
+                err = client[0].exec_command(sudo=True, cmd=command, long_running=True)
                 if err:
                     log.error(f"Permissions set for {client_name} is not working")
                     return 1

@@ -59,7 +59,7 @@ def get_client_info(ceph_nodes, clients):
         if node.role == "mon":
             mon_node = node
             out, err = mon_node.exec_command(cmd="sudo hostname -I")
-            mon_node_ip = out.read().decode().rstrip("\n")
+            mon_node_ip = out.rstrip("\n")
             break
     for node in ceph_nodes:
         if node.role == "mds":
@@ -89,10 +89,9 @@ def auth_list(clients, mon_node):
             "osd 'allow rw pool=cephfs_data' -o /etc/ceph/ceph.client.%s.keyring"
             % (node.hostname, node.hostname)
         )
-        out, err = mon_node.exec_command(
+        keyring, err = mon_node.exec_command(
             sudo=True, cmd="cat /etc/ceph/ceph.client.%s.keyring" % (node.hostname)
         )
-        keyring = out.read().decode()
         key_file = node.remote_file(
             sudo=True,
             file_name="/etc/ceph/ceph.client.%s.keyring" % (node.hostname),
@@ -119,8 +118,7 @@ def fuse_mount(fuse_clients, mounting_dir):
                 cmd="sudo ceph-fuse -n client.%s %s" % (client.hostname, mounting_dir)
             )
             out, err = client.exec_command(cmd="mount")
-            mount_output = out.read().decode()
-            mount_output.split()
+            mount_output = out.split()
             log.info("Checking if fuse mount is is passed of failed:")
             if "fuse" in mount_output:
                 log.info("ceph-fuse mounting passed")
@@ -138,7 +136,6 @@ def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     check_sync_status, err = verify_io_on_site_node.exec_command(
         cmd="sudo radosgw-admin sync status"
     )
-    check_sync_status = check_sync_status.read().decode()
 
     # check for 'failed' or 'ERROR' in sync status.
     if "failed|ERROR" in check_sync_status:
@@ -146,7 +143,7 @@ def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
         sync_error_list, err = verify_io_on_site_node.exec_command(
             cmd="sudo radosgw-admin sync error list"
         )
-        log.error(err.read().decode())
+        log.error(err)
         raise Exception(sync_error_list)
     else:
         log.info("No errors or failures in sync status")
@@ -162,7 +159,6 @@ def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
             check_sync_status, err = verify_io_on_site_node.exec_command(
                 cmd="sudo radosgw-admin sync status"
             )
-            check_sync_status = check_sync_status.read().decode()
             if "behind" in check_sync_status or "recovering" in check_sync_status:
                 log.info(f"sync is still in progress. sleep for {delay}secs and retry")
             else:
@@ -175,6 +171,10 @@ def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
             raise Exception(
                 f"sync is still in progress. with {retry} retries and sleep of {delay}secs between each retry"
             )
+
+    # check metadata sync status
+    if "metadata is behind" in check_sync_status:
+        raise Exception("metadata sync is either in progress or stuck")
 
     # check status for complete sync
     if "data is caught up with source" in check_sync_status:
@@ -189,15 +189,14 @@ def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
             out, err = client.exec_command(
                 cmd="sudo ceph auth get-key client.%s" % (client.hostname)
             )
-            secret_key = out.read().decode().rstrip("\n")
+            secret_key = out.rstrip("\n")
             mon_node_ip = mon_node_ip.replace(" ", "")
             client.exec_command(
                 cmd="sudo mount -t ceph %s:6789:/ %s -o name=%s,secret=%s"
                 % (mon_node_ip, mounting_dir, client.hostname, secret_key)
             )
             out, err = client.exec_command(cmd="mount")
-            mount_output = out.read().decode()
-            mount_output.split()
+            mount_output = out.split()
             log.info("Checking if kernel mount is is passed of failed:")
             if "%s:6789:/" % (mon_node_ip) in mount_output:
                 log.info("kernel mount passed")
@@ -288,9 +287,8 @@ finally:
         )
         to_lock_code.write(to_lock_file)
         to_lock_code.flush()
-        out, err = client.exec_command(cmd="sudo python /home/cephuser/file_lock.py")
-        output = out.read().decode()
-        output.split()
+        output, err = client.exec_command(cmd="sudo python /home/cephuser/file_lock.py")
+        output = output.split()
         if "Errno 11" in output:
             log.info("File locking achieved, data is not corrupted")
         elif "locking" in output:
@@ -302,7 +300,7 @@ finally:
             cmd="sudo md5sum %sto_test_file_lock | awk '{print $1}'" % (mounting_dir)
         )
 
-        md5sum_file_lock.append(out.read().decode())
+        md5sum_file_lock.append(out)
 
     except Exception as e:
         log.error(e)
@@ -337,7 +335,7 @@ def mkdir_pinning(clients, range1, range2, dir_name, pin_val):
                     )
                 else:
                     print("Pin val not given")
-                print(out.read().decode())
+                print(out)
                 print(time.time())
             break
     except Exception as e:
@@ -374,18 +372,16 @@ def pinned_dir_io(clients, mds_fail_over, num_of_files, range1, range2):
             for num in range(range1, range2):
                 if mds_fail_over != "":
                     mds_fail_over(mds_nodes)
-                out, err = client.exec_command(
-                    cmd="sudo crefi -n %d %sdir_%d" % (num_of_files, mounting_dir, num)
+                rc = client.exec_command(
+                    cmd="sudo crefi -n %d %sdir_%d" % (num_of_files, mounting_dir, num),
+                    long_running=True,
                 )
-                rc = out.channel.recv_exit_status()
-                print(out.read().decode())
                 RC.append(rc)
                 print(time.time())
                 if rc == 0:
                     log.info("Client IO is going on,success")
                 else:
                     log.error("Client IO got interrupted")
-                    failure.update({client: out})
                     break
             break
 
@@ -939,8 +935,7 @@ def setup_cluster_access(cluster, target) -> None:
     ]
 
     for command, out_file in commands:
-        out, err = installer_node.exec_command(sudo=True, cmd=command)
-        file_ = out.read().decode()
+        file_, err = installer_node.exec_command(sudo=True, cmd=command)
         fh = target.remote_file(file_name=out_file, file_mode="w", sudo=True)
         fh.write(file_)
         fh.flush()

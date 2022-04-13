@@ -71,12 +71,29 @@ def get_resource_id(resource_name: str, response: Dict) -> str:
     Raises:
         ResourceNotFound    when there is a failure to retrieve the ID.
     """
+    return get_resource_details(resource_name, response)["id"]
+
+
+def get_resource_details(resource_name: str, response: Dict) -> Dict:
+    """
+    Returns the details for the provided resource_name from the given collection.
+
+    Args:
+        resource_name (str):    Name of the resource.
+        response (Dict):        DetailedResponse returned from the collections.
+
+    Returns:
+        Resource id (str)
+
+    Raises:
+        ResourceNotFound    when there is a failure to retrieve the ID.
+    """
     resource_url = response["first"]["href"]
     resource_list_name = re.search(r"v1/(.*?)\?", resource_url).group(1)
 
     for i in response[resource_list_name]:
         if i["name"] == resource_name:
-            return i["id"]
+            return i
 
     raise ResourceNotFound(f"Failed to retrieve the ID of {resource_name}.")
 
@@ -122,7 +139,7 @@ class CephVMNodeIBM:
             node (dict):
         """
         # CephVM attributes
-        self._subnet: list = list()
+        self._subnet: str = ""
         self._roles: list = list()
         self.node = None
 
@@ -199,6 +216,9 @@ class CephVMNodeIBM:
     @retry(ReadTimeout, tries=5, delay=15)
     def subnet(self) -> str:
         """Return the subnet information."""
+        if self._subnet:
+            return self._subnet
+
         subnet_details = self.service.get_subnet(
             self.node["primary_network_interface"]["subnet"]["id"]
         )
@@ -272,8 +292,9 @@ class CephVMNodeIBM:
             vpc_identity_model = dict({"id": vpc_id})
 
             subnets = self.service.list_subnets()
-            subnet_id = get_resource_id(network_name, subnets.get_result())
-            subnet_identity_model = dict({"id": subnet_id})
+            subnet = get_resource_details(network_name, subnets.get_result())
+            subnet_identity_model = dict({"id": subnet["id"]})
+            self._subnet = subnet["ipv4_cidr_block"]
 
             security_group = self.service.list_security_groups()
             security_group_id = get_resource_id(

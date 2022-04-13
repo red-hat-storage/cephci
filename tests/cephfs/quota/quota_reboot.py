@@ -86,7 +86,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} subvol_byte_incr_kernel subvolgroup_quota_byte_increase_1",
         )
-        kernel_subvol_path = subvol_path.read().decode().strip()
+        kernel_subvol_path = subvol_path.strip()
         fs_util.kernel_mount(
             [clients[0]],
             kernel_mounting_dir_1,
@@ -99,7 +99,7 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph fs subvolume getpath {default_fs} subvol_byte_incr_fuse subvolgroup_quota_byte_increase_1",
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-        fuse_subvol_path = subvol_path.read().decode().strip()
+        fuse_subvol_path = subvol_path.strip()
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,

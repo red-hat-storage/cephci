@@ -101,11 +101,11 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {fs_name} subvolume1 --group_name subvolume_group1",
         )
-        subvolume1_path = out.read().decode().rstrip()
+        subvolume1_path = out.rstrip()
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} subvolume2"
         )
-        subvolume2_path = out.read().decode().rstrip()
+        subvolume2_path = out.rstrip()
         commands = [
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --file-size 4 "
             f"--files 1000 --top {nfs_mounting_dir}{subvolume1_path}",
@@ -144,11 +144,11 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {fs_name} clone1 --group_name subvolume_group1",
         )
-        clone1_path = out.read().decode().rstrip()
+        clone1_path = out.rstrip()
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} clone2"
         )
-        clone2_path = out.read().decode().rstrip()
+        clone2_path = out.rstrip()
         commands = [
             f"diff -r {nfs_mounting_dir}{subvolume1_path} {nfs_mounting_dir}{subvolume1_path}/.snap/_snap1*",
             f"diff -r {nfs_mounting_dir}{subvolume2_path} {nfs_mounting_dir}{subvolume2_path}/.snap/_snap2*",

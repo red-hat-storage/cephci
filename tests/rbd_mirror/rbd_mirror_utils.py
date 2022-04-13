@@ -48,7 +48,7 @@ class RbdMirror:
             if kw.get("ceph_args", True):
                 cmd = cmd + self.ceph_args
 
-            out, err = node.exec_command(
+            out = node.exec_command(
                 sudo=True,
                 cmd=cmd,
                 long_running=kw.get("long_running", False),
@@ -56,7 +56,9 @@ class RbdMirror:
             )
 
             if kw.get("output", False):
-                return out.read().decode()
+                if isinstance(out, tuple):
+                    return out[0]
+                return out
 
             return 0
 
@@ -64,8 +66,7 @@ class RbdMirror:
             raise
 
     def copy_file(self, file_name, src, dest):
-        out, err = src.exec_command(sudo=True, cmd="cat {}".format(file_name))
-        contents = out.read().decode()
+        contents, err = src.exec_command(sudo=True, cmd="cat {}".format(file_name))
         key_file = dest.remote_file(sudo=True, file_name=file_name, file_mode="w")
         key_file.write(contents)
         key_file.flush()
@@ -619,11 +620,10 @@ class RbdMirror:
         Returns:
             service_name --> str
         """
-        out, rc = self.ceph_rbdmirror.exec_command(
+        service_name, rc = self.ceph_rbdmirror.exec_command(
             sudo=True,
             cmd=f"systemctl list-units --all | grep {service_name} | awk {{'print $1'}}",
         )
-        service_name = out.read().decode()
         log.info(f"Service name : {service_name} ")
         return service_name
 
@@ -653,7 +653,7 @@ class RbdMirror:
         """
         cmd = f"rbd --image {imagespec} info"
         try:
-            self.exec_cmd(sudo=True, cmd=cmd, output=True)
+            self.exec_cmd(sudo=True, cmd=cmd)
 
         except CommandFailed as failed:
             if "No such file" in failed.args[0]:
@@ -665,7 +665,7 @@ class RbdMirror:
 
     def resize_image(self, imagespec, size):
         """
-        Resize given provided image
+        Resize provided image
         Args:
             imagespec: image-spec of the image to be resized
             size: size of the image to be updated to
@@ -678,7 +678,7 @@ class RbdMirror:
         log.info(f"Resizing image {imagespec} to size {size}")
         cmd = f"rbd resize {imagespec} -s {size} --allow-shrink"
         try:
-            self.exec_cmd(sudo=True, cmd=cmd, output=True)
+            self.exec_cmd(sudo=True, cmd=cmd)
 
         except CommandFailed as resize_failed:
             if "Read-only file system" in resize_failed.args[0]:

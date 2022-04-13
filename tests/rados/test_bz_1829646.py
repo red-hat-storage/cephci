@@ -202,8 +202,7 @@ def get_mon_db_size(mon_node):
     log.info(
         f"Collecting the size of the DB on node: {mon_node.hostname} by executing the command : {cmd}"
     )
-    out, err = mon_node.exec_command(cmd=cmd)
-    output = out.read().decode()
+    output, err = mon_node.exec_command(cmd=cmd)
     regex = r"\s*([\d]*)[M|G]\s+[\w\W]*store.db"
     match = re.search(regex, output)
     size = match.groups()[0] if match else exit("could not collect the size of DB")
@@ -226,8 +225,7 @@ def get_status_from_ceph_report(mon_node, operation=None):
     log.info(
         f"Collecting the status of the cluster from node: {mon_node.hostname} by executing the command : {cmd}"
     )
-    out, err = mon_node.exec_command(cmd=cmd)
-    output = out.read().decode()
+    output, err = mon_node.exec_command(cmd=cmd)
     status_json = json.loads(output)
     if operation.lower() == "osdmap":
         status_dict = {

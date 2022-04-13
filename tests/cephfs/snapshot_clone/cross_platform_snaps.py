@@ -80,7 +80,7 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph fs subvolume getpath {default_fs} subvol_cross_platform_snapshot"
             f" subvol_cross_platform_snapshot_1",
         )
-        subvol_path = subvol_path.read().decode().strip()
+        subvol_path = subvol_path.strip()
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fs_util.fuse_mount(
             [client1],

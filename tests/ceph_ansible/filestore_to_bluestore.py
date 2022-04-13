@@ -14,7 +14,7 @@ def run(**kw):
     installer_node = kw["ceph_cluster"].get_nodes(role="installer")[0]
     for cnode in ceph_nodes:
         if cnode.role == "osd":
-            out, err = installer_node.exec_command(
+            rc = installer_node.exec_command(
                 cmd="cd {ansible_dir};ansible-playbook -vvvv"
                 " infrastructure-playbooks/{playbook} -e ireallymeanit=yes"
                 " -i hosts --limit {osd_daemon_to_migrate}".format(
@@ -31,7 +31,7 @@ def run(**kw):
         ),
     )
 
-    if err == 0:
+    if rc == 0:
         log.info("ansible-playbook filestore-to-bluestore.yml successful")
         return 0
 

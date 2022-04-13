@@ -114,7 +114,6 @@ def run(ceph_cluster, **kwargs) -> int:
             sudo=True, cmd="ceph config get mon mon_allow_pool_delete --format json"
         )
 
-        out = out.read().decode()
         if not json.loads(out):
             nodes[0].exec_command(
                 sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"

@@ -71,12 +71,12 @@ def run(ceph_cluster, **kw):
         c1_out, c1_result = client1.exec_command(
             sudo=True, cmd="ceph fs get cephfs -f json"
         )
-        decoded_out = json.loads(c1_out.read().decode())
+        decoded_out = json.loads(c1_out)
         number_of_up_temp = decoded_out["mdsmap"]["up"]
         number_of_up = len(number_of_up_temp)
         number_of_mds_max = decoded_out["mdsmap"]["max_mds"]
         c1_out2, result2 = client1.exec_command(sudo=True, cmd="ceph -s -f json")
-        decoded_out2 = json.loads(c1_out2.read().decode())
+        decoded_out2 = json.loads(c1_out2)
         number_of_standby = decoded_out2["fsmap"]["up:standby"]
         log.info(number_of_standby)
         counts = number_of_standby
@@ -91,12 +91,12 @@ def run(ceph_cluster, **kw):
             kernel_output, kernel_result = client1.exec_command(
                 sudo=True, cmd="ceph fs get cephfs -f json"
             )
-            kernel_decoded = json.loads(kernel_output.read().decode())
+            kernel_decoded = json.loads(kernel_output)
             current_max_mds = kernel_decoded["mdsmap"]["max_mds"]
             kernel_output2, kernel_result2 = client1.exec_command(
                 sudo=True, cmd="ceph -s -f json"
             )
-            kernel_decoded2 = json.loads(kernel_output2.read().decode())
+            kernel_decoded2 = json.loads(kernel_output2)
             current_standby = kernel_decoded2["fsmap"]["up:standby"]
             if current_max_mds != number_of_mds_max:
                 return 1
@@ -115,12 +115,12 @@ def run(ceph_cluster, **kw):
             kernel_output, kernel_result = client1.exec_command(
                 sudo=True, cmd="ceph fs get cephfs -f json"
             )
-            kernel_decoded = json.loads(kernel_output.read().decode())
+            kernel_decoded = json.loads(kernel_output)
             current_max_mds = kernel_decoded["mdsmap"]["max_mds"]
             kernel_output2, kernel_result2 = client1.exec_command(
                 sudo=True, cmd="ceph -s -f json"
             )
-            kernel_decoded2 = json.loads(kernel_output2.read().decode())
+            kernel_decoded2 = json.loads(kernel_output2)
             current_standby = kernel_decoded2["fsmap"]["up:standby"]
             if current_max_mds != number_of_mds_max:
                 return 1

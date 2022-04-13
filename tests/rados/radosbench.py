@@ -57,5 +57,4 @@ def run(**kw):
      {cleanup}".format(
         name=name, block=block, pool=pool_name, time=time, op=op, cleanup=cleanup
     )
-    output, rc = client.exec_command(cmd=rados_bench, long_running=True)
-    return rc
+    return client.exec_command(cmd=rados_bench, long_running=True)

@@ -148,8 +148,6 @@ def enable_ports(node: CephNode, port: int = 5000) -> None:
 
     try:
         out, err = node.exec_command(sudo=True, cmd="firewall-cmd --state")
-
-        out = out.read().decode()
         if out.lower() != "running":
             return
     except CommandFailed:

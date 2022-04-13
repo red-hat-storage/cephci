@@ -59,7 +59,7 @@ class CephBaremetalNode:
                 command="id -u cephuser",
             )
 
-            if err.read().decode():
+            if err:
                 self._create_user(name="cephuser")
             else:
                 LOG.debug("Reusing existing user account of cephuser.")

@@ -263,10 +263,9 @@ def setup_subscription_manager(
         except BaseException:  # noqa
             if datetime.datetime.now() - starttime > timeout:
                 try:
-                    out, err = ceph.exec_command(
+                    rhsm_log, err = ceph.exec_command(
                         cmd="cat /var/log/rhsm/rhsm.log", timeout=120
                     )
-                    rhsm_log = out.read().decode()
                 except BaseException:  # noqa
                     rhsm_log = "No Log Available"
                 raise RuntimeError(

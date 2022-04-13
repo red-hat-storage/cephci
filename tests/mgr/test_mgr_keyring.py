@@ -22,8 +22,7 @@ def run(**kw):
 
     host_name = client.hostname
     cmd = "getfacl /etc/ceph/ceph.mgr.{}.keyring".format(host_name)
-    out = client.exec_command(cmd=cmd, long_running=True)
-    out = str(out)
+    out, err = client.exec_command(cmd=cmd)
 
     if "user::r--" in out and "group::---" in out and "other::---" in out:
         rc = 0

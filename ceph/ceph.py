@@ -3,6 +3,8 @@ import json
 import pickle
 import random
 import re
+import socket
+from datetime import timedelta
 from distutils.version import LooseVersion
 from select import select
 from time import sleep, time
@@ -18,6 +20,10 @@ from utility.log import Log
 from utility.utils import custom_ceph_config
 
 logger = Log(__name__)
+
+
+class SocketTimeoutException(Exception):
+    pass
 
 
 class ResourceNotFoundError(Exception):
@@ -564,7 +570,7 @@ class Ceph(object):
             "sudo ceph {role} metadata -f json-pretty".format(role=role)
         )
 
-        return json.loads(out.read().decode())
+        return json.loads(out)
 
     def get_osd_metadata(self, osd_id, client=None):
         """
@@ -638,8 +644,7 @@ class Ceph(object):
             cmd = f"cephadm shell -- {cmd}"
 
         out, err = client.exec_command(cmd=cmd, sudo=True)
-        out_json = out.read().decode()
-        ceph_status_json = json.loads(out_json)
+        ceph_status_json = json.loads(out)
 
         # Support extraction of OSDmap attributes for 3.x, 4.x & 5.x
         osd_status = ceph_status_json["osdmap"].get(
@@ -685,10 +690,10 @@ class Ceph(object):
 
         timeout = datetime.timedelta(seconds=timeout)
         starttime = datetime.datetime.now()
-        lines = None
         pending_states = ["peering", "activating", "creating"]
         valid_states = ["active+clean"]
 
+        out = str()
         while datetime.datetime.now() - starttime <= timeout:
             cmd = "ceph -s"
             if cluster_name is not None:
@@ -696,15 +701,14 @@ class Ceph(object):
             if pacific:
                 cmd = f"cephadm shell -- {cmd}"
 
-            out, err = client.exec_command(cmd=cmd, sudo=True)
-            lines = out.read().decode()
+            out, _ = client.exec_command(cmd=cmd, sudo=True)
 
-            if not any(state in lines for state in pending_states):
-                if all(state in lines for state in valid_states):
+            if not any(state in out for state in pending_states):
+                if all(state in out for state in valid_states):
                     break
             sleep(5)
-        logger.info(lines)
-        if not all(state in lines for state in valid_states):
+        logger.info(out)
+        if not all(state in out for state in valid_states):
             logger.error("Valid States are not found in the health check")
             return 1
 
@@ -718,8 +722,8 @@ class Ceph(object):
             if pacific:
                 cmd = f"cephadm shell -- {cmd}"
 
-            out, err = client.exec_command(cmd=cmd, sudo=True)
-            mons = json.loads(out.read().decode())
+            out, _ = client.exec_command(cmd=cmd, sudo=True)
+            mons = json.loads(out)
             logger.info(
                 f"Expected MONS: {self.ceph_demon_stat['mon']}, MON quorum : {mons}"
             )
@@ -729,7 +733,7 @@ class Ceph(object):
                 return 1
         logger.info("Expected MONs is in quorum")
 
-        if "HEALTH_ERR" in lines:
+        if "HEALTH_ERR" in out:
             logger.error("HEALTH in ERROR STATE")
             return 1
         return 0
@@ -1034,8 +1038,7 @@ class Ceph(object):
             "ceph-volume simple scan {osd_data} --stdout".format(osd_data=osd_data),
             check_ec=False,
         )
-        simple_scan = out.read().decode()
-        simple_scan = json.loads(simple_scan[simple_scan.index("{") : :])
+        simple_scan = json.loads(out[out.index("{") : :])
         return simple_scan.get("data").get("path")
 
     def get_osd_data_partition(self, osd_id, client=None):
@@ -1282,7 +1285,7 @@ class CephNode(object):
     @property
     def distro_info(self):
         out, err = self.exec_command(cmd="cat /etc/os-release")
-        info = out.read().decode().split("\n")
+        info = out.split("\n")
         info = filter(None, info)
         info_dict = {}
         for each in info:
@@ -1350,7 +1353,7 @@ class CephNode(object):
         self.exec_command(cmd="ls / ; uptime ; date")
         self.ssh_transport().set_keepalive(15)
         out, err = self.exec_command(cmd="hostname")
-        self.hostname = out.read().strip().decode()
+        self.hostname = out.strip()
         shortname = self.hostname.split(".")
         self.shortname = shortname[0]
         self.exec_command(cmd=f"sudo hostname {self.shortname}")
@@ -1374,7 +1377,7 @@ class CephNode(object):
         out, _ = self.exec_command(
             cmd="/sbin/ifconfig eth0 | grep 'inet ' | awk '{ print $2}'"
         )
-        self.internal_ip = out.read().strip().decode()
+        self.internal_ip = out.strip()
 
     def set_eth_interface(self, eth_interface):
         """
@@ -1391,8 +1394,47 @@ class CephNode(object):
             cmd="test -f ~/.ssh/id_rsa.pub && rm -f ~/.ssh/id*", check_ec=False
         )
         self.exec_command(cmd="ssh-keygen -b 2048 -f ~/.ssh/id_rsa -t rsa -q -N ''")
-        out1, _ = self.exec_command(cmd="cat ~/.ssh/id_rsa.pub")
-        self.id_rsa_pub = out1.read().decode()
+        self.id_rsa_pub, _ = self.exec_command(cmd="cat ~/.ssh/id_rsa.pub")
+
+    def long_running(self, **kw):
+        """Method to execute long running command.
+
+        Args:
+            **kw: execute command configuration
+
+        Returns:
+            ec: exit status
+        """
+        ssh = self.rssh if kw.get("sudo") else self.ssh
+        logger.info("long running command --")
+        channel = ssh().get_transport().open_session()
+        channel.exec_command(kw["cmd"])
+        end_time = datetime.datetime.now() + timedelta(seconds=3600)
+
+        while end_time > datetime.datetime.now():
+            try:
+                if channel.exit_status_ready():
+                    ec = channel.recv_exit_status()
+                    break
+
+                rl, wl, xl = select([channel], [], [channel], 4200)
+
+                if len(rl) > 0:
+                    data = channel.recv(1024)
+                    data = data.decode(errors="ignore")
+                    logger.info(data)
+
+                if len(xl) > 0:
+                    data = channel.recv(1024)
+                    data = data.decode(errors="ignore")
+                    logger.error(data)
+            except socket.timeout as sock_err:
+                logger.error("socket.timeout doesn't give an error message")
+                raise SocketTimeoutException(sock_err)
+        else:
+            raise SocketTimeoutException("Timeout")
+        logger.info(f"end-time: {datetime.datetime.now()}")
+        return ec
 
     def exec_command(self, **kw):
         """
@@ -1412,72 +1454,51 @@ class CephNode(object):
                 check_ec: False will run the command and not wait for exit code
 
         """
+        if kw.get("long_running"):
+            return self.long_running(**kw)
 
-        if kw.get("sudo"):
-            ssh = self.rssh
-        else:
-            ssh = self.ssh
+        timeout = kw["timeout"] if kw.get("timeout") else 600
+        ssh = self.rssh() if kw.get("sudo") else self.ssh()
 
-        if kw.get("timeout"):
-            timeout = kw["timeout"]
-        else:
-            timeout = 120
+        logger.info(
+            f"Running command {kw['cmd']} on {self.ip_address} timeout {timeout}"
+        )
 
-        logger.info("Running command %s on %s", kw["cmd"], self.ip_address)
-        stdin = None
-        stdout = None
-        stderr = None
         if self.run_once:
             self.ssh_transport().set_keepalive(15)
             self.rssh_transport().set_keepalive(15)
 
-        if kw.get("long_running"):
-            logger.info("long running command --")
-            channel = ssh().get_transport().open_session()
-            channel.exec_command(kw["cmd"])
-            read = ""
-            while True:
-                if channel.exit_status_ready():
-                    ec = channel.recv_exit_status()
-                    break
-
-                rl, wl, xl = select([channel], [], [channel], 4200)
-
-                if len(rl) > 0:
-                    data = channel.recv(1024)
-                    data = data.decode(errors="ignore")
-                    logger.info(data)
-                    read += data
-
-                if len(xl) > 0:
-                    data = channel.recv(1024)
-                    data = data.decode(errors="ignore")
-                    logger.error(data)
-                    read += data
-
-            return read, ec
-
+        stdout = str()
+        stderr = str()
+        _stdout = None
+        _stderr = None
         try:
-            stdin, stdout, stderr = ssh().exec_command(kw["cmd"], timeout=timeout)
+            _, _stdout, _stderr = ssh.exec_command(kw["cmd"], timeout=timeout)
+            for line in _stdout:
+                if line:
+                    stdout += line
+            for line in _stderr:
+                if line:
+                    stderr += line
+        except socket.timeout as sock_err:
+            logger.error("socket.timeout doesn't give an error message")
+            ssh.close()
+            raise SocketTimeoutException(sock_err)
         except SSHException as e:
             logger.error("SSHException during cmd: %s", str(e))
 
         exit_status = None
-        if stdout is not None:
-            exit_status = stdout.channel.recv_exit_status()
+        if _stdout is not None:
+            exit_status = _stdout.channel.recv_exit_status()
 
         self.exit_status = exit_status
         if kw.get("check_ec", True):
             if exit_status == 0:
                 logger.info("Command completed successfully")
             else:
-                logger.error("Error %s during cmd, timeout %d", exit_status, timeout)
+                logger.error(f"Error {exit_status} during cmd, timeout {timeout}")
                 raise CommandFailed(
-                    kw["cmd"]
-                    + " Error:  "
-                    + str(stderr.read().decode())
-                    + " "
-                    + str(self.ip_address)
+                    f"{kw['cmd']} Error:  {str(stderr)} {str(self.ip_address)}"
                 )
             return stdout, stderr
         else:
@@ -1634,7 +1655,7 @@ class CephNode(object):
             )
         )
         out, err = self.exec_command(cmd="sudo ls /sys/class/net | grep -v lo")
-        eth_interface_list = out.read().strip().decode().split("\n")
+        eth_interface_list = out.strip().split("\n")
         for eth_interface in eth_interface_list:
             try:
                 for ceph_node in ceph_node_list:
@@ -1877,7 +1898,6 @@ class CephNode(object):
 
     def chk_lvm_exists(self):
         out, rc = self.exec_command(cmd="lsblk")
-        out = out.read().decode()
         if "lvm" in out:
             return 0
         else:
@@ -2143,7 +2163,7 @@ class CephInstaller(CephObject):
                 ansible_dir=self.ansible_dir
             ),
         )
-        return yaml.safe_load(out.read().decode())
+        return yaml.safe_load(out)
 
     def get_installed_ceph_versions(self):
         """
@@ -2156,7 +2176,7 @@ class CephInstaller(CephObject):
             out, rc = self.exec_command(cmd="rpm -qa | grep ceph")
         else:
             out, rc = self.exec_command(sudo=True, cmd="apt-cache search ceph")
-        return out.read().decode()
+        return out
 
     def write_inventory_file(self, inventory_config, file_name="hosts"):
         """
@@ -2182,7 +2202,7 @@ class CephInstaller(CephObject):
                 ansible_dir=self.ansible_dir, inventory_file=file_name
             ),
         )
-        out = out.read().decode().rstrip("\n")
+        out = out.rstrip("\n")
         out = re.sub(r"\]+", "]", out)
         out = re.sub(r"\[+", "[", out)
         host_file = self.remote_file(
@@ -2205,7 +2225,7 @@ class CephInstaller(CephObject):
             sudo=True,
             cmd="cat {ansible_dir}/hosts".format(ansible_dir=self.ansible_dir),
         )
-        return out.readlines()
+        return out.splitlines()
 
     def setup_ansible_site_yml(self, build, containerized):
         """
@@ -2283,7 +2303,7 @@ class CephInstaller(CephObject):
             out, rc = self.exec_command(cmd="dpkg -s ceph-ansible")
         else:
             out, rc = self.exec_command(cmd="rpm -qa | grep ceph-ansible")
-        output = out.read().decode().rstrip()
+        output = out.rstrip()
         logger.info("Installed ceph-ansible: {version}".format(version=output))
 
     def add_iscsi_settings(self, test_data):
@@ -2313,7 +2333,6 @@ class CephInstaller(CephObject):
             out, err = self.exec_command(
                 sudo=True, cmd="ceph mgr module enable restful"
             )
-            out, err = out.read().decode(), err.read().decode()
             if err:
                 raise CommandFailed(err)
             logger.info(out)
@@ -2322,7 +2341,6 @@ class CephInstaller(CephObject):
             out, err = self.exec_command(
                 sudo=True, cmd="ceph restful create-self-signed-cert"
             )
-            out, err = out.read().decode().strip(), err.read().decode()
             if err:
                 raise CommandFailed(err)
             logger.info(out)
@@ -2333,7 +2351,7 @@ class CephInstaller(CephObject):
                 sudo=True, cmd="ceph restful create-key {user}".format(user=user)
             )
 
-            return {"user": user, "password": cred.read().decode().strip()}
+            return {"user": user, "password": cred.strip()}
         except CommandFailed as err:
             logger.error(err.args)
         return False

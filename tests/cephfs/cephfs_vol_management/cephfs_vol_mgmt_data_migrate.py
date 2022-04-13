@@ -99,7 +99,7 @@ def run(ceph_cluster, **kw):
                 [clients[0]],
                 kernel_mounting_dir_1,
                 ",".join(mon_node_ips),
-                sub_dir=f"{subvol_path.read().decode().strip()}",
+                sub_dir=f"{subvol_path.strip()}",
                 extra_params=f",fs={default_fs}",
             )
             log.info("Get the path of subvolume on EC filesystem")
@@ -111,7 +111,7 @@ def run(ceph_cluster, **kw):
             fs_util.fuse_mount(
                 [clients[0]],
                 fuse_mounting_dir_1,
-                extra_params=f" -r {subvol_path.read().decode().strip()} --client_fs cephfs-ec",
+                extra_params=f" -r {subvol_path.strip()} --client_fs cephfs-ec",
             )
         else:
             kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
@@ -125,7 +125,7 @@ def run(ceph_cluster, **kw):
                 [clients[0]],
                 kernel_mounting_dir_1,
                 ",".join(mon_node_ips),
-                sub_dir=f"{subvol_path.read().decode().strip()}",
+                sub_dir=f"{subvol_path.strip()}",
             )
             log.info("Get the path of subvolume on EC filesystem")
             fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_EC_1/"
@@ -136,7 +136,7 @@ def run(ceph_cluster, **kw):
             fs_util.fuse_mount(
                 [clients[0]],
                 fuse_mounting_dir_1,
-                extra_params=f" -r {subvol_path.read().decode().strip()}",
+                extra_params=f" -r {subvol_path.strip()}",
             )
 
         run_ios(

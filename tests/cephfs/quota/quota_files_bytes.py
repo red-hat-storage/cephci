@@ -142,7 +142,7 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
+            sub_dir=f"{subvol_path.strip()}",
         )
 
         subvol_path, rc = clients[0].exec_command(
@@ -154,7 +154,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,
-            extra_params=f" -r {subvol_path.read().decode().strip()}",
+            extra_params=f" -r {subvol_path.strip()}",
         )
 
         fs_util.set_quota_attrs(clients[0], 200, 1000000, kernel_mounting_dir_1)

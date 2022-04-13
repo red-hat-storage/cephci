@@ -106,22 +106,19 @@ def run(ceph_cluster, **kw):
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
         out, rc = client1.exec_command(sudo=True, cmd=f"ls {nfs_mounting_dir}/volumes/")
-        output = out.read().decode().split()
-        if "subvolgroup_1" not in output:
+        if "subvolgroup_1" not in out:
             raise CommandFailed("Subvolume group 1 creation failed")
-        if "subvolgroup_2" not in output:
+        if "subvolgroup_2" not in out:
             raise CommandFailed("Subvolume group 2 creation failed")
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ls {nfs_mounting_dir}/volumes/subvolgroup_1"
         )
-        output = out.read().decode().split()
-        if "subvol_1" not in output:
+        if "subvol_1" not in out:
             raise CommandFailed("Subvolume creation in subvolume group failed")
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ls {nfs_mounting_dir}/volumes/_nogroup"
         )
-        output = out.read().decode().split()
-        if "subvol_2" not in output:
+        if "subvol_2" not in out:
             raise CommandFailed("Subvolume creation in default subvolume group failed")
         commands = [
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 --files"
