@@ -240,7 +240,7 @@ class FsUtils(object):
                 cmd="ceph orch ps --daemon_type=mds --format json",
                 check_ec=False,
             )
-            mds_hosts = json.loads(out.read().decode())
+            mds_hosts = json.loads(out)
             for mds in mds_hosts:
                 log.info(mds)
                 if process_name in mds["daemon_id"] and ispresent:
