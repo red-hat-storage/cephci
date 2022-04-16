@@ -13,7 +13,7 @@ payload
       - test2.xml
   |- attachments
       - test1
-         - test1.zip
+         - test1.tar.gz
          - failed_test.err
 
 config.json:
@@ -164,9 +164,9 @@ def process(xmlObj, rportal):
             process_testcase(xmlObj, testcase, tsuite)
         log.info("\nFinished testcases")
         fqpath = os.path.join(xmlObj._configs.payload_dir, "attachments")
-        if os.path.exists(f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.zip"):
+        if os.path.exists(f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.tar.gz"):
             rplog.add_attachment(
-                tsuite.item_id, f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.zip"
+                tsuite.item_id, f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.tar.gz"
             )
         tsuite.finish()
 
