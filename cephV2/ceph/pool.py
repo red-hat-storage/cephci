@@ -1,4 +1,4 @@
-from ceph.cephV2.osd import Osd
+from cephV2.ceph.osd import Osd
 from utility.log import Log
 
 log = Log(__name__)

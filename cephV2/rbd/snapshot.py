@@ -1,4 +1,4 @@
-from ceph.rbd.rbd import Rbd
+from cephV2.rbd.rbd import Rbd
 from tests.rbd.exceptions import ProtectSnapError, SnapCreateError
 from utility.log import Log
 

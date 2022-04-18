@@ -1,10 +1,10 @@
-from ceph.rbd.rbd import Rbd
+from cephV2.rbd.mirror.pool import Pool
 from utility.log import Log
 
 log = Log(__name__)
 
 
-class Mirror(Rbd):
+class Peer(Pool):
     def __init__(self, nodes):
         self.nodes = nodes
-        super(Mirror, self).__init__(nodes=nodes)
+        super(Peer, self).__init__(nodes=nodes)

@@ -5,7 +5,7 @@ sub-commands of ceph would inherit Ceph class from this module.
 
 """
 
-from ceph.cli import CephCLI
+from cephV2.cli import CephCLI
 from utility.log import Log
 
 log = Log(__name__)

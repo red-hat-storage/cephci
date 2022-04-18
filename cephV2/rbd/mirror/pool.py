@@ -1,4 +1,4 @@
-from ceph.rbd.mirror.mirror import Mirror
+from cephV2.rbd.mirror.mirror import Mirror
 from utility.log import Log
 
 log = Log(__name__)
