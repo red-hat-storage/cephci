@@ -1,5 +1,4 @@
 from cephV2.rbd.rbd import Rbd
-from tests.rbd.exceptions import ProtectSnapError, SnapCreateError
 from utility.log import Log
 
 log = Log(__name__)
@@ -22,8 +21,7 @@ class Snapshot(Rbd):
         pool_name = args["pool_name"]
         image_name = args["image_name"]
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
-        if not self.exec_cmd(cmd=cmd):
-            raise SnapCreateError("Creating the snapshot failed")
+        return self.exec_cmd(cmd=cmd)
 
     def protect(self, args):
         """
@@ -33,8 +31,7 @@ class Snapshot(Rbd):
         """
         snap_spec = args["snapshot_spec"]
         cmd = f"rbd snap protect {snap_spec}"
-        if self.exec_cmd(cmd=cmd):
-            raise ProtectSnapError("Protecting the snapshot Failed")
+        return self.exec_cmd(cmd=cmd)
 
     def unprotect():
         pass

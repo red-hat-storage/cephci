@@ -9,12 +9,15 @@ class CopyFile:
         """Copy the file from one instance to another.
 
         Copy the specified file from source to destination instance.
+        Note: This method is intended for small files for now.
 
         Usage
-        - copy_file: True
-          source: ceph-rbd1
-          dest: ceph-rbd2
-          path: ./dummy_file
+        - copy_file:
+          args:
+            copy_file: True
+            source: ceph-rbd1
+            dest: ceph-rbd2
+            path: ./dummy_file
         """
 
         cluster = kw["ceph_cluster_dict"][args["source"]]
@@ -24,7 +27,7 @@ class CopyFile:
                 source_node = node
                 break
 
-        cmd = f"sleep 10;cat {args['path']}"
+        cmd = f"cat {args['path']}"
         contents, err = source_node.exec_command(sudo=True, cmd=cmd)
 
         cluster = kw["ceph_cluster_dict"][args["dest"]]

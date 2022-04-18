@@ -24,8 +24,6 @@ class Bootstrap(Peer):
             pool_name: Name of the pool of which peer is to be bootstrapped.
             site_name: Name of the site for rbd-mirror
                        name of both sites should be the same
-            file_path: Provide the file name if key needs to be stored in
-                       a file instead of returning.
 
         Returns:
             out: Output after execution of command
@@ -35,8 +33,7 @@ class Bootstrap(Peer):
         cmd = f'rbd mirror pool peer bootstrap create {args["pool_name"]}'
         if args.get("site_name", None):
             cmd = cmd + f" --site-name {args['site_name']}"
-        if args.get("file_path", None):
-            cmd = cmd + f" > {args['file_path']}"
+
         return self.exec_cmd(cmd)
 
     def key_import(self, args):
@@ -59,4 +56,4 @@ class Bootstrap(Peer):
             cmd = cmd + f" --site-name {args['site_name']}"
 
         cmd = cmd + f" --token-path {args['file_path']}"
-        self.exec_cmd(cmd)
+        return self.exec_cmd(cmd)

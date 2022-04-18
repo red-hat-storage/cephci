@@ -14,12 +14,12 @@ import yaml
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
-from ceph.cephV2.pool import Pool
+from cephV2.ceph.pool import Pool
 from ceph.parallel import parallel
-from ceph.rbd.feature import Feature
-from ceph.rbd.mirror.mirror import Mirror
-from ceph.rbd.rbd import Rbd
-from ceph.rbd.snapshot import Snapshot
+from cephV2.rbd.feature import Feature
+from cephV2.rbd.mirror.mirror import Mirror
+from cephV2.rbd.rbd import Rbd
+from cephV2.rbd.snapshot import Snapshot
 from ceph.util_map import UTIL_MAP
 from utility.log import Log
 
