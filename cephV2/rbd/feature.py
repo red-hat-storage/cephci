@@ -20,7 +20,7 @@ class Feature(Rbd):
             feature: Name of the feature that needs to be enabled on the image.
         """
         cmd = f'rbd feature enable {args["pool_name"]}/{args["image_name"]} {args["feature"]}'
-        self.exec_cmd(cmd)
+        return self.exec_cmd(cmd)
 
     def disable(self):
         pass

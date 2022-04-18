@@ -35,4 +35,4 @@ class CreateDummyFile:
         cmd = f"dd if=/dev/urandom of={args['path']} bs=4 count="
         cmd = cmd + str(args["size"]) if args.get("size", None) else "5M"
 
-        target.exec_command(cmd=cmd, long_running=args.get("long_running", False))
+        return target.exec_command(cmd=cmd, long_running=args.get("long_running", False))

@@ -31,7 +31,7 @@ class Rbd(CephCLI):
         )
         if args.get("features", None):
             cmd = cmd + f' --image-features {args["features"]}'
-        self.exec_cmd(cmd)
+        return self.exec_cmd(cmd)
 
     def clone(self, args):
         """CLI wrapper for 'rbd clone'
@@ -43,7 +43,7 @@ class Rbd(CephCLI):
             destination_spec: destination_pool/clone image name.
         """
         cmd = f'rbd clone {args["source_spec"]} {args["destination_spec"]}'
-        self.exec_cmd(cmd)
+        return self.exec_cmd(cmd)
 
     def bench():
         pass
@@ -62,4 +62,4 @@ class Rbd(CephCLI):
         image_name = args["image_name"]
         cmd = f"rbd import {filename} {pool_name}/{image_name}"
 
-        self.exec_cmd(cmd=cmd, long_running=True)
+        return self.exec_cmd(cmd=cmd, long_running=True)
