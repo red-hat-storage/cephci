@@ -1406,9 +1406,10 @@ class CephNode(object):
             ec: exit status
         """
         ssh = self.rssh if kw.get("sudo") else self.ssh
-        logger.info("long running command --")
+        cmd = kw["cmd"]
+        logger.info(f"long running command -- {cmd}")
         channel = ssh().get_transport().open_session()
-        channel.exec_command(kw["cmd"])
+        channel.exec_command(cmd)
         end_time = datetime.datetime.now() + timedelta(seconds=3600)
 
         while end_time > datetime.datetime.now():
