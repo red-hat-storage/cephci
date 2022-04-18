@@ -4,7 +4,7 @@ This module has all subcommands of the command -
 rbd mirror pool peer bootsrap
 """
 
-from ceph.rbd.mirror.peer import Peer
+from cephV2.rbd.mirror.peer import Peer
 from utility.log import Log
 
 log = Log(__name__)
