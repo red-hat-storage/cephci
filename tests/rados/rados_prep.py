@@ -29,9 +29,8 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
-    ceph_nodes = kw.get("ceph_nodes")
-    out, err = ceph_nodes[0].exec_command(cmd="uuidgen")
-    uuid = out.read().strip().decode()[0:5]
+    out, err = cephadm.shell(["uuidgen"])
+    uuid = out.split("-")[0]
 
     if config.get("ec_pool"):
         ec_config = config.get("ec_pool")
