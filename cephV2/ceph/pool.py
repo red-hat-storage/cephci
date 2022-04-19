@@ -1,13 +1,12 @@
-from cephV2.ceph.osd import Osd
 from utility.log import Log
 
 log = Log(__name__)
 
 
-class Pool(Osd):
-    def __init__(self, nodes):
-        self.nodes = nodes
-        super(Pool, self).__init__(nodes=nodes)
+class Pool:
+    def __init__(self, parent_base_cmd):
+        self.base_cmd = parent_base_cmd + " pool"
+
 
     def create(self, args):
         """CLI wrapper for 'ceph osd pol create command
@@ -20,5 +19,5 @@ class Pool(Osd):
             out: output after execution of command
             err: error after execution of command
         """
-        cmd = f'ceph osd pool create {args["pool_name"]}'
+        cmd = self.base_cmd + f' create {args["pool_name"]}'
         return self.exec_cmd(cmd)

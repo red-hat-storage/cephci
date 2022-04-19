@@ -19,7 +19,7 @@ from ceph.parallel import parallel
 from cephV2.rbd.feature import Feature
 from cephV2.rbd.mirror.mirror import Mirror
 from cephV2.rbd.rbd import Rbd
-from cephV2.rbd.snapshot import Snapshot
+from cephV2.rbd.snap import Snapshot
 from ceph.util_map import UTIL_MAP
 from utility.log import Log
 

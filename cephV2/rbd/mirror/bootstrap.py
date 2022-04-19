@@ -4,16 +4,14 @@ This module has all subcommands of the command -
 rbd mirror pool peer bootsrap
 """
 
-from cephV2.rbd.mirror.peer import Peer
 from utility.log import Log
 
 log = Log(__name__)
 
 
-class Bootstrap(Peer):
-    def __init__(self, nodes):
-        self.nodes = nodes
-        super(Bootstrap, self).__init__(nodes=nodes)
+class Bootstrap:
+    def __init__(self, parent_base_cmd):
+        self.base_cmd = parent_base_cmd + " bootstrap"
 
     def create(self, args):
         """Wrapper for pool peer bootstrap create.
@@ -30,7 +28,7 @@ class Bootstrap(Peer):
                  Out would contain the key.
             err: Error after execution of command
         """
-        cmd = f'rbd mirror pool peer bootstrap create {args["pool_name"]}'
+        cmd = self.base_cmd + f' create {args["pool_name"]}'
         if args.get("site_name", None):
             cmd = cmd + f" --site-name {args['site_name']}"
 
@@ -48,7 +46,7 @@ class Bootstrap(Peer):
             file_path: The file name in which the key is stored
         """
 
-        cmd = f'rbd mirror pool peer bootstrap import {args["poolname"]} {args["filepath"]}'
+        cmd = self.base_cmd + f' import {args["poolname"]} {args["filepath"]}'
         if args.get("direction", None):
             cmd = cmd + f" --direction {args['direction']}"
 

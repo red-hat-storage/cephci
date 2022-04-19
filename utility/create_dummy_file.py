@@ -26,13 +26,13 @@ class CreateDummyFile:
             long_running: True or False - Required for bug files
         """
         nodes = kw["ceph_cluster_dict"][args["cluster_name"]]
-        for node in nodes:
-            if node.role == "client":
-                target = node
-                break
+
+        target = nodes.get_ceph_object("client")
 
         log.info(f"Creating a dummy file at provided {args['path']}")
         cmd = f"dd if=/dev/urandom of={args['path']} bs=4 count="
         cmd = cmd + str(args["size"]) if args.get("size", None) else "5M"
 
-        return target.exec_command(cmd=cmd, long_running=args.get("long_running", False))
+        return target.exec_command(
+            cmd=cmd, long_running=args.get("long_running", False)
+        )

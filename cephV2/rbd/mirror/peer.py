@@ -1,10 +1,10 @@
-from cephV2.rbd.mirror.pool import Pool
+from cephV2.rbd.mirror.bootstrap import Bootstrap
 from utility.log import Log
 
 log = Log(__name__)
 
 
-class Peer(Pool):
-    def __init__(self, nodes):
-        self.nodes = nodes
-        super(Peer, self).__init__(nodes=nodes)
+class Peer:
+    def __init__(self, parent_base_cmd):
+        self.base_cmd = parent_base_cmd + " peer"
+        self.bootstrap = Bootstrap(self.base_cmd)
