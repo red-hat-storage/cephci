@@ -11,15 +11,13 @@ from utility.log import Log
 log = Log(__name__)
 
 
-class Image(Mirror):
-    def __init__(self, nodes):
-        self.nodes = nodes
-        self.base_cmd = "rbd mirror image"
-        super(Image, self).__init__(nodes=nodes)
+class Image:
+    def __init__(self, parent_base_cmd):
+        self.base_cmd = parent_base_cmd + " image"
 
     def demote(self, args):
         """Wrapper for rbd mirror image demote.
-        
+
         Usage:
         - args:
             imagespec: poolname/[namespace]/imagename
@@ -34,7 +32,7 @@ class Image(Mirror):
 
     def disable(self, args):
         """Wrapper for rbd mirror image disable.
-        
+
         Usage:
         - args:
             imagespec: poolname/[namespace]/imagename
@@ -49,7 +47,7 @@ class Image(Mirror):
 
     def enable(self, args):
         """Wrapper for rbd mirror image demote.
-        
+
         Usage:
         - args:
             imagespec: poolname/[namespace]/imagename

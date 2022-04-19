@@ -1,13 +1,11 @@
-from cephV2.rbd.rbd import Rbd
 from utility.log import Log
 
 log = Log(__name__)
 
 
-class Snapshot(Rbd):
-    def __init__(self, nodes):
-        self.nodes = nodes
-        super(Snapshot, self).__init__(nodes=nodes)
+class Snap:
+    def __init__(self, parent_base_cmd):
+        self.base_cmd = parent_base_cmd + " snap"
 
     def create(self, args):
         """
@@ -20,7 +18,8 @@ class Snapshot(Rbd):
         snap_name = args["snap_name"]
         pool_name = args["pool_name"]
         image_name = args["image_name"]
-        cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
+
+        cmd = self.base_cmd + f" create {pool_name}/{image_name}@{snap_name}"
         return self.exec_cmd(cmd=cmd)
 
     def protect(self, args):
@@ -30,7 +29,7 @@ class Snapshot(Rbd):
             snap_name : snapshot name in pool/image@snap format
         """
         snap_spec = args["snapshot_spec"]
-        cmd = f"rbd snap protect {snap_spec}"
+        cmd = self.base_cmd + f" protect {snap_spec}"
         return self.exec_cmd(cmd=cmd)
 
     def unprotect():

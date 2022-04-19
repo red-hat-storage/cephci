@@ -1,13 +1,21 @@
 from cephV2.cli import CephCLI
+from cephV2.rbd.feature import Feature
+from cephV2.rbd.mirror.mirror import Mirror
+from cephV2.rbd.pool import Pool
+from cephV2.rbd.snap import Snap
 from utility.log import Log
 
 log = Log(__name__)
 
 
-class Rbd(CephCLI):
-    def __init__(self, nodes):
-        self.nodes = nodes
-        super(Rbd, self).__init__(nodes=nodes)
+class Rbd:
+    def __init__(self):
+        self.base_cmd = "rbd"
+
+        self.feature = Feature(self.base_cmd)
+        self.mirror = Mirror(self.base_cmd)
+        self.pool = Pool(self.base_cmd)
+        self.snap = Snap(self.base_cmd)
 
     def create(self, args):
         """CLI wrapper for `rbd create`
@@ -27,8 +35,10 @@ class Rbd(CephCLI):
         """
 
         cmd = (
-            f'rbd create {args["pool_name"]}/{args["image_name"]} --size {args["size"]}'
+            self.base_cmd
+            + f' create {args["pool_name"]}/{args["image_name"]} --size {args["size"]}'
         )
+
         if args.get("features", None):
             cmd = cmd + f' --image-features {args["features"]}'
         return self.exec_cmd(cmd)
@@ -42,7 +52,7 @@ class Rbd(CephCLI):
             source_spec: Source snapshot spec (pool/image@snap).
             destination_spec: destination_pool/clone image name.
         """
-        cmd = f'rbd clone {args["source_spec"]} {args["destination_spec"]}'
+        cmd = self.base_cmd + f' clone {args["source_spec"]} {args["destination_spec"]}'
         return self.exec_cmd(cmd)
 
     def bench():
@@ -60,6 +70,6 @@ class Rbd(CephCLI):
         filename = args["file_name"]
         pool_name = args["pool_name"]
         image_name = args["image_name"]
-        cmd = f"rbd import {filename} {pool_name}/{image_name}"
+        cmd = self.base_cmd + f" import {filename} {pool_name}/{image_name}"
 
         return self.exec_cmd(cmd=cmd, long_running=True)
