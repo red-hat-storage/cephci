@@ -1,0 +1,119 @@
+#===============================================================================================
+#-------------------------------------
+#-----    Smoke Test suite     ------
+#-------------------------------------
+# Conf: conf/pacific/cephadm/tier-0.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#    - Ceph role Service deployment,
+#    - Configure client for RGW and RBD systems
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # Testing stage
+  - test:
+      name: Executes RGW, RBD and FS operations
+      desc: Run object, block and filesystem basic operations parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
+        - test:
+            config:
+              branch: master
+              script: cli_generic.sh
+              script_path: qa/workunits/rbd
+            desc: "Executing upstream RBD CLI Generic scenarios"
+            module: test_rbd.py
+            name: 1_rbd_cli_generic
+            polarion-id: CEPH-83574241
+        - test:
+            abort-on-fail: false
+            desc: "cephfs basic operations"
+            module: cephfs_basic_tests.py
+            name: cephfs-basics
+            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
