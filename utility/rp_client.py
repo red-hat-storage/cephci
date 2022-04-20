@@ -208,4 +208,6 @@ if __name__ == "__main__":
         "config_file": args.get("--config_file"),
         "payload_dir": args.get("--payload_dir"),
     }
-    upload_logs(arguments)
+    # upload_logs(arguments)
+    launch_id_list = {'launches': [3443]}
+    print(launch_id_list)
