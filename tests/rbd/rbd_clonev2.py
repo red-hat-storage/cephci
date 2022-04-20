@@ -49,6 +49,10 @@ def run(**kw):
         cmd = "ceph osd set-require-min-compat-client mimic"
         rbd.exec_cmd(cmd=cmd)
         rbd.create_clone(snap_name, pool, clone)
+        cmd = "ceph config set client rbd_move_to_trash_on_remove true"
+        rbd.exec_cmd(cmd=cmd)
+        rbd.remove_image(pool, image)
+        rbd.trash(pool, image)
 
     except RbdBaseException as error:
         print(error.message)

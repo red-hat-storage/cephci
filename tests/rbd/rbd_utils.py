@@ -4,7 +4,12 @@ import random
 import string
 from time import sleep
 
-from rbd.exceptions import CreateFileError, ImportFileError, ProtectSnapError
+from rbd.exceptions import (
+    CreateFileError,
+    ImageNotFoundError,
+    ImportFileError,
+    ProtectSnapError,
+)
 
 from ceph.ceph import CommandFailed
 from utility.log import Log
@@ -194,6 +199,25 @@ class Rbd:
         """
         cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
         self.exec_cmd(cmd=cmd)
+
+    def remove_image(self, pool_name, image_name):
+        """
+        Remove image from the specified pool
+        Args:
+            pool_name: name of the pool
+            image_name: name of the image
+
+        Returns:
+
+        """
+        self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
+
+    def trash(self, pool_name, image_name):
+        out = self.exec_cmd(cmd=f"rbd trash list {pool_name} --format json ")
+        image_info = json.loads(out)
+        out_of = image_info.get(image_name)
+        if not out_of:
+            raise ImageNotFoundError(" Deleted Image not found in the Trash")
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):

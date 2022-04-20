@@ -44,3 +44,7 @@ class IOonSecondaryError(RrbdMirrorBaseException):
     """Raised when IO is attempted on secondary image"""
 
     pass
+
+
+class ImageNotFoundError(RbdBaseException):
+    """Raised when Image is not found"""
