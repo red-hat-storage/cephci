@@ -1,0 +1,75 @@
+---
+tests:
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: "install ceph pre-requisites"
+
+  - test:
+      abort-on-fail: true
+      config:
+        ansi_config:
+          alertmanager_container_image: "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6"
+          ceph_conf_overrides:
+            client:
+              rgw crypt require ssl: false
+              rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+            mon:
+              mon_allow_pool_delete: true
+          ceph_origin: distro
+          ceph_repository: rhcs
+          ceph_stable: true
+          ceph_stable_release: nautilus
+          ceph_stable_rh_storage: true
+          ceph_test: true
+          copy_admin_key: true
+          dashboard_admin_password: p@ssw0rd
+          dashboard_admin_user: admin
+          dashboard_enabled: true
+          fetch_directory: ~/fetch
+          grafana_admin_password: p@ssw0rd
+          grafana_admin_user: admin
+          grafana_container_image: "registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4"
+          journal_size: 1024
+          node_exporter_container_image: "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6"
+          osd_scenario: lvm
+          prometheus_container_image: "registry.redhat.io/openshift4/ose-prometheus:v4.6"
+      desc: "ceph deployment using site.yaml(RPM) playbook with lvm scenario"
+      destroy-cluster: false
+      module: test_ansible.py
+      name: "ceph ansible"
+      polarion-id: CEPH-83571467
+
+  # Testing stage
+  - test:
+      name: Executes RGW, RBD and FS operations
+      desc: Run object, block and filesystem basic operations parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              branch: nautilus
+              script_path: qa/workunits/rbd
+              script: cli_generic.sh
+            desc: Executig upstream RBD CLI Generic scenarios
+            module: test_rbd.py
+            name: 1_rbd_cli_generic
+            polarion-id: CEPH-83574241
+
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
+
+        - test:
+            name: cephfs-basics
+            module: cephfs_basic_tests.py
+            polarion-id: CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295
+            desc: cephfs basic operations
+            abort-on-fail: false
