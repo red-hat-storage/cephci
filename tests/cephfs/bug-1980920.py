@@ -63,14 +63,13 @@ def run(ceph_cluster, **kw):
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
         )
-        for i in range(250):
-            client1.exec_command(
-                sudo=True,
-                cmd=f"dd if=/dev/zero of={kernel_mounting_dir_1}"
-                + str(i)
-                + ".txt bs=1 count=0 seek=5M",
-                long_running=True,
-            )
+        client1.exec_command(
+            sudo=True,
+            cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
+            f"{kernel_mounting_dir_1}",
+            long_running=True,
+        )
         log.info("Checking Pre-requisites")
         fs_util.create_snapshot(
             client1, "cephfs", subvolume_name, f"subvol_1_snap{subvolume_name}"
@@ -90,15 +89,16 @@ def run(ceph_cluster, **kw):
             output1 = json.loads(out1)
             output2 = output1["status"]["state"]
             log.info(new_subvolume_name + " status: " + str(output2))
-            result, error = client1.exec_command(
-                sudo=True,
-                cmd=f"ceph fs subvolume rm cephfs {new_subvolume_name} --force",
-                check_ec=False,
-            )
-            log.info("Subvolume Remove Executed")
-            if "clone in-progress" in error:
-                log.info("Clone is in-progress as expected")
             if output2 == "in-progress":
+                result, error = client1.exec_command(
+                    sudo=True,
+                    cmd=f"ceph fs subvolume rm cephfs {new_subvolume_name} --force",
+                    check_ec=False,
+                )
+                log.info("Subvolume Remove Executed")
+                error_result = error
+                if "clone in-progress" in error_result:
+                    log.info("Clone is in-progress as expected")
                 client1.exec_command(
                     sudo=True, cmd=f"ceph fs clone cancel cephfs {new_subvolume_name}"
                 )
@@ -111,6 +111,9 @@ def run(ceph_cluster, **kw):
                 fs_util.remove_subvolume(
                     client1, "cephfs", new_subvolume_name, force=True
                 )
+        fs_util.remove_snapshot(
+            client1, "cephfs", subvolume_name, f"subvol_1_snap{subvolume_name}"
+        )
         fs_util.remove_subvolume(client1, "cephfs", subvolume_name)
         return 0
     except Exception as e:
