@@ -59,12 +59,17 @@ def get_ansible_conf(config, version, is_repo_present, is_ceph_conf_present):
     install_config["ansi_config"]["ceph_docker_registry"] = container_image.split(
         "/", 1
     )[0]
+    install_config["ceph_docker_registry"] = container_image.split("/", 1)[0]
     install_config["ansi_config"]["ceph_docker_image"] = container_image.split("/", 1)[
         1
     ].split(":")[0]
+    install_config["ceph_docker_image"] = container_image.split("/", 1)[1].split(":")[0]
     install_config["ansi_config"]["ceph_docker_image_tag"] = container_image.split(
         "/", 1
     )[1].split(":")[1]
+    install_config["ceph_docker_image_tag"] = container_image.split("/", 1)[1].split(
+        ":"
+    )[1]
 
     return install_config
 
@@ -93,6 +98,8 @@ def get_cephadm_upgrade_config(config, version):
 
     release_info = get_release_repo(version)
     config["container_image"] = release_info["image"]["ceph"]
+    platform = config["rhbuild"].split("-", 1)[1]
+    config["base_url"] = release_info["composes"][platform]
     return config
 
 
@@ -113,6 +120,7 @@ def run(ceph_cluster, **kw):
 
     for cluster_name, cluster in ceph_cluster_dict.items():
 
+        LOG.info(f"Starting Ceph cluster deployment for version: {install_version}")
         if install_version >= 5.0:
             config["steps"] = config["suite_setup"]["steps"]
             rc = test_cephadm.run(
@@ -148,6 +156,7 @@ def run(ceph_cluster, **kw):
             if rc != 0:
                 return rc
 
+        LOG.info("Starting Ceph cluster upgrade")
         for version in upgrade_versions:
             upgrade_steps = paths[version]["upgrade_steps"]
             for steps in upgrade_steps:
@@ -156,10 +165,13 @@ def run(ceph_cluster, **kw):
                     prev_version = (
                         upgrade_versions[index - 1] if index > 0 else install_version
                     )
+                    LOG.info(
+                        f"Upgrading Ceph cluster from version {prev_version} to version {version}"
+                    )
                     if version >= 5.0 and prev_version >= 5.0:
-                        if config.get("paths").get(install_version).get("config"):
-                            config = (
-                                config.get("paths").get(install_version).get("config")
+                        if config.get("paths").get(version).get("config"):
+                            config.update(
+                                config.get("paths").get(version).get("config")
                             )
                         else:
                             config = get_cephadm_upgrade_config(config, version)
