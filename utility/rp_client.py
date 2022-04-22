@@ -45,8 +45,10 @@ those files will get attached to the suite and if there are any .err files we ar
 test cases based on the name of the test case.
 If the .zip file not present in the attachments. for those we are just updating the results and skipping the attachments
 """
+import datetime
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
@@ -192,13 +194,45 @@ def process_testcase(xunit_xml, testcase, tsuite):
         with open(
             f"{fqpath}/{tsuite.xml_name}/{tcase.tc_name.replace(' ', '_')}_0.err", "r"
         ) as file:
-            error = file.readline()
-            while error:
-                tcase.rplog.add_message(
-                    message=error, level="ERROR", test_item_id=tcase.test_item_id
+            log_entries = list(generate_log_events(file))
+            for i in log_entries:
+                timestamp = int(
+                    datetime.datetime.strptime(
+                        i["date"], "%Y-%m-%d %H:%M:%S,%f"
+                    ).strftime("%s")
                 )
-                error = file.readline()
+                tcase.rplog.add_message(
+                    message=i["text"],
+                    level="ERROR",
+                    test_item_id=tcase.test_item_id,
+                    msg_time=str(int(timestamp * 1000)),
+                )
     tcase.finish()
+
+
+def generate_log_events(file_handler):
+    log_events = {}
+    for line in file_handler:
+        if line.startswith(match_start_line(line)):
+            if log_events:
+                yield log_events
+            log_events = {
+                "date": line.split("__")[0][:23],
+                "type": line.split("-", 5)[3],
+                "text": line.split("-", 5)[-1],
+            }
+        else:
+            log_events["text"] += line
+    yield log_events
+
+
+def match_start_line(line):
+    matched = re.match(r"\d\d\d\d-\d\d-\d\d\ \d\d:\d\d:\d\d", line)
+    if matched:
+        matchThis = matched.group()
+    else:
+        matchThis = "NONE"
+    return matchThis
 
 
 if __name__ == "__main__":
