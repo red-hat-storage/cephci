@@ -511,7 +511,7 @@ class FsUtils(object):
                 uid : str
                 gid : str
                 mode : str
-                namespace-isolated : boolean
+                namespace_isolated : boolean
                 check_ec = True
         Returns:
             Returns the cmd_out and cmd_rc for Create cmd
@@ -529,7 +529,7 @@ class FsUtils(object):
             subvolume_cmd += f" --gid {kwargs.get('gid')}"
         if kwargs.get("mode"):
             subvolume_cmd += f" --mode {kwargs.get('mode')}"
-        if kwargs.get("namespace-isolated"):
+        if kwargs.get("namespace_isolated"):
             subvolume_cmd += " --namespace-isolated"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=subvolume_cmd, check_ec=kwargs.get("check_ec", True)
