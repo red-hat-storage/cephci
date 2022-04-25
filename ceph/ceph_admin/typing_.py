@@ -30,7 +30,8 @@ class CephAdmProtocol(Protocol):
         args: List[str],
         base_cmd_args: Dict = None,
         check_status: bool = True,
-        timeout: int = 300,
+        timeout: int = 600,
+        long_running: bool = False,
     ):
         ...
 
@@ -45,7 +46,8 @@ class OrchProtocol(CephAdmProtocol, Protocol):
         args: List[str],
         base_cmd_args: Dict = None,
         check_status: bool = True,
-        timeout: int = 300,
+        timeout: int = 600,
+        long_running: bool = False,
     ):
         ...
 
