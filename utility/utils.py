@@ -4,6 +4,7 @@ import os
 import random
 import re
 import smtplib
+import subprocess
 import time
 import traceback
 from email.mime.multipart import MIMEMultipart
@@ -1203,6 +1204,7 @@ class ReportPortal:
         """Closes the Report Portal execution run."""
         self.client.finish_launch(end_time=timestamp())
         self.client.terminate()
+        tfacon(self.client.get_launch_ui_id())
 
     @rp_deco
     def log(self, message: str, level="INFO") -> None:
@@ -1216,6 +1218,45 @@ class ReportPortal:
             None
         """
         self.client.log(time=timestamp(), message=message, level=level)
+
+
+def tfacon(launch_id):
+    """
+    Connects the launch with TFA and gives the predictions for the launch
+    It will fail silently
+    Arguments:
+         launch_id : launch_id that has been created
+    """
+    cfg = get_cephci_config()
+    tfacon_cfg = cfg.get("tfacon")
+    if not tfacon_cfg:
+        return
+    project_name = tfacon_cfg.get("project_name")
+    auth_token = tfacon_cfg.get("auth_token")
+    platform_url = tfacon_cfg.get("platform_url")
+    tfa_url = tfacon_cfg.get("tfa_url")
+    connector_type = tfacon_cfg.get("connector_type")
+    cmd = (
+        f"tfacon run --auth-token {auth_token} "
+        f"--connector-type {connector_type} "
+        f"--platform-url {platform_url} "
+        f"--project-name {project_name} "
+        f"--tfa-url {tfa_url} "
+        f"--launch-id {launch_id}"
+    )
+    log.info(cmd)
+    p1 = subprocess.Popen(
+        cmd,
+        shell=True,
+        stdin=None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    result, result_err = p1.communicate()
+    log.info(result.decode("utf-8"))
+    if p1.returncode != 0:
+        log.warning("Unable to get the TFA anaylsis for the results")
+        log.warning(result)
 
 
 def install_start_kafka(rgw_node, cloud_type):
