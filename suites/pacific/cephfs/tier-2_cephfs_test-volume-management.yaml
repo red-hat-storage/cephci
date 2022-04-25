@@ -19,6 +19,7 @@
 # CEPH-83574163 - cephfs_vol_mgmt_invalid_pool_layout
 # CEPH-83574190 - Volume default and different permission test
 # CEPH-83574192 - Subvolume creation with invalid pool_layout
+# CEPH-83574187 - Subvolume creation with isolated_namespace option
 #===============================================================================================
 tests:
   - test:
@@ -258,4 +259,11 @@ tests:
       polarion-id: CEPH-83574192
       desc: subvolume_creation_invalid_pool_layout
       abort-on-fail: true
+  - test:
+      name: subvolume_isolated_namespace
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_isolated_namespace.py
+      polarion-id: CEPH-83574187
+      desc: subvolume_isolated_namespace
+      abort-on-fail: true
+
 
