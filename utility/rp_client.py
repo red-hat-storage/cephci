@@ -57,6 +57,7 @@ from docopt import docopt
 from rp_utils.preproc import PreProcClient
 from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
+from utils import tfacon
 
 log = logging.getLogger(__name__)
 doc = """
@@ -108,6 +109,7 @@ def upload_logs(args):
         launch.finish()
     return_obj["launches"] = rportal.launches.list
     log.info("RETURN OBJECT: %s", return_obj)
+    tfacon(launch.launch_id)
     return return_obj
 
 
