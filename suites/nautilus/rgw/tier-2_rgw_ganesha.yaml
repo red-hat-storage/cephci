@@ -80,6 +80,7 @@ tests:
         script-name: test_on_nfs_io.py
         config-file-name: test_on_nfs_io_move.yaml
         nfs-version: 4  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           basedir_count: 8
           subdir_count: 3
@@ -139,6 +140,7 @@ tests:
         script-name: test_on_nfs_io.py
         config-file-name: test_on_nfs_io_move.yaml
         nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           basedir_count: 8
           subdir_count: 3
