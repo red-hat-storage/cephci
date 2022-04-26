@@ -191,23 +191,24 @@ def run(ceph_cluster, **kw):
                             is_repo_present = (
                                 True if config.get("container_image") else False
                             )
-                        upgrade_config = get_ansible_conf(
-                            config, version, is_repo_present, False
+                        container_config = get_ansible_conf(
+                            config, prev_version, is_repo_present, False
                         )
                         if not ceph_cluster.containerized:
                             rc = switch_rpm_to_container.run(
                                 ceph_cluster=ceph_cluster_dict[cluster_name],
                                 ceph_nodes=ceph_cluster_dict[cluster_name],
-                                config=upgrade_config,
+                                config=container_config,
                                 test_data=kw.get("test_data"),
                                 ceph_cluster_dict=ceph_cluster_dict,
                                 clients=kw.get("clients"),
                             )
                             if rc != 0:
                                 return rc
-                            upgrade_config["ansi_config"][
-                                "containerized_deployment"
-                            ] = True
+                        upgrade_config = get_ansible_conf(
+                            config, version, is_repo_present, False
+                        )
+                        upgrade_config["ansi_config"]["containerized_deployment"] = True
                         rc = test_ansible_upgrade.run(
                             ceph_cluster=ceph_cluster_dict[cluster_name],
                             ceph_nodes=ceph_cluster_dict[cluster_name],
