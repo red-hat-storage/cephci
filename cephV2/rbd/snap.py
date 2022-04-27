@@ -4,8 +4,9 @@ log = Log(__name__)
 
 
 class Snap:
-    def __init__(self, parent_base_cmd):
+    def __init__(self, parent_base_cmd, node):
         self.base_cmd = parent_base_cmd + " snap"
+        self.node = node
 
     def create(self, args):
         """
@@ -20,7 +21,7 @@ class Snap:
         image_name = args["image_name"]
 
         cmd = self.base_cmd + f" create {pool_name}/{image_name}@{snap_name}"
-        return self.exec_cmd(cmd=cmd)
+        return self.node.exec_command(cmd=cmd)
 
     def protect(self, args):
         """
@@ -30,7 +31,7 @@ class Snap:
         """
         snap_spec = args["snapshot_spec"]
         cmd = self.base_cmd + f" protect {snap_spec}"
-        return self.exec_cmd(cmd=cmd)
+        return self.node.exec_command(cmd=cmd)
 
     def unprotect():
         pass

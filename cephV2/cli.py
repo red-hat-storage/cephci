@@ -1,13 +1,5 @@
 class CephCLI:
-    def __init__(self, nodes) -> None:
-        self.ceph_client = None
-
-        # Identifying Client node
-        for node in nodes:
-            if node.role == "client":
-                self.ceph_client = node
-                break
-
+    @staticmethod
     def exec_cmd(self, **kw):
         """
         Executes command in client node
@@ -18,6 +10,10 @@ class CephCLI:
             out: output after execution of command
             err: error after execution of command
         """
-        node = kw.pop("node", self.ceph_client)
-        out, err = node.exec_command(**kw)
-        return out.read().decode(), err.read().decode()
+
+        node_role = kw["node_role"]
+        node = kw["node"].get_ceph_object(node_role)
+
+        return node.exec_command(
+            cmd=kw["cmd"], long_running=kw.get("long_running", False)
+        )

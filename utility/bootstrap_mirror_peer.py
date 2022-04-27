@@ -1,8 +1,5 @@
-from ceph.ceph_admin import CephAdmin
-from cephV2.rbd.mirror.bootstrap import Bootstrap
+from cephV2.rbd.rbd import Rbd
 from utility.log import Log
-from utility.copy_file import CopyFile
-from cephV2.rbd.mirror.bootstrap import Bootstrap
 
 log = Log(__name__)
 
@@ -27,7 +24,7 @@ class BootstrapMirrorPeer:
 
         cluster = kw["ceph_cluster_dict"][args["primary"]]
 
-        bootstrap_instance = Bootstrap(cluster)
+        bootstrap_instance = Rbd(cluster)
 
         arg = {}
         arg["pool_name"] = args["pool_name"]
@@ -38,7 +35,9 @@ class BootstrapMirrorPeer:
         cmd = f"echo {out} > token_file"
 
         cluster = kw["ceph_cluster_dict"][args["secondary"]]
-        bootstrap_instance = Bootstrap(cluster)
+        cluster.get_ceph_object("client").exec_command(cmd)
+
+        bootstrap_instance = Rbd(cluster)
 
         arg["file_path"] = args["file_path"]
 

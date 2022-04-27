@@ -10,8 +10,9 @@ log = Log(__name__)
 
 
 class Bootstrap:
-    def __init__(self, parent_base_cmd):
+    def __init__(self, parent_base_cmd, node):
         self.base_cmd = parent_base_cmd + " bootstrap"
+        self.node = node
 
     def create(self, args):
         """Wrapper for pool peer bootstrap create.
@@ -32,7 +33,7 @@ class Bootstrap:
         if args.get("site_name", None):
             cmd = cmd + f" --site-name {args['site_name']}"
 
-        return self.exec_cmd(cmd)
+        return self.node.exec_command(cmd=cmd)
 
     def key_import(self, args):
         """Wrapper for pool peer bootstrap import.
@@ -54,4 +55,4 @@ class Bootstrap:
             cmd = cmd + f" --site-name {args['site_name']}"
 
         cmd = cmd + f" --token-path {args['file_path']}"
-        return self.exec_cmd(cmd)
+        return self.node.exec_command(cmd=cmd)

@@ -5,6 +5,8 @@ log = Log(__name__)
 
 
 class Peer:
-    def __init__(self, parent_base_cmd):
+    def __init__(self, parent_base_cmd, node):
         self.base_cmd = parent_base_cmd + " peer"
-        self.bootstrap = Bootstrap(self.base_cmd)
+        self.node = node
+
+        self.bootstrap = Bootstrap(self.base_cmd, node)

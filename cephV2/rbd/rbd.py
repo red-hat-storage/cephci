@@ -1,4 +1,3 @@
-from cephV2.cli import CephCLI
 from cephV2.rbd.feature import Feature
 from cephV2.rbd.mirror.mirror import Mirror
 from cephV2.rbd.pool import Pool
@@ -9,13 +8,14 @@ log = Log(__name__)
 
 
 class Rbd:
-    def __init__(self):
+    def __init__(self, node):
         self.base_cmd = "rbd"
+        self.node = node
 
-        self.feature = Feature(self.base_cmd)
-        self.mirror = Mirror(self.base_cmd)
-        self.pool = Pool(self.base_cmd)
-        self.snap = Snap(self.base_cmd)
+        self.feature = Feature(self.base_cmd, node)
+        self.mirror = Mirror(self.base_cmd, node)
+        self.pool = Pool(self.base_cmd, node)
+        self.snap = Snap(self.base_cmd, node)
 
     def create(self, args):
         """CLI wrapper for `rbd create`
@@ -33,15 +33,14 @@ class Rbd:
                        separate EC pool.
                        Note: allow_ec_overwrites must be set on the EC pool.
         """
-
         cmd = (
             self.base_cmd
             + f' create {args["pool_name"]}/{args["image_name"]} --size {args["size"]}'
         )
 
         if args.get("features", None):
-            cmd = cmd + f' --image-features {args["features"]}'
-        return self.exec_cmd(cmd)
+            cmd = cmd + f' --image-feature {args["features"]}'
+        return self.node.exec_command(cmd=cmd)
 
     def clone(self, args):
         """CLI wrapper for 'rbd clone'
@@ -53,7 +52,7 @@ class Rbd:
             destination_spec: destination_pool/clone image name.
         """
         cmd = self.base_cmd + f' clone {args["source_spec"]} {args["destination_spec"]}'
-        return self.exec_cmd(cmd)
+        return self.node.exec_command(cmd=cmd)
 
     def bench():
         pass
@@ -72,4 +71,4 @@ class Rbd:
         image_name = args["image_name"]
         cmd = self.base_cmd + f" import {filename} {pool_name}/{image_name}"
 
-        return self.exec_cmd(cmd=cmd, long_running=True)
+        return self.node.exec_command(cmd=cmd, long_running=True)

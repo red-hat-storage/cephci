@@ -5,9 +5,11 @@ log = Log(__name__)
 
 
 class Pool:
-    def __init__(self, parent_base_cmd):
+    def __init__(self, parent_base_cmd, node):
         self.base_cmd = parent_base_cmd + " pool"
-        self.peer = Peer(self.base_cmd)
+        self.node = node
+
+        self.peer = Peer(self.base_cmd, node)
 
     def demote(self):
         pass

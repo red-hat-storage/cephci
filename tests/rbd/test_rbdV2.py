@@ -14,25 +14,19 @@ import yaml
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
-from cephV2.ceph.pool import Pool
 from ceph.parallel import parallel
-from cephV2.rbd.feature import Feature
-from cephV2.rbd.mirror.mirror import Mirror
-from cephV2.rbd.rbd import Rbd
-from cephV2.rbd.snap import Snapshot
 from ceph.util_map import UTIL_MAP
+from cephV2.ceph.ceph import Ceph
+from cephV2.rbd.rbd import Rbd
 from utility.log import Log
 
 log = Log(__name__)
 
 
-CLASS_MAP = dict(
+ROOT_COMMAND_MAP = dict(
     {
-        "RbdMirror": Mirror,
-        "Snapshot": Snapshot,
-        "Rbd": Rbd,
-        "Pool": Pool,
-        "Feature": Feature,
+        "rbd": Rbd,
+        "ceph": Ceph,
     }
 )
 
@@ -50,11 +44,12 @@ def operator(test_config, step_config, **kw):
     Returns:
         0 on success or 1 for failures
     """
-    if step_config.get("method") == "shell":
-        cephadm = CephAdmin(kw["ceph_cluster_dict"], test_config)
+
+    if step_config.get("command") == "shell":
+        cephadm = CephAdmin(cluster=kw["ceph_cluster_dict"], **test_config)
         cephadm.shell(args=step_config["args"])
 
-    elif step_config.get("method", None) is None:
+    elif step_config.get("command") is None:
         util = list(step_config)[0]
         if UTIL_MAP.get(util, None) is None:
             log.error(f"Utility {util} has not been implemented yet")
@@ -63,17 +58,22 @@ def operator(test_config, step_config, **kw):
         UTIL_MAP[util].run(kw, step_config["args"])
 
     else:
-        # maintain dictionary to map to classes based on service
-        # instantiate class
-        cluster_name = step_config.get("cluster_name", None)
+        # Extract where to run
+        cluster_name = step_config.get("cluster_name")
         ceph_nodes = (
             kw["ceph_cluster_dict"][cluster_name] if cluster_name else kw["ceph_nodes"]
         )
-        instance = CLASS_MAP[step_config["class"]](nodes=ceph_nodes)
-        method = getattr(instance, step_config["method"])
-        log.info(method)
-        method(step_config["args"])
-    return 0
+        node_role = step_config.get("node_role", "client")
+        step_node = ceph_nodes.get_ceph_object(node_role)
+
+        # Extract what to run
+        step_command = step_config["command"]
+        step_attribute = ROOT_COMMAND_MAP[step_command.split(" ", 1)[0]](step_node)
+        for sub_command in step_command.split(" ")[1:]:
+            step_attribute = getattr(step_attribute, sub_command)
+
+        # Run
+        step_attribute(args=step_config["args"])
 
 
 def run(**kw):

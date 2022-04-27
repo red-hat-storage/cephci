@@ -1,0 +1,22 @@
+---
+name: rbd-feature-enable-test
+description: 'create pool and enable features'
+steps:
+  - command: ceph osd pool create
+    args:
+      size: '64'
+      pool_name: 'test_rbd_pool'
+  - command: rbd pool init
+    args:
+      pool_name: 'test_rbd_pool'
+  - command: rbd create
+    args:
+      pool_name: 'test_rbd_pool'
+      image_name: 'image'
+      features: layering
+      size: 1G
+  - command: rbd feature enable
+    args:
+      pool_name: 'test_rbd_pool'
+      image_name: 'image'
+      features: "exclusive-lock"

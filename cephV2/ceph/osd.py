@@ -10,10 +10,11 @@ log = Log(__name__)
 
 
 class Osd:
-    def __init__(self, parent_base_cmd):
-        
+    def __init__(self, parent_base_cmd, node):
         self.base_cmd = parent_base_cmd + " osd"
-        self.pool = Pool(self.base_cmd)
+        self.node = node
+
+        self.pool = Pool(self.base_cmd, node)
 
     def df(self):
         pass

@@ -4,16 +4,15 @@ This module has wrapper for all subcommands of the command -
 rbd mirror image
 """
 
-from tkinter import _ImageSpec
-from cephV2.rbd.mirror.mirror import Mirror
 from utility.log import Log
 
 log = Log(__name__)
 
 
 class Image:
-    def __init__(self, parent_base_cmd):
+    def __init__(self, parent_base_cmd, node):
         self.base_cmd = parent_base_cmd + " image"
+        self.node = node
 
     def demote(self, args):
         """Wrapper for rbd mirror image demote.
@@ -28,7 +27,7 @@ class Image:
             err: Error after execution of command
         """
         cmd = self.base_cmd + " demote " + args["imagespec"]
-        return self.exec_cmd(cmd)
+        return self.node.exec_command(cmd=cmd)
 
     def disable(self, args):
         """Wrapper for rbd mirror image disable.
@@ -43,7 +42,7 @@ class Image:
             err: Error after execution of command
         """
         cmd = self.base_cmd + " disable " + args["imagespec"]
-        return self.exec_cmd(cmd)
+        return self.node.exec_command(cmd=cmd)
 
     def enable(self, args):
         """Wrapper for rbd mirror image demote.
@@ -59,7 +58,7 @@ class Image:
             err: Error after execution of command
         """
         cmd = self.base_cmd + " enable " + args["imagespec"]
-        return self.exec_cmd(cmd)
+        return self.node.exec_command(cmd=cmd)
 
     def promote(self, args):
         pass
