@@ -35,6 +35,7 @@ setup(
         "ibm-vpc>=0.8.0",
         "ibm-cloud-networking-services",
         "softlayer",
+        "cryptography==36.0.1",
     ],
     zip_safe=True,
     include_package_data=True,
