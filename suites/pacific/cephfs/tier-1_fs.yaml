@@ -209,10 +209,16 @@ tests:
       desc: Test cephfs subvolume client authorize
       module: subvolume_authorize.py
       polarion-id: CEPH-83574596
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: no recover session mount
       module: no_recover_session_mount.py
       polarion-id: CEPH-11260
       desc: test no recover session mount by blocking the client node
+      abort-on-fail: false
+  - test:
+      name: Clone Operations
+      module: bug-1980920.py
+      desc: Cancel the clone operation and validate error message
+      polarion-id: CEPH-83574681
       abort-on-fail: false
