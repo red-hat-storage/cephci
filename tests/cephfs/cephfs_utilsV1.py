@@ -1430,7 +1430,7 @@ class FsUtils(object):
                 sleep(interval)
         return False
 
-    def run_ios(client, mounting_dir):
+    def run_ios(self, client, mounting_dir):
         def smallfile():
             client.exec_command(
                 sudo=True,
