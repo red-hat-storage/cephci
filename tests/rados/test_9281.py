@@ -86,7 +86,7 @@ def do_rados_get(mon, pool, niter):
                 pool=pool, obj=obj, file_name=file_name
             )
             try:
-                mon.exec_command(cmd=get_cmd)
+                mon.exec_command(cmd=get_cmd, check_ec=True, timeout=1000)
                 outbuf = out.splitlines()
                 log.info(outbuf)
             except Exception:
