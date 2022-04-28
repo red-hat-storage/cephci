@@ -98,18 +98,19 @@ class RadosOrchestrator:
         log.info("Email alerts configured on the cluster")
         return True
 
-    def run_ceph_command(self, cmd: str):
+    def run_ceph_command(self, cmd: str, timeout: int = 300):
         """
         Runs ceph commands with json tag for the action specified otherwise treats action as command
         and returns formatted output
         Args:
             cmd: Command that needs to be run
+            timeout: Maximum time allowed for execution.
         Returns: dictionary of the output
         """
 
         cmd = f"{cmd} -f json"
         try:
-            out, err = self.node.shell([cmd])
+            out, err = self.node.shell([cmd], timeout=timeout)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             return None
