@@ -142,16 +142,16 @@ class PoolFunctions:
         if pg_id:
             obj_cmd = f"rados --pgid {pg_id} ls"
 
-        delete_obj_list = self.rados_obj.run_ceph_command(cmd=obj_cmd)
+        delete_obj_list = self.rados_obj.run_ceph_command(cmd=obj_cmd, timeout=1000)
         for obj in delete_obj_list:
             cmd = f"rados -p {pool_name} rm {obj['name']}"
-            self.rados_obj.node.shell([cmd])
+            self.rados_obj.node.shell([cmd], long_running=True)
 
             # Sleeping for 3 seconds for object reference to be deleted
             time.sleep(3)
 
             # Checking if object is still present in the pool
-            out = self.rados_obj.run_ceph_command(cmd=obj_cmd)
+            out = self.rados_obj.run_ceph_command(cmd=obj_cmd, timeout=1000)
             rem_objs = [obj["name"] for obj in out]
             if obj["name"] in rem_objs:
                 log.error(f"Object {obj['name']} not deleted in the pool")
@@ -170,7 +170,7 @@ class PoolFunctions:
         """
         # Checking if snapshots can be created on the supplied pool
         cmd = "ceph osd dump"
-        pool_status = self.rados_obj.run_ceph_command(cmd=cmd)
+        pool_status = self.rados_obj.run_ceph_command(cmd=cmd, timeout=800)
         for detail in pool_status["pools"]:
             if detail["pool_name"] != pool_name:
                 continue
@@ -187,7 +187,7 @@ class PoolFunctions:
         uuid = out[0:5]
         snap_name = f"{pool_name}-snap-{uuid}"
         cmd = f"ceph osd pool mksnap {pool_name} {snap_name}"
-        self.rados_obj.node.shell([cmd])
+        self.rados_obj.node.shell([cmd], long_running=True)
 
         # Checking if snap was created successfully
         if not self.check_snap_exists(snap_name=snap_name, pool_name=pool_name):
@@ -217,7 +217,7 @@ class PoolFunctions:
         Returns: list of the snaps created
         """
         cmd = "ceph osd dump"
-        pool_status = self.rados_obj.run_ceph_command(cmd=cmd)
+        pool_status = self.rados_obj.run_ceph_command(cmd=cmd, timeout=800)
         for detail in pool_status["pools"]:
             if detail["pool_name"] == pool_name:
                 snap_list = [snap["name"] for snap in detail["pool_snaps"]]
