@@ -21,6 +21,7 @@
 # CEPH-83574192 - Subvolume creation with invalid pool_layout
 # CEPH-83574187 - Subvolume creation with isolated_namespace option
 # CEPH-83574165	- Create cephfs subvolumegroup with desired permissions test
+# CEPH-83574331 - Adding new data pools to cephfs which has existing data pool.
 
 #===============================================================================================
 tests:
@@ -273,4 +274,9 @@ tests:
       polarion-id: CEPH-83574165
       desc: cephfs subvolumegroup with different octal modes
       abort-on-fail: false
-
+  - test:
+      name: add datapools to existing FS
+      module: cephfs_vol_management.cephfs_vol_mgmt_add_datapool_to_existing_fs.py
+      polarion-id: CEPH-83574331
+      desc: add datapools to existing FS
+      abort-on-fail: false
