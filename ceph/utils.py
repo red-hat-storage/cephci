@@ -332,6 +332,7 @@ def create_ceph_nodes(
                     node_params["role"],
                 )
 
+                node_params["networks"] = node_dict.get("networks", [])
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
                     node_params["size-of-disks"] = node_dict.get("disk-size")
@@ -384,7 +385,7 @@ def setup_vm_node(node, ceph_nodes, **params):
             image_name=params["image-name"],
             vm_size=params["vm-size"],
             cloud_data=params["cloud-data"],
-            vm_network=params.get("network", None),
+            vm_network=params.get("networks", []),
             size_of_disks=params.get("size-of-disks", 0),
             no_of_volumes=params.get("no-of-volumes", 0),
         )
