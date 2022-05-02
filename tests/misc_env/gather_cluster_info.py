@@ -1,4 +1,4 @@
-"""Retrieves the information of the system under test."""
+"""Module that executes workflows required for ODF CI tests."""
 import binascii
 import os
 from json import loads
@@ -14,8 +14,12 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     """
     Entry point to this module.
 
-    In this method, the Ceph cluster information is gathered along with the creation
-    of RGW user. All this information is then written to sut.yaml file.
+    At a high level, the below steps are executed
+
+        - Install the required software packages by ODF CI team
+        - Retrieve the cluster's admin key
+        - Create a RGW user
+        - Gather information about the environment.
 
     Args:
         ceph_cluster:       Instance of Ceph
@@ -36,6 +40,11 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     base_cmd = "sudo cephadm shell --"
     if rhbuild.startswith("4"):
         base_cmd = "sudo"
+
+    # Install the software packages and
+    installer.exec_command(
+        sudo=True, cmd="yum install --nogpgcheck -y python-rados python-rbd"
+    )
 
     # Get admin key
     cmd = f"{base_cmd} ceph auth get client.admin --format json"
