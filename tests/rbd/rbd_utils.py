@@ -1,4 +1,3 @@
-import datetime
 import json
 import random
 import string
@@ -12,6 +11,7 @@ from rbd.exceptions import (
 )
 
 from ceph.ceph import CommandFailed
+from ceph.waiter import WaitUntil
 from utility.log import Log
 
 log = Log(__name__)
@@ -125,21 +125,24 @@ class Rbd:
         Returns:  True -> pass, False -> fail
 
         """
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=200)
-        while end_time > datetime.datetime.now():
+        timeout, interval = 200, 2
+        for w in WaitUntil(timeout=timeout, interval=interval):
             out = self.exec_cmd(cmd="ceph df -f json", output=True)
-            existing_pools = json.loads(out)
-            if pool_name not in [ele["name"] for ele in existing_pools["pools"]]:
-                log.error(
-                    f"Pool:{pool_name} not populated yet\n"
-                    f"sleeping for 2 seconds and checking status again"
-                )
-                sleep(2)
-            else:
-                log.info(f"pool {pool_name} exists in the cluster")
+            if pool_name in [ele["name"] for ele in json.loads(out)["pools"]]:
+                log.info(f"Pool '{pool_name}' present in the cluster")
                 return True
-        log.info(f"pool {pool_name} does not exist on cluster")
-        return False
+
+            log.info(
+                f"Pool '{pool_name}' not populated yet.\n"
+                f"Waitinig for {interval} seconds and retrying"
+            )
+
+        if w.expired:
+            log.info(
+                f"Failed to wait {timeout} seconds to pool '{pool_name}'"
+                f" present on cluster"
+            )
+            return False
 
     def create_file_to_import(self, filename="dummy"):
         """
