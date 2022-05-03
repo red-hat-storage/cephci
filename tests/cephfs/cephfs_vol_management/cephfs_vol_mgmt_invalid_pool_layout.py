@@ -28,7 +28,12 @@ def run(ceph_cluster, **kw):
         subvol_group_name = "subvol_group"
         invalid_pool_name = "non_exist_pool"
         out1, err1 = fs_util.create_subvolumegroup(
-            client1, "cephfs", subvol_group_name, pool_layout=invalid_pool_name
+            client1,
+            "cephfs",
+            subvol_group_name,
+            validate=False,
+            pool_layout=invalid_pool_name,
+            check_ec=False,
         )
         out2, err2 = client1.exec_command(
             sudo=True,
