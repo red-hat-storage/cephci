@@ -1,7 +1,10 @@
 """Custom typing objects to avoid circular imports."""
 from typing import Dict, List
 
-from typing_extensions import Protocol
+try:
+    from typing_extensions import Protocol
+except ImportError:
+    from typing import Protocol
 
 from ceph.ceph import Ceph, CephInstaller
 
