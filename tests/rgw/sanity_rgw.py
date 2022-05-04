@@ -159,7 +159,7 @@ def run(ceph_cluster, **kw):
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     cmd_env = " ".join(config.get("env-vars", []))
-    rgw_node.exec_command(
+    test_status = rgw_node.exec_command(
         cmd=cmd_env
         + f"sudo {python_cmd} "
         + test_folder_path
@@ -181,4 +181,4 @@ def run(ceph_cluster, **kw):
         log.info(verify_out)
         log.error(err)
 
-    return 0
+    return test_status
