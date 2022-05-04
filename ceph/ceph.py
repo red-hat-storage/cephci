@@ -160,22 +160,32 @@ class Ceph(object):
         Open required ports on nodes based on relevant ceph demons types
         """
         for node in self.get_nodes():
+            ports = list()
             if node.role == "mon":
-                node.open_firewall_port(port="6789", protocol="tcp")
+                ports += ["6789"]
+
                 # for upgrades from 2.5 to 3.x, we convert mon to mgr
                 # so lets open ports from 6800 to 6820
-                node.open_firewall_port(port="6800-6820", protocol="tcp")
+                ports += ["6800-6820"]
+
             if node.role == "osd":
-                node.open_firewall_port(port="6800-7300", protocol="tcp")
+                ports += ["6800-7300"]
+
             if node.role == "mgr":
-                node.open_firewall_port(port="6800-6820", protocol="tcp")
+                ports += ["6800-6820"]
+
             if node.role == "mds":
-                node.open_firewall_port(port="6800", protocol="tcp")
+                ports += ["6800"]
+
             if node.role == "iscsi-gw":
-                node.open_firewall_port(port="3260", protocol="tcp")
-                node.open_firewall_port(port="5000-5001", protocol="tcp")
+                ports += ["3260", "5000-5001"]
+
             if node.role == "grafana":
-                node.open_firewall_port(port="6800-6820", protocol="tcp")
+                ports += ["6800-6820"]
+
+            if ports:
+                node.configure_firewall()
+                node.open_firewall_port(port=ports, protocol="tcp")
 
     def setup_ssh_keys(self):
         """
@@ -1635,13 +1645,8 @@ class CephNode(object):
         if ceph_object.role == "osd":
             self.get_allocated_volumes()[0].status = NodeVolume.FREE
 
-    def open_firewall_port(self, port, protocol):
-        """
-        Opens firewall port on the node
-        Args:
-            port(str): port, can be range
-            protocol(str): protcol
-        """
+    def configure_firewall(self):
+        """Configures firewall based on the package manager"""
         if self.pkg_type == "rpm":
             try:
                 self.exec_command(sudo=True, cmd="rpm -qa | grep firewalld")
@@ -1652,18 +1657,32 @@ class CephNode(object):
             self.exec_command(sudo=True, cmd="systemctl enable firewalld")
             self.exec_command(sudo=True, cmd="systemctl start firewalld")
             self.exec_command(sudo=True, cmd="systemctl status firewalld")
-            self.exec_command(
-                sudo=True,
-                cmd="firewall-cmd --zone=public --add-port={port}/{protocol}".format(
-                    port=port, protocol=protocol
-                ),
-            )
-            self.exec_command(
-                sudo=True,
-                cmd=f"firewall-cmd --zone=public --add-port={port}/{protocol} --permanent",
-            )
+        elif self.pkg_type == "deb":
+            # Ubuntu section stub
+            pass
 
-        if self.pkg_type == "deb":
+    def open_firewall_port(self, port, protocol):
+        """
+        Opens firewall port on the node
+
+        Args:
+            port(str|int|list): port(s) to be enabled
+            protocol(str): protocol
+        """
+        if self.pkg_type == "rpm":
+            cmd = "firewall-cmd --zone=public "
+
+            if isinstance(port, (str, int)):
+                cmd += f"--add-port={port}/{protocol}"
+            elif isinstance(port, list):
+                cmd += " ".join([f"--add-port={p}/{protocol}" for p in port])
+            else:
+                pass
+
+            self.exec_command(sudo=True, cmd=cmd)
+            self.exec_command(sudo=True, cmd=f"{cmd} --permanent")
+
+        elif self.pkg_type == "deb":
             # Ubuntu section stub
             pass
 
