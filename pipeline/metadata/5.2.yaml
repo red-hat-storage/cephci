@@ -1,0 +1,173 @@
+#=====================================================================================
+# Metadata file for 5.2 RHCS release version.
+# Single file to specify test suites to be executed for all regression (perbuild) and periodical tests
+# as per defined in each stages.
+# Each stage will execute in sequential pattern.
+# Contains all Default parameter used for Execution when no override is specified.
+# parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
+# platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
+#=====================================================================================
+- name: "Tier-0 test suite at 5x for quick build qualification"
+  suite: "suites/pacific/cephadm/tier-0.yaml"
+  global-conf: "conf/pacific/cephadm/tier-0.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Deploy 5x cluster and apply services through cli"
+  suite: "suites/pacific/cephadm/tier-0_5-1_cephadm.yaml"
+  global-conf: "conf/pacific/cephadm/sanity-cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-1
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Deploy all services at 5x using a spec file"
+  suite: "suites/pacific/cephadm/test-container-cli-args.yaml"
+  global-conf: "conf/pacific/cephadm/test-container-cli-args.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-1
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Upgrade cluster from 5x GA to 5x latest"
+  suite: "suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+  global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-1
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-2
+
+- name: "Upgrade cluster from 4x RPM to 5x containerised"
+  suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-rpm.yaml"
+  global-conf: "conf/pacific/upgrades/upgrades.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+
+- name: "Bootstrap cluster with skip dashboard and custom ceph directory testing"
+  suite: "suites/pacific/cephadm/tier-1_skip_dashboard.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Bootstrap cluster with custom ssl dashboard port and apply-spec"
+  suite: "suites/pacific/cephadm/tier-1_ssl_dashboard_port.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-2
+
+- name: "Test multiple path upgrade to 5x latest"
+  suite: "suites/pacific/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-5-latest.yaml"
+  global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-2
+
+- name: "Testing scale up and scale down functionality after upgrade from 4x cdn to 5x latest"
+  suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-4-cdn-to-5-latest.yaml"
+  global-conf: "conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-3
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+
+- name: "Testing scale up and scale down functionality after upgrade from 5x cdn to 5x latest"
+  suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-5-cdn-to-5-latest.yaml"
+  global-conf: "conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-3
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-2
