@@ -35,7 +35,6 @@ from typing import Dict, Optional, Tuple
 from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode, CommandFailed
-from ceph.utils import open_firewall_port
 from utility.log import Log
 
 log = Log(__name__)
@@ -143,7 +142,7 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
     create_s3_conf(cluster, build, host, port, secure, kms_keyid)
 
     if not build.startswith("5"):
-        open_firewall_port(rgw_node, port=port, protocol="tcp")
+        rgw_node.open_firewall_port(port=port, protocol="tcp")
 
     add_lc_debug(cluster, build)
 

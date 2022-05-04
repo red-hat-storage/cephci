@@ -739,17 +739,6 @@ def search_ethernet_interface(ceph_node, ceph_node_list):
     return ceph_node.search_ethernet_interface(ceph_node_list)
 
 
-def open_firewall_port(ceph_node, port, protocol):
-    """
-    Opens firewall ports for given node
-    Args:
-        ceph_node (ceph.ceph.CephNode): ceph node
-        port (str): port
-        protocol (str): protocol
-    """
-    ceph_node.open_firewall_port(port, protocol)
-
-
 def config_ntp(ceph_node, cloud_type="openstack"):
     """
     Configure NTP/Chronyc service based on the OS platform
