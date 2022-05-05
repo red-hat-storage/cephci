@@ -1237,7 +1237,7 @@ def tfacon(launch_id):
     tfa_url = tfacon_cfg.get("tfa_url")
     connector_type = tfacon_cfg.get("connector_type")
     cmd = (
-        f"tfacon run --auth-token {auth_token} "
+        f"~/.local/bin/tfacon run --auth-token {auth_token} "
         f"--connector-type {connector_type} "
         f"--platform-url {platform_url} "
         f"--project-name {project_name} "
@@ -1256,7 +1256,8 @@ def tfacon(launch_id):
     log.info(result.decode("utf-8"))
     if p1.returncode != 0:
         log.warning("Unable to get the TFA anaylsis for the results")
-        log.warning(result)
+        log.warning(result_err.decode("utf-8"))
+        log.warning(result.decode("utf-8"))
 
 
 def install_start_kafka(rgw_node, cloud_type):
