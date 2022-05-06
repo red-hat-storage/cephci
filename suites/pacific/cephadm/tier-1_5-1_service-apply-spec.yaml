@@ -112,6 +112,7 @@ tests:
                   labels: apply-all-labels
                   nodes:
                     - node4
+      abort-on-fail: true
   - test:
       name: Service deployment with spec
       desc: Add services using spec file.
@@ -228,6 +229,7 @@ tests:
                   credentials:
                     snmp_v3_auth_username: myadmin
                     snmp_v3_auth_password: mypassword
+      abort-on-fail: true
   - test:
       name: SNMP Gateway Service deployment with spec
       desc: Add SNMP Gateway services using spec file
