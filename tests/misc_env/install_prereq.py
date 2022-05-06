@@ -188,6 +188,7 @@ def install_prereq(
         config_ntp(ceph, cloud_type)
 
     registry_login(ceph, distro_ver)
+    update_iptables(ceph)
 
 
 def setup_addition_repo(ceph, repo):
@@ -411,3 +412,22 @@ def registry_login(ceph, distro_ver):
         file.write(json.dumps(auths_dict, indent=4))
         file.flush()
         file.close()
+
+
+def update_iptables(node):
+    """update ip-tables rules.
+
+    Drop ip-table rule which matches the list of reject entries,
+     which ensures no side-effects at Ceph configuration.
+
+     Reference:
+     https://docs.ceph.com/en/latest/rados/configuration/network-config-ref/#ip-tables
+
+    Args:
+        node: CephNode object
+    """
+    drop_rules = ["INPUT -j REJECT --reject-with icmp-host-prohibited"]
+    out, _ = node.exec_command(cmd="iptables --list-rules", sudo=True)
+    for rule in drop_rules:
+        if rule in out:
+            node.exec_command(cmd=f"iptables -D {rule}", sudo=True)
