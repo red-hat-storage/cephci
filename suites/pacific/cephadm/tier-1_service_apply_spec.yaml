@@ -95,6 +95,7 @@ tests:
                labels: apply-all-labels
                nodes:
                  - node4
+      abort-on-fail: true
   - test:
       name: Service deployment with spec
       desc: Add services using spec file.
