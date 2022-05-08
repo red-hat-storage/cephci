@@ -17,6 +17,7 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     At a high level, the below steps are executed
 
         - Install the required software packages by ODF CI team
+        - Create the RBD pool
         - Retrieve the cluster's admin key
         - Create a RGW user
         - Gather information about the environment.
@@ -45,6 +46,12 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     installer.exec_command(
         sudo=True, cmd="yum install --nogpgcheck -y python-rados python-rbd"
     )
+
+    # RBD pool is created in test_ansible hence the parity needs to be addressed for
+    # higher RHCS versions
+    if not rhbuild.startswith("4"):
+        installer.exec_command(cmd=f"{base_cmd} ceph osd pool create rbd")
+        installer.exec_command(cmd=f"{base_cmd} rbd pool init rbd")
 
     # Get admin key
     cmd = f"{base_cmd} ceph auth get client.admin --format json"

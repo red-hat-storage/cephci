@@ -8,6 +8,7 @@ globals:
           - installer
           - mgr
           - mon
+          - client
 
       node2:
         disk-size: 20
