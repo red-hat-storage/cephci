@@ -48,6 +48,7 @@ class Ceph(object):
         self.custom_config = None
         self.allow_custom_ansible_config = True
         self.__rhcs_version = None
+        self.networks = dict()
 
     def __eq__(self, ceph_cluster):
         if hasattr(ceph_cluster, "node_list"):
@@ -1055,10 +1056,27 @@ class Ceph(object):
 
         Returns:
             str: data path
-
         """
         osd_partition_path = self.get_osd_data_partition_path(osd_id, client)
         return osd_partition_path[osd_partition_path.rfind("/") + 1 : :]
+
+    def get_public_networks(self) -> str:
+        """Returns a comma separated list of public networks."""
+        if not self.networks:
+            return ""
+
+        return ",".join(self.networks.get("public", []))
+
+    def get_cluster_networks(self) -> str:
+        """Returns a comma separated list of cluster networks."""
+        if not self.networks:
+            return ""
+
+        return ",".join(self.networks.get("cluster", []))
+
+    def get_nodes_in_location(self, location: str) -> list:
+        """Return the list of nodes found in the location."""
+        return [node for node in self.node_list if node.vm_node.location == location]
 
 
 class CommandFailed(Exception):
