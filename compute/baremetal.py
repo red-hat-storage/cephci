@@ -29,10 +29,11 @@ class CephBaremetalNode:
         """
         # CephVM attributes
         self._roles: list = list()
-
         self.osd_scenario: Optional[int] = None
         self.keypair: Optional[str] = None
+
         self.params = params
+        self.location = params.get("location")
         self.private_key = params.get("root_private_key")
         if self.private_key:
             self.private_key = expanduser(self.private_key)
