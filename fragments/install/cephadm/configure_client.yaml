@@ -1,0 +1,16 @@
+# The purpose of this test is to configure the client
+---
+tests:
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node1
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the ceph client
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
