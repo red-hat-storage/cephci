@@ -229,11 +229,8 @@ class Rbd:
                 pool_list.append(self.datapool)
 
             # mon_allow_pool_delete must be True for removing pool
-            if self.ceph_version == 5:
+            if self.ceph_version >= 5:
                 self.exec_cmd(cmd="ceph config set mon mon_allow_pool_delete true")
-                self.exec_cmd(cmd="ceph orch restart mon")
-
-                # ToDo: Unable to confirm service restart
                 sleep(60)
 
             for pool in pool_list:
