@@ -115,9 +115,9 @@ tests:
       abort-on-fail: true
   - test:
       name: Service deployment with spec
-      desc: Add services using spec file.
+      desc: Add OSD services using spec file.
       module: test_cephadm.py
-      polarion-id: CEPH-83573746,CEPH-83574727
+      polarion-id: CEPH-83573746
       config:
         steps:
           - config:
@@ -134,6 +134,35 @@ tests:
                 - service_type: mgr
                   placement:
                     label: mgr
+                - service_type: osd
+                  service_id: osd_first_node
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    nodes:
+                      - node1
+                  data_devices:
+                    all: "true"                         # boolean as string
+                - service_type: osd
+                  service_id: all_other_nodes
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    nodes:
+                      - node2
+                      - node3
+                  data_devices:
+                    all: "true"                         # boolean as string
+  - test:
+      name: Monitoring Service(s) deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
                 - service_type: prometheus
                   placement:
                     count: 1
@@ -153,18 +182,6 @@ tests:
                 - service_type: crash
                   placement:
                     host_pattern: "*"
-                - service_type: osd
-                  service_id: all-available-devices
-                  encrypted: "true"                     # boolean as string
-                  placement:
-                    host_pattern: "*"
-                  data_devices:
-                    all: "true"                         # boolean as string
-          - config:
-              command: shell
-              args:                 # sleep to get all services deployed
-                - sleep
-                - "300"
   - test:
       name: MDS Service deployment with spec
       desc: Add MDS services using spec file
@@ -183,16 +200,12 @@ tests:
           - config:
               command: apply_spec
               service: orch
+              validate-spec-services: true
               specs:
                 - service_type: mds
                   service_id: cephfs
                   placement:
                     label: mds
-          - config:
-              command: shell
-              args:              # sleep to get all services deployed
-                - sleep
-                - "120"
   - test:
       name: NFS Service deployment with spec
       desc: Add NFS services using spec file
@@ -203,6 +216,7 @@ tests:
           - config:
               command: apply_spec
               service: orch
+              validate-spec-services: true
               specs:
                 - service_type: nfs
                   service_id: nfs-rgw-service
@@ -211,11 +225,6 @@ tests:
                       - node4
                   spec:
                     port: 2049
-          - config:
-              command: shell
-              args:              # sleep to get all services deployed
-                - sleep
-                - "120"
   - test:
       name: Setup destination node for SNMP traps
       desc: Install snmptrapd tool and install CEPH MIB on destination node
@@ -240,6 +249,7 @@ tests:
           - config:
               command: apply_spec
               service: orch
+              validate-spec-services: true
               specs:
                 - service_type: snmp-gateway
                   service_name: snmp-gateway
@@ -252,11 +262,6 @@ tests:
                     port: 9464
                     snmp_destination: node3
                     snmp_version: V3
-          - config:
-              command: shell
-              args: # sleep to get all services deployed
-                - sleep
-                - "120"
   - test:
       name: RGW Service deployment with spec
       desc: Add RGW services using spec file
@@ -283,6 +288,7 @@ tests:
           - config:
               command: apply_spec
               service: orch
+              validate-spec-services: true
               specs:
                 - service_type: rgw
                   service_id: my-rgw
@@ -295,11 +301,6 @@ tests:
                     rgw_frontend_port: 8080
                     rgw_realm: east
                     rgw_zone: india
-          - config:
-              command: shell
-              args:              # sleep to get all services deployed
-                - sleep
-                - "120"
   - test:
       name: Configure client
       desc: Configure client on node4

@@ -63,7 +63,7 @@ class Orch(
         self,
         service_name: str = None,
         service_type: str = None,
-        timeout: int = 300,
+        timeout: int = 1800,
         interval: int = 5,
     ) -> bool:
         """
@@ -221,6 +221,9 @@ class Orch(
         # validate services
         validate_spec_services = config.get("validate-spec-services")
         if validate_spec_services:
+            # wait 60 seconds for initial start of daemons,
+            # which avoids 0/0 check and 1/1 when expected count is 3.
+            sleep(60)
             self.validate_spec_services(specs=specs)
             LOG.info("Validation of service created using a spec file is completed")
 
@@ -321,5 +324,12 @@ class Orch(
     def validate_spec_services(self, specs) -> None:
         LOG.info("Validating spec services")
         for spec in specs:
-            self.check_service_exists(service_type=spec["service_type"])
+            svc_type = spec["service_type"]
+            svc_id = spec.get("service_id")
+            if svc_id:
+                self.check_service_exists(
+                    service_name=f"{svc_type}.{spec['service_id']}"
+                )
+            else:
+                self.check_service_exists(service_type=spec["service_type"])
         return False
