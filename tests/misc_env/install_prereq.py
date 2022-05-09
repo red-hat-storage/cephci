@@ -427,7 +427,10 @@ def update_iptables(node):
         node: CephNode object
     """
     drop_rules = ["INPUT -j REJECT --reject-with icmp-host-prohibited"]
-    out, _ = node.exec_command(cmd="iptables --list-rules", sudo=True)
-    for rule in drop_rules:
-        if rule in out:
-            node.exec_command(cmd=f"iptables -D {rule}", sudo=True)
+    try:
+        out, _ = node.exec_command(cmd="iptables --list-rules", sudo=True)
+        for rule in drop_rules:
+            if rule in out:
+                node.exec_command(cmd=f"iptables -D {rule}", sudo=True)
+    except Exception as err:
+        log.error(f"IPtables rpm do not exist. error : {err}")
