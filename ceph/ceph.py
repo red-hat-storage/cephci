@@ -1438,7 +1438,7 @@ class CephNode(object):
         """
         ssh = self.rssh if kw.get("sudo") else self.ssh
         cmd = kw["cmd"]
-        logger.info(f"long running command -- {cmd}")
+        logger.info(f"long running command on {self.ip_address} -- {cmd}")
         channel = ssh().get_transport().open_session()
         channel.exec_command(cmd)
         end_time = datetime.datetime.now() + timedelta(seconds=3600)
