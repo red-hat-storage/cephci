@@ -15,6 +15,7 @@ import sys
 import textwrap
 import time
 import traceback
+from copy import deepcopy
 from getpass import getuser
 from typing import Optional
 
@@ -257,6 +258,13 @@ def create_nodes(
 
         cluster_name = cluster.get("ceph-cluster").get("name", "ceph")
         ceph_cluster_dict[cluster_name] = Ceph(cluster_name, ceph_nodes)
+
+        # Set the network attributes of the cluster
+        # ToDo: Support other providers like openstack and IBM-C
+        if "baremetal" in cloud_type:
+            ceph_cluster_dict["cluster_name"].networks = deepcopy(
+                cluster.get("ceph-cluster", {}).get("networks", {})
+            )
 
     # TODO: refactor cluster dict to cluster list
     log.info("Done creating osp instances")
