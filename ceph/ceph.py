@@ -1,3 +1,4 @@
+"""This module implements the required foundation data structures for testing."""
 import datetime
 import json
 import pickle
@@ -31,7 +32,7 @@ class ResourceNotFoundError(Exception):
 
 
 class Ceph(object):
-    DEFAULT_RHCS_VERSION = "3.3"
+    DEFAULT_RHCS_VERSION = "4.3"
 
     def __init__(self, name, node_list=None):
         """
@@ -47,6 +48,7 @@ class Ceph(object):
         self.custom_config = None
         self.allow_custom_ansible_config = True
         self.__rhcs_version = None
+        self.networks = dict()
 
     def __eq__(self, ceph_cluster):
         if hasattr(ceph_cluster, "node_list"):
@@ -117,8 +119,12 @@ class Ceph(object):
 
     def get_ceph_objects(self, role=None):
         """
-        Get Ceph Object by role. Returns all objects if role is not defined. Ceph object can be Ceph demon, client,
-        installer or generic entity. Pool role is never assigned to Ceph object and means that node has no Ceph objects
+        Get Ceph Object by role.
+
+        Returns all objects if role is not defined. Ceph object can be Ceph demon,
+        client, installer or generic entity. Pool role is never assigned to Ceph object
+        and means that node has no Ceph objects
+
         Args:
             role (str): Ceph object's role as str
 
@@ -133,8 +139,11 @@ class Ceph(object):
 
     def get_ceph_object(self, role, order_id=0):
         """
-        Returns single ceph object. If order id is provided returns that occurrence from results list, otherwise returns
-        first occurrence
+        Returns single ceph object.
+
+        If order id is provided returns that occurrence from results list, otherwise
+        returns first occurrence
+
         Args:
             role(str): Ceph object's role
             order_id(int): order number of the ceph object
@@ -446,7 +455,6 @@ class Ceph(object):
         for node in node_list:  # type: CephNode
             ceph_demon_list.extend(node.get_ceph_demons(role))
         return ceph_demon_list
-        # return [ceph_demon for ceph_demon in self.get_ceph_objects() if isinstance(ceph_demon, CephDemon)]
 
     def set_ansible_config(self, ansible_config):
         """
@@ -511,13 +519,6 @@ class Ceph(object):
                     registry=self.ansible_config.get("ceph_docker_registry")
                 )
             )
-            # for node in self.get_nodes():
-            #     node.exec_command(sudo=True, cmd='sudo chmod 777 /etc/containers/registries.conf;'
-            #                                      'sudo sed -i "16,17d" /etc/containers/registries.conf;'
-            #                                      'echo "[registries.insecure]'
-            #                                      ' registries = ["registry-proxy.engineering.redhat.com"]"'
-            #                                      '>> /etc/containers/registries.conf;'
-            #                                      'sudo systemctl restart docker')
 
     @property
     def ceph_demon_stat(self):
@@ -676,7 +677,8 @@ class Ceph(object):
         Args:
            rhbuild (str): rhcs build version
            client(CephObject): ceph object with ceph-common and ceph-keyring
-           timeout (int): max time to check if cluster is not healthy within timeout period - return 1
+           timeout (int): max time to check if cluster is not healthy within timeout
+                          period - return 1
         Returns:
            int: return 0 when ceph is in healthy state, else 1
         """
@@ -751,7 +753,8 @@ class Ceph(object):
         """
         Refreshes ansible config based on installer all.yml content
         Args:
-            installer(CephInstaller): Ceph installer. Will use first available installer if omitted
+            installer(CephInstaller): Ceph installer. Will use first available installer
+                                      if omitted
         """
         if not installer:
             installer = self.get_ceph_object("installer")
@@ -895,7 +898,8 @@ class Ceph(object):
     @staticmethod
     def get_iso_file_url(base_url):
         """
-        Retrurns iso url for given compose link
+        Returns iso url for given compose link
+
         Args:
             base_url(str): rhel compose
 
@@ -974,8 +978,10 @@ class Ceph(object):
         ]
         return osd_demon_list[0] if len(osd_demon_list) > 0 else None
 
-    def get_osd_service_name(self, osd_id, client=None):
+    @staticmethod
+    def get_osd_service_name(osd_id, client=None):
         """
+        Return the service name of the OSD daemon.
 
         Args:
             osd_id:
@@ -1050,10 +1056,27 @@ class Ceph(object):
 
         Returns:
             str: data path
-
         """
         osd_partition_path = self.get_osd_data_partition_path(osd_id, client)
         return osd_partition_path[osd_partition_path.rfind("/") + 1 : :]
+
+    def get_public_networks(self) -> str:
+        """Returns a comma separated list of public networks."""
+        if not self.networks:
+            return ""
+
+        return ",".join(self.networks.get("public", []))
+
+    def get_cluster_networks(self) -> str:
+        """Returns a comma separated list of cluster networks."""
+        if not self.networks:
+            return ""
+
+        return ",".join(self.networks.get("cluster", []))
+
+    def get_nodes_in_location(self, location: str) -> list:
+        """Return the list of nodes found in the location."""
+        return [node for node in self.node_list if node.vm_node.location == location]
 
 
 class CommandFailed(Exception):
@@ -1063,8 +1086,10 @@ class CommandFailed(Exception):
 class RolesContainer(object):
     """
     Container for single or multiple node roles.
-    Can be used as iterable or with equality '==' operator to check if role is present for the node.
-    Note that '==' operator will behave the same way as 'in' operator i.e. check that value is present in the role list.
+
+    Can be used as iterable or with equality '==' operator to check if role is present
+    for the node. Note that '==' operator will behave the same way as 'in' operator
+    i.e. check that value is present in the role list.
     """
 
     def __init__(self, role="pool"):
@@ -1232,6 +1257,7 @@ class CephNode(object):
         self.ip_address = kw["ip_address"]
         self.subnet = kw["subnet"]
         self.vmname = kw["hostname"]
+
         vmshortname = self.vmname.split(".")
         self.vmshortname = vmshortname[0]
 
@@ -1313,7 +1339,10 @@ class CephNode(object):
 
     def get_ceph_demons(self, role=None):
         """
-        Get Ceph demons list. Only active (those which will be part of the cluster) demons are shown.
+        Get Ceph demons list.
+
+        Only active (those which will be part of the cluster) demons are shown.
+
         Returns:
             list: list of CephDemon
 
@@ -1323,8 +1352,6 @@ class CephNode(object):
             for ceph_demon in self.get_ceph_objects(role)
             if isinstance(ceph_demon, CephDemon) and ceph_demon.is_active
         ]
-
-    # return [ceph_demon for ceph_demon in self.ceph_object_list if ceph_demon.role == role] if role else list()
 
     def connect(self):
         """
@@ -1352,8 +1379,10 @@ class CephNode(object):
         self.rssh().exec_command("echo 20 > /proc/sys/net/ipv4/tcp_keepalive_probes")
         self.exec_command(cmd="ls / ; uptime ; date")
         self.ssh_transport().set_keepalive(15)
+
         out, err = self.exec_command(cmd="hostname")
         self.hostname = out.strip()
+
         shortname = self.hostname.split(".")
         self.shortname = shortname[0]
         self.exec_command(cmd=f"sudo hostname {self.shortname}")
@@ -1363,10 +1392,12 @@ class CephNode(object):
         self.set_internal_ip()
         self.exec_command(cmd="echo 'TMOUT=600' >> ~/.bashrc")
         self.exec_command(cmd="[ -f /etc/redhat-release ]", check_ec=False)
+
         if self.exit_status == 0:
             self.pkg_type = "rpm"
         else:
             self.pkg_type = "deb"
+
         logger.info("finished connect")
         self.run_once = True
 
@@ -1536,6 +1567,7 @@ class CephNode(object):
         del d["ssh_transport"]
         del d["root_connection"]
         del d["connection"]
+
         return d
 
     def __setstate__(self, pickle_dict):
@@ -1623,25 +1655,17 @@ class CephNode(object):
             )
             self.exec_command(
                 sudo=True,
-                cmd="firewall-cmd --zone=public --add-port={port}/{protocol} --permanent".format(
-                    port=port, protocol=protocol
-                ),
+                cmd=f"firewall-cmd --zone=public --add-port={port}/{protocol} --permanent",
             )
+
         if self.pkg_type == "deb":
             # Ubuntu section stub
             pass
-            # ceph_node.exec_command(sudo=True, cmd="ufw --force enable")
-            # ceph_node.exec_command(sudo=True, cmd="ufw status")
-            # ceph_node.exec_command(sudo=True, cmd="iptables -I INPUT -p {protocol} --dport {port} -j ACCEPT"
-            #                        .format(port=str(port).replace('-',':'), protocol=protocol))
-            # ceph_node.exec_command(sudo=True, cmd="update-locale LC_ALL=en_US.UTF-8"
-            #                        .format(port=str(port).replace('-', ':'), protocol=protocol))
-            # ceph_node.exec_command(cmd="sudo DEBIAN_FRONTEND=noninteractive apt-get -yq install iptables-persistent",
-            #                        long_running=True)
 
     def search_ethernet_interface(self, ceph_node_list):
         """
-        Search interface on the given node node which allows every node in the cluster accesible by it's shortname.
+        Search interface on the given node which allows every node in the cluster
+        accesible by it's shortname.
 
         Args:
             ceph_node_list (list): lsit of CephNode
@@ -1674,13 +1698,15 @@ class CephNode(object):
                     )
                 )
                 return eth_interface
-            except Exception:
+            except Exception:  # no-qa
                 continue
+
         logger.info(
             "No suitable ethernet interface found on {node}".format(
                 node=ceph_node.ip_address
             )
         )
+
         return None
 
     def setup_deb_cdn_repos(self, build):
@@ -1762,6 +1788,7 @@ class CephNode(object):
             repos = repos_4x_rhel7
         elif build.startswith("5"):
             repos = repos_5x
+
         self.exec_command(
             sudo=True, cmd="subscription-manager repos --enable={r}".format(r=repos[0])
         )
@@ -1789,8 +1816,7 @@ class CephNode(object):
         ds_keys = [
             "https://www.redhat.com/security/897da07a.txt",
             "https://www.redhat.com/security/f21541eb.txt",
-            # 'https://prodsec.redhat.com/keys/00da75f2.txt',
-            # TODO: replace file file.rdu.redhat.com/~kdreyer with prodsec.redhat.com when it's back
+            "https://prodsec.redhat.com/keys/00da75f2.txt",
             "http://file.rdu.redhat.com/~kdreyer/keys/00da75f2.txt",
             "https://www.redhat.com/security/data/fd431d51.txt",
         ]
@@ -1814,6 +1840,7 @@ class CephNode(object):
         )
         base_file.write(base_repo)
         base_file.flush()
+
         if installer_url is not None:
             installer_repos = ["Agent", "Main", "Installer"]
             inst_repo = Ceph.generate_repository_file(
@@ -1916,12 +1943,14 @@ class CephNode(object):
 
     def multiple_lvm_scenarios(self, devices, scenario):
         """
-        Creates lvm volumes,generates osd scenarios and returns dict, suitable for ansible config
+        Create lvm volumes based on the provided scenario and return dict, suitable for
+        ansible config.
+
         Args:
             devices (list): device list
             scenario (func): osd scenario to be generated
-        Returns (dict): generated osd scenario
 
+        Returns (dict): generated osd scenario
         """
         self.install_lvm_util()
         osd_scenarios = {}
@@ -1995,7 +2024,7 @@ class CephObject(object):
             **kw: options
 
         Returns:
-        node's exec_command result
+            node's exec_command result
         """
         return self.node.exec_command(cmd=cmd, **kw)
 
@@ -2058,13 +2087,15 @@ class CephDemon(CephObject):
 
     def exec_command(self, cmd, **kw):
         """
-        Proxy to node's exec_command with wrapper to run commands inside the container for containerized demons
+        Proxy to node's exec_command with wrapper to run commands inside the container
+        for containerized demons.
+
         Args:
             cmd(str): command to execute
             **kw: options
 
         Returns:
-        node's exec_command resut
+            node's exec_command resut
         """
         return (
             self.node.exec_command(
@@ -2088,7 +2119,8 @@ class CephOsd(CephDemon):
         Represents single osd instance associated with a device.
         Args:
             node (CephNode): ceph node
-            device (str): device, can be left unset but must be set during inventory file configuration
+            device (str): device, can be left unset but must be set during inventory
+                          file configuration
         """
         super(CephOsd, self).__init__("osd", node)
         self.device = device
@@ -2230,7 +2262,8 @@ class CephInstaller(CephObject):
 
     def setup_ansible_site_yml(self, build, containerized):
         """
-        Create proper site.yml from sample for containerized or non-containerized deployment
+        Create site.yml from sample for RPM or Image based deployment.
+
         Args:
             build(string): RHCS build
             containerized(bool): use site-container.yml.sample if True else site.yml.sample
