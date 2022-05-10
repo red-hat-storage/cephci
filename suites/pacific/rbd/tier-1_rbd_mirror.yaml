@@ -9,12 +9,12 @@
 #    No of Clusters : 2
 #    Each cluster configuration
 #    6-Node cluster(RHEL-8.3 and above)
-#    1 MONS, 1 MDS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
+#    1 MONS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
 #     Node1 - Mon, Mgr, Installer
 #     Node2 - client
 #     Node3 - OSD
-#     Node4 - OSD,MDS
-#     Node5 - OSD,MDS
+#     Node4 - OSD
+#     Node5 - OSD
 #     Node6 - RBD Mirror
 
 
@@ -67,22 +67,6 @@ tests:
                   service: osd
                   args:
                     all-available-devices: true
-              - config:
-                  command: shell
-                  args: # arguments to ceph orch
-                    - "ceph fs volume create cephfs"
-              - config:
-                  command: apply
-                  service: mds
-                  base_cmd_args: # arguments to ceph orch
-                    verbose: true
-                  pos_args:
-                    - cephfs                        # name of the filesystem
-                  args:
-                    placement:
-                      nodes:
-                        - node4
-                        - node5
               - config:
                   command: apply
                   service: rbd-mirror
