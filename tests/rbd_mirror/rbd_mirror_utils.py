@@ -663,6 +663,33 @@ class RbdMirror:
 
         return 0
 
+    def rename_image(self, source_imagespec, dest_imagespec, **kw):
+        """
+        Rename the primary image and check from secondary for the changes
+        Args:
+           source_imagespec: primary image
+           dest_imagespec: rename image
+        Returns:
+              None
+        """
+        pool_name = kw.get("poolname")
+        cmd1 = f"rbd mv {source_imagespec} {pool_name}/{dest_imagespec}"
+        self.exec_cmd(cmd=cmd1)
+        cmd2 = f"rbd info {pool_name}/{dest_imagespec} --format=json"
+        out1 = self.exec_cmd(cmd=cmd2)
+        log.info(out1)
+
+    def create_mirror_snapshot(self, imagespec):
+        """
+        create snapshot on the image to reflect the changes to secondary
+        Args:
+            imagespec
+        Returns:
+              None
+        """
+        cmd1 = f"rbd mirror image snapshot {imagespec}"
+        self.exec_cmd(cmd=cmd1)
+
     def resize_image(self, imagespec, size):
         """
         Resize provided image
