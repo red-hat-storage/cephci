@@ -320,4 +320,17 @@ class BootstrapMixin:
                     cmd += f" {override_dict[image_key]}"
                     self.installer.exec_command(sudo=True, cmd=cmd)
 
+        # Set public and cluster networks if provided.
+        # https://docs.ceph.com/en/latest/rados/configuration/network-config-ref/
+        public_nws = self.cluster.get_public_networks()
+        cluster_nws = self.cluster.get_cluster_networks()
+        if public_nws:
+            self.shell(
+                args=["ceph", "config", "set", "global public_network", public_nws]
+            )
+        if cluster_nws:
+            self.shell(
+                args=["ceph", "config", "set", "global cluster_network", cluster_nws]
+            )
+
         return out, err
