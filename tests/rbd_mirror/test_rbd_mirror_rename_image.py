@@ -33,6 +33,7 @@ def run(**kw):
         imagename_1 = mirror1.random_string() + "_tier_1_rbd_mirror_image"
         imagespec_1 = poolname + "/" + imagename_1
         mirror1.create_image(imagespec=imagespec_1, size=config.get("imagesize"))
+        mirror1.config_mirror(mirror2, poolname=poolname, mode="image")
         mirror1.enable_mirror_image(poolname, imagename_1, "snapshot")
         mirror2.wait_for_status(poolname=poolname, images_pattern=1)
         mirror1.benchwrite(imagespec=imagespec_1, io=config.get("io-total"))
