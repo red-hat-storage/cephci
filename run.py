@@ -262,7 +262,7 @@ def create_nodes(
         # Set the network attributes of the cluster
         # ToDo: Support other providers like openstack and IBM-C
         if "baremetal" in cloud_type:
-            ceph_cluster_dict["cluster_name"].networks = deepcopy(
+            ceph_cluster_dict[cluster_name].networks = deepcopy(
                 cluster.get("ceph-cluster", {}).get("networks", {})
             )
 
