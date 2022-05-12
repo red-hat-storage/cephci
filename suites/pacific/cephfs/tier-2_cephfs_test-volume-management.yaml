@@ -2,7 +2,7 @@
 #===============================================================================================
 # Tier-level: 2
 # Test-Suite: tier-2_cephfs_test-volume-management.yaml
-# Conf file : conf/pacific/cephfs/tier_2_cephfs_9-node-cluster.yaml
+# Conf file : conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml
 # Test-Case Covered:
 # CEPH-83574164 : Create cephfs subvolumegroup with desired data pool_layout
 # CEPH-83574193 - cephfs subvolume size expansion test
