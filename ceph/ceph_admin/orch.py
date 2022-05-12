@@ -102,7 +102,7 @@ class Orch(
                 f"{running}/{count} {service_name if service_name else service_type} up... retrying"
             )
 
-            if count == running:
+            if not (count + running) == 0 and count == running:
                 return True
 
         # Identify the failure
