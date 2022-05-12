@@ -477,7 +477,7 @@
     - stage-2
 - name: "test-cephfs-volume-mgmt"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-volume-management.yaml"
-  global-conf: "conf/pacific/cephfs/tier_2_cephfs_9-node-cluster.yaml"
+  global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
   platform: "rhel-8"
   rhbuild: "5.1"
   inventory:
