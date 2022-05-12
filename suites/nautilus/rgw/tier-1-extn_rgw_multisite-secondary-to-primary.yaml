@@ -163,3 +163,14 @@ tests:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_datalog_trim_command.yaml
             timeout: 300
+  - test:
+      name: test bucket sync command with disable sync thread
+      desc: Execute bucket sync command with disable sync thread on secondary
+      polarion-id: CEPH-83574788
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-rgw2:
+          config:
+            script-name:  test_Mbuckets_with_Nobjects.py
+            config-file-name:  test_bucket_sync_command_with_disable_sync_thread.yaml
+            timeout: 300
