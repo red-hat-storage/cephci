@@ -31,7 +31,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     skip-monitoring-stack: true
@@ -73,7 +72,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     skip-monitoring-stack: true
