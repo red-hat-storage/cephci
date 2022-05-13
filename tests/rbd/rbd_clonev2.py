@@ -1,4 +1,4 @@
-from tests.rbd.exceptions import RbdBaseException
+from tests.rbd.exceptions import ImageFoundError, ImageNotFoundError, RbdBaseException
 from tests.rbd.rbd_utils import Rbd
 from utility.log import Log
 
@@ -31,6 +31,7 @@ def run(**kw):
     4. Create clone for an image which is having snapshots
     """
     log.info("Running snap and clone operations with v2clone function")
+    log.info("executing *****")
     rbd = Rbd(**kw)
     pool = rbd.random_string()
     image = rbd.random_string()
@@ -52,11 +53,16 @@ def run(**kw):
         cmd = "ceph config set client rbd_move_to_trash_on_remove true"
         rbd.exec_cmd(cmd=cmd)
         rbd.remove_image(pool, image)
-        rbd.trash(pool, image)
+        if not rbd.trash_exist(pool, image):
+            raise ImageNotFoundError(" Deleted Image not found in the Trash")
+        rbd.flatten_clone(pool, clone)
+        if rbd.trash_exist(pool, image):
+            raise ImageFoundError("Images are found in Trash")
+        return 0
 
     except RbdBaseException as error:
         print(error.message)
+        return 1
 
     finally:
         rbd.clean_up(pools=[pool])
-        return rbd.flag

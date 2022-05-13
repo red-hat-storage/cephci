@@ -48,3 +48,11 @@ class IOonSecondaryError(RrbdMirrorBaseException):
 
 class ImageNotFoundError(RbdBaseException):
     """Raised when Image is not found"""
+
+    pass
+
+
+class ImageFoundError(RbdBaseException):
+    """Raised when image is found in Trash"""
+
+    pass
