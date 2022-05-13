@@ -3,15 +3,9 @@ import random
 import string
 from time import sleep
 
-from rbd.exceptions import (
-    CreateFileError,
-    ImageNotFoundError,
-    ImportFileError,
-    ProtectSnapError,
-)
-
 from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
+from tests.rbd.exceptions import CreateFileError, ImportFileError, ProtectSnapError
 from utility.log import Log
 
 log = Log(__name__)
@@ -203,6 +197,18 @@ class Rbd:
         cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
         self.exec_cmd(cmd=cmd)
 
+    def flatten_clone(self, pool_name, image_name):
+        """
+        Flattens a clone of an image from parent image
+        Args:
+            pool_name: name of the pool which clone is created
+            image_name: name of th clones image
+        """
+        log.info("start flatten")
+        cmd = f"rbd flatten {pool_name}/{image_name}"
+        self.exec_cmd(cmd=cmd)
+        log.info("flatten completed")
+
     def remove_image(self, pool_name, image_name):
         """
         Remove image from the specified pool
@@ -215,12 +221,12 @@ class Rbd:
         """
         self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
 
-    def trash(self, pool_name, image_name):
-        out = self.exec_cmd(cmd=f"rbd trash list {pool_name} --format json ")
+    def trash_exist(self, pool_name, image_name):
+        out = self.exec_cmd(
+            cmd=f"rbd trash list {pool_name} --format json ", output=True
+        )
         image_info = json.loads(out)
-        out_of = image_info.get(image_name)
-        if not out_of:
-            raise ImageNotFoundError(" Deleted Image not found in the Trash")
+        return any(image["name"] == image_name for image in image_info)
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):
