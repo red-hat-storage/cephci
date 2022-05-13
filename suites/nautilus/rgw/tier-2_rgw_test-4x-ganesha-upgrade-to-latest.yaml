@@ -1,0 +1,240 @@
+tests:
+  - test:
+      name: install ceph pre-requisities
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: ceph ansible install rhcs 4.x from cdn
+      polarion-id: CEPH-83571467
+      module: test_ansible.py
+      config:
+        use_cdn: True
+        build: '4.x'
+        ansi_config:
+          ceph_origin: repository
+          ceph_repository: rhcs
+          ceph_repository_type: cdn
+          ceph_rhcs_version: 4
+          ceph_stable_release: nautilus
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          ceph_docker_registry_auth: false
+          dashboard_enabled: false
+          copy_admin_key: True
+          configure_firewall: True
+          ceph_conf_overrides:
+            client:
+              rgw crypt require ssl: false
+              rgw crypt s3 kms encryption keys:
+                testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+      desc: test cluster 4.x cdn setup using ceph-ansible
+      abort-on-fail: True
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: True
+      desc: Check for ceph health debug info
+
+  # NFS tests
+  - test:
+      name: NFS V4 test1
+      desc: Test and Verify NFS I/O Create operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574752
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_create.yaml
+        nfs-version: 4  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 4
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+  - test:
+      name: NFS V4 test2
+      desc: Test and Verify NFS I/O Delete operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574753
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_delete.yaml
+        nfs-version: 4  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 5
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+            delete: true
+  - test:
+      name: NFS V3 test1
+      desc: Test and Verify NFS I/O Create operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574755
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_create.yaml
+        nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 4
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+  - test:
+      name: NFS V3 test2
+      desc: Test and Verify NFS I/O Delete operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574756
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_delete.yaml
+        nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 5
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+            delete: true
+
+  # Upgrade to 4.3 recent build
+
+  - test:
+      name: Upgrade ceph ansible to 4.x latest
+      polarion-id: CEPH-83573508
+      module: test_ansible_upgrade.py
+      config:
+        ansi_config:
+          ceph_origin: distro
+          ceph_stable_release: nautilus
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          ceph_stable: True
+          ceph_stable_rh_storage: True
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          configure_firewall: True
+          dashboard_enabled: False
+          upgrade_ceph_packages: True
+          ceph_rhcs_version: 4
+          ceph_iscsi_config_dev: false
+          ceph_conf_overrides:
+            client:
+              rgw crypt require ssl: false
+              rgw crypt s3 kms encryption keys:
+                testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+      desc: Test Ceph-Ansible rolling update 4.x cdn -> 4.x latest
+      abort-on-fail: True
+
+  # NFS tests
+  - test:
+      name: NFS V4 test1
+      desc: Test and Verify NFS I/O Create operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574752
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_create.yaml
+        nfs-version: 4  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 4
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+  - test:
+      name: NFS V4 test2
+      desc: Test and Verify NFS I/O Delete operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574753
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_delete.yaml
+        nfs-version: 4  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 5
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+            delete: true
+  - test:
+      name: NFS V3 test1
+      desc: Test and Verify NFS I/O Create operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574755
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_create.yaml
+        nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 4
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+  - test:
+      name: NFS V3 test2
+      desc: Test and Verify NFS I/O Delete operation
+      abort-on-fail: true
+      module: sanity_rgw_ganesha.py
+      polarion-id: CEPH-83574756
+      config:
+        script-name: test_on_nfs_io.py
+        config-file-name: test_on_nfs_io_delete.yaml
+        nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
+        test-config:
+          basedir_count: 5
+          subdir_count: 10
+          file_count: 10
+          objects_size_range:
+            min: 5
+            max: 10
+          io_op_config:
+            create: true
+            delete: true
