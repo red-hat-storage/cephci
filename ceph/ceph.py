@@ -5,9 +5,7 @@ import pickle
 import random
 import re
 import socket
-from datetime import timedelta
 from distutils.version import LooseVersion
-from select import select
 from time import sleep, time
 
 import paramiko
@@ -593,8 +591,9 @@ class Ceph(object):
                 "back_iface": "eth0",
                 "backend_filestore_dev_node": "vdd",
                 "backend_filestore_partition_path": "/dev/vdd1",
-                "ceph_version": "ceph version 12.2.5-42.el7cp (82d52d7efa6edec70f6a0fc306f40b89265535fb) luminous
-                        (stable)",
+                "ceph_version": "ceph version 12.2.5-42.el7cp
+                                 (82d52d7efa6edec70f6a0fc306f40b89265535fb) luminous
+                                 (stable)",
                 "cpu": "Intel(R) Xeon(R) CPU E5-2690 v3 @ 2.60GHz",
                 "default_device_class": "hdd",
                 "distro": "rhel",
@@ -624,6 +623,7 @@ class Ceph(object):
         for metadata in metadata_list:
             if metadata.get("id") == osd_id:
                 return metadata
+
         return None
 
     def osd_check(self, client, cluster_name=None, rhbuild=None):
@@ -660,12 +660,14 @@ class Ceph(object):
                 % (num_up_osds, num_osds)
             )
             return 1
+
         if num_osds != num_in_osds:
             logger.error(
                 "Not all osd's are in. Actual: %s / Expected: %s"
                 % (num_in_osds, num_osds)
             )
             return 1
+
         if num_osds == num_up_osds == num_in_osds:
             logger.info("All osds are up and in")
             return 0
@@ -733,11 +735,13 @@ class Ceph(object):
             if len(mons.get("quorum")) != self.ceph_demon_stat["mon"]:
                 logger.error("Not all monitors are in cluster")
                 return 1
+
         logger.info("Expected MONs is in quorum")
 
         if "HEALTH_ERR" in out:
             logger.error("HEALTH in ERROR STATE")
             return 1
+
         return 0
 
     def distribute_all_yml(self):
@@ -747,6 +751,7 @@ class Ceph(object):
         gvar = yaml.dump(self.ansible_config, default_flow_style=False)
         for installer in self.get_ceph_objects("installer"):
             installer.append_to_all_yml(gvar)
+
         logger.info("updated all.yml: \n" + gvar)
 
     def refresh_ansible_config_from_all_yml(self, installer=None):
@@ -758,6 +763,7 @@ class Ceph(object):
         """
         if not installer:
             installer = self.get_ceph_object("installer")
+
         self.ansible_config = installer.get_all_yml()
 
     def setup_packages(
@@ -783,6 +789,7 @@ class Ceph(object):
         """
         if not build:
             build = self.rhcs_version
+
         with parallel() as p:
             for node in self.get_nodes():
                 if self.use_cdn:
@@ -1438,39 +1445,41 @@ class CephNode(object):
         """
         ssh = self.rssh if kw.get("sudo") else self.ssh
         cmd = kw["cmd"]
+        timeout = kw.get("timeout", 3600)
         logger.info(f"long running command on {self.ip_address} -- {cmd}")
-        channel = ssh().get_transport().open_session()
-        channel.exec_command(cmd)
-        end_time = datetime.datetime.now() + timedelta(seconds=3600)
 
-        while end_time > datetime.datetime.now():
-            try:
-                if channel.exit_status_ready():
-                    ec = channel.recv_exit_status()
-                    break
+        try:
+            channel = ssh().get_transport().open_session()
+            channel.settimeout(timeout)
 
-                rl, wl, xl = select([channel], [], [channel], 4200)
+            # A mismatch between stdout and stderr streams have been observed hence
+            # combining the streams and logging is set to debug level only.
+            channel.set_combine_stderr(True)
+            channel.exec_command(cmd)
 
-                if len(rl) > 0:
+            while not channel.exit_status_ready():
+                # Prevent high resource consumption
+                sleep(2)
+
+                if channel.recv_ready():
                     data = channel.recv(1024)
-                    data = data.decode(errors="ignore")
-                    logger.info(data)
+                    while data:
+                        for line in data.splitlines():
+                            logger.debug(line)
 
-                if len(xl) > 0:
-                    data = channel.recv(1024)
-                    data = data.decode(errors="ignore")
-                    logger.error(data)
-            except socket.timeout as sock_err:
-                logger.error("socket.timeout doesn't give an error message")
-                raise SocketTimeoutException(sock_err)
-        else:
-            raise SocketTimeoutException("Timeout")
-        logger.info(f"end-time: {datetime.datetime.now()}")
-        return ec
+                        data = channel.recv(1024)
+
+            logger.info(f"Command completed on {datetime.datetime.now()}")
+            return channel.recv_exit_status()
+        except socket.timeout as terr:
+            logger.error(f"Command failed to execute within {timeout} seconds.")
+            raise SocketTimeoutException(terr)
+        except BaseException as be:  # noqa
+            logger.exception(be)
+            raise CommandFailed(be)
 
     def exec_command(self, **kw):
-        """
-        execute a command on the vm
+        """execute a command on the vm.
 
         Attributes:
             kw (Dict): execute command configuration
@@ -1484,7 +1493,6 @@ class CephNode(object):
 
             kw:
                 check_ec: False will run the command and not wait for exit code
-
         """
         if kw.get("long_running"):
             return self.long_running(**kw)
@@ -1532,19 +1540,17 @@ class CephNode(object):
                 raise CommandFailed(
                     f"{kw['cmd']} Error:  {str(stderr)} {str(self.ip_address)}"
                 )
-            return stdout, stderr
-        else:
-            return stdout, stderr
+
+        return stdout, stderr
 
     def remote_file(self, **kw):
-        if kw.get("sudo"):
-            client = self.rssh
-        else:
-            client = self.ssh
+        """Return contents of the remote file."""
+        client = self.rssh if kw.get("sudo", False) else self.ssh
         file_name = kw["file_name"]
         file_mode = kw["file_mode"]
         ftp = client().open_sftp()
         remote_file = ftp.file(file_name, file_mode, -1)
+
         return remote_file
 
     def _keep_alive(self):

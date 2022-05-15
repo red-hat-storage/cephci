@@ -24,7 +24,6 @@ from utility.log import Log
 
 log = Log(__name__)
 
-
 # variables
 mounting_dir = "/mnt/cephfs/"
 clients = []
@@ -32,14 +31,17 @@ md5sum_list1 = []
 md5sum_list2 = []
 fuse_clients = []
 kernel_clients = []
+
 mon_node = ""
 mon_node_ip = ""
 mds_nodes = []
+
 md5sum_file_lock = []
 active_mdss = []
 RC = []
 failure = {}
 output = []
+
 magna_server = "http://magna002.ceph.redhat.com"
 magna_url = f"{magna_server}/cephci-jenkins/"
 magna_rhcs_artifacts = f"{magna_server}/cephci-jenkins/latest-rhceph-container-info/"
@@ -52,9 +54,11 @@ class TestSetupFailure(Exception):
 # function for getting the clients
 def get_client_info(ceph_nodes, clients):
     log.info("Getting Clients")
+
     for node in ceph_nodes:
         if node.role == "client":
             clients.append(node)
+
     # Identifying MON node
     for node in ceph_nodes:
         if node.role == "mon":
@@ -62,14 +66,17 @@ def get_client_info(ceph_nodes, clients):
             out, err = mon_node.exec_command(cmd="sudo hostname -I")
             mon_node_ip = out.rstrip("\n")
             break
+
     for node in ceph_nodes:
         if node.role == "mds":
             mds_nodes.append(node)
+
     for node in clients:
         node.exec_command(cmd="sudo yum install -y attr")
 
-    fuse_clients = clients[0:2]  # seperating clients for fuse and kernel
+    fuse_clients = clients[0:2]  # separating clients for fuse and kernel
     kernel_clients = clients[2:4]
+
     return (
         fuse_clients,
         kernel_clients,
@@ -81,7 +88,7 @@ def get_client_info(ceph_nodes, clients):
     )
 
 
-# function for providing authorization to the clients from MON ndoe
+# function for providing authorization to the clients from MON node
 def auth_list(clients, mon_node):
     for node in clients:
         log.info("Giving required permissions for clients from MON node:")
@@ -105,11 +112,12 @@ def auth_list(clients, mon_node):
         node.exec_command(
             cmd="sudo chmod 644 /etc/ceph/ceph.client.%s.keyring" % (node.hostname)
         )
+
         # creating mounting directory
         node.exec_command(cmd="sudo mkdir %s" % (mounting_dir))
 
 
-# MOunting single FS with ceph-fuse
+# Mounting single FS with ceph-fuse
 def fuse_mount(fuse_clients, mounting_dir):
     try:
         for client in fuse_clients:
@@ -120,11 +128,13 @@ def fuse_mount(fuse_clients, mounting_dir):
             )
             out, err = client.exec_command(cmd="mount")
             mount_output = out.split()
+
             log.info("Checking if fuse mount is is passed of failed:")
             if "fuse" in mount_output:
                 log.info("ceph-fuse mounting passed")
             else:
                 log.error("ceph-fuse mounting failed")
+
         return md5sum_list1
     except Exception as e:
         log.error(e)
@@ -198,11 +208,13 @@ def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
             )
             out, err = client.exec_command(cmd="mount")
             mount_output = out.split()
+
             log.info("Checking if kernel mount is is passed of failed:")
             if "%s:6789:/" % (mon_node_ip) in mount_output:
                 log.info("kernel mount passed")
             else:
                 log.error("kernel mount failed")
+
         return md5sum_list2
     except Exception as e:
         log.error(e)
@@ -413,45 +425,40 @@ def rc_verify(tc, RC):
 #     BOLD = '\033[1m'
 
 
-def configure_logger(test_name, run_dir, level=logging.INFO):
+def configure_logger(test_name, run_dir):
     """
     Configures a new FileHandler for the root logger.
 
     Args:
         test_name: name of the test being executed. used for naming the logfile
         run_dir: directory where logs are being placed
-        level: logging level
 
     Returns:
         URL where the log file can be viewed or None if the run_dir does not exist
     """
     if not os.path.isdir(run_dir):
         log.error(
-            "Run directory '{run_dir}' does not exist, logs will not output to file.".format(
-                run_dir=run_dir
-            )
+            f"Run directory '{run_dir}' does not exist, logs will not output to file."
         )
         return None
-    _root = logging.getLogger()
 
-    full_log_name = "{test_name}.log".format(test_name=test_name)
-    test_logfile = os.path.join(run_dir, full_log_name)
-    log.info("Test logfile: {}".format(test_logfile))
     close_and_remove_filehandlers()
+    log_format = logging.Formatter(log.log_format)
+
+    full_log_name = f"{test_name}.log"
+    test_logfile = os.path.join(run_dir, full_log_name)
+    log.info(f"Test logfile: {test_logfile}")
+
     _handler = logging.FileHandler(test_logfile)
-    _handler.setLevel(level)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    _handler.setFormatter(formatter)
-    _root.addHandler(_handler)
+    _handler.setFormatter(log_format)
+    log.logger.addHandler(_handler)
 
     # error file handler
     err_logfile = os.path.join(run_dir, f"{test_name}.err")
     _err_handler = logging.FileHandler(err_logfile)
+    _err_handler.setFormatter(log_format)
     _err_handler.setLevel(logging.ERROR)
-    _err_handler.setFormatter(formatter)
-    _root.addHandler(_err_handler)
+    log.logger.addHandler(_err_handler)
 
     url_base = (
         magna_url + run_dir.split("/")[-1]
@@ -459,8 +466,8 @@ def configure_logger(test_name, run_dir, level=logging.INFO):
         else run_dir
     )
     log_url = "{url_base}/{log_name}".format(url_base=url_base, log_name=full_log_name)
+    log.debug("Completed log configuration")
 
-    log.info("Completed log configuration")
     return log_url
 
 
@@ -490,6 +497,7 @@ def create_run_dir(run_id, log_dir=""):
         base_dir = f"/tmp/{dir_name}"
     else:
         base_dir = os.path.join(base_dir, dir_name)
+
     print(f"log directory - {base_dir}")
     try:
         os.makedirs(base_dir)
@@ -500,7 +508,7 @@ def create_run_dir(run_id, log_dir=""):
     return base_dir
 
 
-def close_and_remove_filehandlers(logger=logging.getLogger()):
+def close_and_remove_filehandlers(logger=logging.getLogger("cephci")):
     """
     Close FileHandlers and then remove them from the loggers handlers list.
 
@@ -560,7 +568,8 @@ def error_handler(exc_info):
 
 def create_unique_test_name(test_name, name_list):
     """
-    Creates a unique test name using the actual test name and an increasing integer for each duplicate test name.
+    Creates a unique test name using the actual test name and an increasing integer for
+    each duplicate test name.
 
     Args:
         test_name: name of the test
@@ -597,19 +606,22 @@ def get_latest_container(version):
     Retrieves latest nightly-build container details from magna002.ceph.redhat.com
 
     Args:
-        version: version to get the latest image tag, should match latest-RHCEPH-{version} filename at magna002
-                 storage
+        version:    version to get the latest image tag, should match
+                    latest-RHCEPH-{version} filename at magna002 storage
 
     Returns:
         Container details dictionary with given format:
-        {'docker_registry': docker_registry, 'docker_image': docker_image, 'docker_tag': docker_tag}
+        {
+            'docker_registry': docker_registry,
+            'docker_image': docker_image,
+            'docker_tag': docker_tag
+        }
     """
-    url = "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/latest-RHCEPH-{}.json".format(
-        version
-    )
+    url = f"{magna_rhcs_artifacts}latest-RHCEPH-{version}.json"
     data = requests.get(url, verify=False)
     docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
     docker_image = "rh-osbs/rhceph"
+
     return {
         "docker_registry": docker_registry,
         "docker_image": docker_image,
@@ -619,19 +631,25 @@ def get_latest_container(version):
 
 def get_release_repo(version):
     """
-    Retrieves the repo and image information for the RC build of the version specified from magna002.ceph.redhat.com
+    Retrieves the repo and image information for the RC build of the version specified
+    from magna002.ceph.redhat.com
 
     Args:
-        version: version to get the latest image tag, should match version in release.yaml at magna002
-                 storage
+        version:    version to get the latest image tag, should match version in
+                    release.yaml at magna002 storage
 
     Returns:
         Repo and Container details dictionary with given format:
-        {'composes': <RC release composes>, 'image': <CEPH and monitoring images related to the RC build>}"""
+        {
+            'composes': <RC release composes>,
+            'image': <CEPH and monitoring images related to the RC build>
+        }
+    """
     recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
     url = f"{recipe_url}release.yaml"
     data = requests.get(url, verify=False)
     repo_details = yaml.safe_load(data.text)[version]
+
     return repo_details
 
 
@@ -640,6 +658,7 @@ def yaml_to_dict(file_name):
     file_path = os.path.abspath(file_name)
     with open(file_path, "r") as conf_:
         content = yaml.safe_load(conf_)
+
     return content
 
 
@@ -651,7 +670,8 @@ def custom_ceph_config(suite_config, custom_config, custom_config_file):
 
     Args:
         suite_config: ceph_conf_overrides that currently exist in the test suite
-        custom_config: custom config args provided by the cli (these all go to the global scope)
+        custom_config: custom config args provided by the cli (these all go to the
+                       global scope)
         custom_config_file: path to custom config yaml file provided by the cli
 
     Returns
@@ -702,15 +722,18 @@ def email_results(test_result):
     is a no-op.
 
     Args:
-        test_result (dict): contains all the various keyword arguments containing execution details.
-        Keyword Args :
+        test_result (dict): contains all the various keyword arguments containing
+                            execution details.
+    Supported Keywords
         results_list (list): test case results info
         run_id (str): id of the test run
         trigger_user (str): user of the node where the run is triggered from
         run_dir (str): log directory path
         suite_run_time (dict): suite total duration info
         info (dict): General information about the test run.
-        send_to_cephci (optional [bool]): send to cephci@redhat.com as well as user email
+        send_to_cephci (optional [bool]): send to cephci@redhat.com as well as user
+                                          email
+
     Returns: None
     """
 
@@ -730,27 +753,33 @@ def email_results(test_result):
         run_status=run_status,
         id=run_id,
     )
+
     test_result["run_name"] = run_name
     html = create_html_file(test_result=test_result)
     part1 = MIMEText(html, "html")
     msg.attach(part1)
+
     props_content = f"""
     run_status=\"{run_status}\"
     compose=\"{results_list[0]['compose-id']}\"
     suite=\"{results_list[0]['suite-name']}\"
     """
-    # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
+
+    # result properties file and summary html log for injecting vars in jenkins jobs,
+    # gitlab JJB to parse
     abs_path = os.path.join(os.getcwd(), "result.props")
     write_to_file(data=props_content.strip(), abs_path=abs_path)
     cfg = get_cephci_config().get("email")
     if not cfg:
         return
+
     sender = "cephci@redhat.com"
     recipients = []
     address = cfg.get("address")
     send_to_cephci = test_result.get("send_to_cephci", False)
     if cfg and address:
         recipients = re.split(r",\s*", cfg["address"])
+
     if address.count("@") != len(recipients):
         log.warning(
             "No email address configured in ~/.cephci.yaml."
@@ -761,6 +790,7 @@ def email_results(test_result):
     if send_to_cephci:
         recipients.append(sender)
         recipients = list(set(recipients))
+
     if recipients:
         msg["From"] = sender
         msg["To"] = ", ".join(recipients)
@@ -773,27 +803,27 @@ def email_results(test_result):
                     recipients=recipients
                 )
             )
-
         except Exception as e:
             print("\n")
             log.exception(e)
 
 
 def create_html_file(test_result) -> str:
-    """
-    Creates the HTML file from the template to be sent via mail
+    """Creates the HTML file from the template to be sent via mail
+
     Args:
-        test_result (dict): contains all the various keyword arguments containing execution details.
-        Keyword Args :
+        test_result (dict): contains all the various keyword arguments containing
+                            execution details.
+    Supported Args
         results_list (list): test case results info
         run_name (str): name of the test run
         user (str): user of the node where the run is triggered from
         run_dir (str): log directory path
         run_time (dict): suite total duration info
         info (dict): General information about the test run
+
     Returns: HTML file
     """
-
     try:
         run_name = test_result["run_name"]
         trigger_user = test_result["trigger_user"]
@@ -805,7 +835,8 @@ def create_html_file(test_result) -> str:
         log.error(f"Key not found : {kerr}")
         exit(1)
 
-    # we are checking for /ceph/cephci-jenkins to see if the magna is already mounted on system we are executing
+    # we are checking for /ceph/cephci-jenkins to see if the magna is already mounted
+    # on system we are executing
     log_link = (
         f"{magna_url}{run_name}" if "/ceph/cephci-jenkins" in run_dir else run_dir
     )
@@ -834,7 +865,6 @@ def create_html_file(test_result) -> str:
     # Result.html file is stored in the folder containing the log files.
     # Moving to relative path facilitate the copying of the
     # files to a different location without breaking the hyperlinks in result.html.
-
     result_html = template.render(
         run_name=run_name,
         log_link=log_link,
@@ -847,6 +877,7 @@ def create_html_file(test_result) -> str:
 
     abs_path = os.path.join(run_dir, "index.html")
     write_to_file(data=result_html, abs_path=abs_path)
+
     return html
 
 
@@ -887,6 +918,7 @@ def get_cephci_config():
             "See README for more information."
         )
         raise
+
     return cfg
 
 
@@ -899,6 +931,7 @@ def get_run_status(results_list):
             return "FAILED"
         if tc["status"] == "Not Executed":
             return "SETUP-FAILURE"
+
     return "PASSED"
 
 
@@ -921,7 +954,6 @@ def setup_cluster_access(cluster, target) -> None:
 
     Raises:
         CommandException    when a remote command fails to execute.
-
     """
     node_commands = ["yum install -y ceph-common --nogpgcheck", "mkdir -p /etc/ceph"]
     for command in node_commands:
@@ -966,7 +998,6 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
 
     Only Installer node will get prefixed with "Installer" name,
     which helps in identification of admin node.
-
     """
     _role = ""
     if "installer" in role:
@@ -1170,7 +1201,7 @@ class ReportPortal:
     @rp_deco
     def start_test_item(self, name: str, description: str, item_type: str) -> None:
         """
-        Records a entry within the initiated launch.
+        Records an entry within the initiated launch.
 
         Args:
             name (str):         Name to be set for the test step
@@ -1213,6 +1244,7 @@ class ReportPortal:
 
         Args:
             message (str):  Message to be logged.
+            level (str):    The level at which the record has to be logged.
 
         Returns:
             None
@@ -1224,7 +1256,8 @@ def tfacon(launch_id):
     """
     Connects the launch with TFA and gives the predictions for the launch
     It will fail silently
-    Arguments:
+
+    Args:
          launch_id : launch_id that has been created
     """
     cfg = get_cephci_config()
@@ -1261,14 +1294,13 @@ def tfacon(launch_id):
 
 
 def install_start_kafka(rgw_node, cloud_type):
-    """
-    install kafka package and start zookeeper and kafka services
-    """
+    """Install kafka package and start zookeeper and kafka services."""
     log.info("install kafka broker for bucket notification tests")
     if cloud_type == "ibmc":
         wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.89/kafka_2.13-2.8.0.tgz"
     else:
         wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
+
     tar_cmd = "tar -zxvf /tmp/kafka.tgz -C /usr/local/"
     rename_cmd = "mv /usr/local/kafka_2.13-2.8.0 /usr/local/kafka"
     chown_cmd = "chown cephuser:cephuser /usr/local/kafka"
@@ -1304,10 +1336,12 @@ def method_should_succeed(function, *args, **kwargs):
     Wrapper function to verify the return value of executed method.
 
     This function will raise Assertion if return value is false, empty, or 0.
+
     Args:
         function: name of the function
         args: arg list
         kwargs: arg dict
+
     Usage:
         Basic usage is pass a function and it's list and/or dict arguments
         ex:     method_should_succeed(set_osd_out, ceph_cluster, osd_id)
@@ -1333,12 +1367,10 @@ def should_not_be_empty(variable, msg="Variable is empty"):
 
 
 def generate_self_signed_cert_on_rgw(rgw_node):
-    """
-    generate self signed certifcate on given rgw node
-    """
-    SSL_CERT_PATH = "/etc/ceph/"
-    PEM_FILE_NAME = "server.pem"
-    #    rgw_node = ceph_nodes.get_ceph_object("rgw").node
+    """Generate self signed certificate on given rgw node."""
+    ssl_cert_path = "/etc/ceph/"
+    pem_file_name = "server.pem"
+
     subject = {
         "common_name": rgw_node.hostname,
         "ip_address": rgw_node.ip_address,
@@ -1349,17 +1381,17 @@ def generate_self_signed_cert_on_rgw(rgw_node):
         sudo=True,
         cmd="mkdir /etc/ceph; chown 755 /etc/ceph; touch /etc/ceph/server.pem",
     )
-    PEM_FILE_PATH = os.path.join(SSL_CERT_PATH, PEM_FILE_NAME)
+    pem_file_path = os.path.join(ssl_cert_path, pem_file_name)
     server_pem_file = rgw_node.remote_file(
-        sudo=True, file_name=PEM_FILE_PATH, file_mode="w+"
+        sudo=True, file_name=pem_file_path, file_mode="w+"
     )
     server_pem_file.write(pem)
     server_pem_file.flush()
-    log.info(pem)
+    log.debug(pem)
 
 
 def clone_the_repo(config, node, path_to_clone):
-    """clone the repo on to test node
+    """clone the repo on to test node.
 
     Args:
         config: test config
