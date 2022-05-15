@@ -151,17 +151,7 @@ Options:
   --skip-sos-report                 Enables to collect sos-report on test suite failures
                                     [default: false]
 """
-log = Log(__name__)
-root = logging.getLogger()
-root.setLevel(logging.INFO)
-
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.ERROR)
-ch.setFormatter(formatter)
-root.addHandler(ch)
-
+log = Log()
 test_names = []
 
 
@@ -299,11 +289,13 @@ def print_results(tc):
             dur = str(test["duration"])
         else:
             dur = "0s"
+
         name = test["name"]
         desc = test["desc"] or "None"
         status = test["status"]
         comments = test["comments"]
         line = f"{name:<30.30s}   {desc:<60.60s}   {dur:<30s}   {status:<15s}   {comments:>15s}"
+
         print(line)
 
 
@@ -312,6 +304,7 @@ def load_file(file_name):
     file_path = os.path.abspath(file_name)
     with open(file_path, "r") as conf_:
         content = yaml.safe_load(conf_)
+
     return content
 
 
@@ -397,12 +390,10 @@ def run(args):
     startup_log = os.path.join(run_dir, "startup.log")
 
     handler = logging.FileHandler(startup_log)
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
+    log.logger.addHandler(handler)
 
     if console_log_level:
-        ch.setLevel(logging.getLevelName(console_log_level.upper()))
+        log.logger.setLevel(console_log_level.upper())
 
     log.info(f"Startup log location: {startup_log}")
     run_start_time = datetime.datetime.now()
@@ -463,6 +454,7 @@ def run(args):
     skip_setup = args.get("--skip-cluster", False)
     skip_subscription = args.get("--skip-subscription", False)
     post_to_report_portal = args.get("--report-portal", False)
+
     rp_logger = ReportPortal()
     # setting logger for ReportPortal
     log.set_rp_logger(rp_logger)
@@ -740,7 +732,9 @@ def run(args):
         report_portal_description = tc["desc"] or ""
         unique_test_name = create_unique_test_name(tc["name"], test_names)
         test_names.append(unique_test_name)
+
         tc["log-link"] = configure_logger(unique_test_name, run_dir)
+
         mod_file_name = os.path.splitext(test_file)[0]
         test_mod = importlib.import_module(mod_file_name)
         print("\nRunning test: {test_name}".format(test_name=tc["name"]))
@@ -749,7 +743,6 @@ def run(args):
             print("Test logfile location: {log_url}".format(log_url=tc["log-link"]))
 
         log.info(f"Running test {test_file}")
-        # log.info("Running test %s", test_file)
         start = datetime.datetime.now()
 
         for cluster_name in test.get("clusters", ceph_cluster_dict):
@@ -818,6 +811,7 @@ def run(args):
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
+
             try:
                 if post_to_report_portal:
                     rp_logger.start_test_item(
@@ -843,8 +837,8 @@ def run(args):
                     ceph_cluster_dict=ceph_cluster_dict,
                     clients=clients,
                 )
-            except BaseException:  # noqa
-                log.error(traceback.format_exc())
+            except BaseException as be:  # noqa
+                log.exception(be)
                 rc = 1
             finally:
                 collect_recipe(ceph_cluster_dict[cluster_name])
