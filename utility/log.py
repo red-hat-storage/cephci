@@ -34,7 +34,7 @@ class Log:
     def __init__(self, name=None) -> None:
         """Initializes the logging mechanism based on the inputs provided."""
         self._logger = logging.getLogger("cephci")
-        logging.basicConfig(format=LOG_FORMAT, encoding="utf-8", level=logging.INFO)
+        logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
         if name:
             self._logger.name = f"cephci.{name}"
