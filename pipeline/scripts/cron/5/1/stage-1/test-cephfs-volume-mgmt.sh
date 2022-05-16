@@ -6,7 +6,7 @@ instance_name="ci-${random_string}"
 platform="rhel-8"
 rhbuild="5.1"
 test_suite="suites/pacific/cephfs/tier-2_cephfs_test-volume-management.yaml"
-test_conf="conf/pacific/cephfs/tier_2_cephfs_9-node-cluster.yaml"
+test_conf="conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
 test_inventory="conf/inventory/rhel-8-latest.yaml"
 return_code=0
 
