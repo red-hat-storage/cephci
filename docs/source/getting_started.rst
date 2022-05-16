@@ -211,7 +211,7 @@ Examples
       -                                    # List of clusters part of the test env.
         ceph-cluster:                      # Ceph storage cluster deployment
           name: "ceph"                     # String: The name of the cluster
-          networks:                        # Optional: network information
+          networks:                        # network information
             public:                        # Ceph public network
               - "16.128.103.0/24"          # CIDR notation is only supported
               - "16.128.104.0/24"          # Required when deploying in stretched mode.

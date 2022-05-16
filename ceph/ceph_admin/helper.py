@@ -94,7 +94,7 @@ class GenerateServiceSpec:
         Returns:
             hostname (Str)
         """
-        return node.shortname
+        return node.hostname
 
     @staticmethod
     def get_addr(node):
@@ -133,7 +133,7 @@ class GenerateServiceSpec:
             list of hostanmes (List)
         """
         nodes = get_nodes_by_ids(self.cluster, node_names)
-        return [node.shortname for node in nodes]
+        return [node.hostname for node in nodes]
 
     def _get_template(self, service_type):
         """
