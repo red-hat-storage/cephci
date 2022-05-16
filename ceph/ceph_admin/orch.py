@@ -64,7 +64,7 @@ class Orch(
         service_name: str = None,
         service_type: str = None,
         timeout: int = 1800,
-        interval: int = 5,
+        interval: int = 30,
     ) -> bool:
         """
         Verify the provided service is running for the given list of ids.
@@ -91,6 +91,8 @@ class Orch(
         if service_type:
             check_status_dict["args"]["service_type"] = service_type
 
+        _retries = 3  # cross-verification retries
+        _count = 0
         while end_time > datetime.now():
             sleep(interval)
             out, err = self.ls(check_status_dict)
@@ -102,7 +104,10 @@ class Orch(
                 f"{running}/{count} {service_name if service_name else service_type} up... retrying"
             )
 
-            if not (count + running) == 0 and count == running:
+            _retries = 3 if _count != count else _retries - 1
+            _count = count
+
+            if not (count + running) == 0 and count == running and _retries == 0:
                 return True
 
         # Identify the failure
