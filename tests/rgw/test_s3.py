@@ -8,14 +8,13 @@ https://github.com/ceph/s3-tests. Over here, we have three stages
     - Execute Tests
     - Test Teardown
 
-In the test setup stage, the test suite is cloned and the necessary steps to execute it
-is carried out.
+In test setup stage, the test suite is cloned and the necessary steps to execute it is
+carried out.
 
-In the execute test stage, the test suite is executed using tags based on the RHCS
-build version.
+In execute test stage, the test suite is executed using tags based on the RHCS build
+version.
 
-In the test teardown, the cloned repository is removed and the configuration changes
-undone.
+In test teardown, the cloned repository is removed and the configuration change undone.
 
 Requirement parameters
      ceph_nodes:    The list of node participating in the RHCS environment.
@@ -161,7 +160,7 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         0 - Success
         1 - Failure
     """
-    log.info("Executing s3-tests")
+    log.debug("Executing s3-tests")
     try:
         base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml virtualenv/bin/nosetests -v"
         extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
@@ -177,15 +176,11 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
             tests = "s3tests_boto3"
 
         cmd = f"{base_cmd} {extra_args} {tests}"
-        out, err = node.exec_command(cmd=cmd, timeout=3600)
-        log.info(out)
-        log.error(err)
+        return node.exec_command(cmd=cmd, long_running=True)
     except CommandFailed as e:
         log.warning("Received CommandFailed")
         log.warning(e)
         return 1
-
-    return 0
 
 
 def execute_teardown(cluster: Ceph, build: str) -> None:
