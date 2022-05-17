@@ -1392,7 +1392,6 @@ class CephNode(object):
 
         shortname = self.hostname.split(".")
         self.shortname = shortname[0]
-        self.exec_command(cmd=f"sudo hostname {self.shortname}")
         logger.info(
             "hostname and shortname set to %s and %s", self.hostname, self.shortname
         )
