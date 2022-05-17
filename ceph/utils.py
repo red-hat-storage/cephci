@@ -101,7 +101,7 @@ def create_baremetal_ceph_nodes(cluster_conf):
                     "role": RolesContainer(node.get("role")),
                     "no-of-volumes": len(node.get("volumes", [])),
                     "volumes": node.get("volumes"),
-                    "subnet": cluster_conf["ceph-cluster"]["public-network-cidr"],
+                    "subnet": cluster_conf["ceph-cluster"]["networks"]["public"][0],
                 }
             )
 
@@ -1013,7 +1013,7 @@ def get_node_by_id(cluster, node_name):
         node instance (CephVMNode)
     """
     for node in cluster.get_nodes():
-        searches = re.findall(rf"{node_name}?\d*", node.shortname)
+        searches = re.findall(rf"{node_name}?\d*", node.hostname)
         for ele in searches:
             if ele == node_name:
                 return node
