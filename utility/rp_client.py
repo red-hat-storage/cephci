@@ -46,7 +46,6 @@ test cases based on the name of the test case.
 If the .zip file not present in the attachments. for those we are just updating the results and skipping the attachments
 """
 import datetime
-import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -57,9 +56,10 @@ from docopt import docopt
 from rp_utils.preproc import PreProcClient
 from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
-from utils import tfacon
+from utility.log import Log
+from utils import configure_logger, create_run_dir, generate_unique_id, tfacon
 
-log = logging.getLogger(__name__)
+log = Log(__name__)
 doc = """
 Standard script to push all the logs from Xunit files to Report Portal
 
@@ -244,4 +244,7 @@ if __name__ == "__main__":
         "config_file": args.get("--config_file"),
         "payload_dir": args.get("--payload_dir"),
     }
+    run_id = generate_unique_id(length=6)
+    run_dir = create_run_dir(run_id)
+    configure_logger("report_portal", run_dir)
     upload_logs(arguments)
