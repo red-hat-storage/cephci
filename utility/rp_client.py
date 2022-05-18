@@ -53,7 +53,6 @@ from functools import partial
 
 import xmltodict
 from docopt import docopt
-
 from rp_utils.preproc import PreProcClient
 from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
