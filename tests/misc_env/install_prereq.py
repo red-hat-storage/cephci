@@ -117,6 +117,10 @@ def install_prereq(
     log.info(
         "distro version_id: {version_id}".format(version_id=distro_info["VERSION_ID"])
     )
+    # Remove apache-arrow.repo for baremtal
+    cmd_remove_apache_arrow = "sudo rm -f /etc/yum.repos.d/apache-arrow.repo"
+    ceph.exec_command(cmd=cmd_remove_apache_arrow)
+
     if ceph.pkg_type == "deb":
         ceph.exec_command(
             cmd="sudo apt-get install -y " + deb_all_packages, long_running=True
