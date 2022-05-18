@@ -172,6 +172,81 @@
     - dmfg
     - stage-2
 
+- name: "Tier-0 test suite for 5x for RBD sanity"
+  suite: "suites/pacific/rbd/tier-0_rbd.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-0
+    - openstack
+    - ibmc
+    - rbd
+
+- name: "Tier-1 test suite for 5x for RBD-mirror functionality"
+  suite: "suites/pacific/rbd/tier-1_rbd_mirror.yaml"
+  global-conf: "conf/pacific/rbd/tier-1_rbd_mirror.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-0
+    - openstack
+    - ibmc
+    - rbd
+
+- name: "Tier-1 test suite for 5x for RBD functionality"
+  suite: "suites/pacific/rbd/tier-1_rbd.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-1
+    - openstack
+    - ibmc
+    - rbd
+
+- name: "Tier-2 test suite for 5x - RBD functionality"
+  suite: "suites/pacific/rbd/tier-2_rbd_regression.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - rbd
+
+- name: "Tier-2 test suite for 5x - RBD CLI regression"
+  suite: "suites/pacific/rbd/tier-2_rbd_cli_regression.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - rbd
+
 - name: "Testing RADOS basic regression scenarios"
   suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
   global-conf: "conf/pacific/rados/7-node-cluster.yaml"
