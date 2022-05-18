@@ -45,8 +45,6 @@ those files will get attached to the suite and if there are any .err files we ar
 test cases based on the name of the test case.
 If the .zip file not present in the attachments. for those we are just updating the results and skipping the attachments
 """
-from utility.log import Log
-
 import datetime
 import os
 import re
@@ -58,7 +56,8 @@ from docopt import docopt
 from rp_utils.preproc import PreProcClient
 from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
-from utils import configure_logger, create_run_dir, generate_unique_id, tfacon
+from utility.log import Log
+from utility.utils import configure_logger, create_run_dir, generate_unique_id, tfacon
 
 log = Log(__name__)
 doc = """
