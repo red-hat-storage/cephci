@@ -246,3 +246,168 @@
     - openstack
     - ibmc
     - rbd
+
+- name: "Testing RADOS basic regression scenarios"
+  suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
+  global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "Testing RADOS EC Pool recovery"
+  suite: "suites/pacific/rados/tier-2_rados_ec-pool_recovery.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "Testing RADOS robust osd rebalance scenarios"
+  suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "RADOS regression testing for stretched Clusters"
+  suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "RADOS regression for testing various pool functionalities"
+  suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "RADOS regression testing for Scrubbing scenarios"
+  suite: "suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
+  global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-3
+    - openstack
+    - ibmc
+    - rados
+
+- name: "Testing RADOS regression for ec pool osd rebalance"
+  suite: "suites/pacific/rados/tier-3_rados_test-ecpool-osd-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "Testing RADOS regression for in-progress osd rebalance"
+  suite: "suites/pacific/rados/tier-3_rados_test-osd-inprogress-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "Testing RADOS regression for Stretch mode upgrade"
+  suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - periodical
+    - tier-1
+    - openstack
+    - ibmc
+    - rados
+
+- name: "RADOS regression testing for Mon DB trimming"
+  suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+
+- name: "RADOS regression testing osd rebalance with many pools"
+  suite: "suites/pacific/rados/tier-3_rados_test-osd-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
