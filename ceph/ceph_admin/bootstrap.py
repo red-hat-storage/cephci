@@ -204,8 +204,8 @@ class BootstrapMixin:
                 extra_vars=ansible_run.get("extra-vars"),
                 extra_args=ansible_run.get("extra-args"),
             )
-
-        self.install()
+        else:
+            self.install()
 
         cmd = "cephadm"
         if config.get("base_cmd_args"):
