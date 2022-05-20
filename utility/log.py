@@ -41,12 +41,11 @@ class Log:
 
         self._log_level = self._logger.getEffectiveLevel()
         self._log_dir = None
-
-        self.rp_logger = None
         self.log_format = LOG_FORMAT
 
-    def set_rp_logger(self, logger):
-        self.rp_logger = logger
+    @property
+    def rp_logger(self):
+        return self.config.get("rp_logger")
 
     @property
     def logger(self) -> logging.Logger:
@@ -82,6 +81,7 @@ class Log:
                 "testing_tool": "cephci",
                 "rhcs": self.config.get("rhcs"),
                 "test_build": self.config.get("rhbuild", "released"),
+                "rp_logger": self.config.get("rp_logger", None),
             }
         )
 
