@@ -1249,7 +1249,12 @@ class ReportPortal:
         Returns:
             None
         """
-        self.client.log(time=timestamp(), message=message, level=level)
+        self.client.log(
+            time=timestamp(),
+            message=message.__str__(),
+            level=level,
+            item_id=self._test_id,
+        )
 
 
 def tfacon(launch_id):
