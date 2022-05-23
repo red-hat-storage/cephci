@@ -1,5 +1,5 @@
 # =====================================================================================
-# Single file to specify test suites to be executed for all regression (perbuild) and periodical tests
+# Single file to specify test suites to be executed for all regression (sanity) and schedule tests
 # as per defined in each stages.
 # Each stage will execute in sequential pattern.
 # Contains all Default parameter used for Execution when no override is specified.
@@ -15,7 +15,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-0
     - openstack
     - ibmc
@@ -30,7 +30,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-0
     - openstack
     - ibmc
@@ -45,7 +45,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-0
     - openstack
     - ibmc
@@ -60,7 +60,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-0
     - openstack
     - ibmc
@@ -75,7 +75,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -90,7 +90,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -105,7 +105,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -120,7 +120,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -136,7 +136,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -151,7 +151,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -166,7 +166,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -181,7 +181,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -197,7 +197,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -213,7 +213,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -228,7 +228,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -243,7 +243,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-1
     - openstack
     - ibmc
@@ -258,7 +258,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -273,7 +273,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -288,7 +288,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -303,7 +303,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -318,7 +318,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -333,7 +333,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -348,7 +348,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -363,7 +363,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -378,7 +378,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -393,7 +393,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -408,7 +408,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
@@ -423,13 +423,13 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
     - rgw
     - stage-3
-#Cron pipeline test suite for 5.1 to run as periodical
+#Cron pipeline test suite for 5.1 to run as schedule
 - name: "test-rados-pool-functionalities"
   suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
   global-conf: "conf/pacific/rados/11-node-cluster.yaml"
@@ -439,7 +439,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-2
     - openstack
     - ibmc
@@ -454,7 +454,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-2
     - openstack
     - ibmc
@@ -469,7 +469,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-2
     - openstack
     - ibmc
@@ -484,7 +484,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-2
     - openstack
     - ibmc
@@ -499,7 +499,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-2
     - openstack
     - ibmc
@@ -515,7 +515,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-2
     - openstack
     - ibmc
@@ -531,7 +531,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-2
     - openstack
     - ibmc
@@ -547,7 +547,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - periodical
+    - schedule
     - tier-1
     - openstack
     - ibmc
