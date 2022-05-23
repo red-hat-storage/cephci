@@ -252,6 +252,45 @@ class FsUtils(object):
             sleep(interval)
         return False
 
+    def wait_for_mds_deamon(
+        self,
+        client,
+        process_name,
+        timeout=180,
+        interval=5,
+        ispresent=True,
+        host="host_name",
+        desired_state="running",
+    ):
+        """
+        Checks for the mds deamon and returns the status based on ispresent
+        :param client:
+        :param process_name:
+        :param timeout:
+        :param interval:
+        :param ispresent:
+        :return:
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the process to start or stop")
+        while end_time > datetime.datetime.now():
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=f"ceph orch ps --hostname {host} --daemon_type=mds --format json",
+                check_ec=False,
+            )
+            mds_hosts = json.loads(out)
+            if ispresent:
+                for mds in mds_hosts:
+                    if process_name in mds["daemon_id"]:
+                        if mds["status_desc"] == desired_state:
+                            return True
+            else:
+                if not any(process_name in mds["daemon_id"] for mds in mds_hosts):
+                    return True
+            sleep(interval)
+        return False
+
     def wait_for_mds_process(
         self,
         client,
