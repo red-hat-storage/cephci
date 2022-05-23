@@ -64,7 +64,7 @@ class Orch(
         service_name: str = None,
         service_type: str = None,
         timeout: int = 1800,
-        interval: int = 30,
+        interval: int = 20,
     ) -> bool:
         """
         Verify the provided service is running for the given list of ids.
@@ -226,9 +226,6 @@ class Orch(
         # validate services
         validate_spec_services = config.get("validate-spec-services")
         if validate_spec_services:
-            # wait 60 seconds for initial start of daemons,
-            # which avoids 0/0 check and 1/1 when expected count is 3.
-            sleep(60)
             self.validate_spec_services(specs=specs)
             LOG.info("Validation of service created using a spec file is completed")
 
