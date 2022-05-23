@@ -1171,7 +1171,7 @@ class SSHConnectionManager(object):
         password,
         look_for_keys=False,
         private_key_file_path="",
-        outage_timeout=300,
+        outage_timeout=600,
     ):
         self.ip_address = ip_address
         self.username = username
