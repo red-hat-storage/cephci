@@ -412,8 +412,188 @@
     - ibmc
     - rados
 
+- name: "Tier-0 test suite for 5x for RGW sanity"
+  suite: "suites/pacific/rgw/tier-0_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-0
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "Testing RGW ecpool Multisite Verifying Data from Primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ecpool_test-ms-verify-io-from-primary.yaml"
+  global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "Testing Rgw Multisite Secondary to Primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_multisite-secondary-to-primary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "Testing Rgw Single site"
+  suite: "suites/pacific/rgw/tier-1_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "Testing RGW MS ssl ecpool and verifying from primary site"
+  suite: "suites/pacific/rgw/tier-2_rgw_ssl_ecpool_test-ms-verify-io-from-primary.yaml"
+  global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "Testing RGW multi-realm deployment"
+  suite: "suites/pacific/rgw/tier-1_rgw_cephadm.yaml"
+  global-conf: "conf/pacific/rgw/tier-1_rgw_cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "Testing extended RGW multisite primary to secondary"
+  suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-primary-to-secondary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "Testing extended RGW multisite secondary to primary"
+  suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "RGW Regression testing"
+  suite: "suites/pacific/rgw/tier-2_rgw_regression.yaml"
+  global-conf: "conf/pacific/rgw/tier-2_rgw_regression.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "S3Tests against Red Hat RGW with SSL"
+  suite: "suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
+  global-conf: "conf/pacific/rgw/ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "RGW STS functionality testing"
+  suite: "suites/pacific/rgw/tier-1-extn_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
 - name: "Tier-2 RGW bucket_lc_multipart_object_expired"
   suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - perbuild
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
+- name: "RGW testing using S3CMD CLI commands"
+  suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
   global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
