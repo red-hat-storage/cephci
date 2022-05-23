@@ -57,7 +57,7 @@ from docopt import docopt
 from rp_utils.preproc import PreProcClient
 from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
-from utils import tfacon
+from utils import create_run_dir, generate_unique_id, tfacon
 
 log = logging.getLogger(__name__)
 doc = """
@@ -244,4 +244,20 @@ if __name__ == "__main__":
         "config_file": args.get("--config_file"),
         "payload_dir": args.get("--payload_dir"),
     }
+    run_id = generate_unique_id(length=6)
+    run_dir = create_run_dir(run_id)
+    log_format = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s"
+    )
+    logfile = os.path.join(run_dir, "report_portal.log")
+    handler = logging.FileHandler(logfile)
+    handler.setFormatter(log_format)
+    log.addHandler(handler)
+    url_base = (
+        "http://magna002.ceph.redhat.com/cephci-jenkins/" + run_dir.split("/")[-1]
+        if "/ceph/cephci-jenkins" in run_dir
+        else run_dir
+    )
+    log_url = f"{url_base}/report_portal.log"
     upload_logs(arguments)
+    log.info(f"Log Location {log_url}")

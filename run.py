@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from gevent import monkey
 
+from utility.config import TestMetaData
 from utility.log import Log
 
 monkey.patch_all()
@@ -384,8 +385,13 @@ def run(args):
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
+    post_to_report_portal = args.get("--report-portal", False)
 
     run_id = generate_unique_id(length=6)
+    rp_logger = None
+    if post_to_report_portal:
+        rp_logger = ReportPortal()
+    TestMetaData(run_id=run_id, rhbuild=rhbuild, rhcs="rhcs", rp_logger=rp_logger)
     run_dir = create_run_dir(run_id, log_directory)
     startup_log = os.path.join(run_dir, "startup.log")
 
@@ -453,11 +459,6 @@ def run(args):
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster", False)
     skip_subscription = args.get("--skip-subscription", False)
-    post_to_report_portal = args.get("--report-portal", False)
-
-    rp_logger = ReportPortal()
-    # setting logger for ReportPortal
-    log.set_rp_logger(rp_logger)
 
     instances_name = args.get("--instances-name")
     if instances_name:

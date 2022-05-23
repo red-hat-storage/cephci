@@ -153,6 +153,7 @@ def fetchCephVersion(def baseUrl) {
     return cephVer[0]
 }
 
+
 def setLock(def majorVer, def minorVer) {
     /*
         create a lock file
@@ -183,6 +184,7 @@ def unSetLock(def majorVer, def minorVer) {
     def lockFile = "${defaultFileDir}/RHCEPH-${majorVer}.${minorVer}.lock"
     sh(script: "rm -f ${lockFile}")
 }
+
 
 def readFromReleaseFile(
     def majorVer,
@@ -551,6 +553,28 @@ def uploadResults(def objKey, def dirName, def bucketName="qe-ci-reports") {
     }
 }
 
+def updateUpstreamFile(def version) {
+    /*
+        Updates upstream yaml file for the version passed as argument
+
+        example:  python3 upstream_cli.py build pacific
+
+        Args:
+            version      Version of upstream builds
+        
+    */
+    try {
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python"
+        sh ".venv/bin/python -m pip install packaging"
+        sh "sudo dnf install podman -y"
+        def scriptFile = "pipeline/scripts/ci/upstream_cli.py"
+        def args = "build ${version}"
+        sh script: "${cmd} ${scriptFile} ${args}"
+    } catch(Exception exc) {
+        println exc
+        error "Error during updating upstream yaml file."
+    }
+}
 def prepareIbmNode() {
     /*
         Installs the required packages needed by the IBM Jenkins node to

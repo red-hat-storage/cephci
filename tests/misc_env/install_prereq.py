@@ -117,7 +117,8 @@ def install_prereq(
     log.info(
         "distro version_id: {version_id}".format(version_id=distro_info["VERSION_ID"])
     )
-    # Remove apache-arrow.repo for baremtal
+
+    # Remove apache-arrow.repo for baremetal
     cmd_remove_apache_arrow = "sudo rm -f /etc/yum.repos.d/apache-arrow.repo"
     ceph.exec_command(cmd=cmd_remove_apache_arrow)
 
@@ -243,7 +244,7 @@ def setup_subscription_manager(
                 )
                 username_ = config_["stage_credentials"]["username"]
                 password_ = config_["stage_credentials"]["password"]
-                pool_id = "8a99f9af795d57ab01797e572e860569"
+                pool_id = "8a82d25480dceec60180dcf7d4d20d78"
 
             command += f"--baseurl=https://cdn.redhat.com --username={username_}"
             command += f" --password={password_}"
