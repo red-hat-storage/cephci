@@ -32,7 +32,7 @@ def post_to_polarion(tc):
         tc["test_run_id"] = (
             tc["ceph-version"]
             + "_"
-            + tc["suite-name"]
+            + tc["suite-name"].split("/")[-1].split(".")[0]
             + "_"
             + tc["distro"]
             + "_Automated_Smoke_Runs"
