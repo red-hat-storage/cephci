@@ -9,7 +9,6 @@ instance:
     group_access: cephqe-sec-grp-all-access
     profile: bx2-2x8
 
-
   setup:  |
     #cloud-config
     ssh_pwauth: True
@@ -33,6 +32,7 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - subscription-manager release --set=8.5
       - curl -k -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem https://10.245.4.89/.ceph-qe-ca.pem
       - curl -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://10.245.4.89/.RH-IT-Root-CA.crt
       - update-ca-trust

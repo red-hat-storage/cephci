@@ -1,13 +1,13 @@
-version_id: 8.4
+---
+version_id: 9.0
 id: rhel
 instance:
   create:
-    image-name: rhel-server-84-x86-64-kvm
+    image-name: rhel-90-server-released
     network_name: sn-01-cephqe-pvt-network
     private_key: ibmc-shared
     group_access: cephqe-sec-grp-all-access
     profile: bx2-2x8
-
 
   setup:  |
     #cloud-config
@@ -32,7 +32,9 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - subscription-manager release --set=9.0
       - curl -k -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem https://10.245.4.89/.ceph-qe-ca.pem
       - curl -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://10.245.4.89/.RH-IT-Root-CA.crt
       - update-ca-trust
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
       - touch /ceph-qa-ready
