@@ -157,8 +157,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
     def install(self, **kwargs: Dict) -> None:
-        """
-        Install the cephadm package in the installer node.
+        """Install the cephadm package in all node(s).
 
         Args:
           kwargs (Dict): Key/value pairs that needs to be provided to the installer
@@ -179,17 +178,18 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         if kwargs.get("nogpgcheck", True):
             cmd += " --nogpghceck"
 
-        self.installer.exec_command(
-            sudo=True,
-            cmd="yum install cephadm -y --nogpgcheck",
-            long_running=True,
-        )
+        for node in self.cluster.get_nodes():
+            node.exec_command(
+                sudo=True,
+                cmd="yum install cephadm -y --nogpgcheck",
+                long_running=True,
+            )
 
-        if kwargs.get("upgrade", False):
-            self.installer.exec_command(sudo=True, cmd="yum update metadata")
-            self.installer.exec_command(sudo=True, cmd="yum update -y cephadm")
+            if kwargs.get("upgrade", False):
+                node.exec_command(sudo=True, cmd="yum update metadata")
+                node.exec_command(sudo=True, cmd="yum update -y cephadm")
 
-        self.installer.exec_command(cmd="rpm -qa | grep cephadm")
+            node.exec_command(cmd="rpm -qa | grep cephadm")
 
     def get_cluster_state(self, commands):
         """
