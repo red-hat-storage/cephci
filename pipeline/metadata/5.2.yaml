@@ -577,6 +577,21 @@
     - ibmc
     - rgw
 
+- name: "Tier-2 RGW bucket_lc_multipart_object_expired"
+  suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+
 - name: "RGW testing using S3CMD CLI commands"
   suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
   global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
