@@ -169,7 +169,7 @@ def create_nodes(
     rp_logger: Optional[ReportPortal] = None,
 ):
     """Creates the system under test environment."""
-    if report_portal_session:
+    if rp_logger:
         name = create_unique_test_name("ceph node creation", test_names)
         test_names.append(name)
         desc = "Ceph cluster preparation"
@@ -268,10 +268,12 @@ def create_nodes(
             try:
                 instance.connect()
             except BaseException:
-                rp_logger.finish_test_item(status="FAILED")
+                if rp_logger:
+                    rp_logger.finish_test_item(status="FAILED")
                 raise
 
-    rp_logger.finish_test_item(status="PASSED")
+    if rp_logger:
+        rp_logger.finish_test_item(status="PASSED")
 
     return ceph_cluster_dict, clients
 
