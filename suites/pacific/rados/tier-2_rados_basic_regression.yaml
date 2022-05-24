@@ -348,6 +348,12 @@ tests:
       desc: Ceph balancer plugins CLI validation in upmap mode
 
   - test:
+      name: ceph health alerts test
+      polarion-id: CEPH-83573240
+      module: alerts.py
+      desc: verify ceph health alerts
+
+  - test:
       name: Mute ceph health alerts
       polarion-id: CEPH-83573854
       module: mute_alerts.py
