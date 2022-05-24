@@ -17,6 +17,7 @@ globals:
         disk-size: 15
       node2:
         role:
+          - _admin
           - osd
           - mon
           - mgr

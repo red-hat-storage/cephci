@@ -120,7 +120,8 @@ class GenerateServiceSpec:
         Returns:
             node role list (List)
         """
-        return node.role.role_list
+        label_set = set(node.role.role_list)
+        return list(label_set)
 
     def get_hostnames(self, node_names):
         """
@@ -180,8 +181,15 @@ class GenerateServiceSpec:
             host["hostname"] = self.get_hostname(node)
             if address:
                 host["address"] = self.get_addr(node)
+
             if labels:
-                host["labels"] = self.get_labels(node)
+                # Skipping client node, if only client label is attached
+                if len(node.role.role_list) == 1 and ["client"] == node.role.role_list:
+                    return
+
+                if isinstance(labels, str) and labels == "apply-all-labels":
+                    labels = self.get_labels(node)
+                host["labels"] = labels
             hosts.append(host)
 
         return template.render(hosts=hosts)
@@ -463,6 +471,44 @@ class GenerateServiceSpec:
 
         return template.render(spec=spec)
 
+    def generate_ingress_spec(self, spec):
+        """
+        Return spec content for ha proxy ingress service
+
+        Args:
+            spec (Dict): ha proxy ingress service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: ingress
+                service_id: rgw.my-rgw
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: rgw
+                spec:
+                  backend_service: rgw.ceph-scale-test-y7nmci-node2
+                  virtual_ip: 10.0.208.0/22
+                  frontend_port: 8000
+                  monitor_port: 1967
+
+        :Note: make sure rgw service is already created.
+
+        """
+        template = self._get_template("ingress")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        return template.render(spec=spec)
+
     def _get_render_method(self, service_type):
         """
         Return render definition based on service_type
@@ -481,6 +527,7 @@ class GenerateServiceSpec:
             "rgw": self.generate_rgw_spec,
             "snmp-gateway": self.generate_snmp_spec,
             "snmp-destination": self.generate_snmp_dest_conf,
+            "ingress": self.generate_ingress_spec,
         }
 
         try:
