@@ -256,7 +256,7 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - perbuild
+    - sanity
     - tier-2
     - openstack
     - ibmc
