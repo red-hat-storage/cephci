@@ -6,12 +6,13 @@ def nodeName = "centos-7"
 def credsRpProc = [:]
 def sharedLib
 def rpPreprocDir
-def tierLevel
-def stageLevel
+def tierLevel = null
+def stageLevel = null
 def run_type
 def build_url
 def reportBucket = "qe-ci-reports"
 def remoteName= "ibm-cos"
+def msgMap = [:]
 
 node(nodeName) {
 
@@ -50,6 +51,12 @@ node(nodeName) {
 
                 // prepare the node
                 sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+                msgMap = sharedLib.getCIMessageMap()
+                println("msgMap : ${msgMap}")
+                if(msgMap["pipeline"].containsKey("tags")){
+                    sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+                }
+                println("sharedLib: ${sharedLib}")
                 sharedLib.prepareNode()
             }
         }
@@ -59,8 +66,8 @@ node(nodeName) {
         }
 
         stage('uploadTestResult') {
-            def msgMap = sharedLib.getCIMessageMap()
-            def composeInfo = msgMap["recipe"]
+            msgMap = sharedLib.getCIMessageMap()
+            def composeInfo = msgMap["recipe"]["build"]
 
             def resultDir = msgMap["test"]["object-prefix"]
             println("Test results are available at ${resultDir}")
@@ -115,25 +122,45 @@ node(nodeName) {
             sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
 
             // Update RH recipe file
-            if ( composeInfo != null && testStatus == "SUCCESS" ){
-                def tierLevel = msgMap["pipeline"]["name"]
+
+            if ( composeInfo != null){
+                if ( tierLevel == null ){
+                    tierLevel = msgMap["pipeline"]["name"]
+                }
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                 majorVersion = rhcsVersion["major_version"]
                 minorVersion = rhcsVersion["minor_version"]
+                minorVersion = "${minorVersion}"
 
                 def latestContent = sharedLib.readFromReleaseFile(
                         majorVersion, minorVersion
                     )
+                println("latestContentBefore: ${latestContent}")
 
                 if ( latestContent.containsKey(tierLevel) ) {
-                    latestContent[tierLevel] = composeInfo
+                    if ( stageLevel == null ){
+                        latestContent[tierLevel] = composeInfo
+                    }
+                    else if ( stageLevel == "stage-1"){
+                        latestContent[tierLevel] = composeInfo
+                        latestContent[tierLevel] += ["results": ["${stageLevel}": "${testStatus}"]]
+                    }
+                    else{
+                        latestContent[tierLevel]["results"] += ["${stageLevel}": "${testStatus}"]
+                    }
                 }
                 else {
                     def updateContent = ["${tierLevel}": composeInfo]
+                    if ( stageLevel != null ){
+                        def tierValue = composeInfo + ["results": ["${stageLevel}": "${testStatus}"]]
+                        updateContent = ["${tierLevel}": tierValue]
+                    }
                     latestContent += updateContent
                 }
+                println("latestContent: ${latestContent}")
                 sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
             }
+            println("Execution complete")
         }
     } catch(Exception err) {
         if (currentBuild.result != "ABORTED") {

@@ -226,14 +226,21 @@ def uploadResults(def objKey, def dirName, def bucketName="qe-ci-reports") {
 }
 
 def writeToRecipeFile(
-    def buildType, def rhcephVersion, def dataPhase, def infra="10.245.4.89"
+    def buildType, def rhcephVersion, def dataPhase, def currentStage, def status, def infra="10.245.4.89"
     ) {
     /*
         Method to update content to the recipe file
     */
+    def result = "results"
     def recipeFile = "/data/site/recipe/${rhcephVersion}.yaml"
     recipeFileExist(rhcephVersion, recipeFile, infra)
-    sh "ssh $infra \"yq eval -i '.$dataPhase = .$buildType' $recipeFile\""
+    if("${buildType}" == "latest" || "${currentStage}" == "stage-1"){
+        sh "ssh $infra \"yq eval -i '.$dataPhase = .latest' $recipeFile\""
+        sh "ssh $infra \"yq e -i '.$dataPhase.$result.$currentStage = \\\"$status\\\"' $recipeFile\""
+    }
+    else{
+        sh "ssh $infra \"yq e -i '.$dataPhase.$result.$currentStage = \\\"$status\\\"' $recipeFile\""
+    }
 }
 
 def executeTestSuite(
@@ -655,14 +662,12 @@ def executeTestScript(def script) {
         ) {
         try {
             sh (script: "${env.WORKSPACE}/${executeCLI}")
-            // sh (script: "echo 'PASS'")
         } catch(Exception err) {
             rc = "FAIL"
             println err.getMessage()
             error "Encountered an error"
         } finally {
             sh(script: "${env.WORKSPACE}/${cleanupCLI}")
-            // sh (script: "echo 'PASS Cleanup'")
         }
     }
     println "exit status: ${rc}"
