@@ -320,6 +320,7 @@ class Orch(
             return True
         elif op == "resume" and not loads(out)["paused"]:
             LOG.info("The orch operations are resumed")
+            LOG.info("The orch operations are resumed")
             return True
         return False
 
