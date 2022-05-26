@@ -41,7 +41,7 @@ def sendEmail(
     def artifactDetails,
     def tierLevel,
     def stageLevel = null,
-    def toList="rlepaksh@redhat.com"
+    def toList="ceph-qe-list@redhat.com"
     ) {
     /*
         Send an Email
@@ -117,8 +117,8 @@ def sendEmail(
     body += "</table><br /></body></html>"
 
     if ('FAIL' in fetchStageStatus(testResults)) {
-        if(toList == "rlepaksh@redhat.com"){
-            toList = "rlepaksh@redhat.com"
+        if(toList == "ceph-qe-list@redhat.com"){
+            toList = "cephci@redhat.com"
         }
         status = "UNSTABLE"
     }
@@ -134,7 +134,7 @@ def sendEmail(
     )
 }
 
-def sendGChatNotification(def run_type, def testResults, def tierLevel, def stageLevel= null) {
+def sendGChatNotification(def run_type, def testResults, def tierLevel, def stageLevel= null, def build_url= null) {
     /*
         Send a GChat notification.
         Plugin used:
@@ -153,9 +153,11 @@ def sendGChatNotification(def run_type, def testResults, def tierLevel, def stag
     if ('FAIL' in fetchStageStatus(testResults)) {
         status = "UNSTABLE"
     }
-
-    def msg= "${run_type} for ${ciMsg.artifact.nvr}:${tierLevel} ${stageLevel} is ${status}.Log:${env.BUILD_URL}"
-    googlechatnotification(url: "https://mail.google.com/chat/u/0/#chat/space/AAAAe6gdLps", message: msg)
+    if (! build_url){ 
+        build_url = "${env.BUILD_URL}"
+    }
+    def msg= "${run_type} for ${ciMsg.artifact.nvr}:${tierLevel} ${stageLevel} is ${status}.Log:${build_url}"
+    googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
 }
 
 def generateRandomString() {
@@ -433,11 +435,11 @@ def getCIMessageMap() {
     /*
         Return the CI_MESSAGE map
     */
-    def ciMessage = "${params.buildArtifacts}" ?: ""
+    def ciMessage = "${params.CI_MESSAGE}" ?: ""
     if (! ciMessage?.trim() ) {
         return [:]
     }
-    def compose = readJSON text: "${params.buildArtifacts}"
+    def compose = readJSON text: "${params.CI_MESSAGE}"
     return compose
 }
 
