@@ -6,6 +6,10 @@ def nodeName = "centos-7"
 def credsRpProc = [:]
 def sharedLib
 def rpPreprocDir
+def tierLevel
+def stageLevel
+def run_type
+def build_url
 def reportBucket = "qe-ci-reports"
 def remoteName= "ibm-cos"
 
@@ -80,9 +84,29 @@ node(nodeName) {
             }
 
             def testStatus = "ABORTED"
+            /* Publish results through E-mail and Google Chat */
+            if(msgMap["pipeline"].containsKey("tags")){
+                def tag = msgMap["pipeline"]["tags"]
+                def tags_list = tag.split(',') as List
+                def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
+                stageLevel = tags_list.get(stage_index)
+                def tier_index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
+                tierLevel = tags_list.get(tier_index)
+                run_type = msgMap["pipeline"]["run_type"]
+                build_url = msgMap["run"]["url"]
+
+            }
+            
 
             if (metaData["results"]) {
-                sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
+                if(msgMap["pipeline"].containsKey("tags")){
+                    sharedLib.sendEmail(run_type, metaData["results"], metaData, tierLevel, stageLevel)
+                    sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
+                }
+                else {
+                    sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
+                }
+                
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
                 testStatus = msgMap["test"]["result"]
             }
