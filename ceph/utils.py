@@ -1002,7 +1002,7 @@ def get_node_by_id(cluster, node_name):
         node instance (CephVMNode)
     """
     for node in cluster.get_nodes():
-        searches = re.findall(rf"{node_name}?\d*", node.hostname)
+        searches = re.findall(rf"{node_name}?\d*", node.hostname, re.IGNORECASE)
         for ele in searches:
             if ele == node_name:
                 return node
