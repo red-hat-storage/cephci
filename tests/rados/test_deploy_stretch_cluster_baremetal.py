@@ -29,7 +29,6 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from ceph.utils import get_node_by_id
 from tests.rados.monitor_configurations import MonElectionStrategies
 from tests.rados.stretch_cluster import setup_crush_rule, wait_for_clean_pg_sets
 from utility.log import Log
@@ -89,45 +88,50 @@ def run(ceph_cluster, **kw):
 
     # Moving all the OSD and Mon daemons into respective sites
     sites = ["site1", "site2", "site3"]
+    mon_hosts = mon_obj.get_mon_quorum().keys()
+    osd_hosts = mon_obj.get_osd_hosts()
+    log.debug(f"Mon hosts defined: {mon_hosts}")
+    log.debug(f"OSD hosts defined: {osd_hosts}")
+
+    def search(hosts, pattern):
+        for daemon in hosts:
+            if re.search(daemon, pattern):
+                return daemon
+
+    def mon_set_location(pattern, crush_name):
+        daemon = search(mon_hosts, pattern)
+        if daemon:
+            _cmd = f"ceph mon set_location {daemon} datacenter={crush_name}"
+            cephadm.shell([_cmd])
+            log.info(
+                f"Set location for mon.{daemon} onto site {crush_name}\n"
+                "sleeping for 5 seconds"
+            )
+            time.sleep(5)
+
+    def osd_set_location(pattern, crush_name):
+        daemon = search(osd_hosts, pattern)
+        if daemon:
+            move_crush_item(
+                node=cephadm,
+                crush_obj=daemon,
+                name="datacenter",
+                value=crush_name,
+            )
+            log.info(
+                f"Set location for OSD {daemon} onto site {crush_name}\n"
+                "sleeping for 5 seconds"
+            )
+            time.sleep(5)
+
     for site in sites:
-        mon_hosts = [
-            host_obj.hostname for host_obj in ceph_cluster.get_nodes(role="mon")
-        ]
-        log.info(f"Mon hosts defined: {mon_hosts}")
-        osd_hosts = [
-            host_obj.hostname for host_obj in ceph_cluster.get_nodes(role="osd")
-        ]
-        log.info(f"OSD hosts defined: {osd_hosts}")
         # Collecting hosts from each site and setting locations accordingly
         site_details = config[site]
-        crush_name = site_details["name"]
-        host_nodes = cephadm.cluster.get_nodes()
+        _crush_name = site_details["name"]
 
         for item in site_details["hosts"]:
-            host = [node for node in host_nodes if re.search(item, node.hostname)][0]
-            # Moving the mon daemons into site
-            if host.hostname in mon_hosts:
-                cmd = f"ceph mon set_location {host.hostname} datacenter={crush_name}"
-                cephadm.shell([cmd])
-                log.info(
-                    f"Set location for mon {host.hostname} onto site {crush_name}\n"
-                    "sleeping for 5 seconds"
-                )
-                time.sleep(5)
-
-            # Moving the osd daemons into site
-            if host.hostname in osd_hosts:
-                move_crush_item(
-                    node=cephadm,
-                    crush_obj=host.hostname,
-                    name="datacenter",
-                    value=crush_name,
-                )
-                log.info(
-                    f"Set location for OSD {host.hostname} onto site {crush_name}\n"
-                    "sleeping for 5 seconds"
-                )
-                time.sleep(5)
+            mon_set_location(item, _crush_name)
+            osd_set_location(item, _crush_name)
 
     log.info("Moved all the hosts into respective sites")
 
@@ -145,9 +149,11 @@ def run(ceph_cluster, **kw):
     time.sleep(5)
 
     # Enabling the stretch cluster mode
-    tiebreaker_node = get_node_by_id(cephadm.cluster, config["site3"]["hosts"][0])
-    log.info(f"tiebreaker node provided: {tiebreaker_node.hostname}")
-    cmd = f"ceph mon enable_stretch_mode {tiebreaker_node.hostname} {stretch_rule_name} datacenter"
+    tiebreaker_node = search(mon_hosts, config["site3"]["hosts"][0])
+    log.info(f"tiebreaker node provided: {tiebreaker_node}")
+    cmd = (
+        f"ceph mon enable_stretch_mode {tiebreaker_node} {stretch_rule_name} datacenter"
+    )
     try:
         cephadm.shell([cmd])
     except Exception as err:
