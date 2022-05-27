@@ -146,6 +146,16 @@ class MonElectionStrategies:
         quorum = self.rados_obj.run_ceph_command(cmd)
         return quorum["election_strategy"]
 
+    def get_osd_hosts(self):
+        """
+        lists the names of the OSD hosts in the cluster
+        Returns: list of osd host names as used in the crush map
+
+        """
+        cmd = "ceph osd tree"
+        osds = self.rados_obj.run_ceph_command(cmd)
+        return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]
+
 
 class MonConfigMethods:
     """
