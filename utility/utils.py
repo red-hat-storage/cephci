@@ -1,3 +1,4 @@
+import datetime
 import getpass
 import logging
 import os
@@ -9,15 +10,20 @@ import time
 import traceback
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from ipaddress import ip_address
 from string import ascii_uppercase, digits
 from typing import Dict, Optional, Tuple
 from urllib import request
 
 import requests
 import yaml
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
-from OpenSSL import crypto
 from reportportal_client import ReportPortalService
 
 from utility.log import Log
@@ -1031,10 +1037,10 @@ def get_cephqe_ca() -> Optional[Tuple]:
 
     try:
         with request.urlopen(url=f"{base_uri}/.cephqe-ca.pem") as fd:
-            ca_cert = crypto.load_certificate(crypto.FILETYPE_PEM, fd.read())
+            ca_cert = x509.load_pem_x509_certificate(fd.read())
 
         with request.urlopen(url=f"{base_uri}/.cephqe-ca.key") as fd:
-            ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, fd.read())
+            ca_key = serialization.load_pem_private_key(fd.read(), None)
     except BaseException as be:
         log.debug(be)
 
@@ -1054,63 +1060,52 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
     ca_key, ca_cert = get_cephqe_ca()
 
     # Generate the private key
-    keyout = crypto.PKey()
-    keyout.generate_key(crypto.TYPE_RSA, 2048)
+    cert_key = rsa.generate_private_key(
+        public_exponent=65537, key_size=2048, backend=default_backend()
+    )
 
-    # Create CSR
-    cert = crypto.X509()
-    cert.get_subject().C = subject.get("country", "IN")
-    cert.get_subject().ST = subject.get("state", "Karnataka")
-    cert.get_subject().L = subject.get("locality", "Bangalore")
-    cert.get_subject().O = subject.get("company", "Red Hat Inc")
-    cert.get_subject().OU = subject.get("department", "Storage")
-    cert.get_subject().CN = subject["common_name"]
-    cert.set_serial_number(random.randint(200, 50000))
-    cert.gmtime_adj_notBefore(0)
-    cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
+    cert_subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "IN"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Karnataka"),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, "Bengaluru"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Red Hat Inc"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Storage"),
+            x509.NameAttribute(NameOID.COMMON_NAME, subject["common_name"]),
+        ]
+    )
 
-    san_list = [
-        f"DNS:*.{subject['common_name']}",
-        f"DNS:{subject['common_name']}",
-        f"IP:{subject['ip_address']}",
-    ]
-    sans = ", ".join(san_list)
-    extensions = [
-        crypto.X509Extension(
-            b"keyUsage", False, b"Digital Signature, Non Repudiation, Key Encipherment"
-        ),
-        crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
-        crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth, clientAuth"),
-        crypto.X509Extension(b"subjectAltName", False, sans.encode()),
-    ]
-    cert.add_extensions(extensions)
-
-    cert.set_issuer(cert.get_subject())
-    cert.set_pubkey(keyout)
-    cert.sign(keyout, "sha256")
-
-    # Sign CSR
-    if ca_cert and ca_key:
-        signed_cert = crypto.X509()
-        signed_cert.set_serial_number(random.randint(10, 10000))
-        signed_cert.gmtime_adj_notBefore(0)
-        signed_cert.gmtime_adj_notAfter(365 * 24 * 60 * 60)
-        signed_cert.set_subject(cert.get_subject())
-        signed_cert.add_extensions(extensions)
-        signed_cert.set_issuer(ca_cert.get_subject())
-        signed_cert.set_pubkey(cert.get_pubkey())
-        signed_cert.sign(ca_key, "sha256")
-
-        return (
-            crypto.dump_privatekey(crypto.FILETYPE_PEM, keyout).decode("utf-8"),
-            crypto.dump_certificate(crypto.FILETYPE_PEM, signed_cert).decode("utf-8"),
-            crypto.dump_certificate(crypto.FILETYPE_PEM, ca_cert).decode("utf-8"),
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(cert_subject)
+        .issuer_name(ca_cert.issuer if ca_cert else cert_subject)
+        .public_key(cert_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.utcnow())
+        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=30))
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName(f"*.{subject['common_name']}"),
+                    x509.DNSName(subject["common_name"]),
+                    x509.IPAddress(ip_address(subject["ip_address"])),
+                ]
+            ),
+            critical=False,
         )
+        .sign(ca_key if ca_key else cert_key, hashes.SHA256(), default_backend())
+    )
 
     return (
-        crypto.dump_privatekey(crypto.FILETYPE_PEM, keyout).decode("utf-8"),
-        crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("utf-8"),
-        "",
+        cert_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8"),
+        cert.public_bytes(serialization.Encoding.PEM).decode("utf-8"),
+        ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+        if ca_cert
+        else None,
     )
 
 
@@ -1372,7 +1367,7 @@ def should_not_be_empty(variable, msg="Variable is empty"):
 
 
 def generate_self_signed_cert_on_rgw(rgw_node):
-    """Generate self signed certificate on given rgw node."""
+    """Generate self-signed certificate on given rgw node."""
     ssl_cert_path = "/etc/ceph/"
     pem_file_name = "server.pem"
 
