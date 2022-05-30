@@ -378,8 +378,12 @@ node(nodeName) {
                 currentBuild.result = "FAILED"
                 buildStatus = "fail"
             }
-            // Update result to recipe file and execute post tier based on run execution
-            if(!final_stage || (final_stage && tierLevel != "tier-2")){
+            // Do not trigger next stage of execution
+                // 1) if the current tier executed is tier-0 and it failed
+                // 2) if the current stage was final_stage of a particular tier and tier is not tier-2
+                //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
+            if((!(tierLevel == "tier-0" && buildStatus == "fail")) &&
+               (!final_stage || (final_stage && tierLevel != "tier-2"))){
                 build ([
                     wait: false,
                     job: "rhceph-test-execution-pipeline",
