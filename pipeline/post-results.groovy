@@ -67,7 +67,7 @@ node(nodeName) {
 
         stage('uploadTestResult') {
             msgMap = sharedLib.getCIMessageMap()
-            def composeInfo = msgMap["recipe"]["build"]
+            def composeInfo = msgMap["recipe"]
 
             def resultDir = msgMap["test"]["object-prefix"]
             println("Test results are available at ${resultDir}")
