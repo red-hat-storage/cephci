@@ -663,7 +663,7 @@ class RbdMirror:
 
         return 0
 
-    def rename_image(self, source_imagespec, dest_imagespec, **kw):
+    def rename_primary_image(self, source_imagespec, dest_imagespec, **kw):
         """
         Rename the primary image and check from secondary for the changes
         Args:
