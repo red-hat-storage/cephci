@@ -382,7 +382,7 @@ node(nodeName) {
             if(!final_stage || (final_stage && tierLevel != "tier-2")){
                 build ([
                     wait: false,
-                    job: "rhceph-tier-executor",
+                    job: "rhceph-test-execution-pipeline",
                     parameters: [string(name: 'rhcephVersion', value: rhcephVersion.toString()),
                                 string(name: 'tags', value: tags),
                                 string(name: 'buildType', value: nextbuildType.toString()),
