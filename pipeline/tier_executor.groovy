@@ -110,6 +110,18 @@ node(nodeName) {
         }
         print(overrides)
         // Till the pipeline matures, using the build that has passed tier-0 suite.
+
+        if (tags_list.containsAll(["ibmc","sanity"])){
+            def recipeFileContent = sharedLib.readFromRecipeFile(rhcephVersion)
+            def content = recipeFileContent['latest']
+            println "recipeFile ceph-version : ${content['ceph-version']}"
+            println "buildArtifacts ceph-version : ${buildArtifacts['ceph-version']}"
+            if ( buildArtifacts['ceph-version'] != content['ceph-version']) {
+                currentBuild.result = "ABORTED"
+                error "Aborting the execution as new builds are available.."
+            }
+        }
+
         print("Fetching stages")
         fetchStages = sharedLib.fetchStages(tags, overrides, testResults, rhcephVersion)
         print("Stages fetched")
