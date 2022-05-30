@@ -320,7 +320,6 @@
     - sanity
     - tier-1
     - openstack
-    - ibmc
     - dmfg
     - stage-3
 - name: "test-rgw-multisite-secondary-to-primary-tier-1-extd"
@@ -522,7 +521,6 @@
     - sanity
     - tier-2
     - openstack
-    - ibmc
     - dmfg
     - stage-3
 #Cron pipeline test suite for 4.3 to run as schedule
