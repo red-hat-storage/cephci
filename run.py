@@ -1,10 +1,10 @@
 #!/usr/bin/env python
+
+# Allow parallelized behavior of gevent. It has to be the first line.
 from gevent import monkey
 
-from utility.config import TestMetaData
-from utility.log import Log
-
 monkey.patch_all()
+
 import datetime
 import importlib
 import json
@@ -36,6 +36,8 @@ from ceph.utils import (
     create_ibmc_ceph_nodes,
 )
 from utility import sosreport
+from utility.config import TestMetaData
+from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
