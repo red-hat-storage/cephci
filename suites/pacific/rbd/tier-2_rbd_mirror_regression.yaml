@@ -1,27 +1,18 @@
 #===============================================================================================
-# Tier-level: 1
-# Test-Suite: tier-1_rbd_mirror.yaml
-# Test-Case: Configure RBD Mirror setup and run IOs
-# Polarion ID : CEPH-83573329 - RBD HA MirroringDraft
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_mirror_regression.yaml
 #
 # Cluster Configuration:
-#    cephci/conf/pacific/rbd/tier-1_rbd_mirror.yaml
+#    cephci/conf/pacific/rbd/tier-2_rbd_mirror.yaml
 #    No of Clusters : 2
 #    Each cluster configuration
-#    6-Node cluster(RHEL-8.3 and above)
+#    5-Node cluster(RHEL-8.3 and above)
 #    1 MONS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
 #     Node1 - Mon, Mgr, Installer
 #     Node2 - client
 #     Node3 - OSD
 #     Node4 - OSD
-#     Node5 - OSD
-#     Node6 - RBD Mirror
-
-
-# The following evaluations are carried out
-#   (1) Configures RBD Mirroring on cephadm
-#   (2) Creates Pool Image and enables Mirroring
-#   (3) Runs IO using rbd bench
+#     Node5 - OSD, RBD Mirror
 #===============================================================================================
 tests:
   - test:
@@ -72,7 +63,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node6
+                        - node5
         ceph-rbd2:
           config:
             verify_cluster_health: true
@@ -81,7 +72,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     skip-monitoring-stack: true
@@ -114,7 +104,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node6
+                        - node5
       desc: RBD Mirror cluster deployment using cephadm
       destroy-clster: false
       module: test_cephadm.py
@@ -158,35 +148,25 @@ tests:
       desc: Enable mon_allow_pool_delete to True for deleting the pools
       module: exec.py
       name: configure mon_allow_pool_delete to True
-  - test:
-      name: test_rbd_mirror
-      module: test_rbd_mirror.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-            resize_to: 5G
-      polarion-id: CEPH-83573332
-      desc: Create RBD mirrored image in pools  and run IOs
-  - test:
-      name: test_rbd_mirror_image
-      module: test_rbd_mirror_image.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-83573618,CEPH-83573619,CEPH-83573620
-      desc: Create RBD mirrored images and run IOs
-  - test:
-      name: test_rbd_mirror_rename_image
-      module: test_rbd_mirror_rename_image.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-83573614
-      desc: Rename primary image and check on secondary for this change
 
+  - test:
+      name: test-image-delete-from-primary-site
+      module: test-image-delete-primary-site.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9501
+      desc: Verify that image deleted at primary site updated at secondary
+
+  - test:
+      name: Attempt shrinking secondary image
+      module: test_9500_shrink_img_at_secondary.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9500
+      desc: Verify that deleting secondary image fails

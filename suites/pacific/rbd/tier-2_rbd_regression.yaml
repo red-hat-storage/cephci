@@ -7,6 +7,7 @@
 #
 # The following tests are covered
 #   - CEPH-9230 - verification snap and clone on an imported image
+#   - CEPH-83573308, CEPH-83573307 - clones creation with v2clone format and deletion
 
 tests:
 
@@ -25,7 +26,6 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -86,5 +86,3 @@ tests:
       module: rbd_clonev2.py
       name: clones creation with v2clone format
       polarion-id: CEPH-83573308, CEPH-83573307, CEPH-83573309
-
-

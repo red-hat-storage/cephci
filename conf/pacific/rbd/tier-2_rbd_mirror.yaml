@@ -3,23 +3,25 @@ globals:
      name: ceph-rbd1
      node1:
        role:
+          - _admin
           - mon
           - mgr
           - installer
      node2:
-       role:
-         - client
-         - rbd-mirror
+       role: client
      node3:
        role: osd
        no-of-volumes: 4
        disk-size: 15
      node4:
-       role: osd
+       role:
+          - osd
        no-of-volumes: 4
        disk-size: 15
      node5:
-       role: osd
+       role:
+          - osd
+          - rbd-mirror
        no-of-volumes: 4
        disk-size: 15
 
@@ -27,22 +29,25 @@ globals:
       name: ceph-rbd2
       node1:
         role:
+          - _admin
           - mon
           - mgr
           - installer
       node2:
-        role:
-          - client
-          - rbd-mirror
+        role: client
       node3:
         role: osd
         no-of-volumes: 4
         disk-size: 15
       node4:
-        role: osd
+        role:
+          - osd
         no-of-volumes: 4
         disk-size: 15
       node5:
-        role: osd
+        role:
+          - osd
+          - rbd-mirror
         no-of-volumes: 4
         disk-size: 15
+
