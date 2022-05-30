@@ -53,7 +53,7 @@
     - openstack
     - ibmc
     - dmfg
-    - stage-1
+    - stage-3
 
 - name: "Upgrade cluster from 5x GA to 5x latest"
   suite: "suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
@@ -182,7 +182,7 @@
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
     - sanity
-    - tier-0
+    - tier-1
     - openstack
     - ibmc
     - rbd
@@ -342,11 +342,11 @@
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
     - schedule
-    - tier-2
+    - tier-3
     - openstack
     - ibmc
     - rados
-    - stage-5
+    - stage-1
 
 - name: "Testing RADOS regression for ec pool osd rebalance"
   suite: "suites/pacific/rados/tier-3_rados_test-ecpool-osd-rebalance.yaml"
@@ -394,7 +394,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-2
+    - stage-3
 
 - name: "RADOS regression testing for Mon DB trimming"
   suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
@@ -438,7 +438,7 @@
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
     - sanity
-    - tier-0
+    - tier-1
     - openstack
     - ibmc
     - rgw
@@ -474,7 +474,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-1
+    - stage-3
 
 - name: "Testing Rgw Single site"
   suite: "suites/pacific/rgw/tier-1_rgw.yaml"
@@ -683,3 +683,147 @@
     - ibmc
     - rgw
     - stage-2
+
+- name: "Tier-0 Fs"
+  suite: "suites/pacific/cephfs/tier-0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-1
+
+- name: "Tier-1 Fs"
+  suite: "suites/pacific/cephfs/tier-1_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-1_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-2
+
+- name: "Tier-1 Cephfs Mirror"
+  suite: "suites/pacific/cephfs/tier-1_cephfs_mirror.yaml"
+  global-conf: "conf/pacific/cephfs/tier-1_cephfs_mirror.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-3
+
+- name: "Tier-2 Cephfs test clients"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-clients.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-6
+
+- name: "Tier-2 Cephfs test Multifs"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-multifs.yaml"
+  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-7
+
+- name: "Tier-2 Cephfs test Nfs"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
+  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-7
+
+- name: "Tier-2 Cephfs test quota"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-quota.yaml"
+  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-7
+
+- name: "Tier-2 Cephfs test Snapshot Clone"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
+  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-7
+
+- name: "Tier-2 Cephfs test Volume Management"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-volume-management.yaml"
+  global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-7
