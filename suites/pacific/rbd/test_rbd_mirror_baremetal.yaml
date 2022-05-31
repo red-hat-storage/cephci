@@ -1,0 +1,143 @@
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd-1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    orphan-initial-daemons: true
+                    allow-fqdn-hostname: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd-2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    orphan-initial-daemons: true
+                    allow-fqdn-hostname: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd-1:
+            config:
+              command: add
+              id: client.1
+              node: magna095.ceph.redhat.com
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true
+          ceph-rbd-2:
+            config:
+                command: add
+                id: client.1
+                node: pluto005.ceph.redhat.com
+                install_packages:
+                    - ceph-common
+                copy_admin_keyring: true
+        desc: Configure the client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd-1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd-2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      name: Configure RBD mirror
+      module: test_configure_rbd_mirror.py
+      clusters:
+        ceph-rbd-1:
+          config:
+             primary: ceph-rbd-1
+             secondary: ceph-rbd-2
+             pool-name: rbd
+      desc: RBD mirror configuration over provided pool
