@@ -28,7 +28,7 @@ This script fetches all the tests to be run for a pipeline based on the RHCS ver
 
 def generate_random_string(length):
     """Generate a random alphanumeric string of given length"""
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=length))
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
 def fetch_stages(args):
