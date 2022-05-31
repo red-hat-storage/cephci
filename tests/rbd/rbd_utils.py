@@ -228,6 +228,10 @@ class Rbd:
         image_info = json.loads(out)
         return any(image["name"] == image_name for image in image_info)
 
+    def image_map(self, pool_name, image_name):
+        """Map provided rbd image."""
+        return self.exec_cmd(cmd=f"rbd map {pool_name}/{image_name}", output=True)
+
     def clean_up(self, **kw):
         if kw.get("dir_name"):
             self.exec_cmd(cmd="rm -rf {}".format(kw.get("dir_name")))
