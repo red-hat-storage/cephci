@@ -37,7 +37,7 @@
     - openstack
     - ibmc
     - dmfg
-    - stage-1
+    - stage-2
 
 - name: "Deploy all services at 5x using a spec file"
   suite: "suites/pacific/cephadm/test-container-cli-args.yaml"
@@ -53,7 +53,7 @@
     - openstack
     - ibmc
     - dmfg
-    - stage-3
+    - stage-1
 
 - name: "Upgrade cluster from 5x GA to 5x latest"
   suite: "suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
@@ -70,7 +70,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-2
+    - stage-1
 
 - name: "Upgrade cluster from 4x RPM to 5x containerised"
   suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-rpm.yaml"
@@ -87,7 +87,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-1
+    - stage-4
 
 - name: "Bootstrap cluster with skip dashboard and custom ceph directory testing"
   suite: "suites/pacific/cephadm/tier-1_skip_dashboard.yaml"
@@ -119,7 +119,7 @@
     - openstack
     - ibmc
     - dmfg
-    - stage-2
+    - stage-1
 
 - name: "Test multiple path upgrade to 5x latest"
   suite: "suites/pacific/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-5-latest.yaml"
@@ -136,7 +136,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-2
+    - stage-1
 
 - name: "Testing scale up and scale down functionality after upgrade from 4x cdn to 5x latest"
   suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-4-cdn-to-5-latest.yaml"
@@ -153,7 +153,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-3
+    - stage-1
 
 - name: "Testing scale up and scale down functionality after upgrade from 5x cdn to 5x latest"
   suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-5-cdn-to-5-latest.yaml"
@@ -170,7 +170,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-3
+    - stage-1
 
 - name: "Tier-0 test suite for 5x for RBD sanity"
   suite: "suites/pacific/rbd/tier-0_rbd.yaml"
@@ -186,7 +186,7 @@
     - openstack
     - ibmc
     - rbd
-    - stage-1
+    - stage-2
 
 - name: "Tier-1 test suite for 5x for RBD-mirror functionality"
   suite: "suites/pacific/rbd/tier-1_rbd_mirror.yaml"
@@ -218,7 +218,7 @@
     - openstack
     - ibmc
     - rbd
-    - stage-2
+    - stage-1
 
 - name: "Tier-2 test suite for 5x - RBD functionality"
   suite: "suites/pacific/rbd/tier-2_rbd_regression.yaml"
@@ -234,7 +234,7 @@
     - openstack
     - ibmc
     - rbd
-    - stage-4
+    - stage-2
 
 - name: "Tier-2 test suite for 5x - RBD CLI regression"
   suite: "suites/pacific/rbd/tier-2_rbd_cli_regression.yaml"
@@ -250,7 +250,7 @@
     - openstack
     - ibmc
     - rbd
-    - stage-4
+    - stage-2
 
 - name: "Testing RADOS basic regression scenarios"
   suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
@@ -298,7 +298,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-3
+    - stage-2
 
 - name: "RADOS regression testing for stretched Clusters"
   suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode.yaml"
@@ -314,7 +314,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-5
+    - stage-3
 
 - name: "RADOS regression for testing various pool functionalities"
   suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
@@ -330,7 +330,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-5
+    - stage-2
 
 - name: "RADOS regression testing for Scrubbing scenarios"
   suite: "suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
@@ -362,7 +362,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-6
+    - stage-2
 
 - name: "Testing RADOS regression for in-progress osd rebalance"
   suite: "suites/pacific/rados/tier-3_rados_test-osd-inprogress-rebalance.yaml"
@@ -378,7 +378,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-6
+    - stage-2
 
 - name: "Testing RADOS regression for Stretch mode upgrade"
   suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
@@ -394,7 +394,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-3
+    - stage-1
 
 - name: "RADOS regression testing for Mon DB trimming"
   suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
@@ -410,7 +410,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-5
+    - stage-4
 
 - name: "RADOS regression testing osd rebalance with many pools"
   suite: "suites/pacific/rados/tier-3_rados_test-osd-rebalance.yaml"
@@ -426,7 +426,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-6
+    - stage-5
 
 - name: "Tier-0 test suite for 5x for RGW sanity"
   suite: "suites/pacific/rgw/tier-0_rgw.yaml"
@@ -458,7 +458,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-2
+    - stage-3
 
 - name: "Testing Rgw Multisite Secondary to Primary"
   suite: "suites/pacific/rgw/tier-1_rgw_multisite-secondary-to-primary.yaml"
@@ -490,7 +490,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-1
+    - stage-2
 
 - name: "Testing RGW MS ssl ecpool and verifying from primary site"
   suite: "suites/pacific/rgw/tier-2_rgw_ssl_ecpool_test-ms-verify-io-from-primary.yaml"
@@ -506,7 +506,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-2
+    - stage-3
 
 - name: "Testing RGW multi-realm deployment"
   suite: "suites/pacific/rgw/tier-1_rgw_cephadm.yaml"
@@ -538,7 +538,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-2
+    - stage-4
 
 - name: "Testing extended RGW multisite secondary to primary"
   suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
@@ -554,7 +554,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-4
+    - stage-2
 
 - name: "RGW Regression testing"
   suite: "suites/pacific/rgw/tier-2_rgw_regression.yaml"
@@ -570,7 +570,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-6
+    - stage-4
 
 - name: "S3Tests against Red Hat RGW with SSL"
   suite: "suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
@@ -586,7 +586,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-4
+    - stage-1
 
 - name: "RGW STS functionality testing"
   suite: "suites/pacific/rgw/tier-1-extn_rgw.yaml"
@@ -602,7 +602,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-4
+    - stage-1
 
 - name: "Tier-2 RGW bucket_lc_multipart_object_expired"
   suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
@@ -618,7 +618,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-6
+    - stage-5
 
 - name: "RGW testing using S3CMD CLI commands"
   suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
@@ -666,7 +666,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-5
+    - stage-4
 
 - name: "Tier-2 RGW single site upgrade from 5.x GA to latest developmet build"
   suite: "suites/pacific/rgw/tier-1_rgw_ssl_test-upgrade-5-to-latest.yaml"
@@ -682,7 +682,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-2
+    - stage-3
 
 - name: "Tier-0 Fs"
   suite: "suites/pacific/cephfs/tier-0_fs.yaml"
@@ -746,7 +746,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-6
+    - stage-2
 
 - name: "Tier-2 Cephfs test Multifs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-multifs.yaml"
@@ -762,7 +762,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-7
+    - stage-2
 
 - name: "Tier-2 Cephfs test Nfs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
@@ -778,7 +778,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-7
+    - stage-5
 
 - name: "Tier-2 Cephfs test quota"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-quota.yaml"
@@ -794,7 +794,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-7
+    - stage-2
 
 - name: "Tier-2 Cephfs test Snapshot Clone"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
@@ -810,7 +810,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-7
+    - stage-5
 
 - name: "Tier-2 Cephfs test Volume Management"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-volume-management.yaml"
@@ -826,4 +826,4 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-7
+    - stage-5
