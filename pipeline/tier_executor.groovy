@@ -2,6 +2,8 @@
     Pipeline script for executing v3 pipeline
 */
 
+def user
+def user_email
 def testStages = [:]
 def testResults = [:]
 def sharedLib
@@ -24,6 +26,10 @@ if ("ibmc" in tags_list){
 
 node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
+        wrap([$class: 'BuildUser']) {
+            user = env.BUILD_USER
+            user_email =  env.BUILD_USER_EMAIL
+        }
         stage('Install prereq') {
             if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout(
@@ -102,6 +108,16 @@ node(nodeName) {
             overrides.put("build", "latest")
         }
 
+        def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
+        /*
+           Read the release yaml contents to get contents,
+           before other listener/Executor Jobs updates it.
+        */
+        releaseContent = sharedLib.readFromReleaseFile(
+            majorVersion, minorVersion, lockFlag=false
+        )
+        println(releaseContent)
+
         if("ibmc" in tags_list){
             def workspace = "${env.WORKSPACE}"
             def build_number = "${currentBuild.number}"
@@ -136,127 +152,63 @@ node(nodeName) {
 
     if ("openstack" in tags_list){
         stage('Publish Results') {
-        /* Publish results through E-mail and Google Chat */
-            ciMap = buildArtifacts
-            previousTierLevel = ciMap.test.type
-            def index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
-            stageLevel = tags_list.get(index)
-
-            if ( ! ("FAIL" in sharedLib.fetchStageStatus(testResults)) ) {
-                def latestContent = sharedLib.readFromReleaseFile(
-                    majorVersion, minorVersion
-                )
-                if ( ! releaseContent.containsKey(previousTierLevel) ) {
-                    sharedLib.unSetLock(majorVersion, minorVersion)
-                    error "No data found for pre tier level: ${previousTierLevel}"
-                }
-
-                if ( latestContent.containsKey(tierLevel) ) {
-                    latestContent[tierLevel] = releaseContent[previousTierLevel]
-                } else {
-                    def updateContent = [
-                        "${tierLevel}": releaseContent[previousTierLevel]
-                    ]
-                    latestContent += updateContent
-                }
-
-                sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
-                println "latest content is: ${latestContent}"
-            }
-
-            sharedLib.sendGChatNotification(run_type, testResults, tierLevel.capitalize(), stageLevel.capitalize())
+        /* Publish results through E-mail to user who started the run*/
+            build_url = env.BUILD_URL
+            run_type = "Manual Run"
             sharedLib.sendEmail(
                 run_type,
                 testResults,
-                sharedLib.buildArtifactsDetails(releaseContent, ciMap, overrides.get("build")),
+                sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
                 tierLevel.capitalize(),
-                stageLevel.capitalize(),
+                currentStageLevel.capitalize(),
+                user_email,
             )
         }
 
-        stage('Publish UMB') {
-            /* send UMB message */
-
-            def artifactsMap = [
-                "artifact": [
-                    "type": "product-build",
-                    "name": "Red Hat Ceph Storage",
-                    "version": ciMap["artifact"]["version"],
-                    "nvr": ciMap["artifact"]["nvr"],
-                    "phase": "testing",
-                    "build": ciMap.artifact.build,
-                ],
-                "contact": [
-                    "name": "Downstream Ceph QE",
-                    "email": "cephci@redhat.com",
-                ],
-                "system": [
-                    "os": "centos-7",
-                    "label": "centos-7",
-                    "provider": "openstack",
-                ],
-                "pipeline": [
-                    "name": "rhceph-tier-x",
-                    "id": currentBuild.number,
-                    "tags": tags,
-                    "overrides": overrides,
-                ],
-                "run": [
-                    "url": env.BUILD_URL,
-                    "log": "${env.BUILD_URL}console",
-                    "additional_urls": [
-                        "doc": "https://docs.engineering.redhat.com/display/rhcsqe/RHCS+QE+Pipeline",
-                        "repo": "https://github.com/red-hat-storage/cephci",
-                        "report": "https://reportportal-rhcephqe.apps.ocp4.prod.psi.redhat.com/",
-                        "tcms": "https://polarion.engineering.redhat.com/polarion/",
-                    ],
-                ],
-                "test": [
-                    "type": tierLevel,
-                    "category": "functional",
-                    "result": currentBuild.currentResult,
-                ],
-                "generated_at": env.BUILD_ID,
-                "version": "3.0.0"
-            ]
-
-            def msgType = "Tier1TestingDone"
-            def msgContent = writeJSON returnText: true, json: artifactsMap
-            println "${msgContent}"
-            println(msgType)
-
-            sharedLib.SendUMBMessage(
-                artifactsMap,
-                "VirtualTopic.qe.ci.rhcephqe.product-build.test.complete",
-                msgType,
-            )
-        }
         stage('postBuildAction') {
+            println("Inside post build action")
             buildArtifacts = writeJSON returnText: true, json: buildArtifacts
-            tags_list = tags.split(',') as List
-            def index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
-            stageLevel = tags_list.get(index)
-            def stageValue = stageLevel.split("-")
-            Increment_stage= stageValue[1].toInteger()+1
-            stageLevel= stageValue[0]+"-"+Increment_stage
-            tags_list.putAt(index,stageLevel)
-            tags=tags_list.join(",")
+            def nextbuildType = buildType
+            def buildStatus = "pass"
+            if (final_stage){
+                def tierValue = tierLevel.split("-")
+                Increment_tier= tierValue[1].toInteger()+1
+                nextTierLevel= tierValue[0]+"-"+Increment_tier
+                def index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
+                tags_list.putAt(index,nextTierLevel)
+                def index_stage = tags_list.findIndexOf { it ==~ /stage-\w+/ }
+                tags_list.putAt(index_stage,"stage-1")
+                tags=tags_list.join(",")
+                nextbuildType = tierLevel
+            }
+            else{
+                tags_list = tags.split(',') as List
+                def index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
+                stageLevel = tags_list.get(index)
+                def stageValue = stageLevel.split("-")
+                Increment_stage= stageValue[1].toInteger()+1
+                stageLevel= stageValue[0]+"-"+Increment_stage
+                tags_list.putAt(index,stageLevel)
+                tags=tags_list.join(",")
+            }
             overrides = writeJSON returnText: true, json: overrides
 
             if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
                 currentBuild.result = "FAILED"
-                error "Failure in current build"
+                buildStatus = "fail"
             }
-
-            build ([
-                wait: false,
-                job: "rhceph-tier-executor",
-                parameters: [string(name: 'rhcephVersion', value: rhcephVersion.toString()),
-                            string(name: 'tags', value: tags),
-                            string(name: 'buildType', value: buildType.toString()),
-                            string(name: 'overrides', value: overrides.toString()),
-                            string(name: 'buildArtifacts', value: buildArtifacts.toString())]
-            ])
+            // Execute post tier based on run execution
+            if(!final_stage || (final_stage && tierLevel != "tier-2")){
+                build ([
+                    wait: false,
+                    job: "rhceph-test-execution-pipeline",
+                    parameters: [string(name: 'rhcephVersion', value: rhcephVersion.toString()),
+                                string(name: 'tags', value: tags),
+                                string(name: 'buildType', value: nextbuildType.toString()),
+                                string(name: 'overrides', value: overrides.toString()),
+                                string(name: 'buildArtifacts', value: buildArtifacts.toString())]
+                ])
+            }
         }
     }
 

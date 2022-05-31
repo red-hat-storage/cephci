@@ -8,7 +8,7 @@ def sharedLib
 def rpPreprocDir
 def tierLevel = null
 def stageLevel = null
-def run_type
+def run_type = "Sanity Run"
 def build_url
 def reportBucket = "qe-ci-reports"
 def remoteName= "ibm-cos"
@@ -123,7 +123,7 @@ node(nodeName) {
 
             // Update RH recipe file
 
-            if ( composeInfo != null){
+            if ( composeInfo != null && run_type == "Sanity Run"){
                 if ( tierLevel == null ){
                     tierLevel = msgMap["pipeline"]["name"]
                 }
