@@ -172,7 +172,7 @@ def buildArtifactsDetails(def content, def ciMsgMap, def phase) {
     return [
         "composes": content[phase]["composes"],
         "product": "Red Hat Ceph Storage",
-        "version": ciMsgMap["artifact"]["nvr"],
+        "version": ciMsgMap,
         "ceph_version": content[phase]["ceph-version"],
         "repository": content[phase]["repository"]
     ]
