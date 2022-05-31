@@ -750,7 +750,7 @@
 
 - name: "Tier-2 Cephfs test Multifs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-multifs.yaml"
-  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
@@ -766,7 +766,7 @@
 
 - name: "Tier-2 Cephfs test Nfs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
-  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
@@ -782,7 +782,7 @@
 
 - name: "Tier-2 Cephfs test quota"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-quota.yaml"
-  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
@@ -798,7 +798,7 @@
 
 - name: "Tier-2 Cephfs test Snapshot Clone"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
-  global-conf: "conf/pacific/cephfs/tier_0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
