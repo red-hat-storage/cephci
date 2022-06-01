@@ -68,7 +68,7 @@
     - stage-1
 - name: "test-bootstrap-custom-ssl-dashboard-port-and-apply-spec"
   suite: "suites/pacific/cephadm/tier-1_ssl_dashboard_port.yaml"
-  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
   platform: "rhel-8"
   rhbuild: "5.1"
   inventory:
@@ -83,7 +83,7 @@
     - stage-1
 - name: "test-bootstrap-skip-dashboard-and-custom-ceph-directory-organisation"
   suite: "suites/pacific/cephadm/tier-1_skip_dashboard.yaml"
-  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
   platform: "rhel-8"
   rhbuild: "5.1"
   inventory:
@@ -98,7 +98,7 @@
     - stage-1
 - name: "test-cephadm-apply-service-spec"
   suite: "suites/pacific/cephadm/tier-1_5-1_service-apply-spec.yaml"
-  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
   platform: "rhel-8"
   rhbuild: "5.1"
   inventory:

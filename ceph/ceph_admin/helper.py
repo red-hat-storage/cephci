@@ -174,8 +174,8 @@ class GenerateServiceSpec:
         template = self._get_template("host")
         hosts = []
         address = spec.get("address")
-        labels = spec.get("labels")
         for node_name in spec["nodes"]:
+            labels = spec.get("labels")
             host = dict()
             node = get_node_by_id(self.cluster, node_name)
             host["hostname"] = self.get_hostname(node)
@@ -185,7 +185,7 @@ class GenerateServiceSpec:
             if labels:
                 # Skipping client node, if only client label is attached
                 if len(node.role.role_list) == 1 and ["client"] == node.role.role_list:
-                    return
+                    continue
 
                 if isinstance(labels, str) and labels == "apply-all-labels":
                     labels = self.get_labels(node)

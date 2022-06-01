@@ -12,14 +12,15 @@
 #               eg., ceph orch apply -i <spec_file.yaml>
 #
 # Cluster Configuration:
-#    cephci/conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml
+#    cephci/conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
 #     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
 #     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
 #     Node3 - Mon, OSD, MDS, RGW, node-exporter
-#     Node4 - Client
+#     Node4 - RGW
+#     Node5 - Client
 #
 # Test Steps :
 #   (1) Bootstrap cluster with options,
@@ -112,6 +113,11 @@ tests:
                   labels: apply-all-labels
                   nodes:
                     - node4
+                - service_type: host
+                  address: true
+                  labels: apply-all-labels
+                  nodes:
+                    - node5
       abort-on-fail: true
   - test:
       name: Service deployment with spec
@@ -303,13 +309,13 @@ tests:
                     rgw_zone: india
   - test:
       name: Configure client
-      desc: Configure client on node4
+      desc: Configure client on node5
       module: test_client.py
       polarion-id:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node4                       # client node
+        node: node5                       # client node
         install_packages:
           - ceph-common                   # install ceph common packages
         copy_admin_keyring: true          # Copy admin keyring to node
@@ -333,7 +339,7 @@ tests:
           client_group: clients
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
   - test:
-      name: check-ceph-health on client node4
+      name: check-ceph-health on client node5
       desc: Check for ceph health debug info
       module: exec.py
       config:
