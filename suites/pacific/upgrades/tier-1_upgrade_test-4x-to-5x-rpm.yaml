@@ -99,7 +99,7 @@ tests:
     desc: run rados bench for 360 - normal profile
 
 - test:
-    name: Parallel run
+    name: Upgrade along with I/O's
     module: test_parallel.py
     parallel:
       - test:
@@ -145,8 +145,8 @@ tests:
               prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
               alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
           desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
-          abort-on-fail: True
-    desc: Running upgrade and i/o's parallelly
+    desc: Running upgrade 4.x cdn to 5.x latest then cephadm adopt playbook and i/o's parallelly
+    abort-on-fail: True
 
 - test:
     name: check-ceph-health
