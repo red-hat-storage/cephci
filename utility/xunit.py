@@ -28,7 +28,7 @@ def generate_test_case(name, duration, status, polarion_id=None):
         test_case.time = 0.0
 
     if status != "Pass":
-        test_case.result = Failure("test failed")
+        test_case.result = [Failure("test failed")]
 
     if polarion_id:
         props = Properties()
