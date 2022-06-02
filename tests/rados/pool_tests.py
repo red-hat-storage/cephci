@@ -5,6 +5,7 @@ Tests included:
 2. Effect on size of pools with and without compression
 """
 import datetime
+import pdb
 import re
 import time
 
@@ -399,4 +400,44 @@ def run(ceph_cluster, **kw):
                 rados_obj.detete_pool(pool=entry["pool_name"])
             log.info(f"Completed the test of pg_min_num on pool: {entry['pool_name']} ")
         log.info("pg_min_num tests completed")
+        return 0
+
+    if config.get("verify_pg_num_limit"):
+        """
+        This test is to verify the pg number limit for a pools.
+        Script cover the following steps-
+           1. Creating a pool with default pg number
+           2. Set the pg number more than the limit that is more than 128
+           3. Cheking that pg number getting reduced or not
+        """
+
+        pool_name = config.get("verify_pg_num_limit")["pool_name"]
+        rados_obj.create_pool(pool_name)
+
+        # set the pg number more than 128
+        cmd = f"ceph osd pool set {pool_name} pg_num 256"
+        rados_obj.run_ceph_command(cmd=cmd)
+        time.sleep(5)
+
+        # Checking the pg number is getting below 128
+        pg_num_get = f"ceph osd pool get {pool_name} pg_num"
+        time_end = time.time() + 60 * 30
+
+        try:
+            while time.time() < time_end:
+
+                output = rados_obj.run_ceph_command(cmd=pg_num_get)
+                pg_num = output["pg_num"]
+
+                if pg_num <= 128:
+                    break
+                else:
+                    time.sleep(20)
+        except Exception:
+            log.error("pg number not reduced to less than 128")
+            return 1
+
+        if config.get("delete_pool"):
+            rados_obj.detete_pool(pool=pool_name)
+        log.info("Target ratio tests completed")
         return 0
