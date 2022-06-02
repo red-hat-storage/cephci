@@ -175,6 +175,18 @@ class Rbd:
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
         self.exec_cmd(cmd=cmd)
 
+    def snap_remove(self, pool_name, image_name, snap_name):
+        """
+        Removes a snap of an image in a specified pool name and image name
+        Args:
+            pool_name  : name of the pool where image is to be imported
+            image_name : name of the image file to be imported as
+            snap_name  : name of the snapshot
+        """
+
+        cmd = f"rbd snap rm {pool_name}/{image_name}@{snap_name}"
+        self.exec_cmd(cmd=cmd)
+
     def protect_snapshot(self, snap_name):
         """
         Protects the provided snapshot
