@@ -266,3 +266,12 @@ tests:
         test_autoscaler_bulk_feature: true
         pool_name: test_bulk_features
         delete_pool: true
+  - test:
+      name: PG number maximum limit check
+      module: pool_tests.py
+      desc: Check the pg_num maximut limit is <=128
+      polarion-id: CEPH-83574909
+      config:
+        verify_pg_num_limit:
+          pool_name: pool_num_chk
+          delete_pool: true

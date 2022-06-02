@@ -4,6 +4,7 @@ Tests included:
 1. Verification of EC pool recovery improvement
 2. Effect on size of pools with and without compression
 """
+
 import datetime
 import re
 import time
@@ -399,4 +400,55 @@ def run(ceph_cluster, **kw):
                 rados_obj.detete_pool(pool=entry["pool_name"])
             log.info(f"Completed the test of pg_min_num on pool: {entry['pool_name']} ")
         log.info("pg_min_num tests completed")
+        return 0
+
+    if config.get("verify_pg_num_limit"):
+        """
+        This test is to verify the pg number limit for a pools.
+        Script cover the following steps-
+           1. Creating a pool with default pg number
+           2. set the Logs
+           3. Set noautoscale flag on
+           4. Set the debug_mgr to 10
+           5. Set the pg number more than the limit that is more than 128
+           6. Check the logs for the proper message
+        """
+        # enable the file logging
+        if not rados_obj.enable_file_logging():
+            log.error("Error while setting config to enable logging into file")
+            return 1
+        log.info("Logging to file configured")
+        pool_name = config.get("verify_pg_num_limit")["pool_name"]
+        rados_obj.create_pool(pool_name)
+
+        # Setting the no-autoscale flag
+        cmd = f'{"ceph osd pool set noautoscale"}'
+        rados_obj.run_ceph_command(cmd=cmd)
+
+        # setting the debug_mgr to 10
+        cmd = f'{"ceph tell mgr config set debug_mgr 10"}'
+        rados_obj.run_ceph_command(cmd=cmd)
+
+        # set the pg number more than 128
+        cmd = f"ceph osd pool set {pool_name} pg_num 256"
+        rados_obj.run_ceph_command(cmd=cmd)
+        time.sleep(10)
+        try:
+            # checking the logs
+            cmd = f'{"grep -rnw /var/log/ceph/ -e pg_num_actual"}'
+            cephadm.shell([cmd])
+        except Exception as err:
+            log.error(f'{"Logs are not generated with pg_num_actual"}')
+            log.error(err)
+            return 1
+        if config.get("delete_pool"):
+            rados_obj.detete_pool(pool=pool_name)
+
+            # Unsetting the no-autoscale flag
+            cmd = f'{"ceph osd pool unset noautoscale"}'
+            rados_obj.run_ceph_command(cmd=cmd)
+            # setting the debug_mgr to default
+            cmd = f'{"ceph tell mgr config set debug_mgr 2"}'
+            rados_obj.run_ceph_command(cmd=cmd)
+        log.info(" Verification of pg num checking completed")
         return 0
