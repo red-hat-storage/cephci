@@ -170,3 +170,16 @@ tests:
             io-total: 200M
       polarion-id: CEPH-9500
       desc: Verify that deleting secondary image fails
+
+  - test:
+      name: test image meta operations sync to secondary
+      module: test_rbd_image_meta_mirroring.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            key: ping
+            value: pong
+      polarion-id: CEPH-9525
+      desc: Verify removal of image meta gets mirrored
