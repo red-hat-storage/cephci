@@ -920,20 +920,20 @@ def get_root_permissions(node, path):
     node.obtain_root_permissions(path)
 
 
-def get_public_network(node):
-    """
-    Get the configured public network subnet for nodes in the cluster.
-    This function retrieves the public network subnet from the ceph node
-    object. The subnet is retrieved at runtime when creating nodes. See:
-    ~ mita.openstack.CephVMNode().create_node()
+def get_public_network(nodes):
+    """Get the configured public network subnet from nodes in the cluster.
 
     Args:
-        node(ceph.ceph.CephNode)
+        nodes: cluster nodes
 
     Returns:
-        (str) public network subnet
+        (str) public network subnet(s)
     """
-    return getattr(node, "subnet")
+    subnets = []
+    for node in nodes:
+        if node.subnet not in subnets:
+            subnets.append(node.subnet)
+    return ",".join(subnets)
 
 
 def get_disk_info(node):
