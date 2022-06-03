@@ -193,7 +193,7 @@ tests:
       destroy-cluster: False
       abort-on-fail: True
   - test:
-      name: Upgrade along with I/O's
+      name: Upgrade along with IOs
       module: test_parallel.py
       parallel:
         - test:
