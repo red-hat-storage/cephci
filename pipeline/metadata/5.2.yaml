@@ -282,7 +282,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-3
+    - stage-2
 
 - name: "Testing RADOS robust osd rebalance scenarios"
   suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance.yaml"
@@ -314,7 +314,7 @@
     - openstack
     - ibmc
     - rados
-    - stage-3
+    - stage-4
 
 - name: "RADOS regression for testing various pool functionalities"
   suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
@@ -538,7 +538,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-4
+    - stage-5
 
 - name: "Testing extended RGW multisite secondary to primary"
   suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
@@ -602,7 +602,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-1
+    - stage-2
 
 - name: "Tier-2 RGW bucket_lc_multipart_object_expired"
   suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
@@ -618,7 +618,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-5
+    - stage-2
 
 - name: "RGW testing using S3CMD CLI commands"
   suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
@@ -714,7 +714,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-2
+    - stage-3
 
 - name: "Tier-1 Cephfs Mirror"
   suite: "suites/pacific/cephfs/tier-1_cephfs_mirror.yaml"
@@ -730,7 +730,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-3
+    - stage-2
 
 - name: "Tier-2 Cephfs test clients"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-clients.yaml"
@@ -746,7 +746,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-2
+    - stage-1
 
 - name: "Tier-2 Cephfs test Multifs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-multifs.yaml"
@@ -762,7 +762,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-2
+    - stage-3
 
 - name: "Tier-2 Cephfs test Nfs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
@@ -794,7 +794,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-2
+    - stage-3
 
 - name: "Tier-2 Cephfs test Snapshot Clone"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
