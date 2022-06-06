@@ -459,7 +459,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-2
+    - stage-1
 - name: "test-cephfs-snapshot-clone"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
   global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
@@ -474,7 +474,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-2
+    - stage-1
 - name: "test-cephfs-volume-mgmt"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-volume-management.yaml"
   global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
@@ -489,7 +489,7 @@
     - openstack
     - ibmc
     - cephfs
-    - stage-2
+    - stage-1
 - name: "test-elasticity-after-4-cdn-5-latest-upgrade"
   suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-4-cdn-to-5-latest.yaml"
   global-conf: "conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
@@ -505,7 +505,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-3
+    - stage-2
 - name: "test-elasticity-after-5-cdn-5-latest-upgrade"
   suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-5-cdn-to-5-latest.yaml"
   global-conf: "conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
@@ -521,7 +521,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-3
+    - stage-2
 - name: "test-multipath-upgrade-to-5-latest"
   suite: "suites/pacific/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-5-latest.yaml"
   global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
@@ -537,7 +537,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-3
+    - stage-2
 - name: "test-rados-stretch-cluster-upgrade"
   suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
   global-conf: "conf/pacific/rados/11-node-cluster.yaml"
@@ -553,7 +553,7 @@
     - ibmc
     - upgrades
     - dmfg
-    - stage-4
+    - stage-1
 - name: "Tier-2 RGW bucket_lc_multipart_object_expired"
   suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
   global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
@@ -568,3 +568,4 @@
     - openstack
     - ibmc
     - rgw
+    - stage-2
