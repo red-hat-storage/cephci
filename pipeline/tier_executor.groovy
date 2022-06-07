@@ -127,7 +127,7 @@ node(nodeName) {
         print(overrides)
         // Till the pipeline matures, using the build that has passed tier-0 suite.
 
-        if (tags_list.containsAll(["ibmc","sanity"])){
+        if (tags_list.containsAll(["ibmc","sanity"]) && (tierLevel != "tier-0")){
             def recipeFileContent = sharedLib.readFromRecipeFile(rhcephVersion)
             def content = recipeFileContent['latest']
             println "recipeFile ceph-version : ${content['ceph-version']}"
