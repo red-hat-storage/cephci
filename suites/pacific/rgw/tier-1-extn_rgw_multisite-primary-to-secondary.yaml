@@ -262,6 +262,7 @@ tests:
             script-name: test_bilog_trimming.py
             config-file-name: test_bilog_trimming.yaml
             timeout: 300
+            verify-io-on-site: ["ceph-sec"]
   - test:
       name: datalog trim command
       desc: Execute datalog trim command with delete marker enabled on Primary
@@ -273,6 +274,7 @@ tests:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_datalog_trim_command.yaml
             timeout: 300
+            verify-io-on-site: ["ceph-sec"]
   - test:
       name: crash ls command
       desc: Create bucket on primary required for crash check
@@ -284,6 +286,7 @@ tests:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_bucket_sync_cmd_crash.yaml
             timeout: 300
+            verify-io-on-site: ["ceph-sec"]
   - test:
       name: crash ls command
       desc: Execute bucket sync command to check command is not crashing on secondary
@@ -295,3 +298,4 @@ tests:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_bucket_sync_cmd_crash.yaml
             timeout: 300
+            verify-io-on-site: ["ceph-sec"]
