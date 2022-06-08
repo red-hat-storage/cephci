@@ -83,3 +83,14 @@ tests:
         script-name: test_bucket_lc_object_exp_multipart.py
         config-file-name: test_bucket_lc_object_exp_multipart.yaml
         timeout: 300
+
+  - test:
+      name: Bucket Lifecycle Configuration Tests
+      desc: Test lifecycle with version enabled bucket containing only one object version
+      polarion-id: CEPH-11187
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_current_version_object_expiration.yaml
+        timeout: 300
+
