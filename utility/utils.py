@@ -1408,3 +1408,44 @@ def clone_the_repo(config, node, path_to_clone):
     log.info(f"repo_url: {repo_url}")
     git_clone_cmd = f"sudo git clone {repo_url} -b {branch}"
     node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
+
+
+def install_fio(client_node):
+    """Install fio package on client node.
+
+    Args:
+        client_node: ceph node
+    """
+    log.info("Installing fio on client node")
+    client_node.exec_command(cmd="yum install fio -y", sudo=True)
+
+
+def run_fio(**kw):
+    """Run IO using fio tool on given target.
+
+    Args:
+        filename: Target device or file.
+        rbdname: rbd image name
+        pool: name of rbd image pool
+        runtime: fio runtime
+        long_running(bool): True for long running required
+    """
+    sudo = False
+    if kw.get("filename"):
+        opt_args = f"--filename={kw['filename']}"
+        sudo = True
+    else:
+        opt_args = (
+            f"--ioengine=rbd --rbdname={kw['image_name']} --pool={kw['pool_name']}"
+        )
+
+    opt_args += f" --runtime={kw.get('runtime', 120)}"
+
+    long_running = kw.get("long_running", False)
+    cmd = (
+        "fio --name=test-1  --numjobs=1 --rw=write"
+        " --bs=1M --iodepth=8 --fsync=32  --time_based"
+        f" --group_reporting {opt_args}"
+    )
+
+    return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=sudo)
