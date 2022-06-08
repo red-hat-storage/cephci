@@ -12,11 +12,12 @@ They differ from them on the following points
 
 ### CLI Arguments
 
-| Options | Description |
-| :---- | ----------- |
-| `--osp-cred <cred.yaml>` | OpenStack credential file |
-| `--add-repo <repo.repo>` | Additional repository file to be used. |
-| `--inventory <vm_spec.yaml>` | VM spec file to be used for deployment.|
+| Options                           | Description |
+|:----------------------------------| ----------- |
+| `--osp-cred <cred.yaml>`          | OpenStack credential file |
+| `--add-repo <repo.repo>`          | Additional repository file to be used. |
+| `--inventory <vm_spec.yaml>`      | VM spec file to be used for deployment.|
+| `--platform rhel-<major-version>` | Operating System deployed in the systems.|
 
 ### Environment Variables
 
@@ -30,17 +31,19 @@ They differ from them on the following points
 __Examples___
 ```usage
 # Defaults
-bash pipeline/scripts/5/interop/<test-component.sh> \
+bash pipeline/scripts/interop/test-ceph-features.sh \
     --osp-cred cred.yaml \
     --add-repo repo.repo \
-    --inventory test.yaml
+    --inventory test.yaml \
+    --platform rhel-<major-version>
 
 # Custom environment
 export PY_CMD=/home/fedora/cephci-env/bin/python
-bash pipeline/scripts/5/interop/<test-ceph-component.sh> \
+bash pipeline/scripts/interop/test-ceph-features.sh \
     --osp-cred rhos-d.yaml \
     --add-repo file.repo \
-    --inventory rhel-8.5-latest.yaml 
+    --inventory rhel-8.5-latest.yaml \
+    --platform rhel-8
 ```
 
 It is recommended to execute the script from the root folder of this repo.
