@@ -277,7 +277,7 @@ class CephVMNodeV2:
             if UUID(hex=name):
                 return self.driver.get_image(name)
         except ValueError:
-            LOG.debug("Given name is not an image ID")
+            pass
 
         url = f"/v2/images?name={name}"
         object_ = self.driver.image_connection.request(url).object
