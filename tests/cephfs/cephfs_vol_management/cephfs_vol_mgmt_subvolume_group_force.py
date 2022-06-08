@@ -36,9 +36,12 @@ def run(ceph_cluster, **kw):
             check_ec=False,
         )
         if c_err:
-            return 0
-        return 1
+            log.error(
+                "The Subvolumegroup does not exist --force option should make the command succeed"
+            )
+            return 1
+        return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
