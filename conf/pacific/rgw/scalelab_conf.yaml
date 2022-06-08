@@ -1,0 +1,459 @@
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['172.16.0.0/16']
+      nodes:
+        -
+          hostname: f10-h29-b02-5039ms.rdu2.scalelab.redhat.com
+          ip: 172.16.37.201
+          root_password: 100yard-
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        -
+          hostname: f10-h29-b03-5039ms.rdu2.scalelab.redhat.com
+          ip: 172.16.38.30
+          root_password: 100yard-
+          role:
+            - mon
+            - mgr
+        -
+          hostname: f10-h29-b04-5039ms.rdu2.scalelab.redhat.com
+          ip: 172.16.37.250
+          root_password: 100yard-
+          role:
+            - mon
+            - mgr
+        -
+          hostname: f23-h21-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.43.74
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f23-h25-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.43.193
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f23-h29-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.43.39
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f26-h01-000-6048r.rdu2.scalelab.redhat.com 
+          ip: 172.16.44.201
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f26-h05-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.45.64
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f26-h09-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.44.189
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f26-h13-000-6048r.rdu2.scalelab.redhat.com 
+          ip: 172.16.44.134
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f26-h17-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.44.202
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f26-h21-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.45.164
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f26-h25-000-6048r.rdu2.scalelab.redhat.com 
+          ip: 172.16.44.192
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f27-h09-000-6048r.rdu2.scalelab.redhat.com
+          ip: 172.16.45.52
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f11-h21-000-6049p.rdu2.scalelab.redhat.com
+          ip: 172.16.39.76
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz
+        -
+          hostname: f11-h21-000-6049p.rdu2.scalelab.redhat.com
+          ip: 172.16.37.156
+          root_password: 100yard-
+          role:
+            - osd
+            - rgw
+
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/sdo
+            - /dev/sdp
+            - /dev/sdq
+            - /dev/sdr
+            - /dev/sds
+            - /dev/sdt
+            - /dev/sdu
+            - /dev/sdv
+            - /dev/sdw
+            - /dev/sdx
+            - /dev/sdy
+            - /dev/sdz

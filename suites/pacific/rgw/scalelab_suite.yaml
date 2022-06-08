@@ -1,0 +1,127 @@
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: f10-h29-b02-5039ms
+                allow-fqdn-hostname: true
+                orphan-initial-daemons: true
+                skip-dashboard: true               
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              timeout: 900
+              specs:
+                - service_type: osd
+                  service_id: defaultDG
+                  placement:
+                    hosts:
+                    - f23-h21-000-6048r.rdu2.scalelab.redhat.com
+                    - f23-h25-000-6048r.rdu2.scalelab.redhat.com
+                    - f23-h29-000-6048r.rdu2.scalelab.redhat.com
+                    - f26-h01-000-6048r.rdu2.scalelab.redhat.com
+                    - f26-h05-000-6048r.rdu2.scalelab.redhat.com
+                    - f26-h09-000-6048r.rdu2.scalelab.redhat.com
+                    - f26-h13-000-6048r.rdu2.scalelab.redhat.com
+                    - f26-h17-000-6048r.rdu2.scalelab.redhat.com
+                    - f26-h21-000-6048r.rdu2.scalelab.redhat.com
+                    - f26-h25-000-6048r.rdu2.scalelab.redhat.com
+                    - f27-h09-000-6048r.rdu2.scalelab.redhat.com
+                    - f11-h25-000-6049p.rdu2.scalelab.redhat.com
+                    - f11-h21-000-6049p.rdu2.scalelab.redhat.com
+                  data_devices:
+                    paths:
+                    - /dev/sdc
+                    - /dev/sdd
+                    - /dev/sde
+                    - /dev/sdf
+                    - /dev/sdg
+                    - /dev/sdh
+                    - /dev/sdi
+                    - /dev/sdj
+                    - /dev/sdk
+                    - /dev/sdl
+                    - /dev/sdm
+                    - /dev/sdn
+                    - /dev/sdo
+                    - /dev/sdp
+                    - /dev/sdq
+                    - /dev/sdr
+                    - /dev/sds
+                    - /dev/sdt
+                    - /dev/sdu        
+                    - /dev/sdv
+                    - /dev/sdw
+                    - /dev/sdx
+                    - /dev/sdy
+                    - /dev/sdz
+                  db_devices:
+                    rotational: false
+                  filter_logic: AND
+                  objectstore: bluestore
+
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgws
+                  placement:
+                    nodes: 
+                      - f23-h21-000-6048r.rdu2.scalelab.redhat.com
+                      - f23-h25-000-6048r.rdu2.scalelab.redhat.com
+                      - f23-h29-000-6048r.rdu2.scalelab.redhat.com
+                      - f26-h01-000-6048r.rdu2.scalelab.redhat.com
+                      - f26-h05-000-6048r.rdu2.scalelab.redhat.com
+                      - f26-h09-000-6048r.rdu2.scalelab.redhat.com
+                      - f26-h13-000-6048r.rdu2.scalelab.redhat.com
+                      - f26-h17-000-6048r.rdu2.scalelab.redhat.com
+                      - f26-h21-000-6048r.rdu2.scalelab.redhat.com
+                      - f26-h25-000-6048r.rdu2.scalelab.redhat.com
+                      - f27-h09-000-6048r.rdu2.scalelab.redhat.com
+                      - f11-h21-000-6049p.rdu2.scalelab.redhat.com
+                      - f11-h25-000-6049p.rdu2.scalelab.redhat.com
+                  spec:
+                    rgw_zone: default
+                    rgw_realm: default
+                    rgw_frontend_port: 8080
+                    networks: [172.16.0.0/16]
+                    unmanaged: false
+
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
