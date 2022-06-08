@@ -3,7 +3,6 @@ This script provides the upstream latest rpm repo path and container image.
 Please note that this script should be run under root privilages
 inorder to pull the image and podman should be installed on that host.
 """
-import fcntl
 import logging
 import os
 import re
@@ -14,37 +13,63 @@ import requests
 import yaml
 from docopt import docopt
 from packaging import version
+from yaml.loader import SafeLoader
 
 LOG = logging.getLogger(__name__)
 
 
-def update_upstream(file_name, content):
+def set_lock(file_name):
+    """Method to lock the file to avoid race condition"""
+    lock_file = file_name + ".lock"
+    exit_status = os.system(f"ls -l {lock_file}")
+    if exit_status:
+        print("File lock does not exist, Creating it")
+        os.system(f"touch {lock_file}")
+        return
+    # If any process locks the file it will wait till it unlock
+    timeout = 600
+    timeout_start = time.time()
+    while time.time() < timeout_start + timeout:
+        # wait for 2 minutes before retrying
+        time.sleep(120)
+        exit_status = os.system(f"ls -l {lock_file}")
+        if exit_status:
+            print("File lock does not exist, Creating it")
+            os.system(f"touch {lock_file}")
+            return
+
+    raise Exception(f"Lock file: {lock_file} already exist, can not create lock file")
+
+
+def unset_lock(file_name):
+    """Method to unlock the above set lock"""
+    lock_file = file_name + ".lock"
+    exit_status = os.system(f"rm -f {lock_file}")
+    if exit_status == 0:
+        print("File un-locked successfully")
+        return
+    raise Exception("Unable to unlock the file")
+
+
+def update_upstream(file_name, content, repo, image, upstream_version):
     """Method to update for the provided file
     along with file set lock to avoid race condition.
     Args:
         file_name: Name of the file to update
         content: things to update in file
     """
-    # waiting for 10 minutes in case lock is held indefinitely
-    timeout = 600
-    timeout_start = time.time()
-    while time.time() < timeout_start + timeout:
+    with open(file_name, "w") as yaml_file:
         try:
-            # try/except in case the file is still locked by another process
-            # open the file for editing
-            with open(file_name, "w") as yaml_file:
-                # To lock the file to avoid race condition
-                fcntl.flock(yaml_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                # update the file with write operation
-                yaml_file.write(yaml.dump(content, default_flow_style=False))
-                # unlock it so other processed can use it
-                fcntl.flock(yaml_file, fcntl.LOCK_UN)
-                LOG.info(f"Updated build info in {file_name}")
-                break
-
-        except IOError:
-            # wait for 2 minutes before retrying
-            time.sleep(120)
+            # To lock the file to avoid race condition
+            set_lock(file_name)
+            # update the file with write operation
+            yaml_file.write(yaml.dump(content, default_flow_style=False))
+        finally:
+            # unlock it so other processed can use it
+            unset_lock(file_name)
+            LOG.info(
+                f"Updated build info: \n repo:{repo} \n image:{image} \n ceph version:{upstream_version} in {file_name}"
+            )
 
 
 def store_in_upstream(branch_name, repo, image, upstream_version):
@@ -56,11 +81,24 @@ def store_in_upstream(branch_name, repo, image, upstream_version):
         version: upstream branch ceph version.
     """
     file_name = "/ceph/cephci-jenkins/latest-rhceph-container-info/upstream.yaml"
-    stream = open(file_name, "r")
-    repo_details = yaml.load(stream)
-    # To handle new release which is not updated yet
-    if repo_details.get(branch_name):
+    repo_details = {}
+    if os.path.exists(file_name):
+        stream = open(file_name, "r")
+        repo_details = yaml.load(stream, Loader=SafeLoader) or {}
+    if repo_details and repo_details.get(branch_name):
         existing_version = repo_details[branch_name]["ceph-version"]
+        # version.parse helps to compare version as easy as integers.
+        old_version = version.parse(existing_version)
+        new_version = version.parse(upstream_version)
+        # update only if current version is greater than existing version.
+        if new_version <= old_version:
+            print(
+                f"Current version:{upstream_version} not greater than existing version:{existing_version}"
+            )
+            return
+        repo_details[branch_name]["composes"] = repo
+        repo_details[branch_name]["image"] = image
+        repo_details[branch_name]["ceph-version"] = upstream_version
     else:
         # updating new branch details in upstream.yaml
         repo_details[branch_name] = {
@@ -68,20 +106,7 @@ def store_in_upstream(branch_name, repo, image, upstream_version):
             "composes": repo,
             "image": image,
         }
-        update_upstream(file_name, repo_details)
-        return
-    # version.parse helps to compare version as easy as integers.
-    old_version = version.parse(existing_version)
-    new_version = version.parse(upstream_version)
-    # update only if current version is greater than existing version.
-    if new_version > old_version:
-        # edit the file
-        stream = open(file_name, "r")
-        data = yaml.load(stream)
-        data[branch_name]["composes"] = repo
-        data[branch_name]["image"] = image
-        data[branch_name]["ceph-version"] = upstream_version
-        update_upstream(file_name, data)
+    update_upstream(file_name, repo_details, repo, image, upstream_version)
 
 
 usage = """

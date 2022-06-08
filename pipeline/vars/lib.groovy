@@ -564,9 +564,9 @@ def updateUpstreamFile(def version) {
         
     */
     try {
-        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python"
-        sh ".venv/bin/python -m pip install packaging"
-        sh "sudo dnf install podman -y"
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python3"
+        sh ".venv/bin/python3 -m pip install packaging"
+        sh "sudo yum install podman -y"
         def scriptFile = "pipeline/scripts/ci/upstream_cli.py"
         def args = "build ${version}"
         sh script: "${cmd} ${scriptFile} ${args}"
