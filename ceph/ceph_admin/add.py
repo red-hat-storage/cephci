@@ -23,6 +23,8 @@ class AddMixin:
                 command: add
                 base_cmd_args:
                     verbose: true
+                args:
+                    method: raw
                 pos_args:
                     - node1
                     - /dev/vdb
@@ -47,5 +49,8 @@ class AddMixin:
                 base_cmd += pos_args
 
             base_cmd.append(host)
+
+        if config.get("args"):
+            base_cmd.append(config_dict_to_string(config["args"]))
 
         out, _ = self.shell(base_cmd)
