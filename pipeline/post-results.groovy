@@ -13,6 +13,8 @@ def build_url
 def reportBucket = "qe-ci-reports"
 def remoteName= "ibm-cos"
 def msgMap = [:]
+def majorVersion
+def minorVersion
 
 node(nodeName) {
 
@@ -182,5 +184,8 @@ node(nodeName) {
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
         }
+    }
+    finally{
+        sharedLib.unSetLock(majorVersion, minorVersion)
     }
 }
