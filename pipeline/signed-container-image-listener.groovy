@@ -7,6 +7,8 @@ def cephVersion
 def composeUrl
 def containerImage
 def releaseMap = [:]
+def majorVer
+def minorVer
 
 // Pipeline script entry point
 node(nodeName) {
@@ -146,5 +148,8 @@ node(nodeName) {
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
         }
+    }
+    finally{
+        sharedLib.unSetLock(majorVer, minorVer)
     }
 }

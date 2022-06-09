@@ -8,7 +8,8 @@ def versions
 def cephVersion
 def compose
 def releaseDetails = [:]
-
+def majorVer
+def minorVer
 // Pipeline script entry point
 
 node(nodeName) {
@@ -142,5 +143,8 @@ node(nodeName) {
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
         }
+    }
+    finally{
+        sharedLib.unSetLock(majorVer, minorVer)
     }
 }
