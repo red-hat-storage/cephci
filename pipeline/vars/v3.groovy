@@ -677,30 +677,36 @@ def executeTestScript(def script) {
 
 def fetchStages(
     def tags, def overrides, def testResults, def rhcephversion=null,
-    def metadataFilePath=null
+    def metadataFilePath=null, def upstreamVersion=null
     ) {
     /*
         Return all the scripts found under
-        cephci/pipeline/metadata/<MAJOR>.<MINOR>.yaml matching
-        the given tierLevel as pipeline Test Stages.
+        cephci/pipeline/metadata/<MAJOR>.<MINOR>.yaml or
+        cephci/pipeline/metadata/<upstreamVersion>.yaml matching
+        the given tags as pipeline Test Stages.
            example: cephci/pipeline/metadata/5.1.yaml
         MAJOR   -   RHceph major version (ex., 5)
         MINOR   -   RHceph minor version (ex., 0)
+        upstreamVersion - ex: pacific | quincy
     */
     println("Inside fetch stages from runner")
-    def RHCSVersion = [:]
-    if ( overrides.containsKey("build") && overrides["build"] == "released" ) {
-        RHCSVersion = fetchMajorMinorOSVersion("released")
-    } else if ( rhcephversion ) {
-        RHCSVersion["major_version"] = rhcephversion.substring(7,8)
-        RHCSVersion["minor_version"] = rhcephversion.substring(9,10)
-    } else {
-        RHCSVersion = getRHCSVersionFromArtifactsNvr()
-    }
+    def rhcephVersion
+    if ( ! upstreamVersion ) {
+        def RHCSVersion = [:]
+        if ( overrides.containsKey("build") && overrides["build"] == "released" ) {
+            RHCSVersion = fetchMajorMinorOSVersion("released")
+        } else if ( rhcephversion ) {
+            RHCSVersion["major_version"] = rhcephversion.substring(7,8)
+            RHCSVersion["minor_version"] = rhcephversion.substring(9,10)
+        } else {
+            RHCSVersion = getRHCSVersionFromArtifactsNvr()
+        }
 
-    def majorVersion = RHCSVersion.major_version
-    def minorVersion = RHCSVersion.minor_version
-    def rhcephVersion = "${majorVersion}.${minorVersion}"
+        def majorVersion = RHCSVersion.major_version
+        def minorVersion = RHCSVersion.minor_version
+        rhcephVersion = "${majorVersion}.${minorVersion}"
+    }
+    else { rhcephVersion = upstreamVersion }
 
     def overridesStr = writeJSON returnText: true, json: overrides
 
