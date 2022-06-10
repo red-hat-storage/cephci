@@ -1,0 +1,150 @@
+# Tier0: RBD build evaluation
+#
+# This test suite evaluates the build to determine the execution of identified
+# regression test suites. This suite is executed against all new builds released by the
+# development team.
+#
+# The following testing is carried out
+#   - verification of image related CLI
+#   - verification of block related CLI
+#   - verification of Snapshot and Clone CLI
+#   - verification of other block CLI
+#   - verification of IO operations.
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: "install ceph pre-requisites"
+  -
+    test:
+      name: Cephadm Bootstrap with custom user option
+      desc: cephadm cluster bootstrap with ssh-user(cephuser) option
+      module: test_bootstrap.py
+      polarion-id: CEPH-83573724
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          ssh-user: cephuser
+          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide with ssh-user
+          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+      destroy-cluster: false
+      abort-on-fail: true
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          -
+            config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+        verify_cluster_health: true
+      desc: "RHCS cluster deployment using cephadm"
+      destroy-clster: false
+      module: test_cephadm.py
+      name: "deploy cluster"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+        node: node6
+      desc: "Configure the client system"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      config:
+        branch: master
+        script: cli_generic.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Generic scenarios"
+      module: test_rbd.py
+      name: 1_rbd_cli_generic
+      polarion-id: CEPH-83574241
+  -
+    test:
+      config:
+        branch: master
+        script: rbd_groups.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Groups scenarios"
+      module: test_rbd.py
+      name: 2_rbd_cli_groups
+      polarion-id: CEPH-83574239
+  -
+    test:
+      config:
+        branch: master
+        script: import_export.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Import Export scenarios"
+      module: test_rbd.py
+      name: 3_rbd_cli_import_export
+      polarion-id: CEPH-83574240
+  -
+    test:
+      config:
+        branch: master
+        script: luks-encryption.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD LUKS Encryption scenarios"
+      module: test_rbd.py
+      name: 4_rbd_luks_encryption
+      polarion-id: CEPH-83574242
+  -
+    test:
+      config:
+        branch: master
+        script: cli_migration.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Migration scenarios"
+      module: test_rbd.py
+      name: 5_rbd_cli_migration
+      polarion-id: CEPH-83574243

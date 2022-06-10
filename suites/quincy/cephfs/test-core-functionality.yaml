@@ -1,0 +1,132 @@
+# Tier0: cephfs build evaluation
+#
+# This test suite evaluates the build to determine the execution of identified
+# regression test suites. This suite is executed against all new builds released by the
+# development team.
+#
+# The following testing is carried out
+#   - Deploy MDS with default values using cephadm
+#   - cephfs basic operations
+#   - Deploy mds using cephadm and increase & decrease number of mds
+---
+tests:
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          - ceph
+          - fs
+          - set
+          - cephfs
+          - max_mds
+          - "2"
+        command: shell
+      desc: "Add Active Active configuration of MDS for cephfs"
+      destroy-cluster: false
+      module: test_bootstrap.py
+      name: "Add Active Active configuration of MDS"
+      polarion-id: CEPH-11344
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node7
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: false
+      desc: "Deploy MDS with default values using cephadm"
+      module: mds_default_values.py
+      name: cephfs default values for mds
+      polarion-id: "CEPH-83574284"
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: CEPH-11293  # also applies to [CEPH-11296,CEPH-11297,CEPH-11295]
+  - test:
+      name: Increase and Decrease of MDS
+      module: mds_Inc_dec.py
+      desc: Deploy mds using cephadm and increase & decrease number of mds
+      polarion-id: CEPH-83574286
+      abort-on-fail: false
