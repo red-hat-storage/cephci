@@ -111,7 +111,7 @@ node(nodeName) {
                     "composes": releaseMap.rc.composes
                 ],
                 "contact": [
-                    "email": "ceph-qe@redhat.com",
+                    "email": "cephci@redhat.com",
                     "name": "Downstream Ceph QE"
                 ],
                 "run": [
@@ -141,7 +141,7 @@ node(nodeName) {
                 subject: "${subject}",
                 body: "${body}",
                 from: "cephci@redhat.com",
-                to: "ceph-qe@redhat.com"
+                to: "cephci@redhat.com"
             )
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)

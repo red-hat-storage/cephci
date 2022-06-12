@@ -248,7 +248,7 @@ def sendEmail(def quota_detail){
     echo "Sending Email"
     def html_body = readFile(file: "pipeline/rhos_scripts/quota-template.html")
     def body = generate_mail_body(html_body, quota_detail)
-    def to_list = "cephci@redhat.com, ceph-qe@redhat.com"
+    def to_list = "cephci@redhat.com"
 
     emailext(
         mimeType: 'text/html',
