@@ -42,7 +42,7 @@ def sendCVPUMBMessage(def ciMsg, def status) {
         ],
         "contact": [
             "name": "Downstream Ceph QE",
-            "email": "ceph-qe@redhat.com"
+            "email": "cephci@redhat.com"
         ],
         "test": [
             "type": "tier-0",
