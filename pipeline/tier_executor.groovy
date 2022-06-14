@@ -21,6 +21,15 @@ if ("ibmc" in tags_list){
     nodeName = "agent-01"
 }
 
+def branch
+def repo
+if (params.gitbranch){branch = "*/${params.gitbranch}"}
+else{branch='origin/master'}
+
+if (params.gitrepo){repo = "*/${params.gitrepo}"}
+else{repo='https://github.com/red-hat-storage/cephci.git'}
+
+
 node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
         stage('Install prereq') {
@@ -28,7 +37,7 @@ node(nodeName) {
             checkout(
                 scm: [
                     $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
+                    branches: [[name: branch]],
                     extensions: [
                         [
                             $class: 'CleanBeforeCheckout',
@@ -47,7 +56,7 @@ node(nodeName) {
                         ]
                     ],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
+                        url: repo
                     ]]
                 ],
                 changelog: false,
@@ -198,7 +207,9 @@ node(nodeName) {
                                 string(name: 'tags', value: tags),
                                 string(name: 'buildType', value: nextbuildType.toString()),
                                 string(name: 'overrides', value: overrides.toString()),
-                                string(name: 'buildArtifacts', value: buildArtifacts.toString())]
+                                string(name: 'buildArtifacts', value: buildArtifacts.toString()),
+                                string(name: 'gitrepo', value: repo.toString()),
+                                string(name: 'gitbranch', value: branch.toString())]
                 ])
             }
         }
