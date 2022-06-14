@@ -1,9 +1,6 @@
 /*
     Pipeline script for executing v3 pipeline
 */
-
-def user
-def user_email
 def testStages = [:]
 def testResults = [:]
 def sharedLib
@@ -26,10 +23,6 @@ if ("ibmc" in tags_list){
 
 node(nodeName) {
     timeout(unit: "MINUTES", time: 30) {
-        wrap([$class: 'BuildUser']) {
-            user = env.BUILD_USER
-            user_email =  env.BUILD_USER_EMAIL
-        }
         stage('Install prereq') {
             if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout(
@@ -160,8 +153,7 @@ node(nodeName) {
                 testResults,
                 sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
                 tierLevel.capitalize(),
-                currentStageLevel.capitalize(),
-                user_email,
+                currentStageLevel.capitalize()
             )
         }
 
