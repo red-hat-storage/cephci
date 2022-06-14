@@ -200,5 +200,4 @@ if __name__ == "__main__":
 
         method(*args)
     except BaseException as be:
-        LOG.exception(be)
-        print(usage)
+        raise Exception(be)
