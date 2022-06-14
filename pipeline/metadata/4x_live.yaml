@@ -1,0 +1,37 @@
+#=====================================================================================
+# Metadata file for 4.x RHCS release version live testing.
+# Single file to specify test suites to be executed for all regression (sanity) and schedule tests
+# as per defined in each stages.
+# Each stage will execute in sequential pattern.
+# Contains all Default parameter used for Execution when no override is specified.
+# parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
+# platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
+#=====================================================================================
+- name: "live testing using cdn for RHCS 4.x container"
+  suite: "suites/nautilus/live/sanity_container.yaml"
+  global-conf: "conf/nautilus/dashboard/sanity-dashboard.yaml"
+  platform: "rhel-7"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+- name: "live testing using cdn for RHCS 4.x rpm"
+  suite: "suites/nautilus/live/sanity_rpm.yaml"
+  global-conf: "conf/nautilus/dashboard/sanity-dashboard.yaml"
+  platform: "rhel-7"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1

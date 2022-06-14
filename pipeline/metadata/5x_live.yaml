@@ -9,9 +9,8 @@
 #=====================================================================================
 - name: "Deployment test suite at 5x for live testing"
   suite: "suites/pacific/live/sanity_deployment.yaml"
-  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  global-conf: "conf/pacific/cephadm/sanity-cephadm.yaml"
   platform: "rhel-8"
-  rhbuild: "5.2"
   inventory:
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
@@ -26,13 +25,12 @@
   suite: "suites/pacific/live/sanity_upgrade_cephadm.yaml"
   global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
   platform: "rhel-8"
-  rhbuild: "5.2"
   inventory:
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
     - sanity
-    - tier-0
+    - tier-1
     - openstack
     - ibmc
     - dmfg
@@ -41,13 +39,12 @@
   suite: "suites/pacific/live/sanity_upgrade_test-4x-to-5x-rpm.yaml"
   global-conf: "conf/pacific/upgrades/upgrades.yaml"
   platform: "rhel-8"
-  rhbuild: "5.2"
   inventory:
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
     - sanity
-    - tier-0
+    - tier-1
     - openstack
     - ibmc
     - dmfg
