@@ -18,6 +18,8 @@ def run(**kw):
 
     Test case covered -
     CEPH-83573308 - Verify that clones can be created without protecting snapshot
+    CEPH-83573307 - Delete parent snapshot and verify whether it is moved to trash or not.
+    CEPH-83573309 - Verify deletion of parent Image when clone is flattened.
     Pre-requisites :
     1. Cluster must be up and running with capacity to create pool
        (At least with 64 pgs)
@@ -29,6 +31,8 @@ def run(**kw):
     2. Create snapshot for Image
     3. make v2clone default  - ceph osd set-require-min-compat-client mimic
     4. Create clone for an image which is having snapshots
+    5. Remove parent image snapshot and check the status
+    6. Flattened the clone and check the trash views
     """
     log.info("Running snap and clone operations with v2clone function")
     log.info("executing *****")
@@ -50,8 +54,9 @@ def run(**kw):
         cmd = "ceph osd set-require-min-compat-client mimic"
         rbd.exec_cmd(cmd=cmd)
         rbd.create_clone(snap_name, pool, clone)
-        cmd = "ceph config set client rbd_move_to_trash_on_remove true"
+        cmd = "ceph config set client rbd_move_parent_to_trash_on_remove true"
         rbd.exec_cmd(cmd=cmd)
+        rbd.snap_remove(pool, image, snap)
         rbd.remove_image(pool, image)
         if not rbd.trash_exist(pool, image):
             raise ImageNotFoundError(" Deleted Image not found in the Trash")

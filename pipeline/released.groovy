@@ -94,7 +94,7 @@ node(nodeName) {
                 "repository": "cdn.redhat.com"
             ],
             "contact": [
-                "email": "ceph-qe@redhat.com",
+                "email": "cephci@redhat.com",
                 "name": "Downstream Ceph QE"
             ],
             "run": [

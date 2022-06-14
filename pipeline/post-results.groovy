@@ -177,7 +177,7 @@ node(nodeName) {
                 subject: "${subject}",
                 body: "${body}",
                 from: "cephci@redhat.com",
-                to: "ceph-qe@redhat.com"
+                to: "cephci@redhat.com"
             )
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)

@@ -141,7 +141,7 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
     kms_keyid = config.get("kms_keyid")
     create_s3_conf(cluster, build, host, port, secure, kms_keyid)
 
-    if not build.startswith("5"):
+    if build.startswith("4"):
         rgw_node.open_firewall_port(port=port, protocol="tcp")
 
     add_lc_debug(cluster, build)
@@ -186,10 +186,10 @@ def execute_teardown(cluster: Ceph, build: str) -> None:
     """
     Execute the test teardown phase.
     """
-    command = "rm -rf s3-tests"
+    command = "sudo rm -rf s3-tests"
 
     node = cluster.get_nodes(role="client")[0]
-    node.exec_command(sudo=True, cmd=command)
+    node.exec_command(cmd=command)
 
     del_lc_debug(cluster, build)
 
@@ -214,14 +214,14 @@ def install_s3test_requirements(
     simulation of the manual steps.
 
     Args:
-        node:   The node that is consider for running S3Tests.
+        node:   The node that is considered for running S3Tests.
         branch: The branch to be installed
         os_ver: The OS major version
 
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
-    if branch in ["ceph-nautilus", "ceph-luminous"]:
+    if branch in ["ceph-nautilus", "ceph-luminous"] or os_ver == "9":
         return _s3tests_req_install(node, os_ver)
 
     _s3tests_req_bootstrap(node)
@@ -280,7 +280,7 @@ def get_rgw_frontend(cluster: Ceph) -> Tuple:
     secure = False
     port = 80
 
-    # Double check the port number
+    # Doublecheck the port number
     for value in frontend_value:
         # support values like endpoint=x.x.x.x:port ssl_port=443 port=x.x.x.x:8080
         if "port" in value or "endpoint" in value:
@@ -299,7 +299,7 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
     """
     Create a S3 user with the given display_name.
 
-    The other required information for creating an user is auto generated.
+    The other required information for creating a user is auto generated.
 
     Args:
         node: node in the cluster to create the user on
@@ -412,8 +412,43 @@ def del_lc_debug(cluster: Ceph, build: str) -> None:
 # Private functions
 
 
+def _s3test_req_py3(node: CephNode) -> None:
+    """
+    Creates a python3 virtual environment and install the s3 prerequisite packages.
+
+    Args:
+        node (CephNode):    The system to be used for creating the venv.
+
+    Raises:
+        CommandFailed
+    """
+    packages = [
+        "python3-devel",
+        "libevent-devel",
+        "libffi-devel",
+        "libxml2-devel",
+        "libxslt-devel",
+        "zlib-devel",
+    ]
+    commands = [
+        "python3 -m venv s3-tests/virtualenv",
+        "s3-tests/virtualenv/bin/python -m pip install --upgrade pip setuptools",
+        "s3-tests/virtualenv/bin/python -m pip install -r s3-tests/requirements.txt",
+        "s3-tests/virtualenv/bin/python s3-tests/setup.py develop",
+    ]
+    node.exec_command(
+        sudo=True, check_ec=False, cmd=f"yum install -y {' '.join(packages)}"
+    )
+
+    for cmd in commands:
+        node.exec_command(cmd=cmd)
+
+
 def _s3tests_req_install(node: CephNode, os_ver: str) -> None:
     """Install S3 prerequisites via pip."""
+    if os_ver == "9":
+        return _s3test_req_py3(node)
+
     packages = [
         "python2-virtualenv",
         "python2-devel",

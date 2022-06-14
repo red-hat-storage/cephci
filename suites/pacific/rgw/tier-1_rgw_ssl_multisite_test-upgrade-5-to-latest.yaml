@@ -236,6 +236,7 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects
       module: sanity_rgw_multisite.py
@@ -248,6 +249,7 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: test to create "M" buckets and "N" objects with multipart upload
       module: sanity_rgw_multisite.py
@@ -260,6 +262,7 @@ tests:
           config:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_basic_ops.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: Test object operations with swift
       module: sanity_rgw_multisite.py
@@ -348,6 +351,7 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw_multisite.py
@@ -362,6 +366,7 @@ tests:
           config:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_version_copy_op.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 500
       desc: test restoring of versioned objects in swift
       module: sanity_rgw_multisite.py
@@ -374,6 +379,7 @@ tests:
           config:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_object_expire_op.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 500
       desc: test object expiration with swift
       module: sanity_rgw_multisite.py

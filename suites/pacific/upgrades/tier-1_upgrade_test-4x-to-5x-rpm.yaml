@@ -99,7 +99,7 @@ tests:
     desc: run rados bench for 360 - normal profile
 
 - test:
-    name: Upgrade along with I/O's
+    name: Upgrade along with IOs
     module: test_parallel.py
     parallel:
       - test:

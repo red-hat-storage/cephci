@@ -33,10 +33,10 @@ instance:
 
       runcmd:
         - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
-        - yum --setopt=skip_missing_names_on_install=False install -y wget git
-        - systemctl stop firewalld
-        - sudo yum clean metadata
-        - sudo yum clean all
+        - subscription-manager clean
+        - hostnamectl set-hostname $(hostname -s)
+        - yum clean metadata
+        - yum clean all
         - touch /ceph-qa-ready
 
       final_message: "Ready for ceph qa testing"
