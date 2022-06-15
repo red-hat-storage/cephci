@@ -40,4 +40,7 @@ globals:
         disk-size: 15
       node4:
         role:
+          - rgw
+      node5:
+        role:
           - client

@@ -41,7 +41,7 @@
 
 - name: "Deploy all services at 5x using a spec file"
   suite: "suites/pacific/cephadm/test-container-cli-args.yaml"
-  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
@@ -91,7 +91,7 @@
 
 - name: "Bootstrap cluster with skip dashboard and custom ceph directory testing"
   suite: "suites/pacific/cephadm/tier-1_skip_dashboard.yaml"
-  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
@@ -107,7 +107,7 @@
 
 - name: "Bootstrap cluster with custom ssl dashboard port and apply-spec"
   suite: "suites/pacific/cephadm/tier-1_ssl_dashboard_port.yaml"
-  global-conf: "conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
