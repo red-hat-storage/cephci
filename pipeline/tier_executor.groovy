@@ -101,15 +101,17 @@ node(nodeName) {
             overrides.put("build", "latest")
         }
 
-        def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
-        /*
-           Read the release yaml contents to get contents,
-           before other listener/Executor Jobs updates it.
-        */
-        releaseContent = sharedLib.readFromReleaseFile(
-            majorVersion, minorVersion, lockFlag=false
-        )
-        println(releaseContent)
+        if ("openstack" in tags_list){
+            def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
+            /*
+               Read the release yaml contents to get contents,
+               before other listener/Executor Jobs updates it.
+            */
+            releaseContent = sharedLib.readFromReleaseFile(
+                majorVersion, minorVersion, lockFlag=false
+            )
+            println(releaseContent)
+        }
 
         if("ibmc" in tags_list){
             def workspace = "${env.WORKSPACE}"
