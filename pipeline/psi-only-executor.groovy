@@ -11,6 +11,8 @@ def sharedLib
 def majorVersion
 def minorVersion
 def tierLevel
+def stageLevel = null
+def run_type = null
 def previousTierLevel
 
 
@@ -49,7 +51,7 @@ node(nodeName) {
             )
 
             // prepare the node
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
             sharedLib.prepareNode()
         }
     }
@@ -80,7 +82,7 @@ node(nodeName) {
         )
 
         // Till the pipeline matures, using the build that has passed tier-0 suite.
-        testStages = sharedLib.fetchStages(cliArgs, tierLevel, testResults)
+        testStages = sharedLib.fetchStagesScript(cliArgs, tierLevel, testResults)
         testStages = testStages.findAll { it.key.contains("psi-only")}
         testResults = testResults.findAll { it.key.contains("psi-only")}
 
@@ -100,13 +102,22 @@ node(nodeName) {
 
     stage('Publish Results') {
         /* Publish results through E-mail and Google Chat */
+        if(ciMap["pipeline"].containsKey("tags")){
+            def tag = ciMap["pipeline"]["tags"]
+            def tags_list = tag.split(',') as List
+            def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
+            stageLevel = tags_list.get(stage_index)
+            run_type = ciMap["pipeline"]["run_type"]
+        }
 
-        sharedLib.sendGChatNotification(testResults, tierLevel.capitalize())
+        def ciMsgMap = ciMap["artifact"]["nvr"]
+        sharedLib.sendGChatNotification(run_type, testResults, tierLevel.capitalize(), stageLevel)
         sharedLib.sendEmail(
+            run_type,
             testResults,
-            sharedLib.buildArtifactsDetails(releaseContent, ciMap, "tier-0"),
+            sharedLib.buildArtifactsDetails(releaseContent, ciMsgMap, "tier-0"),
             tierLevel.capitalize(),
-            "Nightly Pipeline",
+            stageLevel,
             "cephci@redhat.com"
         )
     }

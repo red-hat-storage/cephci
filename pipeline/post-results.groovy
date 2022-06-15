@@ -50,12 +50,9 @@ node(nodeName) {
                 )
 
                 // prepare the node
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+                sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
                 msgMap = sharedLib.getCIMessageMap()
                 println("msgMap : ${msgMap}")
-                if(msgMap["pipeline"].containsKey("tags")){
-                    sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-                }
                 println("sharedLib: ${sharedLib}")
                 sharedLib.prepareNode()
             }
@@ -110,10 +107,7 @@ node(nodeName) {
                     sharedLib.sendEmail(run_type, metaData["results"], metaData, tierLevel, stageLevel)
                     sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
                 }
-                else {
-                    sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
-                }
-                
+                              
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
                 testStatus = msgMap["test"]["result"]
             }

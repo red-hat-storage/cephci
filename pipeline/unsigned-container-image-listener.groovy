@@ -47,7 +47,7 @@ node(nodeName) {
                 )
 
                 // prepare the node
-                lib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+                lib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
                 lib.prepareNode(1)
             }
         }

@@ -2,25 +2,6 @@
 
 import org.jsoup.Jsoup
 
-def fetchCephVersion(def baseUrl) {
-    /*
-        Fetches ceph version using compose base url
-    */
-    baseUrl += "/compose/Tools/x86_64/os/Packages/"
-    println baseUrl
-    def document = Jsoup.connect(baseUrl).get().toString()
-    def cephVer = document.findAll(/"ceph-common-([\w.-]+)\.([\w.-]+)"/)[0].findAll(
-        /([\d]+)\.([\d]+)\.([\d]+)\-([\d]+)/
-    )
-
-    println cephVer
-    if (! cephVer) {
-        error "ceph version not found.."
-    }
-
-    return cephVer[0]
-}
-
 def writeToReleaseFile(
     def majorVer,
     def minorVer,
@@ -36,7 +17,7 @@ def writeToReleaseFile(
 }
 
 def sendEmail(
-    def run_type,
+    def run_type = null,
     def testResults,
     def artifactDetails,
     def tierLevel,
@@ -178,29 +159,6 @@ def buildArtifactsDetails(def content, def ciMsgMap, def phase) {
     ]
 }
 
-def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
-    /*
-        This method is a wrapper around upload_compose.py which passes the given
-        arguments to the upload_compose script. It supports
-
-        Args:
-            rhBuild     RHCS Build in the format ceph-<major>.<minor>-<platform>
-            cephVersion The ceph version
-            baseUrl     The compose base URL
-    */
-    try {
-        def cpFile = "sudo cp ${env.HOME}/.cephci.yaml /root/"
-        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python"
-        def scriptFile = "pipeline/scripts/ci/upload_compose.py"
-        def args = "${rhBuild} ${cephVersion} ${baseUrl}"
-
-        sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
-    } catch(Exception exc) {
-        println "Encountered a failure during compose upload."
-        println exc
-    }
-}
-
 def uploadResults(def objKey, def dirName, def bucketName="qe-ci-reports") {
     /*
         Uploads the given directory to COS using cos_cli.py module
@@ -241,44 +199,6 @@ def writeToRecipeFile(
     else{
         sh "ssh $infra \"yq e -i '.$dataPhase.$result.$currentStage = \\\"$status\\\"' $recipeFile\""
     }
-}
-
-def executeTestSuite(
-    def cliArgs, def cleanup_on_success=true, def cleanup_on_failure=true
-    ) {
-    /*
-        This method executes a single test suite and also performs cleanup of the VM.
-
-        Args:
-            cliArgs - argument to be passed to run.py
-    */
-    def rc = "PASS"
-    def randString = sh(
-        script: "cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5",
-        returnStdout: true
-    ).trim()
-    def vmPrefix = "ci-${randString}"
-    def baseCmd = ".venv/bin/python run.py --log-level DEBUG"
-    baseCmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
-
-    try {
-        sh (script: "${baseCmd} --instances-name ${vmPrefix} ${cliArgs}")
-    } catch (err) {
-        rc = "FAIL"
-        println err
-        currentBuild.result = 'FAILURE'
-    } finally {
-        if ((cleanup_on_success && cleanup_on_failure) ||
-            (cleanup_on_success && rc == 'PASS') ||
-            (cleanup_on_failure && rc == 'FAIL'))
-        {
-            sh(script: "${baseCmd} --cleanup ${vmPrefix}")
-        } else {
-            println "Not performing cleanup of cluster."
-        }
-    }
-
-    return [ "result": rc, "instances-name": vmPrefix]
 }
 
 def configureRpPreProc(
@@ -546,53 +466,6 @@ def unSetLock(def majorVer, def minorVer) {
     sh(script: "rm -f ${lockFile}")
 }
 
-def compareCephVersion(def oldCephVer, def newCephVer) {
-    /*
-        compares new and old ceph versions.
-        returns 0 if equal
-        returns 1 if new ceph version is greater than old ceph version
-        returns -1 if new ceph version is lesser than old ceph version
-
-        example for ceph version: 16.2.0-117, 14.2.11-190
-    */
-
-    if (newCephVer == oldCephVer) {
-        return 0
-    }
-
-    def oldVer = oldCephVer.split("\\.|-").collect { it.toInteger() }
-    def newVer = newCephVer.split("\\.|-").collect { it.toInteger() }
-
-    if (newVer[0] > oldVer[0]) {
-        return 1
-    }
-    else if (newVer[0] < oldVer[0]) {
-        return -1
-    }
-
-    if (newVer[1] > oldVer[1]) {
-        return 1
-    }
-    else if (newVer[1] < oldVer[1]) {
-        return -1
-    }
-
-    if (newVer[2] > oldVer[2]) {
-        return 1
-    }
-    else if (newVer[2] < oldVer[2]) {
-        return -1
-    }
-
-    if (newVer[3] > oldVer[3]) {
-        return 1
-    }
-    else if (newVer[3] < oldVer[3]) {
-        return -1
-    }
-
-}
-
 def getRHCSVersionFromArtifactsNvr() {
     /*
         Returns the RHCEPH version from the compose ID in CI_MESSAGE.
@@ -605,13 +478,10 @@ def getRHCSVersionFromArtifactsNvr() {
 def fetchMajorMinorOSVersion(def buildType) {
     /*
         Returns a tuple Major, Minor and platform of the build.
-
         buildType:  type of the build. Supported types are unsigned-compose,
                     unsigned-container-image, cvp, signed-compose,
                     signed-container-image
-
         Returns RH-CEPH major version, minor version and OS platform based on buildType
-
     */
     def cimsg = getCIMessageMap()
     def majorVer
@@ -748,6 +618,70 @@ def fetchStages(
     return ["testStages": testStages, "final_stage": final_stage]
 }
 
+def fetchStagesScript(
+    def scriptArg, def tierLevel, def testResults,
+    def rhcephversion=null, def scriptPathPrefix='pipeline/scripts'
+    ) {
+    /*
+        Return all the scripts found under
+        cephci/pipeline/scripts/<MAJOR>/<MINOR>/<TIER-x>/*.sh
+        as pipeline Test Stages.
+
+           example: cephci/pipeline/scripts/5/0/tier-0/*.sh
+
+        MAJOR   -   RHceph major version (ex., 5)
+        MINOR   -   RHceph minor version (ex., 0)
+        TIER-x  -   Tier level number (ex., tier-0)
+    */
+    def RHCSVersion = [:]
+    if ( scriptArg.contains('released') ) {
+        RHCSVersion = fetchMajorMinorOSVersion("released")
+    } else if ( rhcephversion ) {
+        RHCSVersion["major_version"] = rhcephversion.substring(7,8)
+        RHCSVersion["minor_version"] = rhcephversion.substring(9,10)
+    } else {
+        RHCSVersion = getRHCSVersionFromArtifactsNvr()
+    }
+
+    def majorVersion = RHCSVersion.major_version
+    def minorVersion = RHCSVersion.minor_version
+
+    def scriptPath = "${env.WORKSPACE}/${scriptPathPrefix}/${majorVersion}/${minorVersion}/${tierLevel}/"
+
+    def testStages = [:]
+    def scriptFiles = sh (returnStdout: true, script: "ls ${scriptPath}*.sh | cat")
+    if (! scriptFiles ){
+        return testStages
+    }
+
+    def fileNames = scriptFiles.split("\\n")
+    for (filePath in fileNames) {
+        def fileName = filePath.tokenize("/")[-1].tokenize(".")[0]
+        def scriptArgTmp = scriptArg
+        testResults[fileName] = [:]
+
+        // If ibmc, add log directory to capture xml files
+        if ( scriptArgTmp.contains('--cloud ibmc') ) {
+            def logDir = "${env.WORKSPACE}/logs/${generateRandomString()}-${currentBuild.number}"
+            println("Create log directory ${logDir} for ${filePath} test suite run")
+
+            sh script: "mkdir -p ${logDir}"
+            testResults[fileName]["log-dir"] = logDir
+            scriptArgTmp = "${scriptArgTmp} --log-dir ${logDir} "
+        }
+
+        testStages[fileName] = {
+            stage(fileName) {
+                def absFile = "${scriptPath}${fileName}.sh"
+                testResults[fileName]["status"] = executeTestScript(absFile, scriptArgTmp)
+            }
+        }
+    }
+
+    println "Test Stages - ${testStages}"
+    return testStages
+}
+
 def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
     /* Trigger a UMB message. */
     def msgContent = writeJSON returnText: true, json: msgMap
@@ -764,6 +698,156 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
         failOnError: true
     ])
 
+}
+
+def updateUpstreamFile(def version) {
+    /*
+        Updates upstream yaml file for the version passed as argument
+
+        example:  python3 upstream_cli.py build pacific
+
+        Args:
+            version      Version of upstream builds
+        
+    */
+    try {
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python3"
+        sh ".venv/bin/python3 -m pip install packaging"
+        sh "sudo yum install podman -y"
+        def scriptFile = "pipeline/scripts/ci/upstream_cli.py"
+        def args = "build ${version}"
+        sh script: "${cmd} ${scriptFile} ${args}"
+    } catch(Exception exc) {
+        println exc
+        error "Error during updating upstream yaml file."
+    }
+}
+
+def fetchCephVersion(def baseUrl) {
+    /*
+        Fetches ceph version using compose base url
+    */
+    baseUrl += "/compose/Tools/x86_64/os/Packages/"
+    println baseUrl
+    def document = Jsoup.connect(baseUrl).get().toString()
+    def cephVer = document.findAll(/"ceph-common-([\w.-]+)\.([\w.-]+)"/)[0].findAll(
+        /([\d]+)\.([\d]+)\.([\d]+)\-([\d]+)/
+    )
+
+    println cephVer
+    if (! cephVer) {
+        error "ceph version not found.."
+    }
+
+    return cephVer[0]
+}
+
+def compareCephVersion(def oldCephVer, def newCephVer) {
+    /*
+        compares new and old ceph versions.
+        returns 0 if equal
+        returns 1 if new ceph version is greater than old ceph version
+        returns -1 if new ceph version is lesser than old ceph version
+
+        example for ceph version: 16.2.0-117, 14.2.11-190
+    */
+
+    if (newCephVer == oldCephVer) {
+        return 0
+    }
+
+    def oldVer = oldCephVer.split("\\.|-").collect { it.toInteger() }
+    def newVer = newCephVer.split("\\.|-").collect { it.toInteger() }
+
+    if (newVer[0] > oldVer[0]) {
+        return 1
+    }
+    else if (newVer[0] < oldVer[0]) {
+        return -1
+    }
+
+    if (newVer[1] > oldVer[1]) {
+        return 1
+    }
+    else if (newVer[1] < oldVer[1]) {
+        return -1
+    }
+
+    if (newVer[2] > oldVer[2]) {
+        return 1
+    }
+    else if (newVer[2] < oldVer[2]) {
+        return -1
+    }
+
+    if (newVer[3] > oldVer[3]) {
+        return 1
+    }
+    else if (newVer[3] < oldVer[3]) {
+        return -1
+    }
+
+}
+
+def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
+    /*
+        This method is a wrapper around upload_compose.py which passes the given
+        arguments to the upload_compose script. It supports
+
+        Args:
+            rhBuild     RHCS Build in the format ceph-<major>.<minor>-<platform>
+            cephVersion The ceph version
+            baseUrl     The compose base URL
+    */
+    try {
+        def cpFile = "sudo cp ${env.HOME}/.cephci.yaml /root/"
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python"
+        def scriptFile = "pipeline/scripts/ci/upload_compose.py"
+        def args = "${rhBuild} ${cephVersion} ${baseUrl}"
+
+        sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
+    } catch(Exception exc) {
+        println "Encountered a failure during compose upload."
+        println exc
+    }
+}
+
+def executeTestSuite(
+    def cliArgs, def cleanup_on_success=true, def cleanup_on_failure=true
+    ) {
+    /*
+        This method executes a single test suite and also performs cleanup of the VM.
+
+        Args:
+            cliArgs - argument to be passed to run.py
+    */
+    def rc = "PASS"
+    def randString = sh(
+        script: "cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5",
+        returnStdout: true
+    ).trim()
+    def vmPrefix = "ci-${randString}"
+    def baseCmd = ".venv/bin/python run.py --log-level DEBUG"
+    baseCmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
+
+    try {
+        sh(script: "${baseCmd} --instances-name ${vmPrefix} ${cliArgs}")
+    } catch (err) {
+        rc = "FAIL"
+        println err
+        currentBuild.result = 'FAILURE'
+    } finally {
+        if ((cleanup_on_success && cleanup_on_failure) ||
+            (cleanup_on_success && rc == 'PASS') ||
+            (cleanup_on_failure && rc == 'FAIL'))
+        {
+            sh(script: "${baseCmd} --cleanup ${vmPrefix}")
+        } else {
+            println "Not performing cleanup of cluster."
+        }
+    }
+
+    return [ "result": rc, "instances-name": vmPrefix]
 }
 
 return this;
