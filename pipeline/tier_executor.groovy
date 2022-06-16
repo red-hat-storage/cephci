@@ -26,7 +26,7 @@ def repo
 if (params.gitbranch){branch = "*/${params.gitbranch}"}
 else{branch='origin/master'}
 
-if (params.gitrepo){repo = "*/${params.gitrepo}"}
+if (params.gitrepo){repo = "${params.gitrepo}"}
 else{repo='https://github.com/red-hat-storage/cephci.git'}
 
 
