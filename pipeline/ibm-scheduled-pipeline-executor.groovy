@@ -34,6 +34,8 @@ node(nodeName) {
             def rhcephVersion = validRecipeFile.split("/").last().replace(".yaml", "")
             def recipeContent = sh(
                     returnStdout: true, script: "${SSHServer} \"yq e '.tier-0' ${validRecipeFile}\"").trim()
+            recipeContent = readYaml text: recipeContent
+            recipeContent = writeJSON returnText: true, json:  recipeContent
 
             println "Starting test execution with parameters:"
             println "\trhcephVersion: ${rhcephVersion}\n\tbuildType: ${buildType}\n\tbuildArtifacts: ${recipeContent}\n\toverrides: ${overrides}\n\ttags: ${tags}"
