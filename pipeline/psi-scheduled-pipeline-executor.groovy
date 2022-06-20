@@ -64,6 +64,7 @@ node(nodeName) {
         for (validRecipeFile in validRecipeFiles) {
             def rhcephVersion = validRecipeFile.split("/").last().replace(".yaml", "")
             def recipeContent = readYaml file: "${validRecipeFile}"
+            recipeContent = writeJSON returnText: true, json:  recipeContent
 
             println "Starting test execution with parameters:"
             println "\trhcephVersion: ${rhcephVersion}\n\tbuildType: ${buildType}\n\tbuildArtifacts: ${recipeContent}\n\toverrides: ${overrides}\n\ttags: ${tags}"
