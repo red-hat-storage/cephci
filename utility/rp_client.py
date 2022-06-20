@@ -215,17 +215,20 @@ def process_testcase(xunit_xml, testcase, tsuite):
 def generate_log_events(file_handler):
     log_events = {}
     for line in file_handler:
-        if line.startswith(match_start_line(line)):
-            if log_events:
-                yield log_events
-            log_events = {
-                "date": line.split("__")[0][:23],
-                "type": line.split("-", 5)[3],
-                "text": line.split("-", 5)[-1],
-            }
-        else:
-            log_events["text"] += line
-    yield log_events
+        try:
+            if line.startswith(match_start_line(line)):
+                if log_events:
+                    yield log_events
+                log_events = {
+                    "date": line.split("__")[0][:23],
+                    "type": line.split("-", 5)[3],
+                    "text": line.split("-", 5)[-1],
+                }
+            else:
+                log_events["text"] += line
+        except Exception:
+            log.error(f"Unable to parse the below Line : {line}")
+        yield log_events
 
 
 def match_start_line(line):
