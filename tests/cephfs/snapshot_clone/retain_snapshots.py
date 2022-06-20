@@ -86,7 +86,7 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path.read().decode().strip()}",
+            sub_dir=f"{subvol_path.strip()}",
         )
         client1.exec_command(
             sudo=True,
@@ -142,7 +142,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir_2,
-            extra_params=f" -r {clonevol_path.read().decode().strip()}",
+            extra_params=f" -r {clonevol_path.strip()}",
         )
         client1.exec_command(
             sudo=True, cmd=f"diff -qr /tmp/{mounting_dir} {fuse_mounting_dir_2}"

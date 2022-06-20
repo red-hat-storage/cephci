@@ -1,8 +1,9 @@
+---
 version_id: 9.0
 id: rhel
 instance:
   create:
-    image-name: RHEL-9.0.0-x86_64-nightly-latest
+    image-name: RHEL-9.0.0-x86_64-ga-latest
     vm-size: ci.m1.medium
 
   setup: |
@@ -32,11 +33,12 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - subscription-manager clean
+      - hostnamectl set-hostname $(hostname -s)
       - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
-      - sudo systemctl restart sshd
-      - sudo yum clean metadata
-      - sudo yum clean all
+      - systemctl restart sshd
+      - yum clean metadata
+      - yum clean all
       - touch /ceph-qa-ready
-
 
     final_message: "Ready for ceph qa testing"

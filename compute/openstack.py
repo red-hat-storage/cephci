@@ -78,6 +78,17 @@ def get_openstack_driver(
 class CephVMNodeV2:
     """Represent the VMNode required for cephci."""
 
+    default_network_names = [
+        "provider_net_cci_12",
+        "provider_net_cci_11",
+        "provider_net_cci_9",
+        "provider_net_cci_8",
+        "provider_net_cci_7",
+        "provider_net_cci_6",
+        "provider_net_cci_5",
+        "provider_net_cci_4",
+    ]
+
     def __init__(
         self,
         username: str,
@@ -156,7 +167,9 @@ class CephVMNodeV2:
         try:
             image = self._get_image(name=image_name)
             vm_size = self._get_vm_size(name=vm_size)
-            vm_network = self._get_network(vm_network)
+            vm_network = self.get_network(vm_network)
+
+            LOG.info(f"{node_name} networks: {[i.name for i in vm_network]}")
 
             self.node = self.driver.create_node(
                 name=node_name,
@@ -264,7 +277,7 @@ class CephVMNodeV2:
             if UUID(hex=name):
                 return self.driver.get_image(name)
         except ValueError:
-            LOG.debug("Given name is not an image ID")
+            pass
 
         url = f"/v2/images?name={name}"
         object_ = self.driver.image_connection.request(url).object
@@ -352,8 +365,9 @@ class CephVMNodeV2:
 
         return False
 
-    def _get_network(
-        self, name: Optional[Union[List, str]] = None
+    def get_network(
+        self,
+        name: Optional[Union[List, str]] = None,
     ) -> List[OpenStackNetwork]:
         """
         Return the first available OpenStackNetwork with a free IP address to lease.
@@ -372,23 +386,12 @@ class CephVMNodeV2:
         Raises:
             ResourceNotFound when there no suitable networks in the environment.
         """
-        default_network_names = [
-            "provider_net_cci_12",
-            "provider_net_cci_11",
-            "provider_net_cci_9",
-            "provider_net_cci_8",
-            "provider_net_cci_7",
-            "provider_net_cci_6",
-            "provider_net_cci_5",
-            "provider_net_cci_4",
-        ]
         default_network_count = 1
-
         if name:
             network_names = name if isinstance(name, list) else [name]
             default_network_count = len(network_names)
         else:
-            network_names = default_network_names
+            network_names = self.default_network_names
 
         rtn_nets = list()
         for net in network_names:

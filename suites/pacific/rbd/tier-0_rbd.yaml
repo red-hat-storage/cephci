@@ -71,24 +71,6 @@ tests:
           -
             config:
               args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          -
-            config:
-              args:
-                placement:
-                  nodes:
-                    - node4
-                    - node5
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          -
-            config:
-              args:
                 - "ceph osd pool create rbd"
               command: shell
           -

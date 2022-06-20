@@ -15,15 +15,11 @@ globals:
        no-of-volumes: 4
        disk-size: 15
      node4:
-       role:
-          - osd
-          - mds
+       role: osd
        no-of-volumes: 4
        disk-size: 15
      node5:
-       role:
-          - osd
-          - mds
+       role: osd
        no-of-volumes: 4
        disk-size: 15
 
@@ -43,14 +39,10 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node4:
-        role:
-          - osd
-          - mds
+        role: osd
         no-of-volumes: 4
         disk-size: 15
       node5:
-        role:
-          - osd
-          - mds
+        role: osd
         no-of-volumes: 4
         disk-size: 15

@@ -1,4 +1,4 @@
-"""Retrieves the information of the system under test."""
+"""Module that executes workflows required for ODF CI tests."""
 import binascii
 import os
 from json import loads
@@ -14,8 +14,13 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     """
     Entry point to this module.
 
-    In this method, the Ceph cluster information is gathered along with the creation
-    of RGW user. All this information is then written to sut.yaml file.
+    At a high level, the below steps are executed
+
+        - Install the required software packages by ODF CI team
+        - Create the RBD pool
+        - Retrieve the cluster's admin key
+        - Create a RGW user
+        - Gather information about the environment.
 
     Args:
         ceph_cluster:       Instance of Ceph
@@ -37,10 +42,21 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     if rhbuild.startswith("4"):
         base_cmd = "sudo"
 
+    # Install the software packages and
+    installer.exec_command(
+        sudo=True, cmd="yum install --nogpgcheck -y python-rados python-rbd"
+    )
+
+    # RBD pool is created in test_ansible hence the parity needs to be addressed for
+    # higher RHCS versions
+    if not rhbuild.startswith("4"):
+        installer.exec_command(cmd=f"{base_cmd} ceph osd pool create rbd")
+        installer.exec_command(cmd=f"{base_cmd} rbd pool init rbd")
+
     # Get admin key
     cmd = f"{base_cmd} ceph auth get client.admin --format json"
     out, err = installer.exec_command(cmd=cmd)
-    cmd_resp = loads(out.read().decode())
+    cmd_resp = loads(out)
     admin_key = cmd_resp[0]["key"]
 
     # Create rgw-admin-ops-user
@@ -50,7 +66,7 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
     cmd += " --email rgw-admin-ops-user@foo.bar"
 
     out, err = installer.exec_command(cmd=cmd)
-    cmd_resp = loads(out.read().decode())
+    cmd_resp = loads(out)
     access_key = cmd_resp["keys"][0]["access_key"]
     secret_key = cmd_resp["keys"][0]["secret_key"]
 

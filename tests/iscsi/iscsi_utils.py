@@ -70,8 +70,7 @@ class IscsiUtils(object):
     def get_devicelist_luns(self, no_of_luns):
         for node in self.ceph_nodes:
             if node.role == "osd":
-                out, err = node.exec_command(sudo=True, cmd="hostname -I")
-                osd = out.read().decode()
+                osd, err = node.exec_command(sudo=True, cmd="hostname -I")
                 break
         t1 = datetime.datetime.now()
         time_plus_5 = t1 + datetime.timedelta(minutes=5)
@@ -101,10 +100,9 @@ class IscsiUtils(object):
                 iscsi_initiators.exec_command(sudo=True, cmd="multipath -ll")
                 time.sleep(10)
                 out, err = iscsi_initiators.exec_command(
-                    sudo=True, cmd="ls /dev/mapper/ | grep mpath" "", long_running=True
+                    sudo=True, cmd="ls /dev/mapper/ | grep mpath" ""
                 )
-                output = out
-                output = output.rstrip("\n")
+                output = out.rstrip("\n")
 
                 device_list = list(filter(bool, output.split("mpa")))
                 time.sleep(10)
@@ -244,8 +242,7 @@ trusted_ip_list = {0}
                     cmd="cat /etc/iscsi/" "initiatorname.iscsi",
                     check_ec=False,
                 )
-                output = out.read().decode()
-                out = output.split("=")
+                out = out.split("=")
                 name = out[1].rstrip("\n")
                 if full:
                     return name

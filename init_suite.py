@@ -11,6 +11,30 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def merge_dicts(dict1, dict2):
+    """
+    Returns dict1 by recursively merging dict2 into dict1
+
+    Args:
+        dict1 (dict):     The dictionary corressponding to test in <test_suite>.
+        dict2 (dict):     The dictionary corressponding to test in <overrides>.
+
+    Returns:
+        Dict -> dictionary after merging overrides dict into test_suite dict
+    """
+    if isinstance(dict1, list) and isinstance(dict2, list):
+        dict1.extend(dict2)
+        return dict1
+    if not isinstance(dict1, dict) or not isinstance(dict2, dict):
+        return dict2
+    for k in dict2:
+        if k in dict1:
+            dict1[k] = merge_dicts(dict1[k], dict2[k])
+        else:
+            dict1[k] = dict2[k]
+    return dict1
+
+
 def read_yaml(file_name):
     """read the given yaml
 
@@ -37,7 +61,15 @@ def process_override(dir_name: str) -> List:
 
     overrides.yaml could have
         tests:
-          <key>: <override_value>
+          - test:
+              index : <index of the test we want to update>
+                # index starts from 1 refering to the first test in test suite file.
+                # It is optional. default is 1
+
+              <key>: <override_value>
+                # give override_value as null if you want to ignore the existing key in test
+          - test:
+              <key>: <override_value>
 
         clusters:
           - <cluster_name>
@@ -69,7 +101,9 @@ def process_override(dir_name: str) -> List:
     if not override_data:
         return test_data["tests"]
 
-    test_data.update(override_data.get("tests", {}))
+    for test in override_data.get("tests", list()):
+        index = test["test"].pop("index", 1) - 1
+        merge_dicts(test_data["tests"][index]["test"], test["test"])
 
     if not override_data.get("clusters"):
         return test_data["tests"]
@@ -82,9 +116,9 @@ def process_override(dir_name: str) -> List:
             if isinstance(cluster, str):
                 cluster_name = cluster
             else:
-                cluster_name = cluster.keys()[0]
+                cluster_name = [key for key in cluster.keys()][0]
                 override_config = cluster[cluster_name].get("config", {})
-                config.update(override_config)
+                merge_dicts(config, override_config)
 
             if "clusters" not in test["test"].keys():
                 test["test"]["clusters"] = dict()

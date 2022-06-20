@@ -7,10 +7,11 @@
 #
 # The following tests are covered
 #   - CEPH-9230 - verification snap and clone on an imported image
+#   - CEPH-83573308, CEPH-83573307 - clones creation with v2clone format and deletion
 
 tests:
 
-  # Setup the cluster
+   #Setup the cluster
 
   - test:
       abort-on-fail: true
@@ -25,7 +26,6 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -79,3 +79,10 @@ tests:
       module: rbd_snap_clone_imported_image.py
       name: snap and clone on imported image
       polarion-id: CEPH-9230
+
+  - test:
+      desc: Verify that clones creation and deletion of parent image with V2 enabled
+      destroy-cluster: false
+      module: rbd_clonev2.py
+      name: clones creation with v2clone format
+      polarion-id: CEPH-83573308, CEPH-83573307, CEPH-83573309

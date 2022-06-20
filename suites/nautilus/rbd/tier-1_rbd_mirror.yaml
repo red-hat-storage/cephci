@@ -9,12 +9,12 @@
 #    No of Clusters : 2
 #    Each cluster configuration
 #    6-Node cluster(RHEL-8.3 and above)
-#    1 MONS, 1 MDS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
+#    1 MONS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
 #     Node1 - Mon, Mgr, Installer
 #     Node2 - client
 #     Node3 - OSD
-#     Node4 - OSD,MDS
-#     Node5 - OSD,MDS
+#     Node4 - OSD,
+#     Node5 - OSD
 #     Node6 - RBD Mirror
 
 # The following evaluations are carried out
@@ -56,11 +56,6 @@ tests:
                   mon_max_pg_per_osd: 1024
                 mon:
                   mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
         ceph-rbd2:
           config:
             ansi_config:
@@ -84,11 +79,6 @@ tests:
                   mon_max_pg_per_osd: 1024
                 mon:
                   mon_allow_pool_delete: true
-              cephfs_pools:
-                - name: "cephfs_data"
-                  pgs: "8"
-                - name: "cephfs_metadata"
-                  pgs: "8"
       desc: setup dual cluster using ceph-ansible
       destroy-cluster: false
       abort-on-fail: true
@@ -111,6 +101,7 @@ tests:
           config:
             imagesize: 2G
             io-total: 200M
+            resize_to: 5G
       polarion-id: CEPH-83573329
       desc: Create RBD mirrored image and run IOs
 

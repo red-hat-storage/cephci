@@ -75,16 +75,15 @@ def run(ceph_cluster, **kw):
                 f"{nfs_export_name} {fs_name} path={export_path}",
             )
         out, rc = client1.exec_command(sudo=True, cmd=f"ceph nfs export ls {nfs_name}")
-        output = out.read().decode()
-        output.split()
-        if nfs_export_name not in output:
+
+        if nfs_export_name not in out:
             raise CommandFailed("Failed to create nfs export")
 
         log.info("ceph nfs export created successfully")
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph nfs export get {nfs_name} {nfs_export_name}"
         )
-        output = json.loads(out.read().decode())
+        output = json.loads(out)
         export_get_path = output["path"]
         if export_get_path != export_path:
             log.error("Export path is not correct")

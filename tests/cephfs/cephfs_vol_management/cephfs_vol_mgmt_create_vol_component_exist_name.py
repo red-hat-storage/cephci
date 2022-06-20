@@ -1,3 +1,5 @@
+import random
+import string
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -31,10 +33,16 @@ def run(ceph_cluster, **kw):
             fs_util.create_fs(client1, "cephfs")
         fs_util.auth_list([client1])
         fs_util.prepare_clients(clients, build)
-        volume_name = "vol_01"
-        subvolume_name = "subvol_01"
-        subvolume_group_name = "subvol_group_name_01"
-        fs_util.create_fs(client1, vol_name=volume_name)
+
+        random_name = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(5))
+        )
+        volume_name = "vol_01" + random_name
+        subvolume_name = "subvol_01" + random_name
+        subvolume_group_name = "subvol_group_name_01" + random_name
+        log.info("Ceph Build number is " + build[0])
+        fs_util.create_fs(client1, volume_name)
         fs_util.create_subvolume(client1, volume_name, subvolume_name)
         fs_util.create_subvolumegroup(client1, "cephfs", subvolume_group_name)
         output1, err1 = fs_util.create_fs(client1, volume_name, check_ec=False)
@@ -49,6 +57,6 @@ def run(ceph_cluster, **kw):
         return 0
 
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1

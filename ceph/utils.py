@@ -44,16 +44,17 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
     )
     resp = ibmc_client.list_instances(vpc_name=ibmc["vpc_name"])
     if resp.get_status_code() != 200:
-        log.warn("Failed to retrieve instances")
+        log.warning("Failed to retrieve instances")
         return 1
 
     instances = [i for i in resp.get_result()["instances"] if pattern in i["name"]]
+    log.info(f"Cleaning up instances : {instances}")
 
     while "next" in resp.get_result().keys():
         start = resp.get_result()["next"]["href"].split("start=")[-1]
         resp = ibmc_client.list_instances(start=start, vpc_name=ibmc["vpc_name"])
         if resp.get_status_code() != 200:
-            log.warn("Failed to fetch instance details, breaking out.")
+            log.warning("Failed to fetch instance details, breaking out.")
             break
         instance_list = [
             i for i in resp.get_result()["instances"] if pattern in i["name"]
@@ -101,7 +102,7 @@ def create_baremetal_ceph_nodes(cluster_conf):
                     "role": RolesContainer(node.get("role")),
                     "no-of-volumes": len(node.get("volumes", [])),
                     "volumes": node.get("volumes"),
-                    "subnet": cluster_conf["ceph-cluster"]["public-network-cidr"],
+                    "subnet": cluster_conf["ceph-cluster"]["networks"]["public"][0],
                 }
             )
 
@@ -332,6 +333,7 @@ def create_ceph_nodes(
                     node_params["role"],
                 )
 
+                node_params["networks"] = node_dict.get("networks", [])
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
                     node_params["size-of-disks"] = node_dict.get("disk-size")
@@ -384,7 +386,7 @@ def setup_vm_node(node, ceph_nodes, **params):
             image_name=params["image-name"],
             vm_size=params["vm-size"],
             cloud_data=params["cloud-data"],
-            vm_network=params.get("network", None),
+            vm_network=params.get("networks", []),
             size_of_disks=params.get("size-of-disks", 0),
             no_of_volumes=params.get("no-of-volumes", 0),
         )
@@ -543,44 +545,41 @@ def check_ceph_healthly(
 
     timeout = datetime.timedelta(seconds=timeout)
     starttime = datetime.datetime.now()
-    lines = None
     pending_states = ["peering", "activating", "creating"]
     valid_states = ["active+clean"]
 
+    out = None
     while datetime.datetime.now() - starttime <= timeout:
         if mon_container:
             distro_info = ceph_mon.distro_info
             distro_ver = distro_info["VERSION_ID"]
             if distro_ver.startswith("8"):
-                out, err = ceph_mon.exec_command(
+                out, _ = ceph_mon.exec_command(
                     cmd="sudo podman exec {container} ceph -s".format(
                         container=mon_container
                     )
                 )
             else:
-                out, err = ceph_mon.exec_command(
+                out, _ = ceph_mon.exec_command(
                     cmd="sudo docker exec {container} ceph -s".format(
                         container=mon_container
                     )
                 )
         else:
-            out, err = ceph_mon.exec_command(cmd="sudo ceph -s")
-        lines = out.read().decode()
+            out, _ = ceph_mon.exec_command(cmd="sudo ceph -s")
 
-        if not any(state in lines for state in pending_states):
-            if all(state in lines for state in valid_states):
+        if not any(state in out for state in pending_states):
+            if all(state in out for state in valid_states):
                 break
         sleep(5)
-    log.info(lines)
-    if not all(state in lines for state in valid_states):
+    log.info(out)
+    if not all(state in out for state in valid_states):
         log.error("Valid States are not found in the health check")
         return 1
     if build.startswith("4"):
-        match = re.search(
-            r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", lines
-        )
+        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", out)
     else:
-        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", lines)
+        match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", out)
     all_osds = int(match.group(1))
     up_osds = int(match.group(2))
     in_osds = int(match.group(3))
@@ -592,14 +591,14 @@ def check_ceph_healthly(
         return 1
 
     # attempt luminous pattern first, if it returns none attempt jewel pattern
-    match = re.search(r"(\d+) daemons, quorum", lines)
+    match = re.search(r"(\d+) daemons, quorum", out)
     if not match:
-        match = re.search(r"(\d+) mons at", lines)
+        match = re.search(r"(\d+) mons at", out)
     all_mons = int(match.group(1))
     if all_mons != num_mons:
         log.error("Not all monitors are in cluster")
         return 1
-    if "HEALTH_ERR" in lines:
+    if "HEALTH_ERR" in out:
         log.error("HEALTH in ERROR STATE")
         return 1
     return 0
@@ -741,17 +740,6 @@ def search_ethernet_interface(ceph_node, ceph_node_list):
     return ceph_node.search_ethernet_interface(ceph_node_list)
 
 
-def open_firewall_port(ceph_node, port, protocol):
-    """
-    Opens firewall ports for given node
-    Args:
-        ceph_node (ceph.ceph.CephNode): ceph node
-        port (str): port
-        protocol (str): protocol
-    """
-    ceph_node.open_firewall_port(port, protocol)
-
-
 def config_ntp(ceph_node, cloud_type="openstack"):
     """
     Configure NTP/Chronyc service based on the OS platform
@@ -823,9 +811,8 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                     out, rc = node.exec_command(cmd="rpm -qa | grep ceph-ansible")
                 else:
                     out, rc = node.exec_command(cmd="dpkg -s ceph-ansible")
-                output = out.read().decode().rstrip()
-                log.info(output)
-                versions_dict.update({node.shortname: output})
+                log.info(out)
+                versions_dict.update({node.shortname: out.rstrip()})
 
             else:
                 if containerized:
@@ -844,10 +831,9 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                             out, rc = node.exec_command(
                                 sudo=True, cmd='docker ps --format "{{.Names}}"'
                             )
-                        output = out.read().decode()
                         containers = [
                             container
-                            for container in output.split("\n")
+                            for container in out.split("\n")
                             if container != ""
                         ]
                         log.info("Containers: {}".format(containers))
@@ -869,16 +855,15 @@ def get_ceph_versions(ceph_nodes, containerized=False):
                                         container=container_name
                                     ),
                                 )
-                        output = out.read().decode().rstrip()
-                        log.info(output)
-                        versions_dict.update({container_name: output})
+                        log.info(out)
+                        versions_dict.update({container_name: out.rstrip()})
 
                 else:
                     #  client and grafana role not supported for ceph commands
                     if node.role == "client" or node.role == "grafana":
                         pass
                     out, rc = node.exec_command(cmd="ceph --version")
-                    output = out.read().decode().rstrip()
+                    output = out.rstrip()
                     log.info(output)
                     versions_dict.update({node.shortname: output})
 
@@ -935,20 +920,20 @@ def get_root_permissions(node, path):
     node.obtain_root_permissions(path)
 
 
-def get_public_network(node):
-    """
-    Get the configured public network subnet for nodes in the cluster.
-    This function retrieves the public network subnet from the ceph node
-    object. The subnet is retrieved at runtime when creating nodes. See:
-    ~ mita.openstack.CephVMNode().create_node()
+def get_public_network(nodes):
+    """Get the configured public network subnet from nodes in the cluster.
 
     Args:
-        node(ceph.ceph.CephNode)
+        nodes: cluster nodes
 
     Returns:
-        (str) public network subnet
+        (str) public network subnet(s)
     """
-    return getattr(node, "subnet")
+    subnets = []
+    for node in nodes:
+        if node.subnet not in subnets:
+            subnets.append(node.subnet)
+    return ",".join(subnets)
 
 
 def get_disk_info(node):
@@ -965,7 +950,6 @@ def get_disk_info(node):
 
     # get boot disk
     out, _ = node.exec_command(cmd="%s" % _BOOT_DISK)
-    out = out.read().decode().strip()
 
     boot_disk = re.sub(r"\d", "", out)
     log.info("Boot disk found : %s", boot_disk)
@@ -975,7 +959,7 @@ def get_disk_info(node):
     out, _ = node.exec_command(
         cmd="{} | grep disk".format(_GET_DISKS.format(",".join(headers)))
     )
-    disks_info = out.read().decode().strip().split("\n")
+    disks_info = out.strip().split("\n")
 
     disks = []
     for disk in list([x for x in disks_info if x]):
@@ -1019,7 +1003,7 @@ def get_node_by_id(cluster, node_name):
         node instance (CephVMNode)
     """
     for node in cluster.get_nodes():
-        searches = re.findall(rf"{node_name}?\d*", node.shortname)
+        searches = re.findall(rf"{node_name}?\d*", node.hostname, re.IGNORECASE)
         for ele in searches:
             if ele == node_name:
                 return node

@@ -120,13 +120,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         steps = config.get("steps", [])
         for step in steps:
             cfg = step["config"]
-
-            if cfg["command"] == "shell":
-                cephadm.shell(base_cmd_args=cfg.get("base_cmd_args"), args=cfg["args"])
+            command = cfg.pop("command")
+            if command == "shell":
+                cephadm.shell(**cfg)
                 continue
 
             obj = SERVICE_MAP[cfg["service"]](cluster=ceph_cluster, **config)
-            func = fetch_method(obj, cfg["command"])
+            func = fetch_method(obj, command)
             func(cfg)
 
         if config.get("verify_cluster_health"):

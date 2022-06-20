@@ -281,8 +281,8 @@ def fetch_file_content(node, file):
     """
     try:
         out, _ = node.exec_command(cmd=f"cat {file}", sudo=True)
-        log.info("Output : %s" % out.read().decode())
-        return out.read().decode()
+        log.info("Output : %s" % out)
+        return out
     except CommandFailed as err:
         log.error("Error: %s" % err)
         return None

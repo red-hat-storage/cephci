@@ -52,7 +52,7 @@ def run(ceph_cluster, **kw):
         out, rc = client1.exec_command(
             sudo=True, cmd="ceph orch ps --daemon_type mds -f json"
         )
-        daemon_ls_before = json.loads(out.read().decode())
+        daemon_ls_before = json.loads(out)
         daemon_count_before = len(daemon_ls_before)
         host_list = [
             client1.node.hostname.replace("node7", "node2"),
@@ -61,18 +61,20 @@ def run(ceph_cluster, **kw):
         hosts = " ".join(host_list)
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs volume create cephfs_new --placement='2 {hosts}'",
+            cmd=f"ceph fs volume create cephfs_df_fs --placement='2 {hosts}'",
             check_ec=False,
         )
-        fs_util.wait_for_mds_process(client1, "cephfs_new")
+        fs_util.wait_for_mds_process(client1, "cephfs_df_fs")
         out, rc = client1.exec_command(
             sudo=True, cmd="ceph orch ps --daemon_type mds -f json"
         )
-        daemon_ls_after = json.loads(out.read().decode())
+        daemon_ls_after = json.loads(out)
         daemon_count_after = len(daemon_ls_after)
         assert daemon_count_after > daemon_count_before, (
-            "daemon count is reduced after creating FS. "
-            "Expectation is MDS daemons whould be more"
+            f"daemon count is reduced after creating FS. "
+            f"Expectation is MDS daemons whould be more"
+            f"daemon count before: {daemon_count_before}"
+            f"daemon count after: {daemon_count_after}"
         )
 
         total_fs = fs_util.get_fs_details(client1)
@@ -81,7 +83,7 @@ def run(ceph_cluster, **kw):
                 "We can't proceed with the test case as we are not able to create 2 filesystems"
             )
         fs_names = [fs["name"] for fs in total_fs]
-        validate_mds_placements("cephfs_new", daemon_ls_after, hosts, 2)
+        validate_mds_placements("cephfs_df_fs", daemon_ls_after, hosts, 2)
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -126,4 +128,4 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
-        fs_util.remove_fs(client1, "cephfs_new")
+        fs_util.remove_fs(client1, "cephfs_df_fs")

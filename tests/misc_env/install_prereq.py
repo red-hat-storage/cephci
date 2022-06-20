@@ -117,6 +117,11 @@ def install_prereq(
     log.info(
         "distro version_id: {version_id}".format(version_id=distro_info["VERSION_ID"])
     )
+
+    # Remove apache-arrow.repo for baremetal
+    cmd_remove_apache_arrow = "sudo rm -f /etc/yum.repos.d/apache-arrow.repo"
+    ceph.exec_command(cmd=cmd_remove_apache_arrow)
+
     if ceph.pkg_type == "deb":
         ceph.exec_command(
             cmd="sudo apt-get install -y " + deb_all_packages, long_running=True
@@ -164,18 +169,21 @@ def install_prereq(
 
         if skip_enabling_rhel_rpms and skip_subscription:
             # Ansible is required for RHCS 4.x
-            epel_pkg = "epel-release-latest-8.noarch.rpm"
-            ansible_pkg = "ansible-2.9.27-1.el8"
-            if distro_ver.startswith("7"):
-                epel_pkg = "epel-release-latest-7.noarch.rpm"
-                ansible_pkg = "ansible-2.9.27-1.el7"
+            if distro_ver.startswith("8"):
+                ceph.exec_command(
+                    sudo=True,
+                    cmd="yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+                    check_ec=False,
+                )
+                ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el8")
 
-            ceph.exec_command(
-                sudo=True,
-                cmd=f"yum install -y https://dl.fedoraproject.org/pub/epel/{epel_pkg}",
-                check_ec=False,
-            )
-            ceph.exec_command(sudo=True, cmd=f"yum install -y {ansible_pkg}")
+            if distro_ver.startswith("7"):
+                ceph.exec_command(
+                    sudo=True,
+                    cmd="yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
+                    check_ec=False,
+                )
+                ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el7")
 
         if ceph.role == "client":
             ceph.exec_command(cmd="sudo yum install -y attr gcc", long_running=True)
@@ -185,6 +193,7 @@ def install_prereq(
         config_ntp(ceph, cloud_type)
 
     registry_login(ceph, distro_ver)
+    update_iptables(ceph)
 
 
 def setup_addition_repo(ceph, repo):
@@ -235,7 +244,7 @@ def setup_subscription_manager(
                 )
                 username_ = config_["stage_credentials"]["username"]
                 password_ = config_["stage_credentials"]["password"]
-                pool_id = "8a99f9af795d57ab01797e572e860569"
+                pool_id = "8a82d25480dceec60180dcf7d4d20d78"
 
             command += f"--baseurl=https://cdn.redhat.com --username={username_}"
             command += f" --password={password_}"
@@ -260,10 +269,9 @@ def setup_subscription_manager(
         except BaseException:  # noqa
             if datetime.datetime.now() - starttime > timeout:
                 try:
-                    out, err = ceph.exec_command(
+                    rhsm_log, err = ceph.exec_command(
                         cmd="cat /var/log/rhsm/rhsm.log", timeout=120
                     )
-                    rhsm_log = out.read().decode()
                 except BaseException:  # noqa
                     rhsm_log = "No Log Available"
                 raise RuntimeError(
@@ -409,3 +417,25 @@ def registry_login(ceph, distro_ver):
         file.write(json.dumps(auths_dict, indent=4))
         file.flush()
         file.close()
+
+
+def update_iptables(node):
+    """update ip-tables rules.
+
+    Drop ip-table rule which matches the list of reject entries,
+     which ensures no side-effects at Ceph configuration.
+
+     Reference:
+     https://docs.ceph.com/en/latest/rados/configuration/network-config-ref/#ip-tables
+
+    Args:
+        node: CephNode object
+    """
+    drop_rules = ["INPUT -j REJECT --reject-with icmp-host-prohibited"]
+    try:
+        out, _ = node.exec_command(cmd="$(which iptables) --list-rules", sudo=True)
+        for rule in drop_rules:
+            if rule in out:
+                node.exec_command(cmd=f"$(which iptables) -D {rule}", sudo=True)
+    except Exception as err:
+        log.error(f"iptables rpm do not exist... error : {err}")

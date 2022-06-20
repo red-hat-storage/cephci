@@ -88,7 +88,7 @@ class Host(MaintenanceMixin, Orch):
             label_set = set(ceph_node.role.role_list)
             _labels = list(label_set)
 
-        cmd.extend(["host", "add", ceph_node.shortname])
+        cmd.extend(["host", "add", ceph_node.hostname])
 
         if attach_address:
             cmd.append(ceph_node.ip_address)
@@ -108,19 +108,19 @@ class Host(MaintenanceMixin, Orch):
         self.shell(args=cmd)
 
         # validate host existence
-        if ceph_node.shortname not in self.fetch_host_names():
+        if ceph_node.hostname not in self.fetch_host_names():
             raise HostOpFailure(
-                f"Hostname verify failure. Expected {ceph_node.shortname}"
+                f"Hostname verify failure. Expected {ceph_node.hostname}"
             )
 
         if attach_address:
-            if ceph_node.ip_address != self.get_addr_by_name(ceph_node.shortname):
+            if ceph_node.ip_address != self.get_addr_by_name(ceph_node.hostname):
                 raise HostOpFailure(
                     f"IP address verify failed. Expected {ceph_node.ip_address}"
                 )
 
         if _labels:
-            assert sorted(self.fetch_labels_by_hostname(ceph_node.shortname)) == sorted(
+            assert sorted(self.fetch_labels_by_hostname(ceph_node.hostname)) == sorted(
                 _labels
             )
 
@@ -159,7 +159,7 @@ class Host(MaintenanceMixin, Orch):
         nodes = args.pop("nodes", None)
 
         if not nodes:
-            nodes = [node.shortname for node in self.cluster.get_nodes()]
+            nodes = [node.hostname for node in self.cluster.get_nodes()]
 
         for node in nodes:
             cfg = deepcopy(config)
@@ -198,15 +198,15 @@ class Host(MaintenanceMixin, Orch):
             raise ResourceNotFoundError("%s node not found/provided")
 
         if (
-            node.shortname == self.installer.node.shortname
-            or node.shortname not in self.fetch_host_names()
+            node.hostname == self.installer.node.hostname
+            or node.hostname not in self.fetch_host_names()
         ):
             return
 
         logger.info("Removing node %s" % node.ip_address)
-        cmd.extend(["host", "rm", node.shortname])
+        cmd.extend(["host", "rm", node.hostname])
         self.shell(args=cmd)
-        assert node.shortname not in self.fetch_host_names()
+        assert node.hostname not in self.fetch_host_names()
 
     def remove_hosts(self, config):
         """
@@ -284,9 +284,9 @@ class Host(MaintenanceMixin, Orch):
         logger.info("Add label(s) %s on node %s" % (_labels, node.ip_address))
         for label in _labels:
             _cmd = deepcopy(cmd)
-            _cmd.extend(["host", "label", "add", node.shortname, label])
+            _cmd.extend(["host", "label", "add", node.hostname, label])
             self.shell(args=_cmd)
-            assert label in self.fetch_labels_by_hostname(node.shortname)
+            assert label in self.fetch_labels_by_hostname(node.hostname)
 
             if config.get("validate_admin_keyring") and label == "_admin":
                 logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
@@ -344,9 +344,9 @@ class Host(MaintenanceMixin, Orch):
 
         for label in _labels:
             _cmd = deepcopy(cmd)
-            _cmd.extend(["host", "label", "rm", node.shortname, label])
+            _cmd.extend(["host", "label", "rm", node.hostname, label])
             self.shell(args=_cmd)
-            assert label not in self.fetch_labels_by_hostname(node.shortname)
+            assert label not in self.fetch_labels_by_hostname(node.hostname)
 
             if config.get("validate_admin_keyring") and label == "_admin":
                 logger.info("Ceph keyring - default: %s" % DEFAULT_KEYRING_PATH)
@@ -394,9 +394,9 @@ class Host(MaintenanceMixin, Orch):
             raise ResourceNotFoundError("%s node not found/provided")
 
         logger.info("Set Address on this node : %s" % node.ip_address)
-        cmd.extend(["host", "set-addr", node.shortname, node.ip_address])
+        cmd.extend(["host", "set-addr", node.hostname, node.ip_address])
         self.shell(args=cmd)
-        assert node.ip_address in self.get_addr_by_name(node.shortname)
+        assert node.ip_address in self.get_addr_by_name(node.hostname)
 
     def fetch_labels_by_hostname(self, node_name):
         """

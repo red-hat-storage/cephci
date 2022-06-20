@@ -5,16 +5,14 @@ tests:
       abort-on-fail: true
       config:
         ansi_config:
-          ceph_test: True
+          ceph_test: true
           ceph_origin: distro
           ceph_repository: rhcs
           osd_scenario: lvm
-          osd_auto_discovery: False
-          ceph_stable: True
-          ceph_stable_rh_storage: True
+          osd_auto_discovery: false
           fetch_directory: ~/fetch
           copy_admin_key: true
-          dashboard_enabled: False
+          dashboard_enabled: false
           ceph_conf_overrides:
             global:
               mon_warn_on_insecure_global_id_reclaim_allowed: false

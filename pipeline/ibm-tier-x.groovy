@@ -85,8 +85,8 @@ node(nodeName) {
             Ref: https://bugzilla.redhat.com/show_bug.cgi?id=2062627
         */
         def cliArgs = "--build tier-0 --cloud ibmc --xunit-results "
-        if ( rhcephVersion == "RHCEPH-5.1" ){
-            cliArgs += "--custom-config grafana_image=ceph-qe-registry.syd.qe.rhceph.local/rh-osbs/grafana:ceph-5.1-rhel-8-containers-candidate-30294-20220307225425"
+        if ( rhcephVersion == "RHCEPH-5.1" ) {
+            cliArgs += "--custom-config grafana_image=ceph-qe-registry.syd.qe.rhceph.local/rh-osbs/grafana:5-46"
         }
 
         // Till the pipeline matures, using the build that has passed tier-0 suite.
@@ -118,28 +118,15 @@ node(nodeName) {
         def dirName = "ibm_${currentBuild.projectName}_${currentBuild.number}"
         def targetDir = "${env.WORKSPACE}/${dirName}/results"
         def attachDir = "${env.WORKSPACE}/${dirName}/attachments"
-        sh(script: "mkdir -p ${targetDir}")
+
+        sh (script: "mkdir -p ${targetDir} ${attachDir}")
         testResults.each { key, value ->
-            sh(
-                script: "cp ${value['log-dir']}/xunit.xml ${targetDir}/${key}.xml",
-                returnStatus: true
-            )
-        }
-        sh(script: "mkdir -p ${attachDir}")
-        testResults.each { key, value ->
-            sh(
-                script: "mkdir -p ${attachDir}/${key} && tar -zcvf ${value['log-dir']}/${key}.tar.gz ${value['log-dir']}/*.log && cp ${value['log-dir']}/${key}.tar.gz ${attachDir}/${key}/",
-                returnStatus: true
-            )
-            def scriptFiles = sh (returnStdout: true, script: "ls ${value['log-dir']}/*.err | cat")
-            if (scriptFiles){
-                def fileNames = scriptFiles.split("\\n")
-                for (filePath in fileNames) {
-                sh(
-                    script: "mkdir -p ${attachDir}/${key} && cp ${filePath} ${attachDir}/${key}/"
-                )
-                }
-            }
+            def logDir = value["log-dir"]
+            sh "find ${logDir} -maxdepth 1 -type f -name xunit.xml -exec cp '{}' ${targetDir}/${key}.xml \\;"
+            sh "tar -zcvf ${logDir}/${key}.tar.gz ${logDir}/*.log"
+            sh "mkdir -p ${attachDir}/${key}"
+            sh "cp ${logDir}/${key}.tar.gz ${attachDir}/${key}/"
+            sh "find ${logDir} -maxdepth 1 -type f -not -size 0 -name '*.err' -exec cp '{}' ${attachDir}/${key}/ \\;"
         }
 
         // Adding metadata information

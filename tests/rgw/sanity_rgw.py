@@ -119,7 +119,7 @@ def run(ceph_cluster, **kw):
     python_cmd = "venv/bin/python"
     out, err = rgw_node.exec_command(cmd="ls -l venv", check_ec=False)
 
-    if not out.read().decode():
+    if not out:
         rgw_node.exec_command(
             cmd="yum install python3 -y --nogpgcheck", check_ec=False, sudo=True
         )
@@ -159,7 +159,7 @@ def run(ceph_cluster, **kw):
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     cmd_env = " ".join(config.get("env-vars", []))
-    out, err = rgw_node.exec_command(
+    test_status = rgw_node.exec_command(
         cmd=cmd_env
         + f"sudo {python_cmd} "
         + test_folder_path
@@ -169,10 +169,8 @@ def run(ceph_cluster, **kw):
         + test_folder
         + config_dir
         + config_file_name,
-        timeout=timeout,
+        long_running=True,
     )
-    log.info(out.read().decode())
-    log.error(err.read().decode())
 
     if run_io_verify:
         log.info("running io verify script")
@@ -180,7 +178,7 @@ def run(ceph_cluster, **kw):
             cmd=f"sudo {python_cmd} " + test_folder_path + lib_dir + "read_io_info.py",
             timeout=timeout,
         )
-        log.info(verify_out.read().decode())
-        log.error(verify_out.read().decode())
+        log.info(verify_out)
+        log.error(err)
 
-    return 0
+    return test_status

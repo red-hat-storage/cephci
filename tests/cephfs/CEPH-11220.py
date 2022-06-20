@@ -64,7 +64,7 @@ def run(ceph_cluster, **kw):
             out, rc = node.exec_command(
                 cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir_name)
             )
-            print(out.read().decode())
+            print(out)
             break
 
         return_counts1, rc1 = fs_util.stress_io(

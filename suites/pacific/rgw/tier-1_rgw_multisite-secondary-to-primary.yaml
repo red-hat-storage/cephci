@@ -346,8 +346,6 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
             timeout: 300
-
-
   - test:
       name: Bucket listing test
       desc: test_bucket_listing_flat_ordered on secondary
@@ -403,6 +401,7 @@ tests:
             script-name: test_versioning_copy_objects.py
             config-file-name: test_versioning_copy_objects.yaml
             timeout: 300
+            verify-io-on-site: ["ceph-pri"]
   - test:
       name: Buckets Versioning test
       desc: test_versioning_enable on secondary
@@ -438,6 +437,7 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_copy.yaml
             timeout: 300
+            verify-io-on-site: ["ceph-pri"]
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_delete on secondary

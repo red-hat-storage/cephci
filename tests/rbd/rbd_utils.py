@@ -1,18 +1,11 @@
-import datetime
 import json
 import random
 import string
 from time import sleep
 
-from rbd.exceptions import (
-    CreateCloneError,
-    CreateFileError,
-    ImportFileError,
-    ProtectSnapError,
-    SnapCreateError,
-)
-
 from ceph.ceph import CommandFailed
+from ceph.waiter import WaitUntil
+from tests.rbd.exceptions import CreateFileError, ImportFileError, ProtectSnapError
 from utility.log import Log
 
 log = Log(__name__)
@@ -48,6 +41,7 @@ class Rbd:
         Args:
             pool_name: configs along with `cmd` - command
 
+
         Returns:  0 -> pass, 1 -> fail
         """
         try:
@@ -64,7 +58,7 @@ class Rbd:
             )
 
             if kw.get("output", False):
-                return out.read().decode()
+                return out
 
             return 0
 
@@ -89,6 +83,9 @@ class Rbd:
         if self.ceph_version >= 3:
             self.exec_cmd(cmd="rbd pool init {}".format(poolname))
         return True
+
+    def create_image(self, pool_name, image_name, size):
+        self.exec_cmd(cmd=f"rbd create {pool_name}/{image_name} --size {size}")
 
     def set_ec_profile(self, profile):
         self.exec_cmd(cmd="ceph osd erasure-code-profile rm {}".format(profile))
@@ -122,21 +119,24 @@ class Rbd:
         Returns:  True -> pass, False -> fail
 
         """
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=200)
-        while end_time > datetime.datetime.now():
+        timeout, interval = 200, 2
+        for w in WaitUntil(timeout=timeout, interval=interval):
             out = self.exec_cmd(cmd="ceph df -f json", output=True)
-            existing_pools = json.loads(out)
-            if pool_name not in [ele["name"] for ele in existing_pools["pools"]]:
-                log.error(
-                    f"Pool:{pool_name} not populated yet\n"
-                    f"sleeping for 2 seconds and checking status again"
-                )
-                sleep(2)
-            else:
-                log.info(f"pool {pool_name} exists in the cluster")
+            if pool_name in [ele["name"] for ele in json.loads(out)["pools"]]:
+                log.info(f"Pool '{pool_name}' present in the cluster")
                 return True
-        log.info(f"pool {pool_name} does not exist on cluster")
-        return False
+
+            log.info(
+                f"Pool '{pool_name}' not populated yet.\n"
+                f"Waitinig for {interval} seconds and retrying"
+            )
+
+        if w.expired:
+            log.info(
+                f"Failed to wait {timeout} seconds to pool '{pool_name}'"
+                f" present on cluster"
+            )
+            return False
 
     def create_file_to_import(self, filename="dummy"):
         """
@@ -171,9 +171,21 @@ class Rbd:
             image_name : name of the image file to be imported as
             snap_name  : name of the snapshot
         """
+
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
-        if not self.exec_cmd(cmd):
-            raise SnapCreateError("Creating the snapshot failed")
+        self.exec_cmd(cmd=cmd)
+
+    def snap_remove(self, pool_name, image_name, snap_name):
+        """
+        Removes a snap of an image in a specified pool name and image name
+        Args:
+            pool_name  : name of the pool where image is to be imported
+            image_name : name of the image file to be imported as
+            snap_name  : name of the snapshot
+        """
+
+        cmd = f"rbd snap rm {pool_name}/{image_name}@{snap_name}"
+        self.exec_cmd(cmd=cmd)
 
     def protect_snapshot(self, snap_name):
         """
@@ -195,8 +207,42 @@ class Rbd:
             image_name : name of the cloned image
         """
         cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
-        if not self.exec_cmd(cmd):
-            raise CreateCloneError(f"Creating clone of {snap_name} failed")
+        self.exec_cmd(cmd=cmd)
+
+    def flatten_clone(self, pool_name, image_name):
+        """
+        Flattens a clone of an image from parent image
+        Args:
+            pool_name: name of the pool which clone is created
+            image_name: name of th clones image
+        """
+        log.info("start flatten")
+        cmd = f"rbd flatten {pool_name}/{image_name}"
+        self.exec_cmd(cmd=cmd)
+        log.info("flatten completed")
+
+    def remove_image(self, pool_name, image_name):
+        """
+        Remove image from the specified pool
+        Args:
+            pool_name: name of the pool
+            image_name: name of the image
+
+        Returns:
+
+        """
+        self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
+
+    def trash_exist(self, pool_name, image_name):
+        out = self.exec_cmd(
+            cmd=f"rbd trash list {pool_name} --format json ", output=True
+        )
+        image_info = json.loads(out)
+        return any(image["name"] == image_name for image in image_info)
+
+    def image_map(self, pool_name, image_name):
+        """Map provided rbd image."""
+        return self.exec_cmd(cmd=f"rbd map {pool_name}/{image_name}", output=True)
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):
@@ -208,11 +254,8 @@ class Rbd:
                 pool_list.append(self.datapool)
 
             # mon_allow_pool_delete must be True for removing pool
-            if self.ceph_version == 5:
+            if self.ceph_version >= 5:
                 self.exec_cmd(cmd="ceph config set mon mon_allow_pool_delete true")
-                self.exec_cmd(cmd="ceph orch restart mon")
-
-                # ToDo: Unable to confirm service restart
                 sleep(60)
 
             for pool in pool_list:

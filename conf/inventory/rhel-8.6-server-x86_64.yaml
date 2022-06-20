@@ -3,7 +3,7 @@ version_id: 8.6
 id: rhel
 instance:
   create:
-    image-name: RHEL-8.6.0-x86_64-nightly-latest
+    image-name: RHEL-8.6.0-x86_64-ga-latest
     vm-size: ci.m1.medium
 
   setup: |
@@ -32,11 +32,13 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - subscription-manager clean
+      - hostnamectl set-hostname $(hostname -s)
       - curl -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
       - curl -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://password.corp.redhat.com/RH-IT-Root-CA.crt
       - update-ca-trust
-      - sudo yum clean metadata
-      - sudo yum clean all
+      - yum clean metadata
+      - yum clean all
       - touch /ceph-qa-ready
 
     final_message: "Ready for ceph qa testing"

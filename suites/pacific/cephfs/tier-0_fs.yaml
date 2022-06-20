@@ -106,6 +106,12 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
+  - test:
+      abort-on-fail: false
+      desc: "Deploy MDS with default values using cephadm"
+      module: mds_default_values.py
+      name: cephfs default values for mds
+      polarion-id: "CEPH-83574284"
   -
     test:
       abort-on-fail: false
@@ -118,7 +124,13 @@ tests:
       name: nfs-ganesha_with_cephfs
       module: nfs-ganesha_basics.py
       desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
-      polarion-id: CEPH-11308
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+  - test:
+      name: Increase and Decrease of MDS
+      module: mds_Inc_dec.py
+      desc: Deploy mds using cephadm and increase & decrease number of mds.
+      polarion-id: CEPH-83574286
       abort-on-fail: false
   -
     test:

@@ -2,7 +2,7 @@
 #===============================================================================================
 # Tier-level: 2
 # Test-Suite: tier-2_cephfs_test-volume-management.yaml
-# Conf file : conf/pacific/cephfs/tier_2_cephfs_9-node-cluster.yaml
+# Conf file : conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml
 # Test-Case Covered:
 # CEPH-83574164 : Create cephfs subvolumegroup with desired data pool_layout
 # CEPH-83574193 - cephfs subvolume size expansion test
@@ -17,6 +17,13 @@
 # CEPH-83573528 - cephfs_vol_mgmt_pool_name_option_test
 # CEPH-83574181 - Checking default subvolume group gid and uid
 # CEPH-83574163 - cephfs_vol_mgmt_invalid_pool_layout
+# CEPH-83574190 - Volume default and different permission test
+# CEPH-83574192 - Subvolume creation with invalid pool_layout
+# CEPH-83574187 - Subvolume creation with isolated_namespace option
+# CEPH-83574165	- Create cephfs subvolumegroup with desired permissions test
+# CEPH-83574331 - Adding new data pools to cephfs which has existing data pool.
+# CEPH-83573428 - cephfs_vol_mgmt_volume_with_exist_names
+# CEPH-83574188 - Testing auto-cleanup cephfs subvolume after creation failure
 #===============================================================================================
 tests:
   - test:
@@ -171,76 +178,118 @@ tests:
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_pool_layout.py
       polarion-id: CEPH-83574164
       desc: subvolumegroup creation with desired data pool_layout
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: Subvolume Resize
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_resize.py
       polarion-id: CEPH-83574193
       desc: subvolume resize
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: subvolumegroup creation with uid and gid
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_gid_uid.py
       polarion-id: CEPH-83574166
       desc: subvolumegroup creation with uid and gid
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: Delete subvolume_group name that does not exist
       module: cephfs_vol_management.cephfs_vol_mgmt_non_exist_subvol_group.py
       polarion-id: CEPH-83574182
       desc: Delete subvolume_group name that does not exist
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: Remove subvolume group name does not exist with force option
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_group_force.py
       polarion-id: CEPH-83574169
       desc: Remove subvolume group name does not exist with force option
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: delete_non_exist_subvol_group
       module: cephfs_vol_management.cephfs_vol_mgmt_delete_non_exist_subvol_group.py
       polarion-id: CEPH-83574168
       desc: delete_non_exist_subvol_group
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: Verify data movement bw FS created on Replicated Pool and EC Pool
       module: cephfs_vol_management.cephfs_vol_mgmt_data_migrate.py
       polarion-id: CEPH-83573637
       desc: Verify if the FS data can be moved from an existing Replicated Datapool to EC datapool
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: Arbitrary pool removal on cephfs volume deletion
       module: cephfs_vol_management.cephfs_vol_mgmt_arbitrary_pool_removal.py
       polarion-id: CEPH-83574158
       desc: Verify if the arbitraty pool is also deleted upon volume deletion
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: cephfs_vol_mgmt_create_vol_component_exist_name
       module: cephfs_vol_management.cephfs_vol_mgmt_create_vol_component_exist_name.py
       polarion-id: CEPH-83573428
       desc: cephfs_vol_mgmt_create_vol_component_exist_name
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: cephfs_vol_mgmt_non_exist_subvol_group_deletetion
       module: cephfs_vol_management.cephfs_vol_mgmt_non_exist_subvol_group_deletetion.py
       polarion-id: CEPH-83574162
       desc: Remove subvolume group name does not exist with force option
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: cephfs_vol_mgmt_pool_name_option_test
       module: cephfs_vol_management.cephfs_vol_mgmt_pool_name_option_test.py
       polarion-id: CEPH-83573528
       desc: cephfs_vol_mgmt_pool_name_option_test
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: Checking default subvolume group gid and uid
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_gid_uid.py
       polarion-id: CEPH-83574181
       desc: Checking default subvolume group gid and uid
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       name: cephfs_vol_mgmt_invalid_pool_layout
       module: cephfs_vol_management.cephfs_vol_mgmt_invalid_pool_layout.py
       polarion-id: CEPH-83574163
       desc: cephfs_vol_mgmt_invalid_pool_layout
-      abort-on-fail: true
+      abort-on-fail: false
+  - test:
+      name: volume_permission_test
+      module: cephfs_vol_management.cephfs_vol_mgmt_volume_permissions.py
+      polarion-id: CEPH-83574190
+      desc: volume_permission_test
+      abort-on-fail: false
+  - test:
+      name: subvolume_creation_invalid_pool_layout
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_invalid_pool_layout.py
+      polarion-id: CEPH-83574192
+      desc: subvolume_creation_invalid_pool_layout
+      abort-on-fail: false
+  - test:
+      name: subvolume_isolated_namespace
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_isolated_namespace.py
+      polarion-id: CEPH-83574187
+      desc: subvolume_isolated_namespace
+      abort-on-fail: false
+  - test:
+      name: Create cephfs subvolumegroup with desired permissions test
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_octal_modes.py
+      polarion-id: CEPH-83574165
+      desc: cephfs subvolumegroup with different octal modes
+      abort-on-fail: false
+  - test:
+      name: add datapools to existing FS
+      module: cephfs_vol_management.cephfs_vol_mgmt_add_datapool_to_existing_fs.py
+      polarion-id: CEPH-83574331
+      desc: add datapools to existing FS
+      abort-on-fail: false
+  - test:
+      name: Creating fs volume,sub-volume,sub-volume group with existing names
+      module: cephfs_vol_management.cephfs_vol_mgmt_volume_with_exist_names.py
+      polarion-id: CEPH-83574331
+      desc: Creating fs volume,sub-volume,sub-volume group with existing names
+      abort-on-fail: false
+  - test:
+      name: Subolume Auto clean up after failed creating subvolume
+      module: cephfs_vol_management.cephfs_vol_mgmt_auto_clean_up.py
+      polarion-id: CEPH-83574188
+      desc: Subolume Auto clean up after failed creating subvolume
+      abort-on-fail: false

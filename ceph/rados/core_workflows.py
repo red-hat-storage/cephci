@@ -98,18 +98,19 @@ class RadosOrchestrator:
         log.info("Email alerts configured on the cluster")
         return True
 
-    def run_ceph_command(self, cmd: str):
+    def run_ceph_command(self, cmd: str, timeout: int = 300):
         """
         Runs ceph commands with json tag for the action specified otherwise treats action as command
         and returns formatted output
         Args:
             cmd: Command that needs to be run
+            timeout: Maximum time allowed for execution.
         Returns: dictionary of the output
         """
 
         cmd = f"{cmd} -f json"
         try:
-            out, err = self.node.shell([cmd])
+            out, err = self.node.shell([cmd], timeout=timeout)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             return None
@@ -218,9 +219,6 @@ class RadosOrchestrator:
 
         cmd = f"ceph osd pool get {pool} {props} -f json"
         out, err = self.node.shell([cmd])
-        if err:
-            log.info(f"The property : {props} not set on the cluster. Error: {err}")
-            return False
         prop_details = json.loads(out)
         return prop_details
 
@@ -318,11 +316,14 @@ class RadosOrchestrator:
          Returns: True -> pass, False -> fail
         """
 
-        log.info(f"creating pool_name {pool_name}")
-        pg_num = kwargs.get("pg_num", 64)
-        cmd = f"ceph osd pool create {pool_name} {pg_num} {pg_num}"
+        log.debug(f"creating pool_name {pool_name}")
+        cmd = f"ceph osd pool create {pool_name}"
+        if kwargs.get("pg_num"):
+            cmd = f"{cmd} {kwargs['pg_num']} {kwargs['pg_num']}"
         if kwargs.get("ec_profile_name"):
             cmd = f"{cmd} erasure {kwargs['ec_profile_name']}"
+        if kwargs.get("bulk"):
+            cmd = f"{cmd} --bulk"
         try:
             self.node.shell([cmd])
         except Exception as err:

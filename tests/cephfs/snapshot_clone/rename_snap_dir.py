@@ -71,7 +71,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} subvol_rename_sanp subvol_rename_sanp_1",
         )
-        subvol_path = subvol_path.read().decode().strip()
+        subvol_path = subvol_path.strip()
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fs_util.fuse_mount(
             [client1],

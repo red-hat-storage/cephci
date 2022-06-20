@@ -108,7 +108,7 @@ def run(ceph_cluster, **kw):
                 out, rc = node.exec_command(
                     cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], dir_name)
                 )
-                print(out.read().decode())
+                print(out)
                 break
             active_mds_node_1, active_mds_node_2, rc = fs_util.get_active_mdss(
                 client_info["mds_nodes"]

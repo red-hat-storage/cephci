@@ -1,7 +1,10 @@
 """Custom typing objects to avoid circular imports."""
 from typing import Dict, List
 
-from typing_extensions import Protocol
+try:
+    from typing_extensions import Protocol
+except ImportError:
+    from typing import Protocol
 
 from ceph.ceph import Ceph, CephInstaller
 
@@ -30,7 +33,8 @@ class CephAdmProtocol(Protocol):
         args: List[str],
         base_cmd_args: Dict = None,
         check_status: bool = True,
-        timeout: int = 300,
+        timeout: int = 600,
+        long_running: bool = False,
     ):
         ...
 
@@ -45,7 +49,8 @@ class OrchProtocol(CephAdmProtocol, Protocol):
         args: List[str],
         base_cmd_args: Dict = None,
         check_status: bool = True,
-        timeout: int = 300,
+        timeout: int = 600,
+        long_running: bool = False,
     ):
         ...
 

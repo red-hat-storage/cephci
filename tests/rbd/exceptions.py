@@ -4,6 +4,12 @@ class RbdBaseException(Exception):
     pass
 
 
+class RrbdMirrorBaseException(RbdBaseException):
+    """Base Exception for rbd-mirror exception"""
+
+    pass
+
+
 class CreateFileError(RbdBaseException):
     """Raised when create_file_to_import function call fails"""
 
@@ -30,5 +36,23 @@ class ProtectSnapError(RbdBaseException):
 
 class CreateCloneError(RbdBaseException):
     """Raised when Creating a clone fails"""
+
+    pass
+
+
+class IOonSecondaryError(RrbdMirrorBaseException):
+    """Raised when IO is attempted on secondary image"""
+
+    pass
+
+
+class ImageNotFoundError(RbdBaseException):
+    """Raised when Image is not found"""
+
+    pass
+
+
+class ImageFoundError(RbdBaseException):
+    """Raised when image is found in Trash"""
 
     pass

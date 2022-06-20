@@ -48,7 +48,7 @@ def run(ceph_cluster, **kw):
         devices = json.loads(host.group(2).replace("'", '"'))
         osd_node = next(filter(lambda x: x.hostname == host.group(1), osd_nodes))
         out, err = osd_node.exec_command(cmd=BOOT_DISK_CMD)
-        boot_disk = re.sub(r"\d", "", out.read().decode().strip())
+        boot_disk = re.sub(r"\d", "", out.strip())
 
         if boot_disk not in devices:
             devices.insert(int(), boot_disk)
@@ -64,7 +64,7 @@ def run(ceph_cluster, **kw):
 
     # Run Ansible with limit=OSD
     log.info("Run Ansible playbook with OSD limit")
-    out, rc = ceph_installer.exec_command(
+    rc = ceph_installer.exec_command(
         cmd="cd {};"
         " ANSIBLE_STDOUT_CALLBACK=debug;"
         " ansible-playbook -vvvv -i new_hosts site.yml --limit {daemon}".format(

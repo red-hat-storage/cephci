@@ -32,9 +32,11 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - subscription-manager clean
+      - hostnamectl set-hostname $(hostname -s)
       - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
-      - sudo yum clean metadata
-      - sudo yum clean all
+      - yum clean metadata
+      - yum clean all
       - touch /ceph-qa-ready
 
     final_message: "Ready for ceph qa testing"

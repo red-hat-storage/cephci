@@ -39,6 +39,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd="ceph fs volume create cephfs_new", check_ec=False
         )
+        fs_util.wait_for_mds_process(client1, "cephfs_new")
         total_fs = fs_util.get_fs_details(client1)
         if len(total_fs) < 2:
             log.error(
@@ -81,8 +82,7 @@ def run(ceph_cluster, **kw):
         )
         fs_util.reboot_node(client1)
         out, rc = client1.exec_command(cmd="mount")
-        mount_output = out.read().decode()
-        mount_output = mount_output.split()
+        mount_output = out.split()
         log.info("validate fuse mount:")
         assert fuse_mounting_dir_1.rstrip("/") in mount_output, "fuse mount failed"
         assert fuse_mounting_dir_2.rstrip("/") in mount_output, "fuse mount failed"
@@ -125,6 +125,5 @@ def run(ceph_cluster, **kw):
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
         client1.exec_command(
-            sudo=True, cmd="cp /etc/fstab.backup /etc/fstab", check_ec=False
+            sudo=True, cmd="mv /etc/fstab.backup /etc/fstab", check_ec=False
         )
-        client1.exec_command(sudo=True, cmd="rm -f /etc/fstab.backup", check_ec=False)

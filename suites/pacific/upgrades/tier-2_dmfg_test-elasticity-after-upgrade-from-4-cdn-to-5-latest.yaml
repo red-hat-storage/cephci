@@ -88,7 +88,7 @@ tests:
     desc: Check for ceph health debug info
 
 - test:
-    name: Parallel run
+    name: Upgrade along with IOs
     module: test_parallel.py
     parallel:
      - test:
@@ -130,8 +130,8 @@ tests:
              prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
              alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
          desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
-         abort-on-fail: True
-    desc: Running upgrade and i/o's parallelly
+    desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
+    abort-on-fail: True
 
 - test:
     name: check-ceph-health

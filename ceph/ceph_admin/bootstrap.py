@@ -181,6 +181,7 @@ class BootstrapMixin:
         custom_repo = args.pop("custom_repo", "")
         custom_image = args.pop("custom_image", True)
         build_type = self.config.get("build_type")
+        rhbuild = self.config.get("rhbuild")
 
         if build_type == "upstream":
             self.setup_upstream_repository()
@@ -203,8 +204,8 @@ class BootstrapMixin:
                 extra_vars=ansible_run.get("extra-vars"),
                 extra_args=ansible_run.get("extra-args"),
             )
-
-        self.install()
+        else:
+            self.install()
 
         cmd = "cephadm"
         if config.get("base_cmd_args"):
@@ -271,6 +272,12 @@ class BootstrapMixin:
             args["config"] = create_ceph_config_file(node=self.installer, config=conf)
 
         cmd += config_dict_to_string(args)
+
+        # Todo: This patch is specific to 5.1 release,
+        #   should be removed for next 5.x development builds or release.
+        if rhbuild.split("-")[0] in ["5.1", "5.2"]:
+            cmd += " --yes-i-know"
+
         out, err = self.installer.exec_command(
             sudo=True,
             cmd=cmd,
@@ -278,7 +285,6 @@ class BootstrapMixin:
             check_ec=True,
         )
 
-        out, err = out.read().decode(), err.read().decode()
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
 
@@ -313,5 +319,18 @@ class BootstrapMixin:
                     cmd += f" ceph config set mgr mgr/cephadm/container_image_{image}"
                     cmd += f" {override_dict[image_key]}"
                     self.installer.exec_command(sudo=True, cmd=cmd)
+
+        # Set public and cluster networks if provided.
+        # https://docs.ceph.com/en/latest/rados/configuration/network-config-ref/
+        public_nws = self.cluster.get_public_networks()
+        cluster_nws = self.cluster.get_cluster_networks()
+        if public_nws:
+            self.shell(
+                args=["ceph", "config", "set", "global public_network", public_nws]
+            )
+        if cluster_nws:
+            self.shell(
+                args=["ceph", "config", "set", "global cluster_network", cluster_nws]
+            )
 
         return out, err

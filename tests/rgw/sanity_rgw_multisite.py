@@ -104,7 +104,7 @@ def run(**kw):
     script_dir = TEST_DIR[test_version]["script"]
     config_dir = TEST_DIR[test_version]["config"]
     lib_dir = TEST_DIR[test_version]["lib"]
-    timeout = config.get("timeout", 300)
+    timeout = config.get("timeout", 600)
 
     log.info("flushing iptables")
     test_site_node.exec_command(cmd="sudo iptables -F", check_ec=False)
@@ -118,7 +118,7 @@ def run(**kw):
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     cmd_env = " ".join(config.get("env-vars", []))
-    out, err = test_site_node.exec_command(
+    test_site_node.exec_command(
         cmd=cmd_env
         + "sudo python3 "
         + test_folder_path
@@ -128,11 +128,8 @@ def run(**kw):
         + test_folder
         + config_dir
         + config_file_name,
-        timeout=timeout,
+        long_running=True,
     )
-
-    log.info(out.read().decode())
-    log.error(err.read().decode())
 
     copy_user_to_site = clusters.get(config.get("copy-user-info-to-site"))
     if copy_user_to_site:
@@ -163,8 +160,8 @@ def run(**kw):
                 cmd="sudo python3 " + test_folder_path + lib_dir + "read_io_info.py",
                 timeout=timeout,
             )
-            log.info(verify_out.read().decode())
-            log.error(verify_out.read().decode())
+            log.info(verify_out)
+            log.error(err)
 
     return 0
 

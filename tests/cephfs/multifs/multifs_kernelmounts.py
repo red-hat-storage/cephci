@@ -69,8 +69,7 @@ def run(ceph_cluster, **kw):
         )
         fs_util.reboot_node(client1)
         out, rc = client1.exec_command(cmd="mount")
-        mount_output = out.read().decode()
-        mount_output = mount_output.split()
+        mount_output = out.split()
         log.info("validate kernel mount:")
         assert kernel_mounting_dir_1.rstrip("/") in mount_output, "Kernel mount failed"
         assert kernel_mounting_dir_2.rstrip("/") in mount_output, "Kernel mount failed"
@@ -98,5 +97,5 @@ def run(ceph_cluster, **kw):
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
         client1.exec_command(
-            sudo=True, cmd="cp /etc/fstab.backup /etc/fstab", check_ec=False
+            sudo=True, cmd="mv /etc/fstab.backup /etc/fstab", check_ec=False
         )

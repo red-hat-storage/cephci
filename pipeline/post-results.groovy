@@ -6,8 +6,13 @@ def nodeName = "centos-7"
 def credsRpProc = [:]
 def sharedLib
 def rpPreprocDir
+def tierLevel = null
+def stageLevel = null
+def run_type = "Sanity Run"
+def build_url
 def reportBucket = "qe-ci-reports"
 def remoteName= "ibm-cos"
+def msgMap = [:]
 
 node(nodeName) {
 
@@ -46,6 +51,12 @@ node(nodeName) {
 
                 // prepare the node
                 sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+                msgMap = sharedLib.getCIMessageMap()
+                println("msgMap : ${msgMap}")
+                if(msgMap["pipeline"].containsKey("tags")){
+                    sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+                }
+                println("sharedLib: ${sharedLib}")
                 sharedLib.prepareNode()
             }
         }
@@ -55,7 +66,7 @@ node(nodeName) {
         }
 
         stage('uploadTestResult') {
-            def msgMap = sharedLib.getCIMessageMap()
+            msgMap = sharedLib.getCIMessageMap()
             def composeInfo = msgMap["recipe"]
 
             def resultDir = msgMap["test"]["object-prefix"]
@@ -80,9 +91,29 @@ node(nodeName) {
             }
 
             def testStatus = "ABORTED"
+            /* Publish results through E-mail and Google Chat */
+            if(msgMap["pipeline"].containsKey("tags")){
+                def tag = msgMap["pipeline"]["tags"]
+                def tags_list = tag.split(',') as List
+                def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
+                stageLevel = tags_list.get(stage_index)
+                def tier_index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
+                tierLevel = tags_list.get(tier_index)
+                run_type = msgMap["pipeline"]["run_type"]
+                build_url = msgMap["run"]["url"]
+
+            }
+            
 
             if (metaData["results"]) {
-                sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
+                if(msgMap["pipeline"].containsKey("tags")){
+                    sharedLib.sendEmail(run_type, metaData["results"], metaData, tierLevel, stageLevel)
+                    sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
+                }
+                else {
+                    sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
+                }
+                
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
                 testStatus = msgMap["test"]["result"]
             }
@@ -91,25 +122,45 @@ node(nodeName) {
             sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
 
             // Update RH recipe file
-            if ( composeInfo != null && testStatus == "SUCCESS" ){
-                def tierLevel = msgMap["pipeline"]["name"]
+
+            if ( composeInfo != null && run_type == "Sanity Run"){
+                if ( tierLevel == null ){
+                    tierLevel = msgMap["pipeline"]["name"]
+                }
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                 majorVersion = rhcsVersion["major_version"]
                 minorVersion = rhcsVersion["minor_version"]
+                minorVersion = "${minorVersion}"
 
                 def latestContent = sharedLib.readFromReleaseFile(
                         majorVersion, minorVersion
                     )
+                println("latestContentBefore: ${latestContent}")
 
                 if ( latestContent.containsKey(tierLevel) ) {
-                    latestContent[tierLevel] = composeInfo
+                    if ( stageLevel == null ){
+                        latestContent[tierLevel] = composeInfo
+                    }
+                    else if ( stageLevel == "stage-1"){
+                        latestContent[tierLevel] = composeInfo
+                        latestContent[tierLevel] += ["results": ["${stageLevel}": "${testStatus}"]]
+                    }
+                    else{
+                        latestContent[tierLevel]["results"] += ["${stageLevel}": "${testStatus}"]
+                    }
                 }
                 else {
                     def updateContent = ["${tierLevel}": composeInfo]
+                    if ( stageLevel != null ){
+                        def tierValue = composeInfo + ["results": ["${stageLevel}": "${testStatus}"]]
+                        updateContent = ["${tierLevel}": tierValue]
+                    }
                     latestContent += updateContent
                 }
+                println("latestContent: ${latestContent}")
                 sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
             }
+            println("Execution complete")
         }
     } catch(Exception err) {
         if (currentBuild.result != "ABORTED") {
@@ -126,7 +177,7 @@ node(nodeName) {
                 subject: "${subject}",
                 body: "${body}",
                 from: "cephci@redhat.com",
-                to: "ceph-qe@redhat.com"
+                to: "cephci@redhat.com"
             )
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)

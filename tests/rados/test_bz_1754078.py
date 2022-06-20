@@ -51,7 +51,7 @@ def run(ceph_cluster, **kw):
                     out, err = ceph.exec_command(
                         cmd="sudo ceph osd ls-tree {host}".format(host=ceph.hostname)
                     )
-                    osd_id_list_on_node = out.read().decode().split()
+                    osd_id_list_on_node = out.split()
                     log.info("osds on node {}".format(ceph.hostname))
                     log.info(osd_id_list_on_node)
                     osd_mem_target = check_osd_memory_target_of_node(
@@ -90,7 +90,7 @@ def check_osd_daemon_memory_usage(osd_node, osd_id_list_on_node, osd_mem_target)
             )
             cmd_with_mem = "{} | grep -v grep | awk {{'print $6'}}".format(cmd)
             out, err = osd_node.exec_command(cmd=cmd_with_mem)
-            out = int(out.read().decode())
+            out = int(out)
             current_mem_usage = out * 1000
             log.info(
                 "osd {a} current memory usage:{b}".format(
@@ -118,8 +118,7 @@ def check_osd_memory_target_of_node(osd_node, osd_id_list_on_node):
     cmd = "sudo ceph daemon osd.{id} config show -f=json-pretty".format(
         id=osd_id_list_on_node[0]
     )
-    out, err = osd_node.exec_command(cmd=cmd)
-    out_json = out.read().decode()
+    out_json, err = osd_node.exec_command(cmd=cmd)
     target_mem = json.loads(out_json)
     osd_memory_target = target_mem["osd_memory_target"]
     return int(osd_memory_target)

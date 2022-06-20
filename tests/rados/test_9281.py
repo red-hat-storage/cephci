@@ -56,7 +56,6 @@ def do_rados_put(mon, pool, nobj):
         log.debug("cmd is {pcmd}".format(pcmd=put_cmd))
         try:
             (out, err) = mon.exec_command(cmd=put_cmd)
-            out.read().decode()
         except Exception:
             log.error(traceback.format_exc)
             return 1
@@ -74,7 +73,6 @@ def do_rados_get(mon, pool, niter):
     for i in range(niter):
         pool_ls = "sudo rados -p {pool} ls".format(pool=pool)
         (out, err) = mon.exec_command(cmd=pool_ls)
-        out.readlines()
 
         while not fcsum:
             pass
@@ -88,8 +86,8 @@ def do_rados_get(mon, pool, niter):
                 pool=pool, obj=obj, file_name=file_name
             )
             try:
-                mon.exec_command(cmd=get_cmd)
-                outbuf = out.readlines()
+                mon.exec_command(cmd=get_cmd, check_ec=True, timeout=1000)
+                outbuf = out.splitlines()
                 log.info(outbuf)
             except Exception:
                 log.error("rados get failed for {obj}".format(obj=obj))
@@ -167,8 +165,7 @@ def run(ceph_cluster, **kw):
             LRCprofile=prof_name
         )
     try:
-        (out, err) = helper.raw_cluster_cmd(profile)
-        outbuf = out.read().decode()
+        (outbuf, err) = helper.raw_cluster_cmd(profile)
         log.info(outbuf)
         log.info("created profile {LRCprofile}".format(LRCprofile=prof_name))
     except Exception:

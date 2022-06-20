@@ -10,7 +10,6 @@ from os.path import dirname
 from time import sleep
 
 from jinja2 import Template
-from paramiko.channel import ChannelFile
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
@@ -95,7 +94,7 @@ class GenerateServiceSpec:
         Returns:
             hostname (Str)
         """
-        return node.shortname
+        return node.hostname
 
     @staticmethod
     def get_addr(node):
@@ -121,7 +120,8 @@ class GenerateServiceSpec:
         Returns:
             node role list (List)
         """
-        return node.role.role_list
+        label_set = set(node.role.role_list)
+        return list(label_set)
 
     def get_hostnames(self, node_names):
         """
@@ -134,7 +134,7 @@ class GenerateServiceSpec:
             list of hostanmes (List)
         """
         nodes = get_nodes_by_ids(self.cluster, node_names)
-        return [node.shortname for node in nodes]
+        return [node.hostname for node in nodes]
 
     def _get_template(self, service_type):
         """
@@ -174,15 +174,22 @@ class GenerateServiceSpec:
         template = self._get_template("host")
         hosts = []
         address = spec.get("address")
-        labels = spec.get("labels")
         for node_name in spec["nodes"]:
+            labels = spec.get("labels")
             host = dict()
             node = get_node_by_id(self.cluster, node_name)
             host["hostname"] = self.get_hostname(node)
             if address:
                 host["address"] = self.get_addr(node)
+
             if labels:
-                host["labels"] = self.get_labels(node)
+                # Skipping client node, if only client label is attached
+                if len(node.role.role_list) == 1 and ["client"] == node.role.role_list:
+                    continue
+
+                if isinstance(labels, str) and labels == "apply-all-labels":
+                    labels = self.get_labels(node)
+                host["labels"] = labels
             hosts.append(host)
 
         return template.render(hosts=hosts)
@@ -419,7 +426,6 @@ class GenerateServiceSpec:
         node_installer = get_node_by_id(self.cluster, "node1")
         cmd = "cephadm shell ceph fsid"
         out, err = node_installer.exec_command(sudo=True, cmd=cmd)
-        out = out.read().decode() if isinstance(out, ChannelFile) else out
         LOG.info(f"fsid: {out}")
         engine_id = out.replace("-", "")
         if engine_id:
@@ -456,13 +462,50 @@ class GenerateServiceSpec:
         node = get_node_by_id(self.cluster, "node1")
         cmd = "cephadm shell ceph fsid"
         out, err = node.exec_command(sudo=True, cmd=cmd)
-        out = out.read().decode() if isinstance(out, ChannelFile) else out
         LOG.info(f"fsid: {out}")
         fsid = out.replace("-", "")
         engine_id = fsid[0:32]
         if engine_id:
             spec["spec"]["engine_id"] = engine_id
         LOG.info(f"fsid:{engine_id}")
+
+        return template.render(spec=spec)
+
+    def generate_ingress_spec(self, spec):
+        """
+        Return spec content for ha proxy ingress service
+
+        Args:
+            spec (Dict): ha proxy ingress service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: ingress
+                service_id: rgw.my-rgw
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: rgw
+                spec:
+                  backend_service: rgw.ceph-scale-test-y7nmci-node2
+                  virtual_ip: 10.0.208.0/22
+                  frontend_port: 8000
+                  monitor_port: 1967
+
+        :Note: make sure rgw service is already created.
+
+        """
+        template = self._get_template("ingress")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
         return template.render(spec=spec)
 
@@ -484,6 +527,7 @@ class GenerateServiceSpec:
             "rgw": self.generate_rgw_spec,
             "snmp-gateway": self.generate_snmp_spec,
             "snmp-destination": self.generate_snmp_dest_conf,
+            "ingress": self.generate_ingress_spec,
         }
 
         try:
@@ -587,7 +631,7 @@ def get_cluster_state(cls, commands=None):
     __CLUSTER_STATE_COMMANDS = [
         "ceph status",
         "ceph orch host ls",
-        "ceph orch ls -f yaml",
+        "ceph orch ls -f json-pretty",  # https://bugzilla.redhat.com/show_bug.cgi?id=2068366
         "ceph orch ps -f json-pretty",
         "ceph health detail -f yaml",
         "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
@@ -676,7 +720,7 @@ def file_or_path_exists(node, file_or_path):
     """
     try:
         out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
-        LOG.info(f"Output : {out.read().decode()}")
+        LOG.info(f"Output : {out}")
         return True
     except CommandFailed as err:
         LOG.error(f"Error: {err}")

@@ -26,7 +26,7 @@ def find_osd_by_id(osd_id, mon_node):
         cmd=f"ceph osd find {osd_id} --format json",
         sudo=True,
     )
-    return json.loads(out.read().decode())
+    return json.loads(out)
 
 
 def systemctl(node, op, unit):
@@ -43,7 +43,6 @@ def systemctl(node, op, unit):
     """
     cmd_ = f"systemctl {op} {unit}.service"
     out, err = node.exec_command(cmd=cmd_, sudo=True)
-    out, err = out.read().decode(), err.read().decode()
     log.info(out)
     return out, err
 
@@ -101,7 +100,7 @@ def wait_for_active_clean_pgs(mon_node, timeout=3600):
             cmd="ceph pg stat --format json",
             sudo=True,
         )
-        out = json.loads(out.read().decode().strip())
+        out = json.loads(out.strip())
         pg_smry = out.get("pg_summary")
         log.info(f"PG STATS : {pg_smry}")
 

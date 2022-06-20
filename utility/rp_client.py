@@ -13,7 +13,7 @@ payload
       - test2.xml
   |- attachments
       - test1
-         - test1.zip
+         - test1.tar.gz
          - failed_test.err
 
 config.json:
@@ -45,8 +45,10 @@ those files will get attached to the suite and if there are any .err files we ar
 test cases based on the name of the test case.
 If the .zip file not present in the attachments. for those we are just updating the results and skipping the attachments
 """
+import datetime
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
@@ -55,6 +57,7 @@ from docopt import docopt
 from rp_utils.preproc import PreProcClient
 from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
+from utils import create_run_dir, generate_unique_id, tfacon
 
 log = logging.getLogger(__name__)
 doc = """
@@ -106,6 +109,7 @@ def upload_logs(args):
         launch.finish()
     return_obj["launches"] = rportal.launches.list
     log.info("RETURN OBJECT: %s", return_obj)
+    tfacon(launch.launch_id)
     return return_obj
 
 
@@ -164,9 +168,9 @@ def process(xmlObj, rportal):
             process_testcase(xmlObj, testcase, tsuite)
         log.info("\nFinished testcases")
         fqpath = os.path.join(xmlObj._configs.payload_dir, "attachments")
-        if os.path.exists(f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.zip"):
+        if os.path.exists(f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.tar.gz"):
             rplog.add_attachment(
-                tsuite.item_id, f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.zip"
+                tsuite.item_id, f"{fqpath}/{tsuite.xml_name}/{tsuite.xml_name}.tar.gz"
             )
         tsuite.finish()
 
@@ -192,13 +196,45 @@ def process_testcase(xunit_xml, testcase, tsuite):
         with open(
             f"{fqpath}/{tsuite.xml_name}/{tcase.tc_name.replace(' ', '_')}_0.err", "r"
         ) as file:
-            error = file.readline()
-            while error:
-                tcase.rplog.add_message(
-                    message=error, level="ERROR", test_item_id=tcase.test_item_id
+            log_entries = list(generate_log_events(file))
+            for i in log_entries:
+                timestamp = int(
+                    datetime.datetime.strptime(
+                        i["date"], "%Y-%m-%d %H:%M:%S,%f"
+                    ).strftime("%s")
                 )
-                error = file.readline()
+                tcase.rplog.add_message(
+                    message=i["text"],
+                    level="ERROR",
+                    test_item_id=tcase.test_item_id,
+                    msg_time=str(int(timestamp * 1000)),
+                )
     tcase.finish()
+
+
+def generate_log_events(file_handler):
+    log_events = {}
+    for line in file_handler:
+        if line.startswith(match_start_line(line)):
+            if log_events:
+                yield log_events
+            log_events = {
+                "date": line.split("__")[0][:23],
+                "type": line.split("-", 5)[3],
+                "text": line.split("-", 5)[-1],
+            }
+        else:
+            log_events["text"] += line
+    yield log_events
+
+
+def match_start_line(line):
+    matched = re.match(r"\d\d\d\d-\d\d-\d\d\ \d\d:\d\d:\d\d", line)
+    if matched:
+        matchThis = matched.group()
+    else:
+        matchThis = "NONE"
+    return matchThis
 
 
 if __name__ == "__main__":
@@ -208,4 +244,20 @@ if __name__ == "__main__":
         "config_file": args.get("--config_file"),
         "payload_dir": args.get("--payload_dir"),
     }
+    run_id = generate_unique_id(length=6)
+    run_dir = create_run_dir(run_id)
+    log_format = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s"
+    )
+    logfile = os.path.join(run_dir, "report_portal.log")
+    handler = logging.FileHandler(logfile)
+    handler.setFormatter(log_format)
+    log.addHandler(handler)
+    url_base = (
+        "http://magna002.ceph.redhat.com/cephci-jenkins/" + run_dir.split("/")[-1]
+        if "/ceph/cephci-jenkins" in run_dir
+        else run_dir
+    )
+    log_url = f"{url_base}/report_portal.log"
     upload_logs(arguments)
+    log.info(f"Log Location {log_url}")

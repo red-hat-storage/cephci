@@ -1,0 +1,387 @@
+globals:
+  -
+    ceph-cluster:
+      name: ceph-pri
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: extensa003.ceph.redhat.com
+          ip: 10.8.130.203
+          root_password: r
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        -
+          hostname: extensa004.ceph.redhat.com
+          ip: 10.8.130.204
+          root_password: r
+          role:
+            - mon
+            - mgr
+        -
+          hostname: extensa005.ceph.redhat.com
+          ip: 10.8.130.205
+          root_password: r
+          role:
+            - mon
+        -
+          hostname: extensa006.ceph.redhat.com
+          ip: 10.8.130.206
+          root_password: r
+          role:
+            - mon
+        -
+          hostname: extensa021.ceph.redhat.com
+          ip: 10.8.130.221
+          root_password: r
+          role:
+            - mon
+        -
+          hostname: extensa013.ceph.redhat.com
+          ip: 10.8.130.213
+          root_password: r
+          role:
+            - client
+        -
+          hostname: extensa015.ceph.redhat.com
+          ip: 10.8.130.215
+          root_password: r
+          role:
+            - client
+        -
+          hostname: mero001.ceph.redhat.com
+          ip: 10.8.129.221
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero002.ceph.redhat.com
+          ip: 10.8.129.222
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero003.ceph.redhat.com
+          ip: 10.8.129.223
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+        -
+          hostname: mero004.ceph.redhat.com
+          ip: 10.8.129.224
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero008.ceph.redhat.com
+          ip: 10.8.129.228
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero007.ceph.redhat.com
+          ip: 10.8.129.227
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero020.ceph.redhat.com
+          ip: 10.8.129.240
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+
+  -
+    ceph-cluster:
+      name: ceph-sec
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: extensa010.ceph.redhat.com
+          ip: 10.8.130.210
+          root_password: r
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        -
+          hostname: extensa011.ceph.redhat.com
+          ip: 10.8.130.211
+          root_password: r
+          role:
+            - mon
+            - mgr
+        -
+          hostname: extensa008.ceph.redhat.com
+          ip: 10.8.130.208
+          root_password: r
+          role:
+            - mon
+        -
+          hostname: extensa014.ceph.redhat.com
+          ip: 10.8.130.214
+          root_password: r
+          role:
+            - mon
+        -
+          hostname: extensa012.ceph.redhat.com
+          ip: 10.8.130.212
+          root_password: r
+          role:
+            - mon
+        -
+          hostname: extensa016.ceph.redhat.com
+          ip: 10.8.130.216
+          root_password: r
+          role:
+            - client
+        -
+          hostname: extensa020.ceph.redhat.com
+          ip: 10.8.130.220
+          root_password: r
+          role:
+            - client
+        -
+          hostname: mero010.ceph.redhat.com
+          ip: 10.8.129.230
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero011.ceph.redhat.com
+          ip: 10.8.129.231
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero012.ceph.redhat.com
+          ip: 10.8.129.232
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero013.ceph.redhat.com
+          ip: 10.8.129.233
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero014.ceph.redhat.com
+          ip: 10.8.129.234
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero015.ceph.redhat.com
+          ip: 10.8.129.235
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        -
+          hostname: mero016.ceph.redhat.com
+          ip: 10.8.129.236
+          root_password: r
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+

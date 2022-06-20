@@ -6,14 +6,15 @@
 #      then enabling the dashboard with provided credentials and validate login
 #
 #  Cluster Configuration:
-#    cephci/conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml
+#    cephci/conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
 #     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
 #     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
 #     Node3 - Mon, OSD, MDS, RGW, node-exporter
-#     Node4 - Client
+#     Node4 - RGW
+#     Node5 - Client
 #
 # Test Steps:
 #   (1) Bootstrap cluster with options,
@@ -244,5 +245,41 @@ tests:
         args:
           username: admin123
           password: admin@123
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable the alertmanager
+      desc: Enables alertmanager monitoring stack
+      module: test_dashboard.py
+      polarion-id: CEPH-83574783
+      config:
+        command: enable_alertmanager
+        args:
+          alertmanager-port: "9093"
+          alertmanager_ssl_set: False
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable the prometheus
+      desc: Enables prometheus monitoring stack
+      module: test_dashboard.py
+      polarion-id: CEPH-83574782
+      config:
+        command: enable_prometheus
+        args:
+          prometheus-port: "9095"
+          prmoetheus-ssl-set: False
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable the grafana
+      desc: Enables grafana monitoring stack
+      module: test_dashboard.py
+      polarion-id: CEPH-83574784
+      config:
+        command: enable_grafana
+        args:
+          grafana-port: "3000"
+          grafana-ssl-set: False
       destroy-cluster: false
       abort-on-fail: true

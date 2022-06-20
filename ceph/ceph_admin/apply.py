@@ -93,7 +93,7 @@ class ApplyMixin:
                     verify_service = False
                 else:
                     nodes_ = get_nodes_by_ids(self.cluster, nodes)
-                    node_names = [node.shortname for node in nodes_]
+                    node_names = [node.hostname for node in nodes_]
 
             # Support RGW count-per-host placement option
             if "count-per-host" in placement and self.SERVICE_NAME == "rgw":

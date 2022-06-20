@@ -21,7 +21,7 @@ from typing import Any, Dict
 
 from .config import TestMetaData
 
-LOG_FORMAT = "%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s"
 
 
 class LoggerInitializationException:
@@ -31,17 +31,26 @@ class LoggerInitializationException:
 class Log:
     """CephCI Logger object to help streamline logging."""
 
-    def __init__(self, filename="") -> None:
-        """
-        Initializes the logging mechanism based on the inputs provided."""
-        self._logger = logging.getLogger(filename)
-        self._log_level = logging.DEBUG
+    def __init__(self, name=None) -> None:
+        """Initializes the logging mechanism based on the inputs provided."""
+        self._logger = logging.getLogger("cephci")
+        logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
+
+        if name:
+            self._logger.name = f"cephci.{name}"
+
+        self._log_level = self._logger.getEffectiveLevel()
         self._log_dir = None
         self.log_format = LOG_FORMAT
-        self.rp_logger = None
 
-    def set_rp_logger(self, logger):
-        self.rp_logger = logger
+    @property
+    def rp_logger(self):
+        return self.config.get("rp_logger")
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Return the logger."""
+        return self._logger
 
     @property
     def log_dir(self) -> str:
@@ -72,6 +81,7 @@ class Log:
                 "testing_tool": "cephci",
                 "rhcs": self.config.get("rhcs"),
                 "test_build": self.config.get("rhbuild", "released"),
+                "rp_logger": self.config.get("rp_logger", None),
             }
         )
 
@@ -100,90 +110,68 @@ class Log:
         log[level](message, *args, extra=extra, **kwargs)
 
     def info(self, message: Any, *args, **kwargs) -> None:
-        """
-        Log with info level the provided message and extra data.
+        """Log with info level the provided message and extra data.
 
         Args:
-            message (Any):      The message to be logged.
-            metadata (dict):    The metadata that would be sent along with the message.
+            message (Any):  The message to be logged.
+            args (Any):     Dynamic list of supported arguments.
+            kwargs (Any):   Dynamic list of supported keyword arguments.
 
         Returns:
             None
         """
-        self._log(
-            "info",
-            message,
-            *args,
-            **kwargs,
-        )
+        self._log("info", message, *args, **kwargs)
 
     def debug(self, message: Any, *args, **kwargs) -> None:
-        """
-        Log with debug level the provided message and extra data.
+        """Log with debug level the provided message and extra data.
 
         Args:
-            message (str):      The message to be logged.
-            metadata (dict):    The metadata that would be sent along with the message.
-            kwargs (Any):       Support keyword arguments by logging
+            message (str):  The message to be logged.
+            args (Any):     Dynamic list of supported arguments.
+            kwargs (Any):   Dynamic list of supported keyword arguments.
+
         Returns:
             None
         """
 
-        self._log(
-            "debug",
-            message,
-            *args,
-            **kwargs,
-        )
+        self._log("debug", message, *args, **kwargs)
 
     def warning(self, message: Any, *args, **kwargs) -> None:
-        """
-        Log with warning level the provided message and extra data.
+        """Log with warning level the provided message and extra data.
 
         Args:
-            message (Any):      The message to be logged.
-            metadata (dict):    The metadata that would be sent along with the message.
-            kwargs (Any):       Support keyword arguments by logging
+            message (Any):  The message to be logged.
+            args (Any):     Dynamic list of supported arguments.
+            kwargs (Any):   Dynamic list of supported keyword arguments.
+
         Returns:
             None
         """
         self._log("warning", message, *args, **kwargs)
 
-    def error(
-        self,
-        message: Any,
-        *args,
-        **kwargs,
-    ) -> None:
-        """
-        Log with error level the provided message and extra data.
+    def error(self, message: Any, *args, **kwargs) -> None:
+        """Log with error level the provided message and extra data.
 
         Args:
-            message (Any):      The message to be logged.
-            metadata (dict):    The metadata that would be sent along with the message.
-            exc_info (boo):     Exception details to be logged.
-            kwargs (Any):       Support keyword arguments by logging
+            message (Any):  The message to be logged.
+            args (Any):     Dynamic list of supported arguments.
+            kwargs (Any):   Dynamic list of supported keyword arguments.
+
         Returns:
             None
         """
-        kwargs["exc_info"] = kwargs.get("exc_info", True)
         if self.rp_logger:
             self.rp_logger.log(message=message, level="ERROR")
+
         self._log("error", message, *args, **kwargs)
 
-    def exception(
-        self,
-        message: Any,
-        *args,
-        **kwargs,
-    ) -> None:
-        """
-        Log the given message under exception log level.
+    def exception(self, message: Any, *args, **kwargs) -> None:
+        """Log the given message under exception log level.
 
         Args:
             message (Any):  Message or record to be emitted.
-            exc_info (boo):     Exception details to be logged.
-            kwargs (Any):       Support keyword arguments by logging
+            args (Any):     Dynamic list of supported arguments.
+            kwargs (Any):   Dynamic list of supported keyword arguments.
         Returns:
             None
         """

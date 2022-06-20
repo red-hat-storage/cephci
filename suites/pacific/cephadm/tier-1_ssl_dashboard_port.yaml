@@ -6,14 +6,15 @@
 #       and apply-spec options.
 #
 # Cluster Configuration:
-#   cephci/conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml
+#   cephci/conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
 #     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
 #     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
 #     Node3 - Mon, OSD, MDS, RGW, node-exporter
-#     Node4 - Client
+#     Node4 - RGW
+#     Node5 - Client
 #
 # Test steps:
 #   (1) Bootstrap cluster with options,

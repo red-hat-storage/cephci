@@ -8,14 +8,13 @@ https://github.com/ceph/s3-tests. Over here, we have three stages
     - Execute Tests
     - Test Teardown
 
-In the test setup stage, the test suite is cloned and the necessary steps to execute it
-is carried out.
+In test setup stage, the test suite is cloned and the necessary steps to execute it is
+carried out.
 
-In the execute test stage, the test suite is executed using tags based on the RHCS
-build version.
+In execute test stage, the test suite is executed using tags based on the RHCS build
+version.
 
-In the test teardown, the cloned repository is removed and the configuration changes
-undone.
+In test teardown, the cloned repository is removed and the configuration change undone.
 
 Requirement parameters
      ceph_nodes:    The list of node participating in the RHCS environment.
@@ -36,7 +35,6 @@ from typing import Dict, Optional, Tuple
 from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode, CommandFailed
-from ceph.utils import open_firewall_port
 from utility.log import Log
 
 log = Log(__name__)
@@ -143,8 +141,8 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
     kms_keyid = config.get("kms_keyid")
     create_s3_conf(cluster, build, host, port, secure, kms_keyid)
 
-    if not build.startswith("5"):
-        open_firewall_port(rgw_node, port=port, protocol="tcp")
+    if build.startswith("4"):
+        rgw_node.open_firewall_port(port=port, protocol="tcp")
 
     add_lc_debug(cluster, build)
 
@@ -161,7 +159,7 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         0 - Success
         1 - Failure
     """
-    log.info("Executing s3-tests")
+    log.debug("Executing s3-tests")
     try:
         base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml virtualenv/bin/nosetests -v"
         extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
@@ -177,25 +175,21 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
             tests = "s3tests_boto3"
 
         cmd = f"{base_cmd} {extra_args} {tests}"
-        out, err = node.exec_command(cmd=cmd, timeout=3600)
-        log.info(out.read().decode())
-        log.error(err.read().decode())
+        return node.exec_command(cmd=cmd, long_running=True)
     except CommandFailed as e:
         log.warning("Received CommandFailed")
         log.warning(e)
         return 1
-
-    return 0
 
 
 def execute_teardown(cluster: Ceph, build: str) -> None:
     """
     Execute the test teardown phase.
     """
-    command = "rm -rf s3-tests"
+    command = "sudo rm -rf s3-tests"
 
     node = cluster.get_nodes(role="client")[0]
-    node.exec_command(sudo=True, cmd=command)
+    node.exec_command(cmd=command)
 
     del_lc_debug(cluster, build)
 
@@ -220,14 +214,14 @@ def install_s3test_requirements(
     simulation of the manual steps.
 
     Args:
-        node:   The node that is consider for running S3Tests.
+        node:   The node that is considered for running S3Tests.
         branch: The branch to be installed
         os_ver: The OS major version
 
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
-    if branch in ["ceph-nautilus", "ceph-luminous"]:
+    if branch in ["ceph-nautilus", "ceph-luminous"] or os_ver == "9":
         return _s3tests_req_install(node, os_ver)
 
     _s3tests_req_bootstrap(node)
@@ -255,7 +249,7 @@ def get_rgw_frontend(cluster: Ceph) -> Tuple:
     try:
         node = cluster.get_nodes(role="client")[0]
         out, err = node.exec_command(sudo=True, cmd="ceph config dump --format json")
-        configs = loads(out.read().decode())
+        configs = loads(out)
 
         for config in configs:
             if config.get("name").lower() != "rgw_frontends":
@@ -276,7 +270,6 @@ def get_rgw_frontend(cluster: Ceph) -> Tuple:
         # rgw frontends = civetweb port=192.168.122.199:8080 num_threads=100
         command = "grep -e '^rgw frontends' /etc/ceph/ceph.conf"
         out, err = node.exec_command(sudo=True, cmd=command)
-        out = out.read().decode()
         key, sep, value = out.partition("=")
         frontend_value = value.lstrip().split()
 
@@ -287,7 +280,7 @@ def get_rgw_frontend(cluster: Ceph) -> Tuple:
     secure = False
     port = 80
 
-    # Double check the port number
+    # Doublecheck the port number
     for value in frontend_value:
         # support values like endpoint=x.x.x.x:port ssl_port=443 port=x.x.x.x:8080
         if "port" in value or "endpoint" in value:
@@ -306,7 +299,7 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
     """
     Create a S3 user with the given display_name.
 
-    The other required information for creating an user is auto generated.
+    The other required information for creating a user is auto generated.
 
     Args:
         node: node in the cluster to create the user on
@@ -324,7 +317,7 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
     cmd += " --email={email}@foo.bar".format(email=uid)
 
     out, err = node.exec_command(sudo=True, cmd=cmd)
-    user_info = json.loads(out.read().decode())
+    user_info = json.loads(out)
 
     data[user_prefix] = {
         "id": user_info["keys"][0]["user"],
@@ -419,8 +412,43 @@ def del_lc_debug(cluster: Ceph, build: str) -> None:
 # Private functions
 
 
+def _s3test_req_py3(node: CephNode) -> None:
+    """
+    Creates a python3 virtual environment and install the s3 prerequisite packages.
+
+    Args:
+        node (CephNode):    The system to be used for creating the venv.
+
+    Raises:
+        CommandFailed
+    """
+    packages = [
+        "python3-devel",
+        "libevent-devel",
+        "libffi-devel",
+        "libxml2-devel",
+        "libxslt-devel",
+        "zlib-devel",
+    ]
+    commands = [
+        "python3 -m venv s3-tests/virtualenv",
+        "s3-tests/virtualenv/bin/python -m pip install --upgrade pip setuptools",
+        "s3-tests/virtualenv/bin/python -m pip install -r s3-tests/requirements.txt",
+        "s3-tests/virtualenv/bin/python s3-tests/setup.py develop",
+    ]
+    node.exec_command(
+        sudo=True, check_ec=False, cmd=f"yum install -y {' '.join(packages)}"
+    )
+
+    for cmd in commands:
+        node.exec_command(cmd=cmd)
+
+
 def _s3tests_req_install(node: CephNode, os_ver: str) -> None:
     """Install S3 prerequisites via pip."""
+    if os_ver == "9":
+        return _s3test_req_py3(node)
+
     packages = [
         "python2-virtualenv",
         "python2-devel",
@@ -503,12 +531,12 @@ def _rgw_lc_debug(cluster: Ceph, add: bool = True) -> None:
     out, err = node.exec_command(
         sudo=True, cmd="ceph orch ps --daemon_type rgw --format json"
     )
-    rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out.read().decode())]
+    rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out)]
 
     out, err = node.exec_command(
         sudo=True, cmd="ceph orch ls --service_type rgw --format json"
     )
-    rgw_services = [x["service_name"] for x in loads(out.read().decode())]
+    rgw_services = [x["service_name"] for x in loads(out)]
 
     # Set (or) Unset the lc_debug_interval for all daemons
     for daemon in rgw_daemons:

@@ -1,0 +1,557 @@
+# =====================================================================================
+# Single file to specify test suites to be executed for all regression (sanity) and schedule tests
+# as per defined in each stages.
+# Each stage will execute in sequential pattern.
+# Contains all default parameter used for execution when no override is specified.
+# Parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
+# platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
+# =====================================================================================
+- name: "test-rgw-core-features"
+  suite: "suites/nautilus/rgw/tier-0_rgw.yaml"
+  global-conf: "conf/nautilus/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+- name: "test-rbd-core-features"
+  suite: "suites/nautilus/rbd/tier-0_rbd.yaml"
+  global-conf: "conf/nautilus/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - rbd
+    - stage-1
+- name: "test-cephfs-core-features"
+  suite: "suites/nautilus/cephfs/tier-0_fs.yaml"
+  global-conf: "conf/nautilus/cephfs/tier-0_fs.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-1
+- name: "test-rhceph-image-on-rhel-7"
+  suite: "suites/nautilus/ansible/tier-0_deploy_containerized_ceph.yaml"
+  global-conf: "conf/nautilus/ansible/tier-0_deploy.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-2
+- name: "test-rhceph-image-on-rhel-8"
+  suite: "suites/nautilus/ansible/tier-0_deploy_containerized_ceph.yaml"
+  global-conf: "conf/nautilus/ansible/tier-0_deploy.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-2
+- name: "test-rhceph-rhel-7-rpm"
+  suite: "suites/nautilus/ansible/tier-0_deploy_rpm_ceph.yaml"
+  global-conf: "conf/nautilus/ansible/tier-0_deploy.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-2
+- name: "test-rhceph-rhel-8-rpm"
+  suite: "suites/nautilus/ansible/tier-0_deploy_rpm_ceph.yaml"
+  global-conf: "conf/nautilus/ansible/tier-0_deploy.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-2
+- name: "test-cephfs-extended-mat"
+  suite: "suites/nautilus/cephfs/tier-1_fs.yaml"
+  global-conf: "conf/nautilus/cephfs/tier-1_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-1
+- name: "test-rbd-extended-mat"
+  suite: "suites/nautilus/rbd/tier-1_rbd.yaml"
+  global-conf: "conf/nautilus/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rbd
+    - stage-1
+- name: "test-rgw-ssl-rpm"
+  suite: "suites/nautilus/rgw/tier-1_rgw_ssl_regression.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+- name: "test-upgrade-on-container-based-deployments"
+  suite: "suites/nautilus/upgrades/tier-1_upgrade_container.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-1_upgrade.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+- name: "test-rbd-mirror-functionality"
+  suite: "suites/nautilus/rbd/tier-1_rbd_mirror.yaml"
+  global-conf: "conf/nautilus/rbd/tier-1_rbd_mirror.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rbd
+    - stage-2
+- name: "test-rgw-dynamic-resharding-greenfield"
+  suite: "suites/nautilus/rgw/tier-1_rgw_test-dynamic-resharding-greenfield.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+- name: "test-rgw-manual-resharding-greenfield"
+  suite: "suites/nautilus/rgw/tier-1_rgw_test-manual-resharding-greenfield.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+- name: "test-rgw-single-site"
+  suite: "suites/nautilus/rgw/tier-1_rgw.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+- name: "test-rgw-ssl-image"
+  suite: "suites/nautilus/rgw/tier-1_rgw_ssl_containerized-regression.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+- name: "test-upgrade-of-rpm-based-deployments"
+  suite: "suites/nautilus/upgrades/tier-1_upgrade_rpm.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-1_upgrade.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-3
+- name: "test-rgw-single-site-upgrade"
+  suite: "suites/nautilus/rgw/tier-1_rgw_test-4x-upgrade-to-latest.yaml"
+  global-conf: "conf/nautilus/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+- name: "test-rgw-multi-site-secondary-to-primary"
+  suite: "suites/nautilus/rgw/tier-1_rgw_multisite-secondary-to-primary.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+- name: "test-rgw-ecpool-multisite-primary-to-secondary"
+  suite: "suites/nautilus/rgw/tier-1_rgw_ecpool_verifying-data-from-primary.yaml"
+  global-conf: "conf/nautilus/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+- name: "test-rhceph-rhel-7-rpm-deployment-psi-only"
+  suite: "suites/nautilus/ansible/tier-1_deploy.yaml"
+  global-conf: "conf/nautilus/ansible/tier-1_deploy.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - dmfg
+    - stage-3
+- name: "test-rgw-multisite-secondary-to-primary-tier-1-extd"
+  suite: "suites/nautilus/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+- name: "test-rgw-tier-1-extd"
+  suite: "suites/nautilus/rgw/tier-1-extn_rgw.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+- name: "test-upgrade-disk-scenarios-rpm"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_test-disk-scenarios-rpm.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-2_upgrade.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+- name: "test-upgrade-ceph-custom-name"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_ceph-custom-name.yaml"
+  global-conf: "conf/nautilus/upgrades/upgrades.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-2
+- name: "test-upgrade-disk-scenarios-container"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_test-disk-scenarios-container.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-2_upgrade.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-2
+- name: "test-upgrade-filestore-to-bluestore"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_test-filestore-to-bluestore.yaml"
+  global-conf: "conf/nautilus/upgrades/upgrades.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-2
+- name: "test-upgrade-skip-tags-wait-for-osds"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_skip-tags-wait-for-osds.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-2_upgrade_skip-tags-wait-for-osds.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-2
+- name: "test-rgw_singlesite_to_multisite-tier-2"
+  suite: "suites/nautilus/rgw/tier-2_rgw_singlesite_to_multisite.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+- name: "test-rgw-multisite-primary-to-secondary-tier-1-extd"
+  suite: "suites/nautilus/rgw/tier-1-extn_rgw_multisite-primary-to-secondary.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7.9-server-x86_64.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7.9-minimal-amd64-3.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+- name: "test-upgrade-rpm-to-container-lvm"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_test-rpm-to-container-lvm.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-2_upgrade.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-3
+- name: "test-upgrade-with-tags"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_with-tags.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-2_upgrade.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-3
+- name: "test-rgw-multisite-4x-upgrade"
+  suite: "suites/nautilus/rgw/tier-1_rgw_multisite_test-upgrade-4.x-to-latest.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+- name: "test-deploy-ceph-rpms-psi-only"
+  suite: "suites/nautilus/ansible/tier-2_deploy_test-ceph-rpms.yaml"
+  global-conf: "conf/nautilus/ansible/tier-2_deploy.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - dmfg
+    - stage-3
+#Cron pipeline test suite for 4.3 to run as schedule
+- name: "test-multipath-upgrade-to-4-latest"
+  suite: "suites/nautilus/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-4-latest.yaml"
+  global-conf: "conf/nautilus/upgrades/tier-2_upgrade.yaml"
+  platform: "rhel-7"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-7-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+- name: "bucket_lc_multipart_object_expired"
+  suite: "suites/nautilus/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
+  global-conf: "conf/nautilus/rgw/5-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1

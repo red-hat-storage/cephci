@@ -19,7 +19,8 @@ class ShellMixin:
         args: List[str],
         base_cmd_args: Dict = None,
         check_status: bool = True,
-        timeout: int = 300,
+        timeout: int = 600,
+        long_running: bool = False,
     ):
         """
         Ceph orchestrator shell interface to run ceph commands.
@@ -29,9 +30,11 @@ class ShellMixin:
             base_cmd_args (Dict)): cephadm base command options
             check_status (Bool): check command status
             timeout (Int): Maximum time allowed for execution.
+            long_running (Bool): Long running command (default: False)
 
         Returns:
             out (Str), err (Str) stdout and stderr response
+            rc (Int) exit status code if long_running command
 
         """
         cmd = deepcopy(BASE_CMD)
@@ -42,14 +45,14 @@ class ShellMixin:
         cmd.append("--")
         cmd.extend(args)
 
-        out, err = self.installer.exec_command(
+        out = self.installer.exec_command(
             sudo=True,
             cmd=" ".join(cmd),
             timeout=timeout,
             check_ec=check_status,
+            long_running=long_running,
         )
 
-        out = out.read().decode()
-        err = err.read().decode()
-        LOG.debug(out)
-        return out, err
+        if isinstance(out, tuple):
+            LOG.debug(out[0])
+        return out

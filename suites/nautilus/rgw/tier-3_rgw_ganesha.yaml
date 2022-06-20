@@ -41,6 +41,7 @@ tests:
         script-name: test_on_nfs_io.py
         config-file-name: test_on_nfs_io_create.yaml
         nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           basedir_count: 4
           subdir_count: 10
@@ -60,6 +61,7 @@ tests:
         script-name: test_on_nfs_io.py
         config-file-name: test_on_nfs_io_delete.yaml
         nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           basedir_count: 5
           subdir_count: 10
@@ -80,6 +82,7 @@ tests:
         script-name: test_on_nfs_io.py
         config-file-name: test_on_nfs_io_move.yaml
         nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           basedir_count: 8
           subdir_count: 3
@@ -100,6 +103,7 @@ tests:
         script-name: test_on_s3_io.py
         config-file-name: test_on_s3_io_create.yaml
         nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           bucket_count: 3
           objects_count: 20
@@ -118,6 +122,7 @@ tests:
         script-name: test_on_s3_io.py
         config-file-name: test_on_s3_io_delete.yaml
         nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           bucket_count: 2
           objects_count: 50
@@ -137,6 +142,7 @@ tests:
         script-name: test_on_s3_io.py
         config-file-name: test_on_s3_io_move.yaml
         nfs-version: 3  # To be added in rgw_user.yaml
+        timeout: 900
         test-config:
           bucket_count: 4
           objects_count: 100
