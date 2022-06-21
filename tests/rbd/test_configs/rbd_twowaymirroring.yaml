@@ -1,0 +1,274 @@
+name: Configuration suite file for two-way mirroring for rbd client.
+tests:
+  - runs_on: ceph-rbd1
+    config:
+      - test:
+          name: deploy rbd mirror daemon
+          desc: Configuration to deploy rbd mirror daemon in cluster
+          module: workflow.py
+          steps:
+            - method: apply
+              class: Orch
+              component: ceph
+              args:
+                service_name: rbd-mirror
+                placement:
+                  nodes:
+                    - ceph-rbd1-openstack-node5
+              role: client
+      - test:
+          name: Creation of osd pool.
+          desc: configuration for the creation of osd pool.
+          module: workflow.py
+          steps:
+            - method: create
+              class: Pool
+              component: ceph
+              args:
+                pool_name: mirror_test
+              role: client
+      - test:
+          name: Initialization of rbd application on pool.
+          desc: configuration for the initialization of rbd application on pool.
+          module: workflow.py
+          steps:
+            - method: init
+              class: Pool
+              component: rbd
+              args:
+                pool_name: mirror_test
+              role: client
+      - test:
+          name: Set configuration parameter to enable journaling.
+          desc: >-
+            Set configuration parameter to enable journaling to block device
+            image.
+          module: workflow.py
+          steps:
+            - method: set
+              class: Config
+              component: ceph
+              args:
+                who: global
+                option: rbd_default_features
+                value: 125
+              role: client
+      - test:
+          name: Creation of rbd image.
+          desc: configuration for the creation of block device image.
+          module: workflow.py
+          steps:
+            - method: create
+              class: Rbd
+              component: rbd
+              args:
+                pool_name: mirror_test
+                image_name: image_2
+                size: 1G
+              role: client
+      - test:
+          name: enable pool mirroring
+          desc: configuration to Enable Pool mirroring.
+          module: workflow.py
+          steps:
+            - method: enable
+              class: Pool
+              component: rbd_mirror
+              args:
+                pool_name: mirror_test
+                mode: image
+                site_name: site-a
+              role: client
+      - test:
+          name: enable mirroring on image
+          desc: Enable morring on image to be mirrored.
+          module: workflow.py
+          steps:
+            - method: enable
+              class: Image
+              component: rbd_mirror
+              args:
+                image_spec: mirror_test/image_2
+              role: client
+      - test:
+          name: create file to store bootstrap token
+          desc: configuration to create file to store bootstrap token
+          module: utils.py
+          steps:
+            - method: create_file
+              args:
+                path: /home/ceph-admin
+                file_name: bootstrap_token_master
+              role: client
+      - test:
+          name: create pool peer bootstrap
+          desc: configuration to create pool peer bootstrap.
+          module: workflow.py
+          steps:
+            - method: create
+              class: Bootstrap
+              component: rbd_mirror
+              args:
+                pool_name: mirror_test
+                site_name: site-a
+                token_path: /home/ceph-admin/bootstrap_token_master
+              role: client
+      - test:
+          name: retreive bootstrap token
+          desc: retreive bootstrap token
+          module: utils.py
+          steps:
+            - method: read_from_file
+              args:
+                file_name: bootstrap_token_master
+                path: /home/ceph-admin
+              role: client
+      - test:
+          name: wait for 30 seconds to be clusters in sync
+          desc: wait for 30 seconds to be clusters in sync
+          module: utils.py
+          steps:
+            - method: sleep
+              args:
+                sleep_time: 30
+              role: client
+      - test:
+          name: wait till import bootstrap completes in cluster2
+          desc: wait till import bootstrap completes in cluster2
+          module: utils.py
+          steps:
+            - method: wait_till
+              args:
+                till_result:
+                  load_input_result: "ceph-rbd2.import pool peer bootstrap.step0"
+              role: client
+      - test:
+          name: Verify rbd mirror image status
+          desc: configuration to verify rbd mirorr image status
+          module: workflow.py
+          steps:
+            - method: status
+              class: image
+              component: rbd_mirror
+              args:
+                image_spec: mirror_test/image_2
+              retry:
+                args:
+                  max_attempts: 3
+                  interval_seconds: 5
+                  pattern_till:
+                    key: state
+                    value: up+stopped
+              role: mon
+  - runs_on: ceph-rbd2
+    config:
+      - test:
+          name: deploy rbd mirror daemon
+          desc: Configuration to deploy rbd mirror daemon in cluster
+          module: workflow.py
+          steps:
+            - method: apply
+              class: Orch
+              component: ceph
+              args:
+                service_name: rbd-mirror
+                placement:
+                  nodes:
+                    - ceph-rbd2-openstack-node5
+              role: client
+      - test:
+          name: Creation of osd pool
+          desc: configuration for the creation of osd pool.
+          module: workflow.py
+          steps:
+            - method: create
+              class: Pool
+              component: ceph
+              args:
+                pool_name: mirror_test
+              role: client
+      - test:
+          name: Initialization of rbd application on pool.
+          desc: configuration for the initialization of rbd application on pool.
+          module: workflow.py
+          steps:
+            - method: init
+              class: Pool
+              component: rbd
+              args:
+                pool_name: mirror_test
+              role: client
+      - test:
+          name: enable pool mirroring
+          desc: configuration to Enable Pool mirroring.
+          module: workflow.py
+          steps:
+            - method: enable
+              class: Pool
+              component: rbd_mirror
+              args:
+                pool_name: mirror_test
+                mode: image
+              role: client
+      - test:
+          name: create file to import bootstrap token
+          desc: configuration to create file to import bootstrap token
+          module: utils.py
+          steps:
+            - method: create_file
+              args:
+                path: /home/ceph-admin
+                file_name: bootstrap_token_master
+              role: client
+      - test:
+          name: copy token from primary to secondary
+          desc: configuration to copy token from primary to secondary
+          module: utils.py
+          steps:
+            - method: write_to_file
+              args:
+                content:
+                  load_input_result: "ceph-rbd1.retreive bootstrap token.step0"
+                path: /home/ceph-admin/bootstrap_token_master
+              role: client
+      - test:
+          name: import pool peer bootstrap
+          desc: configuration to import pool peer bootstrap.
+          module: workflow.py
+          steps:
+            - method: import
+              class: Bootstrap
+              component: rbd_mirror
+              args:
+                pool_name: mirror_test
+                site_name: site-b
+                token_path: /home/ceph-admin/bootstrap_token_master
+                direction: rx-tx
+              role: client
+      - test:
+          name: wait for 30 seconds to be clusters in sync
+          desc: wait for 30 seconds to be clusters in sync
+          module: utils.py
+          steps:
+            - method: sleep
+              args:
+                sleep_time: 30
+              role: client
+      - test:
+          name: Verify rbd mirror image status
+          desc: configuration to verify rbd mirror image status
+          module: workflow.py
+          steps:
+            - method: status
+              class: image
+              component: rbd_mirror
+              args:
+                image_spec: mirror_test/image_2
+              retry:
+                args:
+                  max_attempts: 3
+                  interval_seconds: 5
+                  pattern_till:
+                    key: state
+                    value: up+replaying
+              role: mon
