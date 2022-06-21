@@ -524,8 +524,8 @@
     - rgw
     - stage-2
 
-- name: "Testing RGW MS ssl ecpool and verifying from primary site"
-  suite: "suites/pacific/rgw/tier-2_rgw_ssl_ecpool_test-ms-verify-io-from-primary.yaml"
+- name: "test-rgw-ssl-ecpool-ms-bucket-objects-gc-policy-on-secondary"
+  suite: "suites/pacific/rgw/tier-2_rgw_ssl_ecpool_ms-bucket-objects-gc-policy-on-secondary.yaml"
   global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
@@ -539,6 +539,22 @@
     - ibmc
     - rgw
     - stage-3
+
+- name: "test-rgw-ssl-ecpool-ms-bucket-listing-versioning-on-secondary"
+  suite: "suites/pacific/rgw/tier-2_rgw_ssl_ecpool-ms-bucket-listing-versioning-on-secondary.yaml"
+  global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
 
 - name: "Testing RGW multi-realm deployment"
   suite: "suites/pacific/rgw/tier-1_rgw_cephadm.yaml"
@@ -556,8 +572,8 @@
     - rgw
     - stage-1
 
-- name: "Testing extended RGW multisite primary to secondary"
-  suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-primary-to-secondary.yaml"
+- name: "test-rgw-ms-omap-datalog-on-primary.yaml"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-omap-datalog-on-primary.yaml"
   global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
@@ -571,6 +587,22 @@
     - ibmc
     - rgw
     - stage-5
+
+- name: "test-rgw-ms-bilog-crash-on-primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-bilog-crash-on-primary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
 
 - name: "Testing extended RGW multisite secondary to primary"
   suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
