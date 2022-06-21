@@ -5,7 +5,16 @@ tests:
   - runs_on: ceph-rbd1
     parallel: False
     config:
-    test:
+      - test:
+          name: cephadm-ansible preflight playbook
+          desc: execute cephadm-preflight playbook
+          module: test_cephadm_ansible.py
+          config:
+            playbook: cephadm-preflight.yaml
+            extra-vars:
+              ceph_origin: rhcs
+            extra-args:
+              limit: osds
       - test:
           abort-on-fail: true
           module: install_prereq.py
