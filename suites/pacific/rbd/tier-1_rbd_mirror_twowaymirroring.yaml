@@ -1,0 +1,31 @@
+name: Configuration suite file for two-way mirroring for rbd client.
+must_pass: True
+parallel: True
+tests:
+  - runs_on: ceph-rbd1
+    parallel: False
+    config:
+    test:
+      - test:
+          abort-on-fail: true
+          module: install_prereq.py
+          name: install ceph pre-requisites
+      - test:
+          name: Running suite to bootstrap cluster.
+          desc: configuration to bootstrap cluster.
+          suite: misc/test_bootstrap_cluster.yaml
+      - test:
+          name: deploy rbd mirror daemon
+          desc: Configuration to deploy rbd mirror daemon in cluster
+          suite: rbd_twowaymirroring.yaml
+  - runs_on: ceph-rbd2
+    parallel: False
+    config:
+      - test:
+          name: Running suite to bootstrap cluster.
+          desc: configuration to bootstrap cluster.
+          suite: misc/test_bootstrap_cluster.yaml
+      - test:
+          name: deploy rbd mirror daemon
+          desc: Configuration to deploy rbd mirror daemon in cluster
+          suite: rbd_twowaymirroring.yaml
