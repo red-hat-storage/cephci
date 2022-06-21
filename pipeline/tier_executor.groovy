@@ -15,65 +15,68 @@ def buildType
 def final_stage = false
 def run_type
 def nodeName = "centos-7"
-def tags = "${params.tags}" ?: ""
-tags_list = tags.split(',') as List
-if ("ibmc" in tags_list){
-    nodeName = "agent-01"
+def tags = ""
+
+def branch='origin/master'
+def repo='https://github.com/red-hat-storage/cephci.git'
+
+if (params.containsKey('gitbranch')){
+    branch=params.gitbranch
 }
 
-def branch
-def repo
-if (params.gitbranch){branch = "*/${params.gitbranch}"}
-else{branch='origin/master'}
+if (params.containsKey('gitrepo')){
+    repo=params.gitrepo
+}
 
-if (params.gitrepo){repo = "${params.gitrepo}"}
-else{repo='https://github.com/red-hat-storage/cephci.git'}
-
+if (params.containsKey('tags')){
+    tags=params.tags
+    tags_list = tags.split(',') as List
+    if (tags_list.contains('ibmc')){
+        nodeName = "agent-01"
+    }
+}
 
 node(nodeName) {
-    timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: branch]],
-                    extensions: [
-                        [
-                            $class: 'CleanBeforeCheckout',
-                            deleteUntrackedNestedRepositories: true
-                        ],
-                        [
-                            $class: 'WipeWorkspace'
-                        ],
-                        [
-                            $class: 'CloneOption',
-                            depth: 1,
-                            noTags: true,
-                            shallow: true,
-                            timeout: 10,
-                            reference: ''
-                        ]
+    stage('PrepareAgent') {
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: branch]],
+                extensions: [
+                    [
+                        $class: 'CleanBeforeCheckout',
+                        deleteUntrackedNestedRepositories: true
                     ],
-                    userRemoteConfigs: [[
-                        url: repo
-                    ]]
+                    [
+                        $class: 'WipeWorkspace'
+                    ],
+                    [
+                        $class: 'CloneOption',
+                        depth: 1,
+                        noTags: true,
+                        shallow: true,
+                        timeout: 10,
+                        reference: ''
+                    ]
                 ],
-                changelog: false,
-                poll: false
-            )
+                userRemoteConfigs: [[
+                    url: repo
+                ]]
+            ],
+            changelog: false,
+            poll: false
+        )
 
-            tags = "${params.tags}" ?: ""
-            tags_list = tags.split(',') as List
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            if("ibmc" in tags_list){
-                sharedLib.prepareIbmNode()
-            }
-            else{
-                sharedLib.prepareNode()
-            }
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        if(tags_list.contains('ibmc')){
+            sharedLib.prepareIbmNode()
+        }
+        else{
+            sharedLib.prepareNode()
         }
     }
+
 
     stage("PrepareTestStages") {
         /* Prepare pipeline stages using RHCEPH version */
