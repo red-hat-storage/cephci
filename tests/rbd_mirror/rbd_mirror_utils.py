@@ -712,3 +712,21 @@ class RbdMirror:
                 raise IOonSecondaryError("Detected I/O Operation on secondary")
             else:
                 raise
+
+    def mirror_daemon_status(self, daemon):
+        """
+        Gets the rbd mirror daemon status where the rbd mirror daemon running
+        Args:
+            daemon
+        Returns:
+            0 - if daemon_status is active
+            1 - it daemon_status is not active
+        """
+        daemon_status, rc = self.ceph_rbdmirror.exec_command(
+            sudo=True,
+            cmd=f"systemctl | grep {daemon} | awk {{'print $3'}}",
+        )
+        log.info(f"Daemon Runing Status : {daemon_status}")
+        if daemon_status.strip("\n") != "active":
+            return 1
+        return 0
