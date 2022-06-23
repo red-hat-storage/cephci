@@ -8,6 +8,7 @@ from keyword import iskeyword
 
 from gevent import monkey
 
+from ceph.parallel import parallel
 from run import collect_recipe, create_nodes, store_cluster_state
 from utility.core_utils.execute_command import ExecuteCommandMixin
 from utility.core_utils.loader import LoaderMixin
@@ -209,10 +210,9 @@ class RunTestSuite:
         jenkins_rc = 0
         for test in tests:
             if test.get("parallel"):
-                tasks = []
-                for test_pll in test.get("parallel"):
-                    tasks.append((self.run_tests_async, test_pll))
-                await self.parallel_executor.run(tasks)
+                with parallel() as p:
+                    for test_pll in test.get("parallel"):
+                        p.spawn(self.run_tests_async, test_pll)
             test = test.get("test")
             tc = self.fetch_test_details(test)
             report_portal_description = test.get("desc") or ""
@@ -229,13 +229,13 @@ class RunTestSuite:
             runs_on = test.get("runs_on", [None])
             logger.info(f"Running test {test_data}")
             start = datetime.datetime.now()
-            output = {}
             if runs_on:
-                tasks = []
-                for cluster_name in runs_on:
-                    tasks.append((module, test_data, cluster_name))
-                output = await self.parallel_executor.run()
-            for cluster_name, rc in output:
+                with parallel() as p:
+                    for cluster_name in runs_on:
+                        p.spawn(module, test_data, cluster_name)
+            for out in p:
+                cluster_name = out.get("cluster_name")
+                rc = out.get("rc")
                 try:
                     if self.post_to_report_portal:
                         self.rp_logger.start_test_item(
