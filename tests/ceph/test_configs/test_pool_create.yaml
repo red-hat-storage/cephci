@@ -1,0 +1,9 @@
+---
+# test configuration info to create pool
+configs:
+  - method: create
+    class: Pool
+    component: ceph
+    args:
+      pool_name: mirror_test
+    role: client

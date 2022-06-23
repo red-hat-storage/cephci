@@ -1,0 +1,37 @@
+
+---
+# test configuration info for apply
+configs:
+  - method: apply
+    class: Orch
+    component: ceph
+    args:
+      service_name: mgr
+      placement:
+        label: mgr
+    role: _admin
+  - method: apply
+    class: Orch
+    component: ceph
+    args:
+      service_name: mon
+      placement:
+        label: mon
+    role: _admin
+  - method: apply
+    class: Orch
+    component: ceph
+    args:
+      service_name: osd
+      all-available-devices: true
+    role: _admin
+  - id: 2
+    method: apply
+    class: Orch
+    component: ceph
+    args:
+      service_name: rbd-mirror
+        placement:
+          nodes:
+            - ceph-cluster1-openstack-node5
+        role: client

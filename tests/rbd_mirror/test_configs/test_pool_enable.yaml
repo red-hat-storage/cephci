@@ -1,0 +1,10 @@
+---
+# test configuration info to enable pool mirroring
+configs:
+  - method: enable
+    class: Pool
+    component: rbd_mirror
+    args:
+      pool_name: mirror_test
+      mode: image
+    role: client
