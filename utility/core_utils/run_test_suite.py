@@ -170,7 +170,8 @@ class RunTestSuite:
         )
         self.test_names.append(unique_test_name)
         tc["log-link"] = configure_logger(unique_test_name, self.run_dir)
-        test_data = test.get("test_data")
+        test_data_file = test.get("test_data")
+        test_data = importlib.import_module(test_data_file, package="test_configs")
         module = test.get("module")
         module = importlib.import_module(module, package=tests)
         tc = test
