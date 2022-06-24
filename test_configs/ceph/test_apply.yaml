@@ -34,4 +34,4 @@ configs:
         placement:
           nodes:
             - ceph-cluster1-openstack-node5
-        role: client
+    role: client

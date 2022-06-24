@@ -7,4 +7,13 @@ configs:
     args:
       pool_name: mirror_test
       mode: image
-    role: client
+      site_name: site-a
+    role: ceph-cluster1:client
+  - method: enable
+      class: Pool
+      component: rbd_mirror
+      args:
+        pool_name: mirror_test
+        mode: image
+        site_name: site-b
+      role: ceph-cluster2:client

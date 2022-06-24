@@ -732,14 +732,25 @@ def run(args):
     rc = 0
 
     if suite.get("suitev2"):
-        run_details = RunDetails(
-            ceph_cluster_dict=ceph_cluster_dict, rp_logger=rp_logger, test_names=test_names, run_dir=run_dir,
-            post_to_report_portal=post_to_report_portal, rhbuild=rhbuild, ceph_clusters_file=ceph_clusters_file,
-            post_results=post_results, tcs=tcs, cloud_type=cloud_type, osp_cred=osp_cred, instances_name=instances_name,
-            enable_eus=enable_eus, conf=conf, inventory=inventory, service=service, run_id=run_id, store=store,
-            fetch_test_details=fetch_test_details
-        )
-        jenkins_rc = RunTestSuite(suite, run_details).run_tests(tests)
+        passed = True
+        for cluster in ceph_cluster_dict:
+            kw = {
+                "config": {},
+                "ceph_nodes": ceph_cluster_dict[cluster_name]
+            }
+            rc = importlib.import_module("install_prereq", package="tests").run(kw)==0
+            if rc != 0:
+                passed = False
+                break
+        if passed:
+            run_details = RunDetails(
+                ceph_cluster_dict=ceph_cluster_dict, rp_logger=rp_logger, test_names=test_names, run_dir=run_dir,
+                post_to_report_portal=post_to_report_portal, rhbuild=rhbuild, ceph_clusters_file=ceph_clusters_file,
+                post_results=post_results, tcs=tcs, cloud_type=cloud_type, osp_cred=osp_cred, instances_name=instances_name,
+                enable_eus=enable_eus, conf=conf, inventory=inventory, service=service, run_id=run_id, store=store,
+                fetch_test_details=fetch_test_details
+            )
+            jenkins_rc = RunTestSuite(suite, run_details).run_tests(tests)
     else:
         for test in tests:
             test = test.get("test")
