@@ -1,0 +1,11 @@
+---
+# test configuration info to add labels
+configs:
+  - method: add
+    class: Label
+    component: ceph
+    args:
+      host_name:
+        role: mon
+      label: mon
+    role: _admin
