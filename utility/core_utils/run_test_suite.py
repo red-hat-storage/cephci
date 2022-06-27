@@ -1,5 +1,4 @@
 import datetime
-import importlib
 import yaml
 import os
 import sys
@@ -149,6 +148,7 @@ class RunTestSuite:
         return self.jenkins_rc
 
     def run_test(self, test):
+        rc = 0
         test = test.get("test")
         tc = self.fetch_test_details(test)
         report_portal_description = test.get("desc") or ""
@@ -162,18 +162,14 @@ class RunTestSuite:
             test_data = yaml.safe_load(test_data)
         module = test.get("module")
         obj = SERVICE_MAP[module]
-        # getattr(obj, "run")(test_data=test_data)
-        # test_cluster_bootstrap.run(test_data=test_data)
         tc = test
-        print("---------------------------------------------------------------------")
-        print(test)
         runs_on = test.get("runs_on", [None])
         logger.info(f"Running test {test_data_file} with {test_data}")
         start = datetime.datetime.now()
         if runs_on:
             with parallel() as p:
                 for cluster_name in runs_on:
-                    test_cluster_bootstrap.run(test_data=test_data, cluster_name=cluster_name, osp_cred=self.osp_cred, ceph_cluster_dict=self.ceph_cluster_dict)
+                    p.spawn(obj.run, test_data=test_data, cluster_name=cluster_name, osp_cred=self.osp_cred, ceph_cluster_dict=self.ceph_cluster_dict)
                 for out in p:
                     cluster_name = out.get("cluster_name")
                     rc = out.get("rc")
