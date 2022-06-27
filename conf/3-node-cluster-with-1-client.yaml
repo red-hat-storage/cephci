@@ -1,0 +1,46 @@
+# System Under Test environment configuration for DMFG test suites.
+# Cluster Configuration:
+#    3-Node cluster with 1 client
+#    3 MONS, 2 MGR, 3 OSD, 2 MDS and 2 RGW service daemon(s)
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 6
+        disk-size: 15
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+          - rgw
+        no-of-volumes: 6
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - mds
+        no-of-volumes: 6
+        disk-size: 15
+      node4:
+        role:
+          - client

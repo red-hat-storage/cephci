@@ -1,15 +1,9 @@
-#===============================================================================================
-#-------------------------------------
-#-----    Tier-0 Test suite     ------
-#-------------------------------------
-#
-# Tier-0 test cases for
+# Conf: dmfg-3-node-cluster-with-1-client.yaml
+# test cases for
 #    - Bootstrap
 #    - Host management
 #    - Ceph role Service deployment,
 #    - Configure client for RGW and RBD systems
-#    - Run test_Mbuckets_with_Nobjects and CLI Generic scenarios
-#===============================================================================================
 tests:
   - test:
       abort-on-fail: true
@@ -25,7 +19,6 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                registry-url: registry.redhat.io
                 mon-ip: node1
           - config:
               command: add_hosts
@@ -79,10 +72,9 @@ tests:
       config:
         command: add
         id: client.1
-        node: node6
+        node: node4
         install_packages:
           - ceph-common
-          - rbd-nbd
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -118,4 +110,4 @@ tests:
             desc: "cephfs basic operations"
             module: cephfs_basic_tests.py
             name: cephfs-basics
-            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+            polarion-id: CEPH-11293  # also applies to [CEPH-11296,CEPH-11297,CEPH-11295]

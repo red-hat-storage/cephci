@@ -78,6 +78,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--insecure-registry]
         [--post-results]
         [--report-portal]
+        [--upstream-build <upstream-build>]
         [--log-level <LEVEL>]
         [--log-dir  <directory-name>]
         [--instances-name <name>]
@@ -110,7 +111,8 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --build <latest>                  eg: latest|tier-0|tier-1|tier-2|cvp|released
+  --build <latest>                  eg: latest|tier-0|tier-1|tier-2|cvp|released|upstream
+  --upstream-build <upstream-build> eg: quincy|pacific
   --platform <rhel-8>               select platform version eg., rhel-8, rhel-7
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
                                     Top level location of compose
@@ -446,7 +448,7 @@ def run(args):
 
     if build and build not in ["released"]:
         base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-            build, rhbuild, platform
+            build, rhbuild, platform, args.get("--upstream-build", None)
         )
 
     store = args.get("--store", False)
