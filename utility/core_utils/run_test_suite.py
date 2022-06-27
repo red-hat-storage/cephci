@@ -149,13 +149,19 @@ class RunTestSuite:
           None
         """
         logger.info("Running test suite")
-        logger.info(f"Running test {self.config}")
         self.jenkins_rc = 0
         for test in tests:
             if test.get("parallel"):
+                passed = True
                 with parallel() as p:
                     for test_pll in test.get("parallel"):
                         p.spawn(self.run_tests, test_pll)
+                    for result in p:
+                        if not result:
+                            passed = False
+                            break
+                if not passed:
+                    break
             if not self.run_test(test):
                 break
 
@@ -183,38 +189,38 @@ class RunTestSuite:
             with parallel() as p:
                 for cluster_name in runs_on:
                     p.spawn(module, test_data, cluster_name, self.osp_cred, self.ceph_cluster_dict)
-        for out in p:
-            cluster_name = out.get("cluster_name")
-            rc = out.get("rc")
-            try:
-                if self.post_to_report_portal:
-                    self.rp_logger.start_test_item(
-                        name=unique_test_name,
-                        description=report_portal_description,
-                        item_type="STEP",
-                    )
-                    self.rp_logger.log(
-                        message=f"Logfile location - {tc['log-link']}"
-                    )
-                    self.rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
+                for out in p:
+                    cluster_name = out.get("cluster_name")
+                    rc = out.get("rc")
+                    try:
+                        if self.post_to_report_portal:
+                            self.rp_logger.start_test_item(
+                                name=unique_test_name,
+                                description=report_portal_description,
+                                item_type="STEP",
+                            )
+                            self.rp_logger.log(
+                                message=f"Logfile location - {tc['log-link']}"
+                            )
+                            self.rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
 
-                # Initialize the cluster with the expected rhcs_version hence the
-                # precedence would be from test suite.
-                # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
-                _rhcs_version = test.get("ceph_rhcs_version", self.rhbuild[:3])
-                self.ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
-            except BaseException as be:  # noqa
-                logger.exception(be)
-                rc = 1
-            finally:
-                collect_recipe(self.ceph_cluster_dict[cluster_name])
-                if self.store:
-                    store_cluster_state(
-                        self.ceph_cluster_dict, self.ceph_clusters_file
-                    )
+                        # Initialize the cluster with the expected rhcs_version hence the
+                        # precedence would be from test suite.
+                        # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
+                        _rhcs_version = test.get("ceph_rhcs_version", self.rhbuild[:3])
+                        self.ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
+                    except BaseException as be:  # noqa
+                        logger.exception(be)
+                        rc = 1
+                    finally:
+                        collect_recipe(self.ceph_cluster_dict[cluster_name])
+                        if self.store:
+                            store_cluster_state(
+                                self.ceph_cluster_dict, self.ceph_clusters_file
+                            )
 
-            if rc != 0:
-                return False
+                    if rc != 0:
+                        return False
 
         elapsed = datetime.datetime.now() - start
         tc["duration"] = elapsed
