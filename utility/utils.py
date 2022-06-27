@@ -1,7 +1,9 @@
 import datetime
 import getpass
+import json
 import logging
 import os
+import pickle
 import random
 import re
 import smtplib
@@ -429,6 +431,59 @@ def rc_verify(tc, RC):
 #     FAIL = '\033[91m'
 #     ENDC = '\033[0m'
 #     BOLD = '\033[1m'
+
+
+def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
+    cn = open(ceph_clusters_file_name, "w+b")
+    pickle.dump(ceph_cluster_object, cn)
+    cn.close()
+    log.info("ceph_clusters_file %s", ceph_clusters_file_name)
+
+
+def collect_recipe(ceph_cluster):
+    """
+    Gather the system under test details.
+
+    At present, the following information are gathered
+        container (podman/docker)   version
+        ceph                        Deployed Ceph version
+
+    Args:
+        ceph_cluster:   Cluster participating in the test.
+
+    Returns:
+        None
+    """
+    version_datails = {}
+    installer_node = ceph_cluster.get_ceph_objects("installer")
+    client_node = ceph_cluster.get_ceph_objects("client")
+    out, rc = installer_node[0].exec_command(
+        sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
+    )
+    output = out.rstrip()
+    if output:
+        log.info(f"Podman Version {output}")
+        version_datails["PODMAN"] = output
+
+    out, rc = installer_node[0].exec_command(
+        sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
+    )
+    output = out.rstrip()
+    if output:
+        log.info(f"Docker Version {output}")
+        version_datails["DOCKER"] = output
+
+    if client_node:
+        out, rc = client_node[0].exec_command(
+            sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
+        )
+        output = out.rstrip()
+        log.info(f"ceph Version {output}")
+        version_datails["CEPH"] = output
+
+    version_detail = open("version_info.json", "w+")
+    json.dump(version_datails, version_detail)
+    version_detail.close()
 
 
 def configure_logger(test_name, run_dir):

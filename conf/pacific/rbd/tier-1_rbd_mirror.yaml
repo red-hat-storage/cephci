@@ -7,22 +7,22 @@ globals:
           - mon
           - mgr
           - installer
-     node2:
-       role: client
-     node3:
-       role: osd
-       no-of-volumes: 4
-       disk-size: 15
-     node4:
-       role:
-          - osd
-       no-of-volumes: 4
-       disk-size: 15
-     node5:
-       role:
-          - osd
-       no-of-volumes: 4
-       disk-size: 15
+    #  node2:
+    #    role: client
+    #  node3:
+    #    role: osd
+    #    no-of-volumes: 4
+    #    disk-size: 15
+    #  node4:
+    #    role:
+    #       - osd
+    #    no-of-volumes: 4
+    #    disk-size: 15
+    #  node5:
+    #    role:
+    #       - osd
+    #    no-of-volumes: 4
+    #    disk-size: 15
      node6:
        role: rbd-mirror
 
@@ -36,19 +36,19 @@ globals:
           - installer
       node2:
         role: client
-      node3:
-        role: osd
-        no-of-volumes: 4
-        disk-size: 15
-      node4:
-        role:
-          - osd
-        no-of-volumes: 4
-        disk-size: 15
-      node5:
-        role:
-          - osd
-        no-of-volumes: 4
-        disk-size: 15
+      # node3:
+      #   role: osd
+      #   no-of-volumes: 4
+      #   disk-size: 15
+      # node4:
+      #   role:
+      #     - osd
+      #   no-of-volumes: 4
+      #   disk-size: 15
+      # node5:
+      #   role:
+      #     - osd
+      #   no-of-volumes: 4
+      #   disk-size: 15
       node6:
         role: rbd-mirror

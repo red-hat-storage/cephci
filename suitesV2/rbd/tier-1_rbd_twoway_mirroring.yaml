@@ -1,7 +1,6 @@
 ---
 # sample global suite file
-name: Configuration suite file to bootstrap cluster.
-suitev2: True
+name: Configuration suite file to deploy cluster for two-way rbd mirroring.
 tests:
   - test:
       tcms_id: CEPH-1234

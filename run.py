@@ -2,8 +2,8 @@
 
 # Allow parallelized behavior of gevent. It has to be the first line.
 from gevent import monkey
-from utility.core_utils.run_test_suite import RunTestSuite
-from utility.core_utils.run_test_suite import RunDetails
+from utility.core_utils.build_config_for_prerequisite import BuildConfigForPrerequisite
+
 
 monkey.patch_all()
 
@@ -45,6 +45,7 @@ from utility.retry import retry
 from utility.utils import (
     ReportPortal,
     close_and_remove_filehandlers,
+    collect_recipe,
     configure_logger,
     create_run_dir,
     create_unique_test_name,
@@ -52,8 +53,10 @@ from utility.utils import (
     fetch_build_artifacts,
     generate_unique_id,
     magna_url,
+    store_cluster_state,
 )
 from utility.xunit import create_xunit_results
+from utility.core_utils.run_test_suite import RunDetails, RunTestSuite
 
 doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
@@ -61,7 +64,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
  Usage:
   run.py --rhbuild BUILD
         (--platform <name>)
-        (--suite <FILE>)...
+        (--suite <FILE> | --suiteV2 <FILE>)
         (--global-conf FILE | --cluster-conf FILE)
         [--cloud <openstack> | <ibmc> | <baremetal>]
         [--build <name>]
@@ -102,6 +105,8 @@ Options:
   -h --help                         show this screen
   -v --version                      run version
   -s <smoke> --suite <smoke>        test suite to run
+                                    eg: -s smoke or -s rbd
+  -s <smoke> --suiteV2 <smoke>      remodelled sdk test suite to run
                                     eg: -s smoke or -s rbd
   -f <tests> --filter <tests>       filter tests based on the patter
                                     eg: -f 'rbd' will run tests that have 'rbd'
@@ -369,7 +374,7 @@ def run(args):
 
     # Mandatory arguments
     rhbuild = args["--rhbuild"]
-    suite_files = args["--suite"]
+    suite_files = args["--suite"] or args["--suiteV2"]
 
     glb_file = args.get("--global-conf")
     if args.get("--cluster-conf"):
@@ -484,6 +489,8 @@ def run(args):
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
+    if type(suite_files) == str:
+        suite_files = [suite_files]
     suite = init_suite.load_suites(suite_files)
     log.debug(f"Found the following valid test suites: {suite['tests']}")
     if suite["nan"] and not suite["tests"]:
@@ -731,24 +738,46 @@ def run(args):
     # Initialize test return code
     rc = 0
 
-    if suite.get("suitev2"):
+    if args.get("--suiteV2"):
         passed = True
+        config = {}
         for cluster in ceph_cluster_dict:
-            kw = {
-                "config": {},
-                "ceph_nodes": ceph_cluster_dict[cluster]
-            }
-            rc = importlib.import_module("install_prereq", package="tests").run(kw)==0
-            if rc != 0:
+            config = BuildConfigForPrerequisite(args, config, docker_registry, docker_image, docker_tag, osp_cred, base_url).build_config()
+            try:
+                rc = importlib.import_module("install_prereq", package="tests").run(config=config, ceph_nodes= ceph_cluster_dict[cluster]) == 0
+            except BaseException as be:  # noqa
+                log.error(be)
+                rc = 1
+            finally:
+                collect_recipe(ceph_cluster_dict[cluster_name])
+                if store:
+                    store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
+
+            if not rc:
                 passed = False
                 break
         if passed:
+            ceph_clusters_file = None if not store else ceph_clusters_file
             run_details = RunDetails(
-                ceph_cluster_dict=ceph_cluster_dict, rp_logger=rp_logger, test_names=test_names, run_dir=run_dir,
-                post_to_report_portal=post_to_report_portal, rhbuild=rhbuild, ceph_clusters_file=ceph_clusters_file,
-                post_results=post_results, tcs=tcs, cloud_type=cloud_type, osp_cred=osp_cred, instances_name=instances_name,
-                enable_eus=enable_eus, conf=conf, inventory=inventory, service=service, run_id=run_id, store=store,
-                fetch_test_details=fetch_test_details
+                ceph_cluster_dict=ceph_cluster_dict,
+                rp_logger=rp_logger,
+                test_names=test_names,
+                run_dir=run_dir,
+                post_to_report_portal=post_to_report_portal,
+                rhbuild=rhbuild,
+                ceph_clusters_file=None,
+                post_results=post_results,
+                tcs=tcs,
+                cloud_type=cloud_type,
+                osp_cred=osp_cred,
+                instances_name=instances_name,
+                enable_eus=enable_eus,
+                conf=conf,
+                inventory=inventory,
+                service=service,
+                run_id=run_id,
+                store=store,
+                fetch_test_details=fetch_test_details,
             )
             jenkins_rc = RunTestSuite(suite, run_details).run_tests(tests)
     else:
@@ -779,66 +808,7 @@ def run(args):
                 else:
                     config = test.get("config", {})
 
-                if not config.get("base_url"):
-                    config["base_url"] = base_url
-
-                config["rhbuild"] = f"{rhbuild}-{platform}"
-                config["cloud-type"] = cloud_type
-                if "ubuntu_repo" in locals():
-                    config["ubuntu_repo"] = ubuntu_repo
-
-                if skip_setup is True:
-                    config["skip_setup"] = True
-
-                if skip_subscription is True:
-                    config["skip_subscription"] = True
-
-                if config.get("skip_version_compare"):
-                    skip_version_compare = config.get("skip_version_compare")
-
-                if args.get("--add-repo"):
-                    repo = args.get("--add-repo")
-                    if repo.startswith("http"):
-                        config["add-repo"] = repo
-
-                config["build_type"] = build
-                config["enable_eus"] = enable_eus
-                config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
-                config["docker-insecure-registry"] = docker_insecure_registry
-                config["skip_version_compare"] = skip_version_compare
-                config["container_image"] = "%s/%s:%s" % (
-                    docker_registry,
-                    docker_image,
-                    docker_tag,
-                )
-
-                config["ceph_docker_registry"] = docker_registry
-                report_portal_description += f"docker registry: {docker_registry}"
-                config["ceph_docker_image"] = docker_image
-                report_portal_description += f"docker image: {docker_image}"
-                config["ceph_docker_image_tag"] = docker_tag
-                report_portal_description += f"docker registry: {docker_registry}"
-
-                if filestore:
-                    config["filestore"] = filestore
-
-                if ec_pool_vals:
-                    config["ec-pool-k-m"] = ec_pool_vals
-
-                if args.get("--hotfix-repo"):
-                    hotfix_repo = args.get("--hotfix-repo")
-                    if hotfix_repo.startswith("http"):
-                        config["hotfix_repo"] = hotfix_repo
-
-                if kernel_repo is not None:
-                    config["kernel-repo"] = kernel_repo
-
-                if osp_cred:
-                    config["osp_cred"] = osp_cred
-
-                # if Kernel Repo is defined in ENV then set the value in config
-                if os.environ.get("KERNEL-REPO-URL") is not None:
-                    config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
+                config = BuildConfigForPrerequisite(args, config, docker_registry, docker_image, docker_tag, osp_cred, base_url).build_config()
 
                 try:
                     if post_to_report_portal:
@@ -976,8 +946,8 @@ def run(args):
         "info": info,
         "send_to_cephci": send_to_cephci,
     }
-
-    email_results(test_result=test_res)
+    if test_res.get("result") != []:
+        email_results(test_result=test_res)
 
     if jenkins_rc and not skip_sos_report:
         log.info(
@@ -989,59 +959,6 @@ def run(args):
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
     return jenkins_rc
-
-
-def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
-    cn = open(ceph_clusters_file_name, "w+b")
-    pickle.dump(ceph_cluster_object, cn)
-    cn.close()
-    log.info("ceph_clusters_file %s", ceph_clusters_file_name)
-
-
-def collect_recipe(ceph_cluster):
-    """
-    Gather the system under test details.
-
-    At present, the following information are gathered
-        container (podman/docker)   version
-        ceph                        Deployed Ceph version
-
-    Args:
-        ceph_cluster:   Cluster participating in the test.
-
-    Returns:
-        None
-    """
-    version_datails = {}
-    installer_node = ceph_cluster.get_ceph_objects("installer")
-    client_node = ceph_cluster.get_ceph_objects("client")
-    out, rc = installer_node[0].exec_command(
-        sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
-    )
-    output = out.rstrip()
-    if output:
-        log.info(f"Podman Version {output}")
-        version_datails["PODMAN"] = output
-
-    out, rc = installer_node[0].exec_command(
-        sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
-    )
-    output = out.rstrip()
-    if output:
-        log.info(f"Docker Version {output}")
-        version_datails["DOCKER"] = output
-
-    if client_node:
-        out, rc = client_node[0].exec_command(
-            sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
-        )
-        output = out.rstrip()
-        log.info(f"ceph Version {output}")
-        version_datails["CEPH"] = output
-
-    version_detail = open("version_info.json", "w+")
-    json.dump(version_datails, version_detail)
-    version_detail.close()
 
 
 if __name__ == "__main__":

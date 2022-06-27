@@ -10,7 +10,7 @@ tests:
         test_data: cephadm/test_bootstrap_cluster.yaml
         module: test_bootstrap.py
         runs_on: 
-          - ceph-cluster1
+          - ceph-rbd1
     - test:
         tcms_id: CEPH-1234
         name: Running suite to add hosts to cluster.
@@ -18,7 +18,7 @@ tests:
         test_data: ceph/test_addhosts.yaml
         module: test_ceph.py
         runs_on: 
-          - ceph-cluster1
+          - ceph-rbd1
     - test:
         tcms_id: CEPH-1234
         name: Running suite to add labels to nodes in cluster.
@@ -26,7 +26,7 @@ tests:
         test_data: ceph/test_addlabel.yaml
         module: test_ceph.py
         runs_on: 
-          - ceph-cluster1
+          - ceph-rbd1
     - test:
         tcms_id: CEPH-1234
         name: Running suite to apply orchestration to nodes in cluster.
@@ -34,4 +34,4 @@ tests:
         test_data: ceph/test_apply.yaml
         module: test_ceph.py
         runs_on: 
-          - ceph-cluster1
+          - ceph-rbd1

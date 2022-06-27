@@ -1,0 +1,13 @@
+---
+# test configuration info for cephadm bootstrap
+configs:
+  - method: bootstrap
+    class: cephadm
+    component: cephadm
+    installer: cephadm-ansible
+    args:
+      registry-url: registry.redhat.io
+      orphan-initial-daemons: true
+      allow-fqdn-hostname: true
+      yes-i-know: true
+    role: _admin
