@@ -548,6 +548,8 @@ def run(args):
                 ceph_ansible_version.append(search_results.group(1))
 
     distro = ", ".join(list(set(distro)))
+    if not ceph_version and build == "upstream":
+        ceph_version.append(args.get("--upstream-build", None))
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
 
