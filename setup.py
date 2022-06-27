@@ -35,6 +35,7 @@ setup(
         "reportportal-client",
         "requests",
         "softlayer",
+        "RhcsQeSdk",
     ],
     zip_safe=True,
     include_package_data=True,

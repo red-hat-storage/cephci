@@ -142,51 +142,51 @@ tests:
         destroy-cluster: false
         module: test_client.py
         name: configure client
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-rbd1:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set mon mon_allow_pool_delete true"
-        ceph-rbd2:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set mon mon_allow_pool_delete true"
-      desc: Enable mon_allow_pool_delete to True for deleting the pools
-      module: exec.py
-      name: configure mon_allow_pool_delete to True
-  - test:
-      name: test_rbd_mirror
-      module: test_rbd_mirror.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-            resize_to: 5G
-      polarion-id: CEPH-83573332
-      desc: Create RBD mirrored image in pools  and run IOs
-  - test:
-      name: test_rbd_mirror_image
-      module: test_rbd_mirror_image.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-83573618,CEPH-83573619,CEPH-83573620
-      desc: Create RBD mirrored images and run IOs
-  - test:
-      name: test_rbd_mirror_rename_image
-      module: test_rbd_mirror_rename_image.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-83573614
-      desc: Rename primary image and check on secondary for this change
+  # - test:
+  #     abort-on-fail: true
+  #     clusters:
+  #       ceph-rbd1:
+  #         config:
+  #           cephadm: true
+  #           commands:
+  #             - "ceph config set mon mon_allow_pool_delete true"
+  #       ceph-rbd2:
+  #         config:
+  #           cephadm: true
+  #           commands:
+  #             - "ceph config set mon mon_allow_pool_delete true"
+  #     desc: Enable mon_allow_pool_delete to True for deleting the pools
+  #     module: exec.py
+  #     name: configure mon_allow_pool_delete to True
+  # - test:
+  #     name: test_rbd_mirror
+  #     module: test_rbd_mirror.py
+  #     clusters:
+  #       ceph-rbd1:
+  #         config:
+  #           imagesize: 2G
+  #           io-total: 200M
+  #           resize_to: 5G
+  #     polarion-id: CEPH-83573332
+  #     desc: Create RBD mirrored image in pools  and run IOs
+  # - test:
+  #     name: test_rbd_mirror_image
+  #     module: test_rbd_mirror_image.py
+  #     clusters:
+  #       ceph-rbd1:
+  #         config:
+  #           imagesize: 2G
+  #           io-total: 200M
+  #     polarion-id: CEPH-83573618,CEPH-83573619,CEPH-83573620
+  #     desc: Create RBD mirrored images and run IOs
+  # - test:
+  #     name: test_rbd_mirror_rename_image
+  #     module: test_rbd_mirror_rename_image.py
+  #     clusters:
+  #       ceph-rbd1:
+  #         config:
+  #           imagesize: 2G
+  #           io-total: 200M
+  #     polarion-id: CEPH-83573614
+  #     desc: Rename primary image and check on secondary for this change
 

@@ -1,47 +1,31 @@
-import builtins
 import datetime
 import importlib
-import logging
+import yaml
 import os
 import sys
-from rhcs_qe_sdk.src.rhcs_qe_sdk import tests
+import RhcsQeSdk
+
+from RhcsQeSdk.tests.misc import test_cluster_bootstrap
 
 from gevent import monkey
 
 from ceph.parallel import parallel
-from run import collect_recipe, create_nodes, store_cluster_state
-from utility.core_utils.execute_command import ExecuteCommandMixin
-from utility.core_utils.loader import LoaderMixin
-from utility.core_utils.parallel_executor import ParallelExecutor
+from utility.log import Log
 
 monkey.patch_all()
 
 
 from ceph.utils import cleanup_ceph_nodes, cleanup_ibmc_ceph_nodes
 from utility.polarion import post_to_polarion
-from utility.utils import configure_logger, create_unique_test_name
+from utility.utils import collect_recipe, configure_logger, create_unique_test_name, store_cluster_state
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger = Log(__name__)
 
-formatter = logging.Formatter(
-    "%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s"
-)
-
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-stream_handler.setLevel(logging.DEBUG)
-logger.addHandler(stream_handler)
-
-execute_command_mixin = ExecuteCommandMixin()
-METHOD_MAP = dict(
+SERVICE_MAP = dict(
     {
-        "must_pass": execute_command_mixin.must_pass,
-        "must_fail": execute_command_mixin.must_fail,
+        "test_cluster_bootstrap.py": RhcsQeSdk.tests.misc.test_cluster_bootstrap,
     }
 )
-
-
 class RunDetails:
     ceph_cluster_dict = None
     rp_logger = None
@@ -113,6 +97,7 @@ class RunTestSuite:
 
     def __init__(self, config, run_details) -> None:
         sys.path.append(os.path.abspath("utility/core_utils"))
+        sys.path.append(os.path.abspath("RhcsQeSdk"))
         self.config = config
         self.rp_logger = run_details.rp_logger
         self.test_names = run_details.test_names
@@ -133,10 +118,6 @@ class RunTestSuite:
         self.enable_eus = run_details.enable_eus
         self.store = run_details.store
         self.fetch_test_details = run_details.fetch_test_details
-
-        # self.cli_obj = CLI()
-        self.suite_config = LoaderMixin().load_file(config, kind="suites")
-        self.parallel_executor = ParallelExecutor()
         self.jenkins_rc = 0
 
     def run_tests(self, tests):
@@ -155,7 +136,7 @@ class RunTestSuite:
                 passed = True
                 with parallel() as p:
                     for test_pll in test.get("parallel"):
-                        p.spawn(self.run_tests, test_pll)
+                        p.spawn(self.run_test, test_pll)
                     for result in p:
                         if not result:
                             passed = False
@@ -177,18 +158,22 @@ class RunTestSuite:
         self.test_names.append(unique_test_name)
         tc["log-link"] = configure_logger(unique_test_name, self.run_dir)
         test_data_file = test.get("test_data")
-        test_data = importlib.import_module(test_data_file, package="test_configs")
+        with open('test_configs/'+ test_data_file) as test_data:
+            test_data = yaml.safe_load(test_data)
         module = test.get("module")
-        module = importlib.import_module(module, package=tests)
+        obj = SERVICE_MAP[module]
+        # getattr(obj, "run")(test_data=test_data)
+        # test_cluster_bootstrap.run(test_data=test_data)
         tc = test
-        tc["log-link"] = configure_logger(unique_test_name, self.run_dir)
+        print("---------------------------------------------------------------------")
+        print(test)
         runs_on = test.get("runs_on", [None])
-        logger.info(f"Running test {test_data}")
+        logger.info(f"Running test {test_data_file} with {test_data}")
         start = datetime.datetime.now()
         if runs_on:
             with parallel() as p:
                 for cluster_name in runs_on:
-                    p.spawn(module, test_data, cluster_name, self.osp_cred, self.ceph_cluster_dict)
+                    test_cluster_bootstrap.run(test_data=test_data, cluster_name=cluster_name, osp_cred=self.osp_cred, ceph_cluster_dict=self.ceph_cluster_dict)
                 for out in p:
                     cluster_name = out.get("cluster_name")
                     rc = out.get("rc")
@@ -202,7 +187,7 @@ class RunTestSuite:
                             self.rp_logger.log(
                                 message=f"Logfile location - {tc['log-link']}"
                             )
-                            self.rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
+                            self.rp_logger.log(message=f"Polarion ID: {tc['tcms-id']}")
 
                         # Initialize the cluster with the expected rhcs_version hence the
                         # precedence would be from test suite.
@@ -260,16 +245,16 @@ class RunTestSuite:
             elif self.cloud_type == "ibmc":
                 cleanup_ibmc_ceph_nodes(self.osp_cred, self.instances_name)
 
-        if test.get("recreate-cluster") is True:
-            self.ceph_cluster_dict, clients = create_nodes(
-                self.conf,
-                self.inventory,
-                self.osp_cred,
-                self.run_id,
-                self.cloud_type,
-                self.service,
-                self.instances_name,
-                enable_eus=self.enable_eus,
-            )
+        # if test.get("recreate-cluster") is True:
+        #     self.ceph_cluster_dict, clients = create_nodes(
+        #         self.conf,
+        #         self.inventory,
+        #         self.osp_cred,
+        #         self.run_id,
+        #         self.cloud_type,
+        #         self.service,
+        #         self.instances_name,
+        #         enable_eus=self.enable_eus,
+        #     )
         self.tcs.append(tc)
         return True

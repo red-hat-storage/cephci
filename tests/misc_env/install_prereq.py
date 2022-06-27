@@ -193,7 +193,7 @@ def install_prereq(
         config_ntp(ceph, cloud_type)
 
     registry_login(ceph, distro_ver)
-    update_iptables(ceph)
+    # update_iptables(ceph)
 
 
 def setup_addition_repo(ceph, repo):
