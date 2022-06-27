@@ -736,7 +736,7 @@ def run(args):
         for cluster in ceph_cluster_dict:
             kw = {
                 "config": {},
-                "ceph_nodes": ceph_cluster_dict[cluster_name]
+                "ceph_nodes": ceph_cluster_dict[cluster]
             }
             rc = importlib.import_module("install_prereq", package="tests").run(kw)==0
             if rc != 0:
