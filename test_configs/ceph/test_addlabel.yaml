@@ -5,7 +5,6 @@ configs:
     class: Label
     component: ceph
     args:
-      host_name:
-        role: mon
+      host_name: node1
       label: mon
     role: _admin

@@ -740,22 +740,22 @@ def run(args):
 
     if args.get("--suiteV2"):
         passed = True
-        # config = {}
-        # for cluster in ceph_cluster_dict:
-        #     config = BuildConfigForPrerequisite(args, config, docker_registry, docker_image, docker_tag, osp_cred, base_url).build_config()
-        #     try:
-        #         rc = importlib.import_module("install_prereq", package="tests").run(config=config, ceph_nodes= ceph_cluster_dict[cluster]) == 0
-        #     except BaseException as be:  # noqa
-        #         log.error(be)
-        #         rc = 1
-        #     finally:
-        #         collect_recipe(ceph_cluster_dict[cluster_name])
-        #         if store:
-        #             store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
+        config = {}
+        for cluster in ceph_cluster_dict:
+            config = BuildConfigForPrerequisite(args, config, docker_registry, docker_image, docker_tag, osp_cred, base_url).build_config()
+            try:
+                rc = importlib.import_module("install_prereq", package="tests").run(config=config, ceph_nodes=ceph_cluster_dict[cluster]) == 0
+            except BaseException as be:  # noqa
+                log.error(be)
+                rc = 1
+            finally:
+                collect_recipe(ceph_cluster_dict[cluster])
+                if store:
+                    store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
 
-        #     if not rc:
-        #         passed = False
-        #         break
+            if not rc:
+                passed = False
+                break
         if passed:
             ceph_clusters_file = None if not store else ceph_clusters_file
             run_details = RunDetails(
@@ -765,7 +765,7 @@ def run(args):
                 run_dir=run_dir,
                 post_to_report_portal=post_to_report_portal,
                 rhbuild=rhbuild,
-                ceph_clusters_file=None,
+                ceph_clusters_file=ceph_clusters_file,
                 post_results=post_results,
                 tcs=tcs,
                 cloud_type=cloud_type,
@@ -946,8 +946,7 @@ def run(args):
         "info": info,
         "send_to_cephci": send_to_cephci,
     }
-    if test_res.get("result") != []:
-        email_results(test_result=test_res)
+    email_results(test_result=test_res)
 
     if jenkins_rc and not skip_sos_report:
         log.info(

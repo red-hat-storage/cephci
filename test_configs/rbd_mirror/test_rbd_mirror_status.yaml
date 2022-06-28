@@ -7,23 +7,21 @@ configs:
     args:
       image_spec: mirror_test/image_2
     wait_till:
-      args:
-        max_attempts: 3
-        interval_seconds: 5
-        pattern:
-          key: state
-          value: up+stopped
-    role: ceph-cluster1:mon
+      max_attempts: 3
+      interval_seconds: 5
+      pattern:
+        key: state
+        value: up+stopped
+    role: ceph-rbd1:mon
   - method: status
     class: image
     component: rbd_mirror
     args:
       image_spec: mirror_test/image_2
     wait_till:
-      args:
-        max_attempts: 3
-        interval_seconds: 5
-        pattern:
-          key: state
-          value: up+replaying
-    role: ceph-cluster2:mon
+      max_attempts: 3
+      interval_seconds: 5
+      pattern:
+        key: state
+        value: up+replaying
+    role: ceph-rbd2:mon

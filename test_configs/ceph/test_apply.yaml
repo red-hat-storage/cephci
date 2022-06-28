@@ -31,7 +31,7 @@ configs:
     component: ceph
     args:
       service_name: rbd-mirror
-        placement:
-          nodes:
-            - ceph-cluster1-openstack-node5
+      placement:
+        nodes:
+            - node5
     role: client
