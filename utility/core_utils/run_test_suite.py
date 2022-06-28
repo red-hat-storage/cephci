@@ -5,6 +5,10 @@ import sys
 import RhcsQeSdk
 
 from RhcsQeSdk.tests.misc import test_cluster_bootstrap
+from RhcsQeSdk.tests.ceph import test_ceph
+from RhcsQeSdk.tests.rbd import test_rbd, test_rbd_verify_status
+from RhcsQeSdk.tests.rbd_mirror import test_rbd_mirror, test_rbdmirror_bootstrap
+
 
 from gevent import monkey
 
@@ -23,6 +27,11 @@ logger = Log(__name__)
 SERVICE_MAP = dict(
     {
         "test_cluster_bootstrap.py": RhcsQeSdk.tests.misc.test_cluster_bootstrap,
+        "test_ceph.py": RhcsQeSdk.tests.ceph.test_ceph,
+        "test_rbd.py": RhcsQeSdk.tests.rbd.test_rbd,
+        "test_rbd_mirror.py": RhcsQeSdk.tests.rbd_mirror.test_rbd_mirror,
+        "test_rbdmirror_bootstrap.py": RhcsQeSdk.tests.rbd_mirror.test_rbdmirror_bootstrap,
+        "test_rbd_verify_status.py": RhcsQeSdk.tests.rbd.test_rbd_verify_status
     }
 )
 class RunDetails:
@@ -96,7 +105,6 @@ class RunTestSuite:
 
     def __init__(self, config, run_details) -> None:
         sys.path.append(os.path.abspath("utility/core_utils"))
-        sys.path.append(os.path.abspath("RhcsQeSdk"))
         self.config = config
         self.rp_logger = run_details.rp_logger
         self.test_names = run_details.test_names
@@ -162,46 +170,50 @@ class RunTestSuite:
             test_data = yaml.safe_load(test_data)
         module = test.get("module")
         obj = SERVICE_MAP[module]
-        tc = test
-        runs_on = test.get("runs_on", [None])
+        runs_on = test.get("runs_on", None)
         logger.info(f"Running test {test_data_file} with {test_data}")
         start = datetime.datetime.now()
-        if runs_on:
-            with parallel() as p:
+        with parallel() as p:
+            if runs_on:
                 for cluster_name in runs_on:
                     p.spawn(obj.run, test_data=test_data, cluster_name=cluster_name, osp_cred=self.osp_cred, ceph_cluster_dict=self.ceph_cluster_dict)
-                for out in p:
-                    cluster_name = out.get("cluster_name")
-                    rc = out.get("rc")
-                    try:
-                        if self.post_to_report_portal:
-                            self.rp_logger.start_test_item(
-                                name=unique_test_name,
-                                description=report_portal_description,
-                                item_type="STEP",
-                            )
-                            self.rp_logger.log(
-                                message=f"Logfile location - {tc['log-link']}"
-                            )
-                            self.rp_logger.log(message=f"Polarion ID: {tc['tcms-id']}")
+            else:
+                p.spawn(obj.run, test_data=test_data, cluster_name=None, osp_cred=self.osp_cred, ceph_cluster_dict=self.ceph_cluster_dict)
+            for out in p:
+                cluster_names = out.get("cluster_names")
+                rc = out.get("rc")
+                try:
+                    if self.post_to_report_portal:
+                        self.rp_logger.start_test_item(
+                            name=unique_test_name,
+                            description=report_portal_description,
+                            item_type="STEP",
+                        )
+                        self.rp_logger.log(
+                            message=f"Logfile location - {tc['log-link']}"
+                        )
+                        self.rp_logger.log(message=f"Polarion ID: {tc['tcms-id']}")
 
-                        # Initialize the cluster with the expected rhcs_version hence the
-                        # precedence would be from test suite.
-                        # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
-                        _rhcs_version = test.get("ceph_rhcs_version", self.rhbuild[:3])
+                    # Initialize the cluster with the expected rhcs_version hence the
+                    # precedence would be from test suite.
+                    # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
+                    _rhcs_version = test.get("ceph_rhcs_version", self.rhbuild[:3])
+                    for cluster_name in cluster_names:
                         self.ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
-                    except BaseException as be:  # noqa
-                        logger.exception(be)
-                        rc = 1
-                    finally:
+                except BaseException as be:  # noqa
+                    logger.exception(be)
+                    rc = 1
+                finally:
+                    for cluster_name in cluster_names:
                         collect_recipe(self.ceph_cluster_dict[cluster_name])
-                        if self.store:
+                    if self.store:
+                        for cluster_name in cluster_names:
                             store_cluster_state(
                                 self.ceph_cluster_dict, self.ceph_clusters_file
                             )
 
-                    if rc != 0:
-                        return False
+                if rc != 0:
+                    break
 
         elapsed = datetime.datetime.now() - start
         tc["duration"] = elapsed
@@ -241,16 +253,5 @@ class RunTestSuite:
             elif self.cloud_type == "ibmc":
                 cleanup_ibmc_ceph_nodes(self.osp_cred, self.instances_name)
 
-        # if test.get("recreate-cluster") is True:
-        #     self.ceph_cluster_dict, clients = create_nodes(
-        #         self.conf,
-        #         self.inventory,
-        #         self.osp_cred,
-        #         self.run_id,
-        #         self.cloud_type,
-        #         self.service,
-        #         self.instances_name,
-        #         enable_eus=self.enable_eus,
-        #     )
         self.tcs.append(tc)
         return True

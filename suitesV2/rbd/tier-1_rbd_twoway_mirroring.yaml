@@ -91,7 +91,7 @@ tests:
       name: Running suite to configure peer bootstrap.
       desc: configuration to configure peer bootstrap.
       test_data: rbd_mirror/test_rbd_mirror_bootstrap.yaml
-      module: test_rbd_bootstrap.py #create bootstrap, copy token, import bootstrap
+      module: test_rbdmirror_bootstrap.py #create bootstrap, copy token, import bootstrap
   - test:
       tcms_id: CEPH-1234
       name: Running suite to verify status.

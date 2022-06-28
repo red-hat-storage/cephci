@@ -8,15 +8,14 @@ configs:
     args:
       pool_name: mirror_test
       site_name: site-a
-      token_path: /home/ceph-admin/bootstrap_token_master
-    role: 
-      - ceph-cluster1:client
+      token_path: /home/cephuser/bootstrap_token_master
+    role: ceph-rbd1:client
   - method: import
     class: Bootstrap
     component: rbd_mirror
     args:
       pool_name: mirror_test
       site_name: site-b
-      token_path: /home/ceph-admin/bootstrap_token_master
+      token_path: /home/cephuser/bootstrap_token_master
     role: 
-      - ceph-cluster2:client
+      - ceph-rbd:client
