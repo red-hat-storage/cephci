@@ -107,10 +107,16 @@ node(nodeName) {
         if ("sanity" in tags_list){
             run_type = "Sanity Run"
         }
+        if ("rc" in tags_list){
+            run_type = "RC build Sanity Run"
+        }
 
         overrides.put("build", "tier-0")
         if(tierLevel == "tier-0"){
             overrides.put("build", "latest")
+        }
+        if ("rc" in tags_list){
+            overrides.put("build", "rc")
         }
 
         if ("openstack" in tags_list){
