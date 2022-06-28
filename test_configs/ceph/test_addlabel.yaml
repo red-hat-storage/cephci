@@ -7,5 +7,21 @@ configs:
     args:
       host_name: node1
       label: mon
-    role: 
+    role:
+     - _admin
+  - method: add
+    class: Label
+    component: ceph
+    args:
+      host_name: node1
+      label: mgr
+    role:
+     - _admin
+  - method: add
+    class: Label
+    component: ceph
+    args:
+      host_name: node6
+      label: rbd-mirror
+    role:
      - _admin

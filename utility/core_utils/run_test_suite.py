@@ -140,7 +140,7 @@ class RunTestSuite:
         self.parallel_executor.run_until_complete(self.run_tests_async, tests)
         return self.jenkins_rc
 
-    async def run_tests_async(self, tests):
+    def run_tests_async(self, tests):
         """
         This method is used to run list of tests present in a yaml file.
         Args:
@@ -156,18 +156,18 @@ class RunTestSuite:
                 tasks = []
                 for test_pll in test.get("parallel"):
                    tasks.append((self.run_test, test_pll))
-                results = await self.parallel_executor.run(tasks)
+                results = self.parallel_executor.run(tasks)
                 for result in results:
                     if not result:
                         passed = False
                         break
                 if not passed:
                     break
-            if not await self.run_test(test):
+            if not self.run_test(test):
                 break
 
 
-    async def run_test(self, test):
+    def run_test(self, test):
         rc = 0
         test = test.get("test")
         tc = self.fetch_test_details(test)
@@ -194,8 +194,8 @@ class RunTestSuite:
                     "osp_cred": self.osp_cred,
                     "ceph_cluster_dict": self.ceph_cluster_dict
                 }
-                tasks.append((obj.run_async, kw))
-            results = await self.parallel_executor.run(tasks)
+                tasks.append((obj.run, kw))
+            results = self.parallel_executor.run(tasks)
         else:
             with open('test_configs/'+ test_data_file) as test_data:
                 test_data = yaml.safe_load(test_data)
