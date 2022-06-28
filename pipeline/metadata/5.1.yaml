@@ -17,6 +17,7 @@
   metadata:
     - sanity
     - tier-0
+    - rc
     - openstack
     - ibmc
     - cephfs
@@ -32,6 +33,7 @@
   metadata:
     - sanity
     - tier-0
+    - rc
     - openstack
     - ibmc
     - rbd
@@ -47,6 +49,7 @@
   metadata:
     - sanity
     - tier-0
+    - rc
     - openstack
     - ibmc
     - rgw
@@ -62,6 +65,7 @@
   metadata:
     - sanity
     - tier-0
+    - rc
     - openstack
     - ibmc
     - dmfg
@@ -122,6 +126,7 @@
   metadata:
     - sanity
     - tier-1
+    - rc
     - openstack
     - ibmc
     - upgrades
@@ -199,6 +204,7 @@
   metadata:
     - sanity
     - tier-1
+    - rc
     - openstack
     - ibmc
     - upgrades
