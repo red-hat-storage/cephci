@@ -7,6 +7,8 @@ def testStages = [:]
 def testResults = [:]
 def upstreamVersion = "${params.Upstream_Version}"
 def buildType = "upstream"
+def yamlData
+def cephVersion
 
 // Pipeline script entry point
 node('ceph-qe-ci || rhel-8-medium') {
@@ -56,15 +58,25 @@ node('ceph-qe-ci || rhel-8-medium') {
                 error "No test suites were found for execution."
             }
             print("Stages fetched: ${fetchStages}")
-            currentBuild.description = "${buildType} - ${upstreamVersion}"
+            yamlData = readYaml file: "/ceph/cephci-jenkins/latest-rhceph-container-info/${buildType}.yaml"
+            cephVersion = yamlData[upstreamVersion]["ceph-version"]
+            currentBuild.description = "${buildType} - ${upstreamVersion} - ${cephVersion}"
         }
 
         parallel testStages
 
         stage('publish result') {
+            def upstreamArtifact = ["composes": yamlData[upstreamVersion]["composes"],
+                                    "product": "Red Hat Ceph Storage",
+                                    "ceph_version": cephVersion,
+                                    "repository": yamlData[upstreamVersion]["image"]]
+            def status = "STABLE"
             if ( ! ("FAIL" in sharedLib.fetchStageStatus(testResults)) ) {
-                println "Publish result"
+                status = "UNSTABLE"
             }
+            sharedLib.sendEmail(buildType, testResults, upstreamArtifact)
+            def msg = "Upstream test report status of ceph version:${upstreamArtifact.ceph_version} is ${status} .Log:${env.BUILD_URL}"
+            googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
         }
     } catch(Exception err) {
         // notify about failure
