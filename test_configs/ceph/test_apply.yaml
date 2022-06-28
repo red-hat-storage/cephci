@@ -9,7 +9,8 @@ configs:
       service_name: mgr
       placement:
         label: mgr
-    role: _admin
+    role: 
+      - _admin
   - method: apply
     class: Orch
     component: ceph
@@ -17,14 +18,16 @@ configs:
       service_name: mon
       placement:
         label: mon
-    role: _admin
+    role: 
+      - _admin
   - method: apply
     class: Orch
     component: ceph
     args:
       service_name: osd
       all-available-devices: true
-    role: _admin
+    role: 
+      - _admin
   - id: 2
     method: apply
     class: Orch
@@ -33,5 +36,6 @@ configs:
       service_name: rbd-mirror
       placement:
         nodes:
-            - node5
-    role: client
+            - node2
+    role: 
+      - client

@@ -6,4 +6,5 @@ configs:
     component: ceph
     args:
       host_name: node1
-    role: _admin
+    role: 
+      - _admin

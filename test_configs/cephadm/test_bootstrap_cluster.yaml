@@ -10,4 +10,5 @@ configs:
       orphan-initial-daemons: true
       allow-fqdn-hostname: true
       yes-i-know: true
-    role: _admin
+    role: 
+     - _admin

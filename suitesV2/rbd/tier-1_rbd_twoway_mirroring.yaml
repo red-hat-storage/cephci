@@ -2,96 +2,96 @@
 # sample global suite file
 name: Configuration suite file to deploy cluster for two-way rbd mirroring.
 tests:
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to bootstrap cluster.
-      desc: configuration to bootstrap cluster.
-      test_data: cephadm/test_bootstrap_cluster.yaml
-      module: test_cluster_bootstrap.py
-      runs_on: 
-        - ceph-rbd1
-        - ceph-rbd2
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to add hosts to cluster.
-      desc: configuration to add hosts to cluster.
-      test_data: ceph/test_addhosts.yaml
-      module: test_ceph.py
-      runs_on:
-        - ceph-rbd1
-        - ceph-rbd2
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to add labels to nodes in cluster.
-      desc: configuration to add labels to nodes in cluster.
-      test_data: ceph/test_addlabel.yaml
-      module: test_ceph.py
-      runs_on:
-        - ceph-rbd1
-        - ceph-rbd2
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to apply orchestration to nodes in cluster.
-      desc: configuration to apply orchestration to nodes in cluster.
-      test_data: ceph/test_apply.yaml
-      module: test_ceph.py
-      runs_on:
-        - ceph-rbd1
-        - ceph-rbd2
-  - test:
-      tcms_id: CEPH-1234
-      name: Creation of osd pool
-      desc: configuration for the creation of osd pool.
-      test_data: ceph/test_pool_create.yaml
-      module: test_ceph.py
-      runs_on: 
-        - ceph-rbd1
-        - ceph-rbd2
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to initialize application pool.
-      desc: configuration to initialize application pool.
-      test_data: rbd/test_pool_init.yaml
-      module: test_rbd.py
-      runs_on: 
-        - ceph-rbd1
-        - ceph-rbd2
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to set configuration features of ceph.
-      desc: configuration to set configuration features of ceph.
-      test_data: ceph/test_config_set.yaml
-      module: test_ceph.py
-      runs_on: 
-        - ceph-rbd1
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to create rbd image.
-      desc: configuration to create rbd image.
-      test_data: rbd/test_rbd_create.yaml
-      module: test_rbd.py
-      runs_on: 
-        - ceph-rbd1
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to enable pool mirroring.
-      desc: configuration to enable pool mirroring.
-      test_data: rbd_mirror/test_pool_enable.yaml
-      module: test_rbd_mirror.py
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to enable image mirroring.
-      desc: configuration to enable image mirroring.
-      test_data: rbd_mirror/test_image_enable.yaml
-      module: test_rbd_mirror.py
-      runs_on: 
-        - ceph-rbd1
-  - test:
-      tcms_id: CEPH-1234
-      name: Running suite to configure peer bootstrap.
-      desc: configuration to configure peer bootstrap.
-      test_data: rbd_mirror/test_rbd_mirror_bootstrap.yaml
-      module: test_rbdmirror_bootstrap.py #create bootstrap, copy token, import bootstrap
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Running suite to bootstrap cluster.
+  #     desc: configuration to bootstrap cluster.
+  #     test_data: cephadm/test_bootstrap_cluster.yaml
+  #     module: test_cluster_bootstrap.py
+  #     runs_on: 
+  #       - ceph-rbd1
+  #       - ceph-rbd2
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Running suite to add hosts to cluster.
+  #     desc: configuration to add hosts to cluster.
+  #     test_data: ceph/test_addhosts.yaml
+  #     module: test_ceph.py
+  #     runs_on:
+  #       - ceph-rbd1
+  #       - ceph-rbd2
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Running suite to add labels to nodes in cluster.
+  #     desc: configuration to add labels to nodes in cluster.
+  #     test_data: ceph/test_addlabel.yaml
+  #     module: test_ceph.py
+  #     runs_on:
+  #       - ceph-rbd1
+  #       - ceph-rbd2
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Running suite to apply orchestration to nodes in cluster.
+  #     desc: configuration to apply orchestration to nodes in cluster.
+  #     test_data: ceph/test_apply.yaml
+  #     module: test_ceph.py
+  #     runs_on:
+  #       - ceph-rbd1
+  #       - ceph-rbd2
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Creation of osd pool
+  #     desc: configuration for the creation of osd pool.
+  #     test_data: ceph/test_pool_create.yaml
+  #     module: test_ceph.py
+  #     runs_on: 
+  #       - ceph-rbd1
+  #       - ceph-rbd2
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Running suite to initialize application pool.
+  #     desc: configuration to initialize application pool.
+  #     test_data: rbd/test_pool_init.yaml
+  #     module: test_rbd.py
+  #     runs_on: 
+  #       - ceph-rbd1
+  #       - ceph-rbd2
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Running suite to set configuration features of ceph.
+  #     desc: configuration to set configuration features of ceph.
+  #     test_data: ceph/test_config_set.yaml
+  #     module: test_ceph.py
+  #     runs_on: 
+  #       - ceph-rbd1
+  # - test:
+  #     tcms_id: CEPH-1234
+  #     name: Running suite to create rbd image.
+  #     desc: configuration to create rbd image.
+  #     test_data: rbd/test_rbd_create.yaml
+  #     module: test_rbd.py
+  #     runs_on: 
+  #       - ceph-rbd1
+#   - test:
+#       tcms_id: CEPH-1234
+#       name: Running suite to enable pool mirroring.
+#       desc: configuration to enable pool mirroring.
+#       test_data: rbd_mirror/test_pool_enable.yaml
+#       module: test_rbd_mirror.py
+#   - test:
+#       tcms_id: CEPH-1234
+#       name: Running suite to enable image mirroring.
+#       desc: configuration to enable image mirroring.
+#       test_data: rbd_mirror/test_image_enable.yaml
+#       module: test_rbd_mirror.py
+#       runs_on: 
+#         - ceph-rbd1
+#   - test:
+#       tcms_id: CEPH-1234
+#       name: Running suite to configure peer bootstrap.
+#       desc: configuration to configure peer bootstrap.
+#       test_data: rbd_mirror/test_rbd_mirror_bootstrap.yaml
+#       module: test_rbdmirror_bootstrap.py #create bootstrap, copy token, import bootstrap
   - test:
       tcms_id: CEPH-1234
       name: Running suite to verify status.

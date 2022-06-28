@@ -6,4 +6,5 @@ configs:
     component: ceph
     args:
       pool_name: mirror_test
-    role: client
+    role: 
+      - client

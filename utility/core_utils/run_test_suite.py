@@ -21,6 +21,7 @@ monkey.patch_all()
 from ceph.utils import cleanup_ceph_nodes, cleanup_ibmc_ceph_nodes
 from utility.polarion import post_to_polarion
 from utility.utils import collect_recipe, configure_logger, create_unique_test_name, store_cluster_state
+from utility.core_utils.parallel_executor import ParallelExecutor
 
 logger = Log(__name__)
 
@@ -125,6 +126,7 @@ class RunTestSuite:
         self.enable_eus = run_details.enable_eus
         self.store = run_details.store
         self.fetch_test_details = run_details.fetch_test_details
+        self.parallel_executor = ParallelExecutor()
         self.jenkins_rc = 0
 
     def run_tests(self, tests):
@@ -132,7 +134,17 @@ class RunTestSuite:
         This method is used to run list of tests present in a yaml file.
         Args:
           None
+        Returns:
+          None
+        """
+        self.parallel_executor.run_until_complete(self.run_tests_async, tests)
+        return self.jenkins_rc
 
+    async def run_tests_async(self, tests):
+        """
+        This method is used to run list of tests present in a yaml file.
+        Args:
+          None
         Returns:
           None
         """
@@ -141,21 +153,21 @@ class RunTestSuite:
         for test in tests:
             if test.get("parallel"):
                 passed = True
-                with parallel() as p:
-                    for test_pll in test.get("parallel"):
-                        p.spawn(self.run_test, test_pll)
-                    for result in p:
-                        if not result:
-                            passed = False
-                            break
+                tasks = []
+                for test_pll in test.get("parallel"):
+                   tasks.append((self.run_test, test_pll))
+                results = await self.parallel_executor.run(tasks)
+                for result in results:
+                    if not result:
+                        passed = False
+                        break
                 if not passed:
                     break
-            if not self.run_test(test):
+            if not await self.run_test(test):
                 break
 
-        return self.jenkins_rc
 
-    def run_test(self, test):
+    async def run_test(self, test):
         rc = 0
         test = test.get("test")
         tc = self.fetch_test_details(test)
@@ -166,54 +178,71 @@ class RunTestSuite:
         self.test_names.append(unique_test_name)
         tc["log-link"] = configure_logger(unique_test_name, self.run_dir)
         test_data_file = test.get("test_data")
-        with open('test_configs/'+ test_data_file) as test_data:
-            test_data = yaml.safe_load(test_data)
         module = test.get("module")
         obj = SERVICE_MAP[module]
         runs_on = test.get("runs_on", None)
-        logger.info(f"Running test {test_data_file} with {test_data}")
         start = datetime.datetime.now()
-        with parallel() as p:
-            if runs_on:
-                for cluster_name in runs_on:
-                    p.spawn(obj.run, test_data=test_data, cluster_name=cluster_name, osp_cred=self.osp_cred, ceph_cluster_dict=self.ceph_cluster_dict)
-            else:
-                p.spawn(obj.run, test_data=test_data, cluster_name=None, osp_cred=self.osp_cred, ceph_cluster_dict=self.ceph_cluster_dict)
-            for out in p:
-                cluster_names = out.get("cluster_names")
-                rc = out.get("rc")
-                try:
-                    if self.post_to_report_portal:
-                        self.rp_logger.start_test_item(
-                            name=unique_test_name,
-                            description=report_portal_description,
-                            item_type="STEP",
-                        )
-                        self.rp_logger.log(
-                            message=f"Logfile location - {tc['log-link']}"
-                        )
-                        self.rp_logger.log(message=f"Polarion ID: {tc['tcms-id']}")
+        if runs_on:
+            tasks = []
+            for cluster_name in runs_on:
+                with open('test_configs/'+ test_data_file) as test_data:
+                    test_data = yaml.safe_load(test_data)
+                logger.info(f"Running test {test_data_file} with {test_data}")
+                kw = {
+                    "test_data": test_data,
+                    "cluster_name": cluster_name,
+                    "osp_cred": self.osp_cred,
+                    "ceph_cluster_dict": self.ceph_cluster_dict
+                }
+                tasks.append((obj.run_async, kw))
+            results = await self.parallel_executor.run(tasks)
+        else:
+            with open('test_configs/'+ test_data_file) as test_data:
+                test_data = yaml.safe_load(test_data)
+            logger.info(f"Running test {test_data_file} with {test_data}")
+            kw = {
+                "test_data": test_data,
+                "cluster_name": None,
+                "osp_cred": self.osp_cred,
+                "ceph_cluster_dict": self.ceph_cluster_dict
+            }
+            results = obj.run(kw)
+            results = [results]
+        for out in results:
+            cluster_names = out.get("cluster_names")
+            rc = out.get("rc")
+            try:
+                if self.post_to_report_portal:
+                    self.rp_logger.start_test_item(
+                        name=unique_test_name,
+                        description=report_portal_description,
+                        item_type="STEP",
+                    )
+                    self.rp_logger.log(
+                        message=f"Logfile location - {tc['log-link']}"
+                    )
+                    self.rp_logger.log(message=f"Polarion ID: {tc['tcms-id']}")
 
-                    # Initialize the cluster with the expected rhcs_version hence the
-                    # precedence would be from test suite.
-                    # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
-                    _rhcs_version = test.get("ceph_rhcs_version", self.rhbuild[:3])
+                # Initialize the cluster with the expected rhcs_version hence the
+                # precedence would be from test suite.
+                # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
+                _rhcs_version = test.get("ceph_rhcs_version", self.rhbuild[:3])
+                for cluster_name in cluster_names:
+                    self.ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
+            except BaseException as be:  # noqa
+                logger.exception(be)
+                rc = 1
+            finally:
+                for cluster_name in cluster_names:
+                    collect_recipe(self.ceph_cluster_dict[cluster_name])
+                if self.store:
                     for cluster_name in cluster_names:
-                        self.ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
-                except BaseException as be:  # noqa
-                    logger.exception(be)
-                    rc = 1
-                finally:
-                    for cluster_name in cluster_names:
-                        collect_recipe(self.ceph_cluster_dict[cluster_name])
-                    if self.store:
-                        for cluster_name in cluster_names:
-                            store_cluster_state(
-                                self.ceph_cluster_dict, self.ceph_clusters_file
-                            )
+                        store_cluster_state(
+                            self.ceph_cluster_dict, self.ceph_clusters_file
+                        )
 
-                if rc != 0:
-                    break
+            if rc != 0:
+                break
 
         elapsed = datetime.datetime.now() - start
         tc["duration"] = elapsed
@@ -246,6 +275,8 @@ class RunTestSuite:
                 logger.info("Aborting on test failure")
                 self.tcs.append(tc)
                 return False
+            return False
+
 
         if test.get("destroy-cluster") is True:
             if self.cloud_type == "openstack":
