@@ -1,4 +1,5 @@
 import asyncio
+import nest_asyncio
 
 
 class ParallelExecutor:
@@ -21,7 +22,26 @@ class ParallelExecutor:
         loop.close()
         return result
 
-    async def run(self, methods_list):
+    def run(self, methods_list):
+        # loop = asyncio.get_event_loop()
+        # results = loop.create_task(self.run_async(methods_list))
+        # return results
+        loop = asyncio.new_event_loop()
+        nest_asyncio.apply(loop)
+        future = loop.create_future()
+        asyncio.ensure_future(self.run_async(future, methods_list), loop=loop)
+        results = loop.run_until_complete(future)
+        loop.close()
+        return results
+        # results = asyncio.(self.run_async(methods_list))
+        # loop = asyncio.get_event_loop()
+        # future = asyncio.Future()
+        # asyncio.ensure_future(self.run_async(future, methods_list))
+        # results = loop.run_until_complete(future)
+        # asyncio.
+        # return results
+
+    async def run_async(self, future_arg, methods_list):
         """
         Runs all the tasks asynchronously given in arguments.
         Args:
@@ -41,7 +61,8 @@ class ParallelExecutor:
         await asyncio.gather(*tasks)
         for future_iter in futures_list:
             results.append(future_iter.result())
-        return results
+        # return results
+        future_arg.set_result(results)
 
     async def set_result(self, future_arg, args):
         """
@@ -55,5 +76,5 @@ class ParallelExecutor:
         """
         args = list(args)
         method = args.pop(0)
-        result = await method(*args)
+        result = method(*args)
         future_arg.set_result(result)

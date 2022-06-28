@@ -20,14 +20,14 @@ configs:
         label: mon
     role: 
       - _admin
-  - method: apply
-    class: Orch
-    component: ceph
-    args:
-      service_name: osd
-      all-available-devices: true
-    role: 
-      - _admin
+#  - method: apply
+#    class: Orch
+#    component: ceph
+#    args:
+#      service_name: osd
+#      all-available-devices: true
+#    role:
+#      - _admin
   - id: 2
     method: apply
     class: Orch
@@ -35,7 +35,6 @@ configs:
     args:
       service_name: rbd-mirror
       placement:
-        nodes:
-            - node2
+        label: rbd-mirror
     role: 
       - client
