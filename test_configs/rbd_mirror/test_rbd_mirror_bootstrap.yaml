@@ -9,7 +9,8 @@ configs:
       pool_name: mirror_test
       site_name: site-a
       token_path: /home/cephuser/bootstrap_token_master
-    role: ceph-rbd1:client
+    role: 
+      - ceph-rbd1:client
   - method: import
     class: Bootstrap
     component: rbd_mirror
@@ -18,4 +19,4 @@ configs:
       site_name: site-b
       token_path: /home/cephuser/bootstrap_token_master
     role: 
-      - ceph-rbd:client
+      - ceph-rbd2:client

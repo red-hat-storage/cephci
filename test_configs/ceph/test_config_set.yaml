@@ -8,4 +8,5 @@ configs:
       who: global
       option: rbd_default_features
       value: 125
-    role: client
+    role: 
+      - client

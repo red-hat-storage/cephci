@@ -7,4 +7,5 @@ configs:
     args:
       host_name: node1
       label: mon
-    role: _admin
+    role: 
+     - _admin
