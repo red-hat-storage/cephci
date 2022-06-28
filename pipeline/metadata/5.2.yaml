@@ -255,11 +255,11 @@
 - name: "Testing RADOS basic regression scenarios"
   suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
   global-conf: "conf/pacific/rados/7-node-cluster.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "5.2"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
   metadata:
     - sanity
     - tier-2
@@ -303,11 +303,11 @@
 - name: "RADOS regression testing for stretched Clusters"
   suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode.yaml"
   global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "5.2"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
   metadata:
     - sanity
     - tier-2
@@ -335,11 +335,11 @@
 - name: "RADOS regression testing for Scrubbing scenarios"
   suite: "suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
   global-conf: "conf/pacific/rados/7-node-cluster.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "5.2"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
   metadata:
     - schedule
     - tier-3
@@ -351,11 +351,11 @@
 - name: "Testing RADOS regression for ec pool osd rebalance"
   suite: "suites/pacific/rados/tier-3_rados_test-ecpool-osd-rebalance.yaml"
   global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "5.2"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
   metadata:
     - schedule
     - tier-2
@@ -383,11 +383,11 @@
 - name: "Testing RADOS regression for Stretch mode upgrade"
   suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
   global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "5.2"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
   metadata:
     - schedule
     - tier-1
