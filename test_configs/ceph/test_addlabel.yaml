@@ -8,7 +8,7 @@ configs:
       host_name: node1
       label: mon
     role:
-     - _admin
+      - _admin
   - method: add
     class: Label
     component: ceph
@@ -16,7 +16,7 @@ configs:
       host_name: node1
       label: mgr
     role:
-     - _admin
+      - _admin
   - method: add
     class: Label
     component: ceph
@@ -24,4 +24,4 @@ configs:
       host_name: node6
       label: rbd-mirror
     role:
-     - _admin
+      - _admin

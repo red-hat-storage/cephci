@@ -2,14 +2,13 @@
 
 # Allow parallelized behavior of gevent. It has to be the first line.
 from gevent import monkey
-from utility.core_utils.build_config_for_prerequisite import BuildConfigForPrerequisite
 
+from utility.core_utils.build_config_for_prerequisite import BuildConfigForPrerequisite
 
 monkey.patch_all()
 
 import datetime
 import importlib
-import json
 import logging
 import os
 import pickle
@@ -39,6 +38,7 @@ from ceph.utils import (
 )
 from utility import sosreport
 from utility.config import TestMetaData
+from utility.core_utils.run_test_suite import RunDetails, RunTestSuite
 from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
@@ -56,7 +56,6 @@ from utility.utils import (
     store_cluster_state,
 )
 from utility.xunit import create_xunit_results
-from utility.core_utils.run_test_suite import RunDetails, RunTestSuite
 
 doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
@@ -391,8 +390,6 @@ def run(args):
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
     cleanup_name = args.get("--cleanup", None)
 
-    ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
-
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
@@ -463,28 +460,19 @@ def run(args):
     docker_registry = args.get("--docker-registry") or docker_registry
     docker_image = args.get("--docker-image") or docker_image
     docker_tag = args.get("--docker-tag") or docker_tag
-    kernel_repo = args.get("--kernel-repo", None)
-
-    docker_insecure_registry = args.get("--insecure-registry", False)
 
     post_results = args.get("--post-results")
-    skip_setup = args.get("--skip-cluster", False)
-    skip_subscription = args.get("--skip-subscription", False)
 
     instances_name = args.get("--instances-name")
     if instances_name:
         instances_name = instances_name.replace(".", "-")
 
     osp_image = args.get("--osp-image")
-    filestore = args.get("--filestore", False)
-    ec_pool_vals = args.get("--use-ec-pool", None)
-    skip_version_compare = args.get("--skip-version-compare", False)
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
     xunit_results = args.get("--xunit-results", False)
 
     enable_eus = args.get("--enable-eus", False)
-    skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms", False)
     skip_sos_report = args.get("--skip-sos-report", False)
 
     # load config, suite and inventory yaml files
@@ -740,22 +728,35 @@ def run(args):
 
     if args.get("--suiteV2"):
         passed = True
-        # config = {}
-        # for cluster in ceph_cluster_dict:
-        #     config = BuildConfigForPrerequisite(args, config, docker_registry, docker_image, docker_tag, osp_cred, base_url).build_config()
-        #     try:
-        #         rc = importlib.import_module("install_prereq", package="tests").run(config=config, ceph_nodes=ceph_cluster_dict[cluster]) == 0
-        #     except BaseException as be:  # noqa
-        #         log.error(be)
-        #         rc = 1
-        #     finally:
-        #         collect_recipe(ceph_cluster_dict[cluster])
-        #         if store:
-        #             store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
+        config = {}
+        for cluster in ceph_cluster_dict:
+            config = BuildConfigForPrerequisite(
+                args,
+                config,
+                docker_registry,
+                docker_image,
+                docker_tag,
+                osp_cred,
+                base_url,
+            ).build_config()
+            try:
+                rc = (
+                    importlib.import_module("install_prereq", package="tests").run(
+                        config=config, ceph_nodes=ceph_cluster_dict[cluster]
+                    )
+                    == 0
+                )
+            except BaseException as be:  # noqa
+                log.error(be)
+                rc = 1
+            finally:
+                collect_recipe(ceph_cluster_dict[cluster])
+                if store:
+                    store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
 
-        #     if not rc:
-        #         passed = False
-        #         break
+            if not rc:
+                passed = False
+                break
         if passed:
             ceph_clusters_file = None if not store else ceph_clusters_file
             run_details = RunDetails(
@@ -808,7 +809,15 @@ def run(args):
                 else:
                     config = test.get("config", {})
 
-                config = BuildConfigForPrerequisite(args, config, docker_registry, docker_image, docker_tag, osp_cred, base_url).build_config()
+                config = BuildConfigForPrerequisite(
+                    args,
+                    config,
+                    docker_registry,
+                    docker_image,
+                    docker_tag,
+                    osp_cred,
+                    base_url,
+                ).build_config()
 
                 try:
                     if post_to_report_portal:

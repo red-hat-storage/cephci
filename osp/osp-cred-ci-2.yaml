@@ -1,7 +1,7 @@
 globals:
     openstack-credentials:
-        username: 'hchebrol'
-        password: 'Navishka2021!*'
+        username: '<user_name>'
+        password: '<user_password>'
         auth-url: 'https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000'
         auth-version: '3.x_password'
         tenant-name: 'ceph-ci'

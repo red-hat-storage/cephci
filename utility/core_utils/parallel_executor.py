@@ -1,5 +1,11 @@
 import asyncio
+import traceback
+
 import nest_asyncio
+
+from utility.log import Log
+
+logger = Log()
 
 
 class ParallelExecutor:
@@ -18,28 +24,34 @@ class ParallelExecutor:
         asyncio.set_event_loop(loop)
         future = asyncio.Future()
         asyncio.ensure_future(self.set_result(future, args))
-        result = loop.run_until_complete(future)
-        loop.close()
+        try:
+            result = loop.run_until_complete(future)
+            loop.close()
+        except Exception as err:
+            logger.exception(
+                f"Cancelling run until complete because of Exception {err}"
+            )
+            future.exception()
+            loop.stop()
+            loop.close()
+            raise Exception(err)
         return result
 
     def run(self, methods_list):
-        # loop = asyncio.get_event_loop()
-        # results = loop.create_task(self.run_async(methods_list))
-        # return results
         loop = asyncio.new_event_loop()
         nest_asyncio.apply(loop)
         future = loop.create_future()
         asyncio.ensure_future(self.run_async(future, methods_list), loop=loop)
-        results = loop.run_until_complete(future)
-        loop.close()
+        try:
+            results = loop.run_until_complete(future)
+            loop.close()
+        except Exception as err:
+            logger.exception(f"Cancelling run because of Exception '{err}'")
+            future.exception()
+            loop.stop()
+            loop.close()
+            raise Exception(err)
         return results
-        # results = asyncio.(self.run_async(methods_list))
-        # loop = asyncio.get_event_loop()
-        # future = asyncio.Future()
-        # asyncio.ensure_future(self.run_async(future, methods_list))
-        # results = loop.run_until_complete(future)
-        # asyncio.
-        # return results
 
     async def run_async(self, future_arg, methods_list):
         """
@@ -58,10 +70,18 @@ class ParallelExecutor:
             future = asyncio.Future()
             futures_list.append(future)
             tasks.append(asyncio.ensure_future(self.set_result(future, method_args)))
-        await asyncio.gather(*tasks)
+        try:
+            await asyncio.gather(*tasks)
+        except Exception as err:
+            logger.exception(f"Cancelling all tasks because of Exception '{err}'")
+            for future in futures_list:
+                if not future.done():
+                    future.set_exception(err)
+                future.exception()
+            future_arg.set_exception(err)
+            raise Exception(err)
         for future_iter in futures_list:
             results.append(future_iter.result())
-        # return results
         future_arg.set_result(results)
 
     async def set_result(self, future_arg, args):
@@ -76,5 +96,12 @@ class ParallelExecutor:
         """
         args = list(args)
         method = args.pop(0)
-        result = method(*args)
+        try:
+            result = method(*args)
+        except Exception as err:
+            logger.exception(f"Cancelling set result because of Exception '{err}'")
+            traceback.print_tb(err.__traceback__)
+            future_arg.set_exception(err)
+
+            raise Exception(err)
         future_arg.set_result(result)

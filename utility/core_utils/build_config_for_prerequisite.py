@@ -2,8 +2,16 @@ import os
 
 
 class BuildConfigForPrerequisite:
-
-    def __init__(self, args, config, docker_registry, docker_image, docker_tag, osp_cred, base_url):
+    def __init__(
+        self,
+        args,
+        config,
+        docker_registry,
+        docker_image,
+        docker_tag,
+        osp_cred,
+        base_url,
+    ):
         self.args = args
         self.config = config
         self.docker_registry = docker_registry
@@ -38,8 +46,12 @@ class BuildConfigForPrerequisite:
 
         self.config["build_type"] = self.args.get("--build", None)
         self.config["enable_eus"] = self.args.get("--enable-eus", False)
-        self.config["skip_enabling_rhel_rpms"] = self.args.get("--skip-enabling-rhel-rpms", False)
-        self.config["docker-insecure-registry"] = self.args.get("--insecure-registry", False)
+        self.config["skip_enabling_rhel_rpms"] = self.args.get(
+            "--skip-enabling-rhel-rpms", False
+        )
+        self.config["docker-insecure-registry"] = self.args.get(
+            "--insecure-registry", False
+        )
         self.config["skip_version_compare"] = self.args.get("skip_version_compare")
         self.config["container_image"] = "%s/%s:%s" % (
             self.docker_registry,
