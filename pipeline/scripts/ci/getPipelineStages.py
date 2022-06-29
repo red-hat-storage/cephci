@@ -61,6 +61,7 @@ def fetch_stages(args):
             .....
     """
     final_stage = False
+    next_stage_data = []
     current_dir = os.path.dirname(os.path.abspath(__file__))
     metadata_dir = os.path.abspath(f"{current_dir}/../../metadata")
     metadata_file = f"{metadata_dir}/{args['rhcephVersion']}.yaml"
@@ -73,14 +74,17 @@ def fetch_stages(args):
     filtered_data = filter(lambda d: all(tag in d["metadata"] for tag in tags), data)
     # Incrementing stage value to fetch next stage
     stage = [i for i in tags_next if i.startswith("stage-")]
-    stage_index = tags_next.index("".join(stage))
-    stage_value = tags_next[stage_index].split("-")
-    increment_stage = int(stage_value[1]) + 1
-    stage_level = stage_value[0] + "-" + str(increment_stage)
-    tags_next[stage_index] = stage_level
-    next_stage_data = list(
-        filter(lambda d: all(tag_next in d["metadata"] for tag_next in tags_next), data)
-    )
+    if stage:
+        stage_index = tags_next.index("".join(stage))
+        stage_value = tags_next[stage_index].split("-")
+        increment_stage = int(stage_value[1]) + 1
+        stage_level = stage_value[0] + "-" + str(increment_stage)
+        tags_next[stage_index] = stage_level
+        next_stage_data = list(
+            filter(
+                lambda d: all(tag_next in d["metadata"] for tag_next in tags_next), data
+            )
+        )
 
     if not next_stage_data:
         final_stage = True

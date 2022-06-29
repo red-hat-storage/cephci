@@ -41,7 +41,7 @@ def sendEmail(
     def artifactDetails,
     def tierLevel,
     def stageLevel = null,
-    def toList="ceph-qe-list@redhat.com"
+    def toList="rlepaksh@redhat.com"
     ) {
     /*
         Send an Email
@@ -118,9 +118,13 @@ def sendEmail(
 
     if ('FAIL' in fetchStageStatus(testResults)) {
         if(toList == "ceph-qe-list@redhat.com"){
-            toList = "cephci@redhat.com"
+            toList = "rlepaksh@redhat.com"
         }
         status = "UNSTABLE"
+    }
+
+    if (tierLevel == "live"){
+        def subject = "${run_type} for ${artifactDetails.version} is ${status}"
     }
 
     def subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
@@ -134,7 +138,7 @@ def sendEmail(
     )
 }
 
-def sendGChatNotification(def run_type, def testResults, def tierLevel, def stageLevel= null, def build_url= null) {
+def sendGChatNotification(def run_type, def testResults, def tierLevel, def stageLevel= null, def build_url= null, def rhcephVersion= null) {
     /*
         Send a GChat notification.
         Plugin used:
@@ -155,6 +159,9 @@ def sendGChatNotification(def run_type, def testResults, def tierLevel, def stag
     }
     if (! build_url){ 
         build_url = "${env.BUILD_URL}"
+    }
+    if (tierLevel == "live"){
+           def msg= "${run_type} for RHCEPH-${rhcephVersion} is ${status}.Log:${build_url}"
     }
     def msg= "${run_type} for ${ciMsg.artifact.nvr}:${tierLevel} ${stageLevel} is ${status}.Log:${build_url}"
     googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
