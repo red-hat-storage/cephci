@@ -81,7 +81,7 @@ tests:
   - test:
       name: Bucket Lifecycle Object_expiration_tests
       desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
-      polarion-id: CEPH-11177, CEPH-11182, CEPH-11188, CEPH-11187
+      polarion-id: CEPH-11177 # also applies to CEPH-11182, CEPH-11188 and CEPH-11187
       module: sanity_rgw.py
       config:
         script-name: test_bucket_lifecycle_object_expiration.py
