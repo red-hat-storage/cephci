@@ -137,6 +137,8 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Enable the cdn Tools repo on all ceph node.
         """
         cdn_repo = "rhceph-5-tools-for-rhel-8-x86_64-rpms"
+        if "rhel-9" in self.config["rhbuild"]:
+            cdn_repo = "rhceph-5-tools-for-rhel-9-x86_64-rpms"
         cmd = f"subscription-manager repos --enable={cdn_repo}"
         for node in self.cluster.get_nodes():
             node.exec_command(sudo=True, cmd=cmd)

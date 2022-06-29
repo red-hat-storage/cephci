@@ -5,6 +5,7 @@ playbooks supported,
 - cephadm-purge-cluster.yaml
 - cephadm-clients.yaml
 """
+
 from ceph.ceph_admin.common import config_dict_to_string
 from utility.log import Log
 
@@ -20,13 +21,14 @@ class CephadmAnsibleError(Exception):
 class CephadmAnsible:
     """Module to access cephadm ansible playbooks"""
 
-    def __init__(self, cluster):
+    def __init__(self, cluster, rhbuild):
         """Initialize cephadm-ansible repository.
 
         Args:
             cluster: Ceph cluster object
         """
         self.cluster = cluster
+        self.rhbuild = rhbuild
         self.admin = self.cluster.get_ceph_object("installer")
         self.rpm = "cephadm-ansible"
         self.exec_path = f"/usr/share/{self.rpm}"
@@ -39,10 +41,17 @@ class CephadmAnsible:
 
     def install_cephadm_ansible(self):
         """Enable ansible rpm repos and install cephadm-ansible."""
-        self.admin.exec_command(
-            cmd=f"subscription-manager repos --enable={ANSIBLE_RPM}",
-            sudo=True,
-        )
+        if "rhel-9" in self.rhbuild:
+            self.admin.exec_command(
+                cmd="dnf install ansible-core -y --nogpgcheck",
+                sudo=True,
+                long_running=True,
+            )
+        elif "rhel-8" in self.rhbuild:
+            self.admin.exec_command(
+                cmd=f"subscription-manager repos --enable={ANSIBLE_RPM}",
+                sudo=True,
+            )
         self.admin.exec_command(
             cmd=f"yum install {self.rpm} -y --nogpgcheck",
             sudo=True,

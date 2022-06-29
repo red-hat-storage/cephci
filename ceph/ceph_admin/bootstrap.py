@@ -198,7 +198,9 @@ class BootstrapMixin:
 
         ansible_run = config.get("cephadm-ansible", None)
         if ansible_run:
-            cephadm_ansible = CephadmAnsible(cluster=self.cluster)
+            cephadm_ansible = CephadmAnsible(
+                cluster=self.cluster, rhbuild=self.config["rhbuild"]
+            )
             cephadm_ansible.execute_playbook(
                 playbook=ansible_run["playbook"],
                 extra_vars=ansible_run.get("extra-vars"),
