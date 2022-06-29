@@ -1,0 +1,61 @@
+#=====================================================================================
+# Metadata file for quincy upstream testing.
+# Single file to specify test suites to be executed for all regression (sanity) and schedule tests
+# as per defined in each stages.
+# Each stage will execute in sequential pattern.
+# Contains all Default parameter used for Execution when no override is specified.
+# parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
+# platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
+#=====================================================================================
+
+- name: "Core Feature Upstream Testing For DMFG"
+  suite: "suites/quincy/cephadm/sanity-test.yaml"
+  global-conf: "conf/3-node-cluster-with-1-client.yaml"
+  platform: "rhel-8"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - dmfg
+    - stage-1
+
+- name: "Core Feature Upstream Testing For CephFS"
+  suite: "suites/quincy/cephfs/test-core-functionality.yaml"
+  global-conf: "conf/6-node-cluster-with-1-client.yaml"
+  platform: "rhel-8"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - cephfs
+    - stage-1
+
+- name: "Core Feature Upstream Testing For RBD"
+  suite: "suites/quincy/rbd/basic-operations-unit-testing.yaml"
+  global-conf: "conf/5-node-cluster-with-1-client.yaml"
+  platform: "rhel-8"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rbd
+    - stage-1
+
+- name: "Core Feature Upstream Testing For RGW"
+  suite: "suites/quincy/rgw/test-basic-object-operations.yaml"
+  global-conf: "conf/5-node-cluster-1-client-with-1-rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rgw
+    - stage-1

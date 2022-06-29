@@ -28,12 +28,20 @@ class TestAddMixin:
             "base_cmd_args": {"verbose": True},
             "pos_args": ["node1", "dev/vdb", "dev"],
         }
-        config_mock.return_value = ["ceph", "orch", "daemon", "add", "osd", "--verbose"]
+        config_mock.return_value = [
+            "ceph",
+            "orch",
+            "daemon",
+            "add",
+            "osd",
+            "--verbose",
+            "--all-available-devices",
+        ]
         obj = mock.Mock()
         obj.shortname = "host"
         get_node_mock.return_value = obj
         self._add.add(config)
-        config_mock.assert_called_once_with({"verbose": True})
+        assert config_mock.call_count == 2
         assert get_node_mock.call_count == 1
 
     @mock.patch("ceph.ceph_admin.add.get_node_by_id")
@@ -52,7 +60,7 @@ class TestAddMixin:
         obj.shortname = "host"
         get_node_mock.return_value = obj
         self._add.add(config)
-        config_mock.assert_called_once_with({"verbose": True})
+        assert config_mock.call_count == 2
         assert get_node_mock.call_count == 1
 
 

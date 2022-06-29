@@ -15,56 +15,68 @@ def buildType
 def final_stage = false
 def run_type
 def nodeName = "centos-7"
-def tags = "${params.tags}" ?: ""
-tags_list = tags.split(',') as List
-if ("ibmc" in tags_list){
-    nodeName = "agent-01"
+def tags = ""
+
+def branch='origin/master'
+def repo='https://github.com/red-hat-storage/cephci.git'
+
+if (params.containsKey('gitbranch')){
+    branch=params.gitbranch
+}
+
+if (params.containsKey('gitrepo')){
+    repo=params.gitrepo
+}
+
+if (params.containsKey('tags')){
+    tags=params.tags
+    tags_list = tags.split(',') as List
+    if (tags_list.contains('ibmc')){
+        nodeName = "agent-01"
+    }
 }
 
 node(nodeName) {
-    timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    extensions: [
-                        [
-                            $class: 'CleanBeforeCheckout',
-                            deleteUntrackedNestedRepositories: true
-                        ],
-                        [
-                            $class: 'WipeWorkspace'
-                        ],
-                        [
-                            $class: 'CloneOption',
-                            depth: 1,
-                            noTags: true,
-                            shallow: true,
-                            timeout: 10,
-                            reference: ''
-                        ]
+    stage('PrepareAgent') {
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: branch]],
+                extensions: [
+                    [
+                        $class: 'CleanBeforeCheckout',
+                        deleteUntrackedNestedRepositories: true
                     ],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
+                    [
+                        $class: 'WipeWorkspace'
+                    ],
+                    [
+                        $class: 'CloneOption',
+                        depth: 1,
+                        noTags: true,
+                        shallow: true,
+                        timeout: 10,
+                        reference: ''
+                    ]
                 ],
-                changelog: false,
-                poll: false
-            )
+                userRemoteConfigs: [[
+                    url: repo
+                ]]
+            ],
+            changelog: false,
+            poll: false
+        )
 
-            tags = "${params.tags}" ?: ""
-            tags_list = tags.split(',') as List
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            if("ibmc" in tags_list){
-                sharedLib.prepareIbmNode()
-            }
-            else{
-                sharedLib.prepareNode()
-            }
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        if(tags_list.contains('ibmc')){
+            sharedLib.prepareIbmNode()
+        }
+        else{
+            sharedLib.prepareNode()
         }
     }
+
 
     stage("PrepareTestStages") {
         /* Prepare pipeline stages using RHCEPH version */
@@ -95,21 +107,29 @@ node(nodeName) {
         if ("sanity" in tags_list){
             run_type = "Sanity Run"
         }
+        if ("rc" in tags_list){
+            run_type = "RC build Sanity Run"
+        }
 
         overrides.put("build", "tier-0")
         if(tierLevel == "tier-0"){
             overrides.put("build", "latest")
         }
+        if ("rc" in tags_list){
+            overrides.put("build", "rc")
+        }
 
-        def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
-        /*
-           Read the release yaml contents to get contents,
-           before other listener/Executor Jobs updates it.
-        */
-        releaseContent = sharedLib.readFromReleaseFile(
-            majorVersion, minorVersion, lockFlag=false
-        )
-        println(releaseContent)
+        if ("openstack" in tags_list){
+            def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
+            /*
+               Read the release yaml contents to get contents,
+               before other listener/Executor Jobs updates it.
+            */
+            releaseContent = sharedLib.readFromReleaseFile(
+                majorVersion, minorVersion, lockFlag=false
+            )
+            println(releaseContent)
+        }
 
         if("ibmc" in tags_list){
             def workspace = "${env.WORKSPACE}"
@@ -198,7 +218,9 @@ node(nodeName) {
                                 string(name: 'tags', value: tags),
                                 string(name: 'buildType', value: nextbuildType.toString()),
                                 string(name: 'overrides', value: overrides.toString()),
-                                string(name: 'buildArtifacts', value: buildArtifacts.toString())]
+                                string(name: 'buildArtifacts', value: buildArtifacts.toString()),
+                                string(name: 'gitrepo', value: repo.toString()),
+                                string(name: 'gitbranch', value: branch.toString())]
                 ])
             }
         }

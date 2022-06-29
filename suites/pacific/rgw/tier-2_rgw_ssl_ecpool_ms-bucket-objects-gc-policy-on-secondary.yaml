@@ -1,11 +1,13 @@
-# Test suite for evaluating RGW multi-site deployment scenario.
+# Test suite for evaluating RGW multi-site having SSL endpoints.
 #
 # This suite deploys a single realm (India) spanning across two RHCS clusters. It has a
 # zonegroup (shared) which also spans across the clusters. There exists a master (pri)
 # and secondary (sec) zones within this group. The master zone is part of the pri
-# cluster whereas the sec zone is part of the sec datacenter (cluster).
+# cluster whereas the sec zone is part of the sec datacenter (cluster). It also uses
+# EC pool 4+2 configuration
 
 # The deployment is evaluated by running IOs across the environments.
+---
 tests:
 
   # Cluster deployment stage
@@ -54,14 +56,32 @@ tests:
                   args:
                     all-available-devices: true
               - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.pri
                   args:
-                    placement:
-                      nodes:
-                        - node5
+                    - "ceph osd erasure-code-profile set rgwec01 k=4 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create primary.rgw.buckets.data 32 32"
+                    - "erasure rgwec01"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "primary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri
+                      spec:
+                        ssl: true
+                        rgw_frontend_ssl_certificate: create-cert
+                      placement:
+                        nodes:
+                          - node7
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -70,7 +90,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     skip-dashboard: true
@@ -98,14 +117,32 @@ tests:
                   args:
                     all-available-devices: true
               - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.sec
                   args:
-                    placement:
-                      nodes:
-                        - node5
+                    - "ceph osd erasure-code-profile set rgwec01 k=4 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "erasure rgwec01"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "secondary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec
+                      placement:
+                        nodes:
+                          - node7
+                      spec:
+                        ssl: true
+                        rgw_frontend_ssl_certificate: create-cert
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
@@ -117,7 +154,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node8
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -125,7 +162,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node8
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -138,11 +175,10 @@ tests:
       clusters:
         ceph-pri:
           config:
-            cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node7} --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node7} --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
@@ -150,29 +186,33 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
               - "ceph orch restart {service_name:shared.pri}"
         ceph-sec:
           config:
-            cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
               - "ceph orch restart {service_name:shared.sec}"
+              - "sleep 120"
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
+      polarion-id: CEPH-10362
   - test:
       abort-on-fail: true
       clusters:
         ceph-pri:
           config:
-            cephadm: true
             commands:
               - "radosgw-admin sync status"
               - "ceph -s"
@@ -187,7 +227,6 @@ tests:
       clusters:
         ceph-sec:
           config:
-            cephadm: true
             commands:
               - "radosgw-admin sync status"
               - "ceph -s"
@@ -197,23 +236,6 @@ tests:
       desc: Retrieve the configured environment details
       module: exec.py
       name: get shared realm info
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            roles:
-              - rgw
-            rule: root netem delay 30ms 6ms distribution normal
-        ceph-sec:
-          config:
-            roles:
-              - rgw
-            rule: root netem delay 20ms 5ms distribution normal
-      desc: Configuring network traffic delay
-      module: configure-tc.py
-      name: apply-net-qos
 
   # Test work flow
 
@@ -239,13 +261,12 @@ tests:
             timeout: 300
             verify-io-on-site: [ "ceph-pri" ]
       desc: Execute M buckets with N objects on secondary cluster
-      polarion-id: CEPH-9789
       module: sanity_rgw_multisite.py
       name: m buckets with n objects
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_compression on secondary
-      polarion-id: CEPH-11350
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -254,10 +275,10 @@ tests:
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
             timeout: 300
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_aws4 on secondary
-      polarion-id: CEPH-9637
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -265,10 +286,10 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
             timeout: 300
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_delete on secondary
-      polarion-id: CEPH-14237
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -276,10 +297,10 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
             timeout: 300
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_download on secondary
-      polarion-id: CEPH-14237
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -288,10 +309,10 @@ tests:
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
             timeout: 300
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_enc on secondary
-      polarion-id: CEPH-11358,CEPH-11361
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -300,10 +321,10 @@ tests:
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
             timeout: 300
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_multipart on secondary
-      polarion-id: CEPH-9801
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -312,10 +333,10 @@ tests:
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             timeout: 300
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_sharding on secondary
-      polarion-id: CEPH-9245
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -323,10 +344,10 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
             timeout: 300
+
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets on secondary
-      polarion-id: CEPH-9789
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -335,148 +356,10 @@ tests:
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets.yaml
             timeout: 300
-  - test:
-      name: Bucket listing test
-      desc: test_bucket_listing_flat_ordered_versionsing on secondary
-      polarion-id: CEPH-83573545
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-            timeout: 300
-  - test:
-      name: Bucket listing test
-      desc: test_bucket_listing_flat_ordered on secondary
-      polarion-id: CEPH-83573545
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered.yaml
-            timeout: 300
-  - test:
-      name: Bucket listing test
-      desc: test_bucket_listing_flat_unordered.yaml on secondary
-      polarion-id: CEPH-83573545
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_unordered.yaml
-            timeout: 300
-  - test:
-      name: Bucket listing test
-      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
-      polarion-id: CEPH-83573651
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
-            timeout: 300
-  - test:
-      name: Bucket listing test
-      desc: test_bucket_listing_flat_ordered_versionsing on secondary
-      polarion-id: CEPH-83573545
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-            timeout: 300
-  - test:
-      name: Buckets Versioning test
-      desc: test_versioning_copy_objects on secondary
-      polarion-id: CEPH-9221
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_copy_objects.py
-            config-file-name: test_versioning_copy_objects.yaml
-            timeout: 300
-            verify-io-on-site: ["ceph-pri"]
-  - test:
-      name: Buckets Versioning test
-      desc: test_versioning_enable on secondary
-      polarion-id: CEPH-9178
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: Buckets Versioning test
-      desc: test_versioning_objects_acls on secondary
-      polarion-id: CEPH-9190
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_acls.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: Buckets Versioning test
-      desc: test_versioning_objects_copy on secondary
-      polarion-id: CEPH-14264, CEPH-10646
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_copy.yaml
-            timeout: 300
-            verify-io-on-site: ["ceph-pri"]
-  - test:
-      name: Buckets Versioning test
-      desc: test_versioning_objects_delete on secondary
-      polarion-id: CEPH-14262
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_delete.yaml
-            timeout: 300
-  - test:
-      name: Buckets Versioning test
-      desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-14261, CEPH-9222, CEPH-10652
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: Buckets Versioning test
-      desc: test_versioning_objects_suspend on secondary
-      polarion-id: CEPH-14263
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_suspend.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
+
   - test:
       name: LargeObjGet_GC test
       desc: test_LargeObjGet_GC on secondary
-      polarion-id: CEPH-83574416
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -501,7 +384,6 @@ tests:
   - test:
       name: Bucket policy tests
       desc: test_bucket_policy_modify.yaml on secondary
-      polarion-id: CEPH-11214
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -510,10 +392,10 @@ tests:
             config-file-name: test_bucket_policy_modify.yaml
             verify-io-on-site: ["ceph-pri"]
             timeout: 300
+
   - test:
       name: Bucket policy tests
       desc: test_bucket_policy_delete.yaml on secondary
-      polarion-id: CEPH-11213
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -526,7 +408,6 @@ tests:
   - test:
       name: Bucket policy tests
       desc: test_bucket_policy_replace on secondary
-      polarion-id: CEPH-11215
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:

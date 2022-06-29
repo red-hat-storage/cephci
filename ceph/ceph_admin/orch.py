@@ -91,7 +91,7 @@ class Orch(
         if service_type:
             check_status_dict["args"]["service_type"] = service_type
 
-        _retries = 3  # cross-verification retries
+        _retries = 6  # cross-verification retries
         _count = 0
         while end_time > datetime.now():
             sleep(interval)
