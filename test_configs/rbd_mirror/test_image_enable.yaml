@@ -6,5 +6,5 @@ configs:
     component: rbd_mirror
     args:
       image_spec: mirror_test/image_2
-    role: 
+    role:
       - client

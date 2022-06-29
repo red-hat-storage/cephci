@@ -1,40 +1,43 @@
 import datetime
-import yaml
 import os
 import sys
-import RhcsQeSdk
 
-from RhcsQeSdk.tests.misc import test_cluster_bootstrap
+import yaml
+from gevent import monkey
 from RhcsQeSdk.tests.ceph import test_ceph
+from RhcsQeSdk.tests.misc import test_cluster_bootstrap
 from RhcsQeSdk.tests.rbd import test_rbd, test_rbd_verify_status
 from RhcsQeSdk.tests.rbd_mirror import test_rbd_mirror, test_rbdmirror_bootstrap
 
-
-from gevent import monkey
-
-from ceph.parallel import parallel
 from utility.log import Log
 
 monkey.patch_all()
 
 
 from ceph.utils import cleanup_ceph_nodes, cleanup_ibmc_ceph_nodes
-from utility.polarion import post_to_polarion
-from utility.utils import collect_recipe, configure_logger, create_unique_test_name, store_cluster_state
 from utility.core_utils.parallel_executor import ParallelExecutor
+from utility.polarion import post_to_polarion
+from utility.utils import (
+    collect_recipe,
+    configure_logger,
+    create_unique_test_name,
+    store_cluster_state,
+)
 
-logger = Log(__name__)
+logger = Log()
 
 SERVICE_MAP = dict(
     {
-        "test_cluster_bootstrap.py": RhcsQeSdk.tests.misc.test_cluster_bootstrap,
-        "test_ceph.py": RhcsQeSdk.tests.ceph.test_ceph,
-        "test_rbd.py": RhcsQeSdk.tests.rbd.test_rbd,
-        "test_rbd_mirror.py": RhcsQeSdk.tests.rbd_mirror.test_rbd_mirror,
-        "test_rbdmirror_bootstrap.py": RhcsQeSdk.tests.rbd_mirror.test_rbdmirror_bootstrap,
-        "test_rbd_verify_status.py": RhcsQeSdk.tests.rbd.test_rbd_verify_status
+        "test_cluster_bootstrap.py": test_cluster_bootstrap,
+        "test_ceph.py": test_ceph,
+        "test_rbd.py": test_rbd,
+        "test_rbd_mirror.py": test_rbd_mirror,
+        "test_rbdmirror_bootstrap.py": test_rbdmirror_bootstrap,
+        "test_rbd_verify_status.py": test_rbd_verify_status,
     }
 )
+
+
 class RunDetails:
     ceph_cluster_dict = None
     rp_logger = None
@@ -155,7 +158,7 @@ class RunTestSuite:
                 passed = True
                 tasks = []
                 for test_pll in test.get("parallel"):
-                   tasks.append((self.run_test, test_pll))
+                    tasks.append((self.run_test, test_pll))
                 results = self.parallel_executor.run(tasks)
                 for result in results:
                     if not result:
@@ -166,15 +169,12 @@ class RunTestSuite:
             if not self.run_test(test):
                 break
 
-
     def run_test(self, test):
         rc = 0
         test = test.get("test")
         tc = self.fetch_test_details(test)
         report_portal_description = test.get("desc") or ""
-        unique_test_name = create_unique_test_name(
-            test.get("name"), self.test_names
-        )
+        unique_test_name = create_unique_test_name(test.get("name"), self.test_names)
         self.test_names.append(unique_test_name)
         tc["log-link"] = configure_logger(unique_test_name, self.run_dir)
         test_data_file = test.get("test_data")
@@ -182,29 +182,34 @@ class RunTestSuite:
         obj = SERVICE_MAP[module]
         runs_on = test.get("runs_on", None)
         start = datetime.datetime.now()
+        results = []
         if runs_on:
             tasks = []
             for cluster_name in runs_on:
-                with open('test_configs/'+ test_data_file) as test_data:
+                with open("test_configs/" + test_data_file) as test_data:
                     test_data = yaml.safe_load(test_data)
                 logger.info(f"Running test {test_data_file} with {test_data}")
                 kw = {
                     "test_data": test_data,
                     "cluster_name": cluster_name,
                     "osp_cred": self.osp_cred,
-                    "ceph_cluster_dict": self.ceph_cluster_dict
+                    "ceph_cluster_dict": self.ceph_cluster_dict,
                 }
                 tasks.append((obj.run, kw))
-            results = self.parallel_executor.run(tasks)
+            try:
+                results = self.parallel_executor.run(tasks)
+            except Exception:
+                self.jenkins_rc = 1
+                results = [{"cluster_names": runs_on, "rc": 1}]
         else:
-            with open('test_configs/'+ test_data_file) as test_data:
+            with open("test_configs/" + test_data_file) as test_data:
                 test_data = yaml.safe_load(test_data)
             logger.info(f"Running test {test_data_file} with {test_data}")
             kw = {
                 "test_data": test_data,
                 "cluster_name": None,
                 "osp_cred": self.osp_cred,
-                "ceph_cluster_dict": self.ceph_cluster_dict
+                "ceph_cluster_dict": self.ceph_cluster_dict,
             }
             results = obj.run(kw)
             results = [results]
@@ -218,9 +223,7 @@ class RunTestSuite:
                         description=report_portal_description,
                         item_type="STEP",
                     )
-                    self.rp_logger.log(
-                        message=f"Logfile location - {tc['log-link']}"
-                    )
+                    self.rp_logger.log(message=f"Logfile location - {tc['log-link']}")
                     self.rp_logger.log(message=f"Polarion ID: {tc['tcms-id']}")
 
                 # Initialize the cluster with the expected rhcs_version hence the
@@ -249,23 +252,19 @@ class RunTestSuite:
 
         # Write to report portal
         if self.post_to_report_portal:
-            self.rp_logger.finish_test_item(
-                status="PASSED" if rc == 0 else "FAILED"
-            )
+            self.rp_logger.finish_test_item(status="PASSED" if rc == 0 else "FAILED")
 
         if rc == 0:
             tc["status"] = "Pass"
-            msg = "Test {} passed".format(test_data)
+            msg = "Test {} passed".format(unique_test_name)
             logger.info(msg)
-            print(msg)
 
             if self.post_results:
                 post_to_polarion(tc=tc)
         else:
             tc["status"] = "Failed"
-            msg = "Test {} failed".format(test_data)
+            msg = "Test {} failed".format(unique_test_name)
             logger.info(msg)
-            print(msg)
             self.jenkins_rc = 1
 
             if self.post_results:
@@ -275,8 +274,6 @@ class RunTestSuite:
                 logger.info("Aborting on test failure")
                 self.tcs.append(tc)
                 return False
-            return False
-
 
         if test.get("destroy-cluster") is True:
             if self.cloud_type == "openstack":
@@ -285,4 +282,6 @@ class RunTestSuite:
                 cleanup_ibmc_ceph_nodes(self.osp_cred, self.instances_name)
 
         self.tcs.append(tc)
+        if tc["status"] == "Failed":
+            return False
         return True

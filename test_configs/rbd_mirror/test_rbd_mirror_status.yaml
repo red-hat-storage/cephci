@@ -12,7 +12,7 @@ configs:
       pattern:
         key: state
         value: up+stopped
-    role: 
+    role:
       - ceph-rbd1:mon
   - method: status
     class: image
@@ -25,5 +25,5 @@ configs:
       pattern:
         key: state
         value: up+replaying
-    role: 
+    role:
       - ceph-rbd2:mon

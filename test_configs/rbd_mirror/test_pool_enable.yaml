@@ -8,7 +8,7 @@ configs:
       pool_name: mirror_test
       mode: image
       site_name: site-a
-    role: 
+    role:
       - ceph-rbd1:client
   - method: enable
     class: Pool
@@ -17,5 +17,5 @@ configs:
       pool_name: mirror_test
       mode: image
       site_name: site-b
-    role: 
+    role:
       - ceph-rbd2:client
