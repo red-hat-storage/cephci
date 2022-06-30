@@ -187,36 +187,6 @@
     - ibmc
     - rbd
     - stage-2
-- name: "test-rgw-dynamic-resharding-greenfield"
-  suite: "suites/nautilus/rgw/tier-1_rgw_test-dynamic-resharding-greenfield.yaml"
-  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
-  platform: "rhel-8"
-  rhbuild: "4.3"
-  inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-  metadata:
-    - sanity
-    - tier-1
-    - openstack
-    - ibmc
-    - rgw
-    - stage-2
-- name: "test-rgw-manual-resharding-greenfield"
-  suite: "suites/nautilus/rgw/tier-1_rgw_test-manual-resharding-greenfield.yaml"
-  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
-  platform: "rhel-8"
-  rhbuild: "4.3"
-  inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-  metadata:
-    - sanity
-    - tier-1
-    - openstack
-    - ibmc
-    - rgw
-    - stage-2
 - name: "test-rgw-single-site"
   suite: "suites/nautilus/rgw/tier-1_rgw.yaml"
   global-conf: "conf/nautilus/rgw/tier-1_rgw.yaml"
@@ -549,7 +519,23 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - schedule
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "lc_process_for_single_bucket "
+  suite: "suites/nautilus/rgw/tier-2_rgw-single-bucket-process.yaml"
+  global-conf: "conf/nautilus/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
     - tier-2
     - openstack
     - ibmc

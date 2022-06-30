@@ -1,0 +1,80 @@
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # Testing stage
+  - test:
+      config:
+        script-name: test_manual_lc_process_single_bucket.py
+        config-file-name: test_lc_process_single_bucket_expired.yaml
+        timeout: 300
+      desc: test LC process for a single bucket with expired objects
+      module: sanity_rgw.py
+      name: Test LC process for single bucket expired
+      polarion-id: CEPH-83574809
+
+  - test:
+      config:
+        script-name: test_manual_lc_process_single_bucket.py
+        config-file-name: test_lc_process_single_bucket_nonexpired.yaml
+        timeout: 300
+      desc: test LC process for a single bucket with non expired objects
+      module: sanity_rgw.py
+      name: Test LC process for single bucket non-expired
+      polarion-id: CEPH-83574809

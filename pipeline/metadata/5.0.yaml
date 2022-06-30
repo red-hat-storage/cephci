@@ -219,8 +219,23 @@
     - ibmc
     - cephfs
     - stage-3
-- name: "test-rgw-multi-site-secondary-to-primary"
-  suite: "suites/pacific/rgw/tier-1_rgw_multisite-secondary-to-primary.yaml"
+- name: "test-rgw-ms-bucket-object-gc-policy-on-secondary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-bucket-object-gc-policy-on-secondary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+- name: "test-rgw-ms-bucket-listing-versioning-on-secondary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-bucket-listing-versioning-on-secondary.yaml"
   global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
   platform: "rhel-8"
   rhbuild: "5.0"
@@ -339,8 +354,23 @@
     - ibmc
     - rgw
     - stage-2
-- name: "test-rgw-multisite-primary-to-secondary-tier-1-extd"
-  suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-primary-to-secondary.yaml"
+- name: "test-rgw-ms-omap-datalog-on-primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-omap-datalog-on-primary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+- name: "test-rgw-ms-bilog-crash-on-primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-bilog-crash-on-primary.yaml"
   global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
   platform: "rhel-8"
   rhbuild: "5.0"
