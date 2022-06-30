@@ -3,11 +3,12 @@
 # Allow parallelized behavior of gevent. It has to be the first line.
 from gevent import monkey
 
+from utility.core_utils.build_config_for_prerequisite import BuildConfigForPrerequisite
+
 monkey.patch_all()
 
 import datetime
 import importlib
-import json
 import logging
 import os
 import pickle
@@ -37,12 +38,14 @@ from ceph.utils import (
 )
 from utility import sosreport
 from utility.config import TestMetaData
+from utility.core_utils.run_test_suite import RunDetails, RunTestSuite
 from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
     ReportPortal,
     close_and_remove_filehandlers,
+    collect_recipe,
     configure_logger,
     create_run_dir,
     create_unique_test_name,
@@ -50,6 +53,7 @@ from utility.utils import (
     fetch_build_artifacts,
     generate_unique_id,
     magna_url,
+    store_cluster_state,
 )
 from utility.xunit import create_xunit_results
 
@@ -59,7 +63,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
  Usage:
   run.py --rhbuild BUILD
         (--platform <name>)
-        (--suite <FILE>)...
+        (--suite <FILE> | --suiteV2 <FILE>)
         (--global-conf FILE | --cluster-conf FILE)
         [--cloud <openstack> | <ibmc> | <baremetal>]
         [--build <name>]
@@ -101,6 +105,8 @@ Options:
   -h --help                         show this screen
   -v --version                      run version
   -s <smoke> --suite <smoke>        test suite to run
+                                    eg: -s smoke or -s rbd
+  -s <smoke> --suiteV2 <smoke>      remodelled sdk test suite to run
                                     eg: -s smoke or -s rbd
   -f <tests> --filter <tests>       filter tests based on the patter
                                     eg: -f 'rbd' will run tests that have 'rbd'
@@ -369,7 +375,7 @@ def run(args):
 
     # Mandatory arguments
     rhbuild = args["--rhbuild"]
-    suite_files = args["--suite"]
+    suite_files = args["--suite"] or args["--suiteV2"]
 
     glb_file = args.get("--global-conf")
     if args.get("--cluster-conf"):
@@ -385,8 +391,6 @@ def run(args):
 
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
     cleanup_name = args.get("--cleanup", None)
-
-    ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
 
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
@@ -458,32 +462,25 @@ def run(args):
     docker_registry = args.get("--docker-registry") or docker_registry
     docker_image = args.get("--docker-image") or docker_image
     docker_tag = args.get("--docker-tag") or docker_tag
-    kernel_repo = args.get("--kernel-repo", None)
-
-    docker_insecure_registry = args.get("--insecure-registry", False)
 
     post_results = args.get("--post-results")
-    skip_setup = args.get("--skip-cluster", False)
-    skip_subscription = args.get("--skip-subscription", False)
 
     instances_name = args.get("--instances-name")
     if instances_name:
         instances_name = instances_name.replace(".", "-")
 
     osp_image = args.get("--osp-image")
-    filestore = args.get("--filestore", False)
-    ec_pool_vals = args.get("--use-ec-pool", None)
-    skip_version_compare = args.get("--skip-version-compare", False)
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
     xunit_results = args.get("--xunit-results", False)
 
     enable_eus = args.get("--enable-eus", False)
-    skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms", False)
     skip_sos_report = args.get("--skip-sos-report", False)
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
+    if type(suite_files) == str:
+        suite_files = [suite_files]
     suite = init_suite.load_suites(suite_files)
     log.debug(f"Found the following valid test suites: {suite['tests']}")
     if suite["nan"] and not suite["tests"]:
@@ -733,178 +730,183 @@ def run(args):
     # Initialize test return code
     rc = 0
 
-    for test in tests:
-        test = test.get("test")
-        parallel = test.get("parallel")
-        tc = fetch_test_details(test)
-        test_file = tc["file"]
-        report_portal_description = tc["desc"] or ""
-        unique_test_name = create_unique_test_name(tc["name"], test_names)
-        test_names.append(unique_test_name)
-
-        tc["log-link"] = configure_logger(unique_test_name, run_dir)
-
-        mod_file_name = os.path.splitext(test_file)[0]
-        test_mod = importlib.import_module(mod_file_name)
-        print("\nRunning test: {test_name}".format(test_name=tc["name"]))
-
-        if tc.get("log-link"):
-            print("Test logfile location: {log_url}".format(log_url=tc["log-link"]))
-
-        log.info(f"Running test {test_file}")
-        start = datetime.datetime.now()
-
-        for cluster_name in test.get("clusters", ceph_cluster_dict):
-            if test.get("clusters"):
-                config = test.get("clusters").get(cluster_name).get("config", {})
-            else:
-                config = test.get("config", {})
-
-            if not config.get("base_url"):
-                config["base_url"] = base_url
-
-            config["rhbuild"] = f"{rhbuild}-{platform}"
-            config["cloud-type"] = cloud_type
-            if "ubuntu_repo" in locals():
-                config["ubuntu_repo"] = ubuntu_repo
-
-            if skip_setup is True:
-                config["skip_setup"] = True
-
-            if skip_subscription is True:
-                config["skip_subscription"] = True
-
-            if config.get("skip_version_compare"):
-                skip_version_compare = config.get("skip_version_compare")
-
-            if args.get("--add-repo"):
-                repo = args.get("--add-repo")
-                if repo.startswith("http"):
-                    config["add-repo"] = repo
-
-            config["build_type"] = build
-            config["enable_eus"] = enable_eus
-            config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
-            config["docker-insecure-registry"] = docker_insecure_registry
-            config["skip_version_compare"] = skip_version_compare
-            config["container_image"] = "%s/%s:%s" % (
+    if args.get("--suiteV2"):
+        passed = True
+        config = {}
+        for cluster in ceph_cluster_dict:
+            config = BuildConfigForPrerequisite(
+                args,
+                config,
                 docker_registry,
                 docker_image,
                 docker_tag,
-            )
-
-            config["ceph_docker_registry"] = docker_registry
-            report_portal_description += f"docker registry: {docker_registry}"
-            config["ceph_docker_image"] = docker_image
-            report_portal_description += f"docker image: {docker_image}"
-            config["ceph_docker_image_tag"] = docker_tag
-            report_portal_description += f"docker registry: {docker_registry}"
-
-            if filestore:
-                config["filestore"] = filestore
-
-            if ec_pool_vals:
-                config["ec-pool-k-m"] = ec_pool_vals
-
-            if args.get("--hotfix-repo"):
-                hotfix_repo = args.get("--hotfix-repo")
-                if hotfix_repo.startswith("http"):
-                    config["hotfix_repo"] = hotfix_repo
-
-            if kernel_repo is not None:
-                config["kernel-repo"] = kernel_repo
-
-            if osp_cred:
-                config["osp_cred"] = osp_cred
-
-            # if Kernel Repo is defined in ENV then set the value in config
-            if os.environ.get("KERNEL-REPO-URL") is not None:
-                config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
-
+                osp_cred,
+                base_url,
+            ).build_config()
             try:
-                if post_to_report_portal:
-                    rp_logger.start_test_item(
-                        name=unique_test_name,
-                        description=report_portal_description,
-                        item_type="STEP",
+                rc = (
+                    importlib.import_module("install_prereq", package="tests").run(
+                        config=config, ceph_nodes=ceph_cluster_dict[cluster]
                     )
-                    rp_logger.log(message=f"Logfile location - {tc['log-link']}")
-                    rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
-
-                # Initialize the cluster with the expected rhcs_version hence the
-                # precedence would be from test suite.
-                # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
-                _rhcs_version = test.get("ceph_rhcs_version", rhbuild[:3])
-                ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
-
-                rc = test_mod.run(
-                    ceph_cluster=ceph_cluster_dict[cluster_name],
-                    ceph_nodes=ceph_cluster_dict[cluster_name],
-                    config=config,
-                    parallel=parallel,
-                    test_data=ceph_test_data,
-                    ceph_cluster_dict=ceph_cluster_dict,
-                    clients=clients,
+                    == 0
                 )
             except BaseException as be:  # noqa
-                log.exception(be)
+                log.error(be)
                 rc = 1
             finally:
-                collect_recipe(ceph_cluster_dict[cluster_name])
+                collect_recipe(ceph_cluster_dict[cluster])
                 if store:
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
 
-            if rc != 0:
+            if not rc:
+                passed = False
                 break
-
-        elapsed = datetime.datetime.now() - start
-        tc["duration"] = elapsed
-
-        # Write to report portal
-        if post_to_report_portal:
-            rp_logger.finish_test_item(status="PASSED" if rc == 0 else "FAILED")
-
-        if rc == 0:
-            tc["status"] = "Pass"
-            msg = "Test {} passed".format(test_mod)
-            log.info(msg)
-            print(msg)
-
-            if post_results:
-                post_to_polarion(tc=tc)
-        else:
-            tc["status"] = "Failed"
-            msg = "Test {} failed".format(test_mod)
-            log.info(msg)
-            print(msg)
-            jenkins_rc = 1
-
-            if post_results:
-                post_to_polarion(tc=tc)
-
-            if test.get("abort-on-fail", False):
-                log.info("Aborting on test failure")
-                tcs.append(tc)
-                break
-
-        if test.get("destroy-cluster") is True:
-            if cloud_type == "openstack":
-                cleanup_ceph_nodes(osp_cred, instances_name)
-            elif cloud_type == "ibmc":
-                cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
-
-        if test.get("recreate-cluster") is True:
-            ceph_cluster_dict, clients = create_nodes(
-                conf,
-                inventory,
-                osp_cred,
-                run_id,
-                cloud_type,
-                service,
-                instances_name,
+        if passed:
+            ceph_clusters_file = None if not store else ceph_clusters_file
+            run_details = RunDetails(
+                ceph_cluster_dict=ceph_cluster_dict,
+                rp_logger=rp_logger,
+                test_names=test_names,
+                run_dir=run_dir,
+                post_to_report_portal=post_to_report_portal,
+                rhbuild=rhbuild,
+                ceph_clusters_file=ceph_clusters_file,
+                post_results=post_results,
+                tcs=tcs,
+                cloud_type=cloud_type,
+                osp_cred=osp_cred,
+                instances_name=instances_name,
                 enable_eus=enable_eus,
+                conf=conf,
+                inventory=inventory,
+                service=service,
+                run_id=run_id,
+                store=store,
+                fetch_test_details=fetch_test_details,
             )
-        tcs.append(tc)
+            jenkins_rc = RunTestSuite(suite, run_details).run_tests(tests)
+    else:
+        for test in tests:
+            test = test.get("test")
+            parallel = test.get("parallel")
+            tc = fetch_test_details(test)
+            test_file = tc["file"]
+            report_portal_description = tc["desc"] or ""
+            unique_test_name = create_unique_test_name(tc["name"], test_names)
+            test_names.append(unique_test_name)
+
+            tc["log-link"] = configure_logger(unique_test_name, run_dir)
+
+            mod_file_name = os.path.splitext(test_file)[0]
+            test_mod = importlib.import_module(mod_file_name)
+            print("\nRunning test: {test_name}".format(test_name=tc["name"]))
+
+            if tc.get("log-link"):
+                print("Test logfile location: {log_url}".format(log_url=tc["log-link"]))
+
+            log.info(f"Running test {test_file}")
+            start = datetime.datetime.now()
+
+            for cluster_name in test.get("clusters", ceph_cluster_dict):
+                if test.get("clusters"):
+                    config = test.get("clusters").get(cluster_name).get("config", {})
+                else:
+                    config = test.get("config", {})
+
+                config = BuildConfigForPrerequisite(
+                    args,
+                    config,
+                    docker_registry,
+                    docker_image,
+                    docker_tag,
+                    osp_cred,
+                    base_url,
+                ).build_config()
+
+                try:
+                    if post_to_report_portal:
+                        rp_logger.start_test_item(
+                            name=unique_test_name,
+                            description=report_portal_description,
+                            item_type="STEP",
+                        )
+                        rp_logger.log(message=f"Logfile location - {tc['log-link']}")
+                        rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
+
+                    # Initialize the cluster with the expected rhcs_version hence the
+                    # precedence would be from test suite.
+                    # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
+                    _rhcs_version = test.get("ceph_rhcs_version", rhbuild[:3])
+                    ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
+
+                    rc = test_mod.run(
+                        ceph_cluster=ceph_cluster_dict[cluster_name],
+                        ceph_nodes=ceph_cluster_dict[cluster_name],
+                        config=config,
+                        parallel=parallel,
+                        test_data=ceph_test_data,
+                        ceph_cluster_dict=ceph_cluster_dict,
+                        clients=clients,
+                    )
+                except BaseException as be:  # noqa
+                    log.exception(be)
+                    rc = 1
+                finally:
+                    collect_recipe(ceph_cluster_dict[cluster_name])
+                    if store:
+                        store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
+
+                if rc != 0:
+                    break
+
+            elapsed = datetime.datetime.now() - start
+            tc["duration"] = elapsed
+
+            # Write to report portal
+            if post_to_report_portal:
+                rp_logger.finish_test_item(status="PASSED" if rc == 0 else "FAILED")
+
+            if rc == 0:
+                tc["status"] = "Pass"
+                msg = "Test {} passed".format(test_mod)
+                log.info(msg)
+                print(msg)
+
+                if post_results:
+                    post_to_polarion(tc=tc)
+            else:
+                tc["status"] = "Failed"
+                msg = "Test {} failed".format(test_mod)
+                log.info(msg)
+                print(msg)
+                jenkins_rc = 1
+
+                if post_results:
+                    post_to_polarion(tc=tc)
+
+                if test.get("abort-on-fail", False):
+                    log.info("Aborting on test failure")
+                    tcs.append(tc)
+                    break
+
+            if test.get("destroy-cluster") is True:
+                if cloud_type == "openstack":
+                    cleanup_ceph_nodes(osp_cred, instances_name)
+                elif cloud_type == "ibmc":
+                    cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
+
+            if test.get("recreate-cluster") is True:
+                ceph_cluster_dict, clients = create_nodes(
+                    conf,
+                    inventory,
+                    osp_cred,
+                    run_id,
+                    cloud_type,
+                    service,
+                    instances_name,
+                    enable_eus=enable_eus,
+                )
+            tcs.append(tc)
 
     url_base = (
         magna_url + run_dir.split("/")[-1]
@@ -957,8 +959,7 @@ def run(args):
         "info": info,
         "send_to_cephci": send_to_cephci,
     }
-
-    email_results(test_result=test_res)
+    # email_results(test_result=test_res)
 
     if jenkins_rc and not skip_sos_report:
         log.info(
@@ -970,59 +971,6 @@ def run(args):
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
     return jenkins_rc
-
-
-def store_cluster_state(ceph_cluster_object, ceph_clusters_file_name):
-    cn = open(ceph_clusters_file_name, "w+b")
-    pickle.dump(ceph_cluster_object, cn)
-    cn.close()
-    log.info("ceph_clusters_file %s", ceph_clusters_file_name)
-
-
-def collect_recipe(ceph_cluster):
-    """
-    Gather the system under test details.
-
-    At present, the following information are gathered
-        container (podman/docker)   version
-        ceph                        Deployed Ceph version
-
-    Args:
-        ceph_cluster:   Cluster participating in the test.
-
-    Returns:
-        None
-    """
-    version_datails = {}
-    installer_node = ceph_cluster.get_ceph_objects("installer")
-    client_node = ceph_cluster.get_ceph_objects("client")
-    out, rc = installer_node[0].exec_command(
-        sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
-    )
-    output = out.rstrip()
-    if output:
-        log.info(f"Podman Version {output}")
-        version_datails["PODMAN"] = output
-
-    out, rc = installer_node[0].exec_command(
-        sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
-    )
-    output = out.rstrip()
-    if output:
-        log.info(f"Docker Version {output}")
-        version_datails["DOCKER"] = output
-
-    if client_node:
-        out, rc = client_node[0].exec_command(
-            sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
-        )
-        output = out.rstrip()
-        log.info(f"ceph Version {output}")
-        version_datails["CEPH"] = output
-
-    version_detail = open("version_info.json", "w+")
-    json.dump(version_datails, version_detail)
-    version_detail.close()
 
 
 if __name__ == "__main__":

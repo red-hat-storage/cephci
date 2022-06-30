@@ -1,0 +1,37 @@
+---
+# sample global suite file
+name: Configuration suite file to bootstrap cluster.
+tests:
+  - parallel:
+    - test:
+        tcms_id: CEPH-1234
+        name: Running suite to bootstrap cluster.
+        desc: configuration to bootstrap cluster.
+        test_data: cephadm/test_bootstrap_cluster.yaml
+        module: test_bootstrap.py
+        runs_on:
+          - ceph-rbd1
+    - test:
+        tcms_id: CEPH-1234
+        name: Running suite to add hosts to cluster.
+        desc: configuration to add hosts to cluster.
+        test_data: ceph/test_addhosts.yaml
+        module: test_ceph.py
+        runs_on:
+          - ceph-rbd1
+    - test:
+        tcms_id: CEPH-1234
+        name: Running suite to add labels to nodes in cluster.
+        desc: configuration to add labels to nodes in cluster.
+        test_data: ceph/test_addlabel.yaml
+        module: test_ceph.py
+        runs_on:
+          - ceph-rbd1
+    - test:
+        tcms_id: CEPH-1234
+        name: Running suite to apply orchestration to nodes in cluster.
+        desc: configuration to apply orchestration to nodes in cluster.
+        test_data: ceph/test_apply.yaml
+        module: test_ceph.py
+        runs_on:
+          - ceph-rbd1
