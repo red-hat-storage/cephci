@@ -117,7 +117,7 @@ tests:
   - test:
       name: Multi Tenancy Tests
       desc: User and container access in same and different tenants
-      polarion-id: CEPH-9740,CEPH-9741
+      polarion-id: CEPH-9740 # also applies to CEPH-9741
       module: sanity_rgw.py
       config:
         script-name: test_multitenant_user_access.py
@@ -139,7 +139,7 @@ tests:
   - test:
       name: Bucket Request Payer Tests
       desc: Basic test for bucket request payer
-      polarion-id: CEPH-10344,CEPH-10346,CEPH-10351
+      polarion-id: CEPH-10344 # also applies to CEPH-10346 and CEPH-10351
       module: sanity_rgw.py
       config:
         script-name: test_bucket_request_payer.py
@@ -171,7 +171,7 @@ tests:
   - test:
       name: Indexless buckets
       desc: Indexless (blind) buckets
-      polarion-id: CEPH-10354, CEPH-10357
+      polarion-id: CEPH-10354 # also applies to CEPH-10357
       module: sanity_rgw.py
       comments: Known issue BZ-2043366
       config:

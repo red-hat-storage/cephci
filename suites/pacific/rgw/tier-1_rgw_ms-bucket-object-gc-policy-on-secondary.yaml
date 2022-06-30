@@ -291,7 +291,7 @@ tests:
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_enc on secondary
-      polarion-id: CEPH-11358,CEPH-11361
+      polarion-id: CEPH-11361 # also applies to CEPH-11358
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:

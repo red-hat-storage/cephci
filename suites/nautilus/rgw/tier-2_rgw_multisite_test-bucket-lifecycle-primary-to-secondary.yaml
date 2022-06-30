@@ -94,7 +94,7 @@ tests:
             verify-io-on-site: [ "ceph-rgw2" ]
       desc: test_lifecycle  on secondary with AND rule filter
       module: sanity_rgw_multisite.py
-      polarion-id: CEPH-11179, CEPH-11180
+      polarion-id: CEPH-11179 # also applies to CEPH-11180
       name: m buckets with n objects
   - test:
       name: Buckets and Objects test
