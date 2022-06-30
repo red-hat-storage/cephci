@@ -8,5 +8,5 @@ configs:
       pool_name: mirror_test
       image_name: image_2
       size: 1G
-    role: 
+    role:
       - client
