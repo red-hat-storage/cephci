@@ -39,7 +39,7 @@ def sendEmail(
     def run_type,
     def testResults,
     def artifactDetails,
-    def tierLevel,
+    def tierLevel = null,
     def stageLevel = null,
     def toList="ceph-qe-list@redhat.com"
     ) {
@@ -123,7 +123,12 @@ def sendEmail(
         status = "UNSTABLE"
     }
 
-    def subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
+    def subject = ""
+    if (run_type == "upstream") {
+        subject = "Upstream test report status of ceph version:${artifactDetails.ceph_version} is ${status}"
+    } else {
+        subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
+    }
 
     emailext (
         mimeType: 'text/html',
