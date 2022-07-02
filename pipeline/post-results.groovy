@@ -23,7 +23,7 @@ node(nodeName) {
                 checkout(
                     scm: [
                         $class: 'GitSCM',
-                        branches: [[name: 'origin/master']],
+                        branches: [[name: "origin/master"]],
                         extensions: [
                             [
                                 $class: 'CleanBeforeCheckout',
@@ -42,7 +42,7 @@ node(nodeName) {
                             ]
                         ],
                         userRemoteConfigs: [[
-                            url: 'https://github.com/red-hat-storage/cephci.git'
+                            url: "https://github.com/red-hat-storage/cephci.git"
                         ]]
                     ],
                     changelog: false,
@@ -113,16 +113,15 @@ node(nodeName) {
                 else {
                     sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
                 }
-                
+
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
                 testStatus = msgMap["test"]["result"]
             }
 
-            //Remove the sync results folder
+//             Remove the sync results folder
             sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
 
-            // Update RH recipe file
-
+//             Update RH recipe file
             if ( composeInfo != null && run_type == "Sanity Run"){
                 if ( tierLevel == null ){
                     tierLevel = msgMap["pipeline"]["name"]
@@ -159,6 +158,18 @@ node(nodeName) {
                 }
                 println("latestContent: ${latestContent}")
                 sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
+            }
+            if(msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2"){
+                def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
+                println("rhcsVersion")
+                println(rhcsVersion)
+                majorVersion = rhcsVersion["major_version"]
+                minorVersion = rhcsVersion["minor_version"]
+                minorVersion = "${minorVersion}"
+                def testResults = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
+                println("testResults")
+                println(testResults)
+                sharedLib.sendConsolidatedEmail(run_type, testResults, metaData, majorVersion, minorVersion, msgMap["artifact"]["version"])
             }
             println("Execution complete")
         }
