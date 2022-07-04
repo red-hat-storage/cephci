@@ -127,7 +127,7 @@ tests:
   - test:
       name: Object Encryption Tests
       desc: Upload and Download objects using encryption [AES256 alogorithm]
-      polarion-id: CEPH-11358,CEPH-11361
+      polarion-id: CEPH-11358 # also applies to CEPH-11361
       module: sanity_rgw.py
       config:
         script-name: test_Mbuckets_with_Nobjects.py

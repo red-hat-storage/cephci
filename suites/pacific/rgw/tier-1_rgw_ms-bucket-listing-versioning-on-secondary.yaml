@@ -324,7 +324,7 @@ tests:
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_copy on secondary
-      polarion-id: CEPH-14264, CEPH-10646
+      polarion-id: CEPH-10646 # also applies to CEPH-14264
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -347,7 +347,7 @@ tests:
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-14261, CEPH-9222, CEPH-10652
+      polarion-id: CEPH-10652 # also applies to CEPH-14261 and CEPH-9222
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:

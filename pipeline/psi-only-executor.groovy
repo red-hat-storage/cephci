@@ -3,17 +3,8 @@
 */
 
 def nodeName = "centos-7"
-def testStages = [:]
-def testResults = [:]
-def releaseContent = [:]
 def ciMap
 def sharedLib
-def majorVersion
-def minorVersion
-def tierLevel
-def stageLevel = null
-def run_type = null
-def previousTierLevel
 
 
 node(nodeName) {
@@ -56,129 +47,27 @@ node(nodeName) {
         }
     }
 
-    stage('Prepare-Stages') {
-        /* Prepare pipeline stages using RHCEPH version */
+    stage("Trigger Pipeline"){
         ciMap = sharedLib.getCIMessageMap()
-        previousTierLevel = ciMap.test.type
+        def rhcephVersion = ciMap.artifact.nvr
+        def buildType = "tier-0"
+        def tags = "openstack-only,tier-1,stage-1"
+        def overrides = ["build": "tier-0"]
+        def overridesStr = writeJSON returnText: true, json: overrides
+        def buildArtifacts = "${params.CI_MESSAGE}"
 
-        tierTypeStrings = previousTierLevel.split("-")
-        def tierLevelInt = tierTypeStrings[1].toInteger() + 1
-        tierLevel = tierTypeStrings[0] + "-" + tierLevelInt
+        println "Starting test execution with parameters:"
+        println "\trhcephVersion: ${rhcephVersion}\n\tbuildType: ${buildType}\n\tbuildArtifacts: ${buildArtifacts}\n\toverrides: ${overrides}\n\ttags: ${tags}"
 
-        // Once the pipeline matures, uncomment the below line
-        // cliArg = "--build ${tierLevel}"
-        def cliArgs = "--build tier-0"
-
-        def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
-        majorVersion = rhcsVersion["major_version"]
-        minorVersion = rhcsVersion["minor_version"]
-
-        /*
-           Read the release yaml contents to get contents,
-           before other listener/Executor Jobs updates it.
-        */
-        releaseContent = sharedLib.readFromReleaseFile(
-            majorVersion, minorVersion, lockFlag=false
-        )
-
-        // Till the pipeline matures, using the build that has passed tier-0 suite.
-        testStages = sharedLib.fetchStagesScript(cliArgs, tierLevel, testResults)
-        testStages = testStages.findAll { it.key.contains("psi-only")}
-        testResults = testResults.findAll { it.key.contains("psi-only")}
-
-        if ( testStages.isEmpty() ) {
-            currentBuild.result = "ABORTED"
-            error "No test stages found.."
-        }
-
-        currentBuild.description = "${ciMap.artifact.nvr} - ${ciMap.artifact.version} - ${tierLevel}"
+        build ([
+            wait: false,
+            job: "rhceph-test-execution-pipeline",
+            parameters: [
+                string(name: 'rhcephVersion', value: rhcephVersion.toString()),
+                string(name: 'tags', value: tags),
+                string(name: 'buildType', value: buildType),
+                string(name: 'overrides', value: overridesStr),
+                string(name: 'buildArtifacts', value: buildArtifacts.toString())]
+        ])
     }
-
-    // Running the test suites in batches of 4
-    (testStages.keySet() as List).collate(4).each{
-        def stages = testStages.subMap(it)
-        parallel stages
-    }
-
-    stage('Publish Results') {
-        /* Publish results through E-mail and Google Chat */
-        if(ciMap["pipeline"].containsKey("tags")){
-            def tag = ciMap["pipeline"]["tags"]
-            def tags_list = tag.split(',') as List
-            def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
-            stageLevel = tags_list.get(stage_index)
-            run_type = ciMap["pipeline"]["run_type"]
-        }
-
-        def ciMsgMap = ciMap["artifact"]["nvr"]
-        sharedLib.sendGChatNotification(run_type, testResults, tierLevel.capitalize(), stageLevel)
-        sharedLib.sendEmail(
-            run_type,
-            testResults,
-            sharedLib.buildArtifactsDetails(releaseContent, ciMsgMap, "tier-0"),
-            tierLevel.capitalize(),
-            stageLevel,
-            "cephci@redhat.com"
-        )
-    }
-
-    stage('Publish UMB') {
-        /* send UMB message */
-
-        def artifactsMap = [
-            "artifact": [
-                "type": "product-build",
-                "name": "Red Hat Ceph Storage",
-                "version": ciMap["artifact"]["version"],
-                "nvr": ciMap["artifact"]["nvr"],
-                "phase": "testing",
-                "build": ciMap.artifact.build,
-            ],
-            "contact": [
-                "name": "Downstream Ceph QE",
-                "email": "cephci@redhat.com",
-            ],
-            "system": [
-                "os": "centos-7",
-                "label": "centos-7",
-                "provider": "openstack",
-            ],
-            "pipeline": [
-                "name": "rhceph-tier-x",
-                "id": currentBuild.number,
-            ],
-            "run": [
-                "url": env.BUILD_URL,
-                "log": "${env.BUILD_URL}console",
-                "additional_urls": [
-                    "doc": "https://docs.engineering.redhat.com/display/rhcsqe/RHCS+QE+Pipeline",
-                    "repo": "https://github.com/red-hat-storage/cephci",
-                    "report": "https://reportportal-rhcephqe.apps.ocp4.prod.psi.redhat.com/",
-                    "tcms": "https://polarion.engineering.redhat.com/polarion/",
-                ],
-            ],
-            "test": [
-                "type": tierLevel,
-                "category": "functional",
-                "result": currentBuild.currentResult,
-            ],
-            "generated_at": env.BUILD_ID,
-            "version": "1.0.0"
-        ]
-
-        def msgType = "Tier1TestingDone"
-        if ( tierLevel == "tier-2" ) {
-            msgType = "Tier2ValidationTestingDone"
-        }
-
-        def msgContent = writeJSON returnText: true, json: artifactsMap
-        println "${msgContent}"
-
-        sharedLib.SendUMBMessage(
-            artifactsMap,
-            "VirtualTopic.qe.ci.rhcephqe.product-build.test.complete",
-            msgType,
-        )
-    }
-
 }

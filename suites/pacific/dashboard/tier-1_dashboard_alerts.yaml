@@ -1,0 +1,173 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_dashboard_alerts.yaml
+# Test-Case:
+#    - Bootstrap
+#    - Deploy all services
+#    - Configure client and run IO
+#    - validate all alerts
+#
+# Cluster Configuration:
+#   cephci/conf/pacific/cephadm/tier-1_3node_cephadm_bootstrap.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap with ssl-dashboard-port, ssh options
+      desc: bootstrap with ssl-dashboard-port, ssh-public-key, ssh-private-key and apply-spec option.
+      module: test_bootstrap.py
+      polarion-id: CEPH-83573721,CEPH-83573718
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          initial-dashboard-user: admin123
+          initial-dashboard-password: admin@123
+          dashboard-password-noupdate: true
+          dashboard-key: /root/dashboard.key
+          dashboard-crt: /root/dashboard.crt
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+          skip-monitoring-stack: true
+          orphan-initial-daemons: true
+          ssl-dashboard-port: "8445"
+          ssh-user: cephuser
+          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide
+          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+                - node2
+                - node3
+            - service_type: mon
+              placement:
+                nodes:
+                  - node1
+                  - node2
+                  - node3
+            - service_type: mgr
+              placement:
+                label: mgr
+            - service_type: prometheus
+              placement:
+                count: 1
+                nodes:
+                  - node1
+            - service_type: grafana
+              placement:
+                nodes:
+                  - node1
+            - service_type: alertmanager
+              placement:
+                count: 2
+                label: alertmanager
+            - service_type: node-exporter
+              placement:
+                host_pattern: "*"
+            - service_type: crash
+              placement:
+                host_pattern: "*"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Apply OSD, MDS, RGW Service deployment
+      desc: OSD, MDS, RGW service deployment using apply.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573730
+      config:
+        verify_cluster_health: true
+        verify_log_files: true
+        steps:
+          - config:
+              command: shell      # wait for daemons to come up, need to remove this sleep
+              args:               #  in future with apply-spec service verification
+                - sleep
+                - "300"
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs                        # name of the filesystem
+              args:
+                placement:
+                  label: mds
+          - config:
+              command: apply
+              service: rgw
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - myrgw
+              args:
+                placement:
+                  count-per-host: 2
+                  nodes:
+                    - node2
+                    - node3
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Configure client
+      desc: Configure client on node4
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node4                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: ceph health error alert test
+      polarion-id: CEPH-83575044
+      module: alerts.py
+      config:
+        alert: HEALTH_ERR
+      desc: verify ceph health error alert
+  - test:
+      name: ceph health warn alert test
+      polarion-id: CEPH-83574229
+      module: alerts.py
+      config:
+        alert: HEALTH_WARN
+      desc: verify ceph health warn alert

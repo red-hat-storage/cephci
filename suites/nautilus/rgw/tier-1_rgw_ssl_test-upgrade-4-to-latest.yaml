@@ -123,7 +123,7 @@ tests:
   - test:
       name: Bucket Lifecycle Object_expiration_tests
       desc: Test object expiration for Prefix and tag based filter and for more than one days
-      polarion-id: CEPH-11179, CEPH-11180
+      polarion-id: CEPH-11179 # also applies to CEPH-11180
       module: sanity_rgw.py
       config:
         script-name: test_bucket_lifecycle_object_expiration.py
@@ -249,7 +249,7 @@ tests:
   - test:
       name: Bucket Lifecycle Object_expiration_tests
       desc: Test object expiration for Prefix and tag based filter and for more than one days
-      polarion-id: CEPH-11179, CEPH-11180
+      polarion-id: CEPH-11180 # also applies to CEPH-11179
       module: sanity_rgw.py
       config:
         script-name: test_bucket_lifecycle_object_expiration.py

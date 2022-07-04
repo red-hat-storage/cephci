@@ -12,51 +12,45 @@ def sharedLib
 def vmPrefix
 
 // Defaults
-def inventory = "rhel-8-latest.yaml"
+def inventory = "rhel-8.5-server-x86_64-large.yaml"
 def globalConf = "integrations/7_node_ceph.yaml"
 def testSuite = "integrations/ocs/"
 
 node ("centos-7") {
 
-    timeout(unit: "MINUTES", time: 30) {
-        stage("Prepare env") {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+    stage("prepareJenkinsAgent") {
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
 
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    extensions: [
-                        [
-                            $class: 'CleanBeforeCheckout',
-                            deleteUntrackedNestedRepositories: true
-                        ],
-                        [
-                            $class: 'WipeWorkspace'
-                        ],
-                        [
-                            $class: 'CloneOption',
-                            depth: 1,
-                            noTags: true,
-                            shallow: true,
-                            timeout: 10,
-                            reference: ''
-                        ]
-                    ],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
-                ],
-                changelog: false,
-                poll: false
-            )
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: 'origin/master']],
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
+                    deleteUntrackedNestedRepositories: true
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
+            ],
+            changelog: false,
+            poll: false
+        )
 
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            sharedLib.prepareNode()
-        }
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        sharedLib.prepareNode()
     }
 
-    stage("Deploy") {
+    stage("deployCephCluster") {
         def cliArgs = ""
         ciMap = sharedLib.getCIMessageMap()
 
@@ -104,7 +98,7 @@ node ("centos-7") {
         vmPrefix = returnStatus["instances-name"]
     }
 
-    stage('Publish') {
+    stage('postMessage') {
         def sutInfo = readYaml file: "sut.yaml"
         sutInfo["instances-name"] = vmPrefix
 
