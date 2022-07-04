@@ -67,7 +67,7 @@ node('ceph-qe-ci || rhel-8-medium') {
 
         stage('publish result') {
             def upstreamArtifact = ["composes": yamlData[upstreamVersion]["composes"],
-                                    "product": "Red Hat Ceph Storage",
+                                    "product": "Ceph Storage",
                                     "ceph_version": cephVersion,
                                     "repository": yamlData[upstreamVersion]["image"]]
             def status = "STABLE"
@@ -75,7 +75,7 @@ node('ceph-qe-ci || rhel-8-medium') {
                 status = "UNSTABLE"
             }
             sharedLib.sendEmail(buildType, testResults, upstreamArtifact)
-            def msg = "Upstream test report status of ceph version:${upstreamArtifact.ceph_version} is ${status} .Log:${env.BUILD_URL}"
+            def msg = "Ceph Version:${upstreamArtifact.ceph_version} Automated test execution summary"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
         }
     } catch(Exception err) {

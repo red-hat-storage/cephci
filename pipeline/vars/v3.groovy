@@ -881,4 +881,27 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
 
 }
 
+def updateUpstreamFile(def version) {
+    /*
+        Updates upstream yaml file for the version passed as argument
+
+        example:  python3 upstream_cli.py build pacific
+
+        Args:
+            version      Version of upstream builds
+
+    */
+    try {
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python3"
+        sh ".venv/bin/python3 -m pip install packaging"
+        sh "sudo yum install podman -y"
+        def scriptFile = "pipeline/scripts/ci/upstream_cli.py"
+        def args = "build ${version}"
+        sh script: "${cmd} ${scriptFile} ${args}"
+    } catch(Exception exc) {
+        println exc
+        error "Error during updating upstream yaml file."
+    }
+}
+
 return this;
