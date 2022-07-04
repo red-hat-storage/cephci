@@ -239,8 +239,7 @@ def sendConsolidatedEmail(
         status = "UNSTABLE"
     }
 
-//     def subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
-    def subject = "RHCEPH ${majorVersion}.${minorVersion} - ${cephVersion} automated test execution report"
+    def subject = "RHCEPH ${majorVersion}.${minorVersion} - ${cephVersion} ${run_type} test execution report"
     emailext (
         mimeType: 'text/html',
         subject: "${subject}",
