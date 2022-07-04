@@ -39,7 +39,7 @@ node(nodeName) {
                     changelog: false,
                     poll: false
                 )
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+                sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
                 sharedLib.prepareNode()
             }
         }
@@ -52,7 +52,7 @@ node(nodeName) {
             try{
                 sharedLib.updateUpstreamFile(upstreamVersion) //Updates upstream.yaml
             } catch(Exception err) {
-                retry(3) {
+                retry(10) {
                     echo "Execution failed, Retrying..."
                     sharedLib.updateUpstreamFile(upstreamVersion)
                 }
@@ -69,7 +69,8 @@ node(nodeName) {
             def subject =  "[CEPHCI-PIPELINE-ALERT] [JOB-FAILURE] - ${env.JOB_NAME}/${env.BUILD_NUMBER}"
             def body = "<body><h3><u>Job Failure</u></h3></p>"
             body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
-            body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
+            body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd>"
+            body += "<dt>Failure Snippet:</dt><dd>${sharedLib.returnSnippet()}</dd></dl></body>"
 
             emailext (
                 mimeType: 'text/html',

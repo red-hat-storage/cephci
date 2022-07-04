@@ -39,7 +39,7 @@ def sendEmail(
     def run_type,
     def testResults,
     def artifactDetails,
-    def tierLevel,
+    def tierLevel = null,
     def stageLevel = null,
     def toList="rlepaksh@redhat.com"
     ) {
@@ -123,11 +123,18 @@ def sendEmail(
         status = "UNSTABLE"
     }
 
-    if (tierLevel == "live"){
-        def subject = "${run_type} for ${artifactDetails.version} is ${status}"
+    def subject = ""
+    if (run_type == "live") {
+        subject = "${run_type} test report status of ceph version:${artifactDetails.ceph_version} is ${status}"
     }
-
-    def subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
+    println(subject)
+    if (run_type == "upstream") {
+        subject = "Upstream Ceph Version:${artifactDetails.ceph_version}-${artifactDetails.upstreamVersion} Automated test execution summary"
+    }
+    if (run_type == "RC build Sanity Run" || run_type == "Schedule Run" || run_type == "Sanity Run" || run_type == "Manual Run" || run_type == "PSI Only Run") {
+        subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
+    }
+    println(subject)
 
     emailext (
         mimeType: 'text/html',
@@ -138,7 +145,123 @@ def sendEmail(
     )
 }
 
-def sendGChatNotification(def run_type, def testResults, def tierLevel, def stageLevel= null, def build_url= null, def rhcephVersion= null) {
+def sendConsolidatedEmail(
+    def run_type,
+    def testResults,
+    def artifactDetails,
+    def majorVersion,
+    def minorVersion,
+    def cephVersion,
+    def toList="ceph-qe-list@redhat.com"
+    ) {
+    /*
+        Send an Email
+        Arguments:
+            testResults: map of the test suites and its status
+                Example: testResults = [
+                                    "01_deploy": ["status": "PASS",
+                                                  "log-dir": "file_path1/"],
+                                    "02_object": ["status": "PASS",
+                                                  "log-dir": "file_path2/"]
+                                ]
+            artifactDetails: Map of artifact details
+                Example: artifactDetails = ["composes": ["rhe-7": "composeurl1",
+                                                         "rhel-8": "composeurl2"],
+                                            "product": "Redhat",
+                                            "version": "RHCEPH-5.0",
+                                            "ceph_version": "16.2.0-117",
+                                            "repository": "repositoryname"]
+            tierLevel:
+                Example: Tier0, Tier1, CVP..
+
+            stageLevel:
+                Example: Stage-0, Stage-1..
+    */
+    def status = "STABLE"
+    def body = readFile(file: "pipeline/vars/emailable-report.html")
+    def color = "82E0AA"
+
+    body += "<body>"
+    body += "<h3><u>Test Summary</u></h3>"
+    body += "<table>"
+    body += "<tr><th>Tier Level</th><th>Stage Level</th><th>Result</th></tr>"
+
+    textBody = testResults.sort()
+    textBody.each{k,v->
+        if(k.indexOf("tier") >= 0){
+            def stageResults = v["results"].sort()
+            stageResults.each{stage,result->
+                if(result == "FAILURE"){
+                    color = "F1948A"
+                } else {
+                    color = "82E0AA"
+                }
+                body += "<tr bgcolor=${color}><td>${k}</td><td>${stage}</td><td>${result}</td></tr>"
+            }
+        }
+    }
+
+    body += "</table><br />"
+    body += "<h3><u>Test Artifacts</u></h3>"
+    body += "<table>"
+
+    if (artifactDetails.product) {
+        body += "<tr><td>Product</td><td>${artifactDetails.product}</td></tr>"
+    }
+    if (artifactDetails.version) {
+        body += "<tr><td>Version</td><td>${artifactDetails.version}</td></tr>"
+    }
+    if (artifactDetails.ceph_version) {
+        body += "<tr><td>Ceph Version </td><td>${artifactDetails.ceph_version}</td></tr>"
+    }
+    if (artifactDetails.composes) {
+        body += "<tr><td>Composes</td><td>${artifactDetails.composes}</td></tr>"
+    }
+    if (artifactDetails.repository) {
+        body += "<tr><td>Container Image</td><td>${artifactDetails.repository}</td></tr>"
+    }
+    if (artifactDetails.log) {
+        body += "<tr><td>Log</td><td>${artifactDetails.log}</td></tr>"
+    } else {
+        body += "<tr><td>Log</td><td>${env.BUILD_URL}</td></tr>"
+    }
+    if ( artifactDetails.buildArtifacts ){
+        body += "</table><h3><u>Build Artifacts</u></h3><table>"
+
+        if (artifactDetails.buildArtifacts.composes) {
+            body += "<tr><td>Build Composes</td><td>${artifactDetails.buildArtifacts.composes}</td></tr>"
+        }
+        if (artifactDetails.buildArtifacts.repository) {
+            body += "<tr><td>Container Image</td><td>${artifactDetails.buildArtifacts.repository}</td></tr>"
+        }
+    }
+
+    body += "</table><br /></body></html>"
+
+    if ('FAIL' in fetchStageStatus(testResults)) {
+        if(toList == "ceph-qe-list@redhat.com"){
+            toList = "cephci@redhat.com"
+        }
+        status = "UNSTABLE"
+    }
+
+    def subject = "RHCEPH ${majorVersion}.${minorVersion} - ${cephVersion} ${run_type} test execution report"
+    emailext (
+        mimeType: 'text/html',
+        subject: "${subject}",
+        body: "${body}",
+        from: "cephci@redhat.com",
+        to: "${toList}"
+    )
+}
+
+def sendGChatNotification(
+    def run_type,
+    def testResults,
+    def tierLevel,
+    def stageLevel = null,
+    def build_url = null,
+    def rhcephVersion = null) {
     /*
         Send a GChat notification.
         Plugin used:
@@ -157,14 +280,20 @@ def sendGChatNotification(def run_type, def testResults, def tierLevel, def stag
     if ('FAIL' in fetchStageStatus(testResults)) {
         status = "UNSTABLE"
     }
-    if (! build_url){ 
+    if (! build_url){
         build_url = "${env.BUILD_URL}"
     }
-    if (tierLevel == "live"){
-           def msg= "${run_type} for RHCEPH-${rhcephVersion} is ${status}.Log:${build_url}"
+    println(build_url)
+    println(rhcephVersion)
+    def msg= ""
+    if (run_type == "Live"){
+        println("Live Gchat")
+        msg= "${run_type} test run for RHCEPH-${rhcephVersion} is ${status}.Log:${build_url}"
+    } else {
+        msg= "${run_type} for ${ciMsg.artifact.nvr}:${tierLevel} ${stageLevel} is ${status}.Log:${build_url}"
     }
-    def msg= "${run_type} for ${ciMsg.artifact.nvr}:${tierLevel} ${stageLevel} is ${status}.Log:${build_url}"
-    googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
+    println(msg)
+    //googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
 }
 
 def generateRandomString() {
@@ -771,6 +900,47 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
         failOnError: true
     ])
 
+}
+
+def updateUpstreamFile(def version) {
+    /*
+        Updates upstream yaml file for the version passed as argument
+
+        example:  python3 upstream_cli.py build pacific
+
+        Args:
+            version      Version of upstream builds
+    */
+    try {
+        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python3"
+        sh ".venv/bin/python3 -m pip install packaging"
+        sh "sudo yum install podman -y"
+        def scriptFile = "pipeline/scripts/ci/upstream_cli.py"
+        def args = "build ${version}"
+        sh script: "${cmd} ${scriptFile} ${args}"
+    } catch(Exception exc) {
+        error "${exc}"
+    }
+}
+
+def returnSnippet() {
+    /*
+       fetch last failure text from the build console output
+    */
+    def retValue = sh (returnStdout: true, script: "curl ${env.BUILD_URL}consoleText")
+    retValue = retValue.split("\n")
+    def numLines = 150
+    if ( retValue.size() > numLines ){
+        numLines = retValue.size() - numLines
+    } else {
+        numLines = 0
+    }
+    def body = "<code>"
+    for ( line in retValue[numLines..-1] ) {
+        body += "<i>${line}</i><br>"
+    }
+    body += "</code>"
+    return body
 }
 
 return this;

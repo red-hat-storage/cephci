@@ -654,3 +654,67 @@
     - ibmc
     - rgw
     - stage-4
+
+- name: "test-rgw-ssl-upgrade-4-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_ssl_test-upgrade-4-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.1"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-upgrade-4-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_test-upgrade-4-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/5-node-with-iscsi-role.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.1"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-upgrade-5-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_test_upgrade-5-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.1"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "Tier-2 RGW single site upgrade from 5.x GA to latest developmet build"
+  suite: "suites/pacific/rgw/tier-1_rgw_ssl_test-upgrade-5-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.1"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2

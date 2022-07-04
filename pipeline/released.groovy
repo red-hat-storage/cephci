@@ -8,8 +8,9 @@ def cephVersion
 def composeUrl
 def containerImage
 def rhcephVersion
-def run_type
+run_type = "Live"
 def tierLevel = "live"
+def stageLevel = null
 def testStages = [:]
 def testResults = [:]
 
@@ -69,7 +70,6 @@ node(nodeName) {
         })
         println "repo url : ${composeUrl}"
         rhcephVersion = "${majorVersion}.${minorVersion}"
-        run_type = "Live test run"
         println(rhcephVersion)
 
         cephVersion = sharedLib.fetchCephVersion(composeUrl)
@@ -78,7 +78,6 @@ node(nodeName) {
         print(fetchStages)
         testStages = fetchStages["testStages"]
         final_stage = fetchStages["final_stage"]
-        println("final_stage : ${final_stage}")
         currentBuild.description = "RHCEPH-${majorVersion}.${minorVersion}"
     }
 
@@ -129,13 +128,15 @@ node(nodeName) {
             "ceph_version": contentMap["artifact"]["version"],
             "container_image": contentMap["build"]["repository"]
         ]
-
-        sharedLib.sendGChatNotification(run_type, testResults, tierLevel, build_url, rhcephVersion)
+        println(tierLevel)
+        println(build_url)
+        println(rhcephVersion)
+        sharedLib.sendGChatNotification(run_type, testResults, tierLevel, stageLevel, build_url, rhcephVersion)
         sharedLib.sendEmail(
                 run_type,
                 testResults,
                 msg,
-                tierLevel.capitalize()
+                tierLevel
         )
 
     }
