@@ -101,19 +101,12 @@ node(nodeName) {
                 tierLevel = tags_list.get(tier_index)
                 run_type = msgMap["pipeline"]["run_type"]
                 build_url = msgMap["run"]["url"]
-
             }
-            
 
             if (metaData["results"]) {
-                if(msgMap["pipeline"].containsKey("tags")){
-                    sharedLib.sendEmail(run_type, metaData["results"], metaData, tierLevel, stageLevel)
-                    sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
-                }
-                else {
+                if(!msgMap["pipeline"].containsKey("tags")){
                     sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
                 }
-
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
                 testStatus = msgMap["test"]["result"]
             }
@@ -161,15 +154,12 @@ node(nodeName) {
             }
             if(msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2"){
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
-                println("rhcsVersion")
-                println(rhcsVersion)
                 majorVersion = rhcsVersion["major_version"]
                 minorVersion = rhcsVersion["minor_version"]
                 minorVersion = "${minorVersion}"
                 def testResults = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
-                println("testResults")
-                println(testResults)
                 sharedLib.sendConsolidatedEmail(run_type, testResults, metaData, majorVersion, minorVersion, msgMap["artifact"]["version"])
+                sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
             }
             println("Execution complete")
         }
