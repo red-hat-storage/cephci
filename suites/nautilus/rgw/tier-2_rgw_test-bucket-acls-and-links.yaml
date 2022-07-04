@@ -50,6 +50,7 @@ tests:
   - test:
       name: ACLs Test
       desc: Test basic acls
+      polarion-id: CEPH-14238 # also applies to CEPH-14239
       module: sanity_rgw.py
       config:
         test-version: v1
@@ -60,6 +61,7 @@ tests:
   - test:
       name: ACLs Test
       desc: Test acls on all users
+      polarion-id: CEPH-14240 # also applies to CEPH-14241
       module: sanity_rgw.py
       config:
         test-version: v1
@@ -70,6 +72,7 @@ tests:
   - test:
       name: ACLs Test
       desc: Test acls with copy objects on different users
+      polarion-id: CEPH-14242
       module: sanity_rgw.py
       config:
         test-version: v1
@@ -80,6 +83,7 @@ tests:
   - test:
       name: ACLs Test
       desc: Test acls reset
+      polarion-id: CEPH-14260
       module: sanity_rgw.py
       config:
         test-version: v1
@@ -125,6 +129,7 @@ tests:
   - test:
       name: ACLs Test
       desc: Test multipart upload->cancel->reupload
+      polarion-id: CEPH-14266
       module: sanity_rgw.py
       config:
         test-version: v1

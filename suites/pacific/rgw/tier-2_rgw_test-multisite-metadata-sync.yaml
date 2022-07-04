@@ -165,6 +165,7 @@ tests:
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
+      polarion-id: CEPH-10362
   - test:
       abort-on-fail: true
       clusters:

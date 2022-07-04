@@ -62,6 +62,7 @@ tests:
       desc: "test to create \"M\" no of buckets and \"N\" no of objects with encryption"
       module: sanity_rgw.py
       name: Mbuckets_with_Nobjects
+      polarion-id: CEPH-11350
   -
     test:
       config:
@@ -81,6 +82,7 @@ tests:
       desc: "test to enable versioning"
       module: sanity_rgw.py
       name: "Versioning Tests"
+      polarion-id: CEPH-10207
   -
     test:
       config:
@@ -120,6 +122,7 @@ tests:
       desc: test_versioning_suspend
       module: sanity_rgw.py
       name: "Versioning Tests"
+      polarion-id: CEPH-10209
   -
     test:
       config:
@@ -129,6 +132,7 @@ tests:
       desc: "check to test to overwrite objects suspend from another user"
       module: sanity_rgw.py
       name: "Versioning Tests"
+      polarion-id: CEPH-9199
   -
     test:
       config:

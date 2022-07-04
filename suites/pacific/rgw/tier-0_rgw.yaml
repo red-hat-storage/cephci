@@ -121,8 +121,3 @@ tests:
       module: sanity_rgw.py
       name: Swift based tests
       polarion-id: CEPH-11019
-
-  - test:
-      name: generate sosreport
-      module: sosreport.py
-      desc: generate sosreport
