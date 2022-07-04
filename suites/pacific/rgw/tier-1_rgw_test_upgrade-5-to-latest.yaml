@@ -60,6 +60,7 @@ tests:
                 placement:
                   label: rgw
       desc: bootstrap and deployment services with label placements.
+      polarion-id: CEPH-83573777
       destroy-cluster: false
       module: test_cephadm.py
       name: Deploy RHCS cluster using cephadm

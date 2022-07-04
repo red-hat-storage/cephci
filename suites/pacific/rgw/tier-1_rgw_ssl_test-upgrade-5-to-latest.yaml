@@ -72,7 +72,7 @@ tests:
   - test:
       name: Versioning Tests
       desc: Basic versioning test, also called as test to enable bucket versioning
-      polarion-id: CEPH-14261, CEPH-9222 # also applies to CEPH-10652
+      polarion-id: CEPH-9222 # also applies to CEPH-14261 and CEPH-10652
       module: sanity_rgw.py
       config:
         script-name: test_versioning_with_objects.py
@@ -81,7 +81,7 @@ tests:
   - test:
       name: Versioning Tests
       desc: test to overwrite objects after suspending versioning
-      polarion-id: CEPH-9199,CEPH-9223
+      polarion-id: CEPH-9199 # also applies to CEPH-9223
       module: sanity_rgw.py
       config:
         script-name: test_versioning_with_objects.py
@@ -92,7 +92,7 @@ tests:
   - test:
       name: Bucket Lifecycle Object_expiration_tests
       desc: Test object expiration for Prefix and tag based filter and for more than one days
-      polarion-id: CEPH-11179, CEPH-11180
+      polarion-id: CEPH-11179 # also applies to CEPH-11180
       module: sanity_rgw.py
       config:
         script-name: test_bucket_lifecycle_object_expiration.py
@@ -158,7 +158,7 @@ tests:
             name: Upgrade ceph
             desc: Upgrade cluster to latest version
             module: test_cephadm_upgrade.py
-            polarion-id: CEPH-83573791,CEPH-83573790
+            polarion-id: CEPH-83573791 # also applies to CEPH-83573790
             config:
               command: start
               service: upgrade
@@ -182,7 +182,7 @@ tests:
   - test:
       name: Versioning Tests
       desc: Basic versioning test, also called as test to enable bucket versioning
-      polarion-id: CEPH-14261, CEPH-9222 # also applies to CEPH-10652
+      polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
       module: sanity_rgw.py
       config:
         script-name: test_versioning_with_objects.py
@@ -191,7 +191,7 @@ tests:
   - test:
       name: Versioning Tests
       desc: test to overwrite objects after suspending versioning
-      polarion-id: CEPH-9199,CEPH-9223
+      polarion-id: CEPH-9223 # also applies to CEPH-9199
       module: sanity_rgw.py
       config:
         script-name: test_versioning_with_objects.py
@@ -202,7 +202,7 @@ tests:
   - test:
       name: Bucket Lifecycle Object_expiration_tests
       desc: Test object expiration for Prefix and tag based filter and for more than one days
-      polarion-id: CEPH-11179, CEPH-11180
+      polarion-id: CEPH-11180 # also applies to CEPH-11179
       module: sanity_rgw.py
       config:
         script-name: test_bucket_lifecycle_object_expiration.py

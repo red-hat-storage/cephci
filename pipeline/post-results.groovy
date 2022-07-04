@@ -23,7 +23,7 @@ node(nodeName) {
                 checkout(
                     scm: [
                         $class: 'GitSCM',
-                        branches: [[name: 'origin/master']],
+                        branches: [[name: "origin/master"]],
                         extensions: [
                             [
                                 $class: 'CleanBeforeCheckout',
@@ -42,7 +42,7 @@ node(nodeName) {
                             ]
                         ],
                         userRemoteConfigs: [[
-                            url: 'https://github.com/red-hat-storage/cephci.git'
+                            url: "https://github.com/red-hat-storage/cephci.git"
                         ]]
                     ],
                     changelog: false,
@@ -101,28 +101,20 @@ node(nodeName) {
                 tierLevel = tags_list.get(tier_index)
                 run_type = msgMap["pipeline"]["run_type"]
                 build_url = msgMap["run"]["url"]
-
             }
-            
 
             if (metaData["results"]) {
-                if(msgMap["pipeline"].containsKey("tags")){
-                    sharedLib.sendEmail(run_type, metaData["results"], metaData, tierLevel, stageLevel)
-                    sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
-                }
-                else {
+                if(!msgMap["pipeline"].containsKey("tags")){
                     sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
                 }
-                
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
                 testStatus = msgMap["test"]["result"]
             }
 
-            //Remove the sync results folder
+//             Remove the sync results folder
             sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
 
-            // Update RH recipe file
-
+//             Update RH recipe file
             if ( composeInfo != null && run_type == "Sanity Run"){
                 if ( tierLevel == null ){
                     tierLevel = msgMap["pipeline"]["name"]
@@ -159,6 +151,15 @@ node(nodeName) {
                 }
                 println("latestContent: ${latestContent}")
                 sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
+            }
+            if(msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2"){
+                def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
+                majorVersion = rhcsVersion["major_version"]
+                minorVersion = rhcsVersion["minor_version"]
+                minorVersion = "${minorVersion}"
+                def testResults = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
+                sharedLib.sendConsolidatedEmail(run_type, testResults, metaData, majorVersion, minorVersion, msgMap["artifact"]["version"])
+                sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
             }
             println("Execution complete")
         }

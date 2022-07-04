@@ -163,11 +163,14 @@ node(nodeName) {
 
     parallel testStages
 
-    if ("openstack" in tags_list){
+    if ("openstack" in tags_list || "openstack-only" in tags_list){
         stage('Publish Results') {
         /* Publish results through E-mail to user who started the run*/
             build_url = env.BUILD_URL
             run_type = "Manual Run"
+            if ("openstack-only" in tags_list){
+                run_type = "PSI Only Run"
+            }
             sharedLib.sendEmail(
                 run_type,
                 testResults,

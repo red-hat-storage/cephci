@@ -221,6 +221,7 @@ tests:
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
+      polarion-id: CEPH-10362
   - test:
       abort-on-fail: true
       clusters:
@@ -330,7 +331,7 @@ tests:
   - test:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_enc on secondary
-      polarion-id: CEPH-11358,CEPH-11361
+      polarion-id: CEPH-11358 # also applies to CEPH-11361
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:

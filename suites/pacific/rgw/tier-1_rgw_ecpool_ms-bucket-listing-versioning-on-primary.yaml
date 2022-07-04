@@ -221,6 +221,7 @@ tests:
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
+      polarion-id: CEPH-10362
   - test:
       abort-on-fail: true
       clusters:
@@ -363,7 +364,7 @@ tests:
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_copy on secondary
-      polarion-id: CEPH-14264, CEPH-10646
+      polarion-id: CEPH-14264 # also applies to CEPH-10646
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
@@ -386,7 +387,7 @@ tests:
   - test:
       name: Buckets Versioning test
       desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-14261, CEPH-9222, CEPH-10652
+      polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
