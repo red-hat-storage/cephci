@@ -59,7 +59,8 @@ def sendEmail(
                                             "product": "Redhat",
                                             "version": "RHCEPH-5.0",
                                             "ceph_version": "16.2.0-117",
-                                            "repository": "repositoryname"]
+                                            "repository": "repositoryname",
+                                            "upstreamVersion": "quincy"]
             tierLevel:
                 Example: Tier0, Tier1, CVP..
 
@@ -125,7 +126,7 @@ def sendEmail(
 
     def subject = ""
     if (run_type == "upstream") {
-        subject = "Upstream test report status of ceph version:${artifactDetails.ceph_version} is ${status}"
+        subject = "Upstream Ceph Version:${artifactDetails.ceph_version}-${artifactDetails.upstreamVersion} Automated test execution summary"
     } else {
         subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
     }
