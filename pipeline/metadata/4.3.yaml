@@ -290,8 +290,9 @@
     - sanity
     - tier-1
     - openstack
+    - openstack-only
     - dmfg
-    - stage-3
+    - stage-1
 - name: "test-rgw-multisite-secondary-to-primary-tier-1-extd"
   suite: "suites/nautilus/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
   global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
@@ -489,10 +490,11 @@
     ibmc: "conf/inventory/ibm-vpc-rhel-7-latest.yaml"
   metadata:
     - sanity
-    - tier-2
+    - tier-1
     - openstack
+    - openstack-only
     - dmfg
-    - stage-3
+    - stage-1
 #Cron pipeline test suite for 4.3 to run as schedule
 - name: "test-multipath-upgrade-to-4-latest"
   suite: "suites/nautilus/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-4-latest.yaml"
