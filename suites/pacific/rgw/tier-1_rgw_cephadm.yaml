@@ -88,6 +88,7 @@ tests:
                   nodes:
                     - node6
       desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
