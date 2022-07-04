@@ -889,7 +889,6 @@ def updateUpstreamFile(def version) {
 
         Args:
             version      Version of upstream builds
-
     */
     try {
         def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python3"
@@ -899,9 +898,28 @@ def updateUpstreamFile(def version) {
         def args = "build ${version}"
         sh script: "${cmd} ${scriptFile} ${args}"
     } catch(Exception exc) {
-        println exc
-        error "Error during updating upstream yaml file."
+        error "${exc}"
     }
+}
+
+def returnSnippet() {
+    /*
+       fetch last failure text from the build console output
+    */
+    def retValue = sh (returnStdout: true, script: "curl ${env.BUILD_URL}consoleText")
+    retValue = retValue.split("\n")
+    def numLines = 150
+    if ( retValue.size() > numLines ){
+        numLines = retValue.size() - numLines
+    } else {
+        numLines = 0
+    }
+    def body = "<code>"
+    for ( line in retValue[numLines..-1] ) {
+        body += "<i>${line}</i><br>"
+    }
+    body += "</code>"
+    return body
 }
 
 return this;

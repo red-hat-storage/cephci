@@ -553,28 +553,6 @@ def uploadResults(def objKey, def dirName, def bucketName="qe-ci-reports") {
     }
 }
 
-def updateUpstreamFile(def version) {
-    /*
-        Updates upstream yaml file for the version passed as argument
-
-        example:  python3 upstream_cli.py build pacific
-
-        Args:
-            version      Version of upstream builds
-        
-    */
-    try {
-        def cmd = "sudo ${env.WORKSPACE}/.venv/bin/python3"
-        sh ".venv/bin/python3 -m pip install packaging"
-        sh "sudo yum install podman -y"
-        def scriptFile = "pipeline/scripts/ci/upstream_cli.py"
-        def args = "build ${version}"
-        sh script: "${cmd} ${scriptFile} ${args}"
-    } catch(Exception exc) {
-        println exc
-        error "Error during updating upstream yaml file."
-    }
-}
 def prepareIbmNode() {
     /*
         Installs the required packages needed by the IBM Jenkins node to
