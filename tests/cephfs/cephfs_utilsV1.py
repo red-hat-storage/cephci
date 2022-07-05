@@ -1480,6 +1480,8 @@ class FsUtils(object):
                 --printf : option to print a particular value
         Return:
             returns stat of a path(file or directory)
+            If no option added to the cmd, it will return a dictionary consisted of
+            "File", "Access", "Blocks", "Birth", "Access", "Uid", "Gid", "Size".
             Sample output :
 
             [root@ceph-hyelloji-9etpcf-node8 ~]# stat /mnt/cephfs_kernelqcnquvmv84_1/volumes/subvolgroup_1/
@@ -1494,13 +1496,28 @@ class FsUtils(object):
              Birth: -
 
         """
-
+        standard_format = " --printf='%n,%A,%b,%w,%x,%u,%g,%s'"
         stat_cmd = f"stat {file_path} "
         if kwargs.get("format"):
             stat_cmd += f" --printf {kwargs.get('format')}"
+        else:
+            stat_cmd += standard_format
+            out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
+            key_list = [
+                "File",
+                "Permission",
+                "Blocks",
+                "Birth",
+                "Access",
+                "Uid",
+                "Gid",
+                "Size",
+            ]
+            output_dic = dict(zip(key_list, out.split(",")))
+            print(log.info(output_dic))
+            return output_dic
         out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
-        stat_output = json.loads(out)
-        return stat_output
+        return out
 
     def wait_for_cmd_to_succeed(self, client, cmd, timeout=180, interval=5):
         """
