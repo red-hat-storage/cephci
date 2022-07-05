@@ -26,6 +26,7 @@ globals:
           - alertmanager
           - crash
           - rgw
+          - haproxy
         no-of-volumes: 6
         disk-size: 15
       node3:
@@ -36,6 +37,7 @@ globals:
           - crash
           - rgw
           - mds
+          - haproxy
         no-of-volumes: 6
         disk-size: 15
       node4:
