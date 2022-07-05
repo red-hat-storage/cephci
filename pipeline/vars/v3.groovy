@@ -125,9 +125,16 @@ def sendEmail(
     }
 
     def subject = ""
-    if (run_type == "upstream") {
-        subject = "Upstream Ceph Version:${artifactDetails.ceph_version}-${artifactDetails.upstreamVersion} Automated test execution summary"
-    } else {
+    if (run_type == "Live" || run_type == "upstream") {
+        println(run_type)
+        if (run_type == "Live"){
+            subject = "${run_type} test report status for RHCEPH-${artifactDetails.rhcephVersion} ceph version:${artifactDetails.ceph_version} is ${status}"
+        }
+        if (run_type == "upstream") {
+            subject = "Upstream Ceph Version:${artifactDetails.ceph_version}-${artifactDetails.upstreamVersion} Automated test execution summary"
+        }
+    }
+    else{
         subject = "${run_type} for ${tierLevel.capitalize()} ${stageLevel.capitalize()} test report status of ${artifactDetails.version} - ${artifactDetails.ceph_version} is ${status}"
     }
 
@@ -250,7 +257,13 @@ def sendConsolidatedEmail(
     )
 }
 
-def sendGChatNotification(def run_type, def testResults, def tierLevel, def stageLevel= null, def build_url= null) {
+def sendGChatNotification(
+    def run_type,
+    def testResults,
+    def tierLevel,
+    def stageLevel = null,
+    def build_url = null,
+    def rhcephVersion = null) {
     /*
         Send a GChat notification.
         Plugin used:
@@ -272,7 +285,12 @@ def sendGChatNotification(def run_type, def testResults, def tierLevel, def stag
     if (! build_url){
         build_url = "${env.BUILD_URL}"
     }
-    def msg= "${run_type} for ${ciMsg.artifact.nvr}:${tierLevel} ${stageLevel} is ${status}.Log:${build_url}"
+    def msg= ""
+    if (run_type == "Live"){
+        msg= "${run_type} test run for RHCEPH-${rhcephVersion} is ${status}.Log:${build_url}"
+    } else {
+        msg= "${run_type} for ${ciMsg.artifact.nvr}:${tierLevel} ${stageLevel} is ${status}.Log:${build_url}"
+    }
     googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
 }
 

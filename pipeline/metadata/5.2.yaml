@@ -19,6 +19,7 @@
     - sanity
     - tier-0
     - rc
+    - live
     - openstack
     - ibmc
     - dmfg
@@ -68,6 +69,7 @@
     - sanity
     - tier-1
     - rc
+    - live
     - openstack
     - ibmc
     - upgrades
@@ -85,6 +87,8 @@
   metadata:
     - sanity
     - tier-2
+    - rc
+    - live
     - openstack
     - ibmc
     - upgrades

@@ -1,4 +1,4 @@
-// Script to trigger when a RH Ceph is released and execute Tier-0 using the bits
+// Script to trigger when a RH Ceph is released and execute live tests in metadata file of RH Ceph release
 // available in the external repository.
 // Global variables section
 def nodeName = "centos-7"
@@ -7,8 +7,10 @@ def versions
 def cephVersion
 def composeUrl
 def containerImage
-def cliArgs = "--build released"
-def tierLevel = "tier-0"
+def rhcephVersion
+def run_type = "Live"
+def tierLevel = "live"
+def stageLevel = null
 def testStages = [:]
 def testResults = [:]
 
@@ -47,7 +49,7 @@ node(nodeName) {
                 changelog: false,
                 poll: false
             )
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
             sharedLib.prepareNode()
         }
     }
@@ -56,9 +58,9 @@ node(nodeName) {
         versions = sharedLib.fetchMajorMinorOSVersion("released")
         def majorVersion = versions.major_version
         def minorVersion = versions.minor_version
-
         def cimsg = sharedLib.getCIMessageMap()
         def repoDetails = cimsg.build.extra.image
+        def overrides = ["build" : "released"]
 
         containerImage = repoDetails.index.pull.find({ x -> !(x.contains("sha")) })
 
@@ -67,10 +69,14 @@ node(nodeName) {
             x -> x.contains("RHCEPH-${majorVersion}.${minorVersion}")
         })
         println "repo url : ${composeUrl}"
+        rhcephVersion = "${majorVersion}.${minorVersion}"
+        println(rhcephVersion)
 
         cephVersion = sharedLib.fetchCephVersion(composeUrl)
-        testStages = sharedLib.fetchStages(cliArgs, tierLevel, testResults)
-
+        fetchStages = sharedLib.fetchStages(tierLevel, overrides, testResults, rhcephVersion)
+        print("tests fetched")
+        testStages = fetchStages["testStages"]
+        final_stage = fetchStages["final_stage"]
         currentBuild.description = "RHCEPH-${majorVersion}.${minorVersion}"
     }
 
@@ -81,6 +87,7 @@ node(nodeName) {
         if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
            status = 'FAILED'
         }
+        build_url = env.BUILD_URL
 
         def contentMap = [
             "artifact": [
@@ -88,7 +95,8 @@ node(nodeName) {
                 "nvr": "RHCEPH-${versions.major_version}.${versions.minor_version}",
                 "phase": "released",
                 "type": "released-build",
-                "version": cephVersion
+                "version": cephVersion,
+                "rhcephVersion": rhcephVersion
             ],
             "build": [
                 "repository": "cdn.redhat.com"
@@ -105,7 +113,7 @@ node(nodeName) {
                 "category": "release",
                 "result": status
             ],
-            "version": "1.1.0"
+            "version": "3.1.0"
         ]
 
         def msgContent = writeJSON returnText: true, json: contentMap
@@ -118,9 +126,16 @@ node(nodeName) {
             "product": "Red Hat Ceph Storage",
             "version": contentMap["artifact"]["nvr"],
             "ceph_version": contentMap["artifact"]["version"],
-            "container_image": contentMap["build"]["repository"]
+            "container_image": contentMap["build"]["repository"],
+            "rhcephVersion": contentMap["artifact"]["rhcephVersion"]
         ]
+        sharedLib.sendGChatNotification(run_type, testResults, tierLevel, stageLevel, build_url, rhcephVersion)
+        sharedLib.sendEmail(
+                run_type,
+                testResults,
+                msg,
+                tierLevel
+        )
 
-        sharedLib.sendEmail(testResults, msg, tierLevel.capitalize())
     }
 }
