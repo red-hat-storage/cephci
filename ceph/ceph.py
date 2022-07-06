@@ -1384,7 +1384,7 @@ class CephNode(object):
         )
 
         stdin, stdout, stderr = self.rssh().exec_command("dmesg")
-        self.rssh_transport().set_keepalive(15)
+        self.rssh_transport().set_keepalive(20)
         changepwd = (
             "echo " + "'" + self.username + ":" + self.password + "'" + "|" + "chpasswd"
         )
@@ -1394,10 +1394,10 @@ class CephNode(object):
         self.rssh().exec_command("echo 120 > /proc/sys/net/ipv4/tcp_keepalive_time")
         self.rssh().exec_command("echo 60 > /proc/sys/net/ipv4/tcp_keepalive_intvl")
         self.rssh().exec_command("echo 20 > /proc/sys/net/ipv4/tcp_keepalive_probes")
-        self.exec_command(cmd="ls / ; uptime ; date")
-        self.ssh_transport().set_keepalive(15)
+        self.exec_command(cmd="ls / ; uptime ; date", check_ec=False)
+        self.ssh_transport().set_keepalive(20)
 
-        out, err = self.exec_command(cmd="hostname")
+        out, err = self.exec_command(cmd="hostname", check_ec=False)
         self.hostname = out.strip()
 
         shortname = self.hostname.split(".")
@@ -1406,7 +1406,7 @@ class CephNode(object):
             "hostname and shortname set to %s and %s", self.hostname, self.shortname
         )
         self.set_internal_ip()
-        self.exec_command(cmd="echo 'TMOUT=600' >> ~/.bashrc")
+        self.exec_command(cmd="echo 'TMOUT=600' >> ~/.bashrc", check_ec=False)
         self.exec_command(cmd="[ -f /etc/redhat-release ]", check_ec=False)
 
         if self.exit_status == 0:
@@ -1422,7 +1422,7 @@ class CephNode(object):
         set the internal ip of the vm which differs from floating ip
         """
         out, _ = self.exec_command(
-            cmd="/sbin/ifconfig eth0 | grep 'inet ' | awk '{ print $2}'"
+            cmd="/sbin/ifconfig eth0 | grep 'inet ' | awk '{ print $2}'", check_ec=False
         )
         self.internal_ip = out.strip()
 
@@ -1471,12 +1471,12 @@ class CephNode(object):
                 sleep(2)
 
                 if channel.recv_ready():
-                    data = channel.recv(1024)
+                    data = channel.recv(2048)
                     while data:
                         for line in data.splitlines():
                             logger.debug(line)
 
-                        data = channel.recv(1024)
+                        data = channel.recv(2048)
 
             logger.info(f"Command completed on {datetime.datetime.now()}")
             return channel.recv_exit_status()
@@ -1506,7 +1506,7 @@ class CephNode(object):
         if kw.get("long_running"):
             return self.long_running(**kw)
 
-        timeout = kw["timeout"] if kw.get("timeout") else 600
+        timeout = kw["timeout"] if kw.get("timeout") else 1200
         ssh = self.rssh() if kw.get("sudo") else self.ssh()
 
         logger.info(
@@ -1514,8 +1514,8 @@ class CephNode(object):
         )
 
         if self.run_once:
-            self.ssh_transport().set_keepalive(15)
-            self.rssh_transport().set_keepalive(15)
+            self.ssh_transport().set_keepalive(20)
+            self.rssh_transport().set_keepalive(20)
 
         stdout = str()
         stderr = str()

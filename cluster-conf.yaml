@@ -1,0 +1,69 @@
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.70.46.0/22']
+      nodes:
+        -
+          hostname: Test-Node-1
+          ip: 10.70.46.85
+          root_password: r00tme
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        -
+          hostname: Test-Node-2
+          ip: 10.70.46.195
+          root_password: r00tme
+          root_private_key:
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: Test-Node-3
+          ip: 10.70.46.127
+          root_password: r00tme
+          root_private_key:
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: Test-Node-4
+          ip: 10.70.46.187
+          root_password: r00tme
+          root_private_key:
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: Test-Node-5
+          ip: 10.70.46.123
+          root_password: r00tme
+          root_private_key:
+          role:
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: Test-Node-6
+          ip: 10.70.46.45
+          root_password: r00tme
+          root_private_key:
+          role:
+            - client
