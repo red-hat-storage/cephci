@@ -4,10 +4,10 @@
 // Global variables section
 
 def nodeName = "centos-7"
-def tierLevel = "tier-0"
+def tierLevel = "cvp"
 def testStages = [:]
 def testResults = [:]
-def cliArgs = "--build cvp"
+def overrides = {}
 def sharedLib
 def jobStatus
 
@@ -103,7 +103,7 @@ node(nodeName) {
                 changelog: false,
                 poll: false
             )
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
             sharedLib.prepareNode()
         }
     }
@@ -114,12 +114,24 @@ node(nodeName) {
         def releaseContent = sharedLib.readFromReleaseFile(
             versions.major_version, versions.minor_version
         )
-        releaseContent.cvp.repository = ciMessageMap.registry_url
-        releaseContent.cvp["tag-name"] = ciMessageMap.image_tag
+        if (! releaseContent.containsKey("cvp")){
+            releaseContent.put("cvp", [:])
+            releaseContent.cvp["composes"] = releaseContent.latest.get("composes")
+            releaseContent.cvp["ceph-version"] = releaseContent.latest.get("ceph-version")
+            releaseContent.cvp["repository"] = ciMessageMap.artifact.registry_url
+            releaseContent.cvp["tag-name"] = ciMessageMap.artifact.image_tag
+        }
+        else {
+            releaseContent.cvp.put("repository", ciMessageMap.artifact.registry_url)
+            releaseContent.cvp["tag-name"] = ciMessageMap.artifact.image_tag
+
+        }
         def writeToFile = sharedLib.writeToReleaseFile(
             versions.major_version, versions.minor_version, releaseContent
         )
-        testStages = sharedLib.fetchStages(cliArgs, tierLevel, testResults)
+        rhcephversion = "RHCEPH-${version.majorVersion}.${version.minorVersion}"
+        overrides.put("build", "cvp")
+        testStages = sharedLib.fetchStages(tierLevel, overrides, testResults, rhcephversion)
 
         currentBuild.description = ciMessageMap.artifact.nvr
     }

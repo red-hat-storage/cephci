@@ -17,6 +17,7 @@
   metadata:
     - sanity
     - tier-0
+    - cvp
     - rc
     - openstack
     - ibmc
@@ -33,6 +34,7 @@
   metadata:
     - sanity
     - tier-0
+    - cvp
     - rc
     - openstack
     - ibmc
@@ -49,6 +51,7 @@
   metadata:
     - sanity
     - tier-0
+    - cvp
     - rc
     - openstack
     - ibmc
@@ -65,6 +68,7 @@
   metadata:
     - sanity
     - tier-0
+    - cvp
     - rc
     - live
     - openstack

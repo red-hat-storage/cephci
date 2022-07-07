@@ -94,7 +94,7 @@ node(nodeName){
                 url: "${params.Git_Repo}"
             ]]
         ])
-        sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
         if(params.Destroy_Cluster != 'Destroy always'){
             sharedLib.prepareNode(0,"ceph-ci")
         }
