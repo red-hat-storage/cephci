@@ -1,0 +1,73 @@
+# CVP test suite.
+# Cluster layout: 5 node cluster with 1 client and 1 RGW node
+# Test Environment: Red Hat network - PSI OpenStack Environment only.
+# Running build sanity test suite as the only change is the base container image.
+---
+tests:
+  - test:
+      abort-on-fail: true
+      description: "Prepare the environment for testing."
+      module: install_prereq.py
+      name: "test setup"
+
+  - test:
+      abort-on-fail: true
+      config:
+        ansi_config:
+          ceph_conf_overrides:
+            global:
+              mon_warn_on_insecure_global_id_reclaim_allowed: false
+              osd_pool_default_pg_autoscale_mode: "on"
+            client:
+              rgw crypt require ssl: false
+              rgw crypt s3 kms encryption keys:
+                testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+            mon:
+              mon_allow_pool_delete: true
+          ceph_origin: distro
+          ceph_repository: rhcs
+          ceph_test: true
+          containerized_deployment: true
+          copy_admin_key: true
+          dashboard_enabled: false
+          fetch_directory: ~/fetch
+          osd_scenario: lvm
+      desc: "ceph deployment using site.yaml(RPM) playbook with lvm scenario"
+      destroy-cluster: false
+      module: test_ansible.py
+      name: "ceph cluster deploy"
+      polarion-id: CEPH-83571467
+
+  # Begin test
+
+  - test:
+      desc: "Run object, block and filesystem basic operations in parallel"
+      parallel:
+        - test:
+            desc: "Testing rbd CLI Generic scenarios using unit-tests."
+            config:
+              branch: nautilus
+              script_path: qa/workunits/rbd
+              script: cli_generic.sh
+            module: test_rbd.py
+            name: "test rbd generic cli commands"
+            polarion-id: CEPH-83574241
+
+        - test:
+            desc: "Test M buckets having N objects"
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            module: sanity_rgw.py
+            name: "Test M buckets with N objects"
+            polarion-id: CEPH-9789
+
+        - test:
+            desc: "Test cephfs basic operations"
+            module: cephfs_basic_tests.py
+            name: "CephFS sanity check"
+            polarion-id: CEPH-11293
+      module: test_parallel.py
+      name: "Build smoke test."
