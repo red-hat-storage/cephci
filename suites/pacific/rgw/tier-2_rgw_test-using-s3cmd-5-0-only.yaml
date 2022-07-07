@@ -96,6 +96,7 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
+      polarion-id: CEPH-83573713
 
 #   S3CMD tests
   - test:

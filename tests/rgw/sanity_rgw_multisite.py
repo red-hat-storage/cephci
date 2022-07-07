@@ -92,7 +92,7 @@ def run(**kw):
         set_test_env(config, primary_rgw_node)
         set_test_env(config, secondary_rgw_node)
 
-        if primary_cluster.rhcs_version.version[0] == 5:
+        if primary_cluster.rhcs_version.version[0] >= 5:
             setup_cluster_access(primary_cluster, primary_rgw_node)
             setup_cluster_access(secondary_cluster, secondary_rgw_node)
 
