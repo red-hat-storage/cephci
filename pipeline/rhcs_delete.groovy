@@ -38,7 +38,7 @@ node("centos-7") {
                 poll: false
             )
 
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
             sharedLib.prepareNode()
         }
     }

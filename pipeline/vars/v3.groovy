@@ -148,7 +148,7 @@ def sendEmail(
 }
 
 def sendConsolidatedEmail(
-    def run_type,
+    def run_type = "",
     def testResults,
     def artifactDetails,
     def majorVersion,

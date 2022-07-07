@@ -50,12 +50,9 @@ node(nodeName) {
                 )
 
                 // prepare the node
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/lib.groovy")
+                sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
                 msgMap = sharedLib.getCIMessageMap()
                 println("msgMap : ${msgMap}")
-                if(msgMap["pipeline"].containsKey("tags")){
-                    sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-                }
                 println("sharedLib: ${sharedLib}")
                 sharedLib.prepareNode()
             }
