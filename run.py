@@ -725,6 +725,7 @@ def run(args):
     tests = suite.get("tests")
     tcs = []
     jenkins_rc = 0
+    _rhcs_version = rhbuild[:3]
     # use ceph_test_data to pass around dynamic data between tests
     ceph_test_data = dict()
     ceph_test_data["custom-config"] = custom_config
@@ -831,10 +832,9 @@ def run(args):
                     rp_logger.log(message=f"Logfile location - {tc['log-link']}")
                     rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
 
-                # Initialize the cluster with the expected rhcs_version hence the
-                # precedence would be from test suite.
-                # rhbuild would start with the version for example 5.0 or 4.2-rhel-7
-                _rhcs_version = test.get("ceph_rhcs_version", rhbuild[:3])
+                if "build" in config.keys():
+                    _rhcs_version = config["build"]
+                # Initialize the cluster with the expected rhcs_version
                 ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
 
                 rc = test_mod.run(

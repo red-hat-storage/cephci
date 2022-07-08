@@ -94,6 +94,7 @@ tests:
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
+      polarion-id: CEPH-83573713
       name: deploy cluster
 
 #   S3CMD tests
