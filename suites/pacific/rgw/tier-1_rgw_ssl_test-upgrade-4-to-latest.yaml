@@ -1,5 +1,6 @@
 #
 # Objective: Test rgw with ssl configured using ceph-ansible and upgrade
+# with dashboard disabled
 # Polarion ID: CEPH-83574678
 #
 ---
@@ -14,7 +15,7 @@ tests:
       module: test_ansible.py
       config:
         use_cdn: true
-        build: "4.x"
+        build: '4.x'
         ansi_config:
           ceph_origin: repository
           ceph_repository_type: cdn
