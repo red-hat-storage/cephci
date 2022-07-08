@@ -1,5 +1,6 @@
 #############################################################################
 # - Automation support for upgrade from RHCS4 to RHCS5 cluster with RGW tests
+# with dashboard enabled
 #
 # Test steps:
 # ---------------------------------------------------------------------
@@ -26,6 +27,9 @@ tests:
       ansi_config:
         ceph_origin: repository
         ceph_repository: rhcs
+        ceph_repository_type: cdn
+        ceph_rhcs_version: 4
+        ceph_stable_release: nautilus
         osd_scenario: lvm
         osd_auto_discovery: false
         ceph_stable_rh_storage: true
@@ -233,8 +237,8 @@ tests:
         ceph_rhcs_version: 5
         osd_scenario: lvm
         osd_auto_discovery: false
-        fetch_directory: ~/fetch
         radosgw_num_instances: 2
+        fetch_directory: ~/fetch
         copy_admin_key: true
         containerized_deployment: true
         upgrade_ceph_packages: true
