@@ -91,7 +91,7 @@ class Orch(
         if service_type:
             check_status_dict["args"]["service_type"] = service_type
 
-        _retries = 6  # cross-verification retries
+        _retries = 3  # cross-verification retries
         _count = 0
         while end_time > datetime.now():
             sleep(interval)
@@ -104,7 +104,7 @@ class Orch(
                 f"{running}/{count} {service_name if service_name else service_type} up... retrying"
             )
 
-            _retries = 3 if _count != count else _retries - 1
+            _retries = 3 if (_count != count and running != count) else _retries - 1
             _count = count
 
             if not (count + running) == 0 and count == running and _retries == 0:
@@ -114,7 +114,7 @@ class Orch(
         out, err = self.ls(check_status_dict)
         out = loads(out)
         LOG.error(
-            f"{service_name if service_name else service_type} failed with \n{out[0]['events']}"
+            f"{service_name if service_name else service_type} failed with \n{out[0].get('events')}"
         )
 
         return False
