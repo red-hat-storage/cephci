@@ -104,7 +104,7 @@ class Orch(
                 f"{running}/{count} {service_name if service_name else service_type} up... retrying"
             )
 
-            _retries = 3 if (_count != count and running != count) else _retries - 1
+            _retries = 3 if (_count != count or running != count) else _retries - 1
             _count = count
 
             if not (count + running) == 0 and count == running and _retries == 0:
