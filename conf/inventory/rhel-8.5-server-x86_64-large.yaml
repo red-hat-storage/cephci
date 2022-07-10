@@ -33,6 +33,7 @@ instance:
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - hostnamectl set-hostname $(hostname -s)
       - sudo yum clean metadata
       - sudo yum clean all
       - touch /ceph-qa-ready

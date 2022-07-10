@@ -1,0 +1,110 @@
+# This test suite deploys the required environment for OCS CI to validate with external
+# Ceph cluster. Only cluster deployment is validated and the rest of validation occurs
+# in OCS / ODF CI.
+---
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: "Install prerequisites for RHCeph cluster deployment."
+      module: install_prereq.py
+      name: "test suite setup"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          mon-ip: node1
+        command: bootstrap
+        service: cephadm
+      desc: "Bootstrap the cluster with minimal configuration."
+      destroy-cluster: false
+      module: test_bootstrap.py
+      name: "Test cluster deployment using cephadm"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
+      destroy-cluster: false
+      module: test_host.py
+      name: "Test host add with labels and IP"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          placement:
+            label: rgw
+        command: apply
+        pos_args:
+          - rgw.1
+        service: rgw
+      desc: "Deploying RGW daemon using label placement."
+      destroy-cluster: false
+      module: test_rgw.py
+      name: "Test apply rgw with label"
+
+  - test:
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - ceph fs volume create fsvol001 --placement='4 label:mds'
+          - ceph fs set fsvol001 max_mds 2
+      desc: "Create and configure a volume with 2 MDS limit"
+      destroy-cluster: false
+      module: exec.py
+      name: "Create volume with"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          placement:
+            label: mds
+        command: apply
+        pos_args:
+          - fsvol001
+        service: mds
+      desc: Test deploying MDS daemons on hosts with label mds.
+      destroy-cluster: false
+      module: test_mds.py
+      name: Test OSD daemon deployment with all-available-devices enabled.
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node1
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the ceph client
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      desc: "Retrieve the deployed cluster information."
+      module: gather_cluster_info.py
+      name: "Get ceph cluster details."

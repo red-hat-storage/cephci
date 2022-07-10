@@ -5,45 +5,43 @@ def sharedLib
 
 node("centos-7") {
 
-    timeout(unit: "MINUTES", time: 30) {
-        stage("Prepare env") {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+    stage("prepareNode") {
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
 
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    extensions: [
-                        [
-                            $class: 'CleanBeforeCheckout',
-                            deleteUntrackedNestedRepositories: true
-                        ],
-                        [
-                            $class: 'WipeWorkspace'
-                        ],
-                        [
-                            $class: 'CloneOption',
-                            depth: 1,
-                            noTags: true,
-                            shallow: true,
-                            timeout: 10,
-                            reference: ''
-                        ]
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: 'origin/master']],
+                extensions: [
+                    [
+                        $class: 'CleanBeforeCheckout',
+                        deleteUntrackedNestedRepositories: true
                     ],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
+                    [
+                        $class: 'WipeWorkspace'
+                    ],
+                    [
+                        $class: 'CloneOption',
+                        depth: 1,
+                        noTags: true,
+                        shallow: true,
+                        timeout: 10,
+                        reference: ''
+                    ]
                 ],
-                changelog: false,
-                poll: false
-            )
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
+            ],
+            changelog: false,
+            poll: false
+        )
 
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            sharedLib.prepareNode()
-        }
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        sharedLib.prepareNode()
     }
 
-    stage("Remove cluster") {
+    stage("removeCluster") {
         def ciMap = sharedLib.getCIMessageMap()
 
         def cmd = ".venv/bin/python run.py --log-level debug"
