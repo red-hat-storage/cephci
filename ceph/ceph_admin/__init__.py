@@ -7,6 +7,7 @@ operations part of the cluster lifecycle.
 Over here, we create a glue between the CLI and CephCI to allow the QE to write test
 scenarios for verifying and validating cephadm.
 """
+import re
 from typing import Dict
 
 from utility.log import Log
@@ -130,6 +131,12 @@ class CephAdmin(BootstrapMixin, ShellMixin):
                 base_url = repo
             cmd = f"yum-config-manager --add-repo {base_url}"
             for node in self.cluster.get_nodes():
+                rhel_version = "rhel-" + node.distro_info["VERSION_ID"].split(".")[0]
+                if rhel_version not in base_url:
+                    replace_rhel_version = [x for x in base_url.split("/") if re.match(r"rhel-[0-9]", x)][0]
+                    node_base_url = base_url.replace(replace_rhel_version, rhel_version)
+                    node_base_url = node_base_url.replace(replace_rhel_version.upper(), rhel_version.upper())
+                    cmd = f"yum-config-manager --add-repo {node_base_url}"
                 node.exec_command(sudo=True, cmd=cmd)
 
     def set_cdn_tool_repo(self):
