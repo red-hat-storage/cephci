@@ -1,0 +1,45 @@
+---
+# test configuration info to add hosts
+configs:
+  - method: add
+    class: Host
+    component: ceph
+    args:
+      host_name: node1
+    role:
+      - _admin
+  - method: add
+    class: Host
+    component: ceph
+    args:
+      host_name: node2
+    role:
+      - _admin
+  - method: add
+    class: Host
+    component: ceph
+    args:
+      host_name: node3
+    role:
+      - _admin
+  - method: add
+    class: Host
+    component: ceph
+    args:
+      host_name: node4
+    role:
+      - _admin
+  - method: add
+    class: Host
+    component: ceph
+    args:
+      host_name: node5
+    role:
+      - _admin
+  - method: add
+    class: Host
+    component: ceph
+    args:
+      host_name: node6
+    role:
+      - _admin

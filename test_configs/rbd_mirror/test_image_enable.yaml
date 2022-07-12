@@ -1,0 +1,10 @@
+---
+# test configuration info to enable image mode in rbd_mirror.
+configs:
+  - method: enable
+    class: Image
+    component: rbd_mirror
+    args:
+      image_spec: mirror_test/image_2
+    role:
+      - client
