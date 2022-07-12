@@ -104,11 +104,17 @@ class Orch(
                 f"{running}/{count} {service_name if service_name else service_type} up... retrying"
             )
 
-            _retries = 3 if (_count != count and running != count) else _retries - 1
-            _count = count
+            if count + running < 1:
+                continue
 
-            if not (count + running) == 0 and count == running and _retries == 0:
-                return True
+            if count == running and _count == count:
+                if _retries < 1:
+                    return True
+                _retries -= 1
+
+            if _count != count:
+                _count = count
+                _retries = 3
 
         # Identify the failure
         out, err = self.ls(check_status_dict)
