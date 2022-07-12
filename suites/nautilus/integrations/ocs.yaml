@@ -1,0 +1,39 @@
+# This test suite deploys the required environment for OCS CI to validate with external
+# Ceph cluster. Only cluster deployment is validated and the rest of validation occurs
+# in OCS / ODF CI.
+---
+tests:
+  - test:
+      abort-on-fail: true
+      desc: "Install software pre-requisites for RHCS cluster deployment."
+      module: install_prereq.py
+      name: "test suite setup"
+  - test:
+      abort-on-fail: true
+      config:
+        ansi_config:
+          ceph_test: true
+          ceph_origin: distro
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: false
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          dashboard_enabled: false
+          ceph_conf_overrides:
+            global:
+              mon_warn_on_insecure_global_id_reclaim_allowed: false
+          cephfs_pools:
+            - name: "cephfs_data"
+              pgs: "8"
+            - name: "cephfs_metadata"
+              pgs: "16"
+      desc: "Deploy the Ceph cluster using ceph-ansible"
+      destroy-cluster: false
+      module: test_ansible.py
+      name: "test cluster deployment using ceph-ansible"
+  - test:
+      abort-on-fail: true
+      desc: "Retrieve the deployed cluster information."
+      module: gather_cluster_info.py
+      name: "Get ceph cluster details."

@@ -378,8 +378,11 @@ def writeToRecipeFile(
 }
 
 def executeTestSuite(
-    def cliArgs, def cleanup_on_success=true, def cleanup_on_failure=true
-    ) {
+    def cliArgs,
+    def cleanup_on_success=true,
+    def cleanup_on_failure=true,
+    def vmPrefix=null
+) {
     /*
         This method executes a single test suite and also performs cleanup of the VM.
 
@@ -387,11 +390,15 @@ def executeTestSuite(
             cliArgs - argument to be passed to run.py
     */
     def rc = "PASS"
-    def randString = sh(
-        script: "cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5",
-        returnStdout: true
-    ).trim()
-    def vmPrefix = "ci-${randString}"
+
+    if (! vmPrefix?.trim()) {
+        def randString = sh(
+            script: "cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5",
+            returnStdout: true
+        ).trim()
+        vmPrefix = "ci-${randString}"
+    }
+
     def baseCmd = ".venv/bin/python run.py --log-level DEBUG"
     baseCmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
 
