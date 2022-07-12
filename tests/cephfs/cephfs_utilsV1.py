@@ -1560,3 +1560,17 @@ class FsUtils(object):
         io_tools = [dd, smallfile]
         f = random.choice(io_tools)
         f()
+
+    def cephfs_nfs_mount(self, client, nfs_server, nfs_export, nfs_mount_dir):
+        """
+        Mount cephfs nfs export
+        :param client:
+        :param nfs_server:
+        :param nfs_export:
+        :param nfs_mount_dir:
+        """
+        client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mount_dir}")
+        command = f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export} {nfs_mount_dir}"
+        client.exec_command(sudo=True, cmd=command)
+        rc = self.wait_until_mount_succeeds(client, nfs_mount_dir)
+        return rc
