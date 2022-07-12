@@ -1,0 +1,21 @@
+---
+# test configuration info to enable pool mirroring
+configs:
+  - method: enable
+    class: Pool
+    component: rbd_mirror
+    args:
+      pool_name: mirror_test
+      mode: image
+      site_name: site-a
+    role:
+      - ceph-rbd1:client
+  - method: enable
+    class: Pool
+    component: rbd_mirror
+    args:
+      pool_name: mirror_test
+      mode: image
+      site_name: site-b
+    role:
+      - ceph-rbd2:client
