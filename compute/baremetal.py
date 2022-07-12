@@ -152,8 +152,3 @@ class CephBaremetalNode:
     def id(self) -> int:
         """Return the node id."""
         return self.params.get("id")
-
-    @property
-    def location(self) -> str:
-        """Return the Data center location."""
-        return self.params.get("location")

@@ -139,11 +139,12 @@ tests:
                     - "--cpus=1"
                 - service_type: osd
                   service_id: all-available-devices
-                  encrypted: "true"                     # boolean as string
                   placement:
                     host_pattern: "*"
-                  data_devices:
-                    all: "true"                         # boolean as string
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
+                    encrypted: "true"                     # boolean as string
                   extra_container_args:
                     - "--cpus=2"
           - config:

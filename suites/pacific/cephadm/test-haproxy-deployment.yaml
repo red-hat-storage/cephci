@@ -110,8 +110,9 @@ tests:
               encrypted: "true"                     # boolean as string
               placement:
                 host_pattern: "*"
-              data_devices:
-                all: "true"                         # boolean as string
+              spec:
+                data_devices:
+                  all: "true"                         # boolean as string
       destroy-cluster: false
       abort-on-fail: true
   - test:

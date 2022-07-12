@@ -603,11 +603,12 @@ tests:
         specs:
           - service_type: osd
             service_id: all-available-devices
-            encrypted: "true"                     # boolean as string
             placement:
               host_pattern: "node[5-7]"
-            data_devices:
-              all: "true"
+            spec:
+              data_devices:
+                all: "true"
+              encrypted: "true"                     # boolean as string
       destroy-cluster: false
       abort-on-fail: true
 

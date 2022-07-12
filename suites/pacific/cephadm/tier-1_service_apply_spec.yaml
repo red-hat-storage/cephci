@@ -138,11 +138,12 @@ tests:
                 host_pattern: "*"
             - service_type: osd
               service_id: all-available-devices
-              encrypted: "true"                     # boolean as string
               placement:
                 host_pattern: "*"
-              data_devices:
-                all: "true"                         # boolean as string
+              spec:
+                data_devices:
+                  all: "true"                         # boolean as string
+                encrypted: "true"                     # boolean as string
         - config:
             command: shell
             args:                 # sleep to get all services deployed

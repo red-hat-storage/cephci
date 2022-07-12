@@ -88,8 +88,9 @@ tests:
                     nodes:
                       - <host3-shortname>
                       - <host4-shortname>
-                  data_devices:
-                    all: "true"                         # boolean as string
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
 
   - test:
       name: MDS Service deployment with spec

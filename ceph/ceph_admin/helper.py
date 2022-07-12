@@ -248,6 +248,7 @@ class GenerateServiceSpec:
             spec:
               - service_type: osd
                 unmanaged: boolean    # true or false
+
                 placement:
                   host_pattern: "*"   # either hosts or host_pattern
                   nodes:
@@ -257,11 +258,40 @@ class GenerateServiceSpec:
                     all: boolean      # true or false
                 encrypted: boolean    # true or false
 
+            spec:
+              - service_type: osd
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                spec:
+                    data_devices:         # all - consider all device/LVs from node
+                        paths: all        # else whatever values provided from config.
+                    encrypted: boolean    # true or false
+                extra_container_args:
+                    - "--cpus=2"
         """
         template = self._get_template("osd")
         node_names = spec["placement"].pop("nodes", None)
+
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
+        for item, values in spec["spec"].items():
+            if item in ["data_devices", "db_devices", "wal_devices"]:
+                if values.get("paths"):
+                    if values["paths"] == "all":
+                        devs = []
+                        for host in spec["placement"]["hosts"]:
+                            node = get_node_by_id(self.cluster, host)
+                            devs.extend(
+                                [
+                                    i if isinstance(i, str) else i.path
+                                    for i in node.volume_list
+                                ]
+                            )
+                        spec["spec"][item]["paths"] = [i for i in set(devs)]
 
         return template.render(spec=spec)
 

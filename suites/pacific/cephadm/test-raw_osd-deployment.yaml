@@ -87,12 +87,13 @@ tests:
                 host_pattern: "*"
             - service_type: osd
               service_id: osd_first_node
-              encrypted: "true"                     # boolean as string
               placement:
                 nodes:
                   - node1
-              data_devices:
-                all: "true"
+              spec:
+                data_devices:
+                  all: "true"
+                encrypted: "true"                     # boolean as string
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -124,14 +125,15 @@ tests:
               specs:
                 - service_type: osd
                   service_id: raw_osd
-                  encrypted: "true"                     # boolean as string
                   method: raw
                   placement:
                     nodes:
                       - node3
                       - node4
-                  data_devices:
-                    all: "true"
+                  spec:
+                    data_devices:
+                      all: "true"
+                    encrypted: "true"                     # boolean as string
   - test:
       name: Run IOs on the cluster
       module: test_parallel.py
