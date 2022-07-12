@@ -12,6 +12,7 @@
 # CEPH-83574022 - Create NFS cluster with 2 Nodes. 1 nfs daemon per node and Ensure the exports are accessible via
 #                 all the NFS nodes in the cluster. and has same data
 # CEPH-83574026 - zip unzip files continuously on a nfs share
+# CEPH-83573993 - Export the nfs share with cli using an existing path created using subvolume
 #=======================================================================================================================
 tests:
   -
@@ -167,3 +168,10 @@ tests:
       module: nfs.zip_unzip_files_nfs.py
       name: "zipping & unzipping files on nfs export"
       polarion-id: "CEPH-83574026"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test cephfs nfs export for cephfs subvolume"
+      module: nfs.subvolume_export.py
+      name: "cephfs nfs export for subvolume"
+      polarion-id: "CEPH-83573993"
