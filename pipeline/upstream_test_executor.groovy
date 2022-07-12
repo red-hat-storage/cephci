@@ -76,8 +76,7 @@ node('ceph-qe-ci || rhel-8-medium') {
                 status = "UNSTABLE"
             }
             sharedLib.sendEmail(buildType, testResults, upstreamArtifact)
-            def msg = "Ceph Version:${upstreamArtifact.ceph_version} Automated test execution summary"
-            def msg = "Upstream test report status of ceph version:${upstreamArtifact.ceph_version} is ${status} .Log:${env.BUILD_URL}"
+            def msg = "Upstream test report status of ceph version:${cephVersion}-${upstreamVersion} is ${status} .Log:${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
         }
     } catch(Exception err) {
