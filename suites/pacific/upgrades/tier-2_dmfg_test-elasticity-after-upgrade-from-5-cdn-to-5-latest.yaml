@@ -190,6 +190,8 @@ tests:
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
+        install_packages:
+          - ceph-common
       destroy-cluster: False
       abort-on-fail: True
   - test:
