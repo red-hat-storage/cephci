@@ -1,23 +1,58 @@
+#! /bin/env groovy
 /*
-    Pipeline script for executing CVP test suites
+    This script performs the required tasks for testing a new Ceph container image.
+
+    This set of tasks are carried out when the underlying base image used by Red Hat
+    Ceph Storage components have been modified.
+
+    At a high level, the following tasks are performed
+        - Jenkins agent node is prepared
+        - The CI message is read to determine the build smoke test to be executed.
+        - A release version of Red Hat Ceph Storage
+
+    Reference:
+      https://docs.engineering.redhat.com/display/CVP/Container+Verification+Pipeline+E2E+Documentation
+
+    Metadata:
+        env:            psi-only
+        test:           Build Smoke test suite (tier-0)
+        namespace:      rhceph-cvp-test
+        type:           default
+        category:       external1
+        status:         PASSED - if all tests have passed else FAILED
+
+
 */
-// Global variables section
-
-def nodeName = "centos-7"
-def tierLevel = "cvp"
-def testStages = [:]
-def testResults = [:]
-def overrides = {}
 def sharedLib
-def jobStatus
 
-def sendCVPUMBMessage(def ciMsg, def status) {
+def buildArgsMap = [:]
+def testStatus
+
+def versionNameMap = [ "4": "nautilus", "5": "pacific", "6": "quincy"]
+
+def getProductVersion(Map arg) {
     /*
-        Trigger a UMB message for successful cvp test completion
+        Processes the build parameter to determine the product version.
+        Returns:
+            Map
     */
+    def buildTag = arg.artifact.brew_build_tag
+    def nvr = buildTag.split('-')       // ceph-5.1-rhel-8-candidate
+
+    return [
+        "product": nvr[0],
+        "productVersion": nvr[1],
+        "platform": "${nvr[2]}-${nvr[3]}",
+        "type": nvr[4]
+    ]
+}
+
+def postUMB(Map arg, String status) {
+    // Posts a UMB event with the required body generated using the given information.
+
     def msgMap = [
-        "category": "RHCEPH CVP",
-        "status": "${status}",
+        "category": "external1",
+        "status": status,
         "ci": [
             "url": "${env.JENKINS_URL}",
             "team": "RH Ceph QE",
@@ -33,28 +68,28 @@ def sendCVPUMBMessage(def ciMsg, def status) {
             "os": "rhel"
         ],
         "artifact": [
-            "nvr": "${ciMsg.artifact.nvr}",
+            "nvr": arg.artifact.nvr,
             "scratch": "false",
-            "component": "${ciMsg.artifact.component}",
+            "component": arg.artifact.component,
             "type": "brew-build",
-            "id": "${ciMsg.artifact.id}",
-            "issuer": "RHCEPH QE"
-        ],
-        "contact": [
-            "name": "Downstream Ceph QE",
-            "email": "cephci@redhat.com"
+            "id": arg.artifact.id,
+            "issuer": "rhceph-qe-ci"
         ],
         "test": [
             "type": "tier-0",
             "category": "validation",
-            "result": "${status}",
+            "result": status,
             "namespace": "rhceph.cvp.tier0.stage"
         ],
         "generated_at": "${env.BUILD_ID}",
-        "pipeline": "rhceph-cvp",
+        "pipeline": [
+            "build": "${env.BUILD_NUMBER}",
+            "name": arg.pipeline.name,
+            "status": status
+        ],
         "type": "default",
         "namespace": "rhceph-cvp-test",
-        "version": "1.0.0"
+        "version": "0.9.1"
     ]
 
     def msgContent = writeJSON returnText: true, json: msgMap
@@ -70,80 +105,74 @@ def sendCVPUMBMessage(def ciMsg, def status) {
 
 // Pipeline script entry point
 
-node(nodeName) {
+node("rhel-8-medium") {
 
-    timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    extensions: [
-                        [
-                            $class: 'CleanBeforeCheckout',
-                            deleteUntrackedNestedRepositories: true
-                        ],
-                        [
-                            $class: 'WipeWorkspace'
-                        ],
-                        [
-                            $class: 'CloneOption',
-                            depth: 1,
-                            noTags: true,
-                            shallow: true,
-                            timeout: 10,
-                            reference: ''
-                        ]
-                    ],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
-                ],
-                changelog: false,
-                poll: false
-            )
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            sharedLib.prepareNode()
+    stage('prepareNode') {
+        if (env.WORKSPACE) {
+            sh script: "sudo rm -rf * .venv"
         }
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: 'origin/master']],
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
+                    deleteUntrackedNestedRepositories: true
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
+            ],
+            changelog: false,
+            poll: false
+        )
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        sharedLib.prepareNode()
     }
 
-    stage("Prepare Tier-0 suite") {
-        def ciMessageMap = sharedLib.getCIMessageMap()
-        def versions = sharedLib.fetchMajorMinorOSVersion('cvp')
-        def releaseContent = sharedLib.readFromReleaseFile(
-            versions.major_version, versions.minor_version
-        )
-        if (! releaseContent.containsKey("cvp")){
-            releaseContent.put("cvp", [:])
-            releaseContent.cvp["composes"] = releaseContent.latest.get("composes")
-            releaseContent.cvp["ceph-version"] = releaseContent.latest.get("ceph-version")
-            releaseContent.cvp["repository"] = ciMessageMap.artifact.registry_url
-            releaseContent.cvp["tag-name"] = ciMessageMap.artifact.image_tag
-        }
-        else {
-            releaseContent.cvp.put("repository", ciMessageMap.artifact.registry_url)
-            releaseContent.cvp["tag-name"] = ciMessageMap.artifact.image_tag
+    stage("executeTest") {
+        buildArgsMap = sharedLib.stringToMap(params.CI_MESSAGE)
+        def productInfo = getProductVersion(buildArgsMap)
+        def releaseName = versionNameMap[productInfo.productVersion.tokenize('.')[0]]
 
-        }
-        def writeToFile = sharedLib.writeToReleaseFile(
-            versions.major_version, versions.minor_version, releaseContent
-        )
-        rhcephversion = "RHCEPH-${version.majorVersion}.${version.minorVersion}"
-        overrides.put("build", "cvp")
-        testStages = sharedLib.fetchStages(tierLevel, overrides, testResults, rhcephversion)
+        def cmd = ".venv/bin/python"
+        cmd = cmd.concat(" run.py")
+        cmd = cmd.concat(" --osp-cred ${env.HOME}/osp-cred-ci-2.yaml --log-level debug")
+        cmd = cmd.concat(" --rhbuild ${productInfo.productVersion}")
+        cmd = cmd.concat(" --build rc --platform ${productInfo.platform}")
+        cmd = cmd.concat(" --inventory conf/inventory/${productInfo.platform}-latest.yaml")
+        cmd = cmd.concat(" --suite suites/${releaseName}/integrations/cvp.yaml")
+        cmd = cmd.concat(" --global-conf conf/minimal.yaml")
+        cmd = cmd.concat(" --docker-tag ${buildArgsMap.artifact.image_tag}")
 
-        currentBuild.description = ciMessageMap.artifact.nvr
+        testStatus = sharedLib.executeTestSuite(cmd)
     }
 
-    parallel testStages
-
-    stage('Publish Results') {
-        def status = 'PASSED'
-        if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
-           status = 'FAILED'
+    stage('postResults') {
+        def status = "PASSED"
+        if (testStatus.result == "FAIL") {
+            status = "FAILED"
         }
-        def ciMsg = sharedLib.getCIMessageMap()
-        sendCVPUMBMessage(ciMsg, status)
+
+        postUMB(buildArgsMap, status)
+
+        def msg = "Container Verification Pipeline executed for "
+        msg = msg.concat(
+            "${buildArgsMap.artifact.brew_build_tag} completed with ${status}."
+        )
+        msg = msg.concat(
+            " Log link ${env.JENKINS_URL}/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/"
+        )
+
+        sharedLib.postGoogleChatNotification(msg)
     }
 }

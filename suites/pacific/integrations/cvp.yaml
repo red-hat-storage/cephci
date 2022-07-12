@@ -1,0 +1,128 @@
+# CVP test suite.
+# Cluster layout: 5 node cluster with 1 client and 1 RGW node
+# Test Environment: Red Hat network - PSI OpenStack Environment only.
+# Running build sanity test suite as the only change is the base container image.
+---
+tests:
+  - test:
+      abort-on-fail: true
+      description: "Prepare the environment for testing."
+      module: install_prereq.py
+      name: "test setup"
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: "Deploy the ceph cluster using cephadm"
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "Test cluster deployment using cephadm"
+      polarion-id: CEPH-83573713
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        node: node6
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # Begin test
+
+  - test:
+      desc: "Run object, block and filesystem basic operations in parallel"
+      parallel:
+        - test:
+            desc: "Testing rbd CLI Generic scenarios using unit-tests."
+            config:
+              branch: master
+              script_path: qa/workunits/rbd
+              script: cli_generic.sh
+            module: test_rbd.py
+            name: "test rbd generic cli commands"
+            polarion-id: CEPH-83574241
+
+        - test:
+            desc: "Test M buckets having N objects"
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            module: sanity_rgw.py
+            name: "Test M buckets with N objects"
+            polarion-id: CEPH-9789
+
+        - test:
+            desc: "Test cephfs basic operations"
+            module: cephfs_basic_tests.py
+            name: "CephFS sanity check"
+            polarion-id: CEPH-11293
+      module: test_parallel.py
+      name: "Build smoke test."
