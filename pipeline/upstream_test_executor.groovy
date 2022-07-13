@@ -72,7 +72,8 @@ node('ceph-qe-ci || rhel-8-medium') {
                                     "repository": yamlData[upstreamVersion]["image"],
                                     "upstreamVersion": upstreamVersion]
             def status = "STABLE"
-            if ( ! ("FAIL" in sharedLib.fetchStageStatus(testResults)) ) {
+            if ( "FAIL" in sharedLib.fetchStageStatus(testResults) ) {
+                currentBuild.result = "FAILURE"
                 status = "UNSTABLE"
             }
             sharedLib.sendEmail(buildType, testResults, upstreamArtifact)
