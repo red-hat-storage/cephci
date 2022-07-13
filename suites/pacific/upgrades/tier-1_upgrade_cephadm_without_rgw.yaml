@@ -1,0 +1,205 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_cephadm_upgrade.yaml
+# Test-Case: Upgrade ceph cluster from Build-to-Build (B2B)
+#
+# Cluster Configuration:
+#    conf/pacific/upgrades/tier-1_upgrade_cephadm_without_rgw.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, node-exporter
+#     Node4 - Client
+#
+# Test Steps:
+#   (1) Bootstrap cluster using latest released ceph 5.x with below options,
+#       - custom_repo: "cdn"
+#       - skip-monitoring stack
+#       - registry-url: <registry-URL>
+#       - mon-ip: <monitor address, Required>
+#   (2) Copy SSH keys to nodes and Add it to cluster with address and role labels attached to it.
+#   (3) Deploy services using apply option,
+#       - 3 Mon on node1, node2, Node3
+#       - addition of OSD's using "all-available-devices" option.
+#       - MDS on node2, node3 with host placements.
+#   (4) Upgrade to distro build(N) by provided Ceph image version.
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cluster deployment
+      desc: Cluster deployment with latest released version of 5.x
+      module: test_cephadm.py
+      polarion-id: CEPH-83573791,CEPH-83574413
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+                custom_repo: "cdn"
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                skip-monitoring-stack: true
+              cephadm-ansible:
+                playbook: cephadm-preflight.yml
+                extra-vars:
+                  ceph_origin: rhcs
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node3
+          - config:
+              command: apply
+              service: prometheus
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+                  sep: ";"
+          - config:
+              command: apply
+              service: grafana
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+                  sep: ";"
+          - config:
+              command: apply
+              service: alertmanager
+              args:
+                placement:
+                  label: alertmanager
+          - config:
+              command: apply
+              service: node-exporter
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes: "*"
+          - config:
+              command: apply
+              service: crash
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes: "*"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Configure client
+      desc: Configure client with admin keyring.
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>) --> /etc/ceph/ceph.{id}.keyring
+        node: node4                       # client node
+        copy_admin_keyring: true          # Copy admin keyring to node
+        store-keyring: /etc/ceph/ceph.client.1.keyring  # local copy at the installer
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Upgrade along with IOs
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: rbd-io
+            module: rbd_faster_exports.py
+            config:
+              io-total: 100M
+            desc: Perform export during read/write,resizing,flattening,lock operations
+        - test:
+            name: Upgrade ceph
+            desc: Upgrade cluster to latest version
+            module: test_cephadm_upgrade.py
+            polarion-id: CEPH-83573791,CEPH-83573790
+            config:
+              command: start
+              service: upgrade
+              base_cmd_args:
+                verbose: true
+              benchmark:
+                type: rados
+                pool_per_client: true
+                pg_num: 128
+                duration: 10
+              verify_cluster_health: true
+            destroy-cluster: false
+      desc: Running upgrade and i/o's parallelly
+      abort-on-fail: true
+
+  - test:
+      name: test non default rgw pool creation
+      module: exec.py
+      polarion-id: CEPH-83575014
+      config:
+        check_status: true
+        cephadm: true
+        commands:
+          - "ceph osd pool ls detail | grep -v .rgw.root"
+        sudo: true
+      desc: Verifies if default rgw pool is created when RGW service is deployed.
