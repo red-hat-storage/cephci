@@ -322,7 +322,6 @@ tests:
           config:
             script-name: test_versioning_copy_objects.py
             config-file-name: test_versioning_copy_objects.yaml
-            verify-io-on-site: ["ceph-pri"]
             timeout: 300
 
   - test:
@@ -361,7 +360,6 @@ tests:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_copy.yaml
-            verify-io-on-site: ["ceph-pri"]
             timeout: 300
 
   - test:
