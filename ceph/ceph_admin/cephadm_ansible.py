@@ -27,7 +27,13 @@ class CephadmAnsible:
             cluster: Ceph cluster object
         """
         self.cluster = cluster
-        self.admin = self.cluster.get_ceph_object("installer")
+        for host in self.cluster.get_nodes():
+            roles = host.role.role_list
+        if "network-node" in roles:
+            self.admin = self.cluster.get_ceph_object("network-node")
+        else:
+            self.admin = self.cluster.get_ceph_object("installer")
+        #self.admin = self.cluster.get_ceph_object("installer")
         self.rpm = "cephadm-ansible"
         self.exec_path = f"/usr/share/{self.rpm}"
         self.inventory = f"{self.exec_path}/hosts"
@@ -100,6 +106,14 @@ class CephadmAnsible:
                 cmd += f" -e '{k}={v}'"
         if extra_args:
             cmd += config_dict_to_string(extra_args)
+
+        # Check for Disconnected installation
+        for ceph in self.cluster.get_nodes():
+            if ceph.role == "network-node":
+                #Fetch network node hostname
+                network_node = self.cluster.get_ceph_object("network-node").node
+                network_node_hostname=network_node.hostname
+                cmd += f" -e 'custom_repo_url=http://{network_node_hostname}/repo/ceph-Tools'"
 
         rc = self.admin.exec_command(
             cmd=cmd,
