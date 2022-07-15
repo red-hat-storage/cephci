@@ -550,7 +550,7 @@ tests:
 
    - test:
        name: Resharding tests
-       desc: Reshading test - manual
+       desc: Resharding test - manual
        polarion-id: CEPH-83571740
        module: sanity_rgw.py
        config:
@@ -559,7 +559,7 @@ tests:
          timeout: 500
    - test:
        name: Resharding tests
-       desc: Reshading test - dynamic
+       desc: Resharding test - dynamic
        polarion-id: CEPH-83571740
        module: sanity_rgw.py
        config:

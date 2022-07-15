@@ -3,7 +3,7 @@
 tests:
   - test:
       name: Dynamic Resharding tests
-      desc: Reshading test - dynamic
+      desc: Resharding test - dynamic
       polarion-id: CEPH-83571740
       module: sanity_rgw.py
       config:
