@@ -71,12 +71,12 @@ class RbdMirror:
         key_file.write(contents)
         key_file.flush()
 
-    # Retrieve required details from json output
     def value(self, key, dictionary):
+        """Retrieve required details from json output."""
         return str(list(self.find(key, dictionary))[0])
 
-    # Finding required details from json output
     def find(self, key, dictionary):
+        """Finding required details from json output."""
         for k, v in dictionary.items():
             if k == key:
                 yield v
@@ -92,7 +92,6 @@ class RbdMirror:
                         yield d
 
     # Handling of clusters with same name
-
     def handle_same_name(self, name):
         self.cluster_name = name
         self.cluster_spec = self.rbd_client + "@" + self.cluster_name
@@ -113,9 +112,8 @@ class RbdMirror:
             ),
         )
 
-    # Enable, Start or Stop Rbd Mirror Daemon
     def mirror_daemon(self, enable=None, start=None, stop=None, restart=None):
-
+        """Enable, Start or Stop Rbd Mirror Daemon"""
         if enable:
             self.exec_cmd(
                 ceph_args=False, cmd="systemctl enable ceph-rbd-mirror.target"
@@ -549,7 +547,7 @@ class RbdMirror:
     def demote(self, imagespec):
         return self.exec_cmd(cmd="rbd mirror image demote {}".format(imagespec))
 
-    # Demote Image
+    # Resync Image
     def resync(self, imagespec):
         self.exec_cmd(cmd="rbd mirror image resync {}".format(imagespec))
 

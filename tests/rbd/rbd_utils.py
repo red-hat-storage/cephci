@@ -14,12 +14,16 @@ log = Log(__name__)
 class Rbd:
     def __init__(self, **kw):
         self.ceph_args = ""
-        self.ceph_nodes = kw.get("ceph_nodes")
         self.config = kw.get("config")
         self.ceph_version = int(self.config.get("rhbuild")[0])
         self.datapool = None
         self.flag = 0
         self.k_m = self.config.get("ec-pool-k-m", False)
+
+        if kw.get("req_cname"):
+            self.ceph_nodes = kw["ceph_cluster_dict"][kw["req_cname"]]
+        else:
+            self.ceph_nodes = kw["ceph_nodes"]
 
         # Identifying Monitor And Client node
         for node in self.ceph_nodes:
@@ -232,6 +236,23 @@ class Rbd:
 
         """
         self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
+
+    def image_meta(self, **kw):
+        """Manage image-meta.
+
+        Args:
+            action: get, remove, add.
+            image_spec: image specification.
+            key: meta-key.
+            value: meta-value.
+        """
+        cmd = f"rbd image-meta {kw.get('action')} {kw.get('image_spec')}"
+        if kw.get("key"):
+            cmd += f" {kw.get('key')}"
+            if kw.get("value"):
+                cmd += f" {kw.get('value')}"
+
+        return self.exec_cmd(cmd=cmd, output=True)
 
     def trash_exist(self, pool_name, image_name):
         out = self.exec_cmd(
