@@ -1,0 +1,82 @@
+# ======================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_rgw_test-lc-multiple-bucket.yaml
+# Test-Case: RGW  object expiration through lc for multiple buckets
+#
+# Cluster Configuration:
+#    cephci/conf/nautilus/rgw/tier-0_rgw.yaml
+#
+# Test Steps:
+#   (1) Install Pre-requisites, and Deploy Ceph using ceph-ansible
+#   (2) check cluster health
+#   (3) RGW object expiration through lc for multiple buckets
+# ======================================================================================
+tests:
+
+  - test:
+      abort-on-fail: true
+      config:
+        is_production: true
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      name: setup install pre-requisistes
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Bucket Lifecycle expiration Tests
+      desc: Test lifecycle with 100 bucket containing 10 objects each
+      polarion-id: CEPH-11177
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_bucket_lc_multiple_bucket.yaml
+        timeout: 300
