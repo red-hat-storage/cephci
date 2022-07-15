@@ -275,7 +275,7 @@ class BootstrapMixin:
 
         # Todo: This patch is specific to 5.1 release,
         #   should be removed for next 5.x development builds or release.
-        if rhbuild.split("-")[0] in ["5.1", "5.2"]:
+        if rhbuild.split("-")[0] in ["5.1", "5.2", "6.0"]:
             cmd += " --yes-i-know"
 
         out, err = self.installer.exec_command(
