@@ -1,4 +1,4 @@
-def nodeName = "centos-7"
+// Workflow to execute tests
 def sharedLib
 def retVal
 
@@ -74,7 +74,7 @@ def buildArtifactDetails(def sharedLib){
     return artifactDetails
 }
 
-node(nodeName){
+node("rhel-8-medium || ceph-qe-ci"){
     stage('Install pre req') {
         if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
         checkout([

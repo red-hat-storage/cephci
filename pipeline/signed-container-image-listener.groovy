@@ -1,6 +1,5 @@
 // Script to update the container build information into QE recipes.
 // Global variables section
-def nodeName = "centos-7"
 def sharedLib
 def versions
 def cephVersion
@@ -9,47 +8,41 @@ def containerImage
 def releaseMap = [:]
 
 // Pipeline script entry point
-node(nodeName) {
+node("rhel-8-medium || ceph-qe-ci") {
 
     try {
 
-        timeout(unit: "MINUTES", time: 30) {
-            stage('Preparing') {
-                if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-                checkout(
-                    scm: [
-                        $class: 'GitSCM',
-                        branches: [[name: 'origin/master']],
-                        extensions: [
-                            [
-                                $class: 'CleanBeforeCheckout',
-                                deleteUntrackedNestedRepositories: true
-                            ],
-                            [
-                                $class: 'WipeWorkspace'
-                            ],
-                            [
-                                $class: 'CloneOption',
-                                depth: 1,
-                                noTags: true,
-                                shallow: true,
-                                timeout: 10,
-                                reference: ''
-                            ]
-                        ],
-                        userRemoteConfigs: [[
-                            url: 'https://github.com/red-hat-storage/cephci.git'
-                        ]]
-                    ],
-                    changelog: false,
-                    poll: false
-                )
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-                sharedLib.prepareNode(1)
-            }
+        stage('prepareNode') {
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+            checkout(
+                scm: [
+                    $class: 'GitSCM',
+                    branches: [[name: 'origin/master']],
+                    extensions: [[
+                        $class: 'CleanBeforeCheckout',
+                        deleteUntrackedNestedRepositories: true
+                    ], [
+                        $class: 'WipeWorkspace'
+                    ], [
+                        $class: 'CloneOption',
+                        depth: 1,
+                        noTags: true,
+                        shallow: true,
+                        timeout: 10,
+                        reference: ''
+                    ]],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/red-hat-storage/cephci.git'
+                    ]]
+                ],
+                changelog: false,
+                poll: false
+            )
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+            sharedLib.prepareNode(1)
         }
 
-        stage("Updating") {
+        stage("updateRecipeFile") {
             versions = sharedLib.fetchMajorMinorOSVersion("signed-container-image")
             def majorVersion = versions.major_version
             def minorVersion = versions.minor_version
@@ -95,7 +88,7 @@ node(nodeName) {
             println "Success: Updated below information \n ${releaseMap}"
         }
 
-        stage('Publishing') {
+        stage('postUMB') {
             def contentMap = [
                 "artifact": [
                     "build_action": "rc",

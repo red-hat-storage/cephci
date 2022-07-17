@@ -1,7 +1,6 @@
 // Script to trigger when a RH Ceph is released and execute live tests in metadata file of RH Ceph release
 // available in the external repository.
 // Global variables section
-def nodeName = "centos-7"
 def sharedLib
 def versions
 def cephVersion
@@ -16,45 +15,39 @@ def testResults = [:]
 
 
 // Pipeline script entry point
-node(nodeName) {
+node("rhel-8-medium || ceph-qe-ci") {
 
-    timeout(unit: "MINUTES", time: 30) {
-        stage('Preparing') {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    extensions: [
-                        [
-                            $class: 'CleanBeforeCheckout',
-                            deleteUntrackedNestedRepositories: true
-                        ],
-                        [
-                            $class: 'WipeWorkspace'
-                        ],
-                        [
-                            $class: 'CloneOption',
-                            depth: 1,
-                            noTags: true,
-                            shallow: true,
-                            timeout: 10,
-                            reference: ''
-                        ]
-                    ],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
-                ],
-                changelog: false,
-                poll: false
-            )
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            sharedLib.prepareNode()
-        }
+    stage('Preparing') {
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: 'origin/master']],
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
+                    deleteUntrackedNestedRepositories: true
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
+            ],
+            changelog: false,
+            poll: false
+        )
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        sharedLib.prepareNode()
     }
 
-    stage("Get test suites") {
+    stage("fetchTestSuites") {
         versions = sharedLib.fetchMajorMinorOSVersion("released")
         def majorVersion = versions.major_version
         def minorVersion = versions.minor_version
@@ -82,7 +75,7 @@ node(nodeName) {
 
     parallel testStages
 
-    stage('Publish Results') {
+    stage('postResults') {
         def status = 'PASSED'
         if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
            status = 'FAILED'
@@ -129,7 +122,10 @@ node(nodeName) {
             "container_image": contentMap["build"]["repository"],
             "rhcephVersion": contentMap["artifact"]["rhcephVersion"]
         ]
-        sharedLib.sendGChatNotification(run_type, testResults, tierLevel, stageLevel, build_url, rhcephVersion)
+        sharedLib.sendGChatNotification(
+            run_type, testResults, tierLevel, stageLevel, build_url, rhcephVersion
+        )
+
         sharedLib.sendEmail(
                 run_type,
                 testResults,

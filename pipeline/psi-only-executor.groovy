@@ -1,53 +1,46 @@
 /*
-    Pipeline script for executing test suites that are meant to be executed only in PSI cloud.
+    Pipeline script for executing test suites that are meant to be executed only in PSI
+    cloud.
 */
-
-def nodeName = "centos-7"
 def ciMap
 def sharedLib
 
 
-node(nodeName) {
+node("rhel-8-medium || ceph-qe-ci") {
 
-    timeout(unit: "MINUTES", time: 30) {
-        stage('Install prereq') {
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    extensions: [
-                        [
-                            $class: 'CleanBeforeCheckout',
-                            deleteUntrackedNestedRepositories: true
-                        ],
-                        [
-                            $class: 'WipeWorkspace'
-                        ],
-                        [
-                            $class: 'CloneOption',
-                            depth: 1,
-                            noTags: true,
-                            shallow: true,
-                            timeout: 10,
-                            reference: ''
-                        ]
-                    ],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
-                ],
-                changelog: false,
-                poll: false
-            )
+    stage('prepareNode') {
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: 'origin/master']],
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
+                    deleteUntrackedNestedRepositories: true
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
+            ],
+            changelog: false,
+            poll: false
+        )
 
-            // prepare the node
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            sharedLib.prepareNode()
-        }
+        // prepare the node
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        sharedLib.prepareNode()
     }
 
-    stage("Trigger Pipeline"){
+    stage("executeWorkflow"){
         ciMap = sharedLib.getCIMessageMap()
         def rhcephVersion = ciMap.artifact.nvr
         def buildType = "tier-0"

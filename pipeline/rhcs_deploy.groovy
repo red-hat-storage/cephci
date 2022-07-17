@@ -5,7 +5,7 @@ def ciMap = [:]
 def sharedLib
 def vmPrefix
 
-node ("centos-7") {
+node ("rhel-8-medium || ceph-qe-ci") {
 
     stage("prepareJenkinsAgent") {
         if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }

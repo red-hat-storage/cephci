@@ -3,7 +3,7 @@
 */
 def sharedLib
 
-node("centos-7") {
+node("rhel-8-medium || ceph-qe-ci") {
 
     stage("prepareNode") {
         if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
@@ -12,23 +12,19 @@ node("centos-7") {
             scm: [
                 $class: 'GitSCM',
                 branches: [[name: 'origin/master']],
-                extensions: [
-                    [
-                        $class: 'CleanBeforeCheckout',
-                        deleteUntrackedNestedRepositories: true
-                    ],
-                    [
-                        $class: 'WipeWorkspace'
-                    ],
-                    [
-                        $class: 'CloneOption',
-                        depth: 1,
-                        noTags: true,
-                        shallow: true,
-                        timeout: 10,
-                        reference: ''
-                    ]
-                ],
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
+                    deleteUntrackedNestedRepositories: true
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
                 ]]

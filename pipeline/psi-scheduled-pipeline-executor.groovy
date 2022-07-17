@@ -1,10 +1,6 @@
 /*
     Pipeline script for executing weekly scheduled test suites
 */
-
-// Set default values
-def nodeName = "centos-7"
-
 // Recipe file path details
 def recipeFile = "RHCEPH-*.yaml"
 def recipeFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
@@ -16,30 +12,26 @@ def tags = "${params.tags}" ? "schedule,psi,tier-1,stage-1" : "${params.tags}"
 
 
 // Pipeline script entry point
-node(nodeName) {
-    stage('Install prereq') {
+node("rhel-8-medium || ceph-qe-ci") {
+    stage('prepareNode') {
         if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
         checkout(
             scm: [
                 $class: 'GitSCM',
                 branches: [[name: 'origin/master']],
-                extensions: [
-                    [
-                        $class: 'CleanBeforeCheckout',
-                        deleteUntrackedNestedRepositories: true
-                    ],
-                    [
-                        $class: 'WipeWorkspace'
-                    ],
-                    [
-                        $class: 'CloneOption',
-                        depth: 1,
-                        noTags: true,
-                        shallow: true,
-                        timeout: 10,
-                        reference: ''
-                    ]
-                ],
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
+                    deleteUntrackedNestedRepositories: true
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
                 userRemoteConfigs: [[
                     url: 'https://github.com/red-hat-storage/cephci.git'
                 ]]
@@ -51,8 +43,8 @@ node(nodeName) {
         load("${env.WORKSPACE}/pipeline/vars/v3.groovy").prepareNode()
     }
 
-    stage("Trigger Pipeline") {
-        println "Begin synchronzing image artifacts."
+    stage("executeWorkflow") {
+        println "Begin synchronizing image artifacts."
 
         def validRecipeFiles = sh(
                 returnStdout: true, script: "find ${recipeFileDir} -name ${recipeFile} -mtime -7 -print").trim().split("\n") as List

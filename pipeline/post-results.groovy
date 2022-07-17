@@ -1,8 +1,6 @@
 /*
     Pipeline script for uploading IBM test run results to report portal.
 */
-
-def nodeName = "centos-7"
 def credsRpProc = [:]
 def sharedLib
 def rpPreprocDir
@@ -14,48 +12,43 @@ def reportBucket = "qe-ci-reports"
 def remoteName= "ibm-cos"
 def msgMap = [:]
 
-node(nodeName) {
+node("rhel-8-medium || ceph-qe-ci") {
 
     try {
-        timeout(unit: "MINUTES", time: 30) {
-            stage('prepareJenkinsAgent') {
-                if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-                checkout(
-                    scm: [
-                        $class: 'GitSCM',
-                        branches: [[name: "origin/master"]],
-                        extensions: [
-                            [
-                                $class: 'CleanBeforeCheckout',
-                                deleteUntrackedNestedRepositories: true
-                            ],
-                            [
-                                $class: 'WipeWorkspace'
-                            ],
-                            [
-                                $class: 'CloneOption',
-                                depth: 1,
-                                noTags: true,
-                                shallow: true,
-                                timeout: 10,
-                                reference: ''
-                            ]
-                        ],
-                        userRemoteConfigs: [[
-                            url: "https://github.com/red-hat-storage/cephci.git"
-                        ]]
-                    ],
-                    changelog: false,
-                    poll: false
-                )
 
-                // prepare the node
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-                msgMap = sharedLib.getCIMessageMap()
-                println("msgMap : ${msgMap}")
-                println("sharedLib: ${sharedLib}")
-                sharedLib.prepareNode()
-            }
+        stage('prepareJenkinsAgent') {
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+            checkout(
+                scm: [
+                    $class: 'GitSCM',
+                    branches: [[name: "origin/master"]],
+                    extensions: [[
+                        $class: 'CleanBeforeCheckout',
+                        deleteUntrackedNestedRepositories: true
+                    ], [
+                        $class: 'WipeWorkspace'
+                    ], [
+                        $class: 'CloneOption',
+                        depth: 1,
+                        noTags: true,
+                        shallow: true,
+                        timeout: 10,
+                        reference: ''
+                    ]],
+                    userRemoteConfigs: [[
+                        url: "https://github.com/red-hat-storage/cephci.git"
+                    ]]
+                ],
+                changelog: false,
+                poll: false
+            )
+
+            // prepare the node
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+            msgMap = sharedLib.getCIMessageMap()
+            println("msgMap : ${msgMap}")
+            println("sharedLib: ${sharedLib}")
+            sharedLib.prepareNode()
         }
 
         stage('configureReportPortalWorkDir') {
@@ -161,24 +154,26 @@ node(nodeName) {
             println("Execution complete")
         }
     } catch(Exception err) {
-        if (currentBuild.result != "ABORTED") {
-            // notify about failure
-            currentBuild.result = "FAILURE"
-            def failureReason = err.getMessage()
-            def subject =  "[CEPHCI-PIPELINE-ALERT] [JOB-FAILURE] - ${env.JOB_NAME}/${env.BUILD_NUMBER}"
-            def body = "<body><h3><u>Job Failure</u></h3></p>"
-            body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
-            body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
-
-            emailext (
-                mimeType: 'text/html',
-                subject: "${subject}",
-                body: "${body}",
-                from: "cephci@redhat.com",
-                to: "cephci@redhat.com"
-            )
-            subject += "\n Jenkins URL: ${env.BUILD_URL}"
-            googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
+        if (currentBuild.result == "ABORTED") {
+            println("The workflow has been aborted.")
         }
+
+        // notify about failure
+        currentBuild.result = "FAILURE"
+        def failureReason = err.getMessage()
+        def subject =  "[CEPHCI-PIPELINE-ALERT] [JOB-FAILURE] - ${env.JOB_NAME}/${env.BUILD_NUMBER}"
+        def body = "<body><h3><u>Job Failure</u></h3></p>"
+        body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
+        body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
+
+        emailext (
+            mimeType: 'text/html',
+            subject: "${subject}",
+            body: "${body}",
+            from: "cephci@redhat.com",
+            to: "cephci@redhat.com"
+        )
+        subject += "\n Jenkins URL: ${env.BUILD_URL}"
+        googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
     }
 }
