@@ -9,7 +9,7 @@ echo "Initialize Node"
 sudo sysctl -w net.ipv6.conf.eth0.disable_ipv6=1
 
 sudo yum install -y git-core zip unzip
-sudo dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
 sudo yum install -y p7zip
 
 # Mount reesi for storing logs
