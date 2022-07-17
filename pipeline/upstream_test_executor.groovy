@@ -13,41 +13,36 @@ def cephVersion
 // Pipeline script entry point
 node('ceph-qe-ci || rhel-8-medium') {
     try {
-        timeout(unit: "MINUTES", time: 30) {
-            stage('Preparing') {
-                if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-                checkout(
-                    scm: [
-                        $class: 'GitSCM',
-                        branches: [[name: 'origin/master']],
-                        extensions: [
-                            [
-                                $class: 'CleanBeforeCheckout',
-                                deleteUntrackedNestedRepositories: true
-                            ],
-                            [
-                                $class: 'WipeWorkspace'
-                            ],
-                            [
-                                $class: 'CloneOption',
-                                depth: 1,
-                                noTags: true,
-                                shallow: true,
-                                timeout: 10,
-                                reference: ''
-                            ]
-                        ],
-                        userRemoteConfigs: [[
-                            url: 'https://github.com/red-hat-storage/cephci.git'
-                        ]]
-                    ],
-                    changelog: false,
-                    poll: false
-                )
-                sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-                sharedLib.prepareNode()
-            }
+        stage('Preparing') {
+            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+            checkout(
+                scm: [
+                    $class: 'GitSCM',
+                    branches: [[name: 'origin/master']],
+                    extensions: [[
+                        $class: 'CleanBeforeCheckout',
+                        deleteUntrackedNestedRepositories: true
+                    ], [
+                        $class: 'WipeWorkspace'
+                    ], [
+                        $class: 'CloneOption',
+                        depth: 1,
+                        noTags: true,
+                        shallow: true,
+                        timeout: 10,
+                        reference: ''
+                    ]],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/red-hat-storage/cephci.git'
+                    ]]
+                ],
+                changelog: false,
+                poll: false
+            )
+            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+            sharedLib.prepareNode()
         }
+
         stage('Fetch Test-suites for Execution') {
             def tags = "${buildType},stage-1"
             def overrides = [build:buildType,"upstream-build":upstreamVersion]

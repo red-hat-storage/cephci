@@ -88,7 +88,7 @@ def cleanup(
     user_ = osp_identity.get_user(node.extra["userId"])
     if node.state.lower() != "error":
         node_age = datetime.now(timezone.utc) - node.created_at
-        max_age = 7 if tenant != "ceph-ci" else 3
+        max_age = 7 if tenant != "ceph-jenkins" else 3
 
         if (max_age - 1) > node_age.days > (max_age // 2):
             if user_.name == "psi-ceph-jenkins":

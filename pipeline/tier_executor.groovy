@@ -14,7 +14,7 @@ def buildArtifacts
 def buildType
 def final_stage = false
 def run_type
-def nodeName = "centos-7"
+def nodeName = "rhel-8-medium || ceph-qe-ci"
 def tags = ""
 
 def branch='origin/master'
@@ -32,7 +32,7 @@ if (params.containsKey('tags')){
     tags=params.tags
     tags_list = tags.split(',') as List
     if (tags_list.contains('ibmc')){
-        nodeName = "agent-01"
+        nodeName = "agent-01 || ceph-qe-ci"
     }
 }
 
@@ -43,23 +43,19 @@ node(nodeName) {
             scm: [
                 $class: 'GitSCM',
                 branches: [[name: branch]],
-                extensions: [
-                    [
-                        $class: 'CleanBeforeCheckout',
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
                         deleteUntrackedNestedRepositories: true
-                    ],
-                    [
-                        $class: 'WipeWorkspace'
-                    ],
-                    [
-                        $class: 'CloneOption',
-                        depth: 1,
-                        noTags: true,
-                        shallow: true,
-                        timeout: 10,
-                        reference: ''
-                    ]
-                ],
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
                 userRemoteConfigs: [[
                     url: repo
                 ]]
@@ -69,14 +65,13 @@ node(nodeName) {
         )
 
         sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-        if(tags_list.contains('ibmc')){
+        if(tags_list.contains('ibmc')) {
             sharedLib.prepareIbmNode()
         }
-        else{
+        else {
             sharedLib.prepareNode()
         }
     }
-
 
     stage("PrepareTestStages") {
         /* Prepare pipeline stages using RHCEPH version */
@@ -131,7 +126,7 @@ node(nodeName) {
             println(releaseContent)
         }
 
-        if("ibmc" in tags_list){
+        if("ibmc" in tags_list) {
             def workspace = "${env.WORKSPACE}"
             def build_number = "${currentBuild.number}"
             overrides.put("workspace", workspace.toString())
@@ -229,7 +224,7 @@ node(nodeName) {
         }
     }
 
-    if("ibmc" in tags_list){
+    if("ibmc" in tags_list) {
         println("Inside ibmc post results")
         stage('publishTestResults') {
             // Copy all the results into one folder before upload
@@ -381,4 +376,3 @@ node(nodeName) {
         }
     }
 }
-

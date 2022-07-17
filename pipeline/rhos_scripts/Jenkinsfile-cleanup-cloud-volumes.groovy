@@ -38,7 +38,7 @@ node("rhel-8-medium") {
     stage('cleanUp') {
         println("Cleanup Orphaned cloud volumes  and Send Email to respective user")
         cmd = "${env.WORKSPACE}/.venv/bin/python"
-        cmd += " ${env.WORKSPACE}/utility/cleanup_cloud_volumes.py"
+        cmd += " ${env.WORKSPACE}/utility/psi_volume_cleanup.py"
         cmd += " --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
         println(cmd)
 
