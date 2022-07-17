@@ -7,8 +7,8 @@
     the pipeline is executed under a stable environment. The durations for each project
     are
         ceph-jenkins        3 days
-        ceph-ci             2 weeks
-        ceph-core           2 weeks
+        ceph-ci             1 week
+        ceph-core           1 weeks
 """
 import smtplib
 import sys
@@ -19,16 +19,14 @@ from typing import Dict
 
 import yaml
 from docopt import docopt
-from libcloud.common.types import LibcloudError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from ceph.parallel import parallel
 from compute.openstack import CephVMNodeV2, Node
-from utility.retry import retry
 
 doc = """
-Utility to cleanup instances in a RHOS cloud.
+Red Hat OpenStack Instance Removal Utility.
 
     Usage:
         cleanup_env.py --osp-cred <cred-file>
@@ -44,7 +42,7 @@ def add_key_to_ref(
     ref: Dict, category: str, email: str, vm_name: str, tenant: str
 ) -> None:
     """
-    Adds the provide information to ref
+    Adds the provided information to ref
 
     Arguments:
         ref         Data structure to which the values need to be added
@@ -87,13 +85,10 @@ def cleanup(
     Returns:
         None
     """
-    if "do-not-delete" in node.name.lower():
-        return
-
     user_ = osp_identity.get_user(node.extra["userId"])
     if node.state.lower() != "error":
         node_age = datetime.now(timezone.utc) - node.created_at
-        max_age = 3 if tenant == "ceph-jenkins" else 14
+        max_age = 7 if tenant != "ceph-ci" else 3
 
         if (max_age - 1) > node_age.days > (max_age // 2):
             if user_.name == "psi-ceph-jenkins":
@@ -169,7 +164,7 @@ def send_email(payload: Dict) -> list:
                             <p>Hi,<br><br>
                             Below cloud subscriptions are expired/expiring.<br>
                             The durations for subscriptions expire in project are for ceph-jenkins its 3 days,
-                            for ceph-ci and ceph-core its 2 weeks i.e, 14days.</p>"""
+                            for ceph-ci and ceph-core is 7 days.</p>"""
 
             for category, pro in ct.items():
                 statement = "Summary: "
@@ -198,17 +193,16 @@ def send_email(payload: Dict) -> list:
                 html += "</table><br>"
 
             html += """\
-                </table><p style="color:red;">NOTE: Please add 'do-not-delete' along with the node name
-                in case it should not be removed</p></body><br><br></html>"""
+                </table></body><br><br></html>"""
             part1 = MIMEText(html, "html")
             msg.attach(part1)
             s = smtplib.SMTP("localhost")
             s.sendmail(sender, recipient, msg.as_string())
             s.quit()
+
     return failed_vm
 
 
-@retry(LibcloudError, tries=5, delay=15)
 def run(args: Dict) -> int:
     """
     Using the provided credential file, this method removes the instances that are
@@ -255,8 +249,8 @@ def run(args: Dict) -> int:
     if response:
         print(f"Failed to delete Instances/nodes: {response}")
         return 1
-    else:
-        return 0
+
+    return 0
 
 
 if __name__ == "__main__":

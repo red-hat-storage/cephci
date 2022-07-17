@@ -121,24 +121,39 @@ def map_userto_instances(os_nodes, os_cred):
 
 
 def get_complete_quota(instance_detail, os_cred, project_name):
-    """
-    Generates Projects stats and user stats and collate them in to dictionary
-    Returns : quota_stats
-    return sample :
-    [{'project_stats': {'Project Name': 'ceph-jenkins', 'RAM usage in %': 34.22, 'VCPU usage in %': 29.2,
-                        'Storage usage in %': 29.73}, 'user_stats': [
-        {'User': 'psi-ceph-jenkins', 'Project': 'ceph-jenkins', 'Instance Count': 21, 'RAM Used in GB': 84.0,
-         'VCPU Used': 42, 'Volume Used in GB': 820},
-        {'User': 'vimishra', 'Project': 'ceph-jenkins', 'Instance Count': 14, 'RAM Used in GB': 56.0, 'VCPU Used': 28,
-         'Volume Used in GB': 560},
-        ]}]
-    """
+    """Generates Projects stats and user stats and collate them in to dictionary.
 
+    Returns : quota_stats (dict)
+        [{
+            'project_stats': {
+                'Project Name': 'ceph-jenkins',
+                'RAM usage in %': 34.22,
+                'VCPU usage in %': 29.2,
+                'Storage usage in %': 29.73},
+                'user_stats': [{
+                    'User': 'psi-ceph-jenkins',
+                    'Project': 'ceph-jenkins',
+                    'Instance Count': 21,
+                    'RAM Used in GB': 84.0,
+                    'VCPU Used': 42,
+                    'Volume Used in GB': 820
+                }, {
+                    'User': 'user1',
+                    'Project': 'ceph-jenkins',
+                    'Instance Count': 14,
+                    'RAM Used in GB': 56.0,
+                    'VCPU Used': 28,
+                    'Volume Used in GB': 560
+                }]
+        }]
+    """
     total_instances_used = 0
     total_vcpus_used = 0
     total_ram_used = 0
     total_volume_used = 0
     user_stats = []
+    quota_stats = dict()
+
     for k in instance_detail.keys():
         user = k
         stat_map = {
@@ -180,15 +195,14 @@ def get_complete_quota(instance_detail, os_cred, project_name):
 
 
 def send_email(html):
-    """
-    Sends Email with all the quota details
-    """
+    """Sends Email with all the quota details."""
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "Quota Usage Statistics for rhos-d projects."
     part1 = MIMEText(html, "html")
     msg.attach(part1)
 
-    # result properties file and summary html log for injecting vars in jenkins jobs , gitlab JJB to parse
+    # result properties file and summary html log for injecting vars in jenkins jobs,
+    # gitlab JJB to parse
 
     sender = "cephci@redhat.com"
     recipients = ["ceph-qe@redhat.com", "cephci@redhat.com"]
@@ -206,11 +220,8 @@ def send_email(html):
         print(e)
 
 
-def run(args: Dict) -> int:
-    """
-    Generates Report with the usage details of RHOS-D environment
-    This will also emails the team with all the details
-    """
+def run(args: Dict) -> None:
+    """Generates Report with the usage details of RHOS-D environment."""
     osp_cred_file = args["--osp-cred"]
     osp_cred = load_file(osp_cred_file)
     glbs = osp_cred.get("globals")
@@ -230,7 +241,7 @@ def run(args: Dict) -> int:
             quota_details.append(quota_stats)
         except CommandFailed as cf:
             print(
-                f"Openstack Command failed while fetcing the server details {cf.args[-1]}"
+                f"Openstack Command failed to retrieve the server details {cf.args[-1]}"
             )
 
     project_dir = os.path.dirname(os.path.abspath(__file__))
@@ -263,4 +274,4 @@ def run(args: Dict) -> int:
 
 if __name__ == "__main__":
     arguments = docopt(doc)
-    rc = run(arguments)
+    run(arguments)

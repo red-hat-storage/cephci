@@ -1,8 +1,5 @@
-#!/usr/bin/env python
-"""
-Utility to cleanup orphaned volumes.
-
-"""
+#!/usr/bin/env python3
+"""Utility to remove orphaned volumes."""
 from gevent import monkey, sleep
 
 monkey.patch_all()
@@ -12,21 +9,19 @@ from datetime import datetime, timedelta
 import yaml
 from docopt import docopt
 from libcloud.common.exceptions import BaseHTTPError
-from libcloud.common.types import LibcloudError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from ceph.parallel import parallel
-from utility.retry import retry
 
 doc = """
 Utility to cleanup orphaned volumes.
 
- Usage:
-  clean_ceph_vols.py [--osp-cred <file>]
+    Usage:
+        clean_ceph_vols.py [--osp-cred <file>]
 
-Options:
-  --osp-cred <file>                 openstack credentials as separate file [default: osp/osp-cred-ci-2.yaml]
+    Options:
+        --osp-cred <file>     Credential file [default: ~/osp-cred-ci-2.yaml]
 """
 
 
@@ -59,9 +54,7 @@ def get_openstack_driver(yaml, project):
 
 
 def volume_cleanup(volume, driver):
-    """
-    Detach and delete a particular volume
-    """
+    """Detach and delete a particular volume."""
     print("Removing volume", volume.name)
     try:
         driver.detach_volume(volume)
@@ -71,9 +64,7 @@ def volume_cleanup(volume, driver):
 
 
 def cleanup_ceph_vols(osp_cred):
-    """
-    Cleanup stale volues with satus deleting, error
-    """
+    """Cleanup stale volumes with satus deleting, error."""
     projects = ["ceph-jenkins", "ceph-core", "ceph-ci"]
     vol_states = ["deleting", "error", "available"]
     for each_project in projects:
@@ -95,7 +86,6 @@ def cleanup_ceph_vols(osp_cred):
         sleep(10)
 
 
-@retry(LibcloudError, tries=5, delay=15)
 def run(args):
     osp_cred_file = args["--osp-cred"]
     if osp_cred_file:
