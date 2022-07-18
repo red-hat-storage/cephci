@@ -93,6 +93,7 @@ def create_baremetal_ceph_nodes(cluster_conf):
 
     with parallel() as p:
         for n, node in enumerate(nodes):
+            node_id = node.get("id") or f"node{n}"
             params = dict(
                 {
                     "ip": node.get("ip"),
@@ -103,10 +104,12 @@ def create_baremetal_ceph_nodes(cluster_conf):
                     "no-of-volumes": len(node.get("volumes", [])),
                     "volumes": node.get("volumes"),
                     "subnet": cluster_conf["ceph-cluster"]["networks"]["public"][0],
+                    "location": node.get("location"),
+                    "id": node_id,
                 }
             )
 
-            p.spawn(setup_vm_node_baremetal, f"node{n}", ceph_nodes, **params)
+            p.spawn(setup_vm_node_baremetal, node_id, ceph_nodes, **params)
 
     log.info("Done creating nodes")
     return ceph_nodes
@@ -187,7 +190,8 @@ def create_ibmc_ceph_nodes(
                 node_dict = ceph_cluster.get(node)
                 node_params = params.copy()
                 node_params["role"] = RolesContainer(node_dict.get("role"))
-
+                node_params["id"] = node_dict.get("id") or node
+                node_params["location"] = node_dict.get("location")
                 node_params["node-name"] = generate_node_name(
                     node_params.get("cluster-name", "ceph"),
                     instances_name,
@@ -258,6 +262,8 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
         vm.role = params["role"]
         vm.root_login = params["root-login"]
         vm.osd_scenario = params.get("osd-scenario")
+        vm.location = params.get("location")
+        vm.id = params.get("id")
         ceph_nodes[node] = vm
     except RETRY_EXCEPTIONS as retry_except:
         log.warning(retry_except, exc_info=True)
@@ -324,7 +330,8 @@ def create_ceph_nodes(
                 node_params = params.copy()
                 node_params["role"] = RolesContainer(node_dict.get("role"))
                 user = os.getlogin()
-
+                node_params["id"] = node_dict.get("id") or node
+                node_params["location"] = node_dict.get("location")
                 node_params["node-name"] = generate_node_name(
                     node_params.get("cluster-name", "ceph"),
                     instances_name or user,
@@ -395,6 +402,8 @@ def setup_vm_node(node, ceph_nodes, **params):
         vm.root_login = params["root-login"]
         vm.keypair = params["keypair"]
         vm.osd_scenario = params.get("osd-scenario", False)
+        vm.location = params.get("location")
+        vm.id = params.get("id")
         ceph_nodes[node] = vm
     except RETRY_EXCEPTIONS as retry_except:
         log.warning(retry_except, exc_info=True)

@@ -1274,9 +1274,7 @@ class CephNode(object):
         self.ip_address = kw["ip_address"]
         self.subnet = kw["subnet"]
         self.vmname = kw["hostname"]
-
-        vmshortname = self.vmname.split(".")
-        self.vmshortname = vmshortname[0]
+        self.vmshortname = self.vmname.split(".")[0]
 
         if kw.get("ceph_vmnode"):
             self.vm_node = kw["ceph_vmnode"]

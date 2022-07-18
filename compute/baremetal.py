@@ -26,6 +26,8 @@ class CephBaremetalNode:
             root_login
             volumes
             subnet
+            Id
+            location
         """
         # CephVM attributes
         self._roles: list = list()
@@ -145,3 +147,13 @@ class CephBaremetalNode:
     def shortname(self) -> str:
         """Return the shortform of the hostname."""
         return self.hostname.split(".")[0]
+
+    @property
+    def id(self) -> int:
+        """Return the node id."""
+        return self.params.get("id")
+
+    @property
+    def location(self) -> str:
+        """Return the Data center location."""
+        return self.params.get("location")
