@@ -20,7 +20,8 @@
 #     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
 #     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
 #     Node3 - Mon, OSD, MDS, RGW, node-exporter
-#     Node4 - Client
+#     Node4 - RGW
+#     Node5 - Client
 #
 # Test Steps :
 #   (1) Bootstrap cluster with options,
@@ -261,13 +262,13 @@ tests:
                 - "120"
   - test:
       name: Configure client
-      desc: Configure client on node4
+      desc: Configure client on node5
       module: test_client.py
       polarion-id:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node4                       # client node
+        node: node5                       # client node
         install_packages:
           - ceph-common                   # install ceph common packages
         copy_admin_keyring: true          # Copy admin keyring to node
