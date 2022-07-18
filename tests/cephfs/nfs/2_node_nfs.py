@@ -1,10 +1,10 @@
 import secrets
 import string
-import time
 import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
 
 log = Log(__name__)
@@ -74,7 +74,8 @@ def run(ceph_cluster, **kw):
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph nfs cluster delete {nfs_name}"
         )
-        time.sleep(5)
+        if not wait_for_process(client=client1, process_name=nfs_name, ispresent=False):
+            raise CommandFailed("Cluster has not been deleted")
         out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
         output = out.split()
         if nfs_name not in output:
@@ -84,7 +85,8 @@ def run(ceph_cluster, **kw):
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs1},{nfs2}"
         )
-        time.sleep(5)
+        if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
+            raise CommandFailed("Cluster has not been created")
         if nfs_name not in output:
             log.info("ceph nfs cluster created successfully")
         else:
@@ -106,6 +108,12 @@ def run(ceph_cluster, **kw):
                 cmd=f"ceph nfs export create cephfs {nfs_name} "
                 f"{nfs_export_name} {fs_name} path={export_path}",
             )
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs1, nfs_export_name, nfs_mounting_dir_1
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
         commands = [
             f"mkdir -p {nfs_mounting_dir_1}",
             f"mount -t nfs -o port=2049 {nfs1}:{nfs_export_name} {nfs_mounting_dir_1}",
@@ -118,8 +126,14 @@ def run(ceph_cluster, **kw):
             f"/file$(printf %03d "
             "$n"
             ") bs=500k count=1000; done",
-            f"mkdir -p {nfs_mounting_dir_2}",
-            f"mount -t nfs -o port=2049 {nfs2}:{nfs_export_name} {nfs_mounting_dir_2}",
+        ]
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs2, nfs_export_name, nfs_mounting_dir_2
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
+        commands = [
             f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}"
             f"mkdir {nfs_mounting_dir_2}/dir3 {nfs_mounting_dir_2}/dir4",
             f"for n in {{1..5}}; do     dd if=/dev/urandom of={nfs_mounting_dir_2}/dir3"

@@ -73,12 +73,12 @@ def run(ceph_cluster, **kw):
                 cmd=f"ceph nfs export create cephfs {nfs_name} "
                 f"{nfs_export_1} {fs_name} {export_path} --readonly",
             )
-        commands = [
-            f"mkdir {nfs_mounting_dir_1}",
-            f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_1} {nfs_mounting_dir_1}",
-        ]
-        for command in commands:
-            client1.exec_command(sudo=True, cmd=command)
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs_server, nfs_export_1, nfs_mounting_dir_1
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
         out, err = client1.exec_command(
             sudo=True, cmd=f"touch {nfs_mounting_dir_1}/file", check_ec=False
         )
@@ -97,9 +97,13 @@ def run(ceph_cluster, **kw):
                 cmd=f"ceph nfs export create cephfs {nfs_name} "
                 f"{nfs_export_2} {fs_name} path={export_path}",
             )
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs_server, nfs_export_2, nfs_mounting_dir_2
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
         commands = [
-            f"mkdir {nfs_mounting_dir_2}",
-            f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_2} {nfs_mounting_dir_2}",
             f"dd if=/dev/urandom of={nfs_mounting_dir_2}/file bs=1M count=1000",
             f"dd if={nfs_mounting_dir_1}/file of=~/copy_file bs=1M count=1000",
             f"diff {nfs_mounting_dir_2}/file ~/copy_file",

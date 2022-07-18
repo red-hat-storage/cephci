@@ -65,13 +65,13 @@ def run(ceph_cluster, **kw):
                 cmd=f"ceph nfs export create cephfs {nfs_name} "
                 f"{nfs_export_name} {fs_name} path={export_path}",
             )
-        commands = [
-            f"mkdir -p {nfs_mounting_dir}",
-            f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_name} {nfs_mounting_dir}",
-            "yum install zip -y",
-        ]
-        for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs_server, nfs_export_name, nfs_mounting_dir
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
+        client1.exec_command(sudo=True, cmd="yum install zip -y", long_running=True)
         client1.exec_command(sudo=True, cmd=f"mkdir {nfs_mounting_dir}/dir1..10")
         fs_util.create_file_data(
             client1, nfs_mounting_dir + "/files_dir1", 100, "file", "file_data"
