@@ -113,7 +113,11 @@ class RbdMirror:
         )
 
     def mirror_daemon(self, enable=None, start=None, stop=None, restart=None):
-        """Enable, Start or Stop Rbd Mirror Daemon"""
+        """Enable, Start or Stop Rbd Mirror Daemon
+
+        Note: This method cannot be used for RHCS 4.x and beyond.
+        (For mirroring daemons configured using ceph-ansible/cephadm)
+        """
         if enable:
             self.exec_cmd(
                 ceph_args=False, cmd="systemctl enable ceph-rbd-mirror.target"
@@ -128,9 +132,8 @@ class RbdMirror:
                 ceph_args=False, cmd="systemctl restart ceph-rbd-mirror@admin"
             )
 
-    # Initial setup of mirroring host
     def setup_mirror(self, peer_cluster, **kw):
-        self.exec_cmd(ceph_args=False, cmd="yum install -y rbd-mirror")
+        """Exchanges conf file and keyring file and installs rbd-mirror daemon."""
 
         self.copy_file(
             file_name="/etc/ceph/{}.conf".format(peer_cluster.cluster_name),
@@ -157,12 +160,14 @@ class RbdMirror:
             dest=self.ceph_client,
         )
 
-        self.mirror_daemon(enable=True, start=True)
+        if not kw.get("daemon_configured"):
+            self.exec_cmd(ceph_args=False, cmd="yum install -y rbd-mirror")
+            self.mirror_daemon(enable=True, start=True)
 
     def config_mirror(self, peer_cluster, **kw):
         poolname = kw.get("poolname")
-        primary_cluster = "master"
-        secondary_cluster = "slave"
+        primary_cluster = "primary"
+        secondary_cluster = "secondary"
         mode = kw.get("mode")
 
         self.enable_mirroring("pool", poolname, mode=mode)
@@ -171,7 +176,7 @@ class RbdMirror:
         if self.ceph_version >= 4:
             self.bootstrap_peers(poolname=poolname, cluster_name=primary_cluster)
             self.copy_file(
-                file_name="/root/bootstrap_token_master",
+                file_name="/root/bootstrap_token_primary",
                 src=self.ceph_client,
                 dest=peer_cluster.ceph_client,
             )
@@ -465,8 +470,8 @@ class RbdMirror:
             long_running=True,
         )
 
-    # Enable Pool or Image Mirroring
     def enable_mirroring(self, *args, **kw):
+        """Enable mirroring on provided pool with provided mode."""
         self.exec_cmd(
             cmd="rbd mirror {} enable {} {}".format(
                 args[0], args[1], kw.get("mode", "")
@@ -503,21 +508,21 @@ class RbdMirror:
     def bootstrap_peers(self, **kw):
         """Create a bootstrap token on primary cluster and store under root"""
         cmd = "rbd mirror pool peer bootstrap create"
-        cmd += " --site-name master"
-        cmd += f" {kw['poolname']} > /root/bootstrap_token_master"
+        cmd += " --site-name primary"
+        cmd += f" {kw['poolname']} > /root/bootstrap_token_primary"
         return self.exec_cmd(cmd=cmd)
 
     def import_bootstrap(self, **kw):
         """Import bootstrap token that is created on primary from scecondary cluster"""
         if "one-way" in kw.get("way", ""):
             cmd = "rbd mirror pool peer bootstrap import"
-            cmd += " --site-name slave --direction rx-only"
-            cmd += f" {kw['poolname']} /root/bootstrap_token_master"
+            cmd += " --site-name secondary --direction rx-only"
+            cmd += f" {kw['poolname']} /root/bootstrap_token_primary"
             return self.exec_cmd(cmd=cmd)
         else:
             cmd = "rbd mirror pool peer bootstrap import"
-            cmd += " --site-name slave"
-            cmd += f" {kw['poolname']} /root/bootstrap_token_master"
+            cmd += " --site-name secondary"
+            cmd += f" {kw['poolname']} /root/bootstrap_token_primary"
             return self.exec_cmd(cmd=cmd)
 
     # Remove Peer
@@ -620,7 +625,7 @@ class RbdMirror:
         """
         service_name, rc = self.ceph_rbdmirror.exec_command(
             sudo=True,
-            cmd=f"systemctl list-units --all | grep {service_name} | awk {{'print $1'}}",
+            cmd=f"systemctl list-units --all | grep {service_name}|grep -v target | awk {{'print $1'}}",
         )
         log.info(f"Service name : {service_name} ")
         return service_name

@@ -51,7 +51,7 @@ def run(**kw):
         if build.startswith("5"):
             service_name = mirror2.get_rbd_service_name("rbd-mirror")
         if build.startswith("4"):
-            service_name = mirror2.get_rbd_service_name("rbd-mirror@admin.service")
+            service_name = mirror2.get_rbd_service_name("rbd-mirror")
         mirror2.change_service_state(service_name=service_name, operation="stop")
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="down+stopped")
         mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total"))

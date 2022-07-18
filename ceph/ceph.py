@@ -187,6 +187,9 @@ class Ceph(object):
                 node.configure_firewall()
                 node.open_firewall_port(port=ports, protocol="tcp")
 
+            if node.role == "rbd-mirror":
+                node.configure_firewall()
+
     def setup_ssh_keys(self):
         """
         Generate and distribute ssh keys within cluster
@@ -250,6 +253,7 @@ class Ceph(object):
         client_hosts = []
         iscsi_gw_hosts = []
         grafana_hosts = []
+        rbdmirrors_hosts = []
         counter = 0
 
         for node in self:  # type: CephNode
@@ -364,6 +368,8 @@ class Ceph(object):
                     node.shortname + " grafana_interface=" + node.eth_interface
                 )
                 grafana_hosts.append(grafana_host)
+            if node.role == "rbd-mirror":
+                rbdmirrors_hosts.append(str(node.shortname))
         hosts_file = ""
         if mon_hosts:
             mon = "[mons]\n" + "\n".join(mon_hosts)
@@ -392,6 +398,9 @@ class Ceph(object):
         if grafana_hosts:
             grafana = "[grafana-server]\n" + "\n".join(grafana_hosts)
             hosts_file += grafana + "\n"
+        if rbdmirrors_hosts:
+            rbdmirror = "[rbdmirrors]\n" + "\n".join(rbdmirrors_hosts)
+            hosts_file += rbdmirror + "\n"
         logger.info("Generated hosts file: \n{file}".format(file=hosts_file))
         return hosts_file
 
@@ -420,13 +429,18 @@ class Ceph(object):
         collocated = self.ansible_config.get("osd_scenario") == "collocated"
         lvm = self.ansible_config.get("osd_scenario") == "lvm"
 
-        if not collocated and not lvm:
-            reserved_devs = [
-                raw_journal_device
-                for raw_journal_device in set(
-                    self.ansible_config.get("dedicated_devices")
-                )
-            ]
+        try:
+            if not collocated and not lvm:
+                reserved_devs = [
+                    raw_journal_device
+                    for raw_journal_device in set(
+                        self.ansible_config.get("dedicated_devices")
+                    )
+                ]
+        except TypeError:
+            logger.err(
+                "Please add osd_scenario: lvm to ansi_config as it is required for cephci"
+            )
 
         if len(node.get_free_volumes()) >= len(reserved_devs):
             for _ in reserved_devs:

@@ -739,7 +739,11 @@ def run(args):
 
     for test in tests:
         test = test.get("test")
-        parallel = test.get("parallel")
+        try:
+            parallel = test.get("parallel")
+        except AttributeError:
+            log.error("Hint: Check your suite file for test definitions!")
+            raise
         tc = fetch_test_details(test)
         test_file = tc["file"]
         report_portal_description = tc["desc"] or ""
@@ -858,6 +862,7 @@ def run(args):
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
 
             if rc != 0:
+                log.info("Breaking test as rc was not 0")
                 break
 
         elapsed = datetime.datetime.now() - start

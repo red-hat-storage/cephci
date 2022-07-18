@@ -5,10 +5,15 @@ log = Log(__name__)
 
 
 def run(**kw):
-    """
-    --> Configures RBD Mirroring on cephadm
-    --> Creates Pool Image and enables Mirroring
+    """Basic rbd mirroring test scenario.
+
+    Workflow:
+    --> Creates Pool, Image and enables Mirroring in pool mode
     --> Runs IO using rbd bench
+    --> resize the image
+    --> wait for reply to complete
+    --> Check data
+    --> cleanup mirroring
     Args:
         **kw:
     Returns:

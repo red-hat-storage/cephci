@@ -1,0 +1,116 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Scenario: Configure RBD Mirror using ceph-ansible and run IOs
+#
+# Cluster Configuration:
+#    conf/nautilus/rbd/rbd_mirror_using_ceph_ansible.yaml
+#    No of Clusters : 2
+#    Each cluster configuration
+#    6-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MGR, 3 OSD and 1 RBD MIRROR nodes
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client, rbd-mirror
+#     Node3 - Mon, OSD, mgr
+#     Node4 - Mon, OSD
+#     Node5 - OSD
+#
+# Sequence of tests -
+#   1) Configure two clusters
+#   2) Handle same cluster names (required for ceph-ansible usage)
+#   3) Add rbd mirror daemon to both clusters
+#   4) Run IOs
+#===============================================================================================
+tests:
+  - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: True
+
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      clusters:
+        ceph-rbd1:
+          config:
+            ansi_config:
+              ceph_origin: distro
+              osd_auto_discovery: False
+              ceph_stable_rh_storage: True
+              fetch_directory: ~/fetch
+              copy_admin_key: true
+              dashboard_enabled: False
+              osd_scenario: lvm
+              ceph_conf_overrides:
+                global:
+                  osd_pool_default_pg_num: 64
+                  osd_pool_default_pgp_num: 64
+                  mon_max_pg_per_osd: 1024
+                mon:
+                  mon_allow_pool_delete: true
+        ceph-rbd2:
+          config:
+            ansi_config:
+              ceph_origin: distro
+              osd_auto_discovery: False
+              fetch_directory: ~/fetch
+              copy_admin_key: true
+              dashboard_enabled: False
+              osd_scenario: lvm
+              ceph_conf_overrides:
+                global:
+                  osd_pool_default_pg_num: 64
+                  osd_pool_default_pgp_num: 64
+                  mon_max_pg_per_osd: 1024
+                mon:
+                  mon_allow_pool_delete: true
+      desc: setup dual cluster using ceph-ansible
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: rbd mirror pre-req
+      module: mirror_setup.py
+      clusters:
+        ceph-rbd1:
+          config:
+            way: two-way
+            used_ceph-ansible: True
+      desc: pre-req for mirroring host
+      abort-on-fail: true
+
+  - test:
+      name: Add rbd-mirror daemons
+      module: configure_rbd_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            ansi_config:
+              ceph_rbd_mirror_configure: true
+              ceph_rbd_mirror_pool: "rbd"
+              ceph_rbd_mirror_mode: image
+              ceph_rbd_mirror_remote_cluster: "primary"
+              ceph_rbd_mirror_remote_user: "client.admin"
+
+        ceph-rbd2:
+          config:
+            ansi_config:
+              ceph_rbd_mirror_configure: true
+              ceph_rbd_mirror_pool: "rbd"
+              ceph_rbd_mirror_mode: image
+              ceph_rbd_mirror_remote_cluster: "secondary"
+              ceph_rbd_mirror_remote_user: "client.admin"
+      polarion-id: CEPH-83573366
+      desc: add rbd-mirror daemons using ceph-ansible
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: test_rbd_mirror_image
+      module: test_rbd_mirror_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573329
+      desc: Create RBD mirrored images in pool and run IOs
