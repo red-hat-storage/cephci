@@ -35,6 +35,7 @@ tests:
         cmd: ceph -s
         sudo: True
       desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
 
   # kafka broker type broker with persistent flag enabled
   - test:

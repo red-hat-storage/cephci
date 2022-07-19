@@ -36,6 +36,7 @@ tests:
         cmd: ceph -s
         sudo: True
       desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
   - test:
       name: Versioning Tests
       desc: Basic versioning test, also called as test to enable bucket versioning

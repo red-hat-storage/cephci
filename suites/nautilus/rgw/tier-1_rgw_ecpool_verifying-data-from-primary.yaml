@@ -33,6 +33,7 @@ tests:
               - client
             rule: root netem delay 10ms
       desc: Configuring network traffic delay
+      polarion-id: CEPH-83575224
       module: configure-tc.py
       name: apply-net-qos
 
@@ -110,6 +111,7 @@ tests:
                   mon_warn_on_insecure_global_id_reclaim_allowed: false
                   osd_pool_default_pg_autoscale_mode: "on"
       desc: setup multisite cluster using ceph-ansible
+      polarion-id: CEPH-83575224
       abort-on-fail: true
   - test:
       clusters:
@@ -126,6 +128,7 @@ tests:
               - "ceph osd dump"
             sudo: true
       desc: Check the cluster health
+      polarion-id: CEPH-83575200
       module: exec.py
       name: check-ceph-health
 
@@ -134,6 +137,7 @@ tests:
   - test:
       name: create user
       desc: create non-tenanted user
+      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       clusters:
         ceph-rgw1:
@@ -391,6 +395,7 @@ tests:
   - test:
       name: create user
       desc: create tenanted user
+      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       clusters:
         ceph-rgw1:

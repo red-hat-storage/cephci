@@ -41,10 +41,12 @@ tests:
               system_access_key: 86nBoQOGpQgKxh4BLMyq
               system_secret_key: NTnkbmkMuzPjgwsBpJ6o
       desc: setup single site with USA realm using ceph-ansible
+      polarion-id: CEPH-83571467
       abort-on-fail: true
   - test:
       name: create user
       desc: create non-tenanted user
+      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       clusters:
         ceph-rgw1:
@@ -180,6 +182,7 @@ tests:
               - rgw
             rule: root netem delay 10ms
       desc: Configuring network traffic delay
+      polarion-id: CEPH-83575223
       module: configure-tc.py
       name: apply-net-qos
 
@@ -216,11 +219,13 @@ tests:
               rgw_pull_proto: http
               rgw_pull_port: 8080
       desc: Single site to multisite
+      polarion-id: CEPH-83575223
       abort-on-fail: true
 
   - test:
       name: create user
       desc: create tenanted user
+      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       clusters:
         ceph-rgw1:

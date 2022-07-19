@@ -45,6 +45,7 @@ tests:
           - "ceph osd dump"
         sudo: true
       desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
 
   - test:
       name: s3 tests
@@ -52,4 +53,5 @@ tests:
       config:
         branch: ceph-nautilus
       desc: execution of s3 tests against radosgw
+      polarion-id: CEPH-83575225
       destroy-cluster: false
