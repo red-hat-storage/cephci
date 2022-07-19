@@ -110,7 +110,7 @@ def run(ceph_cluster, **kw):
         secret_key=secret_key,
         rgw_hostname=rgw_node_host,  # short hostname of rgw to populate under rgw_user.yaml
         ganesha_config_exists=True,
-        already_mounted=False,
+        already_mounted=True,
         cleanup=True,
         do_unmount=True,
         nfs_version=nfs_version,
