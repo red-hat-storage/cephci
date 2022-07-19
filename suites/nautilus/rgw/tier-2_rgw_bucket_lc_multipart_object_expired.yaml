@@ -44,6 +44,7 @@ tests:
 
   - test:
       name: check-ceph-health
+      polarion-id: CEPH-83575200
       module: exec.py
       config:
         cmd: ceph -s

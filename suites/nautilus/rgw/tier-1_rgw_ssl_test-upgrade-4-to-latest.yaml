@@ -39,6 +39,7 @@ tests:
 
   - test:
       name: check-ceph-health
+      polarion-id: CEPH-83575200
       module: exec.py
       config:
         commands:
@@ -172,6 +173,7 @@ tests:
            - "ceph versions"
         sudo: True
       desc: check for ceph health debug info
+      polarion-id: CEPH-83575200
 
 
   # Swift basic operation

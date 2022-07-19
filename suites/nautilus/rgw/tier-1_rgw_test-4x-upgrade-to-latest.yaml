@@ -39,6 +39,7 @@ tests:
         cmd: ceph -s
         sudo: True
       desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
 
 
   # Basic Bucket Operation Tests

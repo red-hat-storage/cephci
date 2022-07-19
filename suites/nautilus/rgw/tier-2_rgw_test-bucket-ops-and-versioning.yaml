@@ -43,6 +43,7 @@ tests:
       desc: "Check for ceph health debug info"
       module: exec.py
       name: check-ceph-health
+      polarion-id: CEPH-83575200
   -
     test:
       config:

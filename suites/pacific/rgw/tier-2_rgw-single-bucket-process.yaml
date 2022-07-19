@@ -57,6 +57,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+      polarion-id: CEPH-83573758
 
   # Testing stage
   - test:

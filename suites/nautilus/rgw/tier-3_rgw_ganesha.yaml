@@ -32,6 +32,7 @@ tests:
         cmd: ceph -s
         sudo: true
       desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
   - test:
       name: NFS V3 test1
       desc: Test and Verify NFS I/O Create operation

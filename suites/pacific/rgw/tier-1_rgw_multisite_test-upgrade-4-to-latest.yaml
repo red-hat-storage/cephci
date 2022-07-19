@@ -77,6 +77,7 @@ tests:
               rgw_pull_proto: http
               rgw_pull_port: 8080
       desc: Deploying Ceph multisite RGW cluster using ceph-ansible
+      polarion-id: CEPH-83574664
       module: test_ansible.py
       name: deploy ceph multisite cluster from cdn
 
@@ -91,6 +92,7 @@ tests:
             timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83575199
       name: create user
 
   # Baseline testing
