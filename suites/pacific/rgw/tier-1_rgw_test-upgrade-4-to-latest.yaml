@@ -59,6 +59,7 @@ tests:
         - "ceph versions"
       sudo: true
     desc: check for ceph status and version
+    polarion-id: CEPH-83575200
 
 
 # Basic Bucket Operation Tests

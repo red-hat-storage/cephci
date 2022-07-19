@@ -36,6 +36,7 @@ tests:
         cmd: ceph -s
         sudo: True
       desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
   - test:
       name: STS Tests
       desc: Perform assume role on priciple user and perform IOs

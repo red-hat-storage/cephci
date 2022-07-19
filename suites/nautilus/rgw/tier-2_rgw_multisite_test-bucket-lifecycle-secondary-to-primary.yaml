@@ -67,6 +67,7 @@ tests:
               rgw_pull_proto: http
               rgw_pull_port: 8080
       desc: setup multisite cluster using ceph-ansible
+      polarion-id: CEPH-83575224
       abort-on-fail: true
 
   # Test work flow
@@ -81,6 +82,7 @@ tests:
             copy-user-info-to-site: ceph-rgw2
             timeout: 300
       desc: create non-tenanted user
+      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: create user
 

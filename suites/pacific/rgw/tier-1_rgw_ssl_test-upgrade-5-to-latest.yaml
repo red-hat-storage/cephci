@@ -170,6 +170,7 @@ tests:
 # Post upgrade, verify the ceph version
   - test:
       desc: Retrieve the versions of the cluster
+      polarion-id: CEPH-83575200
       module: exec.py
       name: post upgrade gather version
       config:

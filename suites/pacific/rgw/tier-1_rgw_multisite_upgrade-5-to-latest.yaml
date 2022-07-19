@@ -116,6 +116,7 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
+      polarion-id: CEPH-83575222
 
   - test:
       abort-on-fail: true
@@ -140,6 +141,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+      polarion-id: CEPH-83573758
 
   - test:
       abort-on-fail: true
@@ -201,6 +203,7 @@ tests:
       desc: Retrieve the configured environment details
       module: exec.py
       name: get shared realm info
+      polarion-id: CEPH-83575227
 
   - test:
       clusters:
@@ -214,6 +217,7 @@ tests:
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create user
+      polarion-id: CEPH-83575199
 
   # Baseline tests before upgrade
 
@@ -302,6 +306,7 @@ tests:
       desc: Retrieve the versions of the cluster
       module: exec.py
       name: post upgrade gather version
+      polarion-id: CEPH-83575200
 
   # Post upgrade testing
 

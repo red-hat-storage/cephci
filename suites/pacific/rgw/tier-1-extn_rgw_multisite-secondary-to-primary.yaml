@@ -108,6 +108,7 @@ tests:
                       nodes:
                         - node5
       desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83575222
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
@@ -131,6 +132,7 @@ tests:
               - ceph-common
             copy_admin_keyring: true
       desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
       destroy-cluster: false
       module: test_client.py
       name: configure client
@@ -182,6 +184,7 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info
   - test:
@@ -197,6 +200,7 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info
   # Test work flow
@@ -211,12 +215,14 @@ tests:
             copy-user-info-to-site: ceph-sec
             timeout: 300
       desc: create non-tenanted user
+      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: create user
   # add datalog omap tests
   - test:
       name:  datalog omap offload
       desc: Execute datalog omap offload on secondary
+      polarion-id: CEPH-83573691
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -229,6 +235,7 @@ tests:
   - test:
       name:  datalog omap offload
       desc: Execute datalog omap offload with multipart objects on secondary
+      polarion-id: CEPH-83573691
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -241,6 +248,7 @@ tests:
   - test:
       name:  datalog omap offload
       desc:  Execute datalog omap offload on versioned bucket on secondary
+      polarion-id: CEPH-83573691
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:

@@ -198,3 +198,4 @@ tests:
         commands:
           - "ceph -s"
       desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200

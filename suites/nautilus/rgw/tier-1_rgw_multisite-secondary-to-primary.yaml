@@ -79,6 +79,7 @@ tests:
                   osd_pool_default_pgp_num: 64
                   mon_max_pg_per_osd: 1024
       desc: setup multisite cluster using ceph-ansible
+      polarion-id: CEPH-83575224
       abort-on-fail: true
 
   # Test work flow
@@ -95,6 +96,7 @@ tests:
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create user
+      polarion-id: CEPH-83575199
 
   - test:
       clusters:
@@ -354,6 +356,7 @@ tests:
   - test:
       name: create user
       desc: create tenanted user
+      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       clusters:
         ceph-rgw1:
