@@ -157,3 +157,9 @@ tests:
         config-file-name: test_multitenant_access.yaml
         timeout: 300
     desc: Perform rgw tests
+
+- test:
+    name: test_cephadm_shell_run
+    module: test_cephadm_shell_run.py
+    desc: Verification cephadm shell when running from a non-monitor node
+    polarion-id: CEPH-83575009
