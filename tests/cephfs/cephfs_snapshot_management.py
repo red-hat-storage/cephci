@@ -1,7 +1,7 @@
 import traceback
 
 from ceph.ceph import CommandFailed
-from tests.cephfs.cephfs_utils import FsUtils
+from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -37,12 +37,16 @@ def run(ceph_cluster, **kw):
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
-        client_info, rc = fs_util.get_clients(build)
-        if rc == 0:
-            log.info("Got client info")
-        else:
-            raise CommandFailed("fetching client info failed")
-        client1 = client_info["fuse_clients"][0]
+        clients = ceph_cluster.get_ceph_objects("client")
+        fs_util.prepare_clients(clients, build)
+        fs_util.auth_list(clients)
+        log.info("checking Pre-requisites")
+        if not clients:
+            log.info(
+                f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
+            )
+            return 1
+        client1 = clients[0]
         results = []
         tc1 = "83571366"
         log.info(f"Execution of testcase {tc1} started")
@@ -55,6 +59,9 @@ def run(ceph_cluster, **kw):
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
             results.append(f"{command} successfully executed")
+
+        if not fs_util.wait_for_mds_process(client1, "cephfs_new"):
+            raise CommandFailed("Failed to start MDS deamons")
         log.info("Get the path of sub volume")
         subvol_path, rc = client1.exec_command(
             sudo=True, cmd="ceph fs subvolume getpath cephfs_new snap_vol snap_group"
