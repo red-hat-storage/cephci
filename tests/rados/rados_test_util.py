@@ -123,3 +123,29 @@ def get_device_path(host, osd_id):
     ][0]
     should_not_be_empty(dev_path, "Failed to get device path")
     return dev_path
+
+
+def get_slow_requests_log(node, start_time, end_time, service_name="mon"):
+    """
+    Retrieve slow op requests log using journalctl command
+    Args:
+        node: ceph node details
+        start_time: time to start reading the journalctl logs - format ('2022-07-20 09:40:10')
+        end_time: time to stop reading the journalctl logs - format ('2022-07-20 10:58:49')
+        service_name: ceph service name (mon, mgr ...)
+    Returns:  journal_logs
+    """
+    j_log = []
+    try:
+        d_out, d_err = node.exec_command(
+            cmd=f"systemctl list-units --type=service | grep ceph | grep {service_name} | head -n 1"
+        )
+        daemon = d_out.split(" ")[0].rstrip()
+        j_log, err = node.exec_command(
+            cmd=f"sudo journalctl -u {daemon} --since '{start_time}' --until '{end_time}' | grep 'slow requests'"
+        )
+        log.info(f"output ----- {j_log}")
+    except Exception as er:
+        log.error(f"Exception hit while command execution. {er}")
+    should_not_be_empty(j_log, "Failed to retrieve slow requests")
+    return j_log
