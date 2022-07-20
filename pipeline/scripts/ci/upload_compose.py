@@ -117,14 +117,13 @@ def compress_build(repos: List) -> str:
         subprocess.run(
             [
                 "reposync",
-                "-l",
                 "-m",
                 "--delete",
                 "--newest-only",
                 "--download-metadata",
                 "--repoid",
                 f"{repo}",
-                "--download_path",
+                "-p",
                 repo_dir,
             ],
             check=True,
