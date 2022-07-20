@@ -1,29 +1,22 @@
 {%- set nlt = "\n  " -%}
+{%- set nl4t = "\n    " -%}
 {%- set newline = "\n" -%}
 ---
 service_type: {{ spec['service_type'] }}
 service_id: {{ spec['service_id'] }}
-{%+ if spec['encrypted'] -%}encrypted: {{ spec['encrypted'] }}
-{% endif -%}
 {%+ if spec['unmanaged'] -%}unmanaged: {{ spec['unmanaged'] }}
 {% endif -%}
 {%+ if spec['method'] -%}method: {{ spec['method'] }}
 {% endif -%}
 placement:
 {%- if spec['placement']['hosts'] -%}{{ nlt }}hosts: {{ spec['placement']['hosts'] }}{%- endif -%}
-{%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'
-{%- endif %}
-data_devices:
-{%- for key, data in spec['data_devices'].items() -%}{{ nlt }}{{ key }}: {{ data }}
-{%- endfor %}
-{%+ if spec['db_devices'] -%}db_devices:
-{%- for key, data in spec['db_devices'].items() -%}{{ nlt }}{{ key }}: {{ data }}
-{%- endfor %}
-{% endif -%}
-{%+ if spec['wal_devices'] -%}wal_devices:
-{%- for key, data in spec['wal_devices'].items() -%}{{ nlt }}{{ key }}: {{ data }}
+{%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif %}
+{%- if spec['spec'] -%}{{ newline }}spec:
+{%- for name, dict in spec['spec'].items() -%}
+{%- if dict is mapping -%}{{ nlt }}{{ name }}:
+{%- for key, data in spec['spec'][name].items() -%}{{ nl4t }}{{ key }}: {{ data }}{%- endfor -%}
+{% else %}{{ nlt }}{{ name }}: {{ dict}}{% endif -%}
 {%- endfor %}
 {% endif %}
 {%- if spec['extra_container_args'] -%}extra_container_args: {{ spec['extra_container_args'] }}
-
 {% endif -%}

@@ -150,13 +150,14 @@ tests:
                     all: "true"                         # boolean as string
                 - service_type: osd
                   service_id: all_other_nodes
-                  encrypted: "true"                     # boolean as string
                   placement:
                     nodes:
                       - node2
                       - node3
-                  data_devices:
-                    all: "true"                         # boolean as string
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
+                    encrypted: "true"                     # boolean as string
   - test:
       name: Monitoring Service(s) deployment
       desc: Add monitoring services using spec file.
