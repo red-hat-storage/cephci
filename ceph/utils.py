@@ -728,7 +728,7 @@ def update_ca_cert(node, cert_url, out_file, timeout=120, check_ec=True):
         output_dir = "/usr/local/share/ca-certificates/"
         update_cmd = "update-ca-certificates"
 
-    download_cmd = f"curl --fail {cert_url} -o {output_dir}{out_file}"
+    download_cmd = f"curl -m 120 --fail {cert_url} -o {output_dir}{out_file}"
     for cmd in [download_cmd, update_cmd]:
         node.exec_command(
             sudo=True,

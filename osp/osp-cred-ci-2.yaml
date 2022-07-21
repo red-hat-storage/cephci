@@ -4,7 +4,7 @@ globals:
         password: '<user_password>'
         auth-url: 'https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000'
         auth-version: '3.x_password'
-        tenant-name: 'ceph-jenkins'
+        tenant-name: 'ceph-ci'
         service-region: 'regionOne'
         domain: 'redhat.com'
         tenant-domain-id: '62cf1b5ec006489db99e2b0ebfb55f57'
