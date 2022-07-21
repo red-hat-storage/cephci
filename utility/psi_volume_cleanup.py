@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 
 import yaml
 from docopt import docopt
-from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
@@ -59,7 +58,7 @@ def volume_cleanup(volume, driver):
     try:
         driver.detach_volume(volume)
         driver.destroy_volume(volume)
-    except BaseHTTPError as e:
+    except BaseException as e:
         print(e)
 
 

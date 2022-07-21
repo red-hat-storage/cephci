@@ -397,6 +397,7 @@ def run(args):
     rp_logger = None
     if post_to_report_portal:
         rp_logger = ReportPortal()
+
     TestMetaData(run_id=run_id, rhbuild=rhbuild, rhcs="rhcs", rp_logger=rp_logger)
     run_dir = create_run_dir(run_id, log_directory)
     startup_log = os.path.join(run_dir, "startup.log")
@@ -446,18 +447,18 @@ def run(args):
     platform = args["--platform"]
     build = args.get("--build", None)
 
-    if build and build not in ["released"]:
+    if build and build not in ["released"] and not ignore_latest_nightly_container:
         base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
             build, rhbuild, platform, args.get("--upstream-build", None)
         )
 
     store = args.get("--store", False)
 
-    base_url = args.get("--rhs-ceph-repo") or base_url
-    ubuntu_repo = args.get("--ubuntu-repo") or ubuntu_repo
-    docker_registry = args.get("--docker-registry") or docker_registry
-    docker_image = args.get("--docker-image") or docker_image
-    docker_tag = args.get("--docker-tag") or docker_tag
+    base_url = args.get("--rhs-ceph-repo", base_url)
+    ubuntu_repo = args.get("--ubuntu-repo", ubuntu_repo)
+    docker_registry = args.get("--docker-registry", docker_registry)
+    docker_image = args.get("--docker-image", docker_image)
+    docker_tag = args.get("--docker-tag", docker_tag)
     kernel_repo = args.get("--kernel-repo", None)
 
     docker_insecure_registry = args.get("--insecure-registry", False)
