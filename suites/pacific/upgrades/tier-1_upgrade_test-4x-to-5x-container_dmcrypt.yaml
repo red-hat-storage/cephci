@@ -1,0 +1,152 @@
+#############################################################################
+# - Automation support for containerised upgrade from RHCS4 to RHCS5 cluster
+#
+# Cluster configuration: (conf/pacific/upgrades/upgrades.yaml)
+# --------------------------------------------------------------------------
+# Nodes:
+#   - 3 MONS, 3 MGRs, 3 OSDs, 2 RGW, 2 ISCSIGW's, 1 MDS's, 1 CLIENT, 1 GRAFANA, 1 CLIENT
+#
+# Test steps:
+# ---------------------------------------------------------------------
+# - Deploy containerised Nautilus Ceph cluster using CDN RPMS
+# - Run some I/O's
+# - Upgrade to Pacific using ceph-ansible and parallel run I/O's
+# - adopt to cephadm using ceph-adopt playbook
+# - Run some I/O's
+#
+#############################################################################
+tests:
+- test:
+    name: install ceph pre-requisites
+    module: install_prereq.py
+    abort-on-fail: True
+
+- test:
+    name: ceph ansible install containerized rhcs 4.x from cdn
+    polarion-id: CEPH-10961
+    module: test_ansible.py
+    config:
+      use_cdn: True
+      build: '4.x'
+      ansi_config:
+        ntp_service_enabled: true
+        ceph_origin: repository
+        ceph_repository: rhcs
+        ceph_repository_type: cdn
+        ceph_rhcs_version: 4
+        dmcrypt: True
+        osd_scenario: lvm
+        osd_auto_discovery: False
+        containerized_deployment: true
+        ceph_docker_image: "rhceph/rhceph-4-rhel8"
+        ceph_docker_image_tag: "latest"
+        ceph_docker_registry: "registry.redhat.io"
+        copy_admin_key: true
+        dashboard_enabled: True
+        dashboard_admin_user: admin
+        dashboard_admin_password: p@ssw0rd
+        grafana_admin_user: admin
+        grafana_admin_password: p@ssw0rd
+        node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+        grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+        prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+        alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+    desc: deploy ceph containerized 4.x cdn setup using ceph-ansible
+    destroy-cluster: False
+    abort-on-fail: true
+
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      cmd: ceph -s
+      sudo: True
+    desc: Check for ceph health debug info
+
+- test:
+     name: Upgrade along with IOs
+     module: test_parallel.py
+     parallel:
+       - test:
+           name: rados_bench_test
+           module: radosbench.py
+           config:
+             pg_num: '128'
+             pool_type: 'normal'
+           desc: run rados bench for 360 - normal profile
+       - test:
+           name: rbd-io
+           module: rbd_faster_exports.py
+           config:
+             io-total: 100M
+             cleanup: false
+           desc: Perform export during read/write,resizing,flattening,lock operations
+       - test:
+           name: Upgrade containerized ceph to 5.x latest
+           polarion-id: CEPH-83575198
+           module: test_ansible_upgrade.py
+           config:
+             build: '5.x'
+             ansi_config:
+               ceph_origin: distro
+               ceph_repository: rhcs
+               ceph_rhcs_version: 5
+               osd_scenario: lvm
+               osd_auto_discovery: False
+               dmcrypt: True
+               fetch_directory: ~/fetch
+               copy_admin_key: true
+               containerized_deployment: true
+               upgrade_ceph_packages: True
+               dashboard_enabled: True
+               dashboard_admin_user: admin
+               dashboard_admin_password: p@ssw0rd
+               grafana_admin_user: admin
+               grafana_admin_password: p@ssw0rd
+               node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+               grafana_container_image: registry.redhat.io/rhceph/rhceph-5-dashboard-rhel8:5
+               prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+               alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+           desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
+     desc: Running upgrade 4.x cdn -> 5.x latest -> cephadm adopt and i/o's parallelly
+     abort-on-fail: True
+
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      cmd: ceph -s
+      sudo: True
+    desc: Check for ceph health debug info
+
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+
+- test:
+    name: rbd-io
+    module: rbd_faster_exports.py
+    config:
+        io-total: 100M
+    desc: Perform export during read/write,resizing,flattening,lock operations
+
+- test:
+    name: rgw sanity tests
+    module: sanity_rgw.py
+    config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+    desc: Perform rgw tests
