@@ -111,7 +111,9 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --build <latest>                  eg: latest|tier-0|tier-1|tier-2|cvp|released|upstream
+  --build <latest>                  Type of build to be use for testing
+                                    eg: latest|tier-0|tier-1|tier-2|released|upstream
+                                    [default: released]
   --upstream-build <upstream-build> eg: quincy|pacific
   --platform <rhel-8>               select platform version eg., rhel-8, rhel-7
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
@@ -376,22 +378,22 @@ def run(args):
         glb_file = args["--cluster-conf"]
 
     # Deciders
-    reuse = args.get("--reuse", None)
-    cloud_type = args.get("--cloud", "openstack")
+    reuse = args.get("--reuse")
+    cloud_type = args.get("--cloud")
 
     # These are not mandatory options
     inventory_file = args.get("--inventory")
     osp_cred_file = args.get("--osp-cred")
 
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
-    cleanup_name = args.get("--cleanup", None)
+    cleanup_name = args.get("--cleanup")
 
-    ignore_latest_nightly_container = args.get("--ignore-latest-container", False)
+    ignore_latest_nightly_container = args.get("--ignore-latest-container")
 
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
-    post_to_report_portal = args.get("--report-portal", False)
+    post_to_report_portal = args.get("--report-portal")
 
     run_id = generate_unique_id(length=6)
     rp_logger = None
@@ -445,43 +447,43 @@ def run(args):
         raise Exception("Require system configuration information to provision.")
 
     platform = args["--platform"]
-    build = args.get("--build", None)
+    build = args.get("--build")
 
     if build and build not in ["released"] and not ignore_latest_nightly_container:
         base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
             build, rhbuild, platform, args.get("--upstream-build", None)
         )
 
-    store = args.get("--store", False)
+    store = args.get("--store") or False
 
-    base_url = args.get("--rhs-ceph-repo", base_url)
-    ubuntu_repo = args.get("--ubuntu-repo", ubuntu_repo)
-    docker_registry = args.get("--docker-registry", docker_registry)
-    docker_image = args.get("--docker-image", docker_image)
-    docker_tag = args.get("--docker-tag", docker_tag)
-    kernel_repo = args.get("--kernel-repo", None)
+    base_url = args.get("--rhs-ceph-repo") or base_url
+    ubuntu_repo = args.get("--ubuntu-repo") or ubuntu_repo
+    docker_registry = args.get("--docker-registry") or docker_registry
+    docker_image = args.get("--docker-image") or docker_image
+    docker_tag = args.get("--docker-tag") or docker_tag
+    kernel_repo = args.get("--kernel-repo")
 
-    docker_insecure_registry = args.get("--insecure-registry", False)
+    docker_insecure_registry = args.get("--insecure-registry")
 
     post_results = args.get("--post-results")
-    skip_setup = args.get("--skip-cluster", False)
-    skip_subscription = args.get("--skip-subscription", False)
+    skip_setup = args.get("--skip-cluster")
+    skip_subscription = args.get("--skip-subscription")
 
     instances_name = args.get("--instances-name")
     if instances_name:
         instances_name = instances_name.replace(".", "-")
 
     osp_image = args.get("--osp-image")
-    filestore = args.get("--filestore", False)
-    ec_pool_vals = args.get("--use-ec-pool", None)
-    skip_version_compare = args.get("--skip-version-compare", False)
+    filestore = args.get("--filestore")
+    ec_pool_vals = args.get("--use-ec-pool")
+    skip_version_compare = args.get("--skip-version-compare")
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
-    xunit_results = args.get("--xunit-results", False)
+    xunit_results = args.get("--xunit-results")
 
-    enable_eus = args.get("--enable-eus", False)
-    skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms", False)
-    skip_sos_report = args.get("--skip-sos-report", False)
+    enable_eus = args.get("--enable-eus")
+    skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms")
+    skip_sos_report = args.get("--skip-sos-report")
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
