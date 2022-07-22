@@ -3,3 +3,4 @@ cos-aspera; python_version == '3.6'
 python-openstackclient
 xmltodict
 tfacon
+uplink

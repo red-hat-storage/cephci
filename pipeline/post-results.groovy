@@ -98,56 +98,48 @@ node("rhel-8-medium || ceph-qe-ci") {
                     sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
                 }
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
-                testStatus = msgMap["test"]["result"]
+
             }
+            testStatus = msgMap["test"]["result"]
 
 //             Remove the sync results folder
             sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
 
 //             Update RH recipe file
-            if ( composeInfo != null && run_type == "Sanity Run"){
-                if ( tierLevel == null ){
-                    tierLevel = msgMap["pipeline"]["name"]
-                }
-                def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
-                majorVersion = rhcsVersion["major_version"]
-                minorVersion = rhcsVersion["minor_version"]
-                minorVersion = "${minorVersion}"
+            if ( composeInfo != null){
+                if( run_type == "Sanity Run"){
+                    if ( tierLevel == null ){
+                        tierLevel = msgMap["pipeline"]["name"]
+                    }
+                    def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
+                    majorVersion = rhcsVersion["major_version"]
+                    minorVersion = rhcsVersion["minor_version"]
+                    minorVersion = "${minorVersion}"
 
-                def latestContent = sharedLib.readFromReleaseFile(
-                        majorVersion, minorVersion
-                    )
-                println("latestContentBefore: ${latestContent}")
+                    def latestContent = sharedLib.readFromReleaseFile(
+                            majorVersion, minorVersion
+                        )
+                    println("latestContentBefore: ${latestContent}")
 
-                if ( latestContent.containsKey(tierLevel) ) {
-                    if ( stageLevel == null ){
+                    if ( latestContent.containsKey(tierLevel) ) {
                         latestContent[tierLevel] = composeInfo
                     }
-                    else if ( stageLevel == "stage-1"){
-                        latestContent[tierLevel] = composeInfo
-                        latestContent[tierLevel] += ["results": ["${stageLevel}": "${testStatus}"]]
+                    else {
+                        def updateContent = ["${tierLevel}": composeInfo]
+                        latestContent += updateContent
                     }
-                    else{
-                        latestContent[tierLevel]["results"] += ["${stageLevel}": "${testStatus}"]
-                    }
+                    println("latestContent: ${latestContent}")
+                    sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
                 }
-                else {
-                    def updateContent = ["${tierLevel}": composeInfo]
-                    if ( stageLevel != null ){
-                        def tierValue = composeInfo + ["results": ["${stageLevel}": "${testStatus}"]]
-                        updateContent = ["${tierLevel}": tierValue]
-                    }
-                    latestContent += updateContent
-                }
-                println("latestContent: ${latestContent}")
-                sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
+                sharedLib.writeToResultsFile(msgMap["artifact"]["version"], tierLevel, stageLevel, testStatus, run_type)
             }
             if(msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2"){
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                 majorVersion = rhcsVersion["major_version"]
                 minorVersion = rhcsVersion["minor_version"]
                 minorVersion = "${minorVersion}"
-                def testResults = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
+                def testResults = sharedLib.readFromResultsFile(msgMap["artifact"]["version"])
+                sharedLib.updateConfluencePage(majorVersion, minorVersion, msgMap["artifact"]["version"], run_type, testResults)
                 sharedLib.sendConsolidatedEmail(run_type, testResults, metaData, majorVersion, minorVersion, msgMap["artifact"]["version"])
                 sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
             }
