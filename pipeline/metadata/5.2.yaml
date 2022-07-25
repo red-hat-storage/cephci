@@ -1013,3 +1013,19 @@
     - ibmc
     - rgw
     - stage-1
+
+- name: "test-empty-bucket-notification"
+  suite: "suites/pacific/rgw/tier-2_rgw-test-empty-bucket-notifcations.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
