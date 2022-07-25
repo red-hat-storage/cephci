@@ -63,6 +63,16 @@ def run(ceph_cluster, **kwargs) -> int:
         # Check service versions vs available and target containers
         orch.upgrade_check(image=config.get("container_image"))
 
+        # work around for upgrading from 5.1 and 5.2 to 5.1 and 5.2 latest
+        installer = ceph_cluster.get_nodes(role="installer")[0]
+        base_cmd = "sudo cephadm shell -- ceph"
+        ceph_version, err = installer.exec_command(cmd=f"{base_cmd} version")
+        if ceph_version.startswith("ceph version 16.2."):
+            installer.exec_command(
+                cmd=f"{base_cmd} config set mgr mgr/cephadm/no_five_one_rgw true --force"
+            )
+            installer.exec_command(cmd=f"{base_cmd} orch upgrade stop")
+
         # Start Upgrade
         config.update({"args": {"image": "latest"}})
         orch.start_upgrade(config)
