@@ -2,6 +2,7 @@ import random
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
@@ -39,7 +40,8 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd="ceph fs volume create cephfs_new", check_ec=False
         )
-        fs_util.wait_for_mds_process(client1, "cephfs_new")
+        if not fs_util.wait_for_mds_process(client1, "cephfs_new"):
+            raise CommandFailed("Failed to start MDS deamons")
         total_fs = fs_util.get_fs_details(client1)
         if len(total_fs) < 2:
             log.error(
