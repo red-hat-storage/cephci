@@ -1,0 +1,75 @@
+#
+# Objective: Test empty bucket notifications with kafka endpoint
+#       - with ack_type broker
+#       - w/o persistent flag
+#
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+      # kafka broker type with empty bucket notifcation
+  - test:
+      name: test bucket notifcation with empty configuration
+      desc: verify empty bucket notification deletes the existing configuration
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575035
+      config:
+        extra-pkgs:
+          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_empty_bucket_notification_kafka_broker.yaml
+        timeout: 300
