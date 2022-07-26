@@ -39,6 +39,7 @@ def run(ceph_cluster, **kw):
     hotfix_repo = config.get("hotfix_repo")
     test_data = kw.get("test_data")
     cloud_type = config.get("cloud-type", "openstack")
+    custom_log = config.get("custom_log")
 
     # In case of Interop, we would like to avoid updating the packages... mainly, the
     # ansible package.
@@ -146,6 +147,17 @@ def run(ceph_cluster, **kw):
 
     LOG.info("Ceph ansible version " + ceph_installer.get_installed_ceph_versions())
 
+    # Check if ansilbe.log file has any logs initially
+    if custom_log:
+        ansible_log_file, _ = ceph_installer.exec_command(
+            cmd=f"grep log_path {ansible_dir}/ansible.cfg | cut -d ' ' | tr -d '\\n\\r'"
+        )
+        file_size_before, err = ceph_installer.exec_command(
+            cmd=f"du {ansible_log_file} | cut -f1 | tr -d '\\n\\r'"
+        )
+        if "No such file or directory" in err:
+            file_size_before = "0"
+
     # ansible playbookk based on container or bare-metal deployment
     file_name = "site.yml"
 
@@ -168,6 +180,21 @@ def run(ceph_cluster, **kw):
     if rc != 0:
         LOG.error("Failed during deployment")
         return rc
+
+    # Check logs has generated after running the deploy playbook
+    if custom_log:
+        file_size_after, err = ceph_installer.exec_command(
+            cmd=f"du {ansible_log_file} | cut -f1 | tr -d '\\n\\r'"
+        )
+
+        if "No such file or directory" in err:
+            LOG.error(f"{ansible_log_file} file not generated after deployment")
+            return 1
+        elif (file_size_before) < (file_size_after):
+            return 0
+        else:
+            LOG.error("Ansible log has no new logs after deployment")
+            return 1
 
     # check if all osd's are up and in
     timeout = 300
