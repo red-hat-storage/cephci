@@ -1,0 +1,171 @@
+# Suite contains tests related to mon db trimmings
+# Note: the test cannot be run on a cluster that is just created as the DB size increases with
+# new mappings for around next hour or so.. This test needs to be run on cluster who's age is at least 1 hour.
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node8                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Replicated pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      config:
+        replicated_pool:
+          pool_name: test_re_pool
+          pg_num: 32
+          byte_size: 200KB
+          rados_write_duration: 200
+          rados_read_duration: 100
+      desc: Create replicated pools and run IO
+
+  - test:
+      name: EC pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      desc: Create EC pools and run IO
+      config:
+        ec_pool:
+          pool_name: test_ec_pool
+          pg_num: 32
+          k: 8
+          byte_size: 200KB
+          m: 3
+          plugin: jerasure
+          rados_write_duration: 200
+          rados_read_duration: 100
+        replicated_pool:
+          pool_name: delete_pool
+          pg_num: 32
+          byte_size: 1024
+          rados_write_duration: 300
+          rados_read_duration: 10
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+        io-total: 500M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 600
+      desc: Perform rgw tests
+
+  - test:
+      name: Customer Scenario BZ1905339
+      module: customer_scenarios.py
+      polarion-id: CEPH-83574095, CEPH-83573589
+      config:
+        mondb_trim_config:
+          paxos_service_trim_min: 10
+          paxos_service_trim_max: 100
+          osd_op_complaint_time: 0.000001
+          osd_max_backfills: 10
+          osd_recovery_max_active: 10
+      desc: Verification of mon DB trimming during various cluster operations

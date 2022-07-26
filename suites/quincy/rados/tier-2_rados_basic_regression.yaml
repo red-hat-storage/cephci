@@ -1,0 +1,431 @@
+# Suite contains basic tier-2 rados tests
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure email alerts
+      module: rados_prep.py
+      polarion-id: CEPH-83574472
+      config:
+        email_alerts:
+          smtp_host: smtp.corp.redhat.com
+          smtp_sender: ceph-iad2-c01-lab.mgr@redhat.com
+          smtp_port: 25
+          interval: 10
+          smtp_destination:
+            - pdhiran@redhat.com
+          smtp_from_name: Rados Sanity Cluster Alerts
+      desc: Configure email alerts on ceph cluster
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Monitor configuration - section and masks changes
+      module: rados_prep.py
+      polarion-id: CEPH-83573477
+      config:
+        Verify_config_parameters:
+          configurations:
+            - config-1:
+                section: "osd"
+                name: "osd_max_backfills"
+                value: "8"
+                location_type: "class"
+                location_value: "hdd"
+            - config-2:
+                section: "osd"
+                name: "osd_recovery_max_active"
+                value: "8"
+                location_type: "host"
+                location_value: "host"
+      desc: Verify config changes for section & masks like device class, host etc
+
+  - test:
+      name: Monitor configuration - runtime changes
+      module: rados_prep.py
+      polarion-id:  CEPH-83573473
+      config:
+        Verify_config_parameters:
+          configurations:
+            - config-1:
+                section: "global"
+                name: "debug_mgr"
+                value: "10/10"
+            - config-2:
+                section: "osd.2"
+                name: "debug_ms"
+                value: "10/10"
+      desc: Verify config changes for mon config params during runtime
+
+  - test:
+      name: Monitor configuration - global and local changes
+      module: rados_prep.py
+      polarion-id: CEPH-83573471
+      config:
+        Verify_config_parameters:
+          configurations:
+            - config-1:
+                section: "global"
+                name: "debug_mgr"
+                value: "10/10"
+            - config-2:
+                section: "osd"
+                name: "osd_max_scrubs"
+                value: "5"
+            - config-3:
+                section: "osd.1"
+                name: "osd_max_scrubs"
+                value: "3"
+            - config-4:
+                section: "mds"
+                name: "mds_op_history_size"
+                value: "40"
+            - config-5:
+                section: "client.rgw"
+                name: "rgw_lc_debug_interval"
+                value: "1"
+      desc: Verify config source changes at both global and local levels
+
+  - test:
+      name: Monitor configuration - mgr plugins
+      module: rados_prep.py
+      polarion-id: CEPH-83573475
+      config:
+        Verify_config_parameters:
+          configurations:
+            - config-1:
+                section: "mgr"
+                name: "mgr/pg_autoscaler/log_level"
+                value: "debug"
+            - config-2:
+                section: "mgr"
+                name: "mgr/alerts/interval"
+                value: "15"
+      desc: Verify config source changes for mgr plugins
+
+  - test:
+      name: Replicated pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      config:
+        replicated_pool:
+          create: true
+          pool_name: test_re_pool
+          pg_num: 16
+          size: 2
+          disable_pg_autoscale: true
+          rados_write_duration: 50
+          rados_read_duration: 30
+        set_pool_configs:
+          pool_name: test_re_pool
+          configurations:
+            pg_num: 32
+            pgp_num: 32
+            pg_autoscale_mode: 'on'
+            compression_mode: aggressive
+            compression_algorithm: zlib
+      desc: Create replicated pools and run IO
+
+  - test:
+      name: Compression algorithms
+      module: rados_prep.py
+      polarion-id: CEPH-83571669
+      config:
+        replicated_pool:
+          create: true
+          pool_name: re_pool_compress
+          pg_num: 32
+          rados_write_duration: 10
+          rados_read_duration: 10
+        enable_compression:
+          pool_name: re_pool_compress
+          rados_write_duration: 50
+          rados_read_duration: 50
+          configurations:
+            - config-1:
+                compression_mode: force
+                compression_algorithm: snappy
+                compression_required_ratio: 0.3
+                compression_min_blob_size: 1B
+                byte_size: 10KB
+            - config-2:
+                compression_mode: passive
+                compression_algorithm: zlib
+                compression_required_ratio: 0.7
+                compression_min_blob_size: 10B
+                byte_size: 100KB
+            - config-3:
+                compression_mode: aggressive
+                compression_algorithm: zstd
+                compression_required_ratio: 0.5
+                compression_min_blob_size: 1KB
+                byte_size: 100KB
+      desc: Enable/disable different compression algorithms.
+
+  - test:
+      name: Compression algorithms - modes
+      module: rados_prep.py
+      polarion-id: CEPH-83571670
+      config:
+        enable_compression:
+          pool_name: re_pool_compress
+          rados_write_duration: 50
+          rados_read_duration: 50
+          configurations:
+            - config-1:
+                compression_mode: force
+                compression_algorithm: snappy
+                compression_required_ratio: 0.3
+                compression_min_blob_size: 1B
+                byte_size: 10KB
+            - config-2:
+                compression_mode: passive
+                compression_algorithm: zlib
+                compression_required_ratio: 0.7
+                compression_min_blob_size: 10B
+                byte_size: 100KB
+            - config-3:
+                compression_mode: aggressive
+                compression_algorithm: zstd
+                compression_required_ratio: 0.5
+                compression_min_blob_size: 1KB
+                byte_size: 100KB
+      desc: Enable/disable different compression modes.
+
+  - test:
+      name: Compression algorithm tuneables
+      module: rados_prep.py
+      polarion-id: CEPH-83571669
+      config:
+        enable_compression:
+          pool_name: re_pool_compress
+          rados_write_duration: 50
+          rados_read_duration: 50
+          configurations:
+            - config-1:
+                compression_mode: force
+                compression_algorithm: snappy
+                compression_required_ratio: 0.3
+                compression_min_blob_size: 1B
+                byte_size: 10KB
+            - config-2:
+                compression_mode: passive
+                compression_algorithm: zlib
+                compression_required_ratio: 0.7
+                compression_min_blob_size: 10B
+                byte_size: 100KB
+            - config-3:
+                compression_mode: aggressive
+                compression_algorithm: zstd
+                compression_required_ratio: 0.5
+                compression_min_blob_size: 1KB
+                byte_size: 100KB
+      desc: Verify and alter different compression tunables.
+
+  - test:
+      name: Ceph balancer plugin
+      module: rados_prep.py
+      polarion-id: CEPH-83573247
+      config:
+        configure_balancer:
+          configure: true
+          balancer_mode: crush-compat
+          target_max_misplaced_ratio: 0.04
+          sleep_interval: 30
+      desc: Ceph balancer plugins CLI validation in crush-compat mode
+
+  - test:
+      name: Ceph balancer test
+      module: rados_prep.py
+      polarion-id: CEPH-83573251
+      config:
+        configure_balancer:
+          configure: true
+          balancer_mode: upmap
+          target_max_misplaced_ratio: 0.05
+          sleep_interval: 60
+      desc: Ceph balancer plugins CLI validation in upmap mode
+
+  - test:
+      name: Mute ceph health alerts
+      polarion-id: CEPH-83573854
+      module: mute_alerts.py
+      desc: Mute health alerts
+
+  - test:
+      name: Ceph PG Autoscaler
+      module: rados_prep.py
+      polarion-id: CEPH-83573412
+      config:
+        replicated_pool:
+          create: true
+          pool_name: rep_test_pool
+          rados_write_duration: 50
+          rados_read_duration: 50
+          pg_num: 32
+        configure_pg_autoscaler:
+          default_mode: warn
+          mon_target_pg_per_osd: 128
+          pool_config:
+            pool_name: rep_test_pool
+            pg_autoscale_mode: "on"
+            pg_num_min: 16
+            target_size_ratio: 0.4
+      desc: Ceph PG autoscaler CLI validation
+
+  - test:
+      name: Config checks
+      module: rados_prep.py
+      polarion-id: CEPH-83574529
+      config:
+        cluster_configuration_checks:
+          configure: true
+          disable_check_list:
+            - osd_mtu_size
+            - osd_linkspeed
+            - kernel_security
+          enable_check_list:
+            - kernel_security
+            - osd_linkspeed
+      desc: Enable Cluster Configuration checks
+
+  - test:
+      name: config source changes log
+      module: test_mon_config_history.py
+      polarion-id: CEPH-83573479
+      desc: Config sources - Verify config source changes in the log
+
+  - test:
+      name: config source changes reset
+      module: test_mon_config_reset.py
+      polarion-id: CEPH-83573478
+      desc: Config sources - Verify config source changes and reset config
+
+  - test:
+      name: Compression test - replicated pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571673
+      config:
+        Compression_tests:
+          verify_compression_ratio_set: true          # TC : CEPH-83571672
+          pool_type: replicated
+          pool_config:
+            pool-1: test_compression_repool-1
+            pool-2: test_compression_repool-2
+            rados_write_duration: 200
+            byte_size: 400KB
+            pg_num: 32
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.3
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on replicated pools
+
+  - test:
+      name: autoscaler flags
+      module: test_pg_autoscale_flag.py
+      polarion-id: CEPH-83574794
+      desc: verify autoscaler flags functionality
