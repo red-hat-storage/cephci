@@ -1,0 +1,152 @@
+# Suite contains tests related to CIDR blocklisting of ceph clients
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure clients
+      desc: Configures multiple client nodes on cluster
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: Configure client 1
+            desc: Configures client.1 admin node on cluster
+            module: test_client.py
+            polarion-id:
+            config:
+              command: add
+              id: client.1                      # client Id (<type>.<Id>)
+              nodes:
+                  - node7                       # client node
+                  - node8
+                  - node9
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true          # Copy admin keyring to node
+              caps:                             # authorize client capabilities
+                mon: "allow *"
+                osd: "allow *"
+                mds: "allow *"
+                mgr: "allow *"
+        - test:
+            name: Configure client 2
+            desc: Configures client.2 admin node on cluster
+            module: test_client.py
+            polarion-id:
+            config:
+              command: add
+              id: client.2                     # client Id (<type>.<Id>)
+              nodes:
+                - node10
+                - node11
+                - node12
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true          # Copy admin keyring to node
+              caps: # authorize client capabilities
+                mon: "allow *"
+                osd: "allow *"
+                mds: "allow *"
+                mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: CIDR Blocklisting.
+      module: test_cidr_blocklisting.py
+      polarion-id: CEPH-83575008
+      config:
+        pool_configs:
+          pool-1:
+            type: replicated
+            conf: sample-pool-1
+          pool-2:
+            type: replicated
+            conf: sample-pool-2
+# TODO: add support for ec pools as data pools for rbd images, and blocklist the clients
+#          pool-3:
+#            type: erasure
+#            conf: sample-pool-3
+        pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+      desc: CIDR Blocklisting of ceph rbd clients

@@ -335,6 +335,10 @@ class RadosOrchestrator:
         enable_app_cmd = f"sudo ceph osd pool application enable {pool_name} {kwargs.get('app_name', 'rados')}"
         self.node.shell([enable_app_cmd])
 
+        if kwargs.get("app_name") == "rbd":
+            pool_init = f"rbd pool init -p {pool_name}"
+            self.node.shell([pool_init])
+
         cmd_map = {
             "min_size": f"ceph osd pool set {pool_name} min_size {kwargs.get('min_size')}",
             "size": f"ceph osd pool set {pool_name} size {kwargs.get('size')}",
