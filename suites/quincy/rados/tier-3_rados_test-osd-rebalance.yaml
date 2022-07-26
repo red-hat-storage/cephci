@@ -1,0 +1,153 @@
+# Suite contains tests related to osd re-balance upon OSD addition / removal
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args: # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node8                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Robust rebalancing - osd replacement with many pools
+      module: test_osd_rebalance.py
+      desc: Remove and add osd to verify data migration from the pools which have different replica and pg count
+      polarion-id: CEPH-9210
+      abort-on-fail: true
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: rpool_1
+              pg_num: 32
+              rados_write_duration: 50
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+          - create_pool:
+              pool_name: rpool_2
+              pg_num: 32
+              pool_type: replicated
+              size: 2
+              min_size: 2
+              rados_write_duration: 50
+              byte_size: 1024
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+          - create_pool:
+              pool_name: rpool_3
+              pg_num: 32
+              rados_write_duration: 50
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+              disable_pg_autoscale: true
+          - create_pool:
+              create: true
+              pool_name: ecpool_1
+              pool_type: erasure
+              pg_num: 32
+              k: 4
+              m: 2
+              plugin: jerasure
+              rados_write_duration: 50
+              rados_read_duration: 30
+          - create_pool:
+              create: true
+              pool_name: ecpool_2
+              pool_type: erasure
+              pg_num: 32
+              k: 4
+              m: 2
+              l: 3
+              plugin: lrc
+              rados_write_duration: 50
+              rados_read_duration: 30
+        delete_pools:
+          - rpool_1
+          - rpool_2
+          - rpool_3
+          - ecpool_1
+          - ecpool_2

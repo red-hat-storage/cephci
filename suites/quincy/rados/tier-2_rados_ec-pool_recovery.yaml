@@ -1,0 +1,204 @@
+# Suite contains tier-2 rados test: EC Pool recovery
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node8                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: EC Pool Recovery Improvement
+      module: pool_tests.py
+      polarion-id: CEPH-83573852
+      config:
+        ec_pool_recovery_improvement:
+          create: true
+          pool_name: ec_pool_recovery
+          k: 3
+          m: 2
+          pg_num: 32
+          plugin: jerasure
+          rados_write_duration: 100
+          rados_read_duration: 50
+          crush-failure-domain: osd
+          osd_max_backfills: 16
+          osd_recovery_max_active: 16
+          delete_pool: true
+      desc: Verify Recovery of EC pool with only "k" shards available
+
+  - test:
+      name: EC pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      config:
+        ec_pool:
+          create: true
+          pool_name: test_ec_pool
+          pg_num: 64
+          k: 4
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          rados_write_duration: 50
+          rados_read_duration: 30
+        set_pool_configs:
+          pool_name: test_ec_pool
+          configurations:
+            pg_num: 32
+            pgp_num: 32
+            pg_autoscale_mode: 'on'
+            compression_mode: force
+            compression_algorithm: snappy
+        delete_pools:
+          - test_ec_pool
+      desc: Create, modily & delete EC pools and run IO
+
+  - test:
+      name: EC pool with Overwrites
+      module: rados_prep.py
+      polarion-id: CEPH-83571730
+      config:
+        ec_pool:
+          create: true
+          pool_name: ec_pool_overwrite
+          app_name: rbd
+          pg_num: 32
+          erasure_code_use_overwrites: "true"
+          k: 8
+          m: 3
+          plugin: jerasure
+          rados_write_duration: 50
+          rados_read_duration: 30
+          test_overwrites_pool: true
+          metadata_pool: re_pool_overwrite
+          image_name: image_ec_pool
+          image_size: 100M
+        delete_pools:
+          - ec_pool_overwrite
+          - re_pool_overwrite
+      desc: EC pool with Overwrites & create RBD pool
+
+  - test:
+      name: Compression test - EC pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571674
+      config:
+        Compression_tests:
+          pool_type: erasure
+          pool_config:
+            pool-1: test_compression_ecpool-1
+            pool-2: test_compression_ecpool-2
+            rados_write_duration: 200
+            byte_size: 400KB
+            pg_num: 32
+            k: 8
+            m: 3
+            plugin: jerasure
+            crush-failure-domain: osd
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.3
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on erasure coded pools
+

@@ -1,0 +1,277 @@
+# Suite contains tests to verify and test ceph pools
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node8                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Autoscaler test - pool target size ratio
+      module: pool_tests.py
+      polarion-id: CEPH-83573424
+      config:
+        verify_pool_target_ratio:
+          configurations:
+            pool-1:
+              pool_name: ec_pool_1
+              pool_type: erasure
+              pg_num: 32
+              k: 8
+              m: 4
+              plugin: jerasure
+              crush-failure-domain: osd
+              target_size_ratio: 0.005
+              rados_write_duration: 50
+              rados_read_duration: 50
+              delete_pool: true
+            pool-2:
+              pool_type: replicated
+              pool_name: re_pool_1
+              pg_num: 32
+              target_size_ratio: 0.001
+              rados_write_duration: 50
+              rados_read_duration: 50
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
+
+  - test:
+      name: Mon target for PG num
+      module: pool_tests.py
+      polarion-id: CEPH-83573423
+      desc: Verification of mon_target_pg_per_osd option globally
+      config:
+        verify_mon_target_pg_per_osd:
+          section: "global"
+          name: "mon_target_pg_per_osd"
+          value: "150"
+
+  - test:
+      name: Autoscaler test - pool pg_num_min
+      module: pool_tests.py
+      polarion-id: CEPH-83573425
+      config:
+        verify_pg_num_min:
+          configurations:
+            pool-1:
+              pool_name: ec_pool_2
+              pool_type: erasure
+              pg_num: 32
+              k: 8
+              m: 3
+              plugin: jerasure
+              crush-failure-domain: osd
+              pg_num_min: 16
+              rados_write_duration: 50
+              rados_read_duration: 50
+              delete_pool: true
+            pool-2:
+              pool_type: replicated
+              pool_name: re_pool_2
+              pg_num: 64
+              pg_num_min: 32
+              rados_write_duration: 50
+              rados_read_duration: 50
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
+
+  - test:
+      name: Omap creations on objects
+      module: test_omap_entries.py
+      polarion-id: CEPH-83571702
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: ec_pool_3
+              pool_type: erasure
+              pg_num: 1
+              k: 8
+              m: 4
+              plugin: jerasure
+              crush-failure-domain: osd
+              disable_pg_autoscale: true
+            pool-2:
+              pool_type: replicated
+              pool_name: re_pool_3
+              pg_num: 1
+              disable_pg_autoscale: true
+          omap_config:
+            obj_start: 0
+            obj_end: 4000
+            num_keys_obj: 20000
+      desc: Large number of omap creations on objects backed by bluestore
+
+  - test:
+      name: client pg access
+      module: test_client_pg_access.py
+      polarion-id: CEPH-83571713
+      config:
+        verify_client_pg_access:
+          num_snapshots: 20
+          configurations:
+            pool-1:
+              pool_name: ec_pool_4
+              pool_type: erasure
+              pg_num: 1
+              k: 8
+              m: 3
+              disable_pg_autoscale: true
+            pool-2:
+              pool_type: replicated
+              pool_name: re_pool_4
+              pg_num: 1
+              disable_pg_autoscale: true
+      desc: many clients clients accessing same PG with bluestore as backend
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: replicated
+        pool-2-type: replicated
+        pool-1-conf: sample-pool-1
+        pool-2-conf: sample-pool-2
+      desc: Migrating data between different pools. Scenario-1. RE -> RE
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: replicated
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-1
+        pool-2-conf: sample-pool-3
+      desc: Migrating data between different pools. Scenario-2. RE -> EC
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: replicated
+        pool-1-conf: sample-pool-3
+        pool-2-conf: sample-pool-3
+      desc: Migrating data between different pools. Scenario-3. EC -> RE
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-2
+        pool-2-conf: sample-pool-3
+      desc: Migrating data between different pools. Scenario-4. Ec -> EC
+
+  - test:
+      name: Pg autoscaler bulk flag
+      module: pool_tests.py
+      polarion-id: CEPH-83573412
+      desc: Ceph PG autoscaler bulk flag tests
+      config:
+        test_autoscaler_bulk_feature: true
+        pool_name: test_bulk_features
+        delete_pool: true
+  - test:
+      name: PG number maximum limit check
+      module: pool_tests.py
+      desc: Check the pg_num maximut limit is <=128
+      polarion-id: CEPH-83574909
+      config:
+        verify_pg_num_limit:
+          pool_name: pool_num_chk
+          delete_pool: true
