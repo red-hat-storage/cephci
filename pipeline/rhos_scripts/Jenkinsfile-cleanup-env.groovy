@@ -32,7 +32,7 @@ node("rhel-8-medium || ceph-qe-ci") {
                 poll: false
             )
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            sharedLib.prepareNode()
+            sharedLib.prepareNode(2)
         }
         stage('cleanup') {
             println("Cleanup environment and Send Email to respective user")
