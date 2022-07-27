@@ -1453,3 +1453,26 @@ def run_fio(**kw):
     )
 
     return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=sudo)
+
+
+def fetch_image_tag(rhbuild):
+    """Retrieves image tag from magna002.ceph.redhat.com.
+
+    Args:
+        rhbuild: build section to be fetched)
+    Returns:
+        image-tag
+    """
+    try:
+        recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+        filename = f"RHCEPH-{rhbuild}.yaml"
+        url = f"{recipe_url}{filename}"
+        data = requests.get(url, verify=False)
+        yml_data = yaml.safe_load(data.text)
+        if "rc" in yml_data.keys():
+            container_image = yml_data["latest"]["repository"]
+            image_tag = container_image.split(":")[-1]
+            return image_tag
+        raise TestSetupFailure("Not a live testing")
+    except Exception as e:
+        raise TestSetupFailure(f"Could not fetch image tag : {e}")

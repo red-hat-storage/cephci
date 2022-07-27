@@ -1,0 +1,101 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_cephadm_commands.yaml
+#
+# Cluster Configuration:
+#   cephci/conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#
+# Test steps:
+#   (1) Bootstrap cluster with options,
+#       - skip-monitoring-stack
+#       - orphan-initial-daemons
+#       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
+#       - initial-dashboard-user: admin123
+#       - initial-dashboard-password: admin@123,
+#       - registry-json: registry.json
+#       - apply-spec: <list of service specification containing multiple admin nodes, mon, mgr, raw osd and rgw deployment>
+#       - ssh-user: <ssh user name>
+#       - ssh-public-key: <path to the custom ssh public key file>
+#       - ssh-private-key: <path to the custom ssh private key file>
+#       - mon-ip: <monitor IP address: Required>
+#   (2) Verify cephadm pull command
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap with apply-spec option.
+      desc: bootstrap with apply-spec option.
+      module: test_bootstrap.py
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+          orphan-initial-daemons: true
+          ssh-user: cephuser
+          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide
+          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
+          apply-spec:
+            - service_type: host
+              address: true
+              labels:
+                - admin
+                - mgr
+                - alertmanager
+              nodes:
+                - node1
+                - node2
+                - node3
+            - service_type: mon
+              placement:
+                nodes:
+                  - node1
+                  - node2
+                  - node3
+            - service_type: mgr
+              placement:
+                label: mgr
+            - service_type: prometheus
+              placement:
+                count: 1
+                nodes:
+                  - node1
+            - service_type: grafana
+              placement:
+                nodes:
+                  - node1
+            - service_type: alertmanager
+              placement:
+                count: 2
+                label: alertmanager
+            - service_type: node-exporter
+              placement:
+                host_pattern: "*"
+            - service_type: crash
+              placement:
+                host_pattern: "*"
+            - service_type: osd
+              service_id: osd_first_node
+              placement:
+                nodes:
+                  - node1
+              spec:
+                data_devices:
+                  all: "true"
+                encrypted: "true"                     # boolean as string
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: test_cephadm_pull
+      desc: Check the latest ceph image using cephadm pull
+      polarion-id: CEPH-83573787
+      module: test_cephadm_pull.py
+
