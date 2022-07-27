@@ -154,7 +154,7 @@ def sendConsolidatedEmail(
     def majorVersion,
     def minorVersion,
     def cephVersion,
-    def toList="ceph-qe-list@redhat.com"
+    def toList="cephci@redhat.com"
     ) {
     /*
         Send an Email
@@ -194,6 +194,7 @@ def sendConsolidatedEmail(
             def stageResults = v["results"].sort()
             stageResults.each{stage,result->
                 if(result == "FAILURE"){
+                    status = "UNSTABLE"
                     color = "F1948A"
                 } else {
                     color = "82E0AA"
@@ -239,13 +240,6 @@ def sendConsolidatedEmail(
     }
 
     body += "</table><br /></body></html>"
-
-    if ('FAIL' in fetchStageStatus(testResults)) {
-        if(toList == "ceph-qe-list@redhat.com"){
-            toList = "cephci@redhat.com"
-        }
-        status = "UNSTABLE"
-    }
 
     def subject = "RHCEPH ${majorVersion}.${minorVersion} - ${cephVersion} ${run_type} test execution report"
     emailext (
