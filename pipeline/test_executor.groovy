@@ -1,6 +1,11 @@
 // Workflow to execute tests
 def sharedLib
 def retVal
+def run_type = "RHCEPH-test-executor run"
+def rhcephVersion= "${params.RHCS_Build}"
+def phase = "${params.Build}"
+def group = "${params.Group}-"
+def suite = "${params.Suite}"
 
 def getCLI(){
     /*
@@ -115,15 +120,27 @@ node("rhel-8-medium || ceph-qe-ci"){
             }
             def cli = getCLI()
             retVal = sharedLib.executeTestSuite(cli, cleanupOnSuccess, cleanupOnFailure)
+            retVal.put("status", retVal["result"])
+            println(retVal)
         }
     }
     stage('Publish Results'){
-        testResults = ["${params.Suite}": retVal["result"]]
+        testResults = ["${params.Suite}" : retVal]
         def jobUserId
         wrap([$class: 'BuildUser']) {
             jobUserId = "${BUILD_USER_ID}@redhat.com"
+            jobUserName = "${BUILD_USER_FIRST_NAME}"
         }
-        def artifactDetails = buildArtifactDetails(sharedLib)
-        sharedLib.sendEmail(testResults, artifactDetails, "Async-${params.Group}", jobUserId)
+        def (majorVersion, minorVersion) = rhcephVersion.tokenize(".")
+        def releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
+        sharedLib.sendEmail(
+                run_type,
+                testResults,
+                sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, phase),
+                group,
+                suite,
+                jobUserId
+        )
+        currentBuild.description = "Triggered by - ${jobUserName}"
     }
 }
