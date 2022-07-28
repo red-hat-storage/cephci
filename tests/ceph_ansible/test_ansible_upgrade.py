@@ -5,6 +5,7 @@ from ceph.utils import (
     get_ceph_versions,
     get_node_by_id,
     get_public_network,
+    is_legacy_container_present,
     set_container_info,
     translate_to_ip,
 )
@@ -146,6 +147,9 @@ def run(ceph_cluster, **kw):
     if config.get("ansi_cli_args"):
         cmd += config_dict_to_string(config["ansi_cli_args"])
 
+    if build.startswith("5.1"):
+        cmd += " -e qe_testing=true"
+
     short_names = []
     if limit_node:
         for node in limit_node:
@@ -213,7 +217,31 @@ def run(ceph_cluster, **kw):
             LOG.error("Failed during cephadm adopt (rc = {})".format(rc))
             return rc
 
+        LOG.info("The value for parameter build is {}".format(build))
+        if build.startswith("5.1"):
+            installer = ceph_cluster.get_nodes(role="installer")[0]
+            base_cmd = "sudo cephadm shell -- ceph"
+            config_cmd = f"{base_cmd} config set mgr mgr/cephadm/yes_i_know true"
+            installer.exec_command(cmd=config_cmd)
+            mgr_cmd = f"{base_cmd} mgr fail"
+            installer.exec_command(cmd=mgr_cmd)
+
         client = ceph_cluster.get_nodes("mon")[0]
+        if config.get("verify_cephadm_containers") and is_legacy_container_present(
+            ceph_cluster
+        ):
+            LOG.info(
+                "Checking cluster status to ensure that the legacy services are not being inferred"
+            )
+            rc = ceph_cluster.check_health(
+                build,
+                cluster_name=cluster_name,
+                client=client,
+                timeout=config.get("timeout", 300),
+            )
+            if rc != 0:
+                LOG.error("Ceph health not OK after adopting cluster to use cephadm")
+                return rc
 
     return ceph_cluster.check_health(
         build,

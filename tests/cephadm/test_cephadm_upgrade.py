@@ -2,8 +2,10 @@
 Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 
 """
+
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
+from ceph.utils import is_legacy_container_present
 from utility.log import Log
 
 log = Log(__name__)
@@ -79,6 +81,17 @@ def run(ceph_cluster, **kwargs) -> int:
 
         # Monitor upgrade status, till completion
         orch.monitor_upgrade_status()
+
+        if config.get("verify_cephadm_containers") and is_legacy_container_present(
+            ceph_cluster
+        ):
+            log.info(
+                "Checking cluster status to ensure that the legacy services are not being inferred"
+            )
+            if orch.cluster.check_health(
+                rhbuild=config.get("rhbuild"), client=orch.installer
+            ):
+                raise UpgradeFailure("Cluster is in HEALTH_ERR state after upgrade")
 
         if config.get("verify_cluster_health"):
             if orch.cluster.check_health(

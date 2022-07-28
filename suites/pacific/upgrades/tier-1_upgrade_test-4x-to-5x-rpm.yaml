@@ -122,6 +122,7 @@ tests:
           module: test_ansible_upgrade.py
           config:
             build: '5.x'
+            verify_cephadm_containers: True
             ansi_config:
               ceph_origin: distro
               ceph_stable_release: pacific
