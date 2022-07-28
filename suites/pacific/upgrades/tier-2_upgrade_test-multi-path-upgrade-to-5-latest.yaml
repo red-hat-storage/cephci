@@ -1,5 +1,7 @@
 # Upgrade: Multihop upgrade evaluation
 #
+# Conf: conf/pacific/upgrades/upgrades.yaml
+#
 # This test suite is used to test upgrades from all previous ceph release versions
 # to the latest 5.x version. We start from RHCS 4 and install a CDN cluster
 # then proceed with upgrading to every released version after that
