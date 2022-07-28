@@ -48,7 +48,7 @@ node("rhel-8-medium || ceph-qe-ci") {
             msgMap = sharedLib.getCIMessageMap()
             println("msgMap : ${msgMap}")
             println("sharedLib: ${sharedLib}")
-            sharedLib.prepareNode()
+            sharedLib.prepareNode(3)
         }
 
         stage('configureReportPortalWorkDir') {

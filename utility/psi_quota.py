@@ -35,18 +35,23 @@ def execute(cmd, fail_ok=False, merge_stderr=False):
     proc = subprocess.Popen(cmdlist, stdout=stdout, stderr=stderr)
     result, result_err = proc.communicate()
     result = result.decode("utf-8")
+
     if not fail_ok and proc.returncode != 0:
         raise CommandFailed(proc.returncode, cmd, result, result_err)
+
     return json.loads(result)
 
 
-def openstack_basecmd(*args, **kwargs):
+def openstack_basecmd(*args, **kwargs) -> str:
     """Generates the openstack base command"""
-    return (
-        f'openstack --os-auth-url {kwargs.get("auth-url",None)} --os-project-domain-name  {kwargs.get("domain",None)} '
-        f'--os-user-domain-name {kwargs.get("domain",None)} --os-project-name {kwargs.get("project",None)} '
-        f'--os-username {kwargs.get("username")} --os-password {kwargs.get("password")}'
-    )
+    cmd = ".venv/bin/openstack"
+    cmd += f" --os-auth-url {kwargs['auth-url']}"
+    cmd += f" --os-project-domain-name {kwargs['domain']}"
+    cmd += f" --os-user-domain-name {kwargs['domain']}"
+    cmd += f" --os-project-name {kwargs['project']}"
+    cmd += f" --os-username {kwargs['username']}"
+    cmd += f" --os-password {kwargs['password']}"
+    return cmd
 
 
 def map_userto_instances(os_nodes, os_cred):
@@ -244,7 +249,8 @@ def run(args: Dict) -> None:
                 f"Openstack Command failed to retrieve the server details {cf.args[-1]}"
             )
 
-    project_dir = os.path.dirname(os.path.abspath(__file__))
+    # This path we are looking for is <repo-dir>/templates
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     template_dir = os.path.join(project_dir, "templates")
     jinja_env = Environment(
         extensions=[MarkdownExtension],
