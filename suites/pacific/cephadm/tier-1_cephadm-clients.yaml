@@ -1,0 +1,173 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_cephadm-clients.yaml
+# Test-Case: Execute cephadm-clients playbook to copy keyring with the same name as specified
+#            by the keyring parameter
+#
+# Cluster Configuration:
+#    cephci/conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#
+# Test Steps :
+#   (1) Bootstrap cluster with options,
+#       - skip-monitoring-stack: true
+#       - orphan-initial-daemons: true
+#       - registry-json: <registry-URL>
+#       - fsid: <cluster-fsid>
+#       - mon-ip: <monitor IP address: Required>
+#       - config: <ceph config options to be set during bootstrap>
+#   (2) Copy SSH keys to nodes.
+#   (3) Add nodes to cluster with address and role labels attached to it using Host spec yaml file.
+#   (4) Deploy services using apply spec option, (" ceph orch apply -i <spec_file>)
+#       - 3 Mon on node1, node2, node3 using host placements.
+#       - MGR using placement using label(mgr).
+#       - addition of OSD's using "all-avialable-devices" option.
+#       - alertmanager on node1, node2 using label "alert-manager".
+#       - grafana and prometheus on node1 using host placement with limit.
+#       - crash and node-exporter on all nodes using placement="*".
+#   (5) Configure client
+#   (6) Using cephadm-clients playbook distribute keyring with custom destination name
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      config:
+         is_production: True
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap
+      desc: cephadm cluster bootstrap
+      module: test_bootstrap.py
+      polarion-id: CEPH-83573720
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          skip-monitoring-stack: true
+          orphan-initial-daemons: true
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Host addition with spec file
+      desc: add hosts using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574726
+      config:
+        steps:
+        - config:
+            service: host
+            command: set_address
+            args:
+              node: node1
+        - config:
+            service: host
+            command: label_add
+            args:
+              node: node1
+              labels: apply-all-labels
+        - config:
+            command: apply_spec
+            service: orch
+            specs:
+             - service_type: host
+               address: true
+               labels: apply-all-labels
+               nodes:
+                 - node2
+                 - node3
+             - service_type: host
+               address: true
+               labels: apply-all-labels
+               nodes:
+                 - node4
+      abort-on-fail: true
+  - test:
+      name: Service deployment with spec
+      desc: Add services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
+        steps:
+        - config:
+            command: apply_spec
+            service: orch
+            specs:
+            - service_type: mon
+              placement:
+                nodes:
+                - node1
+                - node2
+                - node3
+            - service_type: mgr
+              placement:
+                label: mgr
+            - service_type: prometheus
+              placement:
+                count: 1
+                nodes:
+                  - node1
+            - service_type: grafana
+              placement:
+                nodes:
+                  - node1
+            - service_type: alertmanager
+              placement:
+                count: 2
+                label: alertmanager
+            - service_type: node-exporter
+              placement:
+                host_pattern: "*"
+            - service_type: crash
+              placement:
+                host_pattern: "*"
+            - service_type: osd
+              service_id: all-available-devices
+              placement:
+                host_pattern: "*"
+              spec:
+                data_devices:
+                  all: "true"                         # boolean as string
+                encrypted: "true"                     # boolean as string
+        - config:
+            command: shell
+            args:                 # sleep to get all services deployed
+              - sleep
+              - "300"
+  - test:
+      name: Configure client
+      desc: Configure client on node5
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node5                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        store-keyring: true               # /etc/ceph/ceph.client.1.keyring
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Cephadm-ansible clients playbook
+      desc: Configure client node using cephadm-clients.yml playbook
+      polarion-id: CEPH-83574415
+      module: test_cephadm_ansible.py
+      config:
+        playbook: cephadm-clients.yml
+        extra-vars:
+          keyring: /etc/ceph/ceph.client.admin.keyring
+          client_group: clients
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+          keyring_dest: /etc/ceph/custom_name_ceph.keyring

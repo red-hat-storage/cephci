@@ -101,7 +101,7 @@ tests:
       name: Service deployment with spec
       desc: Add services using spec file.
       module: test_cephadm.py
-      polarion-id: CEPH-83573746,CEPH-83574727
+      polarion-id: CEPH-83574727
       config:
         steps:
         - config:
