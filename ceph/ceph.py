@@ -2037,6 +2037,17 @@ class CephNode(object):
         except Exception as e:
             raise e
 
+    def upload_file(self, src, dst, sudo=False):
+        """Put file to remote location
+
+        Args:
+            src (str): Source file location
+            dst (str): File destination location
+            sudo (bool): Use root access
+        """
+        client = self.rssh if sudo else self.ssh
+        client().open_sftp().put(src, dst)
+
 
 class CephObject(object):
     def __init__(self, role, node):
@@ -2090,6 +2101,17 @@ class CephObject(object):
 
         """
         self.node.get_dir_list(dir_path=dir_path, sudo=sudo)
+
+    def upload_file(self, src, dst, sudo=False):
+        """
+        Proxy to upload file to remote location
+
+        Args:
+            src (str): Source file location
+            dst (str): File destination location
+            sudo (bool): Use root access
+        """
+        self.node.upload_file(src=src, dst=dst, sudo=sudo)
 
 
 class CephDemon(CephObject):
