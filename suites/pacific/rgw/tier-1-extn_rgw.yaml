@@ -81,7 +81,6 @@ tests:
       name: STS Tests
       desc: Perform assume role call with permissive session policies
       polarion-id: CEPH-83574491
-      comments: known issue. 1976883
       module: sanity_rgw.py
       config:
         script-name: test_sts_using_boto_session_policy.py
@@ -91,7 +90,6 @@ tests:
       name: STS Tests
       desc: Perform assume role call with restrictive session policies
       polarion-id: CEPH-83574492
-      comments: known issue. 1976883
       module: sanity_rgw.py
       config:
         script-name: test_sts_using_boto_session_policy.py
@@ -101,7 +99,6 @@ tests:
       name: STS Tests
       desc: Perform Server Side Copy
       polarion-id: CEPH-83574522
-      comments: Known issue BZ 2006194
       module: sanity_rgw.py
       config:
         script-name: test_sts_using_boto_server_side_copy.py
@@ -111,7 +108,6 @@ tests:
       name: STS Tests
       desc: STS test using boto for handling non-existent object condition
       polarion-id: CEPH-83574539
-      comments: Known issue BZ 2006184
       module: sanity_rgw.py
       config:
         script-name: test_sts_using_boto_unexisting_object.py
@@ -121,7 +117,6 @@ tests:
       name: STS Tests
       desc: STS test wit invalid arn in the role's policy
       polarion-id: CEPH-83574537
-      comments: Addresses bugzilla 2007335
       module: sanity_rgw.py
       config:
         script-name: test_sts_using_boto.py
@@ -141,7 +136,6 @@ tests:
       name: Multipart upload with Bucket policy enabled
       desc: Perform multipart upload with Bucket policy enabled
       polarion-id: CEPH-83574538
-      comments: BZ 1960262
       module: sanity_rgw.py
       config:
         script-name: test_bucket_policy_ops.py
