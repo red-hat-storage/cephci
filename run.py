@@ -726,6 +726,9 @@ def run(args):
     sys.path.append(os.path.abspath("tests/upgrades"))
 
     tests = suite.get("tests")
+    if len(tests) == 0:
+        log.info("Looks like there are no tests in the suite!\nCheck your suite file!")
+        raise Exception("Nothing to do!")
     tcs = []
     jenkins_rc = 0
     _rhcs_version = rhbuild[:3]
@@ -739,11 +742,7 @@ def run(args):
 
     for test in tests:
         test = test.get("test")
-        try:
-            parallel = test.get("parallel")
-        except AttributeError:
-            log.error("Hint: Check your suite file for test definitions!")
-            raise
+        parallel = test.get("parallel")
         tc = fetch_test_details(test)
         test_file = tc["file"]
         report_portal_description = tc["desc"] or ""
@@ -862,7 +861,11 @@ def run(args):
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
 
             if rc != 0:
-                log.info("Breaking test as rc was not 0")
+                log.info(
+                    "While running test on multiple clusters, return on was not 0 "
+                    "from a test module.\nTest might have failed "
+                    "or there were no return value."
+                )
                 break
 
         elapsed = datetime.datetime.now() - start

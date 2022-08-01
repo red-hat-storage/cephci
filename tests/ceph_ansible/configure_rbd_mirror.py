@@ -41,7 +41,7 @@ def write_configs_to_rbdmirrors_yaml(ceph_installer, config):
 
     rbdmirrors_yaml = yaml.dump(config.get("ansi_config"), default_flow_style=False)
 
-    log.info("global vars {}".format(rbdmirrors_yaml))
+    log.debug(f"global vars {rbdmirrors_yaml}")
     gvars_file = ceph_installer.remote_file(
         sudo=True,
         file_name="/usr/share/ceph-ansible/group_vars/rbdmirrors.yml",

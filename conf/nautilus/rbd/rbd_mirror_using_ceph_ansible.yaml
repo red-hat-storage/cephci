@@ -1,3 +1,12 @@
+# Configuration file to test rbd-mirror test cases with
+# mirror daemon being configured using ceph-ansible
+# Config contains two clusters and each cluster contains nodes with
+# 1 - mon_mgr+installer
+# 1 client+rbd-mirror
+# 1 mon+mgr+osd
+# 1 mon+osd
+# 1 osd
+# Each OSD node contains 4 volumed of size 15G each
 globals:
   - ceph-cluster:
      name: ceph-rbd1

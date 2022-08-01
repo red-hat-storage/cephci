@@ -1,3 +1,7 @@
+# rbd-mirror configuration with rbd-mirror daemons configured using ceph-ansible
+# Contains configuration of two clusters
+# Each cluster contains 1 installer, 1 mon, 1 mgr, 3 osds, 1 rbd-mirror daemon
+
 globals:
   - ceph-cluster:
      name: ceph-rbd1

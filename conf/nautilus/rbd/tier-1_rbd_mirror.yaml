@@ -1,3 +1,6 @@
+# Configuration file to test rbd-mirror test cases
+# Config contains two clusters and each cluster contains
+# 1 installaer+mon+mgr, 1 client+rbd-mirror, 3 osd nodes with 4 disks of 15G
 globals:
   - ceph-cluster:
      name: ceph-rbd1

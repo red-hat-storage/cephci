@@ -27,7 +27,7 @@ def run(**kw):
     try:
         log.info("Starting RBD mirroring test case")
         config = kw.get("config")
-        build = config.get("build", config.get("rhbuild"))
+
         mirror1, mirror2 = [
             rbdmirror.RbdMirror(cluster, config)
             for cluster in kw.get("ceph_cluster_dict").values()
@@ -48,10 +48,7 @@ def run(**kw):
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
 
         # Stop the rdb-mirror service and cehck the status
-        if build.startswith("5"):
-            service_name = mirror2.get_rbd_service_name("rbd-mirror")
-        if build.startswith("4"):
-            service_name = mirror2.get_rbd_service_name("rbd-mirror")
+        service_name = mirror2.get_rbd_service_name("rbd-mirror")
         mirror2.change_service_state(service_name=service_name, operation="stop")
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="down+stopped")
         mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total"))
