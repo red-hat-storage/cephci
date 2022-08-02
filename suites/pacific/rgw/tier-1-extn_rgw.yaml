@@ -117,6 +117,7 @@ tests:
         script-name: test_sts_using_boto_unexisting_object.py
         config-file-name: test_sts_using_boto.yaml
         timeout: 500
+
   - test:
       name: STS Tests
       desc: STS test wit invalid arn in the role's policy
