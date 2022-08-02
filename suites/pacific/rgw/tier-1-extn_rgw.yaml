@@ -107,6 +107,7 @@ tests:
         script-name: test_sts_using_boto_server_side_copy.py
         config-file-name: test_sts_using_boto_server_side_copy.yaml
         timeout: 500
+
   - test:
       name: STS Tests
       desc: STS test using boto for handling non-existent object condition
