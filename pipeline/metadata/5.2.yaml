@@ -755,6 +755,22 @@
     - rgw
     - stage-3
 
+- name: "Tier-2 RGW multisite test async data notifications on 5.2"
+  suite: "suites/pacific/rgw/tier-2_rgw_test-multisite-async-data-notification.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.2"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
+
 - name: "Tier-0 Fs"
   suite: "suites/pacific/cephfs/tier-0_fs.yaml"
   global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
