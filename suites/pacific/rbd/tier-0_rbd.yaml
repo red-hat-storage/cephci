@@ -101,7 +101,7 @@ tests:
   -
     test:
       config:
-        branch: master
+        branch: v16.2.8
         script: cli_generic.sh
         script_path: qa/workunits/rbd
       desc: "Executing upstream RBD CLI Generic scenarios"
@@ -111,7 +111,7 @@ tests:
   -
     test:
       config:
-        branch: master
+        branch: pacific
         script: rbd_groups.sh
         script_path: qa/workunits/rbd
       desc: "Executing upstream RBD CLI Groups scenarios"
@@ -121,7 +121,7 @@ tests:
   -
     test:
       config:
-        branch: master
+        branch: pacific
         script: import_export.sh
         script_path: qa/workunits/rbd
       desc: "Executing upstream RBD CLI Import Export scenarios"
@@ -131,7 +131,7 @@ tests:
   -
     test:
       config:
-        branch: master
+        branch: pacific
         script: luks-encryption.sh
         script_path: qa/workunits/rbd
       desc: "Executing upstream RBD LUKS Encryption scenarios"
@@ -140,7 +140,7 @@ tests:
   -
     test:
       config:
-        branch: master
+        branch: pacific
         script: cli_migration.sh
         script_path: qa/workunits/rbd
       desc: "Executing upstream RBD CLI Migration scenarios"

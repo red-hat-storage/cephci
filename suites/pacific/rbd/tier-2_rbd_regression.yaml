@@ -95,11 +95,3 @@ tests:
       name: Check trash if the deleted images are moved to trash automatically
       polarion-id: CEPH-83573297
 
-  - test:
-      config:
-        branch: master
-        script_path: qa/workunits/rbd
-        script: krbd_rxbounce.sh
-      desc: Executig upstream RBD kernel exclusive scenarios
-      module: test_rbd.py
-      name: 8_rbd_krbd_rxbounce
