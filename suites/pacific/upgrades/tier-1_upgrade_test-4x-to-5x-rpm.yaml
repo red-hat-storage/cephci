@@ -149,6 +149,16 @@ tests:
     abort-on-fail: True
 
 - test:
+    name: cephadm-ansible preflight playbook
+    desc: run cephadm-preflight.yml playbook
+    polarion-id: CEPH-83574413
+    module: test_cephadm_ansible.py
+    config:
+      playbook: cephadm-preflight.yml
+      extra-vars:
+        ceph_origin: rhcs
+
+- test:
     name: check-ceph-health
     module: exec.py
     config:

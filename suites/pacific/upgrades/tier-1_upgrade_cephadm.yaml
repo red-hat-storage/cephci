@@ -37,7 +37,7 @@ tests:
       name: Cluster deployment
       desc: Cluster deployment with latest released version of 5.x
       module: test_cephadm.py
-      polarion-id: CEPH-83573791,CEPH-83574413
+      polarion-id: CEPH-83573791
       config:
         verify_cluster_health: true
         steps:
