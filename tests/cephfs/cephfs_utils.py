@@ -680,7 +680,7 @@ class FsUtils(object):
                                         self.dir_name,
                                     ),
                                     long_running=True,
-                                    timeout=300,
+                                    timeout=900,
                                 )
                                 self.return_counts = self.io_verify(client)
                             elif size == "m":
@@ -699,7 +699,7 @@ class FsUtils(object):
                                             self.dir_name,
                                         ),
                                         long_running=True,
-                                        timeout=300,
+                                        timeout=900,
                                     )
                                     self.return_counts = self.io_verify(client)
                                 break
@@ -720,7 +720,7 @@ class FsUtils(object):
                                             self.dir_name,
                                         ),
                                         long_running=True,
-                                        timeout=300,
+                                        timeout=900,
                                     )
                                     self.return_counts = self.io_verify(client)
                                 break
@@ -741,7 +741,7 @@ class FsUtils(object):
                                         self.dir_name,
                                     ),
                                     long_running=True,
-                                    timeout=300,
+                                    timeout=900,
                                 )
                                 self.return_counts = self.io_verify(client)
                                 break
@@ -762,7 +762,7 @@ class FsUtils(object):
                                             self.dir_name,
                                         ),
                                         long_running=True,
-                                        timeout=300,
+                                        timeout=900,
                                     )
                                     self.return_counts = self.io_verify(client)
                                 break
@@ -783,7 +783,7 @@ class FsUtils(object):
                                             self.dir_name,
                                         ),
                                         long_running=True,
-                                        timeout=300,
+                                        timeout=900,
                                     )
                                     self.return_counts = self.io_verify(client)
                                 break
@@ -805,7 +805,7 @@ class FsUtils(object):
                                         self.dir_name,
                                     ),
                                     long_running=True,
-                                    timeout=300,
+                                    timeout=900,
                                 )
                                 self.return_counts = self.io_verify(client)
                                 break
@@ -826,7 +826,7 @@ class FsUtils(object):
                                             self.dir_name,
                                         ),
                                         long_running=True,
-                                        timeout=300,
+                                        timeout=900,
                                     )
                                     self.return_counts = self.io_verify(client)
                                 break
@@ -866,7 +866,7 @@ class FsUtils(object):
                                 self.dir_name,
                             ),
                             long_running=True,
-                            timeout=300,
+                            timeout=900,
                         )
                         self.return_counts = self.io_verify(client)
         return self.return_counts, 0
