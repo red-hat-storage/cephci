@@ -205,6 +205,7 @@ def setup_addition_repo(ceph, repo):
     )
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
+
 @retry(RuntimeError, tries=2, delay=30)
 def setup_subscription_manager(
     ceph, is_production=False, cloud_type="openstack", timeout=1800
