@@ -161,3 +161,13 @@ tests:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dbr_with_custom_objs_per_shard_max_dynamic_shard_and_reshard_thread_interval.yaml
         timeout: 500
+
+  - test:
+      name: Bucket setlifeycle with invalid date in LC conf
+      desc: Setlifeycle to bucket with invalid date format in Lifecycle configuration
+      polarion-id: CEPH-11186
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_invalid_date.yaml
+        timeout: 300
