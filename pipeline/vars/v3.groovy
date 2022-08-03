@@ -188,10 +188,11 @@ def sendConsolidatedEmail(
     body += "<table>"
     body += "<tr><th>Tier Level</th><th>Stage Level</th><th>Result</th></tr>"
 
-    textBody = testResults.sort()
+    type = run_type.replaceAll(" ", "_")
+    textBody = testResults["${type}"].sort()
     textBody.each{k,v->
         if(k.indexOf("tier") >= 0){
-            def stageResults = v["results"].sort()
+            def stageResults = v.sort()
             stageResults.each{stage,result->
                 if(result == "FAILURE"){
                     status = "UNSTABLE"
@@ -941,5 +942,154 @@ def returnSnippet() {
     body += "</code>"
     return body
 }
+
+def readFromConfluenceMetadata(
+    def file = "confluence_metadata.yaml",
+    def location="/ceph/cephci-jenkins/results"
+    ){
+    /*
+        Method to read metadata info about confluence.
+    */
+    def dataContent = yamlToMap(file, location)
+    println "content of confluence metadata file is: ${dataContent}"
+    return dataContent
+}
+
+def readFromResultsFile(
+    def cephVersion,
+    def location="/ceph/cephci-jenkins/results"
+    ) {
+    /*
+        Method to read content from the ceph version yaml file.
+    */
+    def cephFile = "${cephVersion}.yaml"
+    def dataContent = yamlToMap(cephFile, location)
+    println "content of ceph version file is: ${dataContent}"
+    return dataContent
+}
+
+def setReleaseLock(location, fileName){
+    def lockFile = "${location}/${fileName}.lock"
+    def lockFileExists = sh (returnStatus: true, script: "ls -l ${lockFile}")
+    if (lockFileExists != 0) {
+        println "${fileName}.lock does not exist. creating it"
+        sh(script: "touch ${lockFile}")
+        return
+    }
+    def startTime = System.currentTimeMillis()
+    while( (System.currentTimeMillis()-startTime) < 600000 ) {
+        sleep(2)
+        lockFilePresent = sh (returnStatus: true, script: "ls -l ${lockFile}")
+        if (lockFilePresent != 0) {
+            sh(script: "touch ${lockFile}")
+            return
+        }
+    }
+    error "Lock file: ${fileName}.lock already exist.can not create lock file"
+}
+
+def writeToResultsFile(
+    def cephVersion,
+    def tier,
+    def stage,
+    def status,
+    def run_type,
+    def location="/ceph/cephci-jenkins/results"
+    ) {
+    /*
+        Method to write results of execution to ceph version file.
+    */
+    println("Inside write to ceph file")
+    def cephFile = "${cephVersion}.yaml"
+    def cephFileExists = sh (returnStatus: true, script: "ls -l ${location}/${cephFile}")
+    println("cephFileExists : ${cephFileExists}")
+    if (cephFileExists != 0) {
+        println "${cephFile} does not exist. creating it"
+        sh(script: "touch ${location}/${cephFile}")
+    }
+    setReleaseLock(location, cephVersion)
+    println("lock file created")
+    def dataContent = yamlToMap(cephFile, location)
+    println("dataContent : ${dataContent}")
+    run_type = run_type.replaceAll(" ", "_")
+    if ( !dataContent ){
+        println("Inside if")
+        dataContent = ["${run_type}": ["${tier}": ["${stage}": "${status}"]]]
+    }
+    else if ( dataContent.containsKey(run_type) ) {
+        println("Inside else if")
+        println("Tier: ${tier}")
+        if ( dataContent["${run_type}"].containsKey(tier) ){
+            println("Inside tier if")
+            dataContent["${run_type}"]["${tier}"] += ["${stage}": "${status}"]
+        }
+        else{
+            println("Inside else")
+            dataContent["${run_type}"] += ["${tier}": ["${stage}": "${status}"]]
+        }
+    }
+    else {
+        println("Inside outer else")
+        dataContent += ["${run_type}": ["${tier}": ["${stage}": "${status}"]]]
+    }
+    writeYaml file: "${location}/${cephFile}", data: dataContent, overwrite: true
+    sh(script: "rm -f ${location}/${cephVersion}.lock")
+}
+
+def updateConfluencePage(
+    def majorVersion,
+    def minorVersion,
+    def cephVersion,
+    def run_type,
+    def testResults
+    ) {
+    /*
+        Method to update test results to confluence page
+    */
+    println("Updating confluence page")
+    rhcsVersion = "RHCS ${majorVersion}.${minorVersion}"
+    pageContent = ["RHCS Version": rhcsVersion, "Ceph Version": cephVersion]
+    type = run_type.replaceAll(" ", "_")
+
+    textBody = testResults["${type}"].sort()
+    textBody.each{k,v->
+        println("key: ${k}")
+        println("value: ${v}")
+        if(k.indexOf("tier") >= 0){
+            def key = "${k}-${type}"
+            def value = "PASS"
+            def stageResults = v.sort()
+            stageResults.each{stage,result->
+                if(result == "FAILURE"){
+                    // If any of the stages in a tier failed, then the status of the tier will be updated as failed
+                    value = "FAIL"
+                } else if(stage == "stage-1" && result == "ABORTED"){
+                    // If stage1 of a tier was aborted, then the status of the tier will be updated as skipped
+                    value = "SKIP"
+                }
+            }
+            pageContent.put(key, value)
+        }
+    }
+    pageContentJson = writeJSON returnText: true, json: pageContent
+
+    confMetadata = readFromConfluenceMetadata()
+    title = confMetadata["pageTitle"]
+    token = confMetadata["token"]
+    space = confMetadata["space"]
+
+    def cli = "cd ${env.WORKSPACE}/pipeline/scripts/ci;"
+    cli = "${cli} ${env.WORKSPACE}/.venv/bin/python update_confluence.py"
+    cli = "${cli} --content '${pageContentJson}'"
+    cli = "${cli} --token '${token}'"
+    cli = "${cli} --title '${title}'"
+    cli = "${cli} --space '${space}'"
+
+    println("Update Confluence CLI: ${cli}")
+
+    def updateResult = sh (returnStdout: true, script: cli)
+    println("Confluence page updated with content")
+}
+
 
 return this;
