@@ -8,8 +8,8 @@ import traceback
 from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
 from utility.log import Log
-from utility.utils import get_cephci_config
 from utility.retry import retry
+from utility.utils import get_cephci_config
 
 log = Log(__name__)
 
