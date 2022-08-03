@@ -221,7 +221,7 @@ def setup_subscription_manager(
     submgr_status = out.split("\n")[0]
     log.info(f"subscription manager status {submgr_status}")
     if submgr_status != 'Unknown':
-        log.info(f"subscription manager is already registered!!")
+        log.info("subscription manager is already registered!!")
         return
 
     while True:
