@@ -221,7 +221,7 @@ def setup_subscription_manager(
     out, _ = ceph.exec_command(cmd=cmd, timeout=300, long_running=False)
     submgr_status = out.split("\n")[0]
     log.info(f"subscription manager status {submgr_status}")
-    if submgr_status != 'Unknown':
+    if submgr_status != "Unknown":
         log.info("subscription manager is already registered!!")
         return
 
