@@ -104,8 +104,8 @@ tests:
               rados_put: true
               pg_num: 32
               pgp_num: 32
-              k: 3
-              m: 2
+              k: 8
+              m: 3
               plugin: jerasure
               crush-failure-domain: host
         delete_pools:

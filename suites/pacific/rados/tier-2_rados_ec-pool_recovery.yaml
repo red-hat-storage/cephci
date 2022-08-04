@@ -113,8 +113,8 @@ tests:
         ec_pool_recovery_improvement:
           create: true
           pool_name: ec_pool_recovery
-          k: 3
-          m: 2
+          k: 8
+          m: 4
           pg_num: 32
           plugin: jerasure
           rados_write_duration: 100
@@ -134,8 +134,8 @@ tests:
           create: true
           pool_name: test_ec_pool
           pg_num: 64
-          k: 4
-          m: 2
+          k: 8
+          m: 4
           plugin: jerasure
           disable_pg_autoscale: true
           rados_write_duration: 50
