@@ -35,6 +35,9 @@ def run(ceph_cluster, **kw):
     elif alert == "HEALTH_WARN":
         if not generate_health_warn_alert(alert, cephadm):
             return 1
+    elif alert == "OSD_DOWN":
+        if not generate_osd_down_alert(alert, cephadm):
+            return 1
     return 0
 
 
@@ -63,7 +66,6 @@ def generate_health_error_alert(alert: str, node: CephAdmin) -> bool:
         alert: name of the alert to be generated
         node: name of the installer node
     Returns: True -> pass, False -> failure
-
     """
     # Ratio .25 to generate alert and .95 to reset default
     for ratio in [0.25, 0.95]:
@@ -89,7 +91,6 @@ def generate_health_warn_alert(alert: str, admin_node: CephAdmin) -> bool:
         alert: name of the alert to be generated
         node: name of the installer node
     Returns: True -> pass, False -> failure
-
     """
     out, _ = admin_node.shell(
         args=["ceph", "orch", "ps", "--daemon_type", "mon", "-f", "json"]
@@ -127,3 +128,44 @@ def generate_health_warn_alert(alert: str, admin_node: CephAdmin) -> bool:
         out, err = mon_node.exec_command(sudo=True, cmd=cmd)
         return True
     raise Exception("Daemon Mon does not exists")
+
+
+def generate_osd_down_alert(alert: str, node: CephAdmin) -> bool:
+    """
+    Method to generate osd down alert
+    Args:
+        alert: name of the alert to be generated
+        node: name of the cephadmin node
+    Returns: True -> pass, False -> failure
+    """
+    cmd = "ceph osd set noup"
+    try:
+        out, err = node.shell([cmd])
+        log.debug("set osd flag to no up")
+    except Exception:
+        log.error("Failed to set osd flag")
+        log.error(traceback.format_exc())
+        return False
+    cmd = "ceph osd down 0 1"
+    try:
+        out, err = node.shell([cmd])
+        log.debug("down the osd 0 and 1")
+    except Exception:
+        log.error("Failed to down the OSD's")
+        log.error(traceback.format_exc())
+        return False
+
+    if not validate_alerts(alert, node):
+        log.error(f"alert : {alert} has failed")
+        return False
+
+    # Resetting to default setting
+    cmd = "ceph osd unset noup"
+    try:
+        out, err = node.shell([cmd])
+        log.debug("unset osd flag to no up")
+        return True
+    except Exception:
+        log.error("Failed to unset osd flag")
+        log.error(traceback.format_exc())
+        return False
