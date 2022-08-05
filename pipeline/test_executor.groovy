@@ -11,8 +11,11 @@ def getCLI(){
     /*
         Generates the CLI using the arguments provided and returns it.
     */
-    def cephVersion = 'pacific'
-    if(params.RHCS_Build.contains("3.")){
+    def cephVersion = 'quincy'
+    if(params.RHCS_Build.contains("5.")){
+        cephVersion = 'pacific'
+    }
+    else if(params.RHCS_Build.contains("3.")){
         cephVersion = 'luminous'
     }
     else if(params.RHCS_Build.contains("4.")){
