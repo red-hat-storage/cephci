@@ -1,0 +1,94 @@
+# Test Suite to test CIDR blocklisting of clients
+# Deployment for all the ceph daemons , with 3 mon's, 3 mgr's, 15 OSD daemons & 6 Client nodes
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - provider_net_cci_12
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+      node2:
+        networks:
+          - provider_net_cci_12
+        role:
+          - mon
+          - mgr
+          - mds
+          - rgw
+          - node-exporter
+          - alertmanager
+          - crash
+      node3:
+        networks:
+          - provider_net_cci_12
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node4:
+        networks:
+          - provider_net_cci_12
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node5:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node6:
+        networks:
+          - provider_net_cci_12
+        role:
+          - mon
+          - mgr
+          - mds
+          - rgw
+          - node-exporter
+          - crash
+      node7:
+        networks:
+          - provider_net_cci_8
+        role:
+          - client
+      node8:
+        networks:
+          - provider_net_cci_8
+        role:
+          - client
+      node9:
+        networks:
+          - provider_net_cci_9
+        role:
+          - client
+      node10:
+        networks:
+          - provider_net_cci_9
+        role:
+          - client
+      node11:
+        networks:
+          - provider_net_cci_7
+        role:
+          - client
+      node12:
+        networks:
+          - provider_net_cci_7
+        role:
+          - client

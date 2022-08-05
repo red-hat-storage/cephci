@@ -117,6 +117,18 @@ def run(ceph_cluster, **kw):
     # Clone the repository once for the entire test suite
     pip_cmd = "venv/bin/pip"
     python_cmd = "venv/bin/python"
+    if ceph_cluster.rhcs_version.version[0] > 4:
+        setup_cluster_access(ceph_cluster, rgw_node)
+        rgw_node.exec_command(
+            sudo=True, cmd="yum install -y ceph-common --nogpgcheck", check_ec=False
+        )
+
+    if ceph_cluster.rhcs_version.version[0] in [3, 4]:
+        if ceph_cluster.containerized:
+            # install ceph-common on the host hosting the container
+            rgw_node.exec_command(
+                sudo=True, cmd="yum install -y ceph-common --nogpgcheck", check_ec=False
+            )
     out, err = rgw_node.exec_command(cmd="ls -l venv", check_ec=False)
 
     if not out:
@@ -130,19 +142,6 @@ def run(ceph_cluster, **kw):
             cmd=f"{pip_cmd} install "
             + f"-r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
         )
-
-        if ceph_cluster.rhcs_version.version[0] > 4:
-            setup_cluster_access(ceph_cluster, rgw_node)
-            rgw_node.exec_command(
-                sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
-            )
-
-        if ceph_cluster.rhcs_version.version[0] in [3, 4]:
-            if ceph_cluster.containerized:
-                # install ceph-common on the host hosting the container
-                rgw_node.exec_command(
-                    sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
-                )
 
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")

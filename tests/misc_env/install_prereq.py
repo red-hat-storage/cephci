@@ -8,6 +8,7 @@ import traceback
 from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
 from utility.log import Log
+from utility.retry import retry
 from utility.utils import get_cephci_config
 
 log = Log(__name__)
@@ -205,6 +206,7 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
+@retry(RuntimeError, tries=2, delay=30)
 def setup_subscription_manager(
     ceph, is_production=False, cloud_type="openstack", timeout=1800
 ):
@@ -215,6 +217,14 @@ def setup_subscription_manager(
             ip=ceph.ip_address, timeout=timeout
         )
     )
+    cmd = "sudo subscription-manager status | grep 'Overall Status' | cut -d ':' -f 2 | cut -d ' ' -f 2"
+    out, _ = ceph.exec_command(cmd=cmd, timeout=300, long_running=False)
+    submgr_status = out.split("\n")[0]
+    log.info(f"subscription manager status {submgr_status}")
+    if submgr_status != "Unknown":
+        log.info("subscription manager is already registered!!")
+        return
+
     while True:
         try:
             # subscription-manager tips:

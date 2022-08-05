@@ -1,7 +1,9 @@
 """Manage the client via cephadm CLI."""
+import time
 from typing import Dict
 
 from ceph.ceph_admin.orch import Orch
+from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from utility.log import Log
 
@@ -43,35 +45,56 @@ def add(cls, config: Dict) -> None:
         file_.write(content)
         file_.flush()
 
-    if config.get("node"):
-        node = get_node_by_id(cls.cluster, config["node"])
+    if config.get("nodes"):
+        nodes = config["nodes"]
+        if not isinstance(nodes, list):
+            nodes = [nodes]
 
-        # Copy the keyring to client
-        node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
-        put_file(node, client_file, cnt_key, "w")
+        def setup(host):
+            node = get_node_by_id(cls.cluster, host)
 
-        if config.get("copy_ceph_conf", True):
-            # Get minimal ceph.conf
-            ceph_conf, err = cls.shell(args=["ceph", "config", "generate-minimal-conf"])
-            # Copy the ceph.conf to client
-            put_file(node, "/etc/ceph/ceph.conf", ceph_conf, "w")
+            # Copy the keyring to client
+            node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+            put_file(node, client_file, cnt_key, "w")
 
-        # Copy admin keyring to client node
-        if config.get("copy_admin_keyring"):
-            admin_keyring, _ = cls.shell(args=["ceph", "auth", "get", "client.admin"])
-            put_file(node, "/etc/ceph/ceph.client.admin.keyring", admin_keyring, "w")
+            if config.get("copy_ceph_conf", True):
+                # Get minimal ceph.conf
+                ceph_conf, err = cls.shell(
+                    args=["ceph", "config", "generate-minimal-conf"]
+                )
+                # Copy the ceph.conf to client
+                put_file(node, "/etc/ceph/ceph.conf", ceph_conf, "w")
 
-        # Install ceph-common
-        if config.get("install_packages"):
-            for pkg in config.get("install_packages"):
-                node.exec_command(cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True)
+            # Copy admin keyring to client node
+            if config.get("copy_admin_keyring"):
+                admin_keyring, _ = cls.shell(
+                    args=["ceph", "auth", "get", "client.admin"]
+                )
+                put_file(
+                    node, "/etc/ceph/ceph.client.admin.keyring", admin_keyring, "w"
+                )
 
-        out, _ = node.exec_command(cmd="ls -ltrh /etc/ceph/", sudo=True)
-        log.info(out)
+            # Install ceph-common
+            if config.get("install_packages"):
+                for pkg in config.get("install_packages"):
+                    node.exec_command(
+                        cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True
+                    )
 
-    # Hold local copy of the client key-ring in the installer node
-    if config.get("store-keyring"):
-        put_file(cls.installer, client_file, cnt_key, "w")
+            out, _ = node.exec_command(cmd="ls -ltrh /etc/ceph/", sudo=True)
+            log.info(out)
+
+            # Hold local copy of the client key-ring in the installer node
+            if config.get("store-keyring"):
+                put_file(cls.installer, client_file, cnt_key, "w")
+
+        with parallel() as p:
+            for node in nodes:
+                p.spawn(
+                    setup,
+                    node,
+                )
+                time.sleep(20)
 
 
 def remove(cls, config: Dict) -> None:

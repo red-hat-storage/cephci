@@ -34,7 +34,7 @@ tests:
       desc: test deploying of cluster setup using ceph-ansible
       destroy-cluster: false
       abort-on-fail: true
-      polarion-id: CEPH-83571467
+      polarion-id: CEPH-83572684
 
   - test:
       name: check-ceph-health

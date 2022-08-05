@@ -171,3 +171,10 @@ tests:
       config:
         alert: HEALTH_WARN
       desc: verify ceph health warn alert
+  - test:
+      name: ceph osd down alert test
+      polarion-id: CEPH-83575270
+      module: alerts.py
+      config:
+        alert: OSD_DOWN
+      desc: verify ceph osd down alert

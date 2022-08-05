@@ -2,6 +2,8 @@
 # - Automation support for containerised upgrade from RHCS4 to RHCS5 cluster
 #
 # Cluster configuration: (conf/pacific/upgrades/upgrades.yaml)
+#
+# Test configuration needs atleast one non mon node to exist to test the test case - test_cephadm_shell_run
 # --------------------------------------------------------------------------
 # Nodes:
 #   - 3 MONS, 3 MGRs, 3 OSDs, 2 RGW, 2 ISCSIGW's, 1 MDS's, 1 CLIENT, 1 GRAFANA, 1 CLIENT
