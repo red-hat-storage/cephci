@@ -45,10 +45,10 @@ def add(cls, config: Dict) -> None:
         file_.write(content)
         file_.flush()
 
-    if config.get("nodes"):
-        nodes = config["nodes"]
-        if not isinstance(nodes, list):
-            nodes = [nodes]
+    nodes_ = config.get("nodes", config.get("node"))
+    if nodes_:
+        if not isinstance(nodes_, list):
+            nodes = [nodes_]
 
         def setup(host):
             node = get_node_by_id(cls.cluster, host)
