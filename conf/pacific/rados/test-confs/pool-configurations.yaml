@@ -29,7 +29,7 @@ erasure:
     pool_type: erasure
     pg_num: 32
     k: 4
-    m: 2
+    m: 3
     plugin: jerasure
     crush-failure-domain: osd
   sample-pool-3:
