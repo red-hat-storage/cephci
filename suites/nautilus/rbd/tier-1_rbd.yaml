@@ -1,4 +1,5 @@
-# Test cases expects mon_allow_pool_delete set as True
+# Suite contains tier-1 rbd testcases which uses upstream scripts.
+# Test cases expects mon_allow_pool_delete set as true.
 tests:
    - test:
       name: install ceph pre-requisites
@@ -9,17 +10,17 @@ tests:
       module: test_ansible.py
       config:
         ansi_config:
-            ceph_test: True
+            ceph_test: true
             ceph_origin: distro
             ceph_stable_release: nautilus
             ceph_repository: rhcs
             osd_scenario: lvm
-            osd_auto_discovery: False
-            ceph_stable: True
-            ceph_stable_rh_storage: True
+            osd_auto_discovery: false
+            ceph_stable: true
+            ceph_stable_rh_storage: true
             fetch_directory: ~/fetch
             copy_admin_key: true
-            dashboard_enabled: False
+            dashboard_enabled: false
             ceph_conf_overrides:
                 global:
                   osd_pool_default_pg_num: 64
@@ -86,7 +87,7 @@ tests:
       polarion-id: CEPH-83574528
    - test:
        config:
-         branch: master
+         branch: main
          script_path: qa/workunits/rbd
          script: krbd_exclusive_option.sh
        desc: Executig upstream RBD kernel exclusive scenarios
