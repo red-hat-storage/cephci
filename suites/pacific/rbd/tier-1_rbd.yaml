@@ -101,7 +101,7 @@ tests:
 
   - test:
       config:
-        branch: master
+        branch: pacific
         script_path: qa/workunits/rbd
         script: test_librbd_python.sh
       desc: Executig upstream LibRBD scenarios
@@ -110,7 +110,7 @@ tests:
       polarion-id: CEPH-83574524
   - test:
       config:
-        branch: master
+        branch: pacific
         script_path: qa/workunits/rbd
         script: permissions.sh
       desc: Executig upstream RBD permissions scenarios
@@ -119,7 +119,7 @@ tests:
       polarion-id: CEPH-83574525
   - test:
       config:
-        branch: master
+        branch: pacific
         script_path: qa/workunits/rbd
         script: read-flags.sh
       desc: Executig upstream RBD Read Flag scenarios
@@ -128,7 +128,7 @@ tests:
       polarion-id: CEPH-83574526
   - test:
       config:
-        branch: master
+        branch: pacific
         script_path: qa/workunits/rbd
         script: qos.sh
       desc: Executig upstream RBD QOS scenarios
@@ -136,7 +136,7 @@ tests:
       name: 4_rbd_qos
   - test:
       config:
-        branch: master
+        branch: pacific
         script_path: qa/workunits/rbd
         script: journal.sh
       desc: Executig upstream RBD Journal scenarios
@@ -145,7 +145,7 @@ tests:
       polarion-id: CEPH-83574527
   - test:
       config:
-        branch: master
+        branch: pacific
         script_path: qa/workunits/rbd
         script: kernel.sh
       desc: Executig upstream RBD Kernal scenarios
@@ -154,7 +154,7 @@ tests:
       polarion-id: CEPH-83574528
   - test:
       config:
-        branch: master
+        branch: pacific
         script_path: qa/workunits/rbd
         script: krbd_exclusive_option.sh
       desc: Executig upstream RBD kernel exclusive scenarios
