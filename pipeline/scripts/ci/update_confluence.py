@@ -1,6 +1,5 @@
 import copy
 import json
-import pdb
 
 import xmltodict
 from confluence.base import Confluence
@@ -38,7 +37,6 @@ def get_updated_page_body(pageBody, content):
     Returns:
         None
     """
-    pdb.set_trace()
     if not pageBody:
         # If page is empty append add a help text
         data = (
