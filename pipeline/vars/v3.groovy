@@ -186,7 +186,7 @@ def sendConsolidatedEmail(
     body += "<body>"
     body += "<h3><u>Test Summary</u></h3>"
     body += "<table>"
-    body += "<tr><th>Tier Level</th><th>Stage Level</th><th>Result</th></tr>"
+    body += "<tr><th>Tier Level</th><th>Stage Level</th><th>Result</th><th>Build URL</th></tr>"
 
     type = run_type.replaceAll(" ", "_")
     textBody = testResults["${type}"].sort()
@@ -194,13 +194,15 @@ def sendConsolidatedEmail(
         if(k.indexOf("tier") >= 0){
             def stageResults = v.sort()
             stageResults.each{stage,result->
-                if(result == "FAILURE"){
+                test_result = result["result"]
+                build_url = result["build_url"]
+                if(test_result == "FAILURE"){
                     status = "UNSTABLE"
                     color = "F1948A"
                 } else {
                     color = "82E0AA"
                 }
-                body += "<tr bgcolor=${color}><td>${k}</td><td>${stage}</td><td>${result}</td></tr>"
+                body += "<tr bgcolor=${color}><td>${k}</td><td>${stage}</td><td>${test_result}</td><td>${build_url}</td></tr>"
             }
         }
     }
@@ -994,12 +996,12 @@ def writeToResultsFile(
     def stage,
     def status,
     def run_type,
+    def jenkinsBuildUrl,
     def location="/ceph/cephci-jenkins/results"
     ) {
     /*
         Method to write results of execution to ceph version file.
     */
-    println("Inside write to ceph file")
     def cephFile = "${cephVersion}.yaml"
     def cephFileExists = sh (returnStatus: true, script: "ls -l ${location}/${cephFile}")
     println("cephFileExists : ${cephFileExists}")
@@ -1013,24 +1015,18 @@ def writeToResultsFile(
     println("dataContent : ${dataContent}")
     run_type = run_type.replaceAll(" ", "_")
     if ( !dataContent ){
-        println("Inside if")
-        dataContent = ["${run_type}": ["${tier}": ["${stage}": "${status}"]]]
+        dataContent = ["${run_type}": ["${tier}": ["${stage}": ["result": "${status}", "build_url": "${jenkinsBuildUrl}"]]]]
     }
     else if ( dataContent.containsKey(run_type) ) {
-        println("Inside else if")
-        println("Tier: ${tier}")
         if ( dataContent["${run_type}"].containsKey(tier) ){
-            println("Inside tier if")
-            dataContent["${run_type}"]["${tier}"] += ["${stage}": "${status}"]
+            dataContent["${run_type}"]["${tier}"] += ["${stage}": ["result": "${status}", "build_url": "${jenkinsBuildUrl}"]]
         }
         else{
-            println("Inside else")
-            dataContent["${run_type}"] += ["${tier}": ["${stage}": "${status}"]]
+            dataContent["${run_type}"] += ["${tier}": ["${stage}": ["result": "${status}", "build_url": "${jenkinsBuildUrl}"]]]
         }
     }
     else {
-        println("Inside outer else")
-        dataContent += ["${run_type}": ["${tier}": ["${stage}": "${status}"]]]
+        dataContent += ["${run_type}": ["${tier}": ["${stage}": ["result": "${status}", "build_url": "${jenkinsBuildUrl}"]]]]
     }
     writeYaml file: "${location}/${cephFile}", data: dataContent, overwrite: true
     sh(script: "rm -f ${location}/${cephVersion}.lock")
@@ -1060,10 +1056,10 @@ def updateConfluencePage(
             def value = "PASS"
             def stageResults = v.sort()
             stageResults.each{stage,result->
-                if(result == "FAILURE"){
+                if(result["result"] == "FAILURE"){
                     // If any of the stages in a tier failed, then the status of the tier will be updated as failed
                     value = "FAIL"
-                } else if(stage == "stage-1" && result == "ABORTED"){
+                } else if(stage == "stage-1" && result["result"] == "ABORTED"){
                     // If stage1 of a tier was aborted, then the status of the tier will be updated as skipped
                     value = "SKIP"
                 }

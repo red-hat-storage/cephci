@@ -131,7 +131,7 @@ node("rhel-8-medium || ceph-qe-ci") {
                     println("latestContent: ${latestContent}")
                     sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
                 }
-                sharedLib.writeToResultsFile(msgMap["artifact"]["version"], tierLevel, stageLevel, testStatus, run_type)
+                sharedLib.writeToResultsFile(msgMap["artifact"]["version"], tierLevel, stageLevel, testStatus, run_type, build_url)
             }
             if(msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2"){
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
