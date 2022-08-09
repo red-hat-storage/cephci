@@ -1,0 +1,80 @@
+# cluster-conf file: conf/pacific/rados/stretch-mode-host-location-attrs.yaml
+
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes
+      module: test_bootstrap.py
+      polarion-id: CEPH-83575289
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+          ssh-user: cephuser
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node2
+                - node3
+                - node4
+              location:
+                root: default
+                datacenter: DC1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node5
+                - node6
+                - node7
+              location:
+                root: default
+                datacenter: DC2
+            - service_type: mon
+              placement:
+                label: mon
+            - service_type: mgr
+              placement:
+                label: mgr
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Service deployment with spec
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
+          - config:
+              command: shell
+              args: # display OSD tree
+                - "ceph osd tree"

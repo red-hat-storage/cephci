@@ -11,6 +11,7 @@ service_id: {{ spec['service_id'] }}
 placement:
 {%- if spec['placement']['hosts'] -%}{{ nlt }}hosts: {{ spec['placement']['hosts'] }}{%- endif -%}
 {%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif %}
+{%- if spec['placement']['label'] -%}{{ nlt }}label: {{ spec['placement']['label'] }}{%- endif -%}
 {%- if spec['spec'] -%}{{ newline }}spec:
 {%- for name, dict in spec['spec'].items() -%}
 {%- if dict is mapping -%}{{ nlt }}{{ name }}:
