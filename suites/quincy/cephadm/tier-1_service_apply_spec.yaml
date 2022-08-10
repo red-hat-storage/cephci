@@ -1,0 +1,257 @@
+#===============================================================================================
+#
+# Tier-level: 1
+# Test-Suite: tier-1_service_apply_spec.yaml
+# Test-Case: Deploy all services using a spec file option as below command
+#               eg., ceph orch apply -i <spec_file.yaml>
+#
+# Cluster Configuration:
+#    cephci/conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#
+#    4-Node cluster
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - RGW
+#     Node5 - Client
+#
+# Test Steps :
+#   (1) Bootstrap cluster with options,
+#       - skip-monitoring-stack: true
+#       - orphan-initial-daemons: true
+#       - registry-json: <registry-URL>
+#       - fsid: <cluster-fsid>
+#       - mon-ip: <monitor IP address: Required>
+#   (2) Copy SSH keys to nodes.
+#   (3) Add nodes to cluster with address and role labels attached to it using Host spec yaml file.
+#   (4) Deploy services using apply spec option, (" ceph orch apply -i <spec_file>)
+#       - 3 Mon on node1, node2, node3 using host placements.
+#       - MGR using placement using label(mgr).
+#       - addition of OSD's using "all-avialable-devices" option.
+#       - alertmanager on node1, node2 using label "alert-manager".
+#       - grafana and prometheus on node1 using host placement with limit.
+#       - crash and node-exporter on all nodes using placement="*".
+#   (5) Deploy MDS service using spec file,
+#       (a) Create FS volume 'cephfs'
+#       (b) Deploy MDS with label(mds) option using 'cephfs' volume.
+#   (6) Deploy NFS service using spec file,
+#       (a) Create OSD pool 'nfs-rgw-pool'
+#       (b) Deploy NFS on node4 using 'nfs-rgw-pool' pool.
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap
+      desc: cephadm cluster bootstrap
+      module: test_bootstrap.py
+      polarion-id: CEPH-83573720
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          skip-monitoring-stack: true
+          orphan-initial-daemons: true
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Host addition with spec file
+      desc: add hosts using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574726
+      config:
+        steps:
+        - config:
+            service: host
+            command: set_address
+            args:
+              node: node1
+        - config:
+            service: host
+            command: label_add
+            args:
+              node: node1
+              labels: apply-all-labels
+        - config:
+            command: apply_spec
+            service: orch
+            specs:
+             - service_type: host
+               address: true
+               labels: apply-all-labels
+               nodes:
+                 - node2
+                 - node3
+             - service_type: host
+               address: true
+               labels: apply-all-labels
+               nodes:
+                 - node4
+      abort-on-fail: true
+  - test:
+      name: Service deployment with spec
+      desc: Add services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+        - config:
+            command: apply_spec
+            service: orch
+            specs:
+            - service_type: mon
+              placement:
+                nodes:
+                - node1
+                - node2
+                - node3
+            - service_type: mgr
+              placement:
+                label: mgr
+            - service_type: prometheus
+              placement:
+                count: 1
+                nodes:
+                  - node1
+            - service_type: grafana
+              placement:
+                nodes:
+                  - node1
+            - service_type: alertmanager
+              placement:
+                count: 2
+                label: alertmanager
+            - service_type: node-exporter
+              placement:
+                host_pattern: "*"
+            - service_type: crash
+              placement:
+                host_pattern: "*"
+        - config:
+            command: shell
+            args:                 # sleep to get all services deployed
+              - sleep
+              - "300"
+  - test:
+      name: Service deployment with spec
+      desc: Add services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
+        steps:
+        - config:
+            command: apply_spec
+            service: orch
+            specs:
+            - service_type: osd
+              service_id: all-available-devices
+              placement:
+                host_pattern: "*"
+              spec:
+                data_devices:
+                  all: "true"                         # boolean as string
+                encrypted: "true"                     # boolean as string
+        - config:
+            command: shell
+            args:                 # sleep to get all services deployed
+              - sleep
+              - "300"
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          - config:
+              command: shell
+              args:              # sleep to get all services deployed
+                - sleep
+                - "120"
+  - test:
+      name: NFS Service deployment with spec
+      desc: Add NFS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574729
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-rgw-service
+                  placement:
+                    nodes:
+                      - node4
+                  spec:
+                    port: 2049
+  - test:
+      name: RGW Service deployment with spec
+      desc: Add RGW services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574640
+      config:
+        steps:                # create realm, zone group and zone
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin realm create --rgw-realm=east --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin zonegroup create --rgw-zonegroup=asia --master --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin zone create --rgw-zonegroup=asia --rgw-zone=india --master --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin period update --rgw-realm=east --commit"
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: my-rgw
+                  placement:
+                    count_per_host: 2
+                    nodes:
+                      - node4
+                      - node3
+                  spec:
+                    rgw_frontend_port: 8080
+                    rgw_realm: east
+                    rgw_zone: india
+          - config:
+              command: shell
+              args:              # sleep to get all services deployed
+                - sleep
+                - "120"
