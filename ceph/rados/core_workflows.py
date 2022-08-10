@@ -414,6 +414,7 @@ class RadosOrchestrator:
             # Collecting the acting set for a random pool ID 1 from cluster
             pg_num = "1.0"
 
+        log.debug(f"Collecting the acting set for the PG : {pg_num}")
         cmd = f"ceph pg map {pg_num}"
         out = self.run_ceph_command(cmd=cmd)
         return out["up"]

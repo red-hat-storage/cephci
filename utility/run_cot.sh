@@ -5,7 +5,7 @@ set -eux -o pipefail
 usage() {
   cat <<EOF >&2
 
-Usage: $0 -o <osdid> -p <pgid> -t <task> [-i <imageurl>]
+Usage: $0 -o <osdid> -p <pgid> -t <task> [-i <imageurl>] [-s <0|1>]
 
 Where:
     -o <osdid>    is the numeric ID of the OSD to run against.
@@ -20,6 +20,8 @@ Where:
     -i <imageurl> is the image address to run the trim shell with.
                   ( optional, default is system default image )
 
+    -s <startosd> is the option that when provided, does not restart the OSD
+                  ( optional, default is 1, i.e restarts the OSD at the end of operation )
 
     NOTE:
 
@@ -52,8 +54,9 @@ maxtrim=500000
 dups_tracked=999999999999
 pgid=""
 error=0
+startosd=1
 
-while getopts ":o:i:t:p:" o; do
+while getopts ":o:i:t:p:s:" o; do
   case "${o}" in
     i)
       cephadmopts="--image ${OPTARG}"
@@ -61,7 +64,7 @@ while getopts ":o:i:t:p:" o; do
     t)
       operation="${OPTARG}"
       ;;
-	o)
+	  o)
       if [ $(echo ${OPTARG} | egrep -c '^[0-9][0-9]*$') -eq 1 ]; then
         osdid=${OPTARG}
       else
@@ -76,6 +79,15 @@ while getopts ":o:i:t:p:" o; do
       else
         echo
         echo "ERROR: -p parameter must be a valid Placement Group ID format (Example: 1.a7)"
+	error=1
+      fi
+      ;;
+    s)
+      if [ $(echo ${OPTARG} | egrep -c "^[0-1]$") -eq 1 ]; then
+        startosd=${OPTARG}
+      else
+        echo
+        echo "ERROR: -s paramter must be numeric only"
 	error=1
       fi
       ;;
@@ -116,6 +128,7 @@ echo "  osdid=${osdid}"
 echo "  cephadm image=${cephadmopts}"
 echo "  pgid=${pgid}"
 echo "  operation=${operation}"
+echo " start osd = ${startosd}"
 
 
 echo "INFO: Gathering fsid"
@@ -162,8 +175,10 @@ chmod 755 /var/log/ceph/${fsid}/osd.${osdid}/${operation}.${osdid}.sh
 echo "INFO: Running COT operation ${operation} for osd.${osdid}"
 cephadm $cephadmopts shell --fsid ${fsid} --name osd.${osdid} /var/log/ceph/osd.${osdid}/${operation}.${osdid}.sh
 
-echo "INFO: starting osd.${osdid}"
-systemctl enable ceph-${fsid}@osd.${osdid}
-cephadm unit --fsid ${fsid} --name osd.${osdid} start
+if [ $startosd -eq 1 ]; then
+  echo "INFO: starting osd.${osdid}"
+  systemctl enable ceph-${fsid}@osd.${osdid}
+  cephadm unit --fsid ${fsid} --name osd.${osdid} start
+fi
 
 echo "Completed COT operation ${operation} on osd :  osd.${osdid}"
