@@ -138,7 +138,7 @@ tests:
 
    - test:
       name: config roll over mds daemon
-      polarion-id: CEPH-83573550
+      polarion-id: CEPH-83575287
       module: test_ansible_roll_over.py
       config:
           is_mixed_lvm_configs: True
