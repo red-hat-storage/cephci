@@ -1,0 +1,1045 @@
+#=====================================================================================
+# Metadata file for 5.3 RHCS release version.
+# Single file to specify test suites to be executed for all regression (sanity) and schedule tests
+# as per defined in each stages.
+# Each stage will execute in sequential pattern.
+# Contains all Default parameter used for Execution when no override is specified.
+# parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
+# platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
+#=====================================================================================
+- name: "Smoke test of RH Ceph build"
+  suite: "suites/pacific/cephadm/tier-0.yaml"
+  global-conf: "conf/pacific/cephadm/tier-0.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - cvp
+    - rc
+    - live
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Deploy 5x cluster and apply services through cli"
+  suite: "suites/pacific/cephadm/tier-0_5-1_cephadm.yaml"
+  global-conf: "conf/pacific/cephadm/sanity-cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-2
+
+- name: "Deploy all services at 5x using a spec file"
+  suite: "suites/pacific/cephadm/test-container-cli-args.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Upgrade cluster from 5x GA to 5x latest"
+  suite: "suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+  global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - rc
+    - live
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+
+- name: "Upgrade cluster from 4x RPM to 5x containerised"
+  suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-rpm.yaml"
+  global-conf: "conf/pacific/upgrades/upgrades.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - rc
+    - live
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-4
+
+- name: "Bootstrap cluster with skip dashboard and custom ceph directory testing"
+  suite: "suites/pacific/cephadm/tier-1_skip_dashboard.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Bootstrap cluster with custom ssl dashboard port and apply-spec"
+  suite: "suites/pacific/cephadm/tier-1_ssl_dashboard_port.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
+- name: "Test multiple path upgrade to 5x latest"
+  suite: "suites/pacific/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-5-latest.yaml"
+  global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack-only
+    - upgrades
+    - dmfg
+    - stage-1
+
+- name: "Testing scale up and scale down functionality after upgrade from 4x cdn to 5x latest"
+  suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-4-cdn-to-5-latest.yaml"
+  global-conf: "conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+
+- name: "Testing scale up and scale down functionality after upgrade from 5x cdn to 5x latest"
+  suite: "suites/pacific/upgrades/tier-2_dmfg_test-elasticity-after-upgrade-from-5-cdn-to-5-latest.yaml"
+  global-conf: "conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - upgrades
+    - dmfg
+    - stage-1
+
+- name: "Tier-0 test suite for 5x for RBD sanity"
+  suite: "suites/pacific/rbd/tier-0_rbd.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - rc
+    - openstack
+    - ibmc
+    - rbd
+    - stage-2
+
+- name: "Tier-1 test suite for 5x for RBD-mirror functionality"
+  suite: "suites/pacific/rbd/tier-1_rbd_mirror.yaml"
+  global-conf: "conf/pacific/rbd/tier-1_rbd_mirror.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rbd
+    - stage-2
+
+- name: "Tier-1 test suite for 5x for RBD functionality"
+  suite: "suites/pacific/rbd/tier-1_rbd.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rbd
+    - stage-1
+
+- name: "Tier-2 test suite for 5x - RBD functionality"
+  suite: "suites/pacific/rbd/tier-2_rbd_regression.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rbd
+    - stage-2
+
+- name: "Tier-2 test suite for 5x - RBD CLI regression"
+  suite: "suites/pacific/rbd/tier-2_rbd_cli_regression.yaml"
+  global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rbd
+    - stage-2
+
+- name: "Testing RADOS basic regression scenarios"
+  suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
+  global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-3
+
+- name: "Testing RADOS EC Pool recovery"
+  suite: "suites/pacific/rados/tier-2_rados_ec-pool_recovery.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-2
+
+- name: "Testing RADOS robust osd rebalance scenarios"
+  suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-2
+
+- name: "RADOS regression testing for stretched Clusters"
+  suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-4
+
+- name: "RADOS regression for testing various pool functionalities"
+  suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-2
+
+- name: "RADOS regression testing for Scrubbing scenarios"
+  suite: "suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
+  global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+  metadata:
+    - schedule
+    - tier-3
+    - openstack
+    - ibmc
+    - rados
+    - stage-1
+
+- name: "Testing RADOS regression for ec pool osd rebalance"
+  suite: "suites/pacific/rados/tier-3_rados_test-ecpool-osd-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-2
+
+- name: "Testing RADOS regression for in-progress osd rebalance"
+  suite: "suites/pacific/rados/tier-3_rados_test-osd-inprogress-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-2
+
+- name: "Testing RADOS regression for Stretch mode upgrade"
+  suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rados
+    - stage-1
+
+- name: "RADOS regression testing for Mon DB trimming"
+  suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-4
+
+- name: "RADOS regression testing osd rebalance with many pools"
+  suite: "suites/pacific/rados/tier-3_rados_test-osd-rebalance.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rados
+    - stage-5
+
+- name: "Tier-0 test suite for 5x for RGW sanity"
+  suite: "suites/pacific/rgw/tier-0_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - rc
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "test-rgw-ecpool-ms-bucket-listing-versioning-on-primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ecpool_ms-bucket-listing-versioning-on-primary.yaml"
+  global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+
+- name: "test-rgw-ecpool-ms-bucket-object-gc-policy-on-primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ecpool_ms-bucket-object-gc-policy-on-primary.yaml"
+  global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+
+- name: "test-rgw-ms-bucket-object-gc-policy-on-secondary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-bucket-object-gc-policy-on-secondary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+
+- name: "test-rgw-ms-bucket-listing-versioning-on-secondary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-bucket-listing-versioning-on-secondary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+
+- name: "Testing Rgw Single site"
+  suite: "suites/pacific/rgw/tier-1_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-ssl-ecpool-ms-bucket-objects-gc-policy-on-secondary"
+  suite: "suites/pacific/rgw/tier-2_rgw_ssl_ecpool_ms-bucket-objects-gc-policy-on-secondary.yaml"
+  global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+
+- name: "test-rgw-ssl-ecpool-ms-bucket-listing-versioning-on-secondary"
+  suite: "suites/pacific/rgw/tier-2_rgw_ssl_ecpool-ms-bucket-listing-versioning-on-secondary.yaml"
+  global-conf: "conf/pacific/rgw/ms-ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
+
+- name: "Testing RGW multi-realm deployment"
+  suite: "suites/pacific/rgw/tier-1_rgw_cephadm.yaml"
+  global-conf: "conf/pacific/rgw/tier-1_rgw_cephadm.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "test-rgw-ms-omap-datalog-on-primary.yaml"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-omap-datalog-on-primary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-5
+
+- name: "test-rgw-ms-bilog-crash-on-primary"
+  suite: "suites/pacific/rgw/tier-1_rgw_ms-bilog-crash-on-primary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
+
+- name: "Testing extended RGW multisite secondary to primary"
+  suite: "suites/pacific/rgw/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "RGW Regression testing"
+  suite: "suites/pacific/rgw/tier-2_rgw_regression.yaml"
+  global-conf: "conf/pacific/rgw/tier-2_rgw_regression.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-4
+
+- name: "S3Tests against Red Hat RGW with SSL"
+  suite: "suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
+  global-conf: "conf/pacific/rgw/ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "RGW STS functionality testing"
+  suite: "suites/pacific/rgw/tier-1-extn_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "Tier-2 RGW bucket_lc_multipart_object_expired"
+  suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "RGW testing using S3CMD CLI commands"
+  suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "Tier-2 RGW bucket notification on the latest development build"
+  suite: "suites/pacific/rgw/tier-2_rgw_test-bucket-notifications.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "Tier-2 RGW secure MultiSite RHCS 5 GA to the latest development build"
+  suite: "suites/pacific/rgw/tier-1_rgw_ssl_multisite_test-upgrade-5-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-4
+
+- name: "Tier-2 RGW single site upgrade from 5.x GA to latest developmet build"
+  suite: "suites/pacific/rgw/tier-1_rgw_ssl_test-upgrade-5-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+
+- name: "Tier-2 RGW multisite test async data notifications on 5.3"
+  suite: "suites/pacific/rgw/tier-2_rgw_test-multisite-async-data-notification.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
+
+- name: "Tier-0 Fs"
+  suite: "suites/pacific/cephfs/tier-0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - rc
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-1
+
+- name: "Tier-1 Fs"
+  suite: "suites/pacific/cephfs/tier-1_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-1_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-3
+
+- name: "Tier-1 Cephfs Mirror"
+  suite: "suites/pacific/cephfs/tier-1_cephfs_mirror.yaml"
+  global-conf: "conf/pacific/cephfs/tier-1_cephfs_mirror.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-2
+
+- name: "Tier-2 Cephfs test clients"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-clients.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-1
+
+- name: "Tier-2 Cephfs test Multifs"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-multifs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-3
+
+- name: "Tier-2 Cephfs test Nfs"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-5
+
+- name: "Tier-2 Cephfs test quota"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-quota.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-3
+
+- name: "Tier-2 Cephfs test Snapshot Clone"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
+  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-5
+
+- name: "Tier-2 Cephfs test Volume Management"
+  suite: "suites/pacific/cephfs/tier-2_cephfs_test-volume-management.yaml"
+  global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - cephfs
+    - stage-5
+
+- name: "test-lc-process-single-bucket"
+  suite: "suites/pacific/rgw/tier-2_rgw-single-bucket-process.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
+
+- name: "test-rgw-ms-upgrade-4-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_multisite_test-upgrade-4-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "test-rgw-ms-upgrade-5-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_multisite_upgrade-5-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "test-rgw-ssl-upgrade-4-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_ssl_test-upgrade-4-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/upgrades.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-upgrade-4-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_test-upgrade-4-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/upgrades.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-upgrade-5-to-latest"
+  suite: "suites/pacific/rgw/tier-1_rgw_test_upgrade-5-to-latest.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-lc-expiration-multiple-bucket"
+  suite: "suites/pacific/rgw/tier-1_rgw_test-lc-multiple-bucket.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
+
+- name: "test-empty-bucket-notification"
+  suite: "suites/pacific/rgw/tier-2_rgw_test-empty-bucket-notifcations.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-6
