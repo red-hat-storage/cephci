@@ -7,6 +7,22 @@
 # parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
 # platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
 #=====================================================================================
+- name: "Smoke Test of RH Ceph build"
+  suite: "suites/quincy/cephadm/tier-0.yaml"
+  global-conf: "conf/quincy/cephadm/tier-0.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+  metadata:
+    - sanity
+    - tier-0
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-1
+
 - name: "Testing RADOS basic regression scenarios"
   suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
   global-conf: "conf/pacific/rados/7-node-cluster.yaml"
