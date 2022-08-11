@@ -62,7 +62,7 @@ tests:
       module: test_cephadm.py
       name: Deploy RHCS cluster using cephadm
   - test:
-      name: Versioning Tests
+      name: enable bucket versioning
       desc: Basic versioning test, also called as test to enable bucket versioning
       polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
       module: sanity_rgw.py
@@ -71,7 +71,7 @@ tests:
         config-file-name: test_versioning_objects_enable.yaml
         timeout: 300
   - test:
-      name: Versioning Tests
+      name: overwrite objects after suspending versioning
       desc: test to overwrite objects after suspending versioning
       polarion-id: CEPH-9199 # also applies to CEPH-9223
       module: sanity_rgw.py
@@ -80,7 +80,7 @@ tests:
         config-file-name: test_versioning_objects_suspend_re-upload.yaml
         timeout: 300
   - test:
-      name: Bucket Lifecycle Object_expiration_tests
+      name: Bucket Lifecycle Object_expiration_tests for Prefix and tag based filter and for more than one days
       desc: Test object expiration for Prefix and tag based filter and for more than one days
       polarion-id: CEPH-11179 # also applies to CEPH-11180
       module: sanity_rgw.py
@@ -89,7 +89,7 @@ tests:
         config-file-name: test_lc_rule_prefix_and_tag.yaml
         timeout: 300
   - test:
-      name: Bucket Lifecycle Object_expiration_tests
+      name: Bucket Lifecycle Object_expiration_tests for non current version expiration
       desc: Test object expiration for non current version expiration
       polarion-id: CEPH-11190
       module: sanity_rgw.py

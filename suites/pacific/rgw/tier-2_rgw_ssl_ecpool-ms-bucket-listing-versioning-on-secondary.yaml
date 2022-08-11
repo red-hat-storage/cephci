@@ -223,7 +223,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on primary
       polarion-id: CEPH-83575227
   - test:
       abort-on-fail: true
@@ -238,7 +238,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on secondary
       polarion-id: CEPH-83575227
 
   # Test work flow
@@ -254,11 +254,11 @@ tests:
             timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
-      name: create user
+      name: create non-tenanted user
       polarion-id: CEPH-83575199
 
   - test:
-      name: Bucket listing test
+      name: listing flat ordered versioned buckets on secondary
       polarion-id: CEPH-83573545
       desc: test_bucket_listing_flat_ordered_versionsing on secondary
       module: sanity_rgw_multisite.py
@@ -270,7 +270,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Bucket listing test
+      name: listing flat ordered buckets on secondary
       polarion-id: CEPH-83573545
       desc: test_bucket_listing_flat_ordered on secondary
       module: sanity_rgw_multisite.py
@@ -282,7 +282,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Bucket listing test
+      name: listing flat unordered buckets on secondary
       polarion-id: CEPH-83573545
       desc: test_bucket_listing_flat_unordered.yaml on secondary
       module: sanity_rgw_multisite.py
@@ -294,7 +294,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Bucket listing test
+      name: listing pseudo ordered dir only buckets on secondary
       polarion-id: CEPH-83573651
       desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
       module: sanity_rgw_multisite.py
@@ -306,19 +306,17 @@ tests:
             timeout: 300
 
   - test:
-      name: Bucket listing test
+      name: ordered listing of bucket with pseudo directories and objects
+      desc: measure execution time for ordered listing of bucket with pseudo directories and objects
       polarion-id: CEPH-83573545
-      desc: test_bucket_listing_flat_ordered_versionsing on secondary
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-            timeout: 300
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_pseudo_ordered.yaml
+        timeout: 300
 
   - test:
-      name: Buckets Versioning test
+      name: Test Copy of objects with Versioned and non-versionsed buckets on secondary
       polarion-id: CEPH-9221
       desc: test_versioning_copy_objects on secondary
       module: sanity_rgw_multisite.py
@@ -330,7 +328,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Buckets Versioning test
+      name: enable bucket versioning on secondary
       polarion-id: CEPH-9178
       desc: test_versioning_enable on secondary
       module: sanity_rgw_multisite.py
@@ -343,7 +341,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Buckets Versioning test
+      name: setting acls to versioned objects on secondary
       polarion-id: CEPH-9190
       desc: test_versioning_objects_acls on secondary
       module: sanity_rgw_multisite.py
@@ -356,7 +354,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Buckets Versioning test
+      name: reverting object to one of the versions on secondary
       polarion-id: CEPH-14264 # also applies to CEPH-10646
       desc: test_versioning_objects_copy on secondary
       module: sanity_rgw_multisite.py
@@ -368,7 +366,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Buckets Versioning test
+      name: delete versioned objects on secondary
       polarion-id: CEPH-14262
       desc: test_versioning_objects_delete on secondary
       module: sanity_rgw_multisite.py
@@ -380,7 +378,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Buckets Versioning test
+      name: enabling bucket versioning and uploading objects on secondary
       polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
       desc: test_versioning_objects_enable on secondary
       module: sanity_rgw_multisite.py
@@ -393,7 +391,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Buckets Versioning test
+      name: suspend bucket versioning on secondary
       polarion-id: CEPH-14263
       desc: test_versioning_objects_suspend on secondary
       module: sanity_rgw_multisite.py

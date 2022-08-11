@@ -76,7 +76,7 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
-      name: Object Expiration
+      name: RGW multipart object expiration through lc
       desc: RGW multipart object expiration through lc
       polarion-id: CEPH-83574797
       module: sanity_rgw.py
@@ -86,7 +86,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Lifecycle Configuration Tests
+      name: lifecycle with version enabled bucket containing only one object version
       desc: Test lifecycle with version enabled bucket containing only one object version
       polarion-id: CEPH-11187
       module: sanity_rgw.py

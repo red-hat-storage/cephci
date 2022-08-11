@@ -182,7 +182,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on primary
   - test:
       abort-on-fail: true
       clusters:
@@ -197,7 +197,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on secondary
   # Test work flow
 
   - test:

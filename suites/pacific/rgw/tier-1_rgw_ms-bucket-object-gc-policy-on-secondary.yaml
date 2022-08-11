@@ -184,7 +184,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on primary
       polarion-id: CEPH-83575227
   - test:
       abort-on-fail: true
@@ -200,7 +200,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on secondary
       polarion-id: CEPH-83575227
 
   - test:
@@ -234,7 +234,7 @@ tests:
             timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
-      name: create user
+      name: create non-tenanted user
       polarion-id: CEPH-83575199
 
   - test:
@@ -250,7 +250,7 @@ tests:
       module: sanity_rgw_multisite.py
       name: m buckets with n objects
   - test:
-      name: Buckets and Objects test
+      name: enable compression on secondary
       desc: test_Mbuckets_with_Nobjects_compression on secondary
       polarion-id: CEPH-11350
       module: sanity_rgw_multisite.py
@@ -262,7 +262,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
             timeout: 300
   - test:
-      name: Buckets and Objects test
+      name: test aws4 signature version on secondary
       desc: test_Mbuckets_with_Nobjects_aws4 on secondary
       polarion-id: CEPH-9637
       module: sanity_rgw_multisite.py
@@ -273,7 +273,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
             timeout: 300
   - test:
-      name: Buckets and Objects test
+      name: delete buckets and objects on secondary
       desc: test_Mbuckets_with_Nobjects_delete on secondary
       polarion-id: CEPH-14237
       module: sanity_rgw_multisite.py
@@ -284,7 +284,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
             timeout: 300
   - test:
-      name: Buckets and Objects test
+      name: download objects on secondary
       desc: test_Mbuckets_with_Nobjects_download on secondary
       polarion-id: CEPH-14237
       module: sanity_rgw_multisite.py
@@ -296,7 +296,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
             timeout: 300
   - test:
-      name: Buckets and Objects test
+      name: test encryption on secondary
       desc: test_Mbuckets_with_Nobjects_enc on secondary
       polarion-id: CEPH-11361 # also applies to CEPH-11358
       module: sanity_rgw_multisite.py
@@ -308,7 +308,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
             timeout: 300
   - test:
-      name: Buckets and Objects test
+      name: multipart upload on secondary
       desc: test_Mbuckets_with_Nobjects_multipart on secondary
       polarion-id: CEPH-9801
       module: sanity_rgw_multisite.py
@@ -320,7 +320,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             timeout: 300
   - test:
-      name: Buckets and Objects test
+      name: test sharding on secondary
       desc: test_Mbuckets_with_Nobjects_sharding on secondary
       polarion-id: CEPH-9245
       module: sanity_rgw_multisite.py
@@ -331,7 +331,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
             timeout: 300
   - test:
-      name: Buckets and Objects test
+      name: test Mbuckets on secondary
       desc: test_Mbuckets on secondary
       polarion-id: CEPH-9789
       module: sanity_rgw_multisite.py
@@ -355,7 +355,7 @@ tests:
             timeout: 300
 
   - test:
-      name: create user
+      name: create tenanted user
       desc: create tenanted user
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
@@ -369,7 +369,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Bucket policy tests
+      name: modify bucket policy on secondary
       desc: test_bucket_policy_modify.yaml on secondary
       polarion-id: CEPH-11214
       module: sanity_rgw_multisite.py
@@ -381,7 +381,7 @@ tests:
             verify-io-on-site: ["ceph-pri"]
             timeout: 300
   - test:
-      name: Bucket policy tests
+      name: delete bucket policy on secondary
       desc: test_bucket_policy_delete.yaml on secondary
       polarion-id: CEPH-11213
       module: sanity_rgw_multisite.py
@@ -394,7 +394,7 @@ tests:
             timeout: 300
 
   - test:
-      name: Bucket policy tests
+      name: replace bucket policy on secondary
       desc: test_bucket_policy_replace on secondary
       polarion-id: CEPH-11215
       module: sanity_rgw_multisite.py

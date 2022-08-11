@@ -99,7 +99,7 @@ tests:
 
 #   S3CMD tests
   - test:
-      name: S3CMD tests
+      name: S3CMD basic  operations
       desc: S3CMD basic  operations
       polarion-id: CEPH-83573244
       module: sanity_rgw.py
@@ -109,7 +109,7 @@ tests:
         timeout: 300
 
   - test:
-      name: S3CMD tests
+      name: S3CMD large object download with GC
       desc: S3CMD large object download with GC
       polarion-id: CEPH-83574416
       module: sanity_rgw.py
@@ -119,7 +119,7 @@ tests:
         timeout: 300
 
   - test:
-      name: S3CMD tests
+      name: S3CMD bucket stats consistency
       desc: S3CMD bucket stats consistency
       polarion-id: CEPH-83574668
       module: sanity_rgw.py
@@ -129,7 +129,7 @@ tests:
         timeout: 300
 
   - test:
-      name: S3CMD tests
+      name: S3CMD object header size check
       desc: S3CMD object header size check
       polarion-id: CEPH-83574691
       module: sanity_rgw.py
