@@ -589,3 +589,147 @@
     - ibmc
     - rgw
     - stage-1
+
+- name: "test-rgw-ms-lc-from-secondary"
+  suite: "suites/nautilus/rgw/tier-2_rgw_multisite_test-bucket-lifecycle-secondary-to-primary.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-ms-lc-from-primary"
+  suite: "suites/nautilus/rgw/tier-2_rgw_multisite_test-bucket-lifecycle-primary-to-secondary.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-2
+
+- name: "test-rgw-ms-metadata-sync"
+  suite: "suites/nautilus/rgw/tier-2_rgw_test-multisite-metadata-sync.yaml"
+  global-conf: "conf/nautilus/rgw/tier-1_rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
+
+- name: "test-rgw-image-bucket-lifecycle-and-listing"
+  suite: "suites/nautilus/rgw/tier-2_rgw_image_test-bucket-lifecycle-and-listing.yaml"
+  global-conf: "conf/nautilus/rgw/5-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-4
+
+- name: "test-rgw-bucket-object-stats"
+  suite: "suites/nautilus/rgw/tier-2_rgw_s3cmd_test-bucket-object-stats.yaml"
+  global-conf: "conf/nautilus/rgw/5-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-4
+
+- name: "test-rgw-s3tests"
+  suite: "suites/nautilus/rgw/tier-2_rgw_s3tests.yaml"
+  global-conf: "conf/nautilus/rgw/ec-profile-4+2-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-4
+
+- name: "test-rgw-bucket-acls-and-links"
+  suite: "suites/nautilus/rgw/tier-2_rgw_test-bucket-acls-and-links.yaml"
+  global-conf: "conf/nautilus/rgw/5-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-4
+
+- name: "test-rgw-bucket-notifications"
+  suite: "suites/nautilus/rgw/tier-2_rgw_test-bucket-notifications.yaml"
+  global-conf: "conf/nautilus/rgw/5-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-4
+
+- name: "test-rgw-bucket-bucket-ops-and-versioning"
+  suite: "suites/nautilus/rgw/tier-2_rgw_test-bucket-ops-and-versioning.yaml"
+  global-conf: "conf/nautilus/rgw/5-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "4.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-5
