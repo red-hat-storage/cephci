@@ -596,8 +596,8 @@
     - dmfg
     - stage-2
 - name: "test-multipath-upgrade-to-5-latest"
-  suite: "suites/pacific/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-5-latest.yaml"
-  global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+  suite: "suites/pacific/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-5.1-latest.yaml"
+  global-conf: "conf/pacific/upgrades/5-0_upgrades.yaml"
   platform: "rhel-8"
   rhbuild: "5.1"
   inventory:

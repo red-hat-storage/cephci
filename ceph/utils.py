@@ -3,6 +3,7 @@ import os
 import re
 import time
 import traceback
+from json import loads
 from time import mktime
 
 import requests
@@ -1159,3 +1160,24 @@ def set_container_info(ceph_cluster, config, use_cdn, containerized):
             ansi_config["ceph_docker_image"] = config.get("ceph_docker_image")
             ansi_config["ceph_docker_image_tag"] = config.get("ceph_docker_image_tag")
     return ansi_config
+
+
+def is_legacy_container_present(ceph_cluster):
+    """
+    Verifies if any legacy containers are present in any of the nodes in the cluster
+    Args:
+        ceph_cluster: The ceph_cluster object
+
+    Returns:
+        True if legacy containers are present in any of the nodes, else False
+    """
+    for node in ceph_cluster.get_nodes(ignore="client"):
+        out, err = node.exec_command(cmd="cephadm ls", sudo=True)
+        legacy_services = [x for x in loads(out) if x["style"] == "legacy"]
+        if legacy_services:
+            log.info(
+                f"Legacy services present in cephadm node {node.hostname} after adopting the cluster"
+            )
+            return True
+
+    return False
