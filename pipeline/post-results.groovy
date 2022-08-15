@@ -1,6 +1,4 @@
-/*
-    Pipeline script for uploading IBM test run results to report portal.
-*/
+// Pipeline script for uploading IBM test run results to report portal.
 def credsRpProc = [:]
 def sharedLib
 def rpPreprocDir
@@ -82,7 +80,7 @@ node("rhel-8-medium || ceph-qe-ci") {
 
             def testStatus = "ABORTED"
             /* Publish results through E-mail and Google Chat */
-            if(msgMap["pipeline"].containsKey("tags")){
+            if ( msgMap["pipeline"].containsKey("tags") ) {
                 def tag = msgMap["pipeline"]["tags"]
                 def tags_list = tag.split(',') as List
                 def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
@@ -94,21 +92,23 @@ node("rhel-8-medium || ceph-qe-ci") {
             }
 
             if (metaData["results"]) {
-                if(!msgMap["pipeline"].containsKey("tags")){
-                    sharedLib.sendEmail(metaData["results"], metaData, metaData["stage"])
+                if ( ! msgMap["pipeline"].containsKey("tags") ) {
+                    sharedLib.sendEmail(
+                        metaData["results"], metaData, metaData["stage"]
+                    )
                 }
                 sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
 
             }
             testStatus = msgMap["test"]["result"]
 
-//             Remove the sync results folder
+            // Remove the sync results folder
             sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
 
-//             Update RH recipe file
-            if ( composeInfo != null){
-                if( run_type == "Sanity Run"){
-                    if ( tierLevel == null ){
+            // Update RH recipe file
+            if ( composeInfo != null ) {
+                if ( run_type == "Sanity Run") {
+                    if ( tierLevel == null ) {
                         tierLevel = msgMap["pipeline"]["name"]
                     }
                     def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
@@ -117,8 +117,8 @@ node("rhel-8-medium || ceph-qe-ci") {
                     minorVersion = "${minorVersion}"
 
                     def latestContent = sharedLib.readFromReleaseFile(
-                            majorVersion, minorVersion
-                        )
+                        majorVersion, minorVersion
+                    )
                     println("latestContentBefore: ${latestContent}")
 
                     if ( latestContent.containsKey(tierLevel) ) {
@@ -129,19 +129,48 @@ node("rhel-8-medium || ceph-qe-ci") {
                         latestContent += updateContent
                     }
                     println("latestContent: ${latestContent}")
-                    sharedLib.writeToReleaseFile(majorVersion, minorVersion, latestContent)
+                    sharedLib.writeToReleaseFile(
+                        majorVersion, minorVersion, latestContent
+                    )
                 }
-                sharedLib.writeToResultsFile(msgMap["artifact"]["version"], tierLevel, stageLevel, testStatus, run_type, build_url)
+                sharedLib.writeToResultsFile(
+                    msgMap["artifact"]["version"],
+                    tierLevel,
+                    stageLevel,
+                    testStatus,
+                    run_type,
+                    build_url
+                )
             }
-            if(msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2"){
+            if (msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2") {
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                 majorVersion = rhcsVersion["major_version"]
                 minorVersion = rhcsVersion["minor_version"]
                 minorVersion = "${minorVersion}"
-                def testResults = sharedLib.readFromResultsFile(msgMap["artifact"]["version"])
-                sharedLib.updateConfluencePage(majorVersion, minorVersion, msgMap["artifact"]["version"], run_type, testResults)
-                sharedLib.sendConsolidatedEmail(run_type, testResults, metaData, majorVersion, minorVersion, msgMap["artifact"]["version"])
-                sharedLib.sendGChatNotification(run_type, metaData["results"], tierLevel, stageLevel, build_url)
+
+                def testResults = sharedLib.readFromResultsFile(
+                    msgMap["artifact"]["version"]
+                )
+                sharedLib.updateConfluencePage(
+                    majorVersion,
+                    minorVersion,
+                    msgMap["artifact"]["version"],
+                    run_type,
+                    testResults
+                )
+                sharedLib.sendConsolidatedEmail(
+                    run_type,
+                    testResults,
+                    metaData,
+                    majorVersion,
+                    minorVersion,
+                    msgMap["artifact"]["version"]
+                )
+                sharedLib.sendGChatNotification(
+                    run_type, metaData["results"], tierLevel, stageLevel, build_url
+                )
+
+                // Remove the release file as it wouldn't be required
             }
             println("Execution complete")
         }
