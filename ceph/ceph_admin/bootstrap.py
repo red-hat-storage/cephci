@@ -9,7 +9,7 @@ from utility.log import Log
 from utility.utils import get_cephci_config
 
 from .common import config_dict_to_string
-from .helper import GenerateServiceSpec, create_ceph_config_file
+from .helper import GenerateServiceSpec, create_ceph_config_file, validate_spec_services
 from .typing_ import CephAdmProtocol
 
 logger = Log(__name__)
@@ -332,5 +332,9 @@ class BootstrapMixin:
             self.shell(
                 args=["ceph", "config", "set", "global cluster_network", cluster_nws]
             )
+
+        # validate spec file
+        if specs:
+            validate_spec_services(self.installer, specs=specs)
 
         return out, err
