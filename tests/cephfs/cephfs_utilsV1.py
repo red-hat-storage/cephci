@@ -675,6 +675,89 @@ class FsUtils(object):
                 raise CommandFailed(f"Creation of subvolume : {snap_name} failed")
         return cmd_out, cmd_rc
 
+    def set_snapshot_metadata(
+        self, client, vol_name, subvol_name, snap_name, metadata_dict, **kwargs
+    ):
+        """
+        Create snapshot metadata with vol_name, subvol_name, snap_name
+        It supports below optional arguments also
+        Args:
+            client:
+            vol_name:
+            subvol_name:
+            snap_name:
+            metadata_dict:
+            validate:
+            **kwargs:
+                group_name : str
+                check_ec = True
+        Returns:
+            Returns the cmd_out and cmd_rc for Create cmd
+        """
+        snapshot_cmd = f"ceph fs subvolume snapshot metadata set {vol_name} {subvol_name} {snap_name} "
+        for k, v in metadata_dict.items():
+            snapshot_cmd += f"{k} {v} "
+        if kwargs.get("group_name"):
+            snapshot_cmd += f"--group_name {kwargs.get('group_name')}"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=snapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+        return cmd_out, cmd_rc
+
+    def remove_snapshot_metadata(
+        self, client, vol_name, subvol_name, snap_name, metadata_list, **kwargs
+    ):
+        """
+        Remove snapshot's metadata with vol_name, subvol_name, snap_name
+        It supports below arguments
+        Args:
+            client:
+            vol_name:
+            subvol_name:
+            snap_name:
+            metadata_list:
+            validate:
+            **kwargs:
+                group_name : str
+                check_ec = True
+        Returns:
+            Returns the cmd_out and cmd_rc for Create cmd
+        """
+        snapshot_cmd = f"ceph fs subvolume snapshot metadata rm {vol_name} {subvol_name} {snap_name} "
+        for i in metadata_list:
+            snapshot_cmd += f"{i} "
+        if kwargs.get("group_name"):
+            snapshot_cmd += f"--group_name {kwargs.get('group_name')}"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=snapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+        return cmd_out, cmd_rc
+
+    def list_snapshot_metadata(
+        self, client, vol_name, subvol_name, snap_name, **kwargs
+    ):
+        """
+        List metadata of the snapshot with vol_name, subvol_name, snap_name
+        It supports below arguments
+        Args:
+            client:
+            vol_name:
+            subvol_name:
+            snap_name:
+            **kwargs:
+                group_name : str
+                check_ec = True
+        Returns:
+            Returns the cmd_out and cmd_rc for Create cmd
+        """
+        snapshot_cmd = f"ceph fs subvolume snapshot metadata ls {vol_name} {subvol_name} {snap_name} "
+        if kwargs.get("group_name"):
+            snapshot_cmd += f"--group_name {kwargs.get('group_name')}"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=snapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+        return cmd_out, cmd_rc
+
     def create_clone(
         self,
         client,
