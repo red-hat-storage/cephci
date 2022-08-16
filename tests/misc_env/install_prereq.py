@@ -171,12 +171,16 @@ def install_prereq(
         if skip_enabling_rhel_rpms and skip_subscription:
             # Ansible is required for RHCS 4.x
             if distro_ver.startswith("8"):
+                # TODO(vamahaja): Temporary changes. Revert ansible package with latest epel repo.
+                ansible_pkg = (
+                    "http://download-node-02.eng.bos.redhat.com/nightly/rhel-8/ANSIBLE/latest-ANSIBLE-2-RHEL-8/"
+                    "compose/Base/x86_64/os/Packages/ansible-2.9.27-1.el8ae.noarch.rpm"
+                )
                 ceph.exec_command(
                     sudo=True,
-                    cmd="yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+                    cmd=f"yum install -y {ansible_pkg}",
                     check_ec=False,
                 )
-                ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el8")
 
             if distro_ver.startswith("7"):
                 ceph.exec_command(
