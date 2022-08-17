@@ -65,7 +65,7 @@ tests:
 # Basic Bucket Operation Tests
 
 - test:
-    name: Mbuckets
+    name: Mbuckets pre upgrade
     desc: test to create "M" no of buckets
     polarion-id: CEPH-9789
     module: sanity_rgw.py
@@ -74,7 +74,7 @@ tests:
       config-file-name: test_Mbuckets.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects
+    name: Mbuckets_with_Nobjects pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects
     polarion-id: CEPH-9789
     module: sanity_rgw.py
@@ -83,7 +83,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects
+    name: encryption tests pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects with encryption
     polarion-id: CEPH-11350
     module: sanity_rgw.py
@@ -92,7 +92,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects_delete
+    name: delete buckets and objects pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects with delete
     module: sanity_rgw.py
     polarion-id: CEPH-14237
@@ -101,7 +101,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects_download
+    name: download objects pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects with download
     module: sanity_rgw.py
     polarion-id: CEPH-14237
@@ -110,7 +110,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects_download.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects with sharing enabled
+    name: test sharding enabled pre upgrade
     desc: test to perform bucket ops with sharding operations
     module: sanity_rgw.py
     polarion-id: CEPH-9245
@@ -120,7 +120,7 @@ tests:
       timeout: 300
 
 - test:
-      name: Mbuckets_with_Nobjects with etag verification
+      name: test etag verification pre upgrade
       desc: test etag verification
       module: sanity_rgw.py
       polarion-id: CEPH-83574871
@@ -131,7 +131,7 @@ tests:
 
 # Bucket Listing Tests
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of bucket with top level objects pre upgrade
     desc: measure execution time for ordered listing of bucket with top level objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -140,7 +140,7 @@ tests:
       config-file-name: test_bucket_listing_flat_ordered.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of versionsed bucket with top level objects pre upgrade
     desc: measure execution time for ordered listing of versionsed bucket with top level objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -149,7 +149,7 @@ tests:
       config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: unordered listing of bucket with top level objects pre upgrade
     desc: measure execution time for unordered listing of bucket with top level objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -158,7 +158,7 @@ tests:
       config-file-name: test_bucket_listing_flat_unordered.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of bucket with pseudo directories and objects pre upgrade
     desc: measure execution time for ordered listing of bucket with pseudo directories and objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -167,7 +167,7 @@ tests:
       config-file-name: test_bucket_listing_pseudo_ordered.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of bucket with pseudo directories only pre upgrade
     desc: measure execution time for ordered listing of bucket with pseudo directories only
     polarion-id: CEPH-83573651
     module: sanity_rgw.py
@@ -179,7 +179,7 @@ tests:
 # Swift basic operation
 
 - test:
-    name: Swift based tests
+    name: RGW lifecycle operations using swift pre upgrade
     desc: RGW lifecycle operations using swift
     polarion-id: CEPH-11019
     module: sanity_rgw.py
@@ -189,7 +189,7 @@ tests:
       timeout: 300
 
 - test:
-    name: swift versioning copy tests
+    name: swift versioning copy tests pre upgrade
     desc: restore versioned object in swift
     polarion-id: CEPH-10646
     module: sanity_rgw.py
@@ -199,7 +199,7 @@ tests:
       timeout: 500
 
 - test:
-    name: Swift based tests
+    name: Swift bulk delete operation pre upgrade
     desc: Swift bulk delete operation
     polarion-id: CEPH-9753
     module: sanity_rgw.py
@@ -210,7 +210,7 @@ tests:
 
 # resharding tests
 - test:
-    name: Resharding tests
+    name: manual resharding tests pre upgrade
     desc: Resharding test - manual
     polarion-id: CEPH-83571740
     module: sanity_rgw.py
@@ -219,7 +219,7 @@ tests:
       config-file-name: test_manual_resharding.yaml
       timeout: 500
 - test:
-    name: Resharding tests
+    name: dynamic resharding tests pre upgrade
     desc: Resharding test - dynamic
     polarion-id: CEPH-83571740
     module: sanity_rgw.py
@@ -229,7 +229,7 @@ tests:
       timeout: 500
 
 - test:
-    name: DBR tests with custom objs_per_shard and max_dynamic_shard
+    name: DBR tests with custom objs_per_shard and max_dynamic_shard pre upgrade
     desc: Resharding test - dynamic
     polarion-id: CEPH-83575266
     module: sanity_rgw.py
@@ -239,7 +239,7 @@ tests:
       timeout: 500
 
 - test:
-    name: DBR tests with custom objs_per_shard max_dynamic_shard and reshard_thread_interval
+    name: DBR tests with custom objs_per_shard max_dynamic_shard and reshard_thread_interval pre upgrade
     desc: Resharding test - dynamic
     polarion-id: CEPH-83575267
     module: sanity_rgw.py
@@ -285,7 +285,7 @@ tests:
 # Basic Bucket Operation Tests
 
 - test:
-    name: Mbuckets
+    name: Mbuckets post upgrade
     desc: test to create "M" no of buckets
     polarion-id: CEPH-9789
     module: sanity_rgw.py
@@ -294,7 +294,7 @@ tests:
       config-file-name: test_Mbuckets.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects
+    name: Mbuckets_with_Nobjects post upgrade
     desc: test to create "M" no of buckets and "N" no of objects
     polarion-id: CEPH-9789
     module: sanity_rgw.py
@@ -303,7 +303,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects
+    name: test encryption post upgrade
     desc: test to create "M" no of buckets and "N" no of objects with encryption
     polarion-id: CEPH-11350
     module: sanity_rgw.py
@@ -312,7 +312,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects_delete
+    name: delete buckets and objects post upgrade
     desc: test to create "M" no of buckets and "N" no of objects with delete
     module: sanity_rgw.py
     polarion-id: CEPH-14237
@@ -321,7 +321,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects_download
+    name: download objects post upgrade
     desc: test to create "M" no of buckets and "N" no of objects with download
     module: sanity_rgw.py
     polarion-id: CEPH-14237
@@ -330,7 +330,7 @@ tests:
       config-file-name: test_Mbuckets_with_Nobjects_download.yaml
       timeout: 300
 - test:
-    name: Mbuckets_with_Nobjects with sharing enabled
+    name: test sharding enabled post upgrade
     desc: test to perform bucket ops with sharding operations
     module: sanity_rgw.py
     polarion-id: CEPH-9245
@@ -340,7 +340,7 @@ tests:
       timeout: 300
 
 - test:
-      name: Mbuckets_with_Nobjects with etag verification
+      name: test etag verification post upgrade
       desc: test etag verification
       module: sanity_rgw.py
       polarion-id: CEPH-83574871
@@ -352,7 +352,7 @@ tests:
 # Bucket Listing Tests
 
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of bucket with top level objects post upgrade
     desc: measure execution time for ordered listing of bucket with top level objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -361,7 +361,7 @@ tests:
       config-file-name: test_bucket_listing_flat_ordered.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of versionsed bucket with top level objects post upgrade
     desc: measure execution time for ordered listing of versionsed bucket with top level objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -370,7 +370,7 @@ tests:
       config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: unordered listing of bucket with top level objects post upgrade
     desc: measure execution time for unordered listing of bucket with top level objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -379,7 +379,7 @@ tests:
       config-file-name: test_bucket_listing_flat_unordered.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of bucket with pseudo directories and objects post upgrade
     desc: measure execution time for ordered listing of bucket with pseudo directories and objects
     polarion-id: CEPH-83573545
     module: sanity_rgw.py
@@ -388,7 +388,7 @@ tests:
       config-file-name: test_bucket_listing_pseudo_ordered.yaml
       timeout: 300
 - test:
-    name: Bucket Listing tests
+    name: ordered listing of bucket with pseudo directories only post upgrade
     desc: measure execution time for ordered listing of bucket with pseudo directories only
     polarion-id: CEPH-83573651
     module: sanity_rgw.py
@@ -400,7 +400,7 @@ tests:
 # Swift basic operation
 
 - test:
-    name: Swift based tests
+    name: RGW lifecycle operations using swift post upgrade
     desc: RGW lifecycle operations using swift
     polarion-id: CEPH-11019
     module: sanity_rgw.py
@@ -410,7 +410,7 @@ tests:
       timeout: 300
 
 - test:
-    name: swift versioning copy tests
+    name: swift versioning copy tests post upgrade
     desc: restore versioned object in swift
     polarion-id: CEPH-10646
     module: sanity_rgw.py
@@ -420,7 +420,7 @@ tests:
       timeout: 500
 
 - test:
-    name: Swift based tests
+    name: Swift bulk delete operation post upgrade
     desc: Swift bulk delete operation
     polarion-id: CEPH-9753
     module: sanity_rgw.py
@@ -431,7 +431,7 @@ tests:
 
 # resharding tests
 - test:
-    name: Resharding tests
+    name: manual resharding tests post upgrade
     desc: Resharding test - manual
     polarion-id: CEPH-83571740
     module: sanity_rgw.py
@@ -440,7 +440,7 @@ tests:
       config-file-name: test_manual_resharding.yaml
       timeout: 500
 - test:
-    name: Resharding tests
+    name: dynamic resharding tests post upgrade
     desc: Resharding test - dynamic
     polarion-id: CEPH-83571740
     module: sanity_rgw.py
@@ -450,7 +450,7 @@ tests:
       timeout: 500
 
 - test:
-    name: DBR tests with custom objs_per_shard and max_dynamic_shard
+    name: DBR tests with custom objs_per_shard and max_dynamic_shard post upgrade
     desc: Resharding test - dynamic
     polarion-id: CEPH-83575266
     module: sanity_rgw.py
@@ -460,7 +460,7 @@ tests:
       timeout: 500
 
 - test:
-    name: DBR tests with custom objs_per_shard max_dynamic_shard and reshard_thread_interval
+    name: DBR tests with custom objs_per_shard max_dynamic_shard and reshard_thread_interval post upgrade
     desc: Resharding test - dynamic
     polarion-id: CEPH-83575267
     module: sanity_rgw.py

@@ -62,7 +62,7 @@ tests:
 
   # kafka broker type broker with persistent flag enabled
   - test:
-      name: test bucket notifcation with kafka endpoint
+      name: notify put,delete events with kafka_broker_persistent
       desc: notify put,delete events with kafka_broker_persistent
       module: sanity_rgw.py
       polarion-id: CEPH-83574066
@@ -75,7 +75,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify copy events with kafka_broker_persistent
       desc: notify copy events with kafka_broker_persistent
       polarion-id: CEPH-83574066
       module: sanity_rgw.py
@@ -85,7 +85,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify on multipart upload events with kafka_broker_persistent
       desc: notify on multipart upload events with kafka_broker_persistent
       polarion-id: CEPH-83574066
       module: sanity_rgw.py
@@ -97,7 +97,7 @@ tests:
   # kafka broker type none with persistent flag enabled
 
   - test:
-      name: test bucket notifcation with kafka endpoint
+      name: notify put,delete events with kafka_none_persistent
       desc: notify put,delete events with kafka_none_persistent
       module: sanity_rgw.py
       polarion-id: CEPH-83574070
@@ -107,7 +107,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify copy events with kafka_none_persistent
       desc: notify copy events with kafka_none_persistent
       polarion-id: CEPH-83574070
       module: sanity_rgw.py
@@ -117,7 +117,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify on multipart upload events with kafka_none_persistent
       desc: notify on multipart upload events with kafka_none_persistent
       polarion-id: CEPH-83574070
       module: sanity_rgw.py
@@ -129,7 +129,7 @@ tests:
   # kafka broker type none
 
   - test:
-      name: test bucket notifcation with kafka endpoint
+      name: notify put,delete events with kafka_none
       desc: notify put,delete events with kafka_none
       module: sanity_rgw.py
       polarion-id: CEPH-83574064
@@ -139,7 +139,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify copy events with kafka_none
       desc: notify copy events with kafka_none
       polarion-id: CEPH-83574064
       module: sanity_rgw.py
@@ -149,7 +149,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify on multipart upload events with kafka_none
       desc: notify on multipart upload events with kafka_none
       polarion-id: CEPH-83574064
       module: sanity_rgw.py
@@ -161,7 +161,7 @@ tests:
   # kafka broker type broker
 
   - test:
-      name: test bucket notifcation with kafka endpoint
+      name: notify put,delete events with kafka_broker
       desc: notify put,delete events with kafka_broker
       module: sanity_rgw.py
       polarion-id: CEPH-83574069
@@ -171,7 +171,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify copy events with kafka_broker
       desc: notify copy events with kafka_broker
       polarion-id: CEPH-83574069
       module: sanity_rgw.py
@@ -181,7 +181,7 @@ tests:
         timeout: 300
 
   - test:
-      name: test bucket notification with kafka endpoint
+      name: notify on multipart upload events with kafka_broker
       desc: notify on multipart upload events with kafka_broker
       polarion-id: CEPH-83574069
       module: sanity_rgw.py

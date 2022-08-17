@@ -229,7 +229,7 @@ tests:
             timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
-      name: create user
+      name: create non-tenanted user
       polarion-id: CEPH-83575199
 
   # Baseline tests before upgrade
@@ -244,7 +244,7 @@ tests:
             timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects
       module: sanity_rgw_multisite.py
-      name: m buckets with n objects
+      name: m buckets with n objects pre upgrade
       polarion-id: CEPH-9789
 
   - test:
@@ -270,7 +270,7 @@ tests:
             timeout: 300
       desc: Test object operations with swift
       module: sanity_rgw_multisite.py
-      name: swift basic operations
+      name: swift basic operations pre upgrade
       polarion-id: CEPH-11019
 
   # Bucket Listing Tests
@@ -284,7 +284,7 @@ tests:
             timeout: 300
       desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw_multisite.py
-      name: ordered listing of buckets
+      name: ordered listing of buckets pre upgrade
       polarion-id: CEPH-83573545
 
   - test:
@@ -296,7 +296,7 @@ tests:
             timeout: 300
       desc: test duration for unordered listing of buckets with top level objects
       module: sanity_rgw_multisite.py
-      name: unordered listing of buckets
+      name: unordered listing of buckets pre upgrade
       polarion-id: CEPH-83573545
 
   # Performing cluster upgrade
@@ -347,7 +347,7 @@ tests:
             timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects with delete
       module: sanity_rgw_multisite.py
-      name: delete using M buckets with N objects
+      name: delete objects post upgrade
       polarion-id: CEPH-14237
 
   - test:
@@ -360,7 +360,7 @@ tests:
             timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw_multisite.py
-      name: download with M buckets with N objects
+      name: download objects post upgrade
       polarion-id: CEPH-14237
 
   # Basic swift based tests
@@ -375,7 +375,7 @@ tests:
             timeout: 500
       desc: test restoring of versioned objects in swift
       module: sanity_rgw_multisite.py
-      name: swift versioning copy
+      name: swift versioning copy post upgrade
       polarion-id: CEPH-10646
 
   - test:
@@ -388,7 +388,7 @@ tests:
             timeout: 500
       desc: test object expiration with swift
       module: sanity_rgw_multisite.py
-      name: swift object expiration
+      name: swift object expiration post upgrade
       polarion-id: CEPH-9718
 
   # Listing
@@ -402,7 +402,7 @@ tests:
             timeout: 300
       desc: test the duration for ordered listing of versioned buckets
       module: sanity_rgw_multisite.py
-      name: bucket Listing tests
+      name: ordered listing of versioned buckets post upgrade
       polarion-id: CEPH-83573545
 
   - test:

@@ -187,7 +187,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on primary
       polarion-id: CEPH-83575227
   - test:
       abort-on-fail: true
@@ -203,7 +203,7 @@ tests:
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
       module: exec.py
-      name: get shared realm info
+      name: get shared realm info on secondary
       polarion-id: CEPH-83575227
   # Test work flow
 
@@ -218,7 +218,7 @@ tests:
             timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
-      name: create user
+      name: create non-tenanted user
       polarion-id: CEPH-83575199
   # add datalog omap tests
   - test:
@@ -231,7 +231,7 @@ tests:
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload on primary cluster
       module: sanity_rgw_multisite.py
-      name: datalog omap offload
+      name: datalog omap offload on primary
       polarion-id: CEPH-83573691
 
   - test:
@@ -244,7 +244,7 @@ tests:
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload with multipart objects on primary
       module: sanity_rgw_multisite.py
-      name: datalog omap offload
+      name: datalog omap offload with multipart objects on primary
       polarion-id: CEPH-83573691
 
   - test:
@@ -257,11 +257,11 @@ tests:
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload on versioned bucket on primary
       module: sanity_rgw_multisite.py
-      name: datalog omap offload
+      name: datalog omap offload on versioned bucket on primary
       polarion-id: CEPH-83573691
 
   - test:
-      name: datalog trim command
+      name: datalog trim command with delete marker enabled on Primary
       desc: Execute datalog trim command with delete marker enabled on Primary
       polarion-id: CEPH-83574591
       module: sanity_rgw_multisite.py

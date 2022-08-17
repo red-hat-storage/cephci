@@ -164,7 +164,7 @@ tests:
   # Swift basic operation
 
   - test:
-       name: Swift based tests
+       name: Swift bulk delete operation
        desc: Swift bulk delete operation
        polarion-id: CEPH-9753
        module: sanity_rgw.py
@@ -206,7 +206,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Test versioning of objects
+      name: Test versioning of objects copy
       desc: test to enable versioning objects copy
       polarion-id: CEPH-14264  # also applies to [CEPH-10646]
       module: sanity_rgw.py
@@ -256,7 +256,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Versioning Tests
+      name: GET object/acl/info operations on different object versions
       desc: GET object/acl/info operations on different object versions
       polarion-id: CEPH-9190
       module: sanity_rgw.py
@@ -266,7 +266,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Versioning Tests
+      name: Deletes on an object in versioning enabled or suspended container by a new user
       desc: Deletes on an object in versioning enabled or suspended container by a new user
       polarion-id: CEPH-9226
       module: sanity_rgw.py
@@ -276,7 +276,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Versioning Tests
+      name: Versioning with copy objects
       desc: Versioning with copy objects
       polarion-id: CEPH-9221
       module: sanity_rgw.py
@@ -287,7 +287,7 @@ tests:
 
   # BucketPolicy Tests
   - test:
-      name: Bucket Policy Tests
+      name: Modify existing bucket policy to replace the existing policy
       desc: CEPH-11215 Modify existing bucket policy to replace the existing policy
       polarion-id: CEPH-11215
       module: sanity_rgw.py
@@ -297,7 +297,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Policy Tests
+      name: Delete bucket policy
       desc: Delete bucket policy
       polarion-id: CEPH-11213
       module: sanity_rgw.py
@@ -307,7 +307,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Policy Tests
+      name: Modify existing bucket policy to add a new policy in addition existing policy
       desc: Modify existing bucket policy to add a new policy in addition existing policy
       polarion-id: CEPH-11214
       module: sanity_rgw.py
@@ -319,7 +319,7 @@ tests:
   # Bucket Lifecycle Tests
 
   - test:
-      name: Bucket Lifecycle Object_expiration_tests
+      name: object expiration for versioned buckets with filter 'Prefix', test multiple rules.
       desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
       polarion-id: CEPH-11177 # also applies to CEPH-11182, CEPH-11188 and CEPH-11187
       module: sanity_rgw.py
@@ -329,7 +329,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Lifecycle Object_expiration_tests
+      name: object expiration with expiration set to Date
       desc: Test object expiration with expiration set to Date
       polarion-id: CEPH-11185
       module: sanity_rgw.py
@@ -339,7 +339,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Lifecycle Object_expiration_tests
+      name: object expiration for delete marker set
       desc: Test object expiration for delete marker set
       polarion-id: CEPH-11189
       module: sanity_rgw.py
@@ -349,7 +349,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Lifecycle Configuration Tests
+      name: Read lifecycle configuration on a given bucket
       desc: Read lifecycle configuration on a given bucket
       polarion-id: CEPH-11181
       module: sanity_rgw.py
@@ -359,7 +359,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Lifecycle Configuration Tests
+      name: lifecycle with version enabled bucket containing multiple object versions
       desc: Test lifecycle with version enabled bucket containing multiple object versions
       polarion-id: CEPH-11188
       module: sanity_rgw.py
@@ -369,7 +369,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Lifecycle Configuration Tests
+      name: Disable lifecycle configuration on a given bucket
       desc: Disable lifecycle configuration on a given bucket
       polarion-id: CEPH-11191
       module: sanity_rgw.py
@@ -379,7 +379,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Lifecycle Configuration Tests
+      name: Modify lifecycle configuration on a given bucket
       desc: Modify lifecycle configuration on a given bucket
       polarion-id: CEPH-11120
       module: sanity_rgw.py
@@ -391,7 +391,7 @@ tests:
   # Multi Tenant Tests
 
   - test:
-      name: Multi Tenancy Tests
+      name: User and container access in same and different tenants
       desc: User and container access in same and different tenants
       polarion-id: CEPH-9740 # also applies to CEPH-9741
       module: sanity_rgw.py
@@ -401,7 +401,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Multi Tenancy Tests
+      name: Generate secret for tenant user
       desc: Generate secret for tenant user
       polarion-id: CEPH-9739
       module: sanity_rgw.py
@@ -412,7 +412,7 @@ tests:
 
   # Bucket Listing Tests
   - test:
-      name: Bucket Listing tests
+      name: ordered listing of bucket with top level objects
       desc: measure execution time for ordered listing of bucket with top level objects
       polarion-id: CEPH-83573545
       module: sanity_rgw.py
@@ -422,7 +422,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Listing tests
+      name: ordered listing of versionsed bucket with top level objects
       desc: measure execution time for ordered listing of versionsed bucket with top level objects
       polarion-id: CEPH-83573545
       module: sanity_rgw.py
@@ -432,7 +432,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Listing tests
+      name: unordered listing of bucket with top level objects
       desc: measure execution time for unordered listing of bucket with top level objects
       polarion-id: CEPH-83573545
       module: sanity_rgw.py
@@ -442,7 +442,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Listing tests
+      name: ordered listing of bucket with pseudo directories and objects
       desc: measure execution time for ordered listing of bucket with pseudo directories and objects
       polarion-id: CEPH-83573545
       module: sanity_rgw.py
@@ -452,7 +452,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Listing tests
+      name: ordered listing of bucket with pseudo directories only
       desc: measure execution time for ordered listing of bucket with pseudo directories only
       polarion-id: CEPH-83573651
       module: sanity_rgw.py
@@ -474,7 +474,7 @@ tests:
   # Bucket Request Payer tests
 
   - test:
-      name: Bucket Request Payer Tests
+      name: bucket request payer
       desc: Basic test for bucket request payer
       polarion-id: CEPH-10344 # also applies to CEPH-10346 and CEPH-10351
       module: sanity_rgw.py
@@ -484,7 +484,7 @@ tests:
         timeout: 300
 
   - test:
-      name: Bucket Request Payer Tests
+      name: bucket request payer with object download
       desc: Basic test for bucket request payer with object download
       polarion-id: CEPH-10347
       module: sanity_rgw.py
@@ -495,7 +495,7 @@ tests:
 
   #resharding tests
   - test:
-      name: Resharding tests
+      name: Manual Resharding tests
       desc: Resharding test - manual
       polarion-id: CEPH-83571740
       module: sanity_rgw.py
@@ -519,7 +519,7 @@ tests:
   # ACLs tests
 
   - test:
-      name: ACLs Test
+      name: Basic ACLs Test
       desc: Test basic acls
       polarion-id: CEPH-14238 # also applies to CEPH-14239
       module: sanity_rgw.py
@@ -530,7 +530,7 @@ tests:
         timeout: 300
 
   - test:
-      name: ACLs Test
+      name: test acls on all users
       desc: Test acls on all users
       polarion-id: CEPH-14240 # also applies to CEPH-14241
       module: sanity_rgw.py
@@ -541,7 +541,7 @@ tests:
         timeout: 300
 
   - test:
-      name: ACLs Test
+      name: test acls with copy objects on different users
       desc: Test acls with copy objects on different users
       polarion-id: CEPH-14242
       module: sanity_rgw.py
@@ -552,7 +552,7 @@ tests:
         timeout: 300
 
   - test:
-      name: ACLs Test
+      name: acls reset
       desc: Test acls reset
       polarion-id: CEPH-14260
       module: sanity_rgw.py
@@ -565,7 +565,7 @@ tests:
   # multipart test
 
   - test:
-      name: ACLs Test
+      name: multipart upload->cancel->reupload
       desc: Test multipart upload->cancel->reupload
       polarion-id: CEPH-14266
       module: sanity_rgw.py
@@ -611,7 +611,7 @@ tests:
 
   # Multifactor Authentication tests
   - test:
-      name: MFA deletes
+      name: versioned object deletion with mfa token
       desc: test versioned object deletion with mfa token
       polarion-id: CEPH-83574054
       module: sanity_rgw.py
@@ -625,7 +625,7 @@ tests:
         timeout: 500
 
   - test:
-      name: MFA deletes
+      name: multipart versioned object deletion with mfa token
       desc: test multipart versioned object deletion with mfa token
       polarion-id: CEPH-83574411
       module: sanity_rgw.py
@@ -639,7 +639,7 @@ tests:
         timeout: 500
 
   - test:
-      name: MFA deletes
+      name: incorrect syntax for mfa resync commnad appropriate usage message is displayed
       desc: test with incorrect syntax for mfa resync commnad appropriate usage message is displayed
       polarion-id: CEPH-83574412
       module: sanity_rgw.py
