@@ -91,7 +91,17 @@ tests:
   - test:
       desc: Enable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are moved to trash automatically
       destroy-cluster: false
+      config:
+        enable: true
       module: rbd_trash.py
       name: Check trash if the deleted images are moved to trash automatically
       polarion-id: CEPH-83573297
 
+  - test:
+      desc: Disable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are not moved to trash automatically
+      destroy-cluster: false
+      config:
+        enable: false
+      module: rbd_trash.py
+      name: Disable Trash and Delete images and check if they are not moved to trash automatically
+      polarion-id: CEPH-83573296
