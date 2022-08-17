@@ -12,6 +12,7 @@ from typing import Dict
 from ceph.utils import get_nodes_by_ids
 
 from .common import config_dict_to_string
+from .helper import check_service_exists
 from .typing_ import ServiceProtocol
 
 
@@ -124,5 +125,7 @@ class ApplyMixin:
         if not verify_service:
             return
 
-        if not self.check_service_exists(service_name=service_name):
+        if not check_service_exists(
+            self.installer, service_name=service_name, service_type=self.SERVICE_NAME
+        ):
             raise OrchApplyServiceFailure(self.SERVICE_NAME)

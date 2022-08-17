@@ -882,7 +882,7 @@ def check_service_exists(
             _retries = 3
 
     # Identify the failure
-    out, err = installer.shell(args=cmd_args)
+    out, err = installer.exec_command(sudo=True, cmd=" ".join(cmd_args))
     out = json.loads(out)
     LOG.error(f"{service_name or service_type} failed with \n{out[0].get('events')}")
     return False

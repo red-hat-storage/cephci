@@ -60,15 +60,6 @@ class OrchProtocol(CephAdmProtocol, Protocol):
     def get_hosts_by_label(self, label: str) -> List:
         ...
 
-    def check_service_exists(
-        self,
-        service_name: str = None,
-        service_type: str = None,
-        timeout: int = 300,
-        interval: int = 5,
-    ) -> bool:
-        ...
-
     def check_service(
         self,
         service_name: str,
@@ -82,9 +73,6 @@ class OrchProtocol(CephAdmProtocol, Protocol):
         ...
 
     def verify_status(self, op: str) -> None:
-        ...
-
-    def validate_spec_services(self, steps):
         ...
 
 
