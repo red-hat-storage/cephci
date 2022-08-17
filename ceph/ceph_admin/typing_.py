@@ -1,4 +1,5 @@
 """Custom typing objects to avoid circular imports."""
+from datetime import datetime
 from typing import Dict, List
 
 try:
@@ -73,6 +74,13 @@ class OrchProtocol(CephAdmProtocol, Protocol):
         ...
 
     def verify_status(self, op: str) -> None:
+        ...
+
+    def check_service_restart(
+        self,
+        service_name: str,
+        restart_init_time: datetime,
+    ) -> bool:
         ...
 
 

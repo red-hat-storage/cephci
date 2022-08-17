@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from json import loads
 from time import sleep
 
+from dateutil import parser
+
 from ceph.ceph import ResourceNotFoundError
 from utility.log import Log
 
@@ -110,6 +112,34 @@ class Orch(
             elif service_name in service and exist:
                 return True
             LOG.info("[%s] check for existence: %s, retrying" % (service_name, exist))
+
+        return False
+
+    def check_service_restart(
+        self,
+        service_name: str,
+        restart_init_time: datetime,
+    ) -> bool:
+        """
+        Checks whether the given service was restarted in the previous minute or any other amount of time as specified.
+        Args:
+            service_name (str): Name of the service
+            restart_init_time (datetime.datetime): Time at which restart was initiated
+
+        Returns:
+            True if the service was restarted within the given interval from now, else false
+        """
+        LOG.info("[%s] check for restart after: %s" % (service_name, restart_init_time))
+
+        out, err = self.ls({"base_cmd_args": {"format": "json"}})
+        out = loads(out)
+        service = [d for d in out if d.get("service_name") == service_name]
+
+        if service:
+            last_refresh = service[0]["status"]["last_refresh"]
+            last_refresh = parser.parse(last_refresh).replace(tzinfo=None)
+            if last_refresh >= restart_init_time:
+                return True
 
         return False
 
