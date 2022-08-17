@@ -33,8 +33,10 @@ def run(ceph_cluster, **kw):
         )
         if out0:
             log.info("Loading previous ceph versions")
-            with open(ceph_version_path, "r") as before_file:
-                pre_data = json.loads(json.load(before_file))
+            with client.remote_file(
+                file_name=ceph_version_path, file_mode="r"
+            ) as before_file:
+                pre_data = json.load(before_file)
             out1, err1 = client.exec_command(
                 sudo=True, cmd="ceph versions --format json"
             )
