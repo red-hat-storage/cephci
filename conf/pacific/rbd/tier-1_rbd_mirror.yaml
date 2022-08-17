@@ -10,12 +10,16 @@ globals:
      node2:
        role: client
      node3:
-       role: osd
+       role:
+         - osd
+         - mon
+         - mgr
        no-of-volumes: 4
        disk-size: 15
      node4:
        role:
           - osd
+          - mon
        no-of-volumes: 4
        disk-size: 15
      node5:
@@ -37,12 +41,16 @@ globals:
       node2:
         role: client
       node3:
-        role: osd
+        role:
+          - osd
+          - mon
+          - mgr
         no-of-volumes: 4
         disk-size: 15
       node4:
         role:
           - osd
+          - mon
         no-of-volumes: 4
         disk-size: 15
       node5:
