@@ -303,8 +303,8 @@ tests:
         args:
           placement:
             nodes:              # A list of strings that would looked up
-                - node7
-                - node8
+                - node2
+                - node3
                 - node9
                 - node10
             limit: 4            # no of daemons
@@ -530,8 +530,8 @@ tests:
         args:
           placement:
             nodes: # A list of strings that would looked up
-              - node9
-              - node10
+              - node2
+              - node3
             limit: 2            # no of daemons
             sep: ";"            # separator to be used for placements
       destroy-cluster: False
