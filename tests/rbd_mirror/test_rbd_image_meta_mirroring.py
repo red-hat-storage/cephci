@@ -60,7 +60,6 @@ def run(**kw):
         mirror1.config_mirror(mirror2, poolname=poolname, mode="image")
         mirror1.enable_mirror_image(poolname, imagename, "journal")
         mirror2.wait_for_status(poolname=poolname, images_pattern=1)
-        mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total"))
         mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
 
@@ -68,7 +67,6 @@ def run(**kw):
         mirror1.create_image(imagespec=imagespec_1, size=config.get("imagesize"))
         mirror1.enable_mirror_image(poolname, imagename_1, "snapshot")
         mirror2.wait_for_status(poolname=poolname, images_pattern=2)
-        mirror1.benchwrite(imagespec=imagespec_1, io=config.get("io-total"))
         mirror1.wait_for_status(imagespec=imagespec_1, state_pattern="up+stopped")
         mirror2.wait_for_status(imagespec=imagespec_1, state_pattern="up+replaying")
 
@@ -80,7 +78,6 @@ def run(**kw):
             if i == imagespec_1:
                 mirror1.create_mirror_snapshot(i)
             time.sleep(30)
-
             # Verify value at secondary
             if value != rbd2.image_meta(action="get", image_spec=i, key=key)[:-1]:
                 log.error(f"Meta value did not get mirrored on {i}")
