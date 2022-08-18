@@ -107,6 +107,6 @@ tests:
               k: 8
               m: 3
               plugin: jerasure
-              crush-failure-domain: host
+              crush-failure-domain: osd
         delete_pools:
           - ec_pool_9212
