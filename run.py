@@ -64,6 +64,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--cloud <openstack> | <ibmc> | <baremetal>]
         [--build <name>]
         [--inventory FILE]
+        [--rhel-version FLAVOUR-VERSION]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--ubuntu-repo <repo>]
@@ -107,6 +108,8 @@ Options:
   --global-conf <file>              global cloud configuration file
   --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
+  --rhel-version <version>          version of the os to be installed
+                                    eg: 8.5, 7.9. Mandatory for baremetal
   --cloud <cloud_type>              cloud type [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
@@ -380,6 +383,11 @@ def run(args):
     # Deciders
     reuse = args.get("--reuse")
     cloud_type = args.get("--cloud")
+
+    # if cloud_type is baremetal, the rhel-version arg is mandatory
+    if "baremetal" in cloud_type and not args.get("--rhel-version"):
+        log.error("ERROR! --rhel-version is a mandatory argument for cloud type baremetal.")
+        exit(1)
 
     # These are not mandatory options
     inventory_file = args.get("--inventory")
