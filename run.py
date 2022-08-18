@@ -386,7 +386,9 @@ def run(args):
 
     # if cloud_type is baremetal, the rhel-version arg is mandatory
     if "baremetal" in cloud_type and not args.get("--rhel-version"):
-        log.error("ERROR! --rhel-version is a mandatory argument for cloud type baremetal.")
+        log.error(
+            "ERROR! --rhel-version is a mandatory argument for cloud type baremetal."
+        )
         exit(1)
 
     # These are not mandatory options
