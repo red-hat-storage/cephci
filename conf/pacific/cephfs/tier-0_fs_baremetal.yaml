@@ -1,0 +1,65 @@
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: magna076.ceph.redhat.com
+          ip: 10.8.128.76
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        -
+          hostname: magna071.ceph.redhat.com
+          ip: 10.8.128.71
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna074.ceph.redhat.com
+          ip: 10.8.128.74
+          root_password: passwd
+          role:
+            - mon
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna069.ceph.redhat.com
+          ip: 10.8.128.69
+          root_password: passwd
+          role:
+            - mds
+            - nfs
+        -
+          hostname: magna091.ceph.redhat.com
+          ip: 10.8.128.91
+          root_password: passwd
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna095.ceph.redhat.com
+          ip: 10.8.128.95
+          root_password: passwd
+          role:
+            - nfs
+            - mds
+            - client
