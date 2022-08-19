@@ -153,3 +153,14 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration.py
         config-file-name: test_rgw_enable_lc_threads.yaml
         timeout: 300
+
+  - test:
+      name: Test ACL Operations
+      desc: Test ACL Operations
+      polarion-id: CEPH-14238
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_acl_ops.py
+        config-file-name: test_acl_ops.yaml
+        timeout: 300
