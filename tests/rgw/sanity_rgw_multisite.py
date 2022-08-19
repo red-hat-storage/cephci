@@ -143,6 +143,15 @@ def run(**kw):
 
     verify_io_on_sites = config.get("verify-io-on-site", [])
     if verify_io_on_sites:
+        verify_out, err = test_site_node.exec_command(
+            cmd="sudo python3 "
+            + test_folder_path
+            + lib_dir
+            + "read_io_info.py -v False",
+            timeout=timeout,
+        )
+        log.info(verify_out)
+        log.error(err)
         io_info = home_dir_path + "io_info.yaml"
         for site in verify_io_on_sites:
             verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
@@ -157,7 +166,10 @@ def run(**kw):
                 )
 
             verify_out, err = verify_io_on_site_node.exec_command(
-                cmd="sudo python3 " + test_folder_path + lib_dir + "read_io_info.py",
+                cmd="sudo python3 "
+                + test_folder_path
+                + lib_dir
+                + "read_io_info.py -v True",
                 timeout=timeout,
             )
             log.info(verify_out)
