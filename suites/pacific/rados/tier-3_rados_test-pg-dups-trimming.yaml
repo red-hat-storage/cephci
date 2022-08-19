@@ -21,7 +21,8 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                custom_repo: "cdn"
+                custom_image: "registry.redhat.io/rhceph/rhceph-5-rhel8:5-184"
+                custom_repo: "https://download.eng.bos.redhat.com/rel-eng/rhel-8/RHCEPH-5/RHCEPH-5.1-RHEL-8-RC-4.1/compose/Tools/x86_64/os/"
                 mon-ip: depressa007
                 allow-fqdn-hostname: true
           - config:
@@ -149,6 +150,21 @@ tests:
       config:
         log_to_file: true
       desc: Change config options to enable logging to file
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+          io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+          script-name: test_multitenant_user_access.py
+          config-file-name: test_multitenant_access.yaml
+          timeout: 300
+      desc: Perform rgw tests
 
   - test:
       name: Verify dups trimming
@@ -159,8 +175,6 @@ tests:
             - type: replicated
               conf: sample-pool-1
             - type: replicated
-              conf: sample-pool-2
-            - type: erasure
               conf: sample-pool-2
         pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
       desc: Verify that the duplicates in the PG log entries are trimmed regularly
