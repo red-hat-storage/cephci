@@ -5,20 +5,22 @@
     modified releases are then compared against a the list of feature complete releases.
     A message is posted for the filtered list.
 */
-def featureCompleteReleases = ['RHCEPH-4.3.yaml', 'RHCEPH-5.2.yaml']
+def featureCompleteReleases = ['RHCEPH-4.3.yaml', 'RHCEPH-5.3.yaml', 'RHCEPH-6.0.yaml']
 
-def postUMB(version) {
+def postUMB(version, image) {
     /*
         This method posts a message to the UMB using the version information provided.
 
         Args:
             version (str):  Version information to be included in the payload.
+            image (str):    Ceph image
     */
     def payload = [
         "artifact": [
             "nvr": "RHCEPH-$version",
             "scratch": "true",
-            "issuer": "rhceph-qe-ci"
+            "issuer": "rhceph-qe-ci",
+            "image": image
         ],
         "category": "external",
         "contact": [
@@ -91,9 +93,12 @@ node('rhel-8-medium || ceph-qe-ci') {
                 returnStdout: true
             )
             if (out?.trim()) {
+                def recipeMap = readYaml file: out.trim()
+                def image = recipeMap["tier-0"]["repository"]
+
                 nvr = it.substring(7,10)
-                println("Found development build for $nvr")
-                postUMB(nvr)
+                println("Found development build for $nvr whose image tag is $image")
+                postUMB(nvr, image)
             }
         }
     }
