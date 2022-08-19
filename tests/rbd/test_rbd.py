@@ -11,6 +11,7 @@ This module will not install any pre-requisites of the repo.
 This module returns 0 on success else 1.
 """
 import json
+import re
 from time import sleep
 
 from ceph.utils import get_nodes_by_ids
@@ -20,6 +21,18 @@ log = Log(__name__)
 
 TEST_REPO = "https://github.com/ceph/ceph.git"
 SCRIPT_PATH = "qa/workunits/rbd"
+
+
+def get_tag(node) -> str:
+    """Get upstream tag that to be picked up for test.
+
+    Args:
+        node: ceph node object
+    Returns:
+        str: tag to be used for upstream script
+    """
+    version, err = node.exec_command(cmd="ceph -v")
+    return "v" + re.search(r"[0-9]+(\.[0-9]+)+", version).group(0)
 
 
 def one_time_setup(node, rhbuild, branch: str) -> None:
@@ -93,7 +106,6 @@ def run(ceph_cluster, **kwargs) -> int:
     script_dir = config["script_path"]
     script = config["script"]
 
-    branch = config.get("branch", "pacific")
     nodes = config.get("nodes", [])
     rhbuild = config.get("rhbuild")
 
@@ -118,9 +130,9 @@ def run(ceph_cluster, **kwargs) -> int:
             nodes[0].exec_command(
                 sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
             )
-            nodes[0].exec_command(sudo=True, cmd="ceph orch restart mon")
 
     for node in nodes:
+        branch = config.get("branch", get_tag(node))
         one_time_setup(node, rhbuild, branch=branch)
 
         cmd = f"cd ceph/{script_dir}; sudo bash {script}"
