@@ -340,3 +340,17 @@ class PoolFunctions:
         for entry in pool_status:
             if entry["pool_name"] == pool_name:
                 return int(entry["pg_num_final"])
+
+    def get_pool_id(self, pool_name) -> int:
+        """
+        Returns the pool ID of the pool passed
+        Args:
+            pool_name: Name of the pool
+        Returns: ID of the pool
+        """
+        cmd = "ceph df"
+        out = self.rados_obj.run_ceph_command(cmd=cmd)
+        for entry in out["pools"]:
+            if entry["name"] == pool_name:
+                return entry["id"]
+        log.error(f"Pool: {pool_name} not found")
