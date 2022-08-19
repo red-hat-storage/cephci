@@ -98,7 +98,6 @@ tests:
             polarion-id: CEPH-9789
         - test:
             config:
-              branch: master
               script: cli_generic.sh
               script_path: qa/workunits/rbd
             desc: "Executing upstream RBD CLI Generic scenarios"
