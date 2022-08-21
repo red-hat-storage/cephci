@@ -1,7 +1,8 @@
 import datetime
+from copy import deepcopy
 
 from ceph.utils import get_public_network, set_container_info
-from utility.utils import Log, generate_self_signed_cert_on_rgw
+from utility.utils import Log, fetch_build_artifacts, generate_self_signed_cert_on_rgw
 
 LOG = Log(__name__)
 
@@ -11,10 +12,28 @@ def run(ceph_cluster, **kw):
     Runs ceph-ansible deployment
     Args:
         ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
+
+    For cdn container installation GAed container parameters needs to override as below,
+        config:
+          use_cdn: True
+          ansi_config:
+            ceph_origin: repository
+            ceph_repository_type: cdn
+
+    For internal repository
+        config:
+          use_internal:
+            rhcs-version: 4.1
+            release: z1-async1
+          ansi_config:
+            ceph_origin: distro
     """
     LOG.info("Running ceph ansible deployment")
     ceph_nodes = kw.get("ceph_nodes")
-    config = kw.get("config")
+
+    # Avoid conflicts arising from shallow reference modifications
+    config = deepcopy(kw.get("config"))
+
     filestore = config.get("filestore", False)
     k_and_m = config.get("ec-pool-k-m")
     hotfix_repo = config.get("hotfix_repo")
@@ -42,14 +61,20 @@ def run(ceph_cluster, **kw):
     )
     containerized = config.get("ansi_config").get("containerized_deployment")
 
-    # For cdn container installation GAed container parameters
-    # needs to override as below,
-    #
-    # config:
-    #     use_cdn: True
-    #     ansi_config:
-    #       ceph_origin: repository
-    #       ceph_repository_type: cdn
+    # Support for released versions available in internal repositories
+    use_internal = config.get("use_internal")
+    if use_internal:
+        _rhcs_version = use_internal["rhcs-version"]
+        _rhcs_release = use_internal["release"]
+        _platform = "-".join(config.get("rhbuild").split("-")[1:])
+        config["build"] = f"{_rhcs_version}-{_platform}"
+        (
+            config["base_url"],
+            config["ceph_docker_registry"],
+            config["ceph_docker_image"],
+            config["ceph_docker_image_tag"],
+        ) = fetch_build_artifacts(_rhcs_release, _rhcs_version, _platform)
+        base_url = config["base_url"]
 
     if all(
         key in ceph_cluster.ansible_config

@@ -4,9 +4,13 @@ import pytest
 from ceph.ceph_admin.apply import ApplyMixin, OrchApplyServiceFailure
 
 
+class MockCephCluster:
+    rhcs_version = ""
+
+
 class MockApplyMixinTestWithShellOutput(ApplyMixin):
     def __init__(self):
-        self.cluster = None
+        self.cluster = MockCephCluster()
         self.service_name = "rgw"
         self.installer = None
 
@@ -16,7 +20,7 @@ class MockApplyMixinTestWithShellOutput(ApplyMixin):
 
 class MockApplyMixinTestWithOutShellOutput(ApplyMixin):
     def __init__(self):
-        self.cluster = None
+        self.cluster = MockCephCluster()
         self.service_name = "rgw"
         self.installer = None
 
@@ -26,7 +30,7 @@ class MockApplyMixinTestWithOutShellOutput(ApplyMixin):
 
 class MockApplyMixinTestWithOutServiceOutput(ApplyMixin):
     def __init__(self):
-        self.cluster = None
+        self.cluster = MockCephCluster()
         self.service_name = "rgw"
         self.installer = None
 

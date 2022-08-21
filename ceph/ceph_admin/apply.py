@@ -126,6 +126,9 @@ class ApplyMixin:
             return
 
         if not check_service_exists(
-            self.installer, service_name=service_name, service_type=self.SERVICE_NAME
+            self.installer,
+            service_name=service_name,
+            service_type=self.SERVICE_NAME,
+            rhcs_version=self.cluster.rhcs_version,
         ):
             raise OrchApplyServiceFailure(self.SERVICE_NAME)

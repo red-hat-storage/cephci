@@ -5,8 +5,10 @@ import json
 import os
 import tempfile
 from datetime import datetime, timedelta
+from distutils.version import LooseVersion
 from os.path import dirname
 from time import sleep
+from typing import Optional
 
 from jinja2 import Template
 
@@ -831,10 +833,11 @@ def validate_log_file_after_enable(cls):
 
 def check_service_exists(
     installer,
-    service_name: str = None,
-    service_type: str = None,
+    service_name: Optional[str] = None,
+    service_type: Optional[str] = None,
     timeout: int = 1800,
     interval: int = 20,
+    rhcs_version: Optional[LooseVersion] = None,
 ) -> bool:
     """
     Verify the provided service is running for the given list of ids.
@@ -845,6 +848,7 @@ def check_service_exists(
         service_type (str): The type of the service to be checked.
         timeout (int):  In seconds, the maximum allowed time (default=1800)
         interval (int): In seconds, the polling interval time (default=20)
+        rhcs_version (LooseVersion):  RHCS version
 
     Returns:
         Boolean: True if the service and the list of daemons are running else False.
@@ -854,7 +858,13 @@ def check_service_exists(
     cmd_args = ["cephadm", "shell", "--", "ceph", "orch", "ls"]
     if service_name:
         cmd_args += ["--service_name", service_name]
-    cmd_args += ["--service_type", service_type, "--format", "json", "--refresh"]
+
+    # Due to a BZ, the running field is always 0 for RGW daemon. This has been fixed in
+    # the later release.
+    if rhcs_version and rhcs_version == "5.0" and service_type == "rgw":
+        cmd_args += ["--format", "json", "--refresh"]
+    else:
+        cmd_args += ["--service_type", service_type, "--format", "json", "--refresh"]
 
     _retries = 3  # cross-verification retries
     _count = 0
@@ -888,7 +898,15 @@ def check_service_exists(
     return False
 
 
-def validate_spec_services(installer, specs) -> None:
+def validate_spec_services(installer, specs, rhcs_version) -> None:
+    """
+    This method ensures the services provided in the spec file are in running state.
+
+    Args:
+        installer       The node having cephadm package
+        specs           A list of CephAdm spec file
+        rhcs_version    The version of Ceph
+    """
     LOG.info("Validating spec services")
     for spec in specs:
         svc_type = spec["service_type"]
@@ -906,5 +924,6 @@ def validate_spec_services(installer, specs) -> None:
             installer=installer,
             service_name=svc_name,
             service_type=svc_type,
+            rhcs_version=rhcs_version,
         ):
             raise Exception(f"{svc_name or svc_type} service deployment failed!!!")

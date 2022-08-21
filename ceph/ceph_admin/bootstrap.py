@@ -6,7 +6,7 @@ from typing import Dict
 from ceph.ceph import ResourceNotFoundError
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from utility.log import Log
-from utility.utils import get_cephci_config
+from utility.utils import fetch_build_artifacts, get_cephci_config
 
 from .common import config_dict_to_string
 from .helper import GenerateServiceSpec, create_ceph_config_file, validate_spec_services
@@ -171,10 +171,18 @@ class BootstrapMixin:
                 ftp://partners.redhat.com/d960e6f2052ade028fa16dfc24a827f5/rhel-8/Tools/x86_64/os/
 
             boolean:
-                True: use latest image from test config
-                False: do not use latest image from test config,
-                        and also indicates usage of default image from cephadm source-code.
+                True:   use the latest image from test config
+                False:  do not use the latest image from test config,
+                        and also indicates usage of default image from cephadm
+                        source-code.
 
+            # Install a released version unavailable in CDN
+                config:
+                  command: bootstrap
+                  args:
+                    rhcs-version: 5.0
+                    release: <ga | z1 | z1-async1>
+                    mon-ip: <node-name>
         """
         self.cluster.setup_ssh_keys()
         args = config.get("args")
@@ -182,6 +190,25 @@ class BootstrapMixin:
         custom_image = args.pop("custom_image", True)
         build_type = self.config.get("build_type")
         rhbuild = self.config.get("rhbuild")
+
+        # Support installation of the baseline cluster whose version is not available in
+        # CDN. This is primarily used for an upgrade scenario. This support is currently
+        # available only for RH network.
+        _rhcs_version = args.pop("rhcs-version")
+        _rhcs_release = args.pop("release")
+        if _rhcs_release and _rhcs_version:
+            _platform = "-".join(rhbuild.split("-")[1:])
+            _details = fetch_build_artifacts(_rhcs_release, _rhcs_version, _platform)
+
+            # The cluster object is configured so that the values are persistent till
+            # an upgrade occurs. This enables us to execute the test in the right
+            # context.
+            self.config["base_url"] = _details[0]
+            self.config[
+                "container_image"
+            ] = f"{_details[1]}/{_details[2]}:{_details[3]}"
+            self.cluster.rhcs_version = _rhcs_version
+            rhbuild = f"{_rhcs_version}-{_platform}"
 
         if build_type == "upstream":
             self.setup_upstream_repository()
@@ -335,6 +362,8 @@ class BootstrapMixin:
 
         # validate spec file
         if specs:
-            validate_spec_services(self.installer, specs=specs)
+            validate_spec_services(
+                self.installer, specs=specs, rhcs_version=self.cluster.rhcs_version
+            )
 
         return out, err
