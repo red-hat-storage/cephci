@@ -175,3 +175,10 @@ tests:
       module: nfs.subvolume_export.py
       name: "cephfs nfs export for subvolume"
       polarion-id: "CEPH-83573993"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Create cephfs nfs export on non-existing directory"
+      module: nfs.nfs_non_exist_export_path.py
+      name: "Create cephfs nfs export on non-existing directory"
+      polarion-id: "CEPH-83573669"
