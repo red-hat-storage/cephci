@@ -2,7 +2,7 @@
 #=======================================================================================================================
 # Tier-level: 2
 # Test-Suite: tier-2_cephfs_test-nfs.yaml
-# Conf file : conf/pacific/cephfs/tier_0_fs.yaml
+# Conf file : conf/pacific/cephfs/tier-2_cephfs_9-node-cluster
 # Test-Case Covered:
 # CEPH-83574028 - Ensure the path of the nfs export is displayed properly.
 # CEPH-83574024 - Ensure Snapshot and cloning works on nfs exports
@@ -13,6 +13,7 @@
 #                 all the NFS nodes in the cluster. and has same data
 # CEPH-83574026 - zip unzip files continuously on a nfs share
 # CEPH-83573993 - Export the nfs share with cli using an existing path created using subvolume
+# CEPH-11309 - Export and import data between NFS and CephFS
 #=======================================================================================================================
 tests:
   -
@@ -182,3 +183,10 @@ tests:
       module: nfs.nfs_non_exist_export_path.py
       name: "Create cephfs nfs export on non-existing directory"
       polarion-id: "CEPH-83573669"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Export and import data between NFS and CephFS"
+      module: nfs.move_data_bw_nfs_and_cephfs_mounts.py
+      name: "Move Data bw nfs and cephfs exports"
+      polarion-id: "CEPH-11309"
