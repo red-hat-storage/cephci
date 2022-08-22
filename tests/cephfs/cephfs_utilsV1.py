@@ -696,7 +696,34 @@ class FsUtils(object):
         """
         snapshot_cmd = f"ceph fs subvolume snapshot metadata set {vol_name} {subvol_name} {snap_name} "
         for k, v in metadata_dict.items():
-            snapshot_cmd += f"{k} {v} "
+            snapshot_cmd += f"'{k}' '{v}' "
+        if kwargs.get("group_name"):
+            snapshot_cmd += f"--group_name {kwargs.get('group_name')}"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=snapshot_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+        return cmd_out, cmd_rc
+
+    def get_snapshot_metadata(
+        self, client, vol_name, subvol_name, snap_name, metadata_key, **kwargs
+    ):
+        """
+        Get snapshot metadata with vol_name, subvol_name, snap_name
+        It supports below optional arguments also
+        Args:
+            client:
+            vol_name:
+            subvol_name:
+            snap_name:
+            metadata_key:
+            validate:
+            **kwargs:
+                group_name : str
+                check_ec = True
+        Returns:
+            Returns the cmd_out and cmd_rc for Create cmd
+        """
+        snapshot_cmd = f"ceph fs subvolume snapshot metadata get {vol_name} {subvol_name} {snap_name} {metadata_key} "
         if kwargs.get("group_name"):
             snapshot_cmd += f"--group_name {kwargs.get('group_name')}"
         cmd_out, cmd_rc = client.exec_command(
