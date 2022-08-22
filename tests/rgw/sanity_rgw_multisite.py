@@ -118,7 +118,7 @@ def run(**kw):
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     cmd_env = " ".join(config.get("env-vars", []))
-    test_site_node.exec_command(
+    test_status = test_site_node.exec_command(
         cmd=cmd_env
         + "sudo python3 "
         + test_folder_path
@@ -130,40 +130,46 @@ def run(**kw):
         + config_file_name,
         long_running=True,
     )
-
-    copy_user_to_site = clusters.get(config.get("copy-user-info-to-site"))
-    if copy_user_to_site:
-        log.info(f'copy_user_to_site: {config.get("copy-user-info-to-site")}')
-        copy_user_to_site_node = copy_user_to_site.get_ceph_object("rgw").node
-        user_details_file = test_folder_path + lib_dir + "user_details.json"
-        copy_file_from_node_to_node(
-            user_details_file, test_site_node, copy_user_to_site_node, user_details_file
-        )
-        verify_sync_status(copy_user_to_site_node)
-
-    verify_io_on_sites = config.get("verify-io-on-site", [])
-    if verify_io_on_sites:
-        io_info = home_dir_path + "io_info.yaml"
-        for site in verify_io_on_sites:
-            verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
-            log.info(f"Check sync status on {site}")
-            verify_sync_status(verify_io_on_site_node)
-            # adding sleep for 60 seconds before verification of data starts
-            time.sleep(60)
-            log.info(f"verification IO on {site}")
-            if test_site != site:
-                copy_file_from_node_to_node(
-                    io_info, test_site_node, verify_io_on_site_node, io_info
-                )
-
-            verify_out, err = verify_io_on_site_node.exec_command(
-                cmd="sudo python3 " + test_folder_path + lib_dir + "read_io_info.py",
-                timeout=timeout,
+    if test_status == 0:
+        copy_user_to_site = clusters.get(config.get("copy-user-info-to-site"))
+        if copy_user_to_site:
+            log.info(f'copy_user_to_site: {config.get("copy-user-info-to-site")}')
+            copy_user_to_site_node = copy_user_to_site.get_ceph_object("rgw").node
+            user_details_file = test_folder_path + lib_dir + "user_details.json"
+            copy_file_from_node_to_node(
+                user_details_file,
+                test_site_node,
+                copy_user_to_site_node,
+                user_details_file,
             )
-            log.info(verify_out)
-            log.error(err)
+            verify_sync_status(copy_user_to_site_node)
 
-    return 0
+        verify_io_on_sites = config.get("verify-io-on-site", [])
+        if verify_io_on_sites:
+            io_info = home_dir_path + "io_info.yaml"
+            for site in verify_io_on_sites:
+                verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
+                log.info(f"Check sync status on {site}")
+                verify_sync_status(verify_io_on_site_node)
+                # adding sleep for 60 seconds before verification of data starts
+                time.sleep(60)
+                log.info(f"verification IO on {site}")
+                if test_site != site:
+                    copy_file_from_node_to_node(
+                        io_info, test_site_node, verify_io_on_site_node, io_info
+                    )
+
+                verify_out, err = verify_io_on_site_node.exec_command(
+                    cmd="sudo python3 "
+                    + test_folder_path
+                    + lib_dir
+                    + "read_io_info.py",
+                    timeout=timeout,
+                )
+                log.info(verify_out)
+                log.error(err)
+
+    return test_status
 
 
 def set_test_env(config, rgw_node):
