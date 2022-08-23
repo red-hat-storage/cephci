@@ -14,6 +14,7 @@
 # CEPH-83574026 - zip unzip files continuously on a nfs share
 # CEPH-83573993 - Export the nfs share with cli using an existing path created using subvolume
 # CEPH-11309 - Export and import data between NFS and CephFS
+# CEPH-11314 - Backup and restore data using existing NFS backup tools
 #=======================================================================================================================
 tests:
   -
@@ -190,3 +191,10 @@ tests:
       module: nfs.move_data_bw_nfs_and_cephfs_mounts.py
       name: "Move Data bw nfs and cephfs exports"
       polarion-id: "CEPH-11309"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Backup and restore data using existing NFS backup tools"
+      module: nfs.data_backup_restore_bw_nfs_and_local_mounts.py
+      name: "backup and restore data bw nfs exports and local dir"
+      polarion-id: "CEPH-11314"
