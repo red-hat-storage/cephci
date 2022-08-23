@@ -262,3 +262,14 @@ tests:
               args:              # sleep to get all services deployed
                 - sleep
                 - "120"
+  - test:
+      name: test_admin_node_removal
+      desc: Verify removal of _admin node acting as a bootstrap node.
+      polarion-id: CEPH-83574670
+      module: test_admin_node_removal.py
+  - test:
+      name: test_admin_add_labels
+      desc: Adding admin node again with different labels  does not remove ceph.client.admin.keyring  and ceph.conf file
+      polarion-id: CEPH-83574671
+      module: test_admin_add_labels.py
+
