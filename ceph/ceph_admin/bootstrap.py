@@ -212,8 +212,10 @@ class BootstrapMixin:
 
         if build_type == "upstream":
             self.setup_upstream_repository()
-            # work-around to enable ceph x86_64 RPM pkgs.
-            # which is currently unavailable in upstream builds.
+            logger.info(
+                "Enabling cdn tool repo to workaround ",
+                "unavailability of ceph x86_64 RPM pkgs in upstream builds",
+            )
             self.set_cdn_tool_repo()
         elif build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False

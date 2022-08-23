@@ -1544,6 +1544,7 @@ class CephNode(object):
                 logger.info("Command completed successfully")
             else:
                 logger.error(f"Error {exit_status} during cmd, timeout {timeout}")
+                logger.error(stderr)
                 raise CommandFailed(
                     f"{kw['cmd']} Error:  {str(stderr)} {str(self.ip_address)}"
                 )
