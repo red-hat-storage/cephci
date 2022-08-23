@@ -194,8 +194,8 @@ class BootstrapMixin:
         # Support installation of the baseline cluster whose version is not available in
         # CDN. This is primarily used for an upgrade scenario. This support is currently
         # available only for RH network.
-        _rhcs_version = args.pop("rhcs-version")
-        _rhcs_release = args.pop("release")
+        _rhcs_version = args.pop("rhcs-version", None)
+        _rhcs_release = args.pop("release", None)
         if _rhcs_release and _rhcs_version:
             _platform = "-".join(rhbuild.split("-")[1:])
             _details = fetch_build_artifacts(_rhcs_release, _rhcs_version, _platform)
