@@ -4,6 +4,8 @@ Test suite that verifies the deployment of Red Hat Ceph Storage via the cephadm 
 The intent of the suite is to simulate a standard operating procedure expected by a
 customer.
 """
+from copy import deepcopy
+
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.alert_manager import AlertManager
@@ -113,8 +115,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                             - ceph osd pool create <pool_name> 3 3 replicated
     """
     LOG.info("Starting Ceph cluster deployment.")
-    config = kwargs["config"]
+
+    # Avoid shallow reference conflicts. This is done for supporting installation of
+    # RH Ceph versions unavailable in CDN.
+    config = deepcopy(kwargs["config"])
     config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
+
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     try:
         steps = config.get("steps", [])

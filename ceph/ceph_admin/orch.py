@@ -195,7 +195,11 @@ class Orch(
         # validate services
         validate_spec_svcs = config.get("validate-spec-services")
         if validate_spec_svcs:
-            validate_spec_services(installer=self.installer, specs=specs)
+            validate_spec_services(
+                installer=self.installer,
+                specs=specs,
+                rhcs_version=self.cluster.rhcs_version,
+            )
             LOG.info("Validation of service created using a spec file is completed")
 
     def op(self, op, config):
