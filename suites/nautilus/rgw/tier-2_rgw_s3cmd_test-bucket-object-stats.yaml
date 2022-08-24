@@ -52,3 +52,13 @@ tests:
         script-name: ../s3cmd/test_header_size.py
         config-file-name: ../../s3cmd/configs/test_header_size.yaml
         timeout: 300
+
+  - test:
+      name: Test single delete marker for versioned object using s3cmd
+      desc: Test single delete marker for versioned object using s3cmd
+      polarion-id: CEPH-83574806
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
+        timeout: 300
