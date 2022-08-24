@@ -598,6 +598,6 @@ def run(ceph_cluster, **kw):
         args = config.get("args", {})
         verify_bootstrap(instance, args, out + err)
     finally:
-        # Get cluster state
+        log.debug("Gathering cluster state after running test_bootstrap")
         get_cluster_state(instance)
     return 0
