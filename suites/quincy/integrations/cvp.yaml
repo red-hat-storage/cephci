@@ -102,7 +102,7 @@ tests:
         - test:
             desc: "Testing rbd CLI Generic scenarios using unit-tests."
             config:
-              branch: v16.2.8
+              branch: v17.2.3
               script_path: qa/workunits/rbd
               script: cli_generic.sh
             module: test_rbd.py

@@ -1,6 +1,27 @@
 // The primary objective of this script is to deploy a RHCeph cluster for OCS CI.
 
-def rhcsVersionMap = [ "4": "nautilus", "5": "pacific", "6": "quincy" ]
+def argsMap = [
+    "4": [
+        "inventory": "conf/inventory/rhel-8.5-server-x86_64-large.yaml",
+        "globalConf": "conf/nautilus/integrations/7_node_ceph.yaml",
+        "suite": "suites/nautilus/integrations/ocs.yaml",
+        "platform": "rhel-8"
+    ],
+    "5": [
+        "inventory": "conf/inventory/rhel-8.5-server-x86_64-large.yaml",
+        "globalConf": "conf/pacific/integrations/7_node_ceph.yaml",
+        "suite": "suites/pacific/integrations/ocs.yaml",
+        "platform": "rhel-8",
+        "rgwSecure": "suites/pacific/integrations/ocs_rgw_ssl.yaml",
+    ],
+    "6": [
+        "inventory": "conf/inventory/rhel-9.0-server-x86_64-large.yaml",
+        "globalConf": "conf/quincy/integrations/7_node_ceph.yaml",
+        "suite": "suites/quincy/integrations/ocs.yaml",
+        "platform": "rhel-9",
+        "rgwSecure": "suites/quincy/integrations/ocs_rgw_ssl.yaml"
+    ]
+]
 def ciMap = [:]
 def sharedLib
 def vmPrefix
@@ -44,17 +65,21 @@ node ("rhel-8-medium || ceph-qe-ci") {
         ciMap = sharedLib.getCIMessageMap()
 
         majorVersion = ciMap.build.substring(0,1)
-        upstreamName = rhcsVersionMap[majorVersion]
         clusterName = ciMap["cluster_name"]
 
         // Prepare the CLI arguments
         cliArgs += "--rhbuild ${ciMap.build}"
-        cliArgs += " --platform rhel-8"
+        cliArgs += " --platform ${argsMap[majorVersion]['platform']}"
         cliArgs += " --build tier-0"
         cliArgs += " --skip-sos-report"
-        cliArgs += " --inventory conf/inventory/rhel-8.5-server-x86_64-large.yaml"
-        cliArgs += " --global-conf conf/${upstreamName}/integrations/7_node_ceph.yaml"
-        cliArgs += " --suite suites/${upstreamName}/integrations/ocs.yaml"
+        cliArgs += " --inventory ${argsMap[majorVersion]['inventory']}"
+        cliArgs += " --global-conf ${argsMap[majorVersion]['globalConf']}"
+
+        if ( ciMap.containsKey("rgw_secure") && ciMap["rgw_secure"] ) {
+            cliArgs += " --suite ${argsMap[majorVersion]['rgwSecure']}"
+        } else {
+            cliArgs += " --suite ${argsMap[majorVersion]['suite']}"
+        }
 
         println "Debug: ${cliArgs}"
 
