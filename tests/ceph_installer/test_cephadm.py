@@ -149,6 +149,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.error(be, exc_info=True)
         return 1
     finally:
-        # Get cluster state
+        LOG.debug("Gathering cluster state after running test_cephadm")
         get_cluster_state(cephadm)
     return 0
