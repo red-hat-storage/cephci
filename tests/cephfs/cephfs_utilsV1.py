@@ -71,6 +71,20 @@ class FsUtils(object):
                 )
 
     @staticmethod
+    def nfs_ganesha_install(ceph_demon):
+        if ceph_demon.pkg_type == "rpm":
+            ceph_demon.exec_command(
+                sudo=True, cmd="yum install --nogpgcheck nfs-ganesha-ceph -y"
+            )
+            ceph_demon.exec_command(sudo=True, cmd="systemctl start rpcbind")
+            ceph_demon.exec_command(sudo=True, cmd="systemctl stop nfs-server.service")
+            ceph_demon.exec_command(
+                sudo=True, cmd="systemctl disable nfs-server.service"
+            )
+            assert ceph_demon.node.exit_status == 0
+        return 0
+
+    @staticmethod
     def get_fs_info(client, fs_name="cephfs"):
         """
         Gets the fs info for the given filesystem.
@@ -1687,6 +1701,7 @@ class FsUtils(object):
         io_tools = [dd, smallfile]
         f = random.choice(io_tools)
         f()
+        return f
 
     def cephfs_nfs_mount(self, client, nfs_server, nfs_export, nfs_mount_dir):
         """
@@ -1701,3 +1716,81 @@ class FsUtils(object):
         client.exec_command(sudo=True, cmd=command)
         rc = self.wait_until_mount_succeeds(client, nfs_mount_dir)
         return rc
+
+    @staticmethod
+    def nfs_ganesha_conf(node, nfs_client_name):
+        out, rc = node.exec_command(
+            sudo=True, cmd="ceph auth get-key client.%s" % nfs_client_name
+        )
+        secret_key = out.rstrip("\n")
+
+        conf = """
+        NFS_CORE_PARAM
+        {
+            Enable_NLM = false;
+            Enable_RQUOTA = false;
+            Protocols = 4;
+        }
+
+        NFSv4
+        {
+            Delegations = true;
+            Minor_Versions = 1, 2;
+        }
+
+        CACHEINODE {
+            Dir_Max = 1;
+            Dir_Chunk = 0;
+            Cache_FDs = true;
+            NParts = 1;
+            Cache_Size = 1;
+        }
+
+        EXPORT
+        {
+            Export_ID=100;
+            Protocols = 4;
+            Transports = TCP;
+            Path = /;
+            Pseudo = /ceph/;
+            Access_Type = RW;
+            Attr_Expiration_Time = 0;
+            Delegations = R;
+            Squash = "None";
+
+            FSAL {
+                Name = CEPH;
+                User_Id = "%s";
+                Secret_Access_key = "%s";
+            }
+
+        }
+        CEPH
+        {
+            Ceph_Conf = /etc/ceph/ceph.conf;
+        }
+             """ % (
+            nfs_client_name,
+            secret_key,
+        )
+        conf_file = node.remote_file(
+            sudo=True, file_name="/etc/ganesha/ganesha.conf", file_mode="w"
+        )
+        conf_file.write(conf)
+        conf_file.flush()
+        node.exec_command(sudo=True, cmd="systemctl enable nfs-ganesha")
+        node.exec_command(sudo=True, cmd="systemctl start nfs-ganesha")
+        return 0
+
+    @staticmethod
+    def nfs_ganesha_mount(client, mounting_dir, nfs_server):
+        if client.pkg_type == "rpm":
+            client.exec_command(sudo=True, cmd="yum install nfs-utils -y")
+            client.exec_command(sudo=True, cmd="mkdir %s" % mounting_dir)
+            client.exec_command(
+                sudo=True,
+                cmd="mount -t nfs -o nfsvers=4,sync,noauto,soft,proto=tcp %s:/ %s"
+                % (nfs_server, mounting_dir),
+            )
+
+        return 0
