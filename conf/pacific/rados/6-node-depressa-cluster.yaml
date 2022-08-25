@@ -84,6 +84,7 @@ globals:
             - mds
             - rgw
             - osd
+            - client
           root_password: redhat
           volumes:
             - /dev/sdb

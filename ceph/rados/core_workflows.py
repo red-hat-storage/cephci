@@ -909,7 +909,7 @@ class RadosOrchestrator:
         """
         host_nodes = self.ceph_cluster.get_nodes()
         cmd = f"ceph orch ps --daemon_type {daemon_type}"
-        if daemon_id:
+        if daemon_id is not None:
             cmd += f" --daemon_id {daemon_id}"
         daemons = self.run_ceph_command(cmd=cmd)
         try:

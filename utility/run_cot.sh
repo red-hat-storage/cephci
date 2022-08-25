@@ -3,9 +3,9 @@
 set -eux -o pipefail
 
 usage() {
-  cat <<EOF >&2
+cat <<EOF >&2
 
-Usage: $0 -o <osdid> -p <pgid> -t <task> [-i <imageurl>] [-s <0|1>]
+Usage: $0 -o <osdid> -p <pgid> -t <task> -f <fsid> [-i <imageurl>] [-s <0|1>]
 
 Where:
     -o <osdid>    is the numeric ID of the OSD to run against.
@@ -22,6 +22,9 @@ Where:
 
     -s <startosd> is the option that when provided, does not restart the OSD
                   ( optional, default is 1, i.e restarts the OSD at the end of operation )
+
+    -f <fsid> fsid of the cluster
+                  ( required )
 
     NOTE:
 
@@ -40,7 +43,7 @@ EOF
   exit 1
 }
 
-if [ $# -lt 3 ]; then
+if [ $# -lt 4 ]; then
   echo
   echo "ERROR: Required parameters missing."
   usage
@@ -53,10 +56,11 @@ cephadmopts=""
 maxtrim=500000
 dups_tracked=999999999999
 pgid=""
+fsid=""
 error=0
 startosd=1
 
-while getopts ":o:i:t:p:s:" o; do
+while getopts ":o:i:t:p:s:f:" o; do
   case "${o}" in
     i)
       cephadmopts="--image ${OPTARG}"
@@ -64,7 +68,10 @@ while getopts ":o:i:t:p:s:" o; do
     t)
       operation="${OPTARG}"
       ;;
-	  o)
+    f)
+      fsid="${OPTARG}"
+      ;;
+	o)
       if [ $(echo ${OPTARG} | egrep -c '^[0-9][0-9]*$') -eq 1 ]; then
         osdid=${OPTARG}
       else
@@ -111,6 +118,12 @@ if [ -z "${osdid}" ]; then
   usage
 fi
 
+if [ -z "${fsid}" ]; then
+  echo
+  echo "ERROR: -f fsid required!"
+  usage
+fi
+
 if [ -z ${operation} ]; then
   echo
   echo "ERROR: -t task required!"
@@ -129,14 +142,8 @@ echo "  cephadm image=${cephadmopts}"
 echo "  pgid=${pgid}"
 echo "  operation=${operation}"
 echo " start osd = ${startosd}"
+echo "Cluster fsid = ${fsid}"
 
-
-echo "INFO: Gathering fsid"
-fsid=$(awk '/fsid *= */ {print $NF}' /etc/ceph/ceph.conf)
-if [ -z "${fsid}" ]; then
-  echo "ERROR: Could not retrieve cluster FSID from /etc/ceph/ceph.conf"
-  exit 1
-fi
 
 mkdir -p /var/log/ceph/${fsid}/osd.${osdid} &>/dev/null
 
@@ -153,32 +160,34 @@ if [ $operation == "pg-log-inject-dups" ]; then
 [{"reqid": "client.4177.0:0", "version": "111'999999999", "user_version": "0", "generate": "100", "return_code": "0"},]
 EOF
   echo "created test file with 100 corrupt dups to be injected"
-  cat << EOF > /var/log/ceph/${fsid}/osd.${osdid}/${operation}.${osdid}.sh
+  cat << EOF > /var/log/ceph/${fsid}/osd.${osdid}/${operation}-${pgid}.${osdid}.sh
 #!/usr/bin/bash
 
 CEPH_ARGS='--no_mon_config --osd_pg_log_dups_tracked=${dups_tracked}' ceph-objectstore-tool \
  --data-path /var/lib/ceph/osd/ceph-${osdid} --op ${operation} --pgid ${pgid} --file /var/log/ceph/text.json \
-  &> /var/log/ceph/osd.${osdid}/${operation}.${osdid}.log
+  &> /var/log/ceph/osd.${osdid}/${operation}-${pgid}.${osdid}.log
 EOF
 
 else
-  cat << EOF > /var/log/ceph/${fsid}/osd.${osdid}/${operation}.${osdid}.sh
+  cat << EOF > /var/log/ceph/${fsid}/osd.${osdid}/${operation}-${pgid}.${osdid}.sh
 #!/usr/bin/bash
 
 CEPH_ARGS='--osd_pg_log_trim_max=${maxtrim}' ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-${osdid} \
- --op ${operation} --pgid ${pgid} &> /var/log/ceph/osd.${osdid}/${operation}.${osdid}.log
+ --op ${operation} --pgid ${pgid} &> /var/log/ceph/osd.${osdid}/${operation}-${pgid}.${osdid}.log
 EOF
 fi
 
-chmod 755 /var/log/ceph/${fsid}/osd.${osdid}/${operation}.${osdid}.sh
+chmod 755 /var/log/ceph/${fsid}/osd.${osdid}/${operation}-${pgid}.${osdid}.sh
 
 echo "INFO: Running COT operation ${operation} for osd.${osdid}"
-cephadm $cephadmopts shell --fsid ${fsid} --name osd.${osdid} /var/log/ceph/osd.${osdid}/${operation}.${osdid}.sh
+cephadm $cephadmopts shell --fsid ${fsid} --name osd.${osdid} /var/log/ceph/osd.${osdid}/${operation}-${pgid}.${osdid}.sh
 
 if [ $startosd -eq 1 ]; then
   echo "INFO: starting osd.${osdid}"
   systemctl enable ceph-${fsid}@osd.${osdid}
   cephadm unit --fsid ${fsid} --name osd.${osdid} start
 fi
+
+chmod 755 /var/log/ceph/${fsid}/osd.${osdid}/${operation}-${pgid}.${osdid}.log
 
 echo "Completed COT operation ${operation} on osd :  osd.${osdid}"
