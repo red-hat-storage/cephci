@@ -198,3 +198,19 @@
     - ibmc
     - rados
     - stage-5
+
+- name: "Basic operation test suite for 6x for RGW sanity"
+  suite: "suites/quincy/rgw/test-basic-object-operations.yaml"
+  global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+  metadata:
+    - sanity
+    - tier-1
+    - openstack
+    - ibmc
+    - rgw
+    - stage-1
