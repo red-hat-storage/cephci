@@ -1,0 +1,57 @@
+# System Under Test environment configuration for OCS-RHCeph integration.
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+
+      node1:
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - client
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 6
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 6
+        role:
+          - mds
+          - mon
+          - osd
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 6
+        role:
+          - mds
+          - osd
+
+      node5:
+        disk-size: 20
+        no-of-volumes: 6
+        role:
+          - mds
+          - osd
+
+      node6:
+        disk-size: 20
+        no-of-volumes: 6
+        role:
+          - mds
+          - osd
+
+      node7:
+        disk-size: 20
+        no-of-volumes: 6
+        role:
+          - osd
+          - rgw
