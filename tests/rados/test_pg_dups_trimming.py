@@ -4,6 +4,7 @@ Module to Verify if PG dup entries are trimmed successfully.
 import datetime
 import json
 import random
+import re
 import time
 from threading import Thread
 
@@ -37,6 +38,7 @@ def run(ceph_cluster, **kw) -> int:
     pool_configs = config["pool_configs"]
     pool_configs_path = config["pool_configs_path"]
     test_image = config.get("container_image")
+    installer = ceph_cluster.get_nodes(role="installer")[0]
     log.debug(f"Verifying pglog dups trimming on OSDs, test img : {test_image}")
 
     try:
@@ -125,7 +127,19 @@ def run(ceph_cluster, **kw) -> int:
             log.error("Could not inflate the dups to the desired levels")
             return 1
 
-        # todo: Check the memory usage of the affected OSDs
+        # Check the memory usage of the affected OSDs
+        log.debug(
+            "Completed inflating the dup conunts on the cluster.\n"
+            "collecting memory utilization by OSDs before upgrade."
+        )
+
+        mem_util_pre_up = get_osd_memory_usages(rados_obj=rados_obj)
+        for osd in osds:
+            log.debug(
+                f"Memory utilization for {osd} before upgrade is : {mem_util_pre_up[osd]}"
+            )
+
+        start_time, _ = installer.exec_command(cmd="sudo date -u '+%Y-%m-%d %H:%M:%S'")
 
         log.debug("Proceeding to upgrade cluster after inflating dup counts")
         if not upgrade_test_cluster(ceph_cluster=ceph_cluster, **config):
@@ -133,10 +147,50 @@ def run(ceph_cluster, **kw) -> int:
             return 1
 
         # todo: Check the boot-up times after upgrade
-        # todo: Post upgrade checks: logging, RES memory release, dups auto trimmed, No crashes, errors
 
+        # Post upgrade checks: logging, RES memory release, dups auto trimmed, No crashes, errors
+        time.sleep(120)
         log.info("Upgrade completed on the cluster")
+        end_time, _ = installer.exec_command(cmd="sudo date -u '+%Y-%m-%d %H:%M:%S'")
+
+        # Checking the logs generated post upgrade
+        log.debug("Proceeding to check logging post upgrade")
+        if not verify_trim_dups_warn_log(
+            rados_obj=rados_obj,
+            acting_sets=acting_sets,
+            start_time=start_time.strip(),
+            end_time=end_time.strip(),
+        ):
+            log.error("Warning logs not generated post upgrade.")
+            return 1
+        log.debug("Verified logging of warning messages post upgrade")
+
+        for pool in pools:
+            method_should_succeed(
+                rwrite_nosave, obj=rados_obj, dur=50, count=2, pool=pool
+            )
+
+        # Check the memory usage of the affected OSDs
+        log.debug("collecting memory utilization by OSDs")
+        mem_util_post_up = get_osd_memory_usages(rados_obj=rados_obj)
+        for osd in osds:
+            log.debug(
+                f"Memory utilization for {osd} After upgrade is : {mem_util_post_up[osd]}"
+            )
+            if mem_util_post_up[osd]["RES"] >= mem_util_pre_up[osd]["RES"]:
+                log.error(f"RES Memory not released for OSD : {osd}")
+                return 1
+        log.debug("RES Memory released after Upgrade")
+
+        # Checking the dup count on all the OSDs:
+        log.debug("Proceeding to check dup counts post upgrade")
+        if not verify_post_upgrade_dups(rados_obj=rados_obj, acting_sets=acting_sets):
+            log.error("there are more than 3000 dups post upgrade on one or more OSDs")
+            return 1
+        log.debug("The dup count on all the OSDs is as expected.")
+        log.info("Completed the workflow")
         return 0
+
     except Exception as err:
         log.error(f"Could not run the workflow Err: {err}")
         return 1
@@ -534,3 +588,130 @@ def get_pglog_items(obj, osd) -> dict:
     cmd = f"ceph tell osd.{osd} dump_mempools"
     out = obj.run_ceph_command(cmd)
     return out["mempool"]["by_pool"]["osd_pglog"]
+
+
+def verify_post_upgrade_dups(rados_obj, acting_sets) -> bool:
+    """
+    Checks the dups count on all the OSDs post upgrade.
+        Args:
+        rados_obj: Rados object to perform operations
+        acting_sets: Dict of acting sets for the PG
+            eg: {'8.0': [0, 5, 10], '9.0': [2, 6, 10]}
+
+    Returns: Pass -> True, Fail -> False
+
+    """
+    fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
+    rados_obj.node.shell(["ceph osd set noout"])
+    # Proceeding to check dups count on each OSD
+    for pgid in acting_sets.keys():
+        log.debug(f"Checking OSDs of PG: {pgid}. OSDs : {acting_sets[pgid]}")
+        for osd in acting_sets[pgid]:
+            host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd)
+            # Collecting the num of dups present on the PG - OSD
+            method_should_succeed(
+                run_cot_command,
+                host=host,
+                osd=osd,
+                task="log",
+                pgid=pgid,
+                fsid=fsid,
+            )
+
+            path = f"/var/log/ceph/{fsid}/osd.{osd}/log-{pgid}.{osd}.log"
+            dup_count = get_dups_count(host=host, path=path)
+            log.debug(
+                f"Dups count on OSD : {osd} for PG : {pgid} after upgrade is {dup_count}"
+            )
+            if dup_count > 3000:
+                log.error(
+                    f"Dups not trimmed on osd {osd} for PG {pgid} on host {host.hostname}"
+                )
+                return False
+            log.info(
+                f"Dups trimmed on osd {osd} for PG {pgid} on host {host.hostname} Successfully!!!"
+            )
+        log.debug(f"Completed checking for all the OSDs of PG : {pgid}")
+    rados_obj.node.shell(["ceph osd unset noout"])
+    log.debug(f"Completed checking for all the OSDs for all the PGs {acting_sets}")
+    return True
+
+
+def verify_trim_dups_warn_log(
+    rados_obj: RadosOrchestrator, acting_sets, start_time, end_time
+) -> bool:
+    """
+    Retrieve slow op requests log using journalctl command and check if the log warning has been generated on OSDs
+
+    2022-07-19T06:17:18.974+0000 7faeabe3b200  0 read_log_and_missing WARN num of dups exceeded 6000.
+    You can be hit by THE DUPS BUG https://tracker.ceph.com/issues/53729.
+    Consider ceph-objectstore-tool --op trim-pg-log-dups
+
+    Args:
+        rados_obj: ceph node details
+        start_time: time to start reading the journalctl logs - format ('2022-07-20 09:40:10')
+        end_time: time to stop reading the journalctl logs - format ('2022-07-20 10:58:49')
+        acting_sets: Dict of acting sets for the PG
+            eg: {'8.0': [0, 5, 10], '9.0': [2, 6, 10]}
+    Returns:  Pass -> True, Fail -> False
+    """
+    log.debug("Checking if the warning message is generated in OSD logs post upgrade")
+    for pgid in acting_sets.keys():
+        log.debug(f"Checking OSD logs of PG: {pgid}. OSDs : {acting_sets[pgid]}")
+        for osd in acting_sets[pgid]:
+            log_lines = rados_obj.get_journalctl_log(
+                start_time=start_time,
+                end_time=end_time,
+                daemon_type="osd",
+                daemon_id=osd,
+            )
+            line = "read_log_and_missing WARN num of dups exceeded 6000"
+            if line not in log_lines:
+                log.error(
+                    f" did not find relevant logging on PG : {pgid} - OSD : {osd}"
+                )
+                return False
+            log.debug(f"Found relevant logging on PG : {pgid} - OSD : {osd}")
+        log.debug(f"Completed verification on PG : {pgid}")
+    log.info("Completed log verification on all the OSDs sent")
+    return True
+
+
+def get_osd_memory_usages(rados_obj: RadosOrchestrator):
+    """
+    Iterates through all the nodes with OSDs and collects the virtual and RES momories consumed by them
+    Args:
+        rados_obj: rados cluster object to perform operations
+
+    Returns: dict with memory usage
+
+    """
+    regex = r"\s*ceph\s+([\da-z.]*)\s+([\da-z.]*)\s+[/a-z-.]*\s+osd.(\d{1,2})"
+    cmd = "top -bc -u ceph -d 10 -n 1 -w512 | awk '{ print $2, $5, $6, $12, $14 }'"
+    osd_hosts = rados_obj.ceph_cluster.get_nodes(role="osd")
+    memory_use = {}
+    for host in osd_hosts:
+        log.debug(
+            f"Fetching osd memory utilization details from host : {host.hostname}"
+        )
+        try:
+            out, _ = host.exec_command(sudo=True, cmd=cmd)
+            usages = re.findall(regex, out)
+            for usage in usages:
+                memory_use[int(usage[2])] = {
+                    "virtual": get_in_gb(usage[0]),
+                    "RES": get_in_gb(usage[1]),
+                }
+        except Exception as err:
+            log.error(
+                f"Failed to collect the memory usage on host : {host.hostname}\n error: {err}"
+            )
+    log.debug(f"Completed collecting all the memory usages for OSDs: {memory_use}")
+    return memory_use
+
+
+def get_in_gb(usage) -> float:
+    if "g" in usage:
+        return float(usage.replace("g", ""))
+    else:
+        return float(int(usage) / (1024 * 1024))

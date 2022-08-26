@@ -914,8 +914,13 @@ class RadosOrchestrator:
         daemons = self.run_ceph_command(cmd=cmd)
         try:
             o_node = [entry["hostname"] for entry in daemons][0]
-            host = [node for node in host_nodes if re.search(o_node, node.hostname)][0]
-            return host
+            for node in host_nodes:
+                if (
+                    re.search(o_node, node.hostname)
+                    or re.search(o_node, node.vmname)
+                    or re.search(o_node, node.shortname)
+                ):
+                    return node
         except Exception:
             log.error(
                 f"Could not find host node for daemon {daemon_type} with name {daemon_id}"
@@ -996,3 +1001,35 @@ class RadosOrchestrator:
         cmd = f'{"date +%Y:%m:%d:%H:%u"}'
         out, err = self.node.shell([cmd])
         return out.strip()
+
+    def get_journalctl_log(
+        self, start_time, end_time, daemon_type: str, daemon_id: str
+    ) -> str:
+        """
+        Retrieve logs for the requested daemon using journalctl command
+        Args:
+            start_time: time to start reading the journalctl logs - format ('2022-07-20 09:40:10')
+            end_time: time to stop reading the journalctl logs - format ('2022-07-20 10:58:49')
+            daemon_type: ceph service type (mon, mgr ...)
+            daemon_id: Name of the service, OSD ID in case of OSDs
+        Returns:  journal_logs
+        """
+        fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        host = self.fetch_host_node(daemon_type=daemon_type, daemon_id=daemon_id)
+        if daemon_type == "osd":
+            systemctl_name = f"ceph-{fsid}@{daemon_type}.{daemon_id}.service"
+        elif daemon_type == "mgr":
+            systemctl_name = (
+                f"ceph-{fsid}@{daemon_type}.{host.hostname}.{daemon_id}.service"
+            )
+        elif daemon_type == "mon":
+            systemctl_name = f"ceph-{fsid}@{daemon_type}.{host.hostname}.service"
+        else:
+            systemctl_name = f"ceph-{fsid}@{daemon_type}.{host.shortname}.service"
+        try:
+            log_lines, err = host.exec_command(
+                cmd=f"sudo journalctl -u {systemctl_name} --since '{start_time}' --until '{end_time}'"
+            )
+        except Exception as er:
+            log.error(f"Exception hit while command execution. {er}")
+        return log_lines
