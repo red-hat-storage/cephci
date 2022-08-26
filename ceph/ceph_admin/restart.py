@@ -28,7 +28,7 @@ class RestartMixin:
         """
         restart_init_time = datetime.datetime.utcnow()
         rc = self.op("restart", config)
-        args = config.get("args")
+        args = config.get("args", {})
         verify = args.pop("verify", True)
         if verify:
             rc = self.check_service_restart(

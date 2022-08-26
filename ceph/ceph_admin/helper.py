@@ -10,6 +10,7 @@ from os.path import dirname
 from time import sleep
 from typing import Optional
 
+from dateutil import parser
 from jinja2 import Template
 
 from ceph.ceph import CommandFailed
@@ -763,6 +764,37 @@ def file_or_path_exists(node, file_or_path):
     return False
 
 
+def file_or_path_updated(node, file_or_path, interval=120):
+    """
+    Method to check if the given file or directory was updated in the given interval
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+        interval: if mentioned checks whether the file existing in the given path
+                              was updated anytime between now and the interval given here.
+
+    Returns:
+        boolean
+    """
+    try:
+        out, _ = node.exec_command(cmd=f"date -u -r {file_or_path}", sudo=True)
+        LOG.info(f"Output : {out}")
+    except CommandFailed as err:
+        LOG.error(f"Error: {err}")
+        return False
+
+    modified_time = parser.parse(out).replace(tzinfo=None)
+    time_now = datetime.utcnow().replace(tzinfo=None)
+    time_diff = (time_now - modified_time).seconds
+    LOG.info(f"Time difference between now and gz file modified date : {time_diff}")
+    if time_diff > interval:
+        LOG.error(
+            f"The gz file was not created within the previous {time_diff} seconds"
+        )
+        return False
+    return True
+
+
 def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=180):
     """Method to monitor a file existence.
 
@@ -827,6 +859,49 @@ def validate_log_file_after_enable(cls):
         except CommandFailed as err:
             LOG.error("Error: %s" % err)
             return False
+
+    return True
+
+
+def validate_log_rotate(cls):
+    """
+    Verify logrotation of cephadm.log file
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        boolean
+    """
+    # step 1: check for the files in current log directory
+    if not file_or_path_exists(cls.installer, "/var/log/ceph/cephadm.log"):
+        LOG.error("Log rotation failed: Logs not present in /var/log/ceph folder")
+        return False
+
+    # step 2: apply logrotate on cephadm.log
+    out = cls.installer.exec_command(
+        cmd="logrotate --force /etc/logrotate.d/cephadm", sudo=True
+    )
+    # if logrotate doesn't result in logs being zipped return False
+    if not file_or_path_updated(
+        cls.installer, "/var/log/ceph/cephadm.log.1.gz", 120
+    ) and file_or_path_exists(cls.installer, "/var/log/ceph/cephadm.log"):
+        LOG.error("Log rotation failed while enabling rotate")
+        return False
+
+    # step 3: perform any operation that would result in cephadm log be written
+    out, _ = cls.shell(args=["ceph", "orch", "ps", "--format", "json"])
+    daemons = json.loads(out)
+    daemon = [d for d in daemons if "mon" in d["daemon_name"]][0]
+    out, _ = cls.shell(
+        args=["ceph", "orch", "daemon", "redeploy", daemon["daemon_name"]]
+    )
+
+    # step 4: check new cephadm.log file is created
+    if not file_or_path_exists(cls.installer, "/var/log/ceph/cephadm.log"):
+        LOG.error(
+            "Log rotation failed: Logs not present in /var/log/ceph folder after logrotate"
+        )
+        return False
 
     return True
 

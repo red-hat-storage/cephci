@@ -15,7 +15,11 @@ from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.crash import Crash
 from ceph.ceph_admin.daemon import Daemon
 from ceph.ceph_admin.grafana import Grafana
-from ceph.ceph_admin.helper import get_cluster_state, validate_log_file_after_enable
+from ceph.ceph_admin.helper import (
+    get_cluster_state,
+    validate_log_file_after_enable,
+    validate_log_rotate,
+)
 from ceph.ceph_admin.host import Host
 from ceph.ceph_admin.iscsi import ISCSI
 from ceph.ceph_admin.mds import MDS
@@ -144,6 +148,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             if not isvalid:
                 LOG.error("Log file validation failure")
                 return 1
+        if config.get("verify_log_rotate") and not validate_log_rotate(cephadm):
+            LOG.error("Log rotate validation failure")
+            return 1
 
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)
