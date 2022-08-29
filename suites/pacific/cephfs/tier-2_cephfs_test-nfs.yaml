@@ -190,3 +190,17 @@ tests:
       module: nfs.move_data_bw_nfs_and_cephfs_mounts.py
       name: "Move Data bw nfs and cephfs exports"
       polarion-id: "CEPH-11309"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Test data integrity between cephfs & nfs mounts"
+      module: nfs.test_data_integrity_nfs_cephfs_mounts.py
+      name: "data integrity between cephfs & nfs mounts"
+      polarion-id: "CEPH-11314"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Create cephfs nfs export on existing path"
+      module: nfs.existing_path_nfs_export.py
+      name: "existing path cephfs nfs export"
+      polarion-id: "CEPH-83573995"
