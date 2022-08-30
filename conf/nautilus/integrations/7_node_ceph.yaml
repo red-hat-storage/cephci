@@ -32,6 +32,7 @@ globals:
         role:
           - mds
           - osd
+          - grafana
 
       node5:
         disk-size: 20
