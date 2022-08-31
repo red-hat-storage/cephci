@@ -1,0 +1,221 @@
+# Objective: Testing upgrade from RHCS 5 GA to RHCS 5 latest development build
+# with rbd-mirroring daemon
+# conf: conf/pacific/rbd/tier-1_rbd_mirror.yaml
+#
+# Execution flow:
+# 1) Create two clusters with rbd-mirroring daemons.
+# 2) Configure client nodes.
+# 3) Run IOs.
+# 4) Upgrade clusters one by one.
+# 5) Runs IOs.
+
+---
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: install ceph pre requisites
+      module: install_prereq.py
+      name: install vm pre-requsites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    custom_repo: cdn
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-dashboard: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node6
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    custom_repo: cdn
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-dashboard: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node6
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-83575222
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd1:
+            config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true
+          ceph-rbd2:
+            config:
+                command: add
+                id: client.1
+                node: node2
+                install_packages:
+                    - ceph-common
+                copy_admin_keyring: true
+        desc: Configure the client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  # Performing cluster upgrade
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+        ceph-rbd2:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+      desc: cluster upgrade with rbd mirroring daemon
+      module: test_cephadm_upgrade.py
+      name: ceph upgrade with rbd-mirroring
+      polarion-id: CEPH-83574829
+
+  - test:
+      name: test_rbd_mirror_image
+      module: test_rbd_mirror_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573619,CEPH-83573620
+      desc: Create RBD mirrored images and run IOs
+
+  - test:
+      name: test_rbd_mirror
+      module: test_rbd_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            resize_to: 5G
+      polarion-id: CEPH-83573332
+      desc: Create RBD mirrored image in pools and run IOs
