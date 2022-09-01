@@ -288,8 +288,15 @@ tests:
       desc: Creating fs volume,sub-volume,sub-volume group with existing names
       abort-on-fail: false
   - test:
-      name: Subolume Auto clean up after failed creating subvolume
+      name: Subvolume Auto clean up after failed creating subvolume
       module: cephfs_vol_management.cephfs_vol_mgmt_auto_clean_up.py
       polarion-id: CEPH-83574188
-      desc: Subolume Auto clean up after failed creating subvolume
+      desc: Subvolume Auto clean up after failed creating subvolume
       abort-on-fail: false
+  - test:
+      name: Subvolume metadata creation, delete and modifying test
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_metadata.py
+      polarion-id: CEPH-83571330
+      desc: Subvolume metadata creation, delete and modifying test
+      abort-on-fail: false
+
