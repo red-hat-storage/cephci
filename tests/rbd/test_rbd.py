@@ -72,10 +72,22 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
         f"https://dl.fedoraproject.org/pub/epel/epel-release-latest-{os_ver}.noarch.rpm"
     )
 
+    # Temporarily installing xmlstarlet from custom location untill
+    # it becomes available from permanenet location
+    temp_xmlstarlet_location = {
+        "7": "xmlstarlet",
+        "8": "https://koji.mbox.centos.org/pkgs/packages/xmlstarlet/1.6.1/20.el8/x86_64/xmlstarlet-1.6.1-20.el8.x86_64"
+        ".rpm",
+        "9": "http://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/Packages/xmlstarlet-1.6.1-20.el9.x86_64.rpm",
+    }
     commands = [
         {"cmd": f"yum install -y {EPEL_RPM} --nogpgcheck", "sudo": True},
         {
-            "cmd": "yum install -y xmlstarlet rbd-nbd qemu-img cryptsetup --nogpgcheck",
+            "cmd": "yum install -y rbd-nbd qemu-img cryptsetup --nogpgcheck",
+            "sudo": True,
+        },
+        {
+            "cmd": f"yum install -y --nogpgcheck {temp_xmlstarlet_location[os_ver]}",
             "sudo": True,
         },
     ]
