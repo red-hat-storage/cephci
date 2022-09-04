@@ -3,6 +3,7 @@
 #----- Ceph code changes in 5.0 ------
 #--------------------------------------
 #--------------------------------------
+# Conf: conf/pacific/cephadm/sanity-cephadm.yaml
 #
 # Tier-0 test cases for
 #    - Bootstrap
@@ -87,7 +88,7 @@ tests:
       abort-on-fail: true
   - test:
       name: Remove Host label
-      desc: Remove host label osd from node3
+      desc: Remove host label osd from node4
       module: test_host.py
       polarion-id: CEPH-83574740
       config:
