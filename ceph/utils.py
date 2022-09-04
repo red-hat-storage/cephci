@@ -5,6 +5,7 @@ import time
 import traceback
 from json import loads
 from time import mktime
+from typing import List
 
 import requests
 import yaml
@@ -514,8 +515,9 @@ def keep_alive(ceph_nodes):
         node.exec_command(cmd="uptime", check_ec=False)
 
 
-def setup_repos(ceph, base_url, installer_url=None):
-    repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
+def setup_repos(ceph, base_url, installer_url=None, repos: List[str] = None):
+    if not repos:
+        repos = ["MON", "OSD", "Tools"]
     base_repo = generate_repo_file(base_url, repos)
     base_file = ceph.remote_file(
         sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"

@@ -5,6 +5,7 @@ from typing import Dict
 
 from ceph.ceph import ResourceNotFoundError
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
+from ceph.utils import setup_repos
 from utility.log import Log
 from utility.utils import fetch_build_artifacts, get_cephci_config
 
@@ -190,6 +191,7 @@ class BootstrapMixin:
         custom_image = args.pop("custom_image", True)
         build_type = self.config.get("build_type")
         rhbuild = self.config.get("rhbuild")
+        base_url = self.config.get("base_url")
 
         # Support installation of the baseline cluster whose version is not available in
         # CDN. This is primarily used for an upgrade scenario. This support is currently
@@ -223,7 +225,9 @@ class BootstrapMixin:
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
-            self.set_tool_repo()
+            repos = ["Tools"]
+            for node in self.cluster.get_nodes():
+                setup_repos(node, base_url=base_url, repos=repos)
 
         ansible_run = config.get("cephadm-ansible", None)
         if ansible_run:
