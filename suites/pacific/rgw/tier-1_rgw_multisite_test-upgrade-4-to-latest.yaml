@@ -259,6 +259,7 @@ tests:
       clusters:
         ceph-pri:
           config:
+            set-env: true
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
             timeout: 300
