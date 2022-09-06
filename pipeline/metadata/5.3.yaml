@@ -1043,3 +1043,19 @@
     - ibmc
     - rgw
     - stage-6
+
+- name: "test-rgw-lc-expiration-with-prefix-as-special-character"
+  suite: "suites/pacific/rgw/tier-2_rgw_test-lc-prefix.yaml"
+  global-conf: "conf/nautilus/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack
+    - ibmc
+    - rgw
+    - stage-3
