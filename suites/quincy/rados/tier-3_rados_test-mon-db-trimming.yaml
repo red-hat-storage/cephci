@@ -158,9 +158,9 @@ tests:
       desc: Perform rgw tests
 
   - test:
-      name: Customer Scenario BZ1905339
+      name: Automatic trimming of Mon DB
       module: customer_scenarios.py
-      polarion-id: CEPH-83574095, CEPH-83573589
+      polarion-id: CEPH-83574095
       config:
         mondb_trim_config:
           paxos_service_trim_min: 10
