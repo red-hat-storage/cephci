@@ -1610,8 +1610,8 @@ class FsUtils(object):
 
             [root@ceph-hyelloji-9etpcf-node8 ~]# stat /mnt/cephfs_kernelqcnquvmv84_1/volumes/subvolgroup_1/
               File: /mnt/cephfs_kernelqcnquvmv84_1/volumes/subvolgroup_1/
-              Size: 2         	Blocks: 0          IO Block: 65536  directory
-            Device: 31h/49d	Inode: 1099511627829  Links: 4
+              Size: 2           Blocks: 0          IO Block: 65536  directory
+            Device: 31h/49d Inode: 1099511627829  Links: 4
             Access: (0755/drwxr-xr-x)  Uid: (   20/ UNKNOWN)   Gid: (   30/ UNKNOWN)
             Context: system_u:object_r:cephfs_t:s0
             Access: 2021-12-13 06:14:55.204505533 -0500
@@ -1662,7 +1662,7 @@ class FsUtils(object):
                 sleep(interval)
         return False
 
-    def run_ios(self, client, mounting_dir):
+    def run_ios(self, client, mounting_dir, io_tools=["dd", "smallfile"], file_name=""):
         def smallfile():
             client.exec_command(
                 sudo=True,
@@ -1693,12 +1693,18 @@ class FsUtils(object):
         def dd():
             client.exec_command(
                 sudo=True,
-                cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}_dd bs=100M "
+                cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}_dd_{file_name} bs=100M "
                 f"count=5",
                 long_running=True,
             )
 
-        io_tools = [dd, smallfile]
+        io_tool_map = {
+            "dd": dd,
+            "smallfile": smallfile,
+            "wget": wget,
+            "file_extract": file_extract,
+        }
+        io_tools = [io_tool_map.get(i) for i in io_tools if io_tool_map.get(i)]
         f = random.choice(io_tools)
         f()
         return f
@@ -1794,3 +1800,66 @@ class FsUtils(object):
             )
 
         return 0
+
+    @staticmethod
+    def generate_id_rsa_root(node):
+        """
+        generate id_rsa key files for the new vm node
+        """
+        # remove any old files
+        node.exec_command(
+            sudo=True,
+            cmd="test -f ~/.ssh/id_rsa.pub && rm -f ~/.ssh/id*",
+            check_ec=False,
+        )
+        node.exec_command(
+            sudo=True, cmd="ssh-keygen -b 2048 -f ~/.ssh/id_rsa -t rsa -q -N ''"
+        )
+        id_rsa_pub, _ = node.exec_command(sudo=True, cmd="cat ~/.ssh/id_rsa.pub")
+        return id_rsa_pub
+
+    @staticmethod
+    def setup_ssh_root_keys(clients):
+        """
+        Generate and distribute ssh keys within cluster
+        """
+        keys = ""
+        hosts = ""
+        hostkeycheck = (
+            "Host *\n\tStrictHostKeyChecking no\n\tServerAliveInterval 2400\n"
+        )
+
+        for ceph in clients:
+            keys = keys + FsUtils.generate_id_rsa_root(ceph)
+            hosts = (
+                hosts
+                + ceph.node.ip_address
+                + "\t"
+                + ceph.node.hostname
+                + "\t"
+                + ceph.node.shortname
+                + "\n"
+            )
+        for ceph in clients:
+            keys_file = ceph.remote_file(
+                sudo=True, file_name=".ssh/authorized_keys", file_mode="a"
+            )
+            hosts_file = ceph.remote_file(
+                sudo=True, file_name="/etc/hosts", file_mode="a"
+            )
+            ceph.exec_command(
+                sudo=True,
+                cmd="[ -f ~/.ssh/config ] && chmod 700 ~/.ssh/config",
+                check_ec=False,
+            )
+            ssh_config = ceph.remote_file(
+                sudo=True, file_name=".ssh/config", file_mode="a"
+            )
+            keys_file.write(keys)
+            hosts_file.write(hosts)
+            ssh_config.write(hostkeycheck)
+            keys_file.flush()
+            hosts_file.flush()
+            ssh_config.flush()
+            ceph.exec_command(sudo=True, cmd="chmod 600 ~/.ssh/authorized_keys")
+            ceph.exec_command(sudo=True, cmd="chmod 400 ~/.ssh/config")
