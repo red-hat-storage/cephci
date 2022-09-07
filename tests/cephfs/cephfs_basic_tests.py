@@ -64,9 +64,6 @@ def run(ceph_cluster, **kw):
 
 def mount_test_case(clients, mounting_dir):
     tc1 = "11293"
-    tc2 = "11296"
-    tc3 = "11297"
-    tc4 = "11295"
     dir1 = "".join(
         random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
     )
@@ -92,26 +89,15 @@ def mount_test_case(clients, mounting_dir):
             f"{mounting_dir}{dir1}",
             long_running=True,
         )
-        log.info(f"Execution of testcase {tc1} ended")
-        results.append(f"TC {tc1} passed")
-
-        log.info(f"Execution of testcase {tc2} started")
         client.exec_command(
             sudo=True, cmd=f"cp -r  {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
         )
         client.exec_command(
             sudo=True, cmd=f"diff -qr  {mounting_dir}{dir1} {mounting_dir}{dir2}/"
         )
-        log.info(f"Execution of testcase {tc2} ended")
-        results.append(f"TC {tc2} passed")
-
-        log.info(f"Execution of testcase {tc3} started")
         client.exec_command(
             sudo=True, cmd=f"mv  -t {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"
         )
-        log.info(f"Execution of testcase {tc3} ended")
-        results.append(f"TC {tc3} passed")
-        log.info(f"Execution of testcase {tc4} started")
         for client in clients:
             if client.pkg_type != "deb":
                 client.exec_command(
@@ -138,13 +124,9 @@ def mount_test_case(clients, mounting_dir):
                 else:
                     raise CommandFailed("Metadata info command failed")
                 break
-        log.info(f"Execution of testcase {tc4} ended")
         log.info(return_counts)
         rc_set = set(return_counts)
         if len(rc_set) == 1:
-            results.append(f"TC {tc4} passed")
-        log.info("Testcase Results:")
-        for res in results:
-            log.info(res)
+            results.append(f"TC {tc1} passed")
         break
     return 0
