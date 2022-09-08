@@ -118,7 +118,7 @@ tests:
       desc: "cephfs basic operations"
       module: cephfs_basic_tests.py
       name: cephfs-basics
-      polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+      polarion-id: "CEPH-11293"
   -
     test:
       name: nfs-ganesha_with_cephfs

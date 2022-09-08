@@ -14,6 +14,11 @@
 # CEPH-83574026 - zip unzip files continuously on a nfs share
 # CEPH-83573993 - Export the nfs share with cli using an existing path created using subvolume
 # CEPH-11309 - Export and import data between NFS and CephFS
+# CEPH-11314 - Test data integrity between cephfs & nfs mounts
+# CEPH-83573995 - Create cephfs nfs export on existing path
+# CEPH-11310 -  Run IOs by mounting same subvolume with all the three mounts
+# CEPH-11314 - Backup and restore data using existing NFS backup tools
+
 #=======================================================================================================================
 tests:
   -
@@ -190,3 +195,31 @@ tests:
       module: nfs.move_data_bw_nfs_and_cephfs_mounts.py
       name: "Move Data bw nfs and cephfs exports"
       polarion-id: "CEPH-11309"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Test data integrity between cephfs & nfs mounts"
+      module: nfs.test_data_integrity_nfs_cephfs_mounts.py
+      name: "data integrity between cephfs & nfs mounts"
+      polarion-id: "CEPH-11314"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Create cephfs nfs export on existing path"
+      module: nfs.existing_path_nfs_export.py
+      name: "existing path cephfs nfs export"
+      polarion-id: "CEPH-83573995"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Run IOs by mounting same subvolume with all the three mounts"
+      module: nfs.nfs_fuse_kernel_same_subvolume.py
+      name: "Mount same volume on fuse,kernel and nfs and runIOs"
+      polarion-id: "CEPH-11310"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Backup and restore data using existing NFS backup tools"
+      module: nfs.data_backup_restore_bw_nfs_and_local_mounts.py
+      name: "backup and restore data bw nfs exports and local dir"
+      polarion-id: "CEPH-11314"
