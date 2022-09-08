@@ -8,7 +8,7 @@
 # platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
 #=====================================================================================
 - name: "Smoke test of RH Ceph build"
-  suite: "suites/pacific/cephadm/tier-0.yaml"
+  suite: "suites/pacific/cephadm/tier-0-temp.yaml"
   global-conf: "conf/pacific/cephadm/tier-0.yaml"
   platform: "rhel-8"
   rhbuild: "5.3"
