@@ -14,7 +14,7 @@
 # CEPH-83574026 - zip unzip files continuously on a nfs share
 # CEPH-83573993 - Export the nfs share with cli using an existing path created using subvolume
 # CEPH-11309 - Export and import data between NFS and CephFS
-# CEPH-11314 - Test data integrity between cephfs & nfs mounts
+# CEPH-11312 - Test data integrity between cephfs & nfs mounts
 # CEPH-83573995 - Create cephfs nfs export on existing path
 # CEPH-11310 -  Run IOs by mounting same subvolume with all the three mounts
 # CEPH-11314 - Backup and restore data using existing NFS backup tools
@@ -120,8 +120,22 @@ tests:
         id: client.1
         install_packages:
           - ceph-common
-        node: node7
+        node: node8
       desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: node9
+      desc: "Configure the Cephfs client system 2"
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
@@ -201,7 +215,7 @@ tests:
       desc: "Test data integrity between cephfs & nfs mounts"
       module: nfs.test_data_integrity_nfs_cephfs_mounts.py
       name: "data integrity between cephfs & nfs mounts"
-      polarion-id: "CEPH-11314"
+      polarion-id: "CEPH-11312"
   -
     test:
       abort-on-fail: false
