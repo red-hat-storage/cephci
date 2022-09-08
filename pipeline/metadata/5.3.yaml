@@ -1075,3 +1075,33 @@
     - ibmc
     - rgw
     - stage-2
+
+- name: "test cephadm cluster bootstrap with mutiple public network"
+  suite: "suites/pacific/cephadm/customer_bz/tier-2_multiple_subnet_openstack_only.yaml"
+  global-conf: "conf/pacific/cephadm/5-node-cluster-multiple-subnet-openstack-only.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack-only
+    - dmfg
+    - stage-7
+
+- name: "test to validate dashboard alerts"
+  suite: "suites/pacific/dashboard/tier-1_dashboard_alerts.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-4
