@@ -854,7 +854,7 @@
 
 - name: "Tier-2 Cephfs test Nfs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
-  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
   platform: "rhel-8"
   rhbuild: "5.2"
   inventory:
