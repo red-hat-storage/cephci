@@ -57,6 +57,7 @@ tests:
       desc: test bucket quota max objects
       module: sanity_rgw.py
       name: test bucket quota max objects
+      polarion-id: CEPH-83575330
 
   - test:
       config:
@@ -66,6 +67,7 @@ tests:
       desc: test bucket quota max size
       module: sanity_rgw.py
       name: test bucket quota max size
+      polarion-id: CEPH-83575330
 
   - test:
       config:
@@ -75,6 +77,7 @@ tests:
       desc: test user quota max objects
       module: sanity_rgw.py
       name: test user quota max objects
+      polarion-id: CEPH-83575330
 
   - test:
       config:
@@ -84,3 +87,4 @@ tests:
       desc: test user quota max size
       module: sanity_rgw.py
       name: test user quota max size
+      polarion-id: CEPH-83575330
