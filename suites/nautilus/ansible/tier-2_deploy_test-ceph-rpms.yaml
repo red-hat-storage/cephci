@@ -26,6 +26,7 @@ tests:
       module: test_ansible.py
       config:
         is_mixed_lvm_configs: True
+        custom_log: True
         ansi_config:
           ceph_test: True
           ceph_origin: distro
