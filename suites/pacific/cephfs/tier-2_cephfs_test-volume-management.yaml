@@ -186,12 +186,6 @@ tests:
       desc: subvolume resize
       abort-on-fail: false
   - test:
-      name: subvolumegroup creation with uid and gid
-      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_gid_uid.py
-      polarion-id: CEPH-83574166
-      desc: subvolumegroup creation with uid and gid
-      abort-on-fail: false
-  - test:
       name: Delete subvolume_group name that does not exist
       module: cephfs_vol_management.cephfs_vol_mgmt_non_exist_subvol_group.py
       polarion-id: CEPH-83574182
