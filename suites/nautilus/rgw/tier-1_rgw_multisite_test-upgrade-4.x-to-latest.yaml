@@ -1,4 +1,4 @@
-# Polarion ID: CEPH-83574658
+# Polarion ID: CEPH-83574647
 # Objective: Testing Multisite upgrade from RHCS 4 GA to latest development build.
 # conf: tier-1_rgw_multisite.yaml
 # platform: rhel-7
@@ -230,7 +230,7 @@ tests:
               upgrade_ceph_packages: true
       desc: Upgrading the clusters to the specified build.
       abort-on-fail: true
-      polarion-id: CEPH-83574658
+      polarion-id: CEPH-83574647
 
   # Test cluster post upgrade
 
