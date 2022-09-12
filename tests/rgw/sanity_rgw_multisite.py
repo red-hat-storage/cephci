@@ -188,16 +188,19 @@ def set_test_env(config, rgw_node):
 
     log.info("flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
-    rgw_node.exec_command(cmd="sudo yum install python3 -y", check_ec=False)
-    rgw_node.exec_command(cmd="yum install -y ceph-common", check_ec=False, sudo=True)
-    rgw_node.exec_command(cmd="sudo rm -rf " + test_folder)
-    rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
-    utils.clone_the_repo(config, rgw_node, test_folder_path)
+    out, err = rgw_node.exec_command(cmd=f"ls -l {test_folder}", check_ec=False)
+    if not out:
+        rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
+        utils.clone_the_repo(config, rgw_node, test_folder_path)
+        rgw_node.exec_command(cmd="sudo yum install python3 -y", check_ec=False)
+        rgw_node.exec_command(
+            cmd="yum install -y ceph-common", check_ec=False, sudo=True
+        )
 
-    rgw_node.exec_command(cmd="sudo pip3 install --upgrade pip")
-    rgw_node.exec_command(
-        cmd=f"sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
-    )
+        rgw_node.exec_command(cmd="sudo pip3 install --upgrade pip")
+        rgw_node.exec_command(
+            cmd=f"sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
+        )
 
 
 def copy_file_from_node_to_node(src_file, src_node, dest_node, dest_file):
