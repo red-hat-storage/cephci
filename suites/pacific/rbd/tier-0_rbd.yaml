@@ -98,16 +98,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-  -
-    test:
-      config:
-        branch: v16.2.8
-        script: cli_generic.sh
-        script_path: qa/workunits/rbd
-      desc: "Executing upstream RBD CLI Generic scenarios"
-      module: test_rbd.py
-      name: 1_rbd_cli_generic
-      polarion-id: CEPH-83574241
+
   -
     test:
       config:
