@@ -854,7 +854,7 @@
 
 - name: "Tier-2 Cephfs test Nfs"
   suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
-  global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+  global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
   platform: "rhel-8"
   rhbuild: "5.3"
   inventory:
@@ -1028,8 +1028,8 @@
     - rgw
     - stage-1
 
-- name: "test-empty-bucket-notification"
-  suite: "suites/pacific/rgw/tier-2_rgw_test-empty-bucket-notifcations.yaml"
+- name: "test-5.3-specific-fixes"
+  suite: "suites/pacific/rgw/tier-2_rgw_test_5.3_specific_fixes.yaml"
   global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
   platform: "rhel-8"
   rhbuild: "5.3"
@@ -1075,6 +1075,36 @@
     - ibmc
     - rgw
     - stage-2
+
+- name: "test cephadm cluster bootstrap with mutiple public network"
+  suite: "suites/pacific/cephadm/customer_bz/tier-2_multiple_subnet_openstack_only.yaml"
+  global-conf: "conf/pacific/cephadm/5-node-cluster-multiple-subnet-openstack-only.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-2
+    - openstack-only
+    - dmfg
+    - stage-7
+
+- name: "test to validate dashboard alerts"
+  suite: "suites/pacific/dashboard/tier-1_dashboard_alerts.yaml"
+  global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+    ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+  metadata:
+    - schedule
+    - tier-1
+    - openstack
+    - ibmc
+    - dmfg
+    - stage-4
 
 - name: "test-rgw-quota-management"
   suite: "suites/pacific/rgw/tier-2_rgw_test-quota-management.yaml"

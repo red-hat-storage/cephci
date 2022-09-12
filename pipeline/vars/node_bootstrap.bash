@@ -9,6 +9,7 @@
 #   1 -> Configures the agent with necessary CI packages
 #   2 -> 0 + 1 along with deploying postfix package
 #   3 -> 0 + 1 along with rclone package
+#   4 -> 0 + 1 along with teuthology clone and install
 
 echo "Initialize Node"
 # Workaround: Disable IPv6 to have quicker downloads
@@ -52,6 +53,14 @@ if [ ${1:-0} -eq 3 ]; then
     curl https://rclone.org/install.sh | sudo bash || echo 0
     mkdir -p ${HOME}/.config/rclone
     wget http://magna002.ceph.redhat.com/cephci-jenkins/.ibm-cos.conf -O ${HOME}/.config/rclone/rclone.conf
+fi
+
+# Install teuthology prerequisites
+if [ ${1:-0} -eq 4 ]; then
+    # Install teuthology
+    sudo yum install ipmitool -y
+    wget http://magna002.ceph.redhat.com/cephci-jenkins/.teuthology.yaml -O ${HOME}/.teuthology.yaml
+    .venv/bin/python -m pip install git+https://github.com/ceph/teuthology.git
 fi
 
 echo "Done bootstrapping the Jenkins node."
