@@ -144,7 +144,7 @@ tests:
   # upgrade ceph cluster
   - test:
       name: Upgrade ceph cluster to 4.x latest
-      polarion-id: CEPH-83574675
+      polarion-id: CEPH-83574647
       module: test_ansible_upgrade.py
       config:
         ansi_config:

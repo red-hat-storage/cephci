@@ -232,7 +232,7 @@ tests:
 
   - test:
       name: Upgrade ceph ansible to 4.x latest
-      polarion-id: CEPH-83573508
+      polarion-id: CEPH-83574647
       module: test_ansible_upgrade.py
       config:
         ansi_config:
