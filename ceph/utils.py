@@ -515,10 +515,16 @@ def keep_alive(ceph_nodes):
         node.exec_command(cmd="uptime", check_ec=False)
 
 
-def setup_repos(ceph, base_url, installer_url=None, repos: List[str] = None):
+def setup_repos(
+    ceph,
+    base_url,
+    installer_url=None,
+    repos: List[str] = None,
+    cloud_type: str = "openstack",
+):
     if not repos:
         repos = ["MON", "OSD", "Tools"]
-    base_repo = generate_repo_file(base_url, repos)
+    base_repo = generate_repo_file(base_url, repos, cloud_type)
     base_file = ceph.remote_file(
         sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
     )
@@ -616,8 +622,8 @@ def check_ceph_healthly(
     return 0
 
 
-def generate_repo_file(base_url, repos):
-    return Ceph.generate_repository_file(base_url, repos)
+def generate_repo_file(base_url, repos, cloud_type="openstack"):
+    return Ceph.generate_repository_file(base_url, repos, cloud_type)
 
 
 def get_iso_file_url(base_url):

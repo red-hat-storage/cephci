@@ -934,18 +934,19 @@ class Ceph(object):
     @staticmethod
     def generate_repository_file(base_url, repos, cloud_type="openstack"):
         """
-        Generate rhel repository file for given repos
+        Generate rhel repository file for given repos.
+
         Args:
             base_url(str): rhel compose url
             repos(list): repos behind compose/ to process
-
+            cloud_type (str): The environment used for testing
         Returns:
             str: repository file content
         """
         repo_file = ""
         for repo in repos:
             base_url = base_url.rstrip("/")
-            if cloud_type == "ibmc":
+            if "ibmc" in cloud_type:
                 repo_to_use = f"{base_url}/{repo}/"
             else:
                 repo_to_use = f"{base_url}/compose/{repo}/x86_64/os/"
@@ -961,6 +962,7 @@ class Ceph(object):
                 gpgcheck = "gpgcheck=0\n"
                 enabled = "enabled=1\n\n"
                 repo_file = repo_file + header + name + baseurl + gpgcheck + enabled
+
         return repo_file
 
     def get_osd_container_name_by_id(self, osd_id, client=None):
