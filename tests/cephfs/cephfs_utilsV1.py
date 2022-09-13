@@ -1823,7 +1823,7 @@ class FsUtils(object):
         """
         Generate and distribute ssh keys within cluster
         """
-        keys = ""
+        keys = "\n"
         hosts = ""
         hostkeycheck = (
             "Host *\n\tStrictHostKeyChecking no\n\tServerAliveInterval 2400\n"
