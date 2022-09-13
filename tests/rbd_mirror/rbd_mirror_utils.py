@@ -620,7 +620,7 @@ class RbdMirror:
         """
         service_name, rc = self.ceph_rbdmirror.exec_command(
             sudo=True,
-            cmd=f"systemctl list-units --all | grep {service_name} | awk {{'print $1'}}",
+            cmd=f"systemctl list-units --all | grep {service_name} | grep -Ev \\.target | awk {{'print $1'}}",
         )
         log.info(f"Service name : {service_name} ")
         return service_name
