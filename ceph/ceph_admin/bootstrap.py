@@ -192,6 +192,7 @@ class BootstrapMixin:
         build_type = self.config.get("build_type")
         rhbuild = self.config.get("rhbuild")
         base_url = self.config.get("base_url")
+        cloud_type = self.config.get("cloud-type", "openstack")
 
         # Support installation of the baseline cluster whose version is not available in
         # CDN. This is primarily used for an upgrade scenario. This support is currently
@@ -227,7 +228,7 @@ class BootstrapMixin:
         else:
             repos = ["Tools"]
             for node in self.cluster.get_nodes():
-                setup_repos(node, base_url=base_url, repos=repos)
+                setup_repos(node, base_url=base_url, repos=repos, cloud_type=cloud_type)
 
         ansible_run = config.get("cephadm-ansible", None)
         if ansible_run:
