@@ -1,0 +1,134 @@
+# Tier - 2: Execute S3Tests using self-signed certificate
+#
+# Requires the following keys in cephci.yaml
+#
+#   vault:
+#        url: http://<vault-server>/
+#        agent:
+#          auth: agent
+#          engine: transit
+#          role-id: <role-id>
+#          secret-id: <secret-id>
+#          prefix: /v1/<path>
+#
+---
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwecprofile01 k=4 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwecprofile01"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.index 32 32"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.index rgw"
+              command: shell
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.ssl
+                  placement:
+                    nodes:
+                      - node7
+                  spec:
+                    ssl: true
+                    rgw_frontend_ssl_certificate: create-cert
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node8
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-quincy
+        kms_keyid: testKey01
+      desc: S3tests
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests
+      polarion-id: CEPH-83575225
