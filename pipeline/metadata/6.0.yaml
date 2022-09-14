@@ -296,7 +296,7 @@
     - cephfs
     - stage-1
 
-- name: "FS Scenario based coversion subvolume,snapshot,quota features"
+- name: "FS Scenario based coversion subvolume-snapshot-quota features"
   suite: "suites/pacific/cephfs/tier-1_fs.yaml"
   global-conf: "conf/pacific/cephfs/tier-1_fs.yaml"
   platform: "rhel-9"
