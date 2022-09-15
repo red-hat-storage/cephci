@@ -402,8 +402,8 @@
     - rados
     - stage-1
 
-- name: "RADOS regression testing for Mon DB trimming"
-  suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
+- name: "Testing RADOS regression for slow op requests"
+  suite: "suites/pacific/rados/tier-2_rados_test-slow-op-requests.yaml"
   global-conf: "conf/pacific/rados/11-node-cluster.yaml"
   platform: "rhel-8"
   rhbuild: "5.3"
@@ -411,10 +411,24 @@
     openstack: "conf/inventory/rhel-8-latest.yaml"
     ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
   metadata:
-    - sanity
+    - schedule
     - tier-2
     - openstack
     - ibmc
+    - rados
+    - stage-2
+
+- name: "RADOS regression testing for Mon DB trimming"
+  suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
+  global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+  platform: "rhel-8"
+  rhbuild: "5.3"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - sanity
+    - tier-2
+    - openstack-only
     - rados
     - stage-4
 
