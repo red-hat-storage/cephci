@@ -370,7 +370,11 @@ node(nodeName) {
                                 string(name: 'buildArtifacts', value: buildArtifacts.toString())]
                 ])
             }
-            sharedLib.writeToRecipeFile(buildType, rhcephVersion, tierLevel, currentStageLevel, buildStatus)
+
+            if(tierLevel == "tier-0" && final_stage && buildStatus == "pass"){
+                sharedLib.writeToRecipeFile(rhcephVersion, tierLevel)
+            }
+
             latestContent = sharedLib.readFromRecipeFile(rhcephVersion)
             println "latest content is: ${latestContent}"
         }
