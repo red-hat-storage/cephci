@@ -162,6 +162,7 @@ tests:
       config:
         verify_cluster_health: true
         verify_log_files: true
+        verify_log_rotate: true
         steps:
           - config:
               command: shell      # wait for daemons to come up, need to remove this sleep
