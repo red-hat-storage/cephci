@@ -940,8 +940,8 @@ def returnSnippet() {
 }
 
 def readFromConfluenceMetadata(
-    def file = "confluence_metadata.yaml",
-    def location="/ceph/cephci-jenkins/results"
+    def file = ".confluence_metadata.yaml",
+    def location="/ceph/cephci-jenkins/"
     ){
     /*
         Method to read metadata info about confluence.
