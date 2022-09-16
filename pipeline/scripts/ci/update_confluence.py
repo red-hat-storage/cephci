@@ -85,6 +85,12 @@ def get_updated_page_body(pageBody, content):
                     rIdx = ceph_version_exists[0][0]
                     tableRows[rIdx]["td"][index] = value
                 tableRow["td"][index] = value
+
+        if not ceph_version_exists:
+            for idx, val in enumerate(tableHeaders["th"]):
+                if val not in content.keys():
+                    tableRow["td"][idx] = ""
+
         newTableRows = (
             [tableHeaders] + tableRows
             if ceph_version_exists
