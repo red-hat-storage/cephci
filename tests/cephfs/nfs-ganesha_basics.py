@@ -39,7 +39,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         rhbuild = config.get("rhbuild")
-        if "5." in rhbuild:
+        if rhbuild.startswith(("5", "6")):
             from tests.cephfs.cephfs_utilsV1 import FsUtils
 
             fs_util = FsUtils(ceph_cluster)
