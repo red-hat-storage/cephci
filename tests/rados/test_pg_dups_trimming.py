@@ -118,12 +118,14 @@ def run(ceph_cluster, **kw) -> int:
         time.sleep(10)
 
         log.debug("Inflating the dup counts on all the corrupted OSDs")
-        if not inflate_dups(
+        new_acting_set = inflate_dups(
             rados_obj=rados_obj,
             acting_sets=acting_sets,
             pools=pools,
             test_image=test_image,
-        ):
+        )
+
+        if not new_acting_set:
             log.error("Could not inflate the dups to the desired levels")
             return 1
 
@@ -157,7 +159,7 @@ def run(ceph_cluster, **kw) -> int:
         log.debug("Proceeding to check logging post upgrade")
         if not verify_trim_dups_warn_log(
             rados_obj=rados_obj,
-            acting_sets=acting_sets,
+            acting_sets=new_acting_set,
             start_time=start_time.strip(),
             end_time=end_time.strip(),
         ):
@@ -393,7 +395,7 @@ def inject_dups(rados_obj, acting_sets, test_image) -> bool:
     return True
 
 
-def inflate_dups(rados_obj, acting_sets, pools, test_image) -> bool:
+def inflate_dups(rados_obj, acting_sets, pools, test_image):
     """
     Method which waits till the desired levels of dup entries are present on the cluster
     Args:
@@ -403,7 +405,7 @@ def inflate_dups(rados_obj, acting_sets, pools, test_image) -> bool:
         pools: test pool names created on cluster
         test_image: Test image to be used to inject/trim dups
 
-    Returns: Pass -> True, Fail -> False
+    Returns: Pass -> New acting set after removing the offline trimmed OSD, Fail -> False
 
     """
 
@@ -417,6 +419,10 @@ def inflate_dups(rados_obj, acting_sets, pools, test_image) -> bool:
     rados_obj.node.shell([cmd])
     pglog_items = {}
     trim_tested = False
+
+    random_pgid = random.choice([pgid for pgid in acting_sets.keys()])
+    random_osd = random.choice(acting_sets[random_pgid])
+    acting_sets[random_pgid].remove(random_osd)
 
     # Total wait time of 4 hours
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=14400)
@@ -435,7 +441,7 @@ def inflate_dups(rados_obj, acting_sets, pools, test_image) -> bool:
             log.info(
                 f"Inflated the pglog average count to {sum_pglog / len(osds)} across OSDs : {osds}"
             )
-            return True
+            return acting_sets
 
         log.debug(
             f"pg_log items not filled to expected levels. average count : {sum_pglog / len(osds)}"
@@ -452,8 +458,6 @@ def inflate_dups(rados_obj, acting_sets, pools, test_image) -> bool:
             )
             log.info("Testing the offline Trimming on one of the affected OSDs")
             trim_tested = True
-            random_pgid = random.choice([pgid for pgid in acting_sets.keys()])
-            random_osd = random.choice(acting_sets[random_pgid])
             log.info(
                 f"Picked PGID : {random_pgid} to trim the duplicates. OSD : {random_osd}"
             )

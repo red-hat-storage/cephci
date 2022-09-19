@@ -25,6 +25,7 @@ tests:
                 custom_repo: "https://download.eng.bos.redhat.com/rel-eng/rhel-8/RHCEPH-5/RHCEPH-5.1-RHEL-8-RC-4.1/compose/Tools/x86_64/os/"
                 mon-ip: depressa007
                 allow-fqdn-hostname: true
+                yes-i-know: true
           - config:
               command: add_hosts
               service: host
