@@ -826,7 +826,7 @@
     - stage-4
 
 - name: "S3Tests against Red Hat RGW with SSL"
-  suite: "suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
+  suite: "suites/quincy/rgw/tier-2_rgw_ssl_s3tests.yaml"
   global-conf: "conf/pacific/rgw/ec-profile-4+2-cluster.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"

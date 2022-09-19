@@ -30,7 +30,8 @@ tests:
                     mon-ip: extensa003
                     allow-fqdn-hostname: true
                     orphan-initial-daemons: true
-                    skip-dashboard: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
               - config:
                   command: add_hosts
                   service: host
@@ -99,7 +100,8 @@ tests:
                     mon-ip: extensa010
                     allow-fqdn-hostname: true
                     orphan-initial-daemons: true
-                    skip-dashboard: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
               - config:
                   command: add_hosts
                   service: host
@@ -162,6 +164,68 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - extensa003
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - extensa003
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - extensa010
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - extensa010
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
 
   - test:
       abort-on-fail: true
