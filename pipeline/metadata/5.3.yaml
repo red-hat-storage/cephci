@@ -1060,7 +1060,7 @@
 
 - name: "test-rgw-lc-expiration-with-prefix-as-special-character"
   suite: "suites/pacific/rgw/tier-2_rgw_test-lc-prefix.yaml"
-  global-conf: "conf/nautilus/rgw/tier-0_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
   platform: "rhel-8"
   rhbuild: "5.3"
   inventory:
