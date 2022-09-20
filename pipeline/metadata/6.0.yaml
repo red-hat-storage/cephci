@@ -795,7 +795,7 @@
 
 - name: "test-rgw-lc-expiration-with-prefix-as-special-character"
   suite: "suites/pacific/rgw/tier-2_rgw_test-lc-prefix.yaml"
-  global-conf: "conf/nautilus/rgw/tier-0_rgw.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
@@ -811,7 +811,7 @@
 
 - name: "tier-2_rgw_test-multisite-metadata-sync"
   suite: "suites/pacific/rgw/tier-2_rgw_test-multisite-metadata-sync.yaml"
-  global-conf: "conf/nautilus/rgw/rgw_mutlisite.yaml"
+  global-conf: "conf/pacific/rgw/rgw_mutlisite.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
