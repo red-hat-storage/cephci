@@ -13,18 +13,55 @@ def get_disk_list(node, expr=None, **kw):
     return node.exec_command(cmd=cmd, **kw)
 
 
-def get_running_containers(node, expr=None, **kw):
+def get_running_containers(node, expr=None, template=None, **kw):
     """Get containers running on nodes
 
     Args:
         node (ceph): ceph node object
         expr (str): expression to filter containers
+        template (str): template to print result
         kw (dict): execute command parameters
     """
     cmd = "podman ps --noheading"
     if expr:
         cmd += f" --filter {expr}"
 
+    if template:
+        cmd += f" --format {template}"
+
+    return node.exec_command(cmd=cmd, **kw)
+
+
+def podman_exec(node, cmd, ctr_id, user=None, workdir=None, **kw):
+    """Execute podman exec with iteractive mode
+
+    Args:
+        node (ceph): Ceph node object
+        ctr_id (str): Container ID
+        cmd (str): Command to be executed inside user
+        user (str): Sets the username or UID used
+        workdir (str): Working directory inside the container.
+    """
+    execute = f"podman exec {ctr_id} "
+    if user:
+        execute += f"--user {user} "
+    if workdir:
+        execute += f"--workdir {workdir} "
+
+    execute += cmd
+    return node.exec_command(cmd=execute, **kw)
+
+
+def podman_copy_to_localhost(node, ctr_id, source, destination, **kw):
+    """Copy source directory from container to localhost
+
+    Args:
+        node (ceph): Ceph node object
+        ctr_id (str): Container ID
+        source (str): Location from container to copy file
+        destination (str): Location from localhost to copy file
+    """
+    cmd = f"podman cp {ctr_id}:{source} {destination}"
     return node.exec_command(cmd=cmd, **kw)
 
 

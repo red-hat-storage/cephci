@@ -8,6 +8,7 @@ RHEL8_EPEL_RELESE_RPM = (
     "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
 )
 RHCEPH5_TOOLS_REPO = "rhceph-5-tools-for-rhel-{}-x86_64-rpms"
+RHCEPH5_TOOLS_DEBUG_REPO = "rhceph-5-tools-for-rhel-{}-x86_64-debug-rpms"
 RHEL8_ANSIBLE_REPO = "ansible-2.9-for-rhel-8-x86_64-rpms"
 
 CEPHADM_ANSIBLE_PATH = "/usr/share/cephadm-ansible"
@@ -61,9 +62,12 @@ class EnableToolsRepositories:
     def run(nodes):
         nodes = nodes if isinstance(nodes, list) else [nodes]
         for node in nodes:
-            stdout, _ = os_major_version(node)
-            repos = [RHCEPH5_TOOLS_REPO.format(stdout.strip())]
-            if stdout.strip() == "8":
+            os_version = os_major_version(node)[0].strip()
+            repos = [
+                RHCEPH5_TOOLS_REPO.format(os_version),
+                RHCEPH5_TOOLS_DEBUG_REPO.format(os_version),
+            ]
+            if os_version == "8":
                 repos.append(RHEL8_ANSIBLE_REPO)
 
             if SubscriptionManager(node).repos.enable(repos):
@@ -123,3 +127,26 @@ class ConfigureCephadmRepositories:
 
         log.info("Configured cephadm repositories successfully")
         return True
+
+
+class InstallCoredump:
+    """Install and configure coredump packages."""
+
+    @staticmethod
+    def run(nodes):
+        packages = (
+            "ceph-base-debuginfo",
+            "ceph-common-debuginfo",
+            "ceph-debugsource",
+            "ceph-fuse-debuginfo",
+            "ceph-immutable-object-cache-debuginfo",
+            "ceph-mds-debuginfo",
+            "ceph-mgr-debuginfo",
+            "ceph-mon-debuginfo",
+            "ceph-osd-debuginfo",
+            "ceph-radosgw-debuginfo",
+            "cephfs-mirror-debuginfo",
+            "gdb",
+        )
+        EnableToolsRepositories().run(nodes)
+        Package(nodes).install(" ".join(packages))
