@@ -382,12 +382,15 @@ def executeTestSuite(
     */
     def rc = "PASS"
 
-    if (! vmPrefix?.trim()) {
-        def randString = sh(
+    def randString = sh(
             script: "cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5",
             returnStdout: true
         ).trim()
+    if (! vmPrefix?.trim()) {
         vmPrefix = "ci-${randString}"
+    }
+    else{
+        vmPrefix = "ci-${vmPrefix}-${randString}"
     }
 
     def baseCmd = ".venv/bin/python run.py --log-level DEBUG"
@@ -1099,6 +1102,15 @@ def updateConfluencePage(
 
     def updateResult = sh (returnStdout: true, script: cli)
     println("Confluence page updated with content")
+}
+
+def getBuildUser(){
+    println("Inside build user")
+    println("${currentBuild.getBuildCauses()[0]}")
+    buildUserId = "${currentBuild.getBuildCauses()[0].userId}"
+    buildUserEmail =  "${currentBuild.getBuildCauses()[0].userId}@redhat.com"
+    buildUserName = "${currentBuild.getBuildCauses()[0].userName}"
+    return ["buildUserId": "${buildUserId}", "buildUserEmail": "${buildUserEmail}", "buildUserName": "${buildUserName}"]
 }
 
 

@@ -6,6 +6,9 @@ def rhcephVersion= "${params.RHCS_Build}"
 def phase = "${params.Build}"
 def group = "${params.Group}-"
 def suite = "${params.Suite}"
+def buildUserId
+def buildUserEmail
+def buildUserName
 
 def getCLI(){
     /*
@@ -109,6 +112,11 @@ node("rhel-8-medium || ceph-qe-ci"){
         else{
             sharedLib.prepareNode()
         }
+        def buildUser = sharedLib.getBuildUser()
+        buildUserId = buildUser["buildUserId"]
+        buildUserEmail = buildUser["buildUserEmail"]
+        buildUserName = buildUser["buildUserName"]
+        currentBuild.description = "Triggered by : ${buildUserName}"
     }
 
     stage('Execute groovy script'){
@@ -122,18 +130,13 @@ node("rhel-8-medium || ceph-qe-ci"){
                 cleanupOnFailure = false
             }
             def cli = getCLI()
-            retVal = sharedLib.executeTestSuite(cli, cleanupOnSuccess, cleanupOnFailure)
+            retVal = sharedLib.executeTestSuite(cli, cleanupOnSuccess, cleanupOnFailure, buildUserId)
             retVal.put("status", retVal["result"])
             println(retVal)
         }
     }
     stage('Publish Results'){
         testResults = ["${params.Suite}" : retVal]
-        def jobUserId
-        wrap([$class: 'BuildUser']) {
-            jobUserId = "${BUILD_USER_ID}@redhat.com"
-            jobUserName = "${BUILD_USER_FIRST_NAME}"
-        }
         def (majorVersion, minorVersion) = rhcephVersion.tokenize(".")
         def releaseContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
         sharedLib.sendEmail(
@@ -142,8 +145,7 @@ node("rhel-8-medium || ceph-qe-ci"){
                 sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, phase),
                 group,
                 suite,
-                jobUserId
+                buildUserEmail
         )
-        currentBuild.description = "Triggered by - ${jobUserName}"
     }
 }
