@@ -114,7 +114,7 @@
   metadata:
     - schedule
     - tier-3
-    - openstack
+    - openstack-only
     - ibmc
     - rados
     - stage-1
