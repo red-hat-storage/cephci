@@ -81,6 +81,18 @@ def run(**kw):
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
     primary_rgw_node = primary_cluster.get_ceph_object("rgw").node
     secondary_rgw_node = secondary_cluster.get_ceph_object("rgw").node
+    archive_cluster_exists = False
+    if "ceph-arc" in clusters.keys():
+        if "ceph-sec" not in clusters.keys():
+            archive_cluster = clusters.get(
+                "ceph-arc", clusters[list(clusters.keys())[1]]
+            )
+        else:
+            archive_cluster = clusters.get(
+                "ceph-arc", clusters[list(clusters.keys())[2]]
+            )
+        archive_rgw_node = archive_cluster.get_ceph_object("rgw").node
+        archive_cluster_exists = True
 
     test_folder = "rgw-ms-tests"
     test_folder_path = f"/home/cephuser/{test_folder}"
@@ -95,7 +107,8 @@ def run(**kw):
         if primary_cluster.rhcs_version.version[0] >= 5:
             setup_cluster_access(primary_cluster, primary_rgw_node)
             setup_cluster_access(secondary_cluster, secondary_rgw_node)
-
+            if archive_cluster_exists:
+                setup_cluster_access(archive_cluster, archive_rgw_node)
     # run the test
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
