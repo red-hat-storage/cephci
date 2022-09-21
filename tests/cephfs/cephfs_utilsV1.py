@@ -548,7 +548,7 @@ class FsUtils(object):
                 if vol_name not in [i["name"] for i in volname_ls]:
                     raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
             return cmd_out, cmd_rc
-        if "pacific" in output_split:
+        if "pacific" in output_split or "quincy" in output_split:
             fs_cmd = f"ceph fs volume create {vol_name}"
             cmd_out, cmd_rc = client.exec_command(
                 sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)

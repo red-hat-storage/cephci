@@ -87,57 +87,32 @@ def run(ceph_cluster, **kw):
             for _ in list(range(10))
         )
         log.info("Mount 1 subvolume on kernel and 1 subvloume on Fuse → Client1")
-        if build.startswith("5"):
-            kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
-            mon_node_ips = fs_util.get_mon_node_ips()
-            log.info("Get the path of subvolume on default filesystem")
-            subvol_path, rc = clients[0].exec_command(
-                sudo=True,
-                cmd=f"ceph fs subvolume getpath {default_fs} subvol_1 subvolgroup_1",
-            )
-            fs_util.kernel_mount(
-                [clients[0]],
-                kernel_mounting_dir_1,
-                ",".join(mon_node_ips),
-                sub_dir=f"{subvol_path.strip()}",
-                extra_params=f",fs={default_fs}",
-            )
-            log.info("Get the path of subvolume on EC filesystem")
-            fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_EC_1/"
-            subvol_path, rc = clients[0].exec_command(
-                sudo=True,
-                cmd="ceph fs subvolume getpath cephfs-ec subvol_2 subvolgroup_ec1",
-            )
-            fs_util.fuse_mount(
-                [clients[0]],
-                fuse_mounting_dir_1,
-                extra_params=f" -r {subvol_path.strip()} --client_fs cephfs-ec",
-            )
-        else:
-            kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
-            mon_node_ips = fs_util.get_mon_node_ips()
-            log.info("Get the path of subvolume on default filesystem")
-            subvol_path, rc = clients[0].exec_command(
-                sudo=True,
-                cmd=f"ceph fs subvolume getpath {default_fs} subvol_1 subvolgroup_1",
-            )
-            fs_util.kernel_mount(
-                [clients[0]],
-                kernel_mounting_dir_1,
-                ",".join(mon_node_ips),
-                sub_dir=f"{subvol_path.strip()}",
-            )
-            log.info("Get the path of subvolume on EC filesystem")
-            fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_EC_1/"
-            subvol_path, rc = clients[0].exec_command(
-                sudo=True,
-                cmd="ceph fs subvolume getpath cephfs-ec subvol_2 subvolgroup_ec1",
-            )
-            fs_util.fuse_mount(
-                [clients[0]],
-                fuse_mounting_dir_1,
-                extra_params=f" -r {subvol_path.strip()}",
-            )
+
+        kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
+        mon_node_ips = fs_util.get_mon_node_ips()
+        log.info("Get the path of subvolume on default filesystem")
+        subvol_path, rc = clients[0].exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume getpath {default_fs} subvol_1 subvolgroup_1",
+        )
+        fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir_1,
+            ",".join(mon_node_ips),
+            sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
+        )
+        log.info("Get the path of subvolume on EC filesystem")
+        fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_EC_1/"
+        subvol_path, rc = clients[0].exec_command(
+            sudo=True,
+            cmd="ceph fs subvolume getpath cephfs-ec subvol_2 subvolgroup_ec1",
+        )
+        fs_util.fuse_mount(
+            [clients[0]],
+            fuse_mounting_dir_1,
+            extra_params=f" -r {subvol_path.strip()} --client_fs cephfs-ec",
+        )
 
         run_ios(
             clients[0], kernel_mounting_dir_1, file_name="dd_file1", bs="100M", count=20
