@@ -196,6 +196,10 @@ def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     # check status for complete sync
     if "data is caught up with source" in check_sync_status:
         log.info("sync status complete")
+    elif (
+        "archive" in check_sync_status and "not syncing from zone" in check_sync_status
+    ):
+        log.info("data from archive zone does not sync to source zone as per design")
     else:
         raise Exception("sync is either in progress or stuck")
 
