@@ -131,7 +131,7 @@ def sendEmail(
             subject = "${run_type} test report status for RHCEPH-${artifactDetails.rhcephVersion} ceph version:${artifactDetails.ceph_version} is ${status}"
         }
         if (run_type == "upstream") {
-            subject = "Upstream Ceph Version:${artifactDetails.ceph_version}-${artifactDetails.upstreamVersion} Automated test execution summary"
+            subject = "Upstream Ceph Version:${artifactDetails.ceph_version}-${artifactDetails.upstreamVersion} ${stageLevel.capitalize()} Automated test execution summary"
         }
     }
     else{
