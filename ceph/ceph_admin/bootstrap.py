@@ -359,12 +359,10 @@ class BootstrapMixin:
         public_nws = self.cluster.get_public_networks()
         cluster_nws = self.cluster.get_cluster_networks()
         if public_nws:
-            self.shell(
-                args=["ceph", "config", "set", "global public_network", public_nws]
-            )
+            self.shell(args=["ceph", "config", "set", "mon public_network", public_nws])
         if cluster_nws:
             self.shell(
-                args=["ceph", "config", "set", "global cluster_network", cluster_nws]
+                args=["ceph", "config", "set", "mon cluster_network", cluster_nws]
             )
 
         # validate spec file
