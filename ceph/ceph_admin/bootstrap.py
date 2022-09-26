@@ -212,6 +212,7 @@ class BootstrapMixin:
             ] = f"{_details[1]}/{_details[2]}:{_details[3]}"
             self.cluster.rhcs_version = _rhcs_version
             rhbuild = f"{_rhcs_version}-{_platform}"
+            base_url = _details[0]
 
         if build_type == "upstream":
             self.setup_upstream_repository()
