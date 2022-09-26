@@ -761,22 +761,6 @@
     - rgw
     - stage-2
 
-- name: "test-empty-bucket-notification"
-  suite: "suites/pacific/rgw/tier-2_rgw_test-empty-bucket-notifcations.yaml"
-  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-  platform: "rhel-9"
-  rhbuild: "6.0"
-  inventory:
-    openstack: "conf/inventory/rhel-9-latest.yaml"
-    ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-  metadata:
-    - schedule
-    - tier-2
-    - openstack
-    - ibmc
-    - rgw
-    - stage-3
-
 - name: "test-rgw-quota-management"
   suite: "suites/pacific/rgw/tier-2_rgw_test-quota-management.yaml"
   global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
