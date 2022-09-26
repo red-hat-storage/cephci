@@ -2021,6 +2021,22 @@ class CephNode(object):
         fileObject.close()
         return osd_scenarios
 
+    def get_dir_list(self, dir_path, sudo=False):
+        """Lists directories from node
+
+        Args:
+            dir_path (str): Directory path to get direcotry list
+            sudo (bool): Use root access
+        """
+        client = self.rssh if sudo else self.ssh
+        try:
+            return client().open_sftp().listdir(dir_path)
+        except FileNotFoundError:
+            logger.info(f"Dir path '{dir_path}' not present")
+            return None
+        except Exception as e:
+            raise e
+
 
 class CephObject(object):
     def __init__(self, role, node):
@@ -2063,6 +2079,17 @@ class CephObject(object):
             node's remote_file result
         """
         return self.node.remote_file(**kw)
+
+    def get_dir_list(self, dir_path, sudo=False):
+        """
+        Proxy to get directory files list
+
+        Args:
+            dir_path (str): Directory path to get direcotry list
+            sudo (bool): Use root access
+
+        """
+        self.node.get_dir_list(dir_path=dir_path, sudo=sudo)
 
 
 class CephDemon(CephObject):

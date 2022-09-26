@@ -1,0 +1,2 @@
+class CephadmOpsExecutionError(Exception):
+    pass
