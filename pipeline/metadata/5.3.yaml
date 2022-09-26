@@ -414,7 +414,7 @@
     - tier-2
     - openstack-only
     - rados
-    - stage-2
+    - stage-3
 
 - name: "RADOS regression testing for Mon DB trimming"
   suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
@@ -1086,7 +1086,7 @@
     - openstack
     - ibmc
     - rgw
-    - stage-2
+    - stage-3
 
 - name: "test cephadm cluster bootstrap with mutiple public network"
   suite: "suites/pacific/cephadm/customer_bz/tier-2_multiple_subnet_openstack_only.yaml"
