@@ -222,7 +222,8 @@ tests:
             script-name: test_dynamic_bucket_resharding.py
             timeout: 300
             verify-io-on-site: [ "ceph-arc" ]
-            desc: Resharding test - dynamic with versioning on primary and verify on archive
+      desc: Resharding test - dynamic with versioning on primary and verify on archive
+      name: Dynamic Resharding with versioning on primary and verify on archive
       polarion-id: CEPH-83571740
       module: sanity_rgw_multisite.py
 
@@ -235,5 +236,6 @@ tests:
             timeout: 300
             verify-io-on-site: [ "ceph-arc" ]
       desc: Resharding test - manual on primary and verify on archive
+      name: Manual Resharding on primary and verify on archive
       polarion-id: CEPH-83571740
       module: sanity_rgw_multisite.py
