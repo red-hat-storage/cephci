@@ -10,10 +10,10 @@ globals:
         public: ['10.8.128.0/21']
       nodes:
         -
-          hostname: magna064.ceph.redhat.com
+          hostname: magna064
           id: node1
           ip: 10.8.128.64
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - _admin
             - installer
@@ -21,27 +21,27 @@ globals:
             - mgr
             - mds
         -
-          hostname: magna065.ceph.redhat.com
+          hostname: magna065
           id: node2
           ip: 10.8.128.65
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - mon
             - mgr
             - mds
         -
-          hostname: magna067.ceph.redhat.com
+          hostname: magna067
           id: node3
           ip: 10.8.128.67
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - mon
             - grafana
         -
-          hostname: cali015.ceph.redhat.com
+          hostname: cali015
           id: node4
           ip: 10.8.130.15
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -54,10 +54,10 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali016.ceph.redhat.com
+          hostname: cali016
           id: node5
           ip: 10.8.130.16
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - osd
           volumes:
@@ -69,10 +69,10 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali017.ceph.redhat.com
+          hostname: cali017
           id: node6
           ip: 10.8.130.17
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - osd
           volumes:
@@ -84,10 +84,10 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali018.ceph.redhat.com
+          hostname: cali018
           id: node7
           ip: 10.8.130.18
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - osd
           volumes:
@@ -99,10 +99,10 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali019.ceph.redhat.com
+          hostname: cali019
           id: node8
           ip: 10.8.130.19
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - osd
           volumes:
@@ -114,10 +114,10 @@ globals:
             - /dev/sdf
             - /dev/nvme0n1
         -
-          hostname: cali020.ceph.redhat.com
+          hostname: cali020
           id: node9
           ip: 10.8.130.20
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - osd
           volumes:
@@ -129,16 +129,16 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: magna068.ceph.redhat.com
+          hostname: magna068
           id: node10
           ip: 10.8.128.68
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - client
         -
-          hostname: magna073.ceph.redhat.com
+          hostname: magna073
           id: node11
           ip: 10.8.128.73
-          root_private_key: ~/.ssh/id_rsa
+          root_password: passwd
           role:
             - client
