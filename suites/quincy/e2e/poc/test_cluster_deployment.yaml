@@ -222,6 +222,7 @@ tests:
         install_packages:
           - ceph-common
           - ceph-base
+          - rbd-nbd
         copy_admin_keyring: true
         node: magna068
       desc: "Configure a ceph client"
@@ -238,6 +239,7 @@ tests:
         install_packages:
           - ceph-common
           - ceph-base
+          - rbd-nbd
         copy_admin_keyring: true
         node: magna073
       desc: "Configure a ceph client"
