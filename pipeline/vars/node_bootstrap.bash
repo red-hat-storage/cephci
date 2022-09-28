@@ -55,12 +55,4 @@ if [ ${1:-0} -eq 3 ]; then
     wget http://magna002.ceph.redhat.com/cephci-jenkins/.ibm-cos.conf -O ${HOME}/.config/rclone/rclone.conf
 fi
 
-# Install teuthology prerequisites
-if [ ${1:-0} -eq 4 ]; then
-    # Install teuthology
-    sudo yum install ipmitool -y
-    wget http://magna002.ceph.redhat.com/cephci-jenkins/.teuthology.yaml -O ${HOME}/.teuthology.yaml
-    .venv/bin/python -m pip install git+https://github.com/ceph/teuthology.git
-fi
-
 echo "Done bootstrapping the Jenkins node."
