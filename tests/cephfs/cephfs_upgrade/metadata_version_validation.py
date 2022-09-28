@@ -31,6 +31,27 @@ def run(ceph_cluster, **kw):
         out0, err0 = client.exec_command(
             sudo=True, cmd=f"stat {ceph_version_path}", check_ec=False
         )
+
+        def version_compare(v1, v2):
+            arr1 = v1.split(".")[:-1]
+            arr2 = v2.split(".")[:-1]
+            n = len(arr1)
+            m = len(arr2)
+            arr1 = [int(i) for i in arr1]
+            arr2 = [int(i) for i in arr2]
+            if n > m:
+                for i in range(m, n):
+                    arr2.append(0)
+            elif m > n:
+                for i in range(n, m):
+                    arr1.append(0)
+            for i in range(len(arr1)):
+                if arr1[i] > arr2[i]:
+                    return 1
+                elif arr2[i] > arr1[i]:
+                    return -1
+            return 0
+
         if out0:
             log.info("Loading previous ceph versions")
             with client.remote_file(
@@ -47,9 +68,12 @@ def run(ceph_cluster, **kw):
                 cur_version = str(upgraded_data[daemon]).split()[2]
                 log.info(f"Previous ceph {daemon} version is {pre_version}")
                 log.info(f"Current ceph {daemon} version is {cur_version}")
-            if pre_version >= cur_version:
-                fail_daemon.append(daemon)
-                log.info(f"Upgrade is not properly done for {daemon}")
+                pre_version = pre_version.replace("-", ".")
+                cur_version = cur_version.replace("-", ".")
+                result = version_compare(cur_version, pre_version)
+                if result == -1 or result == 0:
+                    fail_daemon.append(daemon)
+                    log.error(f"Upgrade failed for {daemon}")
             before_file.close()
             if len(fail_daemon) > 0:
                 log.error(f"Upgrade failed for these daemons: {str(fail_daemon)}")
