@@ -94,6 +94,5 @@ def sendGChatNotification(def testResults, subject) {
     def msg= "Run result for ${subject} \n\n ${testResults}"
     googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
 }
+return this;
 
-data = args
-sendEMail(data)

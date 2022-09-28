@@ -650,6 +650,7 @@ def readFromReleaseFile(
     return dataContent
 }
 
+
 def setLock(def majorVer, def minorVer) {
     /*
         create a lock file
@@ -1103,7 +1104,11 @@ def updateConfluencePage(
     def updateResult = sh (returnStdout: true, script: cli)
     println("Confluence page updated with content")
 }
+def reimageNodes(platform, nodelist)
+{
+    sh (script: "bash ${env.WORKSPACE}/pipeline/scripts/ci/reimage-octo-node.sh --platform ${platform} --nodes ${nodelist}")
 
+}
 def getBuildUser(){
     println("Inside build user")
     println("${currentBuild.getBuildCauses()[0]}")
