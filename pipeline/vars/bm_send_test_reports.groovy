@@ -62,13 +62,11 @@ def sendEMail(def testResults, def rhbuild, def scenarioName, def rhcephInfo) {
         composeUrl += "<br /><br />"
     }
     def cephVer = rhcephInfo["ceph-version"]
-    body += "<h3><u>Test Artifacts</h2></u><table><tr><td>COMPOSE_URL </td><td>${composeUrl}</td></tr><td>CEPH_VERSION</td><td> ${cephVer}</td></tr>"
-    body += "<tr><td> REPOSITORY </td><td>${rhcephInfo["repository"]}</td></tr>"
+    body += "<h3><u>Test Artifacts</h2></u><table><tr><td>Composes </td><td>${composeUrl}</td></tr><td>Ceph Version</td><td> ${cephVer}</td></tr>"
+    body += "<tr><td> Repository </td><td>${rhcephInfo["repository"]}</td></tr>"
 
-    subject = "[UPI Pipeline] [${rhbuild}] Test execution status of ${scenarioName} - ${env.BUILD_NUMBER} : ${status}"
+    subject = "[UPI Pipeline] [${rhbuild}] Test execution status of ${scenarioName} - ${cephVer} : ${status}"
     toList = "cephci@redhat.com"
-    println subject
-    println body
     emailext (
         mimeType: 'text/html',
         subject: "${subject}",
