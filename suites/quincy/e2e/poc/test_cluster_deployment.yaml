@@ -1,0 +1,5 @@
+# This workflow installs and configures Red Hat Ceph Storage cluster with following
+# settings
+#   - Multiple RGW daemons on the same hosts and cluster
+#   -
+---
