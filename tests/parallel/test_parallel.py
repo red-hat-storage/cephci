@@ -73,6 +73,7 @@ def execute(test, args, results: dict):
     file_name = test.get("module")
     mod_file_name = os.path.splitext(file_name)[0]
     test_mod = importlib.import_module(mod_file_name)
+    testcase_name = test.get("name", "Test Case Unknown")
 
     rc = test_mod.run(
         ceph_cluster=args["ceph_cluster"],
@@ -83,5 +84,5 @@ def execute(test, args, results: dict):
         clients=args["clients"],
     )
 
-    file_string = f"{test_mod}"
+    file_string = f"{testcase_name}"
     results.update({file_string: rc})
