@@ -1104,19 +1104,18 @@ def updateConfluencePage(
     def updateResult = sh (returnStdout: true, script: cli)
     println("Confluence page updated with content")
 }
-def reimageNodes(platform, nodelist)
-{
-    sh (script: "bash ${env.WORKSPACE}/pipeline/scripts/ci/reimage-octo-node.sh --platform ${platform} --nodes ${nodelist}")
 
-}
-def getBuildUser(){
+def getBuildUser() {
     println("Inside build user")
     println("${currentBuild.getBuildCauses()[0]}")
     buildUserId = "${currentBuild.getBuildCauses()[0].userId}"
     buildUserEmail =  "${currentBuild.getBuildCauses()[0].userId}@redhat.com"
     buildUserName = "${currentBuild.getBuildCauses()[0].userName}"
-    return ["buildUserId": "${buildUserId}", "buildUserEmail": "${buildUserEmail}", "buildUserName": "${buildUserName}"]
+    return [
+        "buildUserId": "${buildUserId}",
+        "buildUserEmail": "${buildUserEmail}",
+        "buildUserName": "${buildUserName}"
+    ]
 }
-
 
 return this;

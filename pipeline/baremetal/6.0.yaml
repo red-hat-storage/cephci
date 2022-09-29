@@ -1,27 +1,15 @@
 ---
 -
-  cluster_conf: conf/pacific/upi/octo_11_node_env.yaml
-  name: "Tier-1 Green Field"
+  cluster_conf: "conf/quincy/upi/octo_11_node_env.yaml"
+  name: "Tier-1: End to End scenarios executed on greenfield deployment"
   os_version: 9.0
   platform: rhel-9
   rhbuild: "6.0"
   scenario: 1
   suites:
     deploy:
-      - suites/quincy/cephadm/tier-0.yaml
+      - "suites/quincy/e2e/poc/test_cluster_deployment.yaml"
     baseline:
-      - suites/quincy/cephfs/test-core-functionality.yaml
-      - suites/quincy/rbd/basic-operations-unit-testing.yaml
--
-  cluster_conf: conf/pacific/upi/octo_11_node_env.yaml
-  name: "Tier-1 brown Field"
-  os_version: 9.0
-  platform: rhel-9
-  rhbuild: "6.0"
-  scenario: 2
-  suites:
-    deploy:
-      - suites/quincy/cephadm/tier-0.yaml
-    baseline:
-      - suites/quincy/cephfs/test-core-functionality.yaml
-      - suites/quincy/rbd/tier-1_rbd.yaml
+      - "suites/quincy/e2e/poc/test-cephfs-core-features.yaml"
+      - "suites/quincy/e2e/poc/test-rbd-core-features.yaml"
+      - "suites/quincy/e2e/poc/test-object-core-features.yaml"

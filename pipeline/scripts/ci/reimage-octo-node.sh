@@ -56,7 +56,7 @@ for node in ${NODES} ; do
 
     echo "Wipe all data disks clean."
     disks=$(ssh ${node} 'lsblk -o NAME -d | tail -n +2')
-    root_disk=$(ssh ${node} "lsblk -oPKNAME,MOUNTPOINT | grep -e '^[a-z].*' | cut -d ' ' -f 1")
+    root_disk=$(ssh ${node} "lsblk -oPKNAME,MOUNTPOINT | grep -e '^[a-z].*' | cut -d ' ' -f 1 | uniq")
 
     for disk in ${disks} ; do
         if [ "${disk}" != "${root_disk}" ] ; then

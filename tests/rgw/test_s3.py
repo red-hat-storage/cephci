@@ -98,10 +98,16 @@ def run(**kw):
     cluster = kw["ceph_cluster"]
     config = kw.get("config")
     build = config.get("build", config.get("rhbuild"))
+    host = config.get("host")
+    secure = config.get("ssl", False)
+
     client_node = cluster.get_nodes(role="client")[0]
 
     execute_setup(cluster, config)
-    _, secure, _ = get_rgw_frontend(cluster)
+
+    if not host:
+        _, secure, _ = get_rgw_frontend(cluster)
+
     exit_status = execute_s3_tests(client_node, build, secure)
     execute_teardown(cluster, build)
 
@@ -129,15 +135,21 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
         CommandFailed:  When a remote command returned non-zero value.
     """
     build = config.get("build", config.get("rhbuild"))
+    secure = config.get("ssl", False)
+    host = config.get("host")
+    port = config.get("port")
+
     client_node = cluster.get_nodes(role="client")[0]
     rgw_node = cluster.get_nodes(role="rgw")[0]
 
-    branch = config.get("branch", "ceph-luminous")
+    branch = config.get("branch", "ceph-quincy")
     clone_s3_tests(node=client_node, branch=branch)
     install_s3test_requirements(client_node, branch, os_ver=build[-1])
 
-    host = rgw_node.shortname
-    lib, secure, port = get_rgw_frontend(cluster)
+    if not all([host, port]):
+        host = rgw_node.shortname
+        lib, secure, port = get_rgw_frontend(cluster)
+
     kms_keyid = config.get("kms_keyid")
     create_s3_conf(cluster, build, host, port, secure, kms_keyid)
 

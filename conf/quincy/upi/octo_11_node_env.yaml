@@ -26,9 +26,9 @@ globals:
           ip: 10.8.128.65
           root_password: passwd
           role:
-            - mon
-            - mgr
             - mds
+            - mgr
+            - mon
         -
           hostname: magna067
           id: node3
@@ -36,7 +36,6 @@ globals:
           root_password: passwd
           role:
             - mon
-            - grafana
         -
           hostname: cali015
           id: node4
@@ -60,6 +59,7 @@ globals:
           root_password: passwd
           role:
             - osd
+            - rgw
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -75,6 +75,7 @@ globals:
           root_password: passwd
           role:
             - osd
+            - rgw
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -90,6 +91,7 @@ globals:
           root_password: passwd
           role:
             - osd
+            - rgw
           volumes:
             - /dev/sda
             - /dev/sdb

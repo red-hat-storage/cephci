@@ -1,36 +1,40 @@
 /*
-    Script to execute the cephci on baremetals
+    Automated workflow for executing E2E test scenarios in UPI Pipeline.
 */
 // Global variables section
 def sharedLib
-def versions
-def cephVersion
-def composeUrl
-def platform
-def clusterConf
-def rhbuild
+def versions = ""
+def cephVersion = ""
+def composeUrl = ""
+def platform = ""
+def clusterConf = ""
+def rhBuild = ""
 def testResults = [:]
-def scenarioName
+def scenarioName = ""
+def scenario = "1"
 
-def getNodeList(clusterConf,sharedLib){
-    def conf = sharedLib.yamlToMap(clusterConf,"${env.WORKSPACE}")
+def getNodeList(clusterConf, sharedLib) {
+    def conf = sharedLib.yamlToMap(clusterConf, env.WORKSPACE)
     def nodesMap = conf.globals[0]["ceph-cluster"].nodes
     def nodeList = []
+
     nodesMap.eachWithIndex { item, index ->
-    nodeList.add(item.hostname)
+        nodeList.add(item.hostname)
     }
+
     return nodeList
 }
-def executeTestSuite(cmd_cli){
+
+def executeTestSuite(cmd) {
     def rc = "PASS"
-    def executeCLI = cmd_cli
+
     catchError(
         message: 'STAGE_FAILED',
         buildResult: 'FAILURE',
         stageResult: 'FAILURE'
-        ) {
+    ) {
         try {
-            sh (script: "${env.WORKSPACE}/${executeCLI}")
+            sh (script: "${env.WORKSPACE}/${cmd}")
         } catch(Exception err) {
             rc = "FAIL"
             println err.getMessage()
@@ -38,122 +42,175 @@ def executeTestSuite(cmd_cli){
         }
     }
     println "exit status: ${rc}"
+
     return rc
 }
 
-def fetchStages(sharedLib,suites,log_dir,testResults,stageName,clusterConf,rhbuild,platform){
-    stages = [:]
+def fetchStages(
+    suites, lodDir, testResults, stageName, clusterConf, rhBuild, platform, sharedLib
+) {
+    def testStages = [:]
     testResults[stageName] = [:]
-    suites.each{item ->
-        randomString = sharedLib.generateRandomString()
-        suitelog_dir = log_dir+randomString
-        def suiteName = item.split("/").last().replace(".yaml","")
-        cmd_cli = ".venv/bin/python run.py --osp-cred ${HOME}/osp-cred-ci-2.yaml --build tier-0 --platform ${platform} --rhbuild ${rhbuild} --suite ${item} --cluster-conf ${clusterConf} --log-dir ${suitelog_dir} --cloud baremetal"
-        println(cmd_cli)
-        stages[suiteName] =  {stage(suiteName){testResults[stageName][suiteName]=["Logs": suitelog_dir ,"Result":executeTestSuite(cmd_cli)]}}
-    }
-    return stages
-    }
-def fetchSuites(scenarioId,sharedLib){
-    rhcephVersion = "${params.rhcephVersion}" //RHCEPH-6.0
-    def stages = [:]
-    def datacontent = sharedLib.yamlToMap("${rhcephVersion.split('-')[1]}.yaml","${env.WORKSPACE}/pipeline/baremetal/")
-    datacontent.eachWithIndex { item, index ->
-        if ("${item.scenario}" == "${scenarioId}"){
-        def suites = item.suites
-        suites.each{k,v ->
-        def stage_suite = []
-        v.eachWithIndex {i, id ->
-        stage_suite.add(i)
-        }
-        stages[k] = stage_suite
-        }
-        }
-    }
-    return stages
 
+    suites.each { item ->
+        randomString = sharedLib.generateRandomString()
+        suiteLogDir = logDir+randomString
+
+        def suiteName = item.split("/").last().replace(".yaml","")
+        cliArgs = ".venv/bin/python run.py"
+        cliArgs += " --osp-cred ${HOME}/osp-cred-ci-2.yaml"
+        cliArgs += " --build tier-0 --platform ${platform} --rhbuild ${rhBuild}"
+        cliArgs += " --suite ${item} --cluster-conf ${clusterConf}"
+        cliArgs += " --log-dir ${suiteLogDir} --cloud baremetal"
+        println(cliArgs)
+
+        testStages[suiteName] =  {
+            stage(suiteName) {
+                testResults[stageName][suiteName] = [
+                    "Logs": suiteLogDir ,
+                    "Result": executeTestSuite(cliArgs)
+                ]
+            }
+        }
+    }
+
+    return testStages
 }
+
+def fetchSuites(scenarioId, sharedLib) {
+    def rhCephVersion = params.rhcephVersion //RHCEPH-6.0
+    scenario = params.scenarioId
+
+    def testStages = [:]
+    def majorMinorVersion = rhCephVersion.split('-').last()
+    def dataContent = sharedLib.yamlToMap(
+        "${majorMinorVersion}.yaml", "${env.WORKSPACE}/pipeline/baremetal"
+    )
+
+    dataContent.eachWithIndex { item, index ->
+        if ( "${item.scenario}" == "${scenario}" ) {
+            def testSuites = item.suites
+
+            testSuites.each { k,v ->
+                def stageSuites = []
+                v.eachWithIndex { i, id -> stageSuites.add(i) }
+                testStages[k] = stageSuites
+            }
+        }
+    }
+
+    return testStages
+}
+
+def reimageNodes(platform, nodelist) {
+    // Reimage nodes in Octo lab
+    sh (
+        script: "bash ${env.WORKSPACE}/pipeline/scripts/ci/reimage-octo-node.sh --platform ${platform} --nodes ${nodelist}"
+    )
+}
+
+
 // Pipeline script entry point
 node("magna006") {
-        stage('prepareNode') {sharedLib
-            if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
-            checkout(
-                scm: [
-                    $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
-                    extensions: [[
-                        $class: 'CleanBeforeCheckout',
-                        deleteUntrackedNestedRepositories: true
-                    ], [
-                        $class: 'WipeWorkspace'
-                    ], [
-                        $class: 'CloneOption',
-                        depth: 1,
-                        noTags: true,
-                        shallow: true,
-                        timeout: 10,
-                        reference: ''
-                    ]],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/red-hat-storage/cephci.git'
-                    ]]
-                   ],)
 
-            sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-            sharedLib.prepareNode(0)
-        }
-        stage("ReimageNodes") {
-        scenario = "${params.scenarioId}"
-        rhcephVersion = "${params.rhcephVersion}" //RHCEPH-6.0
-        def datacontent = sharedLib.yamlToMap("${rhcephVersion.split('-')[1]}.yaml","${env.WORKSPACE}/pipeline/baremetal/")
-        datacontent.eachWithIndex { item, index ->
-        if ("${item.scenario}" == "${scenario}"){
-        println("${item.cluster_conf}")
-        clusterConf = item.cluster_conf
-        rhbuild = item.rhbuild
-        platform = item.platform
-        scenarioName = item.name
-        nodeList = getNodeList(clusterConf,sharedLib)
-        println("${nodeList}")
-        sharedLib.reimageNodes(item.os_version,nodeList.join(","))
-        }
-        }
-        }
-        stage("fetchTestSuites") {
-        stages = fetchSuites(scenario,sharedLib)
-        println(stages)
-        stages.each{k,v ->
-        logdir = "/ceph/cephci-jenkins/upi/${env.BUILD_NUMBER}/${k}/"
-        stages = fetchStages(sharedLib,v,logdir,testResults,k,clusterConf,rhbuild,platform)
-        parallel stages
-        println(testResults)
-        }
-        }
-        stage("publish results")
-        {
-        println("Publish results for ${scenario}")
-        sharedEmailLib = load("${env.WORKSPACE}/pipeline/vars/bm_send_test_reports.groovy")
-        println(testResults)
-        yamlData = readYaml file: "/ceph/cephci-jenkins/latest-rhceph-container-info/${params.rhcephVersion}.yaml"
-        println(yamlData)
-        println(sharedEmailLib)
-        sharedEmailLib.sendEMail(testResults,rhbuild,scenarioName,yamlData["tier-0"])
-        }
-        stage("PostBuildAction"){
-        def nextScenario = scenario.toInteger()+1
-        stages = fetchSuites(nextScenario.toString(),sharedLib)
-        if (stages){
-         build([
-                wait: false,
-                job: "rh-upi-pipeline-executor.groovy",
-                parameters: [
-                    string(name: 'rhcephVersion', value: "${params.rhcephVersion}"),
-                    string(name: 'scenarioId', value: nextScenario.toString())
-                ]
-            ])
+    stage('prepareNode') {
+        if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
+        checkout(
+            scm: [
+                $class: 'GitSCM',
+                branches: [[name: 'origin/master']],
+                extensions: [[
+                    $class: 'CleanBeforeCheckout',
+                    deleteUntrackedNestedRepositories: true
+                ], [
+                    $class: 'WipeWorkspace'
+                ], [
+                    $class: 'CloneOption',
+                    depth: 1,
+                    noTags: true,
+                    shallow: true,
+                    timeout: 10,
+                    reference: ''
+                ]],
+                userRemoteConfigs: [[
+                    url: 'https://github.com/red-hat-storage/cephci.git'
+                ]]
+           ]
+       )
+
+        sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+        sharedLib.prepareNode(0)
+    }
+
+    stage("reimageTestEnv") {
+        def rhCephVersion = params.rhcephVersion    // RHCEPH-6.0
+        scenario = params.scenarioId
+
+        def majorMinorVersion = rhCephVersion.split('-').last()
+        def dataContent = sharedLib.yamlToMap(
+            "${majorMinorVersion}.yaml", "${env.WORKSPACE}/pipeline/baremetal"
+        )
+
+        dataContent.eachWithIndex { item, index ->
+            if ( "${item.scenario}" == "${scenario}" ) {
+                println(item.cluster_conf)
+                clusterConf = item.cluster_conf
+                rhBuild = item.rhbuild
+                platform = item.platform
+                scenarioName = item.name
+                nodeList = getNodeList(item.cluster_conf, sharedLib)
+                println(nodeList)
+
+                def nodesWithSpace = nodeList.join(",")
+                reimageNodes(item.os_version, nodesWithSpace)
             }
-         else{
-         println("Completed all stages")
-         }
         }
     }
+
+
+    def testSuites = fetchSuites(scenario, sharedLib)
+    println(testSuites)
+    testSuites.each { k, v ->
+        logDir = "/ceph/cephci-jenkins/upi/${env.BUILD_NUMBER}/${k}/"
+        def testJobStages = fetchStages(
+            v, logDir, testResults, k, clusterConf, rhBuild, platform, sharedLib
+        )
+
+        parallel testJobStages
+        println(testResults)
+    }
+
+    stage("publishResults") {
+        println("Publish results for ${scenario}")
+        sharedEmailLib = load(
+            "${env.WORKSPACE}/pipeline/vars/bm_send_test_reports.groovy"
+        )
+        println(testResults)
+
+        yamlData = readYaml(
+            file: "/ceph/cephci-jenkins/latest-rhceph-container-info/${params.rhcephVersion}.yaml"
+        )
+        println(yamlData)
+        println(sharedEmailLib)
+        sharedEmailLib.sendEMail(testResults, rhBuild, scenarioName, yamlData["tier-0"])
+    }
+
+    stage("PostBuildAction") {
+        def nextScenario = scenario.toInteger()+1
+        def testStages = fetchSuites(nextScenario.toString(), sharedLib)
+
+        if (! testStages) {
+            println("Completed all stages")
+            return
+        }
+
+        build([
+            wait: false,
+            job: "rh-upi-pipeline-executor",
+            parameters: [
+                string(name: 'rhcephVersion', value: params.rhcephVersion),
+                string(name: 'scenarioId', value: nextScenario.toString())
+            ]
+        ])
+    }
+}
