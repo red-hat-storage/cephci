@@ -140,7 +140,7 @@ def get_slow_requests_log(node, start_time, end_time, service_name="mon"):
         d_out, d_err = node.exec_command(
             cmd=f"systemctl list-units --type=service | grep ceph | grep {service_name} | head -n 1"
         )
-        daemon = d_out.split(" ")[0].rstrip()
+        daemon = d_out.lstrip().split(" ")[0].rstrip()
         j_log, err = node.exec_command(
             cmd=f"sudo journalctl -u {daemon} --since '{start_time}' --until '{end_time}' | grep 'slow requests'"
         )
