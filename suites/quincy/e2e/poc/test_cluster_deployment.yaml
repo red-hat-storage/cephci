@@ -37,12 +37,7 @@ tests:
               args:
                 placement:
                   label: mgr
-          - config:
-              command: apply
-              service: mon
-              args:
-                placement:
-                  label: mon
+
       desc: "Evaluate cluster deployment using CephADM orchestrator."
       destroy-cluster: false
       module: test_cephadm.py

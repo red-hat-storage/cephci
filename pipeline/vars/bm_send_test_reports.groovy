@@ -63,7 +63,7 @@ def sendEMail(def testResults, def rhBuild, def scenarioName, def rhCephInfo) {
     body +="</table> </body> </html>"
 
     def composeUrl = ""
-    for (compose in rhcephInfo["composes"]){
+    for (compose in rhCephInfo["composes"]){
         composeUrl += compose.key
         composeUrl += " : " + compose.value
         composeUrl += "<br /><br />"
@@ -72,7 +72,7 @@ def sendEMail(def testResults, def rhBuild, def scenarioName, def rhCephInfo) {
     body += "<h3><u>Test Artifacts</h3></u>"
     body += "<table><tr><td>Composes</td><td>${composeUrl}</td></tr>"
     body += "<td>Ceph version</td><td>${cephVer}</td></tr>"
-    body += "<tr><td>Repository</td><td>${rhcephInfo["repository"]}</td></tr>"
+    body += "<tr><td>Repository</td><td>${rhCephInfo["repository"]}</td></tr>"
 
     subject = "[UPI]-[${rhBuild}] Test report of ${scenarioName} - ${cephVer} : ${status}"
     toList = "cephci@redhat.com"
