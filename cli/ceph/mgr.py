@@ -1,20 +1,26 @@
 from cli import Cli
-from utility.log import Log
-
-log = Log(__name__)
 
 
 class Mgr(Cli):
+    """This module provides CLI interface to manage the MGR service."""
+
     def __init__(self, nodes, base_cmd):
         super(Mgr, self).__init__(nodes)
 
         self.base_cmd = f"{base_cmd} mgr"
 
-    def module_disable(self, module):
+    def module(self, action, module=None, force=False):
         """Disable MGR module.
 
         Args:
-            module (str): Ceph module to be disabled
+            action (str): module action (disable|enable)
+            module (str): ceph module to be disabled
+            force (bool): use `--force`
         """
-        cmd = f"{self.base_cmd} module disable {module}"
+        cmd = f"{self.base_cmd} module {action}"
+        if module:
+            cmd += f" {module}"
+        if force:
+            cmd += " --force"
+
         return self.execute(sudo=True, long_running=True, cmd=cmd)
