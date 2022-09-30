@@ -59,3 +59,16 @@
     - openstack
     - rgw
     - stage-1
+
+- name: "Upstream Testing For RGW Multisite"
+  suite: "suites/quincy/upstream/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
+  global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
+  platform: "rhel-8"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rgw
+    - stage-2
