@@ -1,12 +1,9 @@
 from cli import Cli
 from cli.ceph.ceph import Ceph
-from utility.log import Log
-
-log = Log(__name__)
 
 
 class CephAdm(Cli):
-    """Module to execute cephadm operations"""
+    """This module provides CLI interface to manage the CephAdm operations."""
 
     def __init__(self, nodes, base_cmd="cephadm"):
         super(CephAdm, self).__init__(nodes)
@@ -17,11 +14,10 @@ class CephAdm(Cli):
         self.ceph = Ceph(nodes, self.base_shell_cmd)
 
     def shell(self, cmd):
-        """
-        Ceph orchestrator shell interface to run ceph commands.
+        """Ceph orchestrator shell interface to run ceph commands.
 
         Args:
-            cmd (str): Command to be executed
+            cmd (str): command to be executed
         """
         cmd = f"{self.base_shell_cmd} {cmd}"
         return self.execute(sudo=True, long_running=True, cmd=cmd)
@@ -30,10 +26,10 @@ class CephAdm(Cli):
         """Remove cephadm cluster from nodes
 
         Args:
-            node: ceph node object
-            fsid: Cluster FSID
-            zap_osds: Remove OSDS
-            force: Use `--force`
+            node (str): ceph node object
+            fsid (str): cluster FSID
+            zap_osds (bool): remove OSDS
+            force (bool): use `--force`
         """
         cmd = f"{self.base_cmd} rm-cluster --fsid {fsid}"
         if zap_osds:

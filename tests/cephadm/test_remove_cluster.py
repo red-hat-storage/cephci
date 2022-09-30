@@ -11,29 +11,29 @@ CEPH_LIB_DIR = "/var/lib/ceph"
 CEPHADM_LIB_DIR = "/var/lib/cephadm"
 
 
-def validate_ceph_config_dir(nodes, dir_path, roles=[], ignore_entries=[]):
-    """Validate ceph config directory
+def validate_ceph_config_dir(nodes, dir_path, roles=[], ignore=[]):
+    """Validate ceph config directory.
 
     Args:
-        nodes (Ceph): List of Ceph objects
-        roles (list|str): Ceph object role
-        dir_path (str): Directory to be validated
-        ignore_entries (list|str): Ignore directory entry
+        nodes (Ceph): list of Ceph objects
+        roles (list|str): ceph object role
+        dir_path (str): directory to be validated
+        ignore (list|str): ignore directory entry
     """
     if isinstance(roles, str):
         roles = [str(roles)]
 
-    if isinstance(ignore_entries, str):
-        ignore_entries = [str(ignore_entries)]
+    if isinstance(ignore, str):
+        ignore = [str(ignore)]
 
     for node in nodes:
         if node.role not in roles:
             continue
 
-        dir_list = node.get_dir_list(sudo=True, dir_path=CEPH_CONFIG_DIR)
-        if dir_list or dir_list not in [ignore_entries, None]:
+        _dirs = node.get_dir_list(sudo=True, dir_path=CEPH_CONFIG_DIR)
+        if _dirs or _dirs not in [ignore, None]:
             raise CephadmOpsExecutionError(
-                f"Failed to clean ceph directory '{dir_path}' on node '{node.ip_address}': {dir_list} "
+                f"Failed to clean ceph directory '{dir_path}' on node '{node.ip_address}' -\n{_dirs} "
             )
 
         log.info(
@@ -45,8 +45,8 @@ def validate_running_ceph_containers(nodes, roles=[]):
     """Validate containers running on nodes.
 
     Args:
-        nodes (Ceph): List of Ceph objects
-        roles (list|str): Ceph object role
+        nodes (Ceph): list of Ceph objects
+        roles (list|str): ceph object role
     """
     if isinstance(roles, str):
         roles = [str(roles)]
@@ -55,10 +55,10 @@ def validate_running_ceph_containers(nodes, roles=[]):
         if node.role not in roles:
             continue
 
-        containers_list = get_running_containers(node=node, expr="name=ceph-*")
-        if containers_list:
+        _ctrs, _ = get_running_containers(sudo=True, node=node, expr="name=ceph-*")
+        if _ctrs:
             raise CephadmOpsExecutionError(
-                f"Failed to clean ceph containers on node '{node.ip_address}': {containers_list}"
+                f"Failed to clean ceph containers on node '{node.ip_address}' -\n{_ctrs}"
             )
         log.info(f"Ceph containers are cleaned as expected on node '{node.ip_address}'")
 
@@ -67,13 +67,13 @@ def validate_ceph_disks(nodes):
     """Validate disks used by ceph cluster
 
     Args:
-        nodes (Ceph): List of Ceph objects
+        nodes (Ceph): list of Ceph objects
     """
     for node in nodes:
         try:
-            disks_list = get_disk_list(node=node, expr="ceph-")
+            _disks, _ = get_disk_list(sudo=True, node=node, expr="ceph-")
             raise CephadmOpsExecutionError(
-                f"Failed to clean ceph disks on node '{node.ip_address}: {disks_list}'"
+                f"Failed to clean ceph disks on node '{node.ip_address} -\n{_disks}'"
             )
         except CommandFailed:
             log.info(f"Ceph disks are cleaned as expected on node '{node.ip_address}'")
@@ -84,13 +84,17 @@ def run(ceph_cluster, **kw):
     nodes = ceph_cluster.get_nodes()
     installer = ceph_cluster.get_ceph_object("installer")
 
+    # Get cluster FSID
     fsid = CephAdm(installer).ceph.fsid()
     if not fsid:
         raise CephadmOpsExecutionError("Failed to get cluster FSID")
 
-    if CephAdm(installer).ceph.mgr.module_disable("cephadm"):
+    # Disable cephadm module
+    if CephAdm(installer).ceph.mgr.module(action="disable", module="cephadm"):
         raise CephadmOpsExecutionError("Failed to disable cephadm module")
 
+    # Execute rm-cluster on all nodes
+    log.info("Executed 'rm-cluster' command sucessfully on all cluster nodes")
     for node in nodes:
         if not node.role == "osd":
             continue
@@ -99,20 +103,19 @@ def run(ceph_cluster, **kw):
             raise CephadmOpsExecutionError(
                 f"Failed to execute rm-cluster on node '{node.ip_address}'"
             )
-    log.info("Executed 'rm-cluster' command sucessfully on all cluster nodes")
 
+    # Validate ceph config director, disks and containers
     validate_ceph_config_dir(
         nodes=nodes, dir_path=CEPH_CONFIG_DIR, roles=["mon", "osd"]
     )
     validate_ceph_config_dir(nodes=nodes, dir_path=CEPH_LIB_DIR, roles=["mon", "osd"])
-    validate_ceph_config_dir(
-        nodes=nodes, dir_path=CEPHADM_LIB_DIR, ignore_entries=[".ssh"]
-    )
+    validate_ceph_config_dir(nodes=nodes, dir_path=CEPHADM_LIB_DIR, ignore=[".ssh"])
 
     validate_running_ceph_containers(nodes=nodes, roles=["mon", "osd"])
 
     validate_ceph_disks(nodes=nodes)
 
+    # Check ceph status to check if it cleaned cluster
     if CephAdm(installer).ceph.status():
         raise CephadmOpsExecutionError("Failed to clean ceph cluster")
 

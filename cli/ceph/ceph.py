@@ -1,9 +1,6 @@
 from cli import Cli
-from utility.log import Log
 
 from .mgr import Mgr
-
-log = Log(__name__)
 
 
 class Ceph(Cli):
