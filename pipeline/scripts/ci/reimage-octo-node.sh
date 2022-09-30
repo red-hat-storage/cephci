@@ -66,4 +66,8 @@ for node in ${NODES} ; do
 
     echo 'Setting the systems to use shortnames'
     ssh ${node} 'sudo hostnamectl set-hostname $(hostname -s)'
+    ssh ${node} 'sudo sed -i "s/$(hostname)/$(hostname -s)/g" /etc/hosts'
+
+    echo 'Cleaning default repo files to avoid conflicts'
+    ssh ${node} 'sudo rm -f /etc/yum.repos.d/*; sudo yum clean all'
 done
