@@ -35,6 +35,7 @@ globals:
           ip: 10.8.128.67
           root_password: passwd
           role:
+            - mds
             - mon
         -
           hostname: cali015
@@ -106,6 +107,7 @@ globals:
           ip: 10.8.130.19
           root_password: passwd
           role:
+            - mds
             - osd
           volumes:
             - /dev/sda

@@ -177,7 +177,7 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
         tests = "s3tests"
 
-        if build.startswith("5"):
+        if not build.startswith("4"):
             extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616"
 
             if not encryption:
@@ -365,7 +365,7 @@ def create_s3_conf(
     rgw_node = cluster.get_nodes(role="rgw")[0]
     client_node = cluster.get_nodes(role="client")[0]
 
-    if build.startswith("5"):
+    if not build.startswith("4"):
         rgw_node = client_node
 
     create_s3_user(node=rgw_node, user_prefix="main", data=data)
@@ -395,11 +395,11 @@ def add_lc_debug(cluster: Ceph, build: str) -> None:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
     log.debug("Setting the lifecycle interval for all RGW daemons")
-    if build.startswith("5"):
-        _rgw_lc_debug(cluster, add=True)
+    if build.startswith("4"):
+        _rgw_lc_debug_conf(cluster, add=True)
         return
 
-    _rgw_lc_debug_conf(cluster, add=True)
+    _rgw_lc_debug(cluster, add=True)
 
 
 def del_lc_debug(cluster: Ceph, build: str) -> None:
@@ -414,11 +414,11 @@ def del_lc_debug(cluster: Ceph, build: str) -> None:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
     log.debug("Removing the lifecycle configuration")
-    if build.startswith("5"):
-        _rgw_lc_debug(cluster, add=False)
+    if build.startswith("4"):
+        _rgw_lc_debug_conf(cluster, add=False)
         return
 
-    _rgw_lc_debug_conf(cluster, add=False)
+    _rgw_lc_debug(cluster, add=False)
 
 
 # Private functions

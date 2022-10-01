@@ -13,7 +13,7 @@ def testResults = [:]
 def scenarioName = ""
 def scenario = "1"
 
-def getNodeList(clusterConf, sharedLib) {
+def getNodeList(def clusterConf, def sharedLib) {
     def conf = sharedLib.yamlToMap(clusterConf, env.WORKSPACE)
     def nodesMap = conf.globals[0]["ceph-cluster"].nodes
     def nodeList = []
@@ -25,7 +25,7 @@ def getNodeList(clusterConf, sharedLib) {
     return nodeList
 }
 
-def executeTestSuite(cmd) {
+def executeTestSuite(def cmd) {
     def rc = "PASS"
 
     catchError(
@@ -47,7 +47,14 @@ def executeTestSuite(cmd) {
 }
 
 def fetchStages(
-    suites, lodDir, testResults, stageName, clusterConf, rhBuild, platform, sharedLib
+    def suites,
+    def lodDir,
+    def testResults,
+    def stageName,
+    def clusterConf,
+    def rhBuild,
+    def platform,
+    def sharedLib
 ) {
     def testStages = [:]
     testResults[stageName] = [:]
@@ -56,19 +63,22 @@ def fetchStages(
         randomString = sharedLib.generateRandomString()
         suiteLogDir = logDir+randomString
 
-        def suiteName = item.split("/").last().replace(".yaml","")
+        def suiteName = item.split("/").last().replace(".yaml", "")
         cliArgs = ".venv/bin/python run.py"
-        cliArgs += " --osp-cred ${HOME}/osp-cred-ci-2.yaml"
-        cliArgs += " --build tier-0 --platform ${platform} --rhbuild ${rhBuild}"
-        cliArgs += " --suite ${item} --cluster-conf ${clusterConf}"
-        cliArgs += " --log-dir ${suiteLogDir} --cloud baremetal"
+        cliArgs += " --build tier-0"
+        cliArgs += " --platform ${platform}"
+        cliArgs += " --rhbuild ${rhBuild}"
+        cliArgs += " --suite ${item}"
+        cliArgs += " --cluster-conf ${clusterConf}"
+        cliArgs += " --log-dir ${suiteLogDir}"
+        cliArgs += " --cloud baremetal"
         println(cliArgs)
 
         testStages[suiteName] =  {
             stage(suiteName) {
                 testResults[stageName][suiteName] = [
-                    "Logs": suiteLogDir ,
-                    "Result": executeTestSuite(cliArgs)
+                    "logs": suiteLogDir ,
+                    "result": executeTestSuite(cliArgs)
                 ]
             }
         }
@@ -77,7 +87,7 @@ def fetchStages(
     return testStages
 }
 
-def fetchSuites(scenarioId, sharedLib) {
+def fetchSuites(def scenarioId, def sharedLib) {
     def rhCephVersion = params.rhcephVersion //RHCEPH-6.0
     scenario = params.scenarioId
 
@@ -102,7 +112,7 @@ def fetchSuites(scenarioId, sharedLib) {
     return testStages
 }
 
-def reimageNodes(platform, nodelist) {
+def reimageNodes(def platform, def nodelist) {
     // Reimage nodes in Octo lab
     sh (
         script: "bash ${env.WORKSPACE}/pipeline/scripts/ci/reimage-octo-node.sh --platform ${platform} --nodes ${nodelist}"

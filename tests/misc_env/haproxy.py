@@ -26,8 +26,7 @@ from utility.log import Log
 
 LOG = Log(__name__)
 
-HAPRX_CONF = """
-global
+HAPRX_CONF = """global
     log         127.0.0.1 local2
     chroot      /var/lib/haproxy
     pidfile     /var/run/haproxy.pid
@@ -38,6 +37,7 @@ global
     stats socket /var/lib/haproxy/stats
     ssl-default-bind-ciphers PROFILE=SYSTEM
     ssl-default-server-ciphers PROFILE=SYSTEM
+
 defaults
     mode                    http
     log                     global
@@ -55,21 +55,24 @@ defaults
     timeout http-keep-alive 10s
     timeout check           10s
     maxconn                 3000
+
 frontend main
     bind *:5000
     acl url_static       path_beg       -i /static /images /javascript /stylesheets
     acl url_static       path_end       -i .jpg .gif .png .css .js
     use_backend static          if url_static
     default_backend             app
+
 backend static
     balance     roundrobin
 {% for item in data %}
-    server      static {{item}} check
+    server      static{{loop.index}} {{item}} check
 {%- endfor %}
+
 backend app
     balance     roundrobin
 {% for item in data %}
-    server      app {{item}} check
+    server      rgw{{loop.index}} {{item}} check
 {%- endfor %}
 """
 

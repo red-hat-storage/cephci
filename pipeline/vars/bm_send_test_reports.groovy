@@ -23,7 +23,7 @@
 
 */
 
-def sendEMail(def testResults, def rhbuild, def scenarioName, def rhcephInfo) {
+def sendEMail(def testResults, def rhBuild, def scenarioName, def rhCephInfo) {
     /*
         Send Email notification mentioning the stages, corresponding
         suites and their execution status
@@ -37,20 +37,25 @@ def sendEMail(def testResults, def rhbuild, def scenarioName, def rhcephInfo) {
     body += "<table>"
     heading = "<tr><th>Stage</th><th>Suite</th><th>Result</th><th>Logs</th></tr>"
     body += heading
+
     def status = "PASSED"
     for ( stage in testResults ) {
         body += "<tr><td rowspan = \"${stage.value.size()}\">${stage.key}</td>"
         gchatResult+= "\nSTAGE : ${stage.key}"
+
         for ( suites in stage.value ) {
-            res = suites.value["Result"]
+            res = suites.value["result"]
+
             body += "<td>${suites.key}</td>"
-            body += "<td>${suites.value["Result"]}</td>"
-            body += "<td>${suites.value["Logs"]}</td>"
+            body += "<td>${suites.value["result"]}</td>"
+            body += "<td>${suites.value["logs"]}</td>"
             body += "</tr>"
+
             gchatResult += "\n\tSuite Name : ${suites.key}"
-            gchatResult += "\n\t\tResult : ${suites.value["Result"]}"
-            gchatResult += "\n\t\tLogs : ${suites.value["Logs"]}"
-            if (suites.value["Result"].toLowerCase() != "pass"){
+            gchatResult += "\n\t\tResult : ${suites.value["result"]}"
+            gchatResult += "\n\t\tLogs : ${suites.value["logs"]}"
+
+            if (suites.value["result"].toLowerCase() != "pass") {
                 status = "FAILED"
             }
         }
@@ -64,13 +69,13 @@ def sendEMail(def testResults, def rhbuild, def scenarioName, def rhcephInfo) {
         composeUrl += " : " + compose.value
         composeUrl += "<br /><br />"
     }
-    def cephVer = rhcephInfo["ceph-version"]
+    def cephVer = rhCephInfo["ceph-version"]
     body += "<h3><u>Test Artifacts</h3></u>"
     body += "<table><tr><td>Composes</td><td>${composeUrl}</td></tr>"
     body += "<td>Ceph version</td><td>${cephVer}</td></tr>"
     body += "<tr><td>Repository</td><td>${rhcephInfo["repository"]}</td></tr>"
 
-    subject = "[UPI]-[${rhbuild}] Test report of ${scenarioName} - ${cephVer} : ${status}"
+    subject = "[UPI]-[${rhBuild}] Test report of ${scenarioName} - ${cephVer} : ${status}"
     toList = "cephci@redhat.com"
     emailext (
         mimeType: 'text/html',

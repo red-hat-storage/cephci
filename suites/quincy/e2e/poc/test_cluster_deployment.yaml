@@ -61,23 +61,25 @@ tests:
             service_id: archive_tier
             placement:
               label: osd
-            data_devices:
-              rotational: 1
-              size: '3T:'
-            db_devices:
-              paths:
-                -
-                  /dev/nvme0n1
+            spec:
+              data_devices:
+                rotational: 1
+              db_devices:
+                paths:
+                  -
+                    /dev/nvme0n1
           -
             service_type: osd
             service_id: hot_tier
             placement:
               label: osd
-            data_devices:
-              rotational: 0
-              size: '2T:'
+            spec:
+              data_devices:
+                rotational: 0
+                size: "3T:4T"
       desc: "Evaluate deployment of OSD daemons using spec file."
       destroy-cluster: false
+      module: test_osd.py
       name: "Test OSD daemon deployment"
 
   -
@@ -139,8 +141,7 @@ tests:
       config:
         cephadm: true
         commands:
-          - "ceph osd erasure-code-profile set rgwec01 k=4 m=2"
-          - "crush-failure-domain=host crush-device-class=hdd"
+          - "ceph osd erasure-code-profile set rgwec01 k=4 m=2 crush-failure-domain=host crush-device-class=hdd"
       desc: "Create erasure profile"
       destroy-cluster: false
       module: exec.py
@@ -152,8 +153,7 @@ tests:
       config:
         cephadm: true
         commands:
-          - "ceph osd pool create default.rgw.buckets.data 32 32"
-          - "erasure rgwec01"
+          - "ceph osd pool create default.rgw.buckets.data 32 32 erasure rgwec01"
       desc: "Create OSD pool with erasure profile."
       destroy-cluster: false
       module: exec.py
@@ -177,8 +177,7 @@ tests:
       config:
         cephadm: true
         commands:
-          - "ceph osd pool application enable"
-          - "default.rgw.buckets.data rgw"
+          - "ceph osd pool application enable default.rgw.buckets.data rgw"
       desc: "Enable OSD pool for RGW data"
       destroy-cluster: false
       module: exec.py
@@ -190,8 +189,7 @@ tests:
       config:
         cephadm: true
         commands:
-          - "ceph osd pool application enable"
-          - "default.rgw.buckets.index rgw"
+          - "ceph osd pool application enable default.rgw.buckets.index rgw"
       desc: "Enable OSD pool for RGW index"
       destroy-cluster: false
       module: exec.py
@@ -218,7 +216,7 @@ tests:
       abort-on-fail: true
       config:
         command: add
-        id: magna068
+        id: client.magna068
         install_packages:
           - ceph-common
           - ceph-base
@@ -235,7 +233,7 @@ tests:
       abort-on-fail: true
       config:
         command: add
-        id: magna073
+        id: client.magna073
         install_packages:
           - ceph-common
           - ceph-base
@@ -251,7 +249,7 @@ tests:
     test:
       abort-on-fail: false
       config:
-        haproxy_client:
+        haproxy_clients:
           - cali019
         rgw_endpoints:
           - cali015:80
