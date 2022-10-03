@@ -5,6 +5,7 @@ from typing import Dict
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from utility import utils
 from utility.log import Log
 
 log = Log(__name__)
@@ -80,6 +81,12 @@ def add(cls, config: Dict) -> None:
                     node.exec_command(
                         cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True
                     )
+            if config.get("git_clone", False):
+                log.info("perform cloning operation")
+                role = config.get("git_node_role", "client")
+                ceph_object = cls.cluster.get_ceph_object(role)
+                node_value = ceph_object.node
+                utils.perform_env_setup(config, node_value, cls.cluster)
 
             out, _ = node.exec_command(cmd="ls -ltrh /etc/ceph/", sudo=True)
             log.info(out)
