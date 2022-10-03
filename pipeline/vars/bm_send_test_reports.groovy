@@ -48,8 +48,7 @@ def sendEMail(def testResults, def rhBuild, def scenarioName, def rhCephInfo) {
 
             body += "<td>${suites.key}</td>"
             body += "<td>${suites.value["result"]}</td>"
-            body += "<td>${suites.value["logs"]}</td>"
-            body += "</tr>"
+            body += "<td>${suites.value["logs"]}</td></tr>"
 
             gchatResult += "\n\tSuite Name : ${suites.key}"
             gchatResult += "\n\t\tResult : ${suites.value["result"]}"
