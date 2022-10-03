@@ -72,3 +72,17 @@
     - openstack
     - rgw
     - stage-2
+
+- name: "Core Feature Upstream Testing For RGW and RGW LC tests"
+  suite: "suites/quincy/upstream/tier-1_rgw_and_lc.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-8"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rgw
+    - stage-2
+
