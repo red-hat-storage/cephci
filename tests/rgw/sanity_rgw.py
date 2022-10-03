@@ -118,20 +118,22 @@ def run(ceph_cluster, **kw):
         rgw_node.exec_command(cmd=f"sudo mkdir {test_folder}")
         utils.clone_the_repo(config, rgw_node, test_folder_path)
 
-    if ceph_cluster.rhcs_version.version[0] > 4:
-        setup_cluster_access(ceph_cluster, rgw_node)
-        rgw_node.exec_command(
-            sudo=True, cmd="yum install -y ceph-common --nogpgcheck", check_ec=False
-        )
-
-    if ceph_cluster.rhcs_version.version[0] in [3, 4]:
-        if ceph_cluster.containerized:
-            # install ceph-common on the host hosting the container
+    install_common = config.get("install_common", True)
+    if install_common:
+        if ceph_cluster.rhcs_version.version[0] > 4:
+            setup_cluster_access(ceph_cluster, rgw_node)
             rgw_node.exec_command(
-                sudo=True,
-                cmd="yum install -y ceph-common --nogpgcheck",
-                check_ec=False,
+                sudo=True, cmd="yum install -y ceph-common --nogpgcheck", check_ec=False
             )
+
+        if ceph_cluster.rhcs_version.version[0] in [3, 4]:
+            if ceph_cluster.containerized:
+                # install ceph-common on the host hosting the container
+                rgw_node.exec_command(
+                    sudo=True,
+                    cmd="yum install -y ceph-common --nogpgcheck",
+                    check_ec=False,
+                )
     out, err = rgw_node.exec_command(cmd="ls -l venv", check_ec=False)
 
     if not out:

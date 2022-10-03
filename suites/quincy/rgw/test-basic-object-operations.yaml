@@ -98,6 +98,8 @@ tests:
         install_packages:
           - ceph-common
         copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
       desc: Configure the RGW client system
       polarion-id: CEPH-83573758
       destroy-cluster: false
@@ -107,51 +109,61 @@ tests:
   # Testing stage
 
   - test:
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects.yaml
-        timeout: 300
-      desc: test to create "M" no of buckets and "N" no of objects
-      module: sanity_rgw.py
-      name: Test M buckets with N objects
-      polarion-id: CEPH-9789
+      name: Parallel run
+      desc: RGW tier-0 parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+              install_common: false
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
 
-  - test:
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
-        timeout: 300
-      desc: test to create "M" no of buckets and "N" no of objects with delete
-      module: sanity_rgw.py
-      name: Test delete using M buckets with N objects
-      polarion-id: CEPH-14237
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+              timeout: 300
+              install_common: false
+            desc: test to create "M" no of buckets and "N" no of objects with delete
+            module: sanity_rgw.py
+            name: Test delete using M buckets with N objects
+            polarion-id: CEPH-14237
 
-  - test:
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-        timeout: 300
-      desc: test to create "M" no of buckets and "N" no of objects with download
-      module: sanity_rgw.py
-      name: Test download with M buckets with N objects
-      polarion-id: CEPH-14237
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+              timeout: 300
+              install_common: false
+            desc: test to create "M" no of buckets and "N" no of objects with download
+            module: sanity_rgw.py
+            name: Test download with M buckets with N objects
+            polarion-id: CEPH-14237
 
-  - test:
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-        timeout: 300
-      desc: test to create "M" no of buckets and "N" no of objects with multipart upload
-      module: sanity_rgw.py
-      name: Test multipart upload of M buckets with N objects
-      polarion-id: CEPH-9801
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+              timeout: 300
+              install_common: false
+            desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+            module: sanity_rgw.py
+            name: Test multipart upload of M buckets with N objects
+            polarion-id: CEPH-9801
 
-  - test:
-      config:
-        script-name: test_swift_basic_ops.py
-        config-file-name: test_swift_basic_ops.yaml
-        timeout: 300
-      desc: Test object operations with swift
-      module: sanity_rgw.py
-      name: Swift based tests
-      polarion-id: CEPH-11019
+        - test:
+            config:
+              script-name: test_swift_basic_ops.py
+              config-file-name: test_swift_basic_ops.yaml
+              timeout: 300
+              install_common: false
+            desc: Test object operations with swift
+            module: sanity_rgw.py
+            name: Swift based tests
+            polarion-id: CEPH-11019
