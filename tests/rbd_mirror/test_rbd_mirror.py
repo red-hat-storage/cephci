@@ -9,6 +9,10 @@ def run(**kw):
     --> Configures RBD Mirroring on cephadm
     --> Creates Pool Image and enables Mirroring
     --> Runs IO using rbd bench
+    --> Resize the image
+    --> Allow changes to the image to mirror
+    --> Check for data consistency
+    --> Cleanup
     Args:
         **kw:
     Returns:

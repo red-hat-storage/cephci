@@ -86,3 +86,15 @@
     - rgw
     - stage-2
 
+- name: "Upstream Testing For rbd and rbd-mirror"
+  suite: "suites/quincy/upstream/tier-1_rbd_mirror_and_rbd.yaml"
+  global-conf: "conf/quincy/upstream/5-node-2-clusters.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rbd
+    - stage-2

@@ -1,0 +1,283 @@
+#===============================================================================================
+# Test-Suite: tier-1_rbd_mirror.yaml
+#
+# Cluster Configuration:
+#    conf/quincy/upstream/5-node-2-clusters.yaml
+#    No of Clusters : 2
+#    node2 needs to be the client node
+#
+# Sequesnce of Tests:
+#   - Prerequisites to bring up clusters
+#   - Bring up two clusters with rbd pool and mirror daemon
+#   - Install client package on client node
+#   - Run rbd-mirror tests
+#       - test_rbd_mirror
+#       - Run test_rbd_mirror_image
+#       - test_rbd_mirror_rename_image
+#   - Run rbd tests
+#       - test_librbd_python, rbd_permissions, read-flags, qos,
+#         rbd - journal, rbd_kernel, rbd_krbd_exclusive
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+              -
+                config:
+                  args:
+                    - "ceph osd pool create rbd"
+                  command: shell
+              -
+                config:
+                  args:
+                    - "rbd pool init rbd"
+                  command: shell
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd1:
+            config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true
+          ceph-rbd2:
+            config:
+                command: add
+                id: client.1
+                node: node2
+                install_packages:
+                    - ceph-common
+                copy_admin_keyring: true
+        desc: Configure the client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+  - test:
+      name: test_rbd_mirror
+      module: test_rbd_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            resize_to: 5G
+      polarion-id: CEPH-83573332
+      desc: Create RBD mirrored image in pools and run IOs
+  - test:
+      name: test_rbd_mirror_image
+      module: test_rbd_mirror_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573619,CEPH-83573620
+      desc: Create RBD mirrored images and run IOs
+  - test:
+      name: test_rbd_mirror_rename_image
+      module: test_rbd_mirror_rename_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573614
+      desc: Rename primary image and check on secondary for this change
+  - test:
+      name: test_rbd_mirror_daemon_status
+      module: test_rbd_mirror_daemon_status.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573760
+      desc: Verify rbd mirror and daemon status on cluster
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            branch: main
+            script_path: qa/workunits/rbd
+            script: test_librbd_python.sh
+      desc: Executig upstream LibRBD scenarios
+      module: test_rbd.py
+      name: librbd_python
+      polarion-id: CEPH-83574524
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            branch: main
+            script_path: qa/workunits/rbd
+            script: permissions.sh
+      desc: Executig upstream RBD permissions scenarios
+      module: test_rbd.py
+      name: rbd_permissions
+      polarion-id: CEPH-83574525
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            branch: main
+            script_path: qa/workunits/rbd
+            script: read-flags.sh
+      desc: Executig upstream RBD Read Flag scenarios
+      module: test_rbd.py
+      name: rbd_read_flags
+      polarion-id: CEPH-83574526
+  - test:
+      clusters:
+        ceph-rbd1:
+         config:
+           branch: main
+           script_path: qa/workunits/rbd
+           script: qos.sh
+      desc: Executig upstream RBD QOS scenarios
+      module: test_rbd.py
+      name: rbd_qos
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            branch: main
+            script_path: qa/workunits/rbd
+            script: journal.sh
+      desc: Executig upstream RBD Journal scenarios
+      module: test_rbd.py
+      name: rbd_journal
+      polarion-id: CEPH-83574527
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            branch: main
+            script_path: qa/workunits/rbd
+            script: kernel.sh
+      desc: Executig upstream RBD Kernal scenarios
+      module: test_rbd.py
+      name: rbd_kernel
+      polarion-id: CEPH-83574528
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            branch: main
+            script_path: qa/workunits/rbd
+            script: krbd_exclusive_option.sh
+      desc: Executig upstream RBD kernel exclusive scenarios
+      module: test_rbd.py
+      name: rbd_krbd_exclusive
+      polarion-id: CEPH-83574531
