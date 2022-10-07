@@ -179,7 +179,10 @@ def run(ceph_cluster, **kw):
     if run_io_verify:
         log.info("running io verify script")
         verify_out, err = rgw_node.exec_command(
-            cmd=f"sudo {python_cmd} " + test_folder_path + lib_dir + "read_io_info.py",
+            cmd=f"sudo {python_cmd} "
+            + test_folder_path
+            + lib_dir
+            + f"read_io_info.py -c {config_file_name}",
             timeout=timeout,
         )
         log.info(verify_out)
