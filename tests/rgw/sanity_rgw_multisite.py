@@ -72,6 +72,7 @@ def run(**kw):
     test_site = kw.get("ceph_cluster")
     log.info(f"test site: {test_site.name}")
     test_site_node = test_site.get_ceph_object("rgw").node
+    test_client_node = test_site.get_ceph_object("client").node
     config["git-url"] = config.get(
         "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
     )
@@ -80,7 +81,16 @@ def run(**kw):
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
     primary_rgw_node = primary_cluster.get_ceph_object("rgw").node
+    primary_client_node = primary_cluster.get_ceph_object("client").node
     secondary_rgw_node = secondary_cluster.get_ceph_object("rgw").node
+    secondary_client_node = secondary_cluster.get_ceph_object("client").node
+    run_on_rgw = config.get("run-on-rgw", False)
+    if run_on_rgw:
+        exec_from = test_site_node
+        append_param = ""
+    else:
+        exec_from = test_client_node
+        append_param = " --rgw-node " + str(test_site_node.ip_address)
     archive_cluster_exists = False
     if "ceph-arc" in clusters.keys():
         if "ceph-sec" not in clusters.keys():
@@ -101,10 +111,14 @@ def run(**kw):
     config["test_folder_path"] = test_folder_path
 
     if set_env:
+        set_test_env(config, primary_client_node)
+        set_test_env(config, secondary_client_node)
         set_test_env(config, primary_rgw_node)
         set_test_env(config, secondary_rgw_node)
 
         if primary_cluster.rhcs_version.version[0] >= 5:
+            setup_cluster_access(primary_cluster, primary_client_node)
+            setup_cluster_access(secondary_cluster, secondary_client_node)
             setup_cluster_access(primary_cluster, primary_rgw_node)
             setup_cluster_access(secondary_cluster, secondary_rgw_node)
             if archive_cluster_exists:
@@ -120,18 +134,16 @@ def run(**kw):
     timeout = config.get("timeout", 600)
 
     log.info("flushing iptables")
-    test_site_node.exec_command(cmd="sudo iptables -F", check_ec=False)
+    exec_from.exec_command(cmd="sudo iptables -F", check_ec=False)
 
     if test_config["config"]:
         log.info("creating custom config")
         f_name = test_folder_path + config_dir + config_file_name
-        remote_fp = test_site_node.remote_file(
-            file_name=f_name, file_mode="w", sudo=True
-        )
+        remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     cmd_env = " ".join(config.get("env-vars", []))
-    test_status = test_site_node.exec_command(
+    test_status = exec_from.exec_command(
         cmd=cmd_env
         + "sudo python3 "
         + test_folder_path
@@ -140,26 +152,30 @@ def run(**kw):
         + " -c "
         + test_folder
         + config_dir
-        + config_file_name,
+        + config_file_name
+        + append_param,
         long_running=True,
     )
     if test_status == 0:
         copy_user_to_site = clusters.get(config.get("copy-user-info-to-site"))
         if copy_user_to_site:
             log.info(f'copy_user_to_site: {config.get("copy-user-info-to-site")}')
-            copy_user_to_site_node = copy_user_to_site.get_ceph_object("rgw").node
+            copy_list = []
+            copy_list.append(copy_user_to_site.get_ceph_object("rgw").node)
+            copy_list.append(copy_user_to_site.get_ceph_object("client").node)
             user_details_file = test_folder_path + lib_dir + "user_details.json"
-            copy_file_from_node_to_node(
-                user_details_file,
-                test_site_node,
-                copy_user_to_site_node,
-                user_details_file,
-            )
-            verify_sync_status(copy_user_to_site_node)
+            for lis in copy_list:
+                copy_file_from_node_to_node(
+                    user_details_file,
+                    exec_from,
+                    lis,
+                    user_details_file,
+                )
+            verify_sync_status(copy_user_to_site.get_ceph_object("rgw").node)
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:
-            io_info = home_dir_path + "io_info.yaml"
+            io_info = home_dir_path + f"io_info_{config_file_name}"
             for site in verify_io_on_sites:
                 verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
                 log.info(f"Check sync status on {site}")
@@ -169,14 +185,14 @@ def run(**kw):
                 log.info(f"verification IO on {site}")
                 if test_site != site:
                     copy_file_from_node_to_node(
-                        io_info, test_site_node, verify_io_on_site_node, io_info
+                        io_info, exec_from, verify_io_on_site_node, io_info
                     )
 
                 verify_out, err = verify_io_on_site_node.exec_command(
                     cmd="sudo python3 "
                     + test_folder_path
                     + lib_dir
-                    + "read_io_info.py",
+                    + f"read_io_info.py -c {config_file_name}",
                     timeout=timeout,
                 )
                 log.info(verify_out)
