@@ -73,7 +73,7 @@ backend app
     balance     roundrobin
 {% for item in data %}
     server      rgw{{loop.index}} {{item}} check
-{%- endfor %}
+{% endfor %}
 """
 
 
