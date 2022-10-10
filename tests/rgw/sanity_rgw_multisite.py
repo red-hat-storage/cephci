@@ -159,7 +159,7 @@ def run(**kw):
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:
-            io_info = home_dir_path + "io_info.yaml"
+            io_info = home_dir_path + f"io_info_{config_file_name}"
             for site in verify_io_on_sites:
                 verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
                 log.info(f"Check sync status on {site}")
@@ -176,7 +176,7 @@ def run(**kw):
                     cmd="sudo python3 "
                     + test_folder_path
                     + lib_dir
-                    + "read_io_info.py",
+                    + f"read_io_info.py -c {config_file_name}",
                     timeout=timeout,
                 )
                 log.info(verify_out)
