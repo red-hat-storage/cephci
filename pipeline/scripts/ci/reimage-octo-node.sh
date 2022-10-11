@@ -56,7 +56,17 @@ for node in ${NODES} ; do
 
     echo "Wipe all data disks clean."
     disks=$(ssh ${node} 'lsblk -o NAME -d | tail -n +2')
-    root_disk=$(ssh ${node} 'lsblk -oPKNAME,MOUNTPOINT | grep -e "^[a-z].*" | cut -d " " -f 1 | uniq')
+    root_disk=$(ssh ${node} 'eval $(lsblk -o PKNAME,MOUNTPOINT -P | grep "MOUNTPOINT=\"/\""); echo $PKNAME')
+
+    if [ -z "${root_disk}" ]; then
+        echo "ERR: Unable to find root disk on ${node}"
+        exit 2
+    fi
+
+    if [ "$(echo ${root_disk} | wc -l)" != "1" ]; then
+        echo "ERR: More than one root disk found on ${node}"
+        exit 2
+    fi
 
     for disk in ${disks} ; do
         if [ "${disk}" != "${root_disk}" ] ; then
