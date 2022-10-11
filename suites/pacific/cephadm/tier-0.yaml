@@ -93,26 +93,27 @@ tests:
       desc: Run object, block and filesystem basic operations parallelly.
       module: test_parallel.py
       parallel:
+        # - test:
+        #     config:
+        #       script-name: test_Mbuckets_with_Nobjects.py
+        #       config-file-name: test_Mbuckets_with_Nobjects.yaml
+        #       timeout: 300
+        #     desc: test to create "M" no of buckets and "N" no of objects
+        #     module: sanity_rgw.py
+        #     name: Test M buckets with N objects
+        #     polarion-id: CEPH-9789
         - test:
             config:
-              script-name: test_Mbuckets_with_Nobjects.py
-              config-file-name: test_Mbuckets_with_Nobjects.yaml
-              timeout: 300
-            desc: test to create "M" no of buckets and "N" no of objects
-            module: sanity_rgw.py
-            name: Test M buckets with N objects
-            polarion-id: CEPH-9789
-        - test:
-            config:
+              branch: v16.2.8
               script: cli_generic.sh
               script_path: qa/workunits/rbd
             desc: "Executing upstream RBD CLI Generic scenarios"
             module: test_rbd.py
             name: 1_rbd_cli_generic
             polarion-id: CEPH-83574241
-        - test:
-            abort-on-fail: false
-            desc: "cephfs basic operations"
-            module: cephfs_basic_tests.py
-            name: cephfs-basics
-            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+        # - test:
+        #     abort-on-fail: false
+        #     desc: "cephfs basic operations"
+        #     module: cephfs_basic_tests.py
+        #     name: cephfs-basics
+        #     polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
