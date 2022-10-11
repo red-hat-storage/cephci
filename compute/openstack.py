@@ -437,7 +437,7 @@ class CephVMNodeV2:
                 msg = (
                     "Unknown Error"
                     if not node.extra
-                    else node.extra.get("fault").get("message")
+                    else node.extra.get("fault", {}).get("message", "Unknown Error")
                 )
                 raise NodeError(msg)
 
