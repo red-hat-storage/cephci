@@ -173,3 +173,9 @@ tests:
     module: test_cephadm_shell_run.py
     desc: Verification cephadm shell when running from a non-monitor node
     polarion-id: CEPH-83575009
+
+- test:
+    name: test_check_non_exisiting_legacy_services
+    module: test_legacy_services.py
+    desc: Verify if the cephadm shell tries to infer config from a dummy mon created
+    polarion-id: CEPH-83575342
