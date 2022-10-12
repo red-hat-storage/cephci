@@ -11,10 +11,12 @@ globals:
        role:
          - mon
          - mgr
+         - mds
      node3:
        role:
          - mon
          - mgr
+         - mds
      node4:
        role:
          - osd
