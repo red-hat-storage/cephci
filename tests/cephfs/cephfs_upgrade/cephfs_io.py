@@ -1,3 +1,5 @@
+import secrets
+import string
 import traceback
 from datetime import datetime, timedelta
 
@@ -36,13 +38,27 @@ def run(ceph_cluster, **kw):
         client1 = clients[0]
         stats = {"total_iterations": 0, "smallfile": 0, "dd": 0}
         out, rc = client1.exec_command(
-            sudo=True, cmd="mount -t fuse.ceph-fuse | awk {'print $3'}", check_ec=False
+            sudo=True, cmd="mount -t ceph | awk {'print $3'}", check_ec=False
         )
+        if out == "":
+            mon_node_ip = fs_util.get_mon_node_ips()
+            mon_node_ip = ",".join(mon_node_ip)
+            kernel_mount_dir = "/mnt/" + "".join(
+                secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
+            )
+            fs_util.kernel_mount(clients, kernel_mount_dir, mon_node_ip)
+            mount_points = kernel_mount_dir
         mount_points = out.rstrip("\n")
         fuse_mount_points = mount_points.split("\n")
         out, rc = client1.exec_command(
-            sudo=True, cmd="mount -t ceph | awk {'print $3'}", check_ec=False
+            sudo=True, cmd="mount -t fuse.ceph-fuse | awk {'print $3'}", check_ec=False
         )
+        if out == "":
+            fuse_mount_dir = "/mnt/" + "".join(
+                secrets.choice(string.ascii_lowercase + string.digits) for i in range(5)
+            )
+            fs_util.fuse_mount(clients, fuse_mount_dir)
+            mount_points = fuse_mount_dir
         mount_points = out.rstrip("\n")
         kernel_mount_points = mount_points.split("\n")
         total_mounts = fuse_mount_points + kernel_mount_points

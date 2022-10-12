@@ -162,6 +162,15 @@ tests:
     desc: Perform export during read/write,resizing,flattening,lock operations
 
 - test:
+    abort-on-fail: false
+    config:
+        timeout: 600
+    desc: Runs cephfs IOs
+    module: cephfs_upgrade.cephfs_io.py
+    name: "cephfs-io"
+    polarion-id: CEPH-83575315
+
+- test:
     name: rgw sanity tests
     module: sanity_rgw.py
     config:

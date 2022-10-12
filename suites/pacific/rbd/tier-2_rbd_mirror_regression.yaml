@@ -181,5 +181,5 @@ tests:
             io-total: 200M
             key: ping
             value: pong
-      polarion-id: CEPH-9525
+      polarion-id: CEPH-9524
       desc: Verify removal of image meta gets mirrored
