@@ -14,9 +14,9 @@ def run(**kw):
 
     # Handling of clusters with same name
     if mirror1.cluster_name == mirror2.cluster_name:
-        mirror1.handle_same_name("master")
+        mirror1.handle_same_name("primary")
         if "two-way" in config.get("way", ""):
-            mirror2.handle_same_name("slave")
+            mirror2.handle_same_name("secondary")
 
     if "one-way" in config.get("way", ""):
         mirror2.setup_mirror(mirror1)

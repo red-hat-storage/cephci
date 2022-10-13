@@ -739,7 +739,6 @@ def run(args):
 
     for test in tests:
         test = test.get("test")
-        parallel = test.get("parallel")
         tc = fetch_test_details(test)
         test_file = tc["file"]
         report_portal_description = tc["desc"] or ""
@@ -761,8 +760,10 @@ def run(args):
         for cluster_name in test.get("clusters", ceph_cluster_dict):
             if test.get("clusters"):
                 config = test.get("clusters").get(cluster_name).get("config", {})
+                parallel = test.get("clusters").get(cluster_name).get("parallel")
             else:
                 config = test.get("config", {})
+                parallel = test.get("parallel")
 
             if not config.get("base_url"):
                 config["base_url"] = base_url
