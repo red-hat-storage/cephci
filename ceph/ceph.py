@@ -2322,6 +2322,43 @@ class CephInstaller(CephObject):
         host_file.write(out)
         host_file.flush()
 
+    def append_inventory_file(self, inventory_config, file_name="hosts"):
+        """
+        Append inventory to hosts file for ansible use. Existing file will be appended
+        Args:
+            inventory_config(str):inventory config compatible with ceph-ansible
+            file_name(str): custom inventory file name. (default : "hosts")
+        """
+        host_file = self.remote_file(
+            sudo=True,
+            file_mode="a",
+            file_name="{ansible_dir}/{inventory_file}".format(
+                ansible_dir=self.ansible_dir, inventory_file=file_name
+            ),
+        )
+        logger.info(inventory_config)
+        host_file.write(inventory_config)
+        host_file.flush()
+
+        out, rc = self.exec_command(
+            sudo=True,
+            cmd="cat {ansible_dir}/{inventory_file}".format(
+                ansible_dir=self.ansible_dir, inventory_file=file_name
+            ),
+        )
+        out = out.rstrip("\n")
+        out = re.sub(r"\]+", "]", out)
+        out = re.sub(r"\[+", "[", out)
+        host_file = self.remote_file(
+            sudo=True,
+            file_mode="a",
+            file_name="{ansible_dir}/{inventory_file}".format(
+                ansible_dir=self.ansible_dir, inventory_file=file_name
+            ),
+        )
+        host_file.write(out)
+        host_file.flush()
+
     def read_inventory_file(self):
         """
         Read inventory file from ansible node
