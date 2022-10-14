@@ -395,6 +395,9 @@ def run(args):
     log_directory = args.get("--log-dir")
     post_to_report_portal = args.get("--report-portal")
 
+    # jenkin job url
+    jenkin_job_url = os.environ.get("BUILD_URL")
+
     run_id = generate_unique_id(length=6)
     rp_logger = None
     if post_to_report_portal:
@@ -577,26 +580,49 @@ def run(args):
         launch_name = f"RHCS {rhbuild} - {suite_file_name}"
         launch_desc = textwrap.dedent(
             """
-            ceph version: {ceph_version}
-            ceph-ansible version: {ceph_ansible_version}
-            compose-id: {compose_id}
-            invoked-by: {user}
-            log-location: {_log}
+            "jenkin-url": {jenkin_job_url},
+            "build": {rhbuild},
+            "ceph-version": {ceph_version},
+            "ceph-ansible-version": {ceph_ansible_version},
+            "base_url": {base_url},
+            "suite-name": {suite_name},
+            "conf-file": {glb_file},
+            "polarion-project-id": "CEPH",
+            "distro": {distro},
+            "container-registry": {docker_registry},
+            "container-image": {docker_image},
+            "container-tag": {docker_tag},
+            "compose-id": {compose_id},
+            "log-dir": {_log},
+            "run-id": {run_id},
+            "cloud-type": {cloud_type},
+            "instance-name": {instances_name},
             """.format(
+                jenkin_job_url=jenkin_job_url,
+                rhbuild=rhbuild,
                 ceph_version=ceph_version,
                 ceph_ansible_version=ceph_ansible_version,
-                user=getuser(),
+                base_url=base_url,
+                suite_name=suite_name,
+                glb_file=glb_file,
+                distro=distro,
+                docker_registry=docker_registry,
+                docker_image=docker_image,
+                docker_tag=docker_tag,
                 compose_id=compose_id,
                 _log=_log,
+                run_id=run_id,
+                cloud_type=cloud_type,
+                instances_name=instances_name,
             )
         )
         if docker_image and docker_registry and docker_tag:
             launch_desc = launch_desc + textwrap.dedent(
                 """
-                docker registry: {docker_registry}
-                docker image: {docker_image}
-                docker tag: {docker_tag}
-                invoked-by: {user}
+                "docker-registry": {docker_registry}
+                "docker-image": {docker_image}
+                "docker-tag": {docker_tag}
+                "invoked-by": {user}
                 """.format(
                     docker_registry=docker_registry,
                     docker_image=docker_image,
@@ -612,6 +638,7 @@ def run(args):
                 "tier": qe_tier,
                 "ceph_version": ceph_version,
                 "os": platform if platform else "-".join(rhbuild.split("-")[1:]),
+                "job_url": jenkin_job_url,
             }
         )
 
@@ -650,6 +677,10 @@ def run(args):
         details["duration"] = "0s"
         details["status"] = "Not Executed"
         details["comments"] = var.get("comments", str())
+        details["jenkin-url"] = jenkin_job_url
+        details["cloud-type"] = cloud_type
+        details["instance-name"] = instances_name
+        details["invoked-by"] = trigger_user
         return details
 
     if reuse is None:
@@ -919,19 +950,24 @@ def run(args):
     close_and_remove_filehandlers()
 
     test_run_metadata = {
+        "jenkin-url": jenkin_job_url,
         "build": rhbuild,
-        "polarion-project-id": "CEPH",
-        "suite-name": suite_name,
-        "distro": distro,
         "ceph-version": ceph_version,
         "ceph-ansible-version": ceph_ansible_version,
         "base_url": base_url,
+        "suite-name": suite_name,
+        "conf-file": glb_file,
+        "polarion-project-id": "CEPH",
+        "distro": distro,
         "container-registry": docker_registry,
         "container-image": docker_image,
         "container-tag": docker_tag,
         "compose-id": compose_id,
         "log-dir": run_dir,
         "run-id": run_id,
+        "cloud-type": cloud_type,
+        "instance-name": instances_name,
+        "invoked-by": trigger_user,
     }
 
     if post_to_report_portal:
