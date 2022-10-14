@@ -9,6 +9,8 @@ def build_url
 def reportBucket = "qe-ci-reports"
 def remoteName= "ibm-cos"
 def msgMap = [:]
+def tags_list
+def umbLib
 
 node("rhel-8-medium || ceph-qe-ci") {
 
@@ -82,7 +84,7 @@ node("rhel-8-medium || ceph-qe-ci") {
             /* Publish results through E-mail and Google Chat */
             if ( msgMap["pipeline"].containsKey("tags") ) {
                 def tag = msgMap["pipeline"]["tags"]
-                def tags_list = tag.split(',') as List
+                tags_list = tag.split(',') as List
                 def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
                 stageLevel = tags_list.get(stage_index)
                 def tier_index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
@@ -171,6 +173,16 @@ node("rhel-8-medium || ceph-qe-ci") {
                 )
 
                 // Remove the release file as it wouldn't be required
+            }
+            if (
+                tags_list.contains("rc") && tierLevel == "tier-0"
+                && msgMap["pipeline"]["final_stage"] && testStatus == "SUCCESS"
+            ){
+                def recipeMap = sharedLib.readFromReleaseFile(
+                    majorVersion, minorVersion, lockFlag=false
+                )
+                umbLib = load("${env.WORKSPACE}/pipeline/vars/umb.groovy")
+                umbLib.postUMBTestQueue(nvr, recipeMap, "false")
             }
             println("Execution complete")
         }

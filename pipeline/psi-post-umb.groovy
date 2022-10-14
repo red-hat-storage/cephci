@@ -7,49 +7,6 @@
 */
 def featureCompleteReleases = ['RHCEPH-4.3.yaml', 'RHCEPH-5.3.yaml', 'RHCEPH-6.0.yaml']
 
-def postUMB(def version, Map recipeMap) {
-    /*
-        This method posts a message to the UMB using the version information provided.
-
-        Args:
-            version (str):  Version information to be included in the payload.
-            image (str):    Ceph image
-    */
-    def stableBuild = ( recipeMap.containsKey('osp') ) ? recipeMap['osp'] : [:]
-    def payload = [
-        "artifact": [
-            "nvr": version,
-            "latest": recipeMap['tier-0'],
-            "stable": stableBuild,
-            "scratch": "true"
-        ],
-        "category": "external",
-        "contact": [
-            "email": "cephci@redhat.com",
-            "name": "Red Hat Ceph Storage QE Team"
-        ],
-        "issuer": "rhceph-qe-ci",
-        "run": [
-            "url": "${env.JENKINS_URL}/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/",
-            "log": "${env.JENKINS_URL}/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/console"
-        ],
-        "version": "1.0.0"
-    ]
-
-    def msg = writeJSON returnText: true, json: payload
-    def msgProps = """ PRODUCT = Red Hat Ceph Storage
-        TOOL = cephci
-    """
-    sendCIMessage([
-        providerName: 'Red Hat UMB',
-        overrides:[topic: 'VirtualTopic.qe.ci.rhceph.product-scenario.test.queue'],
-        messageContent: msg,
-        messageProperties: msgProps,
-        messageType: "Custom",
-        failOnError: true
-    ])
-}
-
 node('rhel-8-medium || ceph-qe-ci') {
     stage('prepareNode') {
         checkout(
@@ -87,6 +44,7 @@ node('rhel-8-medium || ceph-qe-ci') {
     }
 
     stage('postMessage') {
+        def umbLib = load("${env.WORKSPACE}/pipeline/vars/umb.groovy")
         def findRootDir = "/ceph/cephci-jenkins/latest-rhceph-container-info/"
 
         // Check if there was a new build in the last week for each supported release
@@ -101,7 +59,7 @@ node('rhel-8-medium || ceph-qe-ci') {
 
                 println("Development build found for $nvr")
 
-                postUMB(nvr, recipeMap)
+                umbLib.postUMBTestQueue(nvr, recipeMap, "true")
             }
         }
     }
