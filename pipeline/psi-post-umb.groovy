@@ -7,7 +7,7 @@
 */
 def featureCompleteReleases = ['RHCEPH-4.3.yaml', 'RHCEPH-5.3.yaml', 'RHCEPH-6.0.yaml']
 
-def postUMB(version, image) {
+def postUMB(def version, Map recipeMap) {
     /*
         This method posts a message to the UMB using the version information provided.
 
@@ -15,24 +15,27 @@ def postUMB(version, image) {
             version (str):  Version information to be included in the payload.
             image (str):    Ceph image
     */
+    def stableBuild = ( recipeMap.containsKey('osp') ) ? recipeMap['osp'] : [:]
     def payload = [
         "artifact": [
-            "nvr": "RHCEPH-$version",
-            "scratch": "true",
-            "issuer": "rhceph-qe-ci",
-            "image": image
+            "nvr": version,
+            "latest": recipeMap['tier-0'],
+            "stable": stableBuild,
+            "scratch": "true"
         ],
         "category": "external",
         "contact": [
             "email": "cephci@redhat.com",
             "name": "Red Hat Ceph Storage QE Team"
         ],
+        "issuer": "rhceph-qe-ci",
         "run": [
             "url": "${env.JENKINS_URL}/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/",
             "log": "${env.JENKINS_URL}/job/${env.JOB_NAME}/${env.BUILD_NUMBER}/console"
         ],
         "version": "1.0.0"
     ]
+
     def msg = writeJSON returnText: true, json: payload
     def msgProps = """ PRODUCT = Red Hat Ceph Storage
         TOOL = cephci
@@ -94,11 +97,11 @@ node('rhel-8-medium || ceph-qe-ci') {
             )
             if (out?.trim()) {
                 def recipeMap = readYaml file: out.trim()
-                def image = recipeMap["tier-0"]["repository"]
+                def nvr = it.replace(".yaml", "")
 
-                nvr = it.substring(7,10)
-                println("Found development build for $nvr whose image tag is $image")
-                postUMB(nvr, image)
+                println("Development build found for $nvr")
+
+                postUMB(nvr, recipeMap)
             }
         }
     }
