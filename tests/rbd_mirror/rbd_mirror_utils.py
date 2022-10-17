@@ -1,7 +1,6 @@
 import ast
 import datetime
 import json
-import pdb
 import random
 import string
 import time
@@ -175,7 +174,6 @@ class RbdMirror:
         peer_cluster.enable_mirroring("pool", poolname, mode=mode)
 
         if self.ceph_version >= 4:
-            pdb.set_trace()
             self.bootstrap_peers(poolname=poolname, cluster_name=primary_cluster)
             self.copy_file(
                 file_name="/root/bootstrap_token_primary",
