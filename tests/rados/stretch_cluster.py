@@ -377,11 +377,11 @@ def add_crush_rules(node, rule_name: str, rules: str) -> bool:
     try:
         # Getting the crush map
         cmd = "/bin/ceph osd getcrushmap > /tmp/crush.map.bin"
-        node.exec_command(cmd=cmd)
+        node.exec_command(cmd=cmd, sudo=True)
 
         # changing it to text for editing
         cmd = "/bin/crushtool -d /tmp/crush.map.bin -o /tmp/crush.map.txt"
-        node.exec_command(cmd=cmd)
+        node.exec_command(cmd=cmd, sudo=True)
 
         # Adding the crush rules into the file
         cmd = f"""cat <<EOF >> /tmp/crush.map.txt
@@ -389,15 +389,15 @@ rule {rule_name} {"{"}
 {rules}
 {"}"}
 EOF"""
-        node.exec_command(cmd=cmd)
+        node.exec_command(cmd=cmd, sudo=True)
 
         # Changing back the text file into bin
         cmd = "/bin/crushtool -c /tmp/crush.map.txt -o /tmp/crush2.map.bin"
-        node.exec_command(cmd=cmd)
+        node.exec_command(cmd=cmd, sudo=True)
 
         # Setting the new crush map
         cmd = "/bin/ceph osd setcrushmap -i /tmp/crush2.map.bin"
-        node.exec_command(cmd=cmd)
+        node.exec_command(cmd=cmd, sudo=True)
 
         log.info(f"Crush rule : {rule_name} added successfully")
         return True
