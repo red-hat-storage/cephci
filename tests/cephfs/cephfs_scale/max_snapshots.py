@@ -19,7 +19,6 @@ def get_available_space(client, fs_name="cephfs"):
         (pool["avail"] for pool in output["pools"] if pool["type"] == "data"), None
     )
 
-
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered:
