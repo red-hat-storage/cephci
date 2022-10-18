@@ -19,6 +19,7 @@ def get_available_space(client, fs_name="cephfs"):
         (pool["avail"] for pool in output["pools"] if pool["type"] == "data"), None
     )
 
+
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered:
@@ -105,7 +106,7 @@ def run(ceph_cluster, **kw):
                 client1.exec_command(
                     sudo=True,
                     cmd=f"dd if=/dev/zero "
-                        f"of={kernel_mounting_dir_1}/file_{snapshot['snap_name']}.txt bs={bs} count=1000",
+                    f"of={kernel_mounting_dir_1}/file_{snapshot['snap_name']}.txt bs={bs} count=1000",
                 )
                 fs_util.create_snapshot(clients[0], **snapshot, validate=False)
             except CommandFailed:
