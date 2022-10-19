@@ -161,13 +161,14 @@ tests:
       desc: Verify that image deleted at primary site updated at secondary
 
   - test:
-      name: test image delete from secondary after multiple promote and demote
-      module: test_83574741.py
+      name: test image delete from secondary after promote and demote
+      module: test-image-delete-from-secondary.py
       clusters:
         ceph-rbd1:
           config:
             imagesize: 2G
             io-total: 200M
+            repeat_count: 1
       polarion-id: CEPH-83574741
       desc: Verify that deleting primary image also delete the secondary image
 
