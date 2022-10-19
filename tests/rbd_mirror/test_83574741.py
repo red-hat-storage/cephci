@@ -62,7 +62,8 @@ def run(**kw):
 
         if mirror2.image_exists(imagespec):
             return 0
-    
+ 
     except Exception as e:
         log.exception(e)
         return 1
+
