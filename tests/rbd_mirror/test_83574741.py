@@ -10,7 +10,7 @@ def run(**kw):
     this verifies that the deletion of primary images deletes the images on secondary also when we perform multiple
     promote and demote operation.
 
-    Test case flow: 
+    Test case flow:
     1. Create image on cluster-1.
     2. Enable mirroring for created image on cluster-1 and run IOs.
     3. Ensure mirror image created on cluster-2.
@@ -19,7 +19,7 @@ def run(**kw):
     6. resync the image to cluster 2.
     7. Demote image on cluster-2 and promote image on cluster-1.
     8. Delete image on cluster-1.
- 
+
     Args:
         **kw:
     Returns:
@@ -62,8 +62,7 @@ def run(**kw):
 
         if mirror2.image_exists(imagespec):
             return 0
- 
+
     except Exception as e:
         log.exception(e)
         return 1
-
