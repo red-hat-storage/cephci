@@ -93,6 +93,16 @@ node("rhel-8-medium || ceph-qe-ci") {
                 build_url = msgMap["run"]["url"]
             }
 
+            if (msgMap["test"]["result"] == "FAILURE" && tierLevel == "tier-0") {
+                sharedLib.sendEmail(
+                    run_type,
+                    metaData['results'],
+                    metaData,
+                    tierLevel,
+                    stageLevel
+                )
+            }
+
             if (metaData["results"]) {
                 if ( ! msgMap["pipeline"].containsKey("tags") ) {
                     sharedLib.sendEmail(
