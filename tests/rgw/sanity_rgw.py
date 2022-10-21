@@ -131,10 +131,8 @@ def run(ceph_cluster, **kw):
     install_common = config.get("install_common", True)
     if install_common:
         if ceph_cluster.rhcs_version.version[0] > 4:
-            setup_cluster_access(ceph_cluster, exec_from)
-            exec_from.exec_command(
-                sudo=True, cmd="yum install -y ceph-common --nogpgcheck", check_ec=False
-            )
+            setup_cluster_access(ceph_cluster, rgw_node)
+            setup_cluster_access(ceph_cluster, client_node)
 
         if ceph_cluster.rhcs_version.version[0] in [3, 4]:
             if ceph_cluster.containerized:
