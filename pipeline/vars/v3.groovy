@@ -437,7 +437,7 @@ def configureRpPreProc(
     }
 }
 
-def uploadTestResults(def sourceDir, def credPreproc, def runProperties) {
+def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def stageLevel=null, def runType=null) {
     /*
         upload Xunit Xml file to report portal and polarion
 
@@ -465,6 +465,9 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties) {
             "tier": runProperties["stage"],
         ]
     ]
+    if ( stageLevel ) {
+        launchConfig["name"] = runType.split(" ")[0] + " " + launchConfig["name"] + " " + stageLevel
+    }
     credPreproc["reportportal"]["launch"] = launchConfig
     writeJSON file: credFile, json: credPreproc
 

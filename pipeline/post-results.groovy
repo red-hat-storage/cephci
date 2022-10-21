@@ -99,7 +99,7 @@ node("rhel-8-medium || ceph-qe-ci") {
                         metaData["results"], metaData, metaData["stage"]
                     )
                 }
-                sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
+                sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData, stageLevel, run_type)
 
             }
             testStatus = msgMap["test"]["result"]
