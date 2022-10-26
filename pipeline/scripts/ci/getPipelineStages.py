@@ -112,8 +112,7 @@ def fetch_stages(args):
             os.makedirs(logdir)
             execute_cli += f" --log-dir {logdir}"
             cleanup_cli += f" --cloud {cloud_type}"
-        else:
-            execute_cli += " --post-results --report-portal"
+
         overrides.pop("workspace", None)
         overrides.pop("build_number", None)
         script.update({"inventory": script["inventory"][cloud_type]})
