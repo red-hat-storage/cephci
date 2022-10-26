@@ -103,14 +103,6 @@ tests:
             name: Test M buckets with N objects
             polarion-id: CEPH-9789
         - test:
-            config:
-              script: cli_generic.sh
-              script_path: qa/workunits/rbd
-            desc: "Executing upstream RBD CLI Generic scenarios"
-            module: test_rbd.py
-            name: 1_rbd_cli_generic
-            polarion-id: CEPH-83574241
-        - test:
             abort-on-fail: false
             desc: "cephfs basic operations"
             module: cephfs_basic_tests.py
