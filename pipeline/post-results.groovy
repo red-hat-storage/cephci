@@ -93,6 +93,7 @@ node("rhel-8-medium || ceph-qe-ci") {
                 build_url = msgMap["run"]["url"]
             }
 
+            // Send email and gchat notification on tier-0 execution failure
             if (msgMap["test"]["result"] == "FAILURE" && tierLevel == "tier-0") {
                 sharedLib.sendEmail(
                     run_type,
@@ -100,6 +101,10 @@ node("rhel-8-medium || ceph-qe-ci") {
                     metaData,
                     tierLevel,
                     stageLevel
+                )
+
+                sharedLib.sendGChatNotification(
+                    run_type, metaData["results"], tierLevel, stageLevel, build_url
                 )
             }
 
