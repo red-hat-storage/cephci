@@ -1,6 +1,7 @@
 import time
 
 from ceph.utils import hard_reboot
+from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 from utility.log import Log
 
 log = Log(__name__)
@@ -9,9 +10,11 @@ log = Log(__name__)
 def run(**kw):
     try:
         log.info("Starting CEPH-9470")
-        mirror1 = kw.get("test_data")["mirror1"]
-        mirror2 = kw.get("test_data")["mirror2"]
         config = kw.get("config")
+        mirror1, mirror2 = [
+            rbdmirror.RbdMirror(cluster, config)
+            for cluster in kw.get("ceph_cluster_dict").values()
+        ]
         osd_cred = config.get("osp_cred")
         poolname = mirror1.random_string() + "9470pool"
         imagename = mirror1.random_string() + "9470image"
