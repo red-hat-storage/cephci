@@ -65,12 +65,18 @@ def fetch_stages(args):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     metadata_dir = os.path.abspath(f"{current_dir}/../../metadata")
     metadata_file = f"{metadata_dir}/{args['rhcephVersion']}.yaml"
-    data = yaml.safe_load(open(metadata_file, "r"))
+    metadata_content = yaml.safe_load(open(metadata_file, "r"))
+    metadata_overrides = metadata_content.get("overrides")
+    ibmc_overrides = metadata_overrides.pop("ibmc", None)
+    openstack_overrides = metadata_overrides.pop("openstack", None)
+    data = metadata_content.get("suites")
     tags = args["tags"].split(",")
     tags_next = args["tags"].split(",")
     overrides = json.loads(args.get("overrides", {}))
     overrides_log = json.loads(args.get("overrides", {}))
     cloud_type = "openstack"
+
+    # filter metadata file for test suites based on tags provided
     filtered_data = filter(lambda d: all(tag in d["metadata"] for tag in tags), data)
     # Incrementing stage value to fetch next stage
     stage = [i for i in tags_next if i.startswith("stage-")]
@@ -102,6 +108,7 @@ def fetch_stages(args):
         execute_cli += f" --instances-name {instances_name}"
         execute_cli += " --log-level DEBUG"
         logdir = ""
+        script.update({"inventory": script["inventory"][cloud_type]})
         if "ibmc" in tags:
             cloud_type = "ibmc"
             execute_cli += " --xunit-results"
@@ -112,14 +119,21 @@ def fetch_stages(args):
             os.makedirs(logdir)
             execute_cli += f" --log-dir {logdir}"
             cleanup_cli += f" --cloud {cloud_type}"
+            script.update(ibmc_overrides)
+        else:
+            script.update(openstack_overrides)
 
+        script.update(metadata_overrides)
         overrides.pop("workspace", None)
         overrides.pop("build_number", None)
-        script.update({"inventory": script["inventory"][cloud_type]})
         script.update(overrides)
 
         for (k, v) in script.items():
-            execute_cli += f" --{k} {v}"
+            if isinstance(v, list):
+                for item in v:
+                    execute_cli += f" --{k} {item}"
+            else:
+                execute_cli += f" --{k} {v}"
 
         test_scripts.update(
             {
