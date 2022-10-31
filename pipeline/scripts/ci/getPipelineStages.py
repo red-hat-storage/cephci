@@ -66,7 +66,7 @@ def fetch_stages(args):
     metadata_dir = os.path.abspath(f"{current_dir}/../../metadata")
     metadata_file = f"{metadata_dir}/{args['rhcephVersion']}.yaml"
     metadata_content = yaml.safe_load(open(metadata_file, "r"))
-    metadata_overrides = metadata_content.get("overrides")
+    metadata_overrides = metadata_content.get("overrides", {})
     ibmc_overrides = metadata_overrides.pop("ibmc", None)
     openstack_overrides = metadata_overrides.pop("openstack", None)
     data = metadata_content.get("suites")
