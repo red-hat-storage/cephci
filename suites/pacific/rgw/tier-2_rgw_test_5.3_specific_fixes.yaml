@@ -105,6 +105,7 @@ tests:
             module: sanity_rgw.py
             polarion-id: CEPH-83575035
             config:
+              run-on-rgw: true
               extra-pkgs:
                 - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
               install_start_kafka: true
