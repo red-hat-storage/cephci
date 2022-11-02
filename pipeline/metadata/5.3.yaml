@@ -1243,3 +1243,19 @@ suites:
       - ibmc
       - rgw
       - stage-7
+
+  - name: "test-rbd-mirror-upgrade-4-to-latest"
+    suite: "suites/pacific/rbd/tier-1_rbd_mirroring_upgrade-4-to-latest.yaml"
+    global-conf: "conf/pacific/rbd/tier-1_rbd_mirror.yaml"
+    platform: "rhel-8"
+    rhbuild: "5.3"
+    inventory:
+      openstack: "conf/inventory/rhel-8-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    metadata:
+      - schedule
+      - tier-1
+      - openstack
+      - ibmc
+      - rbd
+      - stage-2

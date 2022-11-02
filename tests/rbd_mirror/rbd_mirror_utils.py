@@ -177,24 +177,75 @@ class RbdMirror:
                 way: one-way or two-way mirroring
         """
         poolname = kw.get("poolname")
-        primary_cluster = "primary"
-        secondary_cluster = "secondary"
+        primary_cluster = kw.get("ceph_cluster")
+        primary_cluster_name = primary_cluster.name
+        secondary_cluster_name = [
+            cluster_name
+            for cluster_name in kw.get("ceph_cluster_dict").keys()
+            if cluster_name != primary_cluster_name
+        ][0]
+        secondary_cluster = kw.get("ceph_cluster_dict")[secondary_cluster_name]
         mode = kw.get("mode")
+        peer_mode = kw.get("peer_mode")
+        rbd_client = kw.get("rbd_client")
+        build = kw.get("build")
 
         self.enable_mirroring(mirror_level="pool", specs=poolname, mode=mode)
         peer_cluster.enable_mirroring(mirror_level="pool", specs=poolname, mode=mode)
 
         if self.ceph_version >= 4:
-            self.bootstrap_peers(poolname=poolname, cluster_name=primary_cluster)
-            self.copy_file(
-                file_name="/root/bootstrap_token_primary",
-                src=self.ceph_client,
-                dest=peer_cluster.ceph_client,
-            )
-            peer_cluster.import_bootstrap(
-                poolname=poolname, cluster_name=secondary_cluster
-            )
+            if peer_mode == "bootstrap":
+                self.bootstrap_peers(
+                    poolname=poolname, cluster_name=primary_cluster_name
+                )
+                self.copy_file(
+                    file_name="/root/bootstrap_token_primary",
+                    src=self.ceph_client,
+                    dest=peer_cluster.ceph_client,
+                )
+                peer_cluster.import_bootstrap(
+                    poolname=poolname, cluster_name=secondary_cluster_name
+                )
+            else:
 
+                primary_mon = ",".join(
+                    [
+                        obj.node.ip_address
+                        for obj in primary_cluster.get_ceph_objects(role="mon")
+                    ]
+                )
+                secondary_mon = ",".join(
+                    [
+                        obj.node.ip_address
+                        for obj in secondary_cluster.get_ceph_objects(role="mon")
+                    ]
+                )
+                primary_fsid = peer_cluster.ceph_nodes.get_cluster_fsid(build)
+                secondary_fsid = self.ceph_nodes.get_cluster_fsid(build)
+                secret = self.exec_cmd(
+                    cmd=f"ceph auth get-or-create {rbd_client}", output=True
+                )
+                secret = secret.split(" ")[-1].strip()
+                key_file_path = "/etc/ceph/secret_key"
+                self.exec_cmd(cmd=f"echo {secret} > {key_file_path}")
+                peer_cluster.exec_cmd(cmd=f"echo {secret} > {key_file_path}")
+                primary_cluster_spec = (
+                    f"{rbd_client}@{primary_fsid} --remote-mon-host {secondary_mon} "
+                    f"--remote-key-file {key_file_path}"
+                )
+                secondary_cluster_spec = (
+                    f"{rbd_client}@{secondary_fsid} --remote-mon-host {primary_mon} "
+                    f"--remote-key-file {key_file_path}"
+                )
+                if "one-way" in kw.get("way", ""):
+                    peer_cluster.peer_add(
+                        poolname=poolname, cluster_spec=secondary_cluster_spec
+                    )
+                else:
+                    self.peer_add(poolname=poolname, cluster_spec=primary_cluster_spec)
+                    peer_cluster.peer_add(
+                        poolname=poolname, cluster_spec=secondary_cluster_spec
+                    )
         else:
             if "one-way" in kw.get("way", ""):
                 peer_cluster.peer_add(poolname=poolname, cluster_spec=self.cluster_spec)
@@ -239,8 +290,9 @@ class RbdMirror:
 
         self.create_image(imagespec=imagespec, size=imagesize)
         if kw.get("mode"):
-            mode = kw.get("mode")
-            self.config_mirror(mirror2, poolname=poolname, mode=mode)
+            kw["peer_mode"] = kw.get("peer_mode", "bootstrap")
+            kw["rbd_client"] = kw.get("rbd_client", "client.admin")
+            self.config_mirror(mirror2, poolname=poolname, **kw)
         if kw.get("mirrormode"):
             mirrormode = kw.get("mirrormode")
             self.enable_mirror_image(poolname, imagename, mirrormode)
@@ -266,7 +318,7 @@ class RbdMirror:
         if kw.get("tout"):
             tout = kw.get("tout")
         else:
-            tout = datetime.timedelta(seconds=600)
+            tout = datetime.timedelta(seconds=1200)
         time.sleep(20)
         while True:
             if kw.get("poolname", False):

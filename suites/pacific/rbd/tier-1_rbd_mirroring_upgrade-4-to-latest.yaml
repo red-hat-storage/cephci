@@ -28,6 +28,8 @@ tests:
       module: install_prereq.py
       abort-on-fail: true
       desc: install ceph pre requisites
+      config:
+        is_production: True
 
   - test:
       name: ceph ansible
@@ -41,6 +43,7 @@ tests:
               ceph_origin: repository
               ceph_repository: rhcs
               ceph_repository_type: cdn
+              containerized_deployment: true
               ceph_stable_release: nautilus
               osd_scenario: lvm
               copy_admin_key: true
@@ -61,6 +64,7 @@ tests:
               ceph_origin: repository
               ceph_repository: rhcs
               ceph_repository_type: cdn
+              containerized_deployment: true
               ceph_stable_release: nautilus
               osd_scenario: lvm
               copy_admin_key: true
@@ -83,6 +87,7 @@ tests:
       clusters:
         ceph-rbd1:
           config:
+            build: '4.x'
             ansi_config:
               ceph_rbd_mirror_configure: true
               ceph_rbd_mirror_pool: "rbd"
@@ -94,6 +99,7 @@ tests:
               ceph_rbd_mirror_remote_key: "AQC+eM1iKKBXFBAAVpunJvqpkodHSYmljCFCnw=="
         ceph-rbd2:
           config:
+            build: '4.x'
             ansi_config:
               ceph_rbd_mirror_configure: true
               ceph_rbd_mirror_pool: "rbd"
@@ -117,14 +123,11 @@ tests:
             imagesize: 2G
             io-total: 200M
             resize_to: 5G
+            peer_mode: manual #default is bootstrap for 4x and above and manual for others
+            rbd_client: client.rbd-mirror-peer
+            build: '4.x'
       polarion-id: CEPH-83573329
       desc: Create RBD mirrored image and run IOs
-
-  - test:
-      name: switch-from-non-containerized-to-containerized-ceph-daemons
-      polarion-id: CEPH-83573510
-      module: switch_rpm_to_container.py
-      abort-on-fail: true
 
   - test:
       name: check-ceph-health
@@ -146,6 +149,7 @@ tests:
                 clusters:
                   ceph-rbd1:
                     config:
+                      build: '5.x'
                       imagesize: 2G
                       io-total: 200M
                 polarion-id: CEPH-83573329
@@ -184,6 +188,7 @@ tests:
                 clusters:
                   ceph-rbd1:
                     config:
+                      build: '5.x'
                       imagesize: 2G
                       io-total: 200M
                 polarion-id: CEPH-83573329
