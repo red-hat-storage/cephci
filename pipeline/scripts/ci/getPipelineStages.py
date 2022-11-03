@@ -97,6 +97,8 @@ def fetch_stages(args):
         final_stage = True
 
     test_scripts = dict()
+    workspace = overrides.pop("workspace", "")
+    build_number = overrides.pop("build_number", "")
     for script in filtered_data:
         script_name = script.pop("name")
         del script["metadata"]
@@ -108,8 +110,6 @@ def fetch_stages(args):
         execute_cli = ".venv/bin/python run.py --osp-cred $HOME/osp-cred-ci-2.yaml"
         execute_cli += f" --instances-name {instances_name}"
         execute_cli += " --log-level DEBUG"
-        workspace = overrides.pop("workspace", "")
-        build_number = overrides.pop("build_number", "")
         logdir = f"{workspace}/logs/{generate_random_string(5)}-{build_number}"
 
         if "ibmc" in tags:
