@@ -45,7 +45,7 @@ node(nodeName) {
                 branches: [[name: branch]],
                 extensions: [[
                     $class: 'CleanBeforeCheckout',
-                        deleteUntrackedNestedRepositories: true
+                    deleteUntrackedNestedRepositories: true
                 ], [
                     $class: 'WipeWorkspace'
                 ], [
@@ -114,7 +114,7 @@ node(nodeName) {
             overrides.put("build", "rc")
         }
 
-        if ("openstack" in tags_list){
+        if ("openstack" in tags_list || "openstack-only" in tags_list){
             def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
             /*
                Read the release yaml contents to get contents,
@@ -123,6 +123,7 @@ node(nodeName) {
             releaseContent = sharedLib.readFromReleaseFile(
                 majorVersion, minorVersion, lockFlag=false
             )
+            println("releaseContent")
             println(releaseContent)
         }
 
