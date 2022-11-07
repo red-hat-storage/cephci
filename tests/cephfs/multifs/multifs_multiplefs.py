@@ -66,7 +66,10 @@ def run(ceph_cluster, **kw):
             )
             fuse_mounting_dir = f"/mnt/cephfs_fuse{mounting_dir}_{i}/"
             fs_util.fuse_mount(
-                [clients[0]], fuse_mounting_dir, extra_params=f"--client_fs cephfs_{i}"
+                [clients[0]],
+                fuse_mounting_dir,
+                extra_params=f"--client_fs cephfs_{i}",
+                wait_for_mount=True,
             )
             client1.exec_command(
                 sudo=True,
