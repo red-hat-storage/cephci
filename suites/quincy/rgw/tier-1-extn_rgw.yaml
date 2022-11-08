@@ -1,0 +1,297 @@
+# Tier 1: RGW extension suites
+
+# This test suite is executed in stage 2 of the QE pipeline. The primary objective of
+# the test suite is to evaluate the STS functionality of RGW.
+
+# Requires a 5 node cluster layout having only one node with RGW role.
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.ssl
+                  placement:
+                    nodes:
+                      - node5
+                  spec:
+                    ssl: true
+                    rgw_frontend_ssl_certificate: create-cert
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-83573777
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  # STS tests
+
+  - test:
+      name: STS Tests to perform assume role on principle user and perform IOs
+      desc: Perform assume role on principle user and perform IOs
+      polarion-id: CEPH-83572938
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        test-version: v2
+        script-name: test_sts_using_boto.py
+        config-file-name: test_sts_using_boto.yaml
+        timeout: 500
+  - test:
+      name: STS Tests to perform assume role call with permissive session policies
+      desc: Perform assume role call with permissive session policies
+      polarion-id: CEPH-83574491
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_sts_using_boto_session_policy.py
+        config-file-name: test_sts_using_boto_permissive_session_policy.yaml
+        timeout: 500
+  - test:
+      name: STS Tests to perform assume role call with restrictive session policies
+      desc: Perform assume role call with restrictive session policies
+      polarion-id: CEPH-83574492
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_sts_using_boto_session_policy.py
+        config-file-name: test_sts_using_boto_restricted_session_policy.yaml
+        timeout: 500
+  - test:
+      name: STS Tests to perform Server Side Copy
+      desc: Perform Server Side Copy
+      polarion-id: CEPH-83574522
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_sts_using_boto_server_side_copy.py
+        config-file-name: test_sts_using_boto_server_side_copy.yaml
+        timeout: 500
+  - test:
+      name: STS Tests for handling non-existent object condition
+      desc: STS test using boto for handling non-existent object condition
+      polarion-id: CEPH-83574539
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_sts_using_boto_unexisting_object.py
+        config-file-name: test_sts_using_boto.yaml
+        timeout: 500
+  - test:
+      name: STS test with invalid arn in the role's policy
+      desc: STS test with invalid arn in the role's policy
+      polarion-id: CEPH-83574537
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_sts_using_boto.py
+        config-file-name: test_sts_using_boto_invalid_arn_policy.yaml
+        timeout: 500
+  - test:
+      name: reshard cancel command
+      desc: reshard cancel command
+      polarion-id: CEPH-11474
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_reshard_cancel_cmd.yaml
+        timeout: 500
+
+  - test:
+      name: Multipart upload with Bucket policy enabled
+      desc: Perform multipart upload with Bucket policy enabled
+      polarion-id: CEPH-83574538
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_with_multipart_upload.yaml
+        timeout: 500
+
+  - test:
+      name: DBR tests with custom objs_per_shard and max_dynamic_shard
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83575266
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dbr_with_custom_objs_per_shard_and_max_dynamic_shard.yaml
+        timeout: 500
+
+  - test:
+      name: DBR tests with custom objs_per_shard max_dynamic_shard and reshard_thread_interval
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83575267
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dbr_with_custom_objs_per_shard_max_dynamic_shard_and_reshard_thread_interval.yaml
+        timeout: 500
+
+  - test:
+      name: Bucket setlifeycle with invalid date in LC conf
+      desc: Setlifeycle to bucket with invalid date format in Lifecycle configuration
+      polarion-id: CEPH-11186
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_invalid_date.yaml
+        timeout: 300
+
+  - test:
+      name: LC enabled on bucket removes pre and post uploaded objects
+      desc: Bucket in which LC is enabled should delete object existed and objects added in future
+      polarion-id: CEPH-11197
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lc_enable_object_exp.yaml
+        timeout: 300
+
+  - test:
+      name: Control functionality for RGW lifecycle
+      desc: Control functionality for RGW lifecycle with rgw_enable_lc_threads
+      polarion-id: CEPH-83575046
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_rgw_enable_lc_threads.yaml
+        timeout: 300
+
+  - test:
+      name: Test ACL Operations
+      desc: Test ACL Operations
+      polarion-id: CEPH-14238
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        test-version: v2
+        script-name: test_acl_ops.py
+        config-file-name: test_acl_ops.yaml
+        timeout: 300
+
+  - test:
+      name: Test single delete marker for versioned object using LC
+      desc: Test single delete marker for versioned object using LC
+      polarion-id: CEPH-83574806
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration.py
+        config-file-name: test_lc_multiple_delete_marker.yaml
+        timeout: 300
+
+  - test:
+      name: Test Rate limits on a User and Bucket level using s3cmd
+      desc: Test Rate limits on a User and Bucket level using s3cmd
+      polarion-id: CEPH-83574910
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
+        timeout: 300
+
+  - test:
+      name: Test NFS cluster and export create
+      desc: Test NFS cluster and export create
+      polarion-id: CEPH-83574597
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+        timeout: 300
+
+  - test:
+      abort-on-fail: true
+      name: Test NFS V4 mount
+      desc: Test NFS V4 mount
+      polarion-id: CEPH-83574598
+      config:
+        check_status: true
+        sudo: true
+        commands:
+          - "mkdir /mnt/nfs1"
+          - "mount -t nfs -o nfsvers=4,noauto,soft,sync,proto=tcp {node_ip:node5}:/ /mnt/nfs1"
+      module: exec.py
