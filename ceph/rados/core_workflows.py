@@ -13,6 +13,7 @@ import datetime
 import json
 import re
 import time
+from configparser import ConfigParser
 
 from ceph.ceph_admin import CephAdmin
 from utility.log import Log
@@ -1033,3 +1034,28 @@ class RadosOrchestrator:
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
         return log_lines
+
+    def config_param_chk(self, feature):
+        """
+        Used to check the osd configuration parameter value
+        Args:
+            feature: feature name in the ini file
+
+        Returns : True -> pass, False -> fail
+        """
+        # Read Config paramters
+        config_info = ConfigParser()
+        get_config_baseCmd = "ceph config get osd  "
+
+        config_info.read("tests/rados/rados_config_parameters.ini")
+        # Read values from mclock section
+
+        parameters = config_info.items(feature)
+        for param in parameters:
+            get_config_cmd = f"{get_config_baseCmd}{param[0]}"
+            status = self.run_ceph_command(cmd=get_config_cmd)
+            # Return if any parameter is not equal to the default value
+            if str(status).strip() != str(param[-1]).strip():
+                return False
+        # Return True if all parameters are pass
+        return True
