@@ -183,3 +183,36 @@ tests:
             value: pong
       polarion-id: CEPH-9524
       desc: Verify removal of image meta gets mirrored
+
+  - test:
+      name: Recovery of abrupt failure of primary cluster
+      module: test_9470.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9470
+      desc: Test unplanned failover and failback scenario
+
+  - test:
+      name: Recovery of shutdown primary cluster
+      module: test_9471.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9471
+      desc: Test planned failover and failback scenario
+
+  - test:
+      name: Recovery of shutdown secondary cluster
+      module: test_9475.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9475
+      desc: Testing secondary cluster unplanned failover test

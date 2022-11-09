@@ -119,6 +119,7 @@ tests:
               config-file-name: test_Mbuckets_with_Nobjects.yaml
               timeout: 300
               install_common: false
+              run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects
             module: sanity_rgw.py
             name: Test M buckets with N objects
@@ -130,6 +131,7 @@ tests:
               config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
               timeout: 300
               install_common: false
+              run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with delete
             module: sanity_rgw.py
             name: Test delete using M buckets with N objects
@@ -141,6 +143,7 @@ tests:
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
               timeout: 300
               install_common: false
+              run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with download
             module: sanity_rgw.py
             name: Test download with M buckets with N objects
@@ -152,6 +155,7 @@ tests:
               config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
               timeout: 300
               install_common: false
+              run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with multipart upload
             module: sanity_rgw.py
             name: Test multipart upload of M buckets with N objects
@@ -163,6 +167,7 @@ tests:
               config-file-name: test_swift_basic_ops.yaml
               timeout: 300
               install_common: false
+              run-on-rgw: true
             desc: Test object operations with swift
             module: sanity_rgw.py
             name: Swift based tests

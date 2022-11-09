@@ -27,6 +27,7 @@ tests:
               args:
                 registry-url: registry.redhat.io
                 mon-ip: node1
+                allow-fqdn-hostname: true
           - config:
               command: add_hosts
               service: host

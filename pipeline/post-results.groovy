@@ -93,13 +93,28 @@ node("rhel-8-medium || ceph-qe-ci") {
                 build_url = msgMap["run"]["url"]
             }
 
+            // Send email and gchat notification on tier-0 execution failure
+            if (msgMap["test"]["result"] == "FAILURE" && tierLevel == "tier-0") {
+                sharedLib.sendEmail(
+                    run_type,
+                    metaData['results'],
+                    metaData,
+                    tierLevel,
+                    stageLevel
+                )
+
+                sharedLib.sendGChatNotification(
+                    run_type, metaData["results"], tierLevel, stageLevel, build_url
+                )
+            }
+
             if (metaData["results"]) {
                 if ( ! msgMap["pipeline"].containsKey("tags") ) {
                     sharedLib.sendEmail(
                         metaData["results"], metaData, metaData["stage"]
                     )
                 }
-                sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData)
+                sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData, stageLevel, run_type)
 
             }
             testStatus = msgMap["test"]["result"]

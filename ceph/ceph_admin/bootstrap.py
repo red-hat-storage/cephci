@@ -336,7 +336,11 @@ class BootstrapMixin:
         copy_ceph_configuration_files(self, args)
 
         # Check for image overrides
-        if self.config.get("overrides"):
+        if (
+            self.config.get("overrides")
+            and build_type != "released"
+            and custom_repo.lower() != "cdn"
+        ):
             override_dict = dict(item.split("=") for item in self.config["overrides"])
             supported_overrides = [
                 "grafana",
@@ -345,6 +349,9 @@ class BootstrapMixin:
                 "prometheus",
                 "node_exporter",
                 "alertmanager",
+                "promtail",
+                "snmp_gateway",
+                "loki",
             ]
 
             for image in supported_overrides:

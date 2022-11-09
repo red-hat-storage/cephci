@@ -291,6 +291,7 @@ tests:
       clusters:
         ceph-pri:
           config:
+            run-on-rgw: true
             config-file-name: test_multisite_async_data_notifications.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
@@ -303,6 +304,7 @@ tests:
       clusters:
         ceph-sec:
           config:
+            run-on-rgw: true
             config-file-name: test_multisite_async_data_notifications.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]

@@ -1,6 +1,7 @@
 import time
 
 from ceph.parallel import parallel
+from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 from utility.log import Log
 
 log = Log(__name__)
@@ -9,9 +10,11 @@ log = Log(__name__)
 def run(**kw):
     try:
         log.info("Starting CEPH-9475")
-        mirror1 = kw.get("test_data")["mirror1"]
-        mirror2 = kw.get("test_data")["mirror2"]
         config = kw.get("config")
+        mirror1, mirror2 = [
+            rbdmirror.RbdMirror(cluster, config)
+            for cluster in kw.get("ceph_cluster_dict").values()
+        ]
         poolname = mirror1.random_string() + "9475pool"
         imagename = mirror1.random_string() + "9475image"
         imagespec = poolname + "/" + imagename
