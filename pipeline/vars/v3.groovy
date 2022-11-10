@@ -455,6 +455,11 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
     def msgMap = getCIMessageMap()
     def credFile = "${sourceDir}/config.json"
 
+    def suitesWithStatus = [:]
+    runProperties['results'].each{suiteName, suiteStatus->
+        suitesWithStatus[suiteName] = suiteStatus['status']
+    }
+
     // Configure rp_preproc launch
     def launchConfig = [
         "name": "${runProperties['version']} - ${runProperties['stage']}",
@@ -463,6 +468,7 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
             "ceph_version": runProperties["ceph_version"],
             "rhcs": runProperties["version"].split('-')[1],
             "tier": runProperties["stage"],
+            "suites": suitesWithStatus,
         ]
     ]
     if ( stageLevel ) {
