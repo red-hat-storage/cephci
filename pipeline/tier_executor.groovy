@@ -7,6 +7,7 @@ def sharedLib
 def rhcephVersion
 def tags_list
 def tierLevel
+def tierNumber
 def stageLevel
 def currentStageLevel = ""
 def overrides
@@ -95,6 +96,12 @@ node(nodeName) {
         tags_list = tags.split(',') as List
         def index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
         tierLevel = tags_list.get(index)
+
+        tierNumber = tierLevel.split("-") as List
+        tierNumber = tierNumber[1] as Integer
+        if (tierNumber > 2){
+            error "Executions for tiers above tier 2 is not supported in this pipeline"
+        }
         def stageIndex = tags_list.findIndexOf { it ==~ /stage-\w+/ }
         currentStageLevel = tags_list.get(stageIndex)
 
@@ -209,7 +216,10 @@ node(nodeName) {
                 buildStatus = "fail"
             }
             // Execute post tier based on run execution
-            if(!final_stage || (final_stage && tierLevel != "tier-2")){
+            // Do not trigger next stage of execution
+            // if the current stage was final_stage of a particular tier and tier is greater than 2
+            //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
+            if(!final_stage || (final_stage && tierNumber < 2)){
                 build ([
                     wait: false,
                     job: "rhceph-test-execution-pipeline",
@@ -356,11 +366,11 @@ node(nodeName) {
                 buildStatus = "fail"
             }
             // Do not trigger next stage of execution
-                // 1) if the current tier executed is tier-0 and it failed
-                // 2) if the current stage was final_stage of a particular tier and tier is not tier-2
-                //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
+            // 1) if the current tier executed is tier-0 and it failed
+            // 2) if the current stage was final_stage of a particular tier and tier is greater than 2
+            //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
             if((!(tierLevel == "tier-0" && buildStatus == "fail")) &&
-               (!final_stage || (final_stage && tierLevel != "tier-2"))){
+               (!final_stage || (final_stage && tierLevel < 2))){
                 build ([
                     wait: false,
                     job: "rhceph-test-execution-pipeline",
