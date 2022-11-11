@@ -1,0 +1,168 @@
+# Test suite for cloud transition workflow
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - rgw.1
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+        cloud:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - rgw.1
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        cloud:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        cloud:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin user create --uid=clouduser --display_name='Cloud user' --access-key abc --secret abc"
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_lc_debug_interval 20"
+              - "radosgw-admin zonegroup placement add --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3"
+              - "radosgw-admin zonegroup placement add --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3 --tier-config=endpoint=http://{node_ip:cloud#node5}:80,access_key=abc,secret=abc,multipart_sync_threshold=44432,multipart_min_part_size=44432,target_path='cloudbucket',retain_head_object=true"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Setting up cloud transition environment
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition.yaml
+            timeout: 500
+      desc: test clould transition basic workflow
+      module: sanity_rgw.py
+      name: Test cloud transition
+      polarion-id: CEPH-83575276
