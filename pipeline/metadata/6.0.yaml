@@ -487,8 +487,8 @@ suites:
       - stage-2
 
   - name: "RGW STS functionality testing"
-    suite: "suites/pacific/rgw/tier-1-extn_rgw.yaml"
-    global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+    suite: "suites/quincy/rgw/tier-1-extn_rgw.yaml"
+    global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
