@@ -370,7 +370,7 @@ node(nodeName) {
             // 2) if the current stage was final_stage of a particular tier and tier is greater than 2
             //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
             if((!(tierLevel == "tier-0" && buildStatus == "fail")) &&
-               (!final_stage || (final_stage && tierLevel < 2))){
+               (!final_stage || (final_stage && tierNumber < 2))){
                 build ([
                     wait: false,
                     job: "rhceph-test-execution-pipeline",
