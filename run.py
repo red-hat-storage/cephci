@@ -43,7 +43,6 @@ from utility.retry import retry
 from utility.utils import (
     ReportPortal,
     close_and_remove_filehandlers,
-    configure_logger,
     create_run_dir,
     create_unique_test_name,
     email_results,
@@ -776,7 +775,7 @@ def run(args):
         unique_test_name = create_unique_test_name(tc["name"], test_names)
         test_names.append(unique_test_name)
 
-        tc["log-link"] = configure_logger(unique_test_name, run_dir)
+        tc["log-link"] = log.configure_logger(unique_test_name, run_dir)
 
         mod_file_name = os.path.splitext(test_file)[0]
         test_mod = importlib.import_module(mod_file_name)
