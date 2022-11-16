@@ -14,14 +14,22 @@ Along with the above, it provides support for pushing events to
 
     - local file
     - logstash server
+
+Initial Log format will be 'datetime - level - message'
+later updating log format with 'datetime - level -filename:line_number - message'
 """
+import inspect
 import logging
+import os
 from copy import deepcopy
 from typing import Any, Dict
 
 from .config import TestMetaData
 
-LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s:%(lineno)d - %(message)s"
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+# EX: 2022-11-15 11:37:00,346 - DEBUG  - Completed log configuration
+magna_server = "http://magna002.ceph.redhat.com"
+magna_url = f"{magna_server}/cephci-jenkins/"
 
 
 class LoggerInitializationException:
@@ -88,6 +96,8 @@ class Log:
     def _log(self, level: str, message: Any, *args, **kwargs) -> None:
         """
         Log the given message using the provided level along with the metadata.
+        updating LOG_FORMAT with filename:line_number - message
+        ex: 2022-11-15 11:37:00,346 - DEBUG - cephci.utility.log.py:227 - Completed log configuration
 
         *Args:
             level (str):        Log level
@@ -107,7 +117,17 @@ class Log:
         }
         extra = deepcopy(self.metadata)
         extra.update(kwargs.get("metadata", {}))
-        log[level](message, *args, extra=extra, **kwargs)
+        calling_frame = inspect.stack()[2].frame
+        trace = inspect.getframeinfo(calling_frame)
+        file_path = trace.filename.split("/")
+        files = file_path if len(file_path) == 1 else file_path[5:]
+        extra.update({"LINENUM": trace.lineno, "FILENAME": ".".join(files)})
+        log[level](
+            f"cephci.{extra['FILENAME']}:{extra['LINENUM']} - {message}",
+            *args,
+            extra=extra,
+            **kwargs,
+        )
 
     def info(self, message: Any, *args, **kwargs) -> None:
         """Log with info level the provided message and extra data.
@@ -177,3 +197,55 @@ class Log:
         """
         kwargs["exc_info"] = kwargs.get("exc_info", True)
         self._log("exception", message, *args, **kwargs)
+
+    def configure_logger(self, test_name, run_dir):
+        """
+        Configures a new FileHandler for the root logger.
+        Args:
+            test_name: name of the test being executed. used for naming the logfile
+            run_dir: directory where logs are being placed
+        Returns:
+            URL where the log file can be viewed or None if the run_dir does not exist
+        """
+        if not os.path.isdir(run_dir):
+            self._logger.error(
+                f"Run directory '{run_dir}' does not exist, logs will not output to file."
+            )
+            return None
+        self.close_and_remove_filehandlers()
+        log_format = logging.Formatter(self.log_format)
+        full_log_name = f"{test_name}.log"
+        test_logfile = os.path.join(run_dir, full_log_name)
+        self.info(f"Test logfile: {test_logfile}")
+
+        _handler = logging.FileHandler(test_logfile)
+        _handler.setFormatter(log_format)
+        self._logger.addHandler(_handler)
+        # error file handler
+        err_logfile = os.path.join(run_dir, f"{test_name}.err")
+        _err_handler = logging.FileHandler(err_logfile)
+        _err_handler.setFormatter(log_format)
+        _err_handler.setLevel(logging.ERROR)
+        self._logger.addHandler(_err_handler)
+
+        url_base = (
+            magna_url + run_dir.split("/")[-1]
+            if "/ceph/cephci-jenkins" in run_dir
+            else run_dir
+        )
+        log_url = f"{url_base}/{full_log_name}"
+        self.debug("Completed log configuration")
+
+        return log_url
+
+    def close_and_remove_filehandlers(self):
+        """
+        Close FileHandlers and then remove them from the loggers handlers list.
+        Returns:
+            None
+        """
+        handlers = self._logger.handlers[:]
+        for h in handlers:
+            if isinstance(h, logging.FileHandler):
+                h.close()
+                self._logger.removeHandler(h)

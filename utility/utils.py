@@ -1,6 +1,5 @@
 import datetime
 import getpass
-import logging
 import os
 import random
 import re
@@ -435,52 +434,6 @@ def rc_verify(tc, RC):
 #     BOLD = '\033[1m'
 
 
-def configure_logger(test_name, run_dir):
-    """
-    Configures a new FileHandler for the root logger.
-
-    Args:
-        test_name: name of the test being executed. used for naming the logfile
-        run_dir: directory where logs are being placed
-
-    Returns:
-        URL where the log file can be viewed or None if the run_dir does not exist
-    """
-    if not os.path.isdir(run_dir):
-        log.error(
-            f"Run directory '{run_dir}' does not exist, logs will not output to file."
-        )
-        return None
-
-    close_and_remove_filehandlers()
-    log_format = logging.Formatter(log.log_format)
-
-    full_log_name = f"{test_name}.log"
-    test_logfile = os.path.join(run_dir, full_log_name)
-    log.info(f"Test logfile: {test_logfile}")
-
-    _handler = logging.FileHandler(test_logfile)
-    _handler.setFormatter(log_format)
-    log.logger.addHandler(_handler)
-
-    # error file handler
-    err_logfile = os.path.join(run_dir, f"{test_name}.err")
-    _err_handler = logging.FileHandler(err_logfile)
-    _err_handler.setFormatter(log_format)
-    _err_handler.setLevel(logging.ERROR)
-    log.logger.addHandler(_err_handler)
-
-    url_base = (
-        magna_url + run_dir.split("/")[-1]
-        if "/ceph/cephci-jenkins" in run_dir
-        else run_dir
-    )
-    log_url = "{url_base}/{log_name}".format(url_base=url_base, log_name=full_log_name)
-    log.debug("Completed log configuration")
-
-    return log_url
-
-
 def create_run_dir(run_id, log_dir=""):
     """
     Create the directory where test logs will be placed.
@@ -516,23 +469,6 @@ def create_run_dir(run_id, log_dir=""):
             raise
 
     return base_dir
-
-
-def close_and_remove_filehandlers(logger=logging.getLogger("cephci")):
-    """
-    Close FileHandlers and then remove them from the loggers handlers list.
-
-    Args:
-        logger: the logger in which to remove the handlers from, defaults to root logger
-
-    Returns:
-        None
-    """
-    handlers = logger.handlers[:]
-    for h in handlers:
-        if isinstance(h, logging.FileHandler):
-            h.close()
-            logger.removeHandler(h)
 
 
 def create_report_portal_session():
