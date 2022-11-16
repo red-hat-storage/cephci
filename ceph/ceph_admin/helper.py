@@ -125,6 +125,21 @@ class GenerateServiceSpec:
         label_set = set(node.role.role_list)
         return list(label_set)
 
+    @staticmethod
+    def get_gateway_cidr(node):
+        """
+        Returns the gateway and CIDR of a node
+
+        :param
+            node (CephNode): node object
+
+        :return: list (gateway, cidr)
+        """
+        node_sub = node.subnet
+        gw = node_sub.split("/")[0]
+        cidr = node_sub.split("/")[1]
+        return gw, cidr
+
     def get_hostnames(self, node_names):
         """
         Return list of hostnames
@@ -534,6 +549,7 @@ class GenerateServiceSpec:
                   virtual_ip: 10.0.208.0/22
                   frontend_port: 8000
                   monitor_port: 1967
+                  ssl_cert: create-cert | <contents of crt>
 
         :Note: make sure rgw service is already created.
 
@@ -542,6 +558,21 @@ class GenerateServiceSpec:
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        if spec["spec"].get("ssl_cert") == "create-cert":
+            subject = {
+                "common_name": spec["placement"]["hosts"][0],
+                "ip_address": self.cluster.get_node_by_hostname(
+                    spec["placement"]["hosts"][0]
+                ).ip_address,
+            }
+            key, cert, ca = generate_self_signed_certificate(subject=subject)
+            pem = key + cert + ca
+            cert_value = "|\n" + pem
+            spec["spec"]["ssl_cert"] = "\n    ".join(cert_value.split("\n"))
+            LOG.debug(pem)
+            vip_node = get_node_by_id(self.cluster, node_names[0])
+            _, vip_cidr = self.get_gateway_cidr(vip_node)
 
         return template.render(spec=spec)
 

@@ -134,7 +134,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node8
+        node: node6
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -165,3 +165,46 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
+
+  - test:
+      name: Deploy RGW Ingress daemon
+      abort-on-fail: true
+      desc: Add RGW and HA Proxy services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574607
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: my-rgw
+                  placement:
+                    nodes:
+                      - node4
+                      - node5
+                  spec:
+                    rgw_frontend_port: 8080
+          - config:
+              command: shell
+              args: # sleep to get all services deployed
+                - sleep
+                - "60"
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: rgw.my-rgw
+                  placement:
+                    nodes:
+                      - node4
+                      - node5
+                  spec:
+                    backend_service: rgw.my-rgw
+                    virtual_ip: 10.0.211.172/22
+                    frontend_port: 443
+                    monitor_port: 1967
+                    ssl_cert: create-cert
