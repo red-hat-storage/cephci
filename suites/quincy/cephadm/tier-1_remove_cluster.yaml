@@ -1,0 +1,92 @@
+#===============================================================================================
+# Conf: conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+# Test cases for cephadm modules
+#    - Bootstrap
+#    - Host management
+#    - Ceph role Service deployment,
+#    - Configure client for RGW and RBD systems
+#    - Purge cluster using rm-cluster command
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW, RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Delete cluster using cephadm rm-cluster command
+      desc:  Verify cluster purge via cephamd commands
+      polarion-id: CEPH-83573765
+      module: test_remove_cluster.py
