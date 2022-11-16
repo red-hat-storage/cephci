@@ -324,7 +324,7 @@ suites:
       - stage-4
 
   - name: "RADOS regression for testing various pool functionalities"
-    suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-pool-functionalities.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-8"
     rhbuild: "5.2"
@@ -340,7 +340,7 @@ suites:
       - stage-2
 
   - name: "RADOS regression testing for Scrubbing scenarios"
-    suite: "suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-scrubbing.yaml"
     global-conf: "conf/pacific/rados/7-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "5.2"
@@ -354,7 +354,7 @@ suites:
       - stage-1
 
   - name: "Testing RADOS regression for ec pool osd rebalance"
-    suite: "suites/pacific/rados/tier-3_rados_test-ecpool-osd-rebalance.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-ecpool-osd-rebalance.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "5.2"
@@ -370,7 +370,7 @@ suites:
       - stage-2
 
   - name: "Testing RADOS regression for in-progress osd rebalance"
-    suite: "suites/pacific/rados/tier-3_rados_test-osd-inprogress-rebalance.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-osd-inprogress-rebalance.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-8"
     rhbuild: "5.2"
@@ -386,7 +386,7 @@ suites:
       - stage-2
 
   - name: "Testing RADOS regression for Stretch mode upgrade"
-    suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode-upgrade.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "5.2"
@@ -402,7 +402,7 @@ suites:
       - stage-1
 
   - name: "RADOS regression testing for Mon DB trimming"
-    suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-mon-db-trimming.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-8"
     rhbuild: "5.2"
@@ -418,7 +418,7 @@ suites:
       - stage-4
 
   - name: "RADOS regression testing osd rebalance with many pools"
-    suite: "suites/pacific/rados/tier-3_rados_test-osd-rebalance.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance-many-pools.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-8"
     rhbuild: "5.2"
