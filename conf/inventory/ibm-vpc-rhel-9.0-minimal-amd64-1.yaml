@@ -3,7 +3,7 @@ version_id: 9.0
 id: rhel
 instance:
   create:
-    image-name: rhel-90-server-released
+    image-name: rhel-90-server-released-latest
     network_name: sn-01-cephqe-pvt-network
     private_key: ibmc-shared
     group_access: cephqe-sec-grp-all-access
