@@ -275,6 +275,22 @@ suites:
       - rados
       - stage-3
 
+  - name: "Tier-2 test suite for 5x - RBD Snapshot mirroring functionality"
+    suite: "suites/pacific/rbd/tier-2_rbd_mirror_snapshot_regression.yaml"
+    global-conf: "conf/pacific/rbd/tier-2_rbd_mirror.yaml"
+    platform: "rhel-8"
+    rhbuild: "5.3"
+    inventory:
+      openstack: "conf/inventory/rhel-8-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack
+      - ibmc
+      - rbd
+      - stage-3
+
   - name: "Testing RADOS EC Pool recovery"
     suite: "suites/pacific/rados/tier-2_rados_ec-pool_recovery.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
