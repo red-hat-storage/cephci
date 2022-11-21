@@ -120,3 +120,15 @@ tests:
       module: cephfs_scale.max_snapshots.py
       name: cephfs Scale test for max Snapshots
       polarion-id: "CEPH-83573520"
+  - test:
+      abort-on-fail: false
+      desc: "Max subvolumess"
+      module: cephfs_scale.max_subvolumes.py
+      name: cephfs Scale test for max subvolumes
+      polarion-id: ~
+  - test:
+      abort-on-fail: false
+      desc: "Max snaps per volume"
+      module: cephfs_scale.max_smallfile_snap.py
+      name: cephfs Scale test for max Snapshots
+      polarion-id: ~
