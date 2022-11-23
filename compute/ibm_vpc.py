@@ -115,7 +115,26 @@ def get_dns_zone_id(zone_name: str, response: Any) -> str:
     for i in response["dnszones"]:
         if i["name"] == zone_name:
             return i["id"]
+    raise ResourceNotFound(f"Failed to retrieve the ID of {zone_name}.")
 
+
+def get_dns_zone_instance_id(zone_name: str, response: Any) -> str:
+    """
+    Retrieve the DNS Zone Instance ID for the provided zone name using the provided response.
+
+    Args:
+        zone_name (str):    DNS Zone whose ID needs to be retrieved.
+        response (Dict):    Response returned from the collection.
+
+    Returns:
+        DNS Zone Instance ID (str)
+
+    Raises:
+        ResourceNotFound    when there is a failure to retrieve the given zone ID.
+    """
+    for i in response["dnszones"]:
+        if i["name"] == zone_name:
+            return i["instance_id"]
     raise ResourceNotFound(f"Failed to retrieve the ID of {zone_name}.")
 
 
@@ -529,6 +548,7 @@ class CephVMNodeIBM:
 
         raise NodeError(f"{node_details['name']} is in {node_details['status']} state.")
 
+    @retry(ConnectionError, tries=3, delay=60)
     def remove_dns_records(self, zone_name):
         """
         Remove the DNS records associated this VSI.
@@ -541,9 +561,10 @@ class CephVMNodeIBM:
 
         zones = self.dns_service.list_dnszones("a55534f5-678d-452d-8cc6-e780941d8e31")
         zone_id = get_dns_zone_id(zone_name, zones.get_result())
+        zone_instance_id = get_dns_zone_instance_id(zone_name, zones.get_result())
 
         resp = self.dns_service.list_resource_records(
-            instance_id="a55534f5-678d-452d-8cc6-e780941d8e31", dnszone_id=zone_id
+            instance_id=zone_instance_id, dnszone_id=zone_id
         )
         records = resp.get_result()
 
