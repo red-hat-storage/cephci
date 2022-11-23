@@ -174,13 +174,15 @@ node(nodeName) {
             if ("openstack-only" in tags_list){
                 run_type = "PSI Only Run"
             }
-            sharedLib.sendEmail(
-                run_type,
-                testResults,
-                sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
-                tierLevel.capitalize(),
-                currentStageLevel.capitalize()
-            )
+            if (testResults) {
+                sharedLib.sendEmail(
+                    run_type,
+                    testResults,
+                    sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
+                    tierLevel.capitalize(),
+                    currentStageLevel.capitalize()
+                )
+            }
         }
 
         stage('postBuildAction') {
