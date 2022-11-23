@@ -161,7 +161,7 @@ node(nodeName) {
         testStages = fetchStages["testStages"]
         final_stage = fetchStages["final_stage"]
         println("final_stage : ${final_stage}")
-        currentBuild.description = "${params.rhcephVersion} - ${tierLevel} - ${currentStageLevel}"
+        currentBuild.description = "${params.rhcephVersion} - ${tierLevel} - ${currentStageLevel} \n ceph-version : ${buildArtifacts['ceph-version']}"
     }
 
     parallel testStages
