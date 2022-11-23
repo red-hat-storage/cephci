@@ -1410,33 +1410,36 @@ def run_fio(**kw):
     """Run IO using fio tool on given target.
 
     Args:
-        filename: Target device or file.
+        device_name: Target device
+        filename: Target file
         rbdname: rbd image name
         pool: name of rbd image pool
         runtime: fio runtime
         long_running(bool): True for long running required
+        client_node: node where fio needs to be run
 
     Prerequisite: fio package must have been installed on the client node.
+    One of device_name, filename, (rbdname,pool) is required.
     """
-    sudo = False
+
     if kw.get("filename"):
         opt_args = f"--filename={kw['filename']}"
-        sudo = True
+
+    if kw.get("device_name"):
+        opt_args = f"--ioengine=libaio --filename={kw['device_name']}"
     else:
         opt_args = (
             f"--ioengine=rbd --rbdname={kw['image_name']} --pool={kw['pool_name']}"
         )
 
-    opt_args += f" --runtime={kw.get('runtime', 120)}"
-
     long_running = kw.get("long_running", False)
     cmd = (
         "fio --name=test-1  --numjobs=1 --rw=write"
         " --bs=1M --iodepth=8 --fsync=32  --time_based"
-        f" --group_reporting {opt_args}"
+        f" --group_reporting --runtime={kw.get('runtime', 120)} {opt_args}"
     )
 
-    return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=sudo)
+    return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=True)
 
 
 def fetch_image_tag(rhbuild):

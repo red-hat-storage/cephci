@@ -44,7 +44,7 @@ class Rbd:
         exec_command wrapper for rbd functions
         Args:
             pool_name: configs along with `cmd` - command
-
+            output: True if command output needs to be returned
 
         Returns:  0 -> pass, 1 -> fail
         """
@@ -264,6 +264,10 @@ class Rbd:
     def image_map(self, pool_name, image_name):
         """Map provided rbd image."""
         return self.exec_cmd(cmd=f"rbd map {pool_name}/{image_name}", output=True)
+
+    def image_unmap(self, device_name):
+        """UnMap provided rbd image."""
+        return self.exec_cmd(cmd=f"rbd unmap {device_name}", output=True)
 
     def clean_up(self, **kw):
         if kw.get("dir_name"):
