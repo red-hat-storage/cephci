@@ -286,12 +286,11 @@ suites:
       openstack: "conf/inventory/rhel-9-latest.yaml"
       ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
     metadata:
-      - sanity
+      - schedule
       - tier-2
-      - openstack
-      - ibmc
+      - openstack-only
       - rbd
-      - stage-1
+      - stage-4
 
   - name: "Basic operation test suite for Cephfs"
     suite: "suites/pacific/cephfs/tier-0_fs.yaml"
