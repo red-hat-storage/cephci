@@ -54,6 +54,7 @@ class RbdMirror:
                 long_running=kw.get("long_running", False),
                 check_ec=kw.get("check_ec", True),
             )
+            log.info(f"Output of command {cmd}: {out}")
 
             if kw.get("output", False):
                 if isinstance(out, tuple):
@@ -165,13 +166,22 @@ class RbdMirror:
             self.mirror_daemon(enable=True, start=True)
 
     def config_mirror(self, peer_cluster, **kw):
+        """
+        Configure mirroring on RBD clusters based on the parameters provided
+        Args:
+            peer_cluster: peer_cluster object for the secondary RBD cluster
+            **kw:
+                poolname: poolname to be used for creating pool
+                mode: mirroring mode, pool or image to be used
+                way: one-way or two-way mirroring
+        """
         poolname = kw.get("poolname")
         primary_cluster = "primary"
         secondary_cluster = "secondary"
         mode = kw.get("mode")
 
-        self.enable_mirroring("pool", poolname, mode=mode)
-        peer_cluster.enable_mirroring("pool", poolname, mode=mode)
+        self.enable_mirroring(mirror_level="pool", specs=poolname, mode=mode)
+        peer_cluster.enable_mirroring(mirror_level="pool", specs=poolname, mode=mode)
 
         if self.ceph_version >= 4:
             self.bootstrap_peers(poolname=poolname, cluster_name=primary_cluster)
@@ -315,18 +325,21 @@ class RbdMirror:
             return mirroring_details.get("mode")
         return None
 
-    def mirror_snapshot_schedule_add(self, poolname, **kwargs):
+    def mirror_snapshot_schedule_add(self, **kwargs):
         """
         This will schedule snapshot based on below kwargs
         Args:
-            poolname:
             **kwargs:
-                imagename : if image name is specified schedule will be done per image if not will done globally
-                interval : Positional argument need to be specified
+                poolname: if pool name is specified schedule will be done per pool, if not will be done globally
+                imagename : if image name is specified schedule will be done per image if not will be done per pool or
+                            globally
+                interval : Positional argument need to be specified, default will be 1minute
                 starttime : optional if specified will be configured
         Returns:
         """
-        cmd1 = f"rbd mirror snapshot schedule add --pool {poolname}"
+        cmd1 = "rbd mirror snapshot schedule add"
+        if kwargs.get("poolname"):
+            cmd1 += f" --pool {kwargs.get('poolname', '')}"
         if kwargs.get("imagename"):
             cmd1 += f" --image {kwargs.get('imagename')}"
         cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else " 1m"
@@ -388,18 +401,20 @@ class RbdMirror:
             cmd1 += f" --image {kwargs.get('imagename')} --format=json"
         self.exec_cmd(cmd=cmd1)
 
-    def mirror_snapshot_schedule_remove(self, poolname, **kwargs):
+    def mirror_snapshot_schedule_remove(self, **kwargs):
         """
         This will remove the mirror snapshot schedule based on below kwargs
         Args:
-            poolname:
             **kwargs:
-                imagename : if imagename is specified schedule will be done per image if not will done globally
+                poolname : if poolname is specified schedule will be removed at pool level else cluster level
+                imagename : if imagename is specified schedule will be removed per image if not will done globally
                 interval : optional if specified will be configured
                 starttime : optional if specified will be configured
         Returns:
         """
-        cmd1 = f"rbd mirror snapshot schedule remove --pool {poolname}"
+        cmd1 = "rbd mirror snapshot schedule remove"
+        if kwargs.get("poolname"):
+            cmd1 += f" --pool {kwargs.get('poolname')}"
         if kwargs.get("imagename"):
             cmd1 += f" --image {kwargs.get('imagename')}"
         cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else ""
@@ -471,11 +486,25 @@ class RbdMirror:
         )
 
     # Enable Pool or Image Mirroring
-    def enable_mirroring(self, *args, **kw):
-        """Enable mirroring on provided pool with provided mode."""
+    def enable_mirroring(self, **kw):
+        """
+        Enable mirroring on provided pool with provided mode.
+        Args:
+            **kw:
+                mirror_level: pool if mirroring has to be enabled on a pool,
+                              image if mirroring has to be enabled only on a specific image in a pool
+                              this is a necessary parameter
+                specs: pool_name if mirroring has to be enabled on a pool,
+                       pool_name/image_name if mirroring has to be enabled on an image
+                       this is a necessary parameter
+                mode: pool if mirroring has to be enabled on all images in a pool by default,
+                      image if mirroring has to be enabled explicitly on images in a pool
+        """
         self.exec_cmd(
             cmd="rbd mirror {} enable {} {}".format(
-                args[0], args[1], kw.get("mode", "")
+                kw.get("mirror_level", "pool"),
+                kw.get("specs", "rbd"),
+                kw.get("mode", ""),
             )
         )
 
