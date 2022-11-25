@@ -1,10 +1,10 @@
 ---
-version_id: 9.0
+version_id: 9.1
 id: rhel
 instance:
   create:
-    image-name: RHEL-9.0.0-x86_64-ga-latest
-    vm-size: ci.m1.large
+    image-name: RHEL-9.1.0-x86_64-ga-latest
+    vm-size: ci.m1.medium
 
   setup: |
     #cloud-config
