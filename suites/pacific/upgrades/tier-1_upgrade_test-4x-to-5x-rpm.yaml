@@ -166,6 +166,7 @@ tests:
       playbook: cephadm-preflight.yml
       extra-vars:
         ceph_origin: rhcs
+    abort-on-fail: True
 
 - test:
     name: check-ceph-health
