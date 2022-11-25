@@ -73,6 +73,7 @@ tests:
       script-name: test_Mbuckets_with_Nobjects.py
       config-file-name: test_Mbuckets.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: Mbuckets_with_Nobjects pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects
@@ -82,6 +83,7 @@ tests:
       script-name: test_Mbuckets_with_Nobjects.py
       config-file-name: test_Mbuckets_with_Nobjects.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: encryption tests pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects with encryption
@@ -91,6 +93,7 @@ tests:
       script-name: test_Mbuckets_with_Nobjects.py
       config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: delete buckets and objects pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects with delete
@@ -100,6 +103,7 @@ tests:
       script-name: test_Mbuckets_with_Nobjects.py
       config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: download objects pre upgrade
     desc: test to create "M" no of buckets and "N" no of objects with download
@@ -109,6 +113,7 @@ tests:
       script-name: test_Mbuckets_with_Nobjects.py
       config-file-name: test_Mbuckets_with_Nobjects_download.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: test sharding enabled pre upgrade
     desc: test to perform bucket ops with sharding operations
@@ -118,6 +123,7 @@ tests:
       script-name: test_Mbuckets_with_Nobjects.py
       config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
       timeout: 300
+      run-on-rgw: true
 
 - test:
       name: test etag verification pre upgrade
@@ -128,6 +134,7 @@ tests:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
         timeout: 300
+        run-on-rgw: true
 
 # Bucket Listing Tests
 - test:
@@ -139,6 +146,7 @@ tests:
       script-name: test_bucket_listing.py
       config-file-name: test_bucket_listing_flat_ordered.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: ordered listing of versionsed bucket with top level objects pre upgrade
     desc: measure execution time for ordered listing of versionsed bucket with top level objects
@@ -148,6 +156,7 @@ tests:
       script-name: test_bucket_listing.py
       config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: unordered listing of bucket with top level objects pre upgrade
     desc: measure execution time for unordered listing of bucket with top level objects
@@ -157,6 +166,7 @@ tests:
       script-name: test_bucket_listing.py
       config-file-name: test_bucket_listing_flat_unordered.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: ordered listing of bucket with pseudo directories and objects pre upgrade
     desc: measure execution time for ordered listing of bucket with pseudo directories and objects
@@ -166,6 +176,7 @@ tests:
       script-name: test_bucket_listing.py
       config-file-name: test_bucket_listing_pseudo_ordered.yaml
       timeout: 300
+      run-on-rgw: true
 - test:
     name: ordered listing of bucket with pseudo directories only pre upgrade
     desc: measure execution time for ordered listing of bucket with pseudo directories only
@@ -175,6 +186,7 @@ tests:
       script-name: test_bucket_listing.py
       config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
       timeout: 300
+      run-on-rgw: true
 
 # Swift basic operation
 
@@ -187,6 +199,7 @@ tests:
       script-name: test_swift_basic_ops.py
       config-file-name: test_swift_basic_ops.yaml
       timeout: 300
+      run-on-rgw: true
 
 - test:
     name: swift versioning copy tests pre upgrade
@@ -197,6 +210,7 @@ tests:
       script-name: test_swift_basic_ops.py
       config-file-name: test_swift_version_copy_op.yaml
       timeout: 500
+      run-on-rgw: true
 
 - test:
     name: Swift bulk delete operation pre upgrade
@@ -207,6 +221,7 @@ tests:
       script-name: test_swift_bulk_delete.py
       config-file-name: test_swift_bulk_delete.yaml
       timeout: 300
+      run-on-rgw: true
 
 # resharding tests
 - test:
@@ -218,6 +233,7 @@ tests:
       script-name: test_dynamic_bucket_resharding.py
       config-file-name: test_manual_resharding_without_bucket_delete.yaml
       timeout: 500
+      run-on-rgw: true
 - test:
     name: dynamic resharding tests pre upgrade
     desc: Resharding test - dynamic
@@ -227,6 +243,7 @@ tests:
       script-name: test_dynamic_bucket_resharding.py
       config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
       timeout: 500
+      run-on-rgw: true
 
 - test:
     name: DBR tests with custom objs_per_shard and max_dynamic_shard pre upgrade
@@ -237,6 +254,7 @@ tests:
       script-name: test_dynamic_bucket_resharding.py
       config-file-name: test_dbr_with_custom_objs_per_shard_and_max_dynamic_shard.yaml
       timeout: 500
+      run-on-rgw: true
 
 - test:
     name: DBR tests with custom objs_per_shard max_dynamic_shard and reshard_thread_interval pre upgrade
@@ -247,6 +265,7 @@ tests:
       script-name: test_dynamic_bucket_resharding.py
       config-file-name: test_dbr_with_custom_objs_per_shard_max_dynamic_shard_and_reshard_thread_interval.yaml
       timeout: 500
+      run-on-rgw: true
 - test:
     name: test bucket stats and radoslist
     desc: Test bucket stats and radoslist on all buckets
@@ -256,6 +275,7 @@ tests:
       script-name: test_bucket_listing.py
       config-file-name: test_bucket_radoslist.yaml
       timeout: 300
+      run-on-rgw: true
 
 # switch from rpm to container
 - test:

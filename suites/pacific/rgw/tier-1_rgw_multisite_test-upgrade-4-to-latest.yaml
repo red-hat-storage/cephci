@@ -106,6 +106,7 @@ tests:
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
             timeout: 300
+            run-on-rgw: true
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       polarion-id: CEPH-83575199
@@ -121,6 +122,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects.yaml
             verify-io-on-site: ["ceph-sec"]
             timeout: 300
+            run-on-rgw: true
       desc: test to create "M" no of buckets and "N" no of objects
       module: sanity_rgw_multisite.py
       name: Test M buckets with N objects pre upgrade
@@ -134,6 +136,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             verify-io-on-site: ["ceph-sec"]
             timeout: 300
+            run-on-rgw: true
       desc: test to create "M" buckets and "N" objects with multipart upload
       module: sanity_rgw_multisite.py
       name: Test multipart upload of M buckets with N objects pre upgrade
@@ -147,6 +150,7 @@ tests:
             config-file-name: test_swift_basic_ops.yaml
             verify-io-on-site: ["ceph-sec"]
             timeout: 300
+            run-on-rgw: true
       desc: Test object operations with swift
       module: sanity_rgw_multisite.py
       name: Swift based tests
@@ -161,6 +165,7 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
             timeout: 300
+            run-on-rgw: true
       desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw_multisite.py
       name: test ordered listing of buckets pre upgrade
@@ -173,6 +178,7 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
             timeout: 300
+            run-on-rgw: true
       desc: test duration for unordered listing of buckets with top level objects
       module: sanity_rgw_multisite.py
       name: test unordered listing of buckets pre upgrade
@@ -186,6 +192,7 @@ tests:
             config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
             timeout: 300
+            run-on-rgw: true
       desc: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
@@ -199,6 +206,7 @@ tests:
             config-file-name: test_multisite_manual_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
             timeout: 300
+            run-on-rgw: true
       desc: Create bucket for Testing manual resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Create bucket for Testing manual resharding brownfield scenario after upgrade
