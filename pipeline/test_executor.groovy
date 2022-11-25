@@ -130,6 +130,8 @@ node("rhel-8-medium || ceph-qe-ci"){
                 cleanupOnFailure = false
             }
             def cli = getCLI()
+            run_id = sharedLib.generateRandomString()
+            cli += " --log-dir /ceph/cephci-jenkins/cephci-run-${run_id}"
             retVal = sharedLib.executeTestSuite(cli, cleanupOnSuccess, cleanupOnFailure, buildUserId)
             retVal.put("status", retVal["result"])
             println(retVal)

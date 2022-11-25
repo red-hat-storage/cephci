@@ -92,6 +92,8 @@ from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
 from utils import create_run_dir, generate_unique_id, tfacon
 
+from utility.retry import retry
+
 log = logging.getLogger(__name__)
 doc = """
 Standard script to push all the logs from Xunit files and get launcher details from Report Portal
@@ -111,6 +113,7 @@ Standard script to push all the logs from Xunit files and get launcher details f
 """
 
 
+@retry(RuntimeError, tries=3, delay=120)
 def get_launch_details(config_file, launch_id):
     """
     Get launcher details for specific launch id
@@ -127,6 +130,10 @@ def get_launch_details(config_file, launch_id):
 
         testsuites = list()
         for ts in results:
+            if ts.get("status") == "IN_PROGRESS":
+                raise RuntimeError(
+                    "Require status is not yet attained for the test cases in report portal"
+                )
             testsuite = {
                 "id": ts.get("id"),
                 "name": ts.get("name"),
