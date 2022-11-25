@@ -213,11 +213,47 @@ class RbdMirror:
         self.wait_for_status(poolname=poolname, health_pattern="OK")
         peer_cluster.wait_for_status(poolname=poolname, health_pattern="OK")
 
+    # configure initial mirroring steps
+    def initial_mirror_config(self, mirror1, mirror2, poolname, imagename, **kw):
+        """
+        Calls create_pool function on both the clusters,
+        creates an image on primary cluster and configure the mirroring
+        waits for image to be present in secondary cluster with replying status
+        Args:
+            **kw:
+            mirror1 - primary cluster
+            mirror2 - secondary cluster
+            poolname - name for pool to be created on primary and secondary cluster
+            imagename - name of images created on primary and secondary cluster
+            imagesize - size of the image created
+            mode - mirror mode to be configured pool or image
+            mirrormode - type of mirror configured journal or snapshot
+        """
+        mode = kw.get("mode")
+        imagespec = poolname + "/" + imagename
+        imagesize = kw.get("imagesize")
+        io = kw.get("io_total")
+        mirror1.create_pool(poolname=poolname)
+        mirror2.create_pool(poolname=poolname)
+        mirror1.create_image(imagespec=imagespec, size=imagesize)
+        mirror1.config_mirror(mirror2, poolname=poolname, mode=mode)
+        if kw.get("mirrormode"):
+            mirrormode = kw.get("mirrormode")
+            mirror1.enable_mirror_image(poolname, imagename, mirrormode)
+        mirror2.wait_for_status(poolname=poolname, images_pattern=1)
+        mirror1.benchwrite(imagespec=imagespec, io=io)
+        time.sleep(60)
+        mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
+        mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
+
     # Wait for required status
     def wait_for_status(self, **kw):
-        tout = datetime.timedelta(seconds=600)
-        starttime = datetime.datetime.now()
         # Waiting for cluster to be aware of new event
+        starttime = datetime.datetime.now()
+        if kw.get("tout"):
+            tout = kw.get("tout")
+        else:
+            tout = datetime.timedelta(seconds=600)
         time.sleep(20)
         while True:
             if kw.get("poolname", False):
