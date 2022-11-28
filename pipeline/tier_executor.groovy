@@ -161,7 +161,7 @@ node(nodeName) {
         testStages = fetchStages["testStages"]
         final_stage = fetchStages["final_stage"]
         println("final_stage : ${final_stage}")
-        ceph_version = ${buildArtifacts['ceph-version']} ?: ${buildArtifacts['recipe']['ceph-version']}
+        ceph_version = buildArtifacts['ceph-version'] ?: buildArtifacts['recipe']['ceph-version']
         currentBuild.description = "${params.rhcephVersion} - ${tierLevel} - ${currentStageLevel} \n ceph-version : ${ceph_version}"
     }
 
