@@ -126,7 +126,7 @@ tests:
       polarion-id: CEPH-11293  # also applies to [CEPH-11296,CEPH-11297,CEPH-11295]
   - test:
       name: Increase and Decrease of MDS
-      module: mds_Inc_dec.py
+      module: mds_inc_dec.py
       desc: Deploy mds using cephadm and increase & decrease number of mds
       polarion-id: CEPH-83574286
       abort-on-fail: false

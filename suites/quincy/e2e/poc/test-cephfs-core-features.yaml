@@ -21,6 +21,6 @@ tests:
     test:
       abort-on-fail: false
       desc: "Deploy mds using cephA and increase & decrease number of mds"
-      module: mds_Inc_dec.py
+      module: mds_inc_dec.py
       name: "Evaluate crud operations on MDS daemons"
       polarion-id: CEPH-83574286
