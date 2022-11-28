@@ -135,11 +135,10 @@ tests:
               - "ceph orch restart {service_name:rgw.1}"
         openstack:
           config:
-            os_auth: true
             commands:
-              - "openstack endpoint create --region regionOne swift public 'http://{node_ip:ceph#node5}:80/swift/v1'"
-              - "openstack endpoint create --region regionOne swift internal 'http://{node_ip:ceph#node5}:80/swift/v1'"
-              - "openstack endpoint create --region regionOne swift admin 'http://{node_ip:ceph#node5}:80/swift/v1'"
+              - "source ./os_auth.sh ; openstack endpoint create --region regionOne swift public 'http://{node_ip:ceph#node5}:80/swift/v1'"
+              - "source ./os_auth.sh ; openstack endpoint create --region regionOne swift internal 'http://{node_ip:ceph#node5}:80/swift/v1'"
+              - "source ./os_auth.sh ; openstack endpoint create --region regionOne swift admin 'http://{node_ip:ceph#node5}:80/swift/v1'"
       desc: integrate ceph rgw with openstack keystone
       module: exec.py
       name: integrate ceph with openstack
@@ -149,10 +148,9 @@ tests:
       clusters:
         openstack:
           config:
-            os_auth: true
             commands:
-              - "swift post container1"
-              - "swift list"
+              - "source ./os_auth.sh ; swift post container1"
+              - "source ./os_auth.sh ; swift list"
         ceph:
           config:
             cephadm: true

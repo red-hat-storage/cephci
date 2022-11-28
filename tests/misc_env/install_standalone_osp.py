@@ -217,7 +217,6 @@ def run(**kw):
         log.info(f"listing the endpoints:\n{out}")
 
         # removing existing swift endpoints
-        admin_password = config.get("admin_password")
         log.info("removing existing swift endpoints")
         out, _ = osp_node.exec_command(
             cmd="export OS_CLOUD=standalone; openstack endpoint list --format json"
@@ -248,6 +247,27 @@ def run(**kw):
         log.info(
             "admin project password changed successfully. "
             + f"admin project details present under ~/.config/openstack/clouds.yaml :\n{cloud_yaml}"
+        )
+
+        # creating a shell script to set environment variables
+        auth = cloud_yaml["clouds"]["standalone"]["auth"]
+        commands = [
+            f"OS_USERNAME={auth['username']}",
+            f"OS_PASSWORD={auth['password']}",
+            f"OS_PROJECT_NAME={auth['project_name']}",
+            f"OS_PROJECT_DOMAIN_NAME={auth['project_domain_name']}",
+            f"OS_USER_DOMAIN_NAME={auth['user_domain_name']}",
+            f"OS_AUTH_URL={auth['auth_url']}",
+            f"OS_IDENTITY_API_VERSION={cloud_yaml['clouds']['standalone']['identity_api_version']}",
+            "export OS_USERNAME OS_PASSWORD OS_PROJECT_NAME OS_USER_DOMAIN_NAME OS_PROJECT_DOMAIN_NAME"
+            + " OS_AUTH_URL OS_IDENTITY_API_VERSION",
+        ]
+        cmd = "\n".join(commands)
+        osp_node.exec_command(cmd="touch ~/os_auth.sh")
+        osp_node.exec_command(cmd=f"echo '{cmd}' > ~/os_auth.sh")
+        log.info(
+            "created shell script os_auth.sh that can be used to set environment variables"
+            + " for executing osp commands and swift commands"
         )
 
     else:

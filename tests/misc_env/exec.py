@@ -3,8 +3,6 @@ import json
 import re
 from typing import Any, Tuple
 
-import yaml
-
 from ceph.utils import get_node_by_id, translate_to_ip
 from utility.log import Log
 
@@ -154,34 +152,6 @@ def get_systemctl_service_name(node, service_name, command):
     return f"{command} {service_full_name}"
 
 
-def get_os_auth_commands(node):
-    """
-    Return list of export commands for openstack authentication like OS_USERNAME, OS_PASSWORD, OS_AUTH_URL etc...
-
-    Args:
-        node:       System to be used to gather the information.
-
-    Return:
-        command after adding the service name.
-    """
-    out, err = node.exec_command(cmd="cat ~/.config/openstack/clouds.yaml")
-    clouds_yaml = yaml.full_load(out)
-    auth = clouds_yaml["clouds"]["standalone"]["auth"]
-    commands = [
-        f"OS_USERNAME={auth['username']}",
-        f"OS_PASSWORD={auth['password']}",
-        f"OS_PROJECT_NAME={auth['project_name']}",
-        f"OS_PROJECT_DOMAIN_NAME={auth['project_domain_name']}",
-        f"OS_USER_DOMAIN_NAME={auth['user_domain_name']}",
-        f"OS_AUTH_URL={auth['auth_url']}",
-        f"OS_IDENTITY_API_VERSION={clouds_yaml['clouds']['standalone']['identity_api_version']}",
-        "export OS_USERNAME OS_PASSWORD OS_PROJECT_NAME OS_USER_DOMAIN_NAME OS_PROJECT_DOMAIN_NAME"
-        + " OS_AUTH_URL OS_IDENTITY_API_VERSION",
-    ]
-    cmd = ";".join(commands)
-    return cmd
-
-
 def run(ceph_cluster, **kwargs: Any) -> int:
     """
     Test module for executing a sequence of commands using the CephAdm shell interface.
@@ -230,7 +200,6 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     LOG.warning("Usage of cmd is deprecated instead use commands.")
     commands = [command] if command else config["commands"]
     cephadm = config.get("cephadm", False)
-    os_auth = config.get("os_auth", False)
 
     check_status = config.get("check_status", True)
     sudo = config.get("sudo", False)
@@ -239,8 +208,6 @@ def run(ceph_cluster, **kwargs: Any) -> int:
     role = config.get("role", "client")
     if cephadm:
         role = "installer"
-    elif os_auth:
-        role = "osp"
 
     nodes = ceph_cluster.get_nodes(role=role)
     node = nodes[config.get("idx", 0)]
@@ -254,8 +221,6 @@ def run(ceph_cluster, **kwargs: Any) -> int:
             cmd = f"cephadm shell -- {cmd}"
             sudo = True
             long_running = False
-        elif os_auth:
-            cmd = f"{get_os_auth_commands(node)}; {cmd}"
 
         # Reconstruct cephadm specific lookups
         if not build.startswith("4"):
