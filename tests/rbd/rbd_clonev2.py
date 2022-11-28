@@ -44,11 +44,7 @@ def run(**kw):
     size = "1G"
 
     try:
-        if not rbd.create_pool(poolname=pool):
-            # create pool does not catch exceptions, it returns true/false.
-            # so we are returning 1 instead of raising exception
-            return 1
-        rbd.create_image(pool_name=pool, image_name=image, size=size)
+        rbd.initial_rbd_config(rbd, pool, image, size=size)
         rbd.snap_create(pool, image, snap)
         snap_name = f"{pool}/{image}@{snap}"
         cmd = "ceph osd set-require-min-compat-client mimic"

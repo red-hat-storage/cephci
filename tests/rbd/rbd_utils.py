@@ -75,6 +75,22 @@ class Rbd:
         temp_str = "".join([random.choice(string.ascii_letters) for _ in range(10)])
         return temp_str
 
+    def initial_rbd_config(self, rbd, pool, image, **kw):
+        """
+        Calls create_pool function on the clusters,
+        creates an image in the pool,
+        Args:
+            **kw:
+            pool - name for pool to be created on cluster
+            image - name of images created on the pool
+            size - size of the image to be created
+        """
+        size = kw.get("size", "10G")
+        if not self.create_pool(poolname=pool):
+            log.error(f"Pool creation failed for pool {pool}")
+            return 1
+        self.create_image(pool_name=pool, image_name=image, size=size)
+
     def create_pool(self, poolname):
         if self.ceph_version > 2 and self.k_m:
             self.create_ecpool(profile=self.ec_profile, poolname=self.datapool)
@@ -237,9 +253,49 @@ class Rbd:
         """
         self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
 
+    def move_image_trash(self, pool_name, image_name):
+        """
+        Move images to trash from the specified pool
+        Args:
+            pool_name : name of the pool
+            image_name : mane of the image
+        Returns:
+
+        """
+        self.exec_cmd(cmd=f"rbd trash mv {pool_name}/{image_name}")
+
+    def remove_image_trash(self, pool_name, image_id):
+        """
+        Remove images from trash using image unique ID
+        Args:
+            pool_name : name of the pool
+            image_id : unique id of the images generated after moving image to trash
+        Returns:
+
+        """
+        self.exec_cmd(cmd=f"rbd trash rm {pool_name}/{image_id}")
+
+    def get_image_id(self, pool_name, image_name):
+        """
+        Returns the image_id of image obtained from images in trash
+        for the provided poolname
+        Args:
+            pool_name : name of the pool
+            image_name : name of the image used to verify the image_id of the image in trash
+        Returns:
+            image_id of the image
+
+        """
+        out = self.exec_cmd(
+            cmd=f"rbd trash list {pool_name} --format json ", output=True
+        )
+        image_info = json.loads(out)
+        for value in image_info:
+            if value["name"] == image_name:
+                return value["id"]
+
     def image_meta(self, **kw):
         """Manage image-meta.
-
         Args:
             action: get, remove, add.
             image_spec: image specification.

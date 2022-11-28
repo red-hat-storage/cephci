@@ -48,12 +48,7 @@ def run(**kw):
     size = "10G"
 
     try:
-        if not rbd.create_pool(poolname=pool):
-            # create pool does not catch exceptions, it returns true/false.
-            # so we are returning 1 instead of raising exception
-            return 1
-
-        rbd.create_image(pool_name=pool, image_name=image, size=size)
+        rbd.initial_rbd_config(rbd, pool, image, size=size)
         client = kw["ceph_cluster"].get_nodes(role="client")[0]
         run_fio(image_name=image, pool_name=pool, client_node=client)
         if config["enable"]:
