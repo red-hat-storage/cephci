@@ -1,17 +1,16 @@
 ---
-version_id: 9.0
+version_id: 8.7
 id: rhel
 instance:
   create:
-    image-name: RHEL-9.0.0-x86_64-ga-latest
-    vm-size: ci.m1.large
+    image-name: RHEL-8.7.0-x86_64-ga-latest
+    vm-size: ci.m1.medium
 
   setup: |
     #cloud-config
 
     ssh_pwauth: true
     disable_root: false
-
     groups:
       - cephuser
 
@@ -40,7 +39,7 @@ instance:
       - curl -m 120 -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
       - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://password.corp.redhat.com/RH-IT-Root-CA.crt
       - update-ca-trust
-      - yum-config-manager --add-repo http://magna002.ceph.redhat.com/cephci-jenkins/repos/9/lab-extras.repo
+      - yum-config-manager --add-repo http://magna002.ceph.redhat.com/cephci-jenkins/repos/8/lab-extras.repo
       - yum clean metadata
       - yum clean all
       - touch /ceph-qa-ready

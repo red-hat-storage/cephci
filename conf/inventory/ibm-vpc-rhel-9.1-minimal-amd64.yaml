@@ -1,9 +1,9 @@
 ---
-version_id: 9.0
+version_id: 9.1
 id: rhel
 instance:
   create:
-    image-name: rhel-90-server-released-latest
+    image-name: rhel-91-server-released
     network_name: sn-01-cephqe-pvt-network
     private_key: ibmc-shared
     group_access: cephqe-sec-grp-all-access
@@ -11,9 +11,8 @@ instance:
 
   setup:  |
     #cloud-config
-    disable_root: false
     ssh_pwauth: true
-
+    disable_root: false
     groups:
       - cephuser
 
