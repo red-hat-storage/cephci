@@ -17,6 +17,8 @@ def final_stage = false
 def run_type
 def nodeName = "rhel-8-medium || ceph-qe-ci"
 def tags = ""
+def majorVersion
+def minorVersion
 
 def branch='origin/master'
 def repo='https://github.com/red-hat-storage/cephci.git'
@@ -122,7 +124,7 @@ node(nodeName) {
         }
 
         if ("openstack" in tags_list || "openstack-only" in tags_list){
-            def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
+            (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
             /*
                Read the release yaml contents to get contents,
                before other listener/Executor Jobs updates it.
@@ -175,14 +177,41 @@ node(nodeName) {
             if ("openstack-only" in tags_list){
                 run_type = "PSI Only Run"
             }
-            if (testResults) {
-                sharedLib.sendEmail(
+            if (testResults && run_type != "Manual Run") {
+
+                testStatus = "SUCCESS"
+                if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
+                    currentBuild.result = "FAILED"
+                    buildStatus = "fail"
+                    testStatus = "FAILURE"
+                }
+                sharedLib.writeToResultsFile(
+                    ceph_version,
+                    tierLevel,
+                    currentStageLevel,
+                    testStatus,
                     run_type,
-                    testResults,
-                    sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
-                    tierLevel.capitalize(),
-                    currentStageLevel.capitalize()
+                    env.RUN_DISPLAY_URL
                 )
+                if(final_stage && tierLevel == "tier-2"){
+
+                    def testConsolidatedResults = sharedLib.readFromResultsFile(ceph_version)
+                    sharedLib.updateConfluencePage(
+                        majorVersion,
+                        minorVersion,
+                        ceph_version,
+                        run_type,
+                        testConsolidatedResults
+                    )
+                    sharedLib.sendConsolidatedEmail(
+                        run_type,
+                        testConsolidatedResults,
+                        sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
+                        majorVersion,
+                        minorVersion,
+                        ceph_version
+                    )
+                }
             }
         }
 
