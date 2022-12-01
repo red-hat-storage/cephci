@@ -67,15 +67,24 @@ def run(**kw):
         # snapshot schedule should be removed at the level (cluster, pool, image) at which it was added
         if not snapshot_schedule_level or snapshot_schedule_level == "cluster":
             mirror1.mirror_snapshot_schedule_remove()
+            mirror1.verify_snapshot_schedule_remove()
         elif snapshot_schedule_level == "pool":
             mirror1.mirror_snapshot_schedule_remove(poolname=poolname)
+            mirror1.verify_snapshot_schedule_remove(poolname=poolname)
         else:
             mirror1.mirror_snapshot_schedule_remove(
+                poolname=poolname, imagename=imagename
+            )
+            mirror1.verify_snapshot_schedule_remove(
                 poolname=poolname, imagename=imagename
             )
             mirror1.mirror_snapshot_schedule_remove(
                 poolname=poolname, imagename=imagename_2
             )
+            mirror1.verify_snapshot_schedule_remove(
+                poolname=poolname, imagename=imagename_2
+            )
+
         # Cleans up the configuration
         mirror1.delete_image(imagespec)
         mirror1.delete_image(imagespec_2)
