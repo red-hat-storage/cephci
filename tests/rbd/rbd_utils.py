@@ -18,7 +18,7 @@ class Rbd:
         self.ceph_version = int(self.config.get("rhbuild")[0])
         self.datapool = None
         self.flag = 0
-        self.k_m = self.config.get("ec-pool-k-m", False)
+        self.k_m = self.config.get("ec-pool-k-m", None)
 
         if kw.get("req_cname"):
             self.ceph_nodes = kw["ceph_cluster_dict"][kw["req_cname"]]
@@ -35,8 +35,10 @@ class Rbd:
                 continue
 
         if self.ceph_version > 2 and self.k_m:
-            self.datapool = "rbd_datapool"
-            self.ec_profile = "rbd_ec_profile"
+            self.datapool = self.config.get("ec_pool_config").get("data_pool")
+            self.ec_profile = self.config.get("ec_pool_config").get(
+                "ec_profile", "rbd_ec_profile"
+            )
             self.set_ec_profile(profile=self.ec_profile)
 
     def exec_cmd(self, **kw):
@@ -105,7 +107,10 @@ class Rbd:
         return True
 
     def create_image(self, pool_name, image_name, size):
-        self.exec_cmd(cmd=f"rbd create {pool_name}/{image_name} --size {size}")
+        cmd = f"rbd create {pool_name}/{image_name} --size {size}"
+        if self.ceph_version > 2 and self.k_m:
+            cmd += f" --data-pool {self.datapool}"
+        self.exec_cmd(cmd=cmd)
 
     def set_ec_profile(self, profile):
         self.exec_cmd(cmd="ceph osd erasure-code-profile rm {}".format(profile))
@@ -124,7 +129,6 @@ class Rbd:
         if not self.check_pool_exists(pool_name=poolname):
             log.error("Pool not created")
             return False
-        self.exec_cmd(cmd="rbd pool init {}".format(poolname))
         self.exec_cmd(
             cmd="ceph osd pool set {} allow_ec_overwrites true".format(poolname)
         )
@@ -253,6 +257,20 @@ class Rbd:
         """
         self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
 
+    def image_exists(self, pool_name, image_name):
+        """
+        Verify if image exists in the specified pool
+        Args:
+            pool_name: name of the pool
+            image_name: name of the image
+
+        Returns:
+
+        """
+        out = self.exec_cmd(cmd=f"rbd ls {pool_name} --format json", output=True)
+        images = json.loads(out)
+        return True if any(image_name == image for image in images) else False
+
     def move_image_trash(self, pool_name, image_name):
         """
         Move images to trash from the specified pool
@@ -344,3 +362,106 @@ class Rbd:
                     cmd="ceph osd pool delete {pool} {pool} "
                     "--yes-i-really-really-mean-it".format(pool=pool)
                 )
+
+
+def initial_rbd_config(**kw):
+    """
+    Configure replicated pools, ecpools or both based on arguments specified
+    Args:
+        **kw:
+
+    Examples: In default configuration, pool and image names will be taken as random values.
+        Default configuration for ecpools:
+            config:
+                ec-pool-k-m: 2,1
+                ec-pool-only: True
+        Default configuration for replicated pools:
+            <kw["config"]> can be left empty
+        Advanced configuration:
+            config:
+               ec-pool-k-m: 2,1
+               ec-pool-only: False
+               ec_pool_config:
+                  pool: rbd_pool_4
+                  data_pool: rbd_ec_pool_4
+                  ec_profile: rbd_ec_profile_4
+                  image: rbd_image_4
+                  size: 10G
+               rep_pool_config:
+                  pool: rbd_rep_pool
+                  image: rbd_rep_image
+                  size: 10G
+    """
+    rbd_obj = dict()
+
+    if not kw.get("config") or not kw.get("config").get("ec-pool-only"):
+        ec_pool_k_m = kw.get("config", {}).pop("ec-pool-k-m", None)
+        rbd_reppool = Rbd(**kw)
+
+        if not kw.get("config"):
+            kw["config"] = {
+                "rep_pool_config": {
+                    "pool": rbd_reppool.random_string(),
+                    "image": rbd_reppool.random_string(),
+                    "size": "10G",
+                }
+            }
+        elif kw.get("config").get("rep_pool_config"):
+            kw["config"]["rep_pool_config"]["pool"] = kw["config"][
+                "rep_pool_config"
+            ].get("pool", rbd_reppool.random_string())
+            kw["config"]["rep_pool_config"]["image"] = kw["config"][
+                "rep_pool_config"
+            ].get("image", rbd_reppool.random_string())
+            kw["config"]["rep_pool_config"]["size"] = kw["config"][
+                "rep_pool_config"
+            ].get("size", "10G")
+        else:
+            kw["config"]["rep_pool_config"] = {
+                "pool": rbd_reppool.random_string(),
+                "image": rbd_reppool.random_string(),
+                "size": "10G",
+            }
+        kw["config"]["ec-pool-k-m"] = ec_pool_k_m
+        rbd_obj.update({"rbd_reppool": rbd_reppool})
+
+    if kw.get("config").get("ec-pool-k-m"):
+        if kw.get("config").get("ec_pool_config"):
+            kw["config"]["ec_pool_config"]["data_pool"] = kw["config"][
+                "ec_pool_config"
+            ].get("data_pool", "rbd_datapool")
+            kw["config"]["ec_pool_config"]["ec_profile"] = kw["config"][
+                "ec_pool_config"
+            ].get("ec_profile", "rbd_ecprofile")
+        else:
+            kw["config"] = {
+                "ec_pool_config": {
+                    "data_pool": "rbd_datapool",
+                    "ec_profile": "rbd_ecprofile",
+                }
+            }
+
+        rbd_ecpool = Rbd(**kw)
+        kw["config"]["ec_pool_config"]["pool"] = kw["config"]["ec_pool_config"].get(
+            "pool", rbd_ecpool.random_string()
+        )
+        kw["config"]["ec_pool_config"]["image"] = kw["config"]["ec_pool_config"].get(
+            "image", rbd_ecpool.random_string()
+        )
+        kw["config"]["ec_pool_config"]["size"] = kw["config"]["ec_pool_config"].get(
+            "size", "10G"
+        )
+
+        if not rbd_ecpool.create_pool(poolname=kw["config"]["ec_pool_config"]["pool"]):
+            log.error(
+                f"Pool creation failed for pool {kw['config']['ec_pool_config']['pool']}"
+            )
+            return None
+        rbd_ecpool.create_image(
+            pool_name=kw["config"]["ec_pool_config"]["pool"],
+            image_name=kw["config"]["ec_pool_config"]["image"],
+            size=kw["config"]["ec_pool_config"]["size"],
+        )
+        rbd_obj.update({"rbd_ecpool": rbd_ecpool})
+
+    return rbd_obj

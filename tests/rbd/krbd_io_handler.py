@@ -66,7 +66,7 @@ def krbd_io_handler(**kw):
                         client_node=rbd.ceph_client,
                         filename=mount_points[-1],
                         runtime=config.get("runtime", 30),
-                        file_size=config.get("file_size", "100M"),
+                        size=config.get("file_size", "100M"),
                     )
                 else:
                     run_fio(

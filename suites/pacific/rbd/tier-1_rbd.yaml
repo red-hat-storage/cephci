@@ -91,6 +91,7 @@ tests:
         install_packages:
           - ceph-common
           - rbd-nbd
+          - fio
         copy_admin_keyring: true
       desc: Configure the client system
       destroy-cluster: false
@@ -98,6 +99,20 @@ tests:
       name: configure client
 
   # Test cases to be executed
+  - test:
+      config:
+        ec-pool-k-m: 2,1
+        ec-pool-only: True
+        ec_pool_config:
+          pool: rbd_pool_4
+          data_pool: rbd_ec_pool_4
+          ec_profile: rbd_ec_profile_4
+          image: rbd_image_4
+          size: 10G
+      desc: Create and delete images on an ecpool and run IOs on the image
+      module: rbd_ecpool_test_image.py
+      name: test_image_on_ecpool
+      polarion-id: CEPH-83571600
 
   - test:
       config:
