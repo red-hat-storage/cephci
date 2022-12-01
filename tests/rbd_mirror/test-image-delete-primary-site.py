@@ -40,13 +40,14 @@ def run(**kw):
         imagename = mirror1.random_string() + "_ceph_9501"
         imagespec = poolname + "/" + imagename
 
-        initial_config(
-            mirror1,
+        mirror1.initial_mirror_config(
             mirror2,
-            poolname,
-            imagespec,
+            poolname=poolname,
+            imagename=imagename,
             imagesize=config.get("imagesize", "1G"),
+            mode="pool",
         )
+
         mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total", "1G"))
 
         mirror1.delete_image(imagespec)
@@ -57,18 +58,3 @@ def run(**kw):
         log.exception(e)
 
     return 1
-
-
-def initial_config(mirror1, mirror2, poolname, imagespec, imagesize):
-    """
-    Calls create_pool function on both the clusters,
-    creates an image on primary cluster and
-    waits for image to be present in secondary cluster with replying status
-    """
-    mirror1.create_pool(poolname=poolname)
-    mirror2.create_pool(poolname=poolname)
-    mirror1.create_image(imagespec=imagespec, size=imagesize)
-    mirror1.config_mirror(mirror2, poolname=poolname, mode="pool")
-    mirror2.wait_for_status(poolname=poolname, images_pattern=1)
-    mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
-    mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
