@@ -294,6 +294,16 @@ class Rbd:
             if value["name"] == image_name:
                 return value["id"]
 
+    def trash_restore(self, pool_name, image_id):
+        """
+         Move images to trash, restore them
+        Args:
+             pool_name: name of the pool
+             image_id: image id of the image
+         Returns:
+        """
+        self.exec_cmd(cmd=f"rbd trash restore {pool_name}/{image_id}")
+
     def image_meta(self, **kw):
         """Manage image-meta.
         Args:
