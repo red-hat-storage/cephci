@@ -106,6 +106,26 @@ class FsUtils(object):
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
 
+    def validate_fs_info(self, client, fs_name="cephfs"):
+        """
+        Validates fs info command.
+        ceph fs volume info
+        if fs_name not given.it fetches the default cephfs info
+        Checks the mon Ips based on Cluster configuration in CI
+        Args:
+            client:
+            fs_name:
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph fs volume info {fs_name} --format json"
+        )
+        fs_info = json.loads(out)
+        mon_ips = self.get_mon_node_ips()
+        if not set([f"{i}:6789" for i in mon_ips]).issubset(fs_info["mon_addrs"]):
+            log.error("Mon IPs are not matching with FS Info IPs")
+            return False
+        return True
+
     def get_fs_details(self, client, **kwargs):
         """
         Gets all filesystems information
