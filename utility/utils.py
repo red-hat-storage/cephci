@@ -781,6 +781,9 @@ def create_html_file(test_result) -> str:
         log.error(f"Key not found : {kerr}")
         exit(1)
 
+    ts_file_path = test_result.get("result")[0].get("suite-name")
+    ts_file = os.path.splitext(os.path.basename(ts_file_path))[0]
+
     # we are checking for /ceph/cephci-jenkins to see if the magna is already mounted
     # on system we are executing
     log_link = (
@@ -796,7 +799,7 @@ def create_html_file(test_result) -> str:
         autoescape=select_autoescape(["html", "xml"]),
     )
 
-    template = jinja_env.get_template("result-email-template.html")
+    template = jinja_env.get_template("result-summary-template.html")
 
     html = template.render(
         run_name=run_name,
@@ -821,7 +824,7 @@ def create_html_file(test_result) -> str:
         use_abs_log_link=False,
     )
 
-    abs_path = os.path.join(run_dir, "index.html")
+    abs_path = os.path.join(run_dir, "{}.html".format(ts_file))
     write_to_file(data=result_html, abs_path=abs_path)
 
     return html
