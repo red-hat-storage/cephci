@@ -73,7 +73,7 @@ tests:
       name: OSD deployment
       desc: Add OSD services using spec file.
       module: test_cephadm.py
-      polarion-id: CEPH-83573746
+      polarion-id: CEPH-83573746, CEPH-83571650
       config:
         steps:
           - config:
@@ -155,7 +155,7 @@ tests:
   - test:
       name: Deploy stretch Cluster
       module: test_deploy_stretch_cluster_baremetal.py
-      polarion-id: CEPH-83573621
+      polarion-id: CEPH-83573621, CEPH-83572692
       config:
         stretch_rule_name: "stretch_rule"
         site1:
