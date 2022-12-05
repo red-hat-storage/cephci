@@ -18,7 +18,9 @@ globals:
      node5:
        role: client
      node6:
-       role: installer
+       role:
+         - installer
+         - grafana
      node7:
        role: mds
      node8:
@@ -48,7 +50,9 @@ globals:
      node5:
        role: client
      node6:
-       role: installer
+       role:
+         - installer
+         - grafana
      node7:
        role: mds
      node8:
