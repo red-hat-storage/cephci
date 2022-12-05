@@ -1,6 +1,7 @@
 from cli import Cli
 
 from .mgr import Mgr
+from .orch.orch import Orch
 
 
 class Ceph(Cli):
@@ -11,6 +12,7 @@ class Ceph(Cli):
 
         self.base_cmd = f"{base_cmd} ceph" if base_cmd else "ceph"
         self.mgr = Mgr(nodes, self.base_cmd)
+        self.orch = Orch(nodes, self.base_cmd)
 
     def version(self):
         """Get ceph version."""
