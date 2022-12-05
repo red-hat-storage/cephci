@@ -147,8 +147,20 @@ def fuse_mount(fuse_clients, mounting_dir):
 
 def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     """
-    verify multisite sync status on primary
+    verify RGW multisite sync status
     """
+    ceph_version = verify_io_on_site_node.exec_command(cmd="ceph version")
+    ceph_version = ceph_version[0].split()[4]
+    if ceph_version == "pacific":
+        out = verify_io_on_site_node.exec_command(cmd="ceph orch ps | grep rgw")
+        rgw_process_name = out[0].split()[0]
+        out = verify_io_on_site_node.exec_command(
+            cmd=f"ceph config set client.{rgw_process_name} rgw_sync_lease_period 120"
+        )
+        out = verify_io_on_site_node.exec_command(cmd="ceph orch ls | grep rgw")
+        rgw_name = out[0].split()[0]
+        verify_io_on_site_node.exec_command(cmd=f"ceph orch restart {rgw_name}")
+        time.sleep(20)
     check_sync_status, err = verify_io_on_site_node.exec_command(
         cmd="sudo radosgw-admin sync status"
     )
