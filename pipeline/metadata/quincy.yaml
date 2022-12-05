@@ -7,7 +7,7 @@
 # parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
 # platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
 #=====================================================================================
-
+suites:
 - name: "Core Feature Upstream Testing For DMFG"
   suite: "suites/quincy/cephadm/sanity-test.yaml"
   global-conf: "conf/3-node-cluster-with-1-client.yaml"
