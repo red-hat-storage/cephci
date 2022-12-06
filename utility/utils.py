@@ -1482,3 +1482,35 @@ def fetch_image_tag(rhbuild):
         raise TestSetupFailure("Not a live testing")
     except Exception as e:
         raise TestSetupFailure(f"Could not fetch image tag : {e}")
+
+
+def validate_conf(conf):
+    """
+    Validates the global conf by checking unique ID for nodes.
+
+    Rules:
+    1. If id is provided, then it will take the highest precedence.
+    2. If id not provided, then framework will add the node IDs based on its appearance index.
+
+    Note : ID should not follow node{i} which will conflict with the dynamic ID generator. like node1,node2..etc
+    """
+    log.info("Validate global configuration file")
+    for cluster in conf.get("globals"):
+        nodes = cluster.get("ceph-cluster").get("nodes", [])
+        if not nodes:
+            nodes_id = []
+            ceph_cluster = cluster.get("ceph-cluster")
+            for node in sorted(ceph_cluster.keys()):
+                if not node.startswith("node"):
+                    continue
+                nodes_id.append(ceph_cluster[node].get("id") or f"{node}")
+        else:
+            nodes_id = [
+                node.get("id") or f"node{idx+1}" for idx, node in enumerate(nodes)
+            ]
+        log.info(f"List of Node IDs : {nodes_id}")
+        if not (len(nodes_id) == len(set(nodes_id))):
+            raise TestSetupFailure(
+                f"Nodes does not have Unique Identifiers, "
+                f"Please set the unique node Ids in global conf {validate_conf.__doc__}"
+            )

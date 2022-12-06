@@ -75,7 +75,7 @@ for node in ${NODES} ; do
     done
 
     echo 'Setting the systems to use shortnames'
-    ssh ${node} 'sudo hostnamectl set-hostname $(hostname -s)'
+    ssh ${node} 'sudo hostnamectl set-hostname $(hostname -s).ceph.redhat.com'
     ssh ${node} 'sudo sed -i "s/$(hostname)/$(hostname -s)/g" /etc/hosts'
 
     echo 'Cleaning default repo files to avoid conflicts'

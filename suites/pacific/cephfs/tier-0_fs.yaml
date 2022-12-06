@@ -17,6 +17,7 @@ tests:
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
                 skip-monitoring-stack: true
               base_cmd_args:
                 verbose: true
