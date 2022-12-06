@@ -122,4 +122,16 @@ suites:
     - openstack
     - rados
     - stage-2
+- name: "Upstream Testing For CephFS Regression"
+  suite: "suites/quincy/cephfs/tier-1_cephfs_upstream-core-functionality.yaml"
+  global-conf: "conf/pacific/cephfs/tier-1_fs.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - cephfs
+    - stage-2
 
