@@ -1033,3 +1033,82 @@ class RadosOrchestrator:
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
         return log_lines
+
+    def get_osd_list(self):
+        """
+        Used to get the list of OSDs configured in the cluster nodes
+        Returns:
+            Dictionary with the keys as cluster osd names and values are the list of osd names configured to the node.
+        """
+        try:
+            osd_list = dict()
+            cmd = "ceph osd  tree"
+            osds = self.run_ceph_command(cmd)
+            for entry in osds["nodes"]:
+                if entry["type"] == "host":
+                    osd_list[entry["name"]] = entry["children"]
+            return osd_list
+        except Exception as e:
+            log.error("Failed to  get the osd list : %s", str(e))
+
+    def get_osd_pid(self, host_object, osd):
+        """
+        Used to get the process id of an  OSD
+        Args:
+             host_object is osd host object
+             osd is the osd number
+        Returns:
+            PID number of the osd
+        """
+        try:
+            get_pid_cmd = (
+                'ps -ef | grep -w "/usr/bin/ceph-osd .* osd.'
+                + osd
+                + '"| grep -v "/run/podman-init" | grep -v grep | awk \'{print $2 }\''
+            )
+            osd_pid = host_object.exec_command(sudo=True, cmd=get_pid_cmd)
+            osd_pid = ("".join(osd_pid)).strip()
+            return osd_pid
+        except Exception as e:
+            log.error("Failed to  get the process id of OSD : %s", str(e))
+
+    def check_osd_status(self, host_object, osd):
+        """
+        Used to check the process is running in osd node or not
+        Args:
+             host_object is osd host object
+             osd is the osd number
+        Returns:
+            If process is up and running then  returns 0 else return non zero
+        """
+        try:
+            osd_status_cmd = (
+                'systemctl is-active --quiet "$(systemctl list-units --type=service | grep -i "ceph-.*@osd.'
+                + osd
+                + ".service\" | awk '{print $1}')\" && echo $?"
+            )
+            status = host_object.exec_command(
+                sudo=True, cmd=osd_status_cmd, long_running=True
+            )
+            if type(status) == tuple:
+                status = ("".join(status)).strip()
+            return status
+        except Exception as e:
+            log.error("Failed to check the OSD status : %s", str(e))
+
+    def kill_osd_process(self, host_object, osd_pid):
+        """
+         Used to kill the osd process
+        Args:
+                host_object is osd host object
+                osd is the osd number
+        Returns:
+                If process is up and running then  returns 0 else return non zero
+        """
+        try:
+            osd_kill_cmd = "kill -9  " + osd_pid
+            kill_status = host_object.exec_command(sudo=True, cmd=osd_kill_cmd)
+            time.sleep(5)
+            return kill_status
+        except Exception as e:
+            log.error("Failed to kill the OSD process : %s", str(e))
