@@ -84,7 +84,11 @@ def run(**kw):
     primary_client_node = primary_cluster.get_ceph_object("client").node
     secondary_rgw_node = secondary_cluster.get_ceph_object("rgw").node
     secondary_client_node = secondary_cluster.get_ceph_object("client").node
-    run_on_rgw = config.get("run-on-rgw", False)
+    run_on_rgw = (
+        True
+        if primary_cluster.rhcs_version.version[0] == 4
+        else config.get("run-on-rgw", False)
+    )
     if run_on_rgw:
         exec_from = test_site_node
         append_param = ""
