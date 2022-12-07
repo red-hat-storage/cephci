@@ -11,6 +11,7 @@ globals:
           - mgr
           - mon
           - osd
+          - grafana
 
       node2:
         disk-size: 20
