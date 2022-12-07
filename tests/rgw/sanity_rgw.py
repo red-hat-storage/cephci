@@ -86,7 +86,11 @@ def run(ceph_cluster, **kw):
     test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     client_node = client_ceph_object.node
-    run_on_rgw = config.get("run-on-rgw", False)
+    run_on_rgw = (
+        True
+        if ceph_cluster.rhcs_version.version[0] == 4
+        else config.get("run-on-rgw", False)
+    )
     distro_version_id = rgw_node.distro_info["VERSION_ID"]
 
     if run_on_rgw:
