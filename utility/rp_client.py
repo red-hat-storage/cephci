@@ -234,7 +234,7 @@ def generate_log_events(file_handler):
 
 
 def match_start_line(line):
-    matched = re.match(r"\d\d\d\d-\d\d-\d\d\ \d\d:\d\d:\d\d", line)
+    matched = re.match(r"\d\d\d\d-\d\d-\d\d\ \d\d:\d\d:\d\d,\d\d\d", line)
     if matched:
         matchThis = matched.group()
     else:
