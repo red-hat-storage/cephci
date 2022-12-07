@@ -212,6 +212,59 @@ class Rbd:
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
         return self.exec_cmd(cmd=cmd)
 
+    def snap_ls(self, pool_name, image_name, snap_name=None):
+        """
+        Lists the snapshots present for an image and returns the given snap_name if present
+        Args:
+            pool_name: name of the pool containing snapshots
+            image_name: name of the image whose snapshots are to be listed
+            snap_name: if specified will return the snapshot if its present
+
+        Returns:
+            all the snaps for a pool and image specified
+            the snap with the given snapname if pool, image and snapname are specified
+            None if no specified snaps are present.
+        """
+        cmd = f"rbd snap ls {pool_name}/{image_name} --format json"
+        out = self.exec_cmd(cmd=cmd, output=True)
+        if out == 1:
+            log.error(
+                f"Snap list command failed on pool {pool_name} and image {image_name}"
+            )
+            return None
+        snaps = json.loads(out)
+        if snaps and not snap_name:
+            # returns all the listed snaps if snap_name is not specified
+            return snaps
+        else:
+            snap_requested = [snap for snap in snaps if snap["name"] == snap_name]
+            return snap_requested
+
+    def snap_rename(self, pool_name, image_name, current_snap_name, new_snap_name):
+        """
+        Renames the snap of an image in a specified pool name and image name
+        Args:
+            pool_name: name of the pool where image snapshot is present
+            image_name: name of the image where image whose snapshot is to be renamed
+            current_snap_name: current name of the snapshot
+            new_snap_name: new name to be given to the snapshot
+        """
+        cmd = f"rbd snap rename {pool_name}/{image_name}@{current_snap_name} {pool_name}/{image_name}@{new_snap_name}"
+        if self.exec_cmd(cmd=cmd):
+            log.error(f"Snapshot rename failed for {current_snap_name}")
+            return 1
+
+        if self.snap_ls(pool_name, image_name, new_snap_name) and not self.snap_ls(
+            pool_name, image_name, current_snap_name
+        ):
+            log.info(
+                f"Snapshot rename successful from {current_snap_name} to {new_snap_name}"
+            )
+            return 0
+        else:
+            log.error(f"Snapshot rename failed for {current_snap_name}")
+            return 1
+
     def snap_remove(self, pool_name, image_name, snap_name):
         """
         Removes a snap of an image in a specified pool name and image name
