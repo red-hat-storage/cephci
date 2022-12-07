@@ -158,6 +158,7 @@ Options:
 """
 log = Log()
 test_names = []
+run_summary = {}
 
 
 @retry(LibcloudError, tries=5, delay=15)
@@ -971,6 +972,7 @@ def run(args):
 
     if post_to_report_portal:
         rp_logger.finish_launch()
+        run_summary["rp_link"] = rp_logger.client.get_launch_ui_url()
 
     if xunit_results:
         create_xunit_results(suite_name, tcs, test_run_metadata)
@@ -986,6 +988,8 @@ def run(args):
         "total": f"{int(duration[0])} mins, {int(duration[1])} secs",
     }
     info = {"status": "Pass"}
+    with open(f"{run_dir}/run_summary.json", "w", encoding="utf-8") as f:
+        json.dump(run_summary, f, ensure_ascii=False, indent=4)
     test_res = {
         "result": tcs,
         "run_id": run_id,

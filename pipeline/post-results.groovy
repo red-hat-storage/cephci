@@ -114,8 +114,10 @@ node("rhel-8-medium || ceph-qe-ci") {
                         metaData["results"], metaData, metaData["stage"]
                     )
                 }
-                sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData, stageLevel, run_type)
-
+                def launch_id = sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData, stageLevel, run_type)
+                if (launch_id) {
+                metaData["rp_link"] = "https://reportportal-rhcephqe.apps.ocp-c1.prod.psi.redhat.com/ui/#cephci/launches/all/${launch_id}"
+                }
             }
             testStatus = msgMap["test"]["result"]
 
