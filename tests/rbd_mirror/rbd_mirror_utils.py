@@ -412,7 +412,7 @@ class RbdMirror:
         """
         This will list the mirror snapshot schedule based on below kwargs
         Args:
-            poolname:
+            poolname: name of the pool
             **kwargs:
                 imagename : if imagename is specified list will be done per image if not will done globally
         Returns:
@@ -456,6 +456,30 @@ class RbdMirror:
         cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else ""
         cmd1 += f" {kwargs.get('starttime')}" if kwargs.get("starttime") else ""
         self.exec_cmd(cmd=cmd1)
+
+    def verify_snapshot_schedule_remove(self, **kwargs):
+        """
+        This will verify snapshot schedule got removed successfuly or not
+        Args:
+        **kwargs:
+            poolname : if poolname is specified schedule will be removed at pool level else cluster level
+            imagename : if imagename is specified schedule will be removed per image if not will done globally
+        Returns:
+            0 on Success
+            1 on Failure
+        """
+        cmd1 = "rbd mirror snapshot schedule list"
+        if kwargs.get("poolname"):
+            cmd1 += f" --pool {kwargs.get('poolname')}"
+        if kwargs.get("imagename"):
+            cmd1 += f" --image {kwargs.get('imagename')}"
+        output = self.exec_cmd(output=True, cmd=cmd1, check_ec=False)
+        if not output:
+            log.info("snapshot schedule got removed successfully")
+            return 0
+        else:
+            log.error("Failed to remove snapshot schedule")
+            return 1
 
     # Check data consistency
     def check_data(self, peercluster, imagespec):
