@@ -1406,37 +1406,56 @@ def perform_env_setup(config, node, ceph_cluster):
         )
 
 
-def run_fio(**kw):
+def run_mkfs(**kw):
+    """Create fs on a raw device using mkfs.
+
+    Args:
+        type: ext4/xfs
+        device_name: name of the device on which fs needs to be created.
+    """
+
+    long_running = kw.get("long_running", True)
+    cmd = f"mkfs -t {kw.get('type', 'xfs')} {kw.get('device_name')}"
+
+    return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=True)
+
+
+def run_fio(**fio_args):
     """Run IO using fio tool on given target.
 
     Args:
-        filename: Target device or file.
+        device_name: Target device
+        filename: Target file
         rbdname: rbd image name
         pool: name of rbd image pool
         runtime: fio runtime
         long_running(bool): True for long running required
-
+        client_node: node where fio needs to be run
+        file_size: 'size' for file size
     Prerequisite: fio package must have been installed on the client node.
+    One of device_name, filename, (rbdname,pool) is required.
     """
-    sudo = False
-    if kw.get("filename"):
-        opt_args = f"--filename={kw['filename']}"
-        sudo = True
+    log.debug(f"Config Recieved for fio: {fio_args}")
+
+    if fio_args.get("filename"):
+        opt_args = f"--filename={fio_args['filename']}/file --size={fio_args.get('file_size', '100M')}"
+
+    elif fio_args.get("device_name"):
+        opt_args = f"--ioengine=libaio --filename={fio_args['device_name']}"
+
     else:
-        opt_args = (
-            f"--ioengine=rbd --rbdname={kw['image_name']} --pool={kw['pool_name']}"
-        )
+        opt_args = f"--ioengine=rbd --rbdname={fio_args['image_name']} --pool={fio_args['pool_name']}"
 
-    opt_args += f" --runtime={kw.get('runtime', 120)}"
-
-    long_running = kw.get("long_running", False)
+    long_running = fio_args.get("long_running", False)
     cmd = (
         "fio --name=test-1  --numjobs=1 --rw=write"
-        " --bs=1M --iodepth=8 --fsync=32  --time_based"
-        f" --group_reporting {opt_args}"
+        " --iodepth=8 --fsync=32  --time_based"
+        f" --group_reporting --runtime={fio_args.get('runtime', 120)} {opt_args}"
     )
 
-    return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=sudo)
+    return fio_args["client_node"].exec_command(
+        cmd=cmd, long_running=long_running, sudo=True
+    )
 
 
 def fetch_image_tag(rhbuild):
