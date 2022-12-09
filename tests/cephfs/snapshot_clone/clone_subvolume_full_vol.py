@@ -119,7 +119,7 @@ def run(ceph_cluster, **kw):
             "group_name": "subvolgroup_full_vol_1",
         }
         fs_util.create_clone(client1, **full_vol_1)
-        fs_util.validate_clone_state(client1, full_vol_1, timeout=600)
+        fs_util.validate_clone_state(client1, full_vol_1, timeout=1200)
         clonevol_path, rc = client1.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} "
@@ -145,8 +145,9 @@ def run(ceph_cluster, **kw):
             {"vol_name": default_fs, "subvol_name": "full_vol_1"},
         ]
         for clone_vol in rmclone_list:
-            fs_util.remove_subvolume(client1, **clone_vol)
-        fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
+            fs_util.remove_subvolume(client1, **clone_vol, force=True, validate=False)
+        if snapshot in locals():
+            fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
         fs_util.remove_subvolume(client1, **subvolume, validate=False, check_ec=False)
         for subvolumegroup in subvolumegroup_list:
             fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)

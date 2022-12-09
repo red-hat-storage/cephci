@@ -189,8 +189,8 @@ def run(ceph_cluster, **kw):
             log.info(f"Iteration {iteration} has been completed")
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
 
     finally:
@@ -198,8 +198,11 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd="ceph config set mgr mgr/volumes/max_concurrent_clones 4"
         )
-        for clonevolume in rmclone_list:
-            fs_util.remove_subvolume(client1, **clonevolume, force=True, validate=False)
+        if rmclone_list in locals():
+            for clonevolume in rmclone_list:
+                fs_util.remove_subvolume(
+                    client1, **clonevolume, force=True, validate=False
+                )
         log.info("Clean Up in progess")
-        fs_util.remove_snapshot(client1, **snapshot)
-        fs_util.remove_subvolume(client1, **subvolume)
+        fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
+        fs_util.remove_subvolume(client1, **subvolume, validate=False, check_ec=False)
