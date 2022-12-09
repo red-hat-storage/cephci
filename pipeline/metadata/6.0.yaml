@@ -290,7 +290,7 @@ suites:
       - tier-2
       - openstack-only
       - rbd
-      - stage-4
+      - stage-1
 
   - name: "Basic operation test suite for Cephfs"
     suite: "suites/pacific/cephfs/tier-0_fs.yaml"
