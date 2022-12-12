@@ -450,10 +450,11 @@ def run(args):
 
     platform = args["--platform"]
     build = args.get("--build")
+    upstream_build = args.get("--upstream-build", None)
 
     if build and build not in ["released"] and not ignore_latest_nightly_container:
         base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-            build, rhbuild, platform, args.get("--upstream-build", None)
+            build, rhbuild, platform, upstream_build
         )
 
     store = args.get("--store") or False
@@ -557,7 +558,7 @@ def run(args):
 
     distro = ", ".join(list(set(distro)))
     if not ceph_version and build == "upstream":
-        ceph_version.append(args.get("--upstream-build", None))
+        ceph_version.append(upstream_build)
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
 
@@ -576,7 +577,11 @@ def run(args):
         suite_file_name = " ".join(suite_file_name.split("_"))
         _log = run_dir.replace("/ceph/", "http://magna002.ceph.redhat.com/")
 
-        launch_name = f"RHCS {rhbuild} - {suite_file_name}"
+        launch_name = (
+            f"Upstream {upstream_build} - {suite_file_name}"
+            if build == "upstream"
+            else f"RHCS {rhbuild} - {suite_file_name}"
+        )
         launch_desc = textwrap.dedent(
             """
             "jenkin-url": {jenkin_job_url},
