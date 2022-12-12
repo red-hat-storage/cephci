@@ -106,8 +106,11 @@ class Rbd:
             self.exec_cmd(cmd="rbd pool init {}".format(poolname))
         return True
 
-    def create_image(self, pool_name, image_name, size):
+    def create_image(self, pool_name, image_name, size, **kw):
         cmd = f"rbd create {pool_name}/{image_name} --size {size}"
+        if kw.get("image_feature"):
+            image_feature = kw.get("image_feature")
+            cmd += f" --image-feature {image_feature}"
         if self.ceph_version > 2 and self.k_m:
             cmd += f" --data-pool {self.datapool}"
         self.exec_cmd(cmd=cmd)
@@ -221,7 +224,7 @@ class Rbd:
         if not self.exec_cmd(cmd):
             raise ProtectSnapError("Protecting the snapshot Failed")
 
-    def create_clone(self, snap_name, pool_name, image_name):
+    def create_clone(self, snap_name, pool_name, image_name, **kw):
         """
         Creates a clone of an image from its snapshot
         in a specified pool name and image name
@@ -229,9 +232,21 @@ class Rbd:
             snap_name  : name of the snapshot of which a clone is to be created
             pool_name  : name of the pool where clone is to be created
             image_name : name of the cloned image
+        Returns:
+            0 on Success
+            1 on Failure
         """
+        if kw.get("clone_version") == "v2":
+            cmd = "ceph osd set-require-min-compat-client mimic"
+            self.exec_cmd(cmd=cmd)
         cmd = f"rbd clone {snap_name} {pool_name}/{image_name}"
         self.exec_cmd(cmd=cmd)
+        if self.image_exists(pool_name, image_name):
+            log.info("clone creation is successful")
+            return 0
+        else:
+            log.info("clone creation is failed")
+            return 1
 
     def flatten_clone(self, pool_name, image_name):
         """

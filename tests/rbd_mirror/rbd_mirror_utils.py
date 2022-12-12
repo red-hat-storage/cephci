@@ -763,10 +763,11 @@ class RbdMirror:
 
         except CommandFailed as failed:
             if "No such file" in failed.args[0]:
+                log.info("No such image found")
                 return 1
             else:
                 raise CommandFailed
-
+        log.info("Image is found")
         return 0
 
     def rename_primary_image(self, source_imagespec, dest_imagespec, **kw):
