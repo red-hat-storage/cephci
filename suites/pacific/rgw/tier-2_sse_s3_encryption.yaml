@@ -1,0 +1,128 @@
+# Tier-2 : Execute SSE-S3 encryption tests
+#
+# Requires the following keys in cephci.yaml
+#
+#   vault:
+#        url: http://<vault-server>/
+#        agent:
+#          auth: agent
+#          engine: transit
+#          role-id: <role-id>
+#          secret-id: <secret-id>
+#          prefix: /v1/<path>
+#
+---
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # Testing stage
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      config:
+        script-name: test_ss3_s3_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+        timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test
+      polarion-id: CEPH-83574615 # CEPH-83574617, CEPH-83575151
+
+  - test:
+      config:
+        script-name: test_ss3_s3_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+        timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_version_enabled
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test on a versiond bucket
+      polarion-id: CEPH-83574619 # CEPH-83575150
+
+  - test:
+      config:
+        script-name: test_ss3_s3_with_vault.py
+        config-file-name: test_sse_s3_per_object.yaml
+        timeout: 300
+      desc: test_sse_s3_per_object
+      module: sanity_rgw.py
+      name: sse-s3 per object encryption test
+      polarion-id: CEPH-83575153
+
+  - test:
+      config:
+        script-name: test_ss3_s3_with_vault.py
+        config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
+        timeout: 300
+      desc: test_sse_s3_per_object_with_versioning
+      module: sanity_rgw.py
+      name: test_sse_s3_per_object_with_versioning
+      polarion-id: CEPH-83575153
+
