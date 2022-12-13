@@ -510,6 +510,22 @@ suites:
       - rgw
       - stage-3
 
+  - name: "test-rgw-sse-s3-encryption-tech-preview"
+    suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
+    global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+    platform: "rhel-9"
+    rhbuild: "5.3"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack
+      - ibmc
+      - rgw
+      - stage-6
+
   - name: "test-rgw-ms-bucket-object-gc-policy-on-secondary"
     suite: "suites/pacific/rgw/tier-1_rgw_ms-bucket-object-gc-policy-on-secondary.yaml"
     global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
