@@ -84,6 +84,9 @@ def run(ceph_cluster, **kw):
         )
         client1 = clients[0]
         fs_details = fs_util.get_fs_info(client1)
+        rmclone_list = [
+            {"vol_name": default_fs, "subvol_name": f"clone_{x}"} for x in range(1, 6)
+        ]
         if not fs_details:
             fs_util.create_fs(client1, "cephfs")
         subvolumegroup = {"vol_name": default_fs, "group_name": "subvolgroup_1"}
@@ -158,6 +161,9 @@ def run(ceph_cluster, **kw):
         rmclone_list = [
             {"vol_name": default_fs, "subvol_name": f"clone_{x}"} for x in range(1, 6)
         ]
+        rmclone_cancel_list = [
+            {"vol_name": default_fs, "clone_name": f"clone_{x}"} for x in range(1, 6)
+        ]
         for clonevolume in rmclone_list:
             fs_util.remove_subvolume(client1, **clonevolume)
         log.info("Set clone threads to 2 and verify only 2 clones are in progress")
@@ -198,10 +204,16 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd="ceph config set mgr mgr/volumes/max_concurrent_clones 4"
         )
-        if rmclone_list in locals():
+        if locals().get("rmclone_cancel_list", None):
+            for clonevolume in rmclone_cancel_list:
+                fs_util.clone_cancel(
+                    client1, **clonevolume, force=True, validate=False, check_ec=False
+                )
+
+        if locals().get("rmclone_list", None):
             for clonevolume in rmclone_list:
                 fs_util.remove_subvolume(
-                    client1, **clonevolume, force=True, validate=False
+                    client1, **clonevolume, force=True, validate=False, check_ec=False
                 )
         log.info("Clean Up in progess")
         fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
