@@ -68,7 +68,7 @@ def run(ceph_cluster, **kw):
     container_id = [
         item["Names"][0]
         for item in json.loads(out)
-        if f"osd.{osd_id}" in item["Command"]
+        if item.get("Command") and f"osd.{osd_id}" in item["Command"]
     ][0]
     if not container_id:
         log.error("Failed to retrieve container id")
@@ -98,9 +98,9 @@ def run(ceph_cluster, **kw):
 
     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
     method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
-    method_should_succeed(wait_for_device, host, container_id, osd_id, action="remove")
+    method_should_succeed(wait_for_device, host, osd_id, action="remove")
     utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
-    method_should_succeed(wait_for_device, host, container_id, osd_id, action="add")
+    method_should_succeed(wait_for_device, host, osd_id, action="add")
     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
     do_rados_put(mon=client_node, pool=pool["pool_name"], nobj=1000)
     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
@@ -117,12 +117,11 @@ def run(ceph_cluster, **kw):
     return 0
 
 
-def wait_for_device(host, container_id, osd_id, action: str) -> bool:
+def wait_for_device(host, osd_id, action: str) -> bool:
     """
     Waiting for the device to be removed/added based on the action
     Args:
         host: host object
-        container_id: container name for running podman exec
         osd_id: osd id
         action: add/remove device path
     Returns:  True -> pass, False -> fail
@@ -133,7 +132,9 @@ def wait_for_device(host, container_id, osd_id, action: str) -> bool:
 
         out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
         container = [
-            item["Names"][0] for item in json.loads(out) if "ceph" in item["Command"]
+            item["Names"][0]
+            for item in json.loads(out)
+            if item.get["Command"] and "ceph" in item["Command"]
         ]
         if not container:
             log.error("Failed to retrieve container ids")
