@@ -1431,20 +1431,23 @@ def run_fio(**fio_args):
         runtime: fio runtime
         long_running(bool): True for long running required
         client_node: node where fio needs to be run
-        file_size: 'size' for file size
+        size: 'size' for file size/io size
     Prerequisite: fio package must have been installed on the client node.
     One of device_name, filename, (rbdname,pool) is required.
     """
     log.debug(f"Config Recieved for fio: {fio_args}")
 
     if fio_args.get("filename"):
-        opt_args = f"--filename={fio_args['filename']}/file --size={fio_args.get('file_size', '100M')}"
+        opt_args = f" --filename={fio_args['filename']}/file"
 
     elif fio_args.get("device_name"):
-        opt_args = f"--ioengine=libaio --filename={fio_args['device_name']}"
+        opt_args = f" --ioengine=libaio --filename={fio_args['device_name']}"
 
     else:
-        opt_args = f"--ioengine=rbd --rbdname={fio_args['image_name']} --pool={fio_args['pool_name']}"
+        opt_args = f" --ioengine=rbd --rbdname={fio_args['image_name']} --pool={fio_args['pool_name']}"
+
+    if fio_args.get("size"):
+        opt_args += f" --size={fio_args.get('size', '100M')}"
 
     long_running = fio_args.get("long_running", False)
     cmd = (
