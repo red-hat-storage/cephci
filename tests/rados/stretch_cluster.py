@@ -1,6 +1,7 @@
 import datetime
 import re
 import time
+from typing import Any
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
@@ -293,18 +294,25 @@ def run(ceph_cluster, **kw):
     return 0
 
 
-def wait_for_clean_pg_sets(rados_obj: RadosOrchestrator) -> bool:
+def wait_for_clean_pg_sets(rados_obj: RadosOrchestrator, timeout: Any = 9000) -> bool:
     """
     Waiting for up to 2.5 hours for the PG's to enter active + Clean state after stretch changes
     Automation for bug : [1] & [2]
     Args:
         rados_obj: RadosOrchestrator object to run commands
+        timeout: timeout in seconds or "unlimited"
 
     Returns:  True -> pass, False -> fail
 
     """
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
-    while end_time > datetime.datetime.now():
+    end_time = 0
+    if timeout == "unlimited":
+        condition = lambda x: "unlimited" == x
+    elif isinstance(timeout, int):
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        condition = lambda x: end_time > datetime.datetime.now()
+
+    while condition(end_time if isinstance(timeout, int) else timeout):
         flag = True
         status_report = rados_obj.run_ceph_command(cmd="ceph report")
 

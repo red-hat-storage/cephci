@@ -1033,3 +1033,19 @@ class RadosOrchestrator:
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
         return log_lines
+
+    def set_mclock_profile(self, profile, osd="osd"):
+        """Set OSD MClock Profile.
+
+        ceph config set osd_mclock_profile <profile_name>
+
+        profile names:
+        - balanced
+        - high_recovery_ops
+        - high_client_ops
+
+        Args:
+            profile: mclock profile name
+            osd: "osd" service by default or "osd.<Id>"
+        """
+        return self.node.shell([f"ceph config set {osd} osd_mclock_profile {profile}"])

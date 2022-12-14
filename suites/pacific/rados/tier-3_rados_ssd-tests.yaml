@@ -1,0 +1,191 @@
+# Suite contains tests related to OSD(s) on SSDs
+# Picking Cali and Clara systems, since it has SSDs, HDDs and NVmes
+# - ADD SSD OSDs
+# - Perform IO with replicated and EC pool
+# - ADD or remove OSDs.
+# - Remove replicated EC pool and verify the re-balance
+# - ADD HDD OSDs and perform IOS
+tests:
+  - test:
+      name: setup install pre-requisites
+      desc: deploy pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment on SSDs with spec
+      desc: Add OSD services on SSDs using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-11686
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: ssd_nodes
+                  placement:
+                    nodes:
+                      - node1
+                      - node2
+                      - node3
+                  spec:
+                    data_devices:
+                      rotational: 0
+
+  - test:
+      name: SSDs OSDs replacement with replicated and EC pools
+      module: test_osd_rebalance.py
+      desc: Remove and add osd to verify data migration from the pools
+      polarion-id: CEPH-9269
+      abort-on-fail: true
+      config:
+        mclock_profile: high_recovery_ops
+        timeout: unlimited                # provide "unlimited" or "<time in seconds>"
+        create_pools:
+          - create_pool:
+              pool_name: rpool_1
+              pg_num: 16
+              pool_type: replicated
+              size: 2
+              min_size: 2
+              rados_write_duration: 30
+              rados_read_duration: 15
+              byte_size: 256
+          - create_pool:
+              create: true
+              pool_name: ecpool_1
+              pool_type: erasure
+              pg_num: 16
+              byte_size: 256
+              k: 4
+              m: 2
+              plugin: jerasure
+              rados_write_duration: 30
+              rados_read_duration: 15
+              crush-failure-domain: osd
+        delete_pools:
+          - ecpool_1
+          - rpool_1
+
+  - test:
+      name: OSD deployment on SSDs and HDDs with spec
+      desc: Add OSD on SSDs and HDDs using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-9264
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: hdd_nodes
+                  placement:
+                    nodes:
+                      - node1
+                      - node2
+                      - node3
+                  spec:
+                    data_devices:
+                      rotational: 1
+
+  - test:
+      name: Rebalancing on SSDs HDDs osd with replicate pools
+      module: test_osd_rebalance.py
+      desc: Remove and add osd to verify data migration
+      polarion-id: CEPH-9210
+      abort-on-fail: true
+      config:
+        timeout: unlimited
+        mclock_profile: high_recovery_ops
+        create_pools:
+          - create_pool:
+              pool_name: rpool_01
+              pg_num: 16
+              rados_write_duration: 60
+              rados_read_duration: 30
+              byte_size: 256
+              pool_type: replicated
+        delete_pools:
+          - rpool_01
+
+  - test:
+      name: OSD deployment on single SSD
+      desc: Add OSD services on single SSD.
+      module: test_daemon.py
+      polarion-id: CEPH-9268
+      config:
+        steps:
+          - config:
+              command: add
+              service: osd
+              pos_args:
+                - node4
+                - "/dev/sdc"
+          - config:
+              command: add
+              service: osd
+              pos_args:
+                - node4
+                - "/dev/sdd"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: EC pool LC
+      module: rados_prep.py
+      polarion-id:
+      config:
+        ec_pool:
+          create: true
+          pool_name: test_ec_pool
+          pg_num: 16
+          k: 4
+          m: 2
+          plugin: jerasure
+          rados_write_duration: 60
+          rados_read_duration: 30
+          crush-failure-domain: osd
+      desc: Create pools and run IO

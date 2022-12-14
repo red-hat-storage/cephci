@@ -28,9 +28,11 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
+    rhbuild = config.get("rhbuild")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
+    timeout = config.get("timeout", 10800)
 
     log.info("Running create pool test case")
     if config.get("create_pools"):
@@ -52,7 +54,14 @@ def run(ceph_cluster, **kw):
         log.error("Failed to retrieve pool details")
         return 1
 
-    rados_obj.change_recover_threads(config=pool, action="set")
+    # Set recover threads configurations
+    if not rhbuild.startswith("6"):
+        rados_obj.change_recover_threads(config=pool, action="set")
+
+    # Set mclock_profile
+    if rhbuild.startswith("6") and config.get("mclock_profile"):
+        rados_obj.set_mclock_profile(profile=config["mclock_profile"])
+
     acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
     log.info(f"Acting set {acting_pg_set}")
     if not acting_pg_set:
@@ -89,24 +98,24 @@ def run(ceph_cluster, **kw):
     log.debug(
         f"device path  : {dev_path}, osd_id : {osd_id}, host.hostname : {host.hostname}"
     )
-    utils.set_osd_devices_unamanged(ceph_cluster, unmanaged=True)
+    utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
     method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
     utils.osd_remove(ceph_cluster, osd_id)
     if cr_pool.get("rados_put", False):
         do_rados_get(client_node, pool["pool_name"], 1)
 
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
     method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
     method_should_succeed(wait_for_device, host, osd_id, action="remove")
     utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
     method_should_succeed(wait_for_device, host, osd_id, action="add")
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
     do_rados_put(mon=client_node, pool=pool["pool_name"], nobj=1000)
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
     if cr_pool.get("rados_put", False):
         do_rados_get(client_node, pool["pool_name"], 1)
-    utils.set_osd_devices_unamanged(ceph_cluster, unmanaged=False)
+    utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
     rados_obj.change_recover_threads(config=pool, action="rm")
 
     if config.get("delete_pools"):
@@ -127,40 +136,51 @@ def wait_for_device(host, osd_id, action: str) -> bool:
     Returns:  True -> pass, False -> fail
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
-    while end_time > datetime.datetime.now():
-        flag = True
 
-        out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
-        container = [
-            item["Names"][0]
-            for item in json.loads(out)
-            if item.get("Command") and "ceph" in item["Command"]
-        ]
-        if not container:
-            log.error("Failed to retrieve container ids")
-            return False
+    def validate(_host, _osd_id):
+        containers = utils.get_containers(_host, "osd")
+        osd_container = ""
+        for _container in containers:
+            if f"osd.{_osd_id}" in _container["Command"]:
+                osd_container = _container["Names"][0]
+                break
 
-        volume_out, _ = host.exec_command(
-            sudo=True,
-            cmd=f"podman exec {container[0]} ceph-volume lvm list --format json",
-        )
-        dev_path = [
-            v[0]["devices"][0]
-            for k, v in json.loads(volume_out).items()
-            if str(k) == str(osd_id)
-        ]
-        log.info(f"dev_path  : {dev_path}")
-        if action == "remove":
-            if dev_path:
-                flag = False
+        cmd = "ceph-volume lvm list --format json"
+        if osd_container or containers:
+            lvm_list = utils.podman_exec(
+                _host, osd_container or containers[0]["Names"][0], cmd=cmd
+            )
         else:
-            if not dev_path:
-                flag = False
-        if flag:
-            log.info(f"The OSD {action} is completed.")
-            return True
-        log.info(
-            f"Waiting for OSD {osd_id} to {action}. checking status again in 2 minutes"
-        )
+            lvm_list, _ = host.exec_command(sudo=True, cmd=f"cephadm shell -- {cmd}")
+
+        _dev_path = ""
+        try:
+            lvm_list = json.loads(lvm_list)
+            for key, lvm in lvm_list.items():
+                if str(osd_id) == key:
+                    _dev_path = lvm[0]["devices"]
+                    break
+        except json.JSONDecodeError:
+            pass
+
+        return osd_container, _dev_path
+
+    while end_time > datetime.datetime.now():
+        # Initially container creation could take sometime.
         time.sleep(120)
+        container, device_path = validate(host, osd_id)
+
+        match action:
+            case "add":
+                if device_path and container:
+                    log.info(f"[osd.{osd_id}] {container}-{device_path} added..")
+                    return True
+            case "remove":
+                if not (device_path and container):
+                    log.info(f"[osd.{osd_id}] {container}-{device_path} removed..")
+                    return True
+        log.info(
+            f"waiting for the {action} to complete...\n"
+            f"container: {container}, device_path: {device_path}"
+        )
     return False

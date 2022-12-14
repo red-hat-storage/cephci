@@ -55,7 +55,7 @@ def run(ceph_cluster, **kw):
         log.debug(
             f"osd1 device path  : {dev_path}, osd_id : {osd_id}, host.hostname : {host.hostname}"
         )
-        utils.set_osd_devices_unamanged(ceph_cluster, unmanaged=True)
+        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         utils.osd_remove(ceph_cluster, osd_id)
@@ -83,7 +83,7 @@ def run(ceph_cluster, **kw):
 
         if pool.get("rados_put", False):
             do_rados_get(client_node, pool["pool_name"], 1)
-        utils.set_osd_devices_unamanged(ceph_cluster, unmanaged=False)
+        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
         rados_obj.change_recover_threads(config=pool, action="rm")
         if config.get("delete_pools"):
             for name in config["delete_pools"]:
