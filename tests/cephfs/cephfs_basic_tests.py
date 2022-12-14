@@ -19,6 +19,10 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        if not build.startswith(("3", "4", "5")):
+            if not fs_util.validate_fs_info(clients[0], "cephfs"):
+                log.error("FS info Validation failed")
+                return 1
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))

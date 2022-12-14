@@ -90,7 +90,7 @@ tests:
       name: Limit slow request details to cluster log
       module: test_slow_op_requests.py
       desc: Limit slow request details to cluster log
-      polarion-id: CEPH-83574884
+      polarion-id: CEPH-83574884, CEPH-83572697
       config:
         create_pools:
           - create_pool:

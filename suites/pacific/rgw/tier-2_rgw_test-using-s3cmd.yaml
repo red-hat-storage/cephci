@@ -140,7 +140,6 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_s3cmd.yaml
         timeout: 300
-        run-on-rgw: true
 
   - test:
       name: S3CMD large object download with GC
@@ -151,7 +150,6 @@ tests:
         script-name: ../s3cmd/test_large_object_gc.py
         config-file-name: ../../s3cmd/configs/test_large_object_gc.yaml
         timeout: 300
-        run-on-rgw: true
 
   - test:
       name: S3CMD bucket stats consistency
@@ -162,7 +160,6 @@ tests:
         script-name: ../s3cmd/test_bucket_stats.py
         config-file-name: ../../s3cmd/configs/test_bucket_stats.yaml
         timeout: 300
-        run-on-rgw: true
 
   - test:
       name: S3CMD object header size check
@@ -173,7 +170,6 @@ tests:
         script-name: ../s3cmd/test_header_size.py
         config-file-name: ../../s3cmd/configs/test_header_size.yaml
         timeout: 300
-        run-on-rgw: true
 
   - test:
       name: S3CMD tests
@@ -184,7 +180,6 @@ tests:
         script-name: ../s3cmd/test_rgw_ops_log.py
         config-file-name: ../../s3cmd/configs/test_rgw_opslog.yaml
         timeout: 300
-        run-on-rgw: true
 
   - test:
       name: Test single delete marker for versioned object using s3cmd
@@ -195,4 +190,3 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
         timeout: 300
-        run-on-rgw: true

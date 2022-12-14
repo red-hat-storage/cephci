@@ -84,7 +84,11 @@ def run(**kw):
     primary_client_node = primary_cluster.get_ceph_object("client").node
     secondary_rgw_node = secondary_cluster.get_ceph_object("rgw").node
     secondary_client_node = secondary_cluster.get_ceph_object("client").node
-    run_on_rgw = config.get("run-on-rgw", False)
+    run_on_rgw = (
+        True
+        if primary_cluster.rhcs_version.version[0] == 4
+        else config.get("run-on-rgw", False)
+    )
     if run_on_rgw:
         exec_from = test_site_node
         append_param = ""
@@ -145,7 +149,7 @@ def run(**kw):
     cmd_env = " ".join(config.get("env-vars", []))
     test_status = exec_from.exec_command(
         cmd=cmd_env
-        + "sudo python3 "
+        + "sudo venv/bin/python "
         + test_folder_path
         + script_dir
         + script_name
@@ -189,7 +193,7 @@ def run(**kw):
                     )
 
                 verify_out, err = verify_io_on_site_node.exec_command(
-                    cmd="sudo python3 "
+                    cmd="sudo venv/bin/python "
                     + test_folder_path
                     + lib_dir
                     + f"read_io_info.py -c {config_file_name}",
@@ -217,19 +221,26 @@ def set_test_env(config, rgw_node):
 
     log.info("flushing iptables")
     rgw_node.exec_command(cmd="sudo iptables -F", check_ec=False)
+    install_common = config.get("install_common", True)
+    if install_common:
+        rgw_node.exec_command(
+            cmd="yum install -y ceph-common", check_ec=False, sudo=True
+        )
     out, err = rgw_node.exec_command(cmd=f"ls -l {test_folder}", check_ec=False)
     if not out:
         rgw_node.exec_command(cmd="sudo mkdir " + test_folder)
         utils.clone_the_repo(config, rgw_node, test_folder_path)
-        rgw_node.exec_command(cmd="sudo yum install python3 -y", check_ec=False)
-        rgw_node.exec_command(
-            cmd="yum install -y ceph-common", check_ec=False, sudo=True
-        )
+        out, err = rgw_node.exec_command(cmd="ls -l venv", check_ec=False)
 
-        rgw_node.exec_command(cmd="sudo pip3 install --upgrade pip")
-        rgw_node.exec_command(
-            cmd=f"sudo pip3 install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
-        )
+        if not out:
+            rgw_node.exec_command(
+                cmd="yum install python3 -y --nogpgcheck", check_ec=False, sudo=True
+            )
+            rgw_node.exec_command(cmd="python3 -m venv venv")
+            rgw_node.exec_command(cmd="venv/bin/pip install --upgrade pip")
+            rgw_node.exec_command(
+                cmd=f"venv/bin/pip install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
+            )
 
 
 def copy_file_from_node_to_node(src_file, src_node, dest_node, dest_file):

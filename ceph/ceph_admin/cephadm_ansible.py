@@ -39,10 +39,16 @@ class CephadmAnsible:
 
     def install_cephadm_ansible(self):
         """Enable ansible rpm repos and install cephadm-ansible."""
-        self.admin.exec_command(
-            cmd=f"subscription-manager repos --enable={ANSIBLE_RPM}",
-            sudo=True,
-        )
+        if float(self.cluster._Ceph__rhcs_version) >= 6.0:
+            self.admin.exec_command(
+                cmd="yum install ansible-core -y --nogpgcheck",
+                sudo=True,
+            )
+        else:
+            self.admin.exec_command(
+                cmd=f"subscription-manager repos --enable={ANSIBLE_RPM}",
+                sudo=True,
+            )
         self.admin.exec_command(
             cmd=f"yum install {self.rpm} -y --nogpgcheck",
             sudo=True,

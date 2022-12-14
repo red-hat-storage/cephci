@@ -1,6 +1,5 @@
 import datetime
 import getpass
-import logging
 import os
 import random
 import re
@@ -148,8 +147,20 @@ def fuse_mount(fuse_clients, mounting_dir):
 
 def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     """
-    verify multisite sync status on primary
+    verify RGW multisite sync status
     """
+    ceph_version = verify_io_on_site_node.exec_command(cmd="ceph version")
+    ceph_version = ceph_version[0].split()[4]
+    if ceph_version == "pacific":
+        out = verify_io_on_site_node.exec_command(cmd="ceph orch ps | grep rgw")
+        rgw_process_name = out[0].split()[0]
+        out = verify_io_on_site_node.exec_command(
+            cmd=f"ceph config set client.{rgw_process_name} rgw_sync_lease_period 120"
+        )
+        out = verify_io_on_site_node.exec_command(cmd="ceph orch ls | grep rgw")
+        rgw_name = out[0].split()[0]
+        verify_io_on_site_node.exec_command(cmd=f"ceph orch restart {rgw_name}")
+        time.sleep(20)
     check_sync_status, err = verify_io_on_site_node.exec_command(
         cmd="sudo radosgw-admin sync status"
     )
@@ -435,52 +446,6 @@ def rc_verify(tc, RC):
 #     BOLD = '\033[1m'
 
 
-def configure_logger(test_name, run_dir):
-    """
-    Configures a new FileHandler for the root logger.
-
-    Args:
-        test_name: name of the test being executed. used for naming the logfile
-        run_dir: directory where logs are being placed
-
-    Returns:
-        URL where the log file can be viewed or None if the run_dir does not exist
-    """
-    if not os.path.isdir(run_dir):
-        log.error(
-            f"Run directory '{run_dir}' does not exist, logs will not output to file."
-        )
-        return None
-
-    close_and_remove_filehandlers()
-    log_format = logging.Formatter(log.log_format)
-
-    full_log_name = f"{test_name}.log"
-    test_logfile = os.path.join(run_dir, full_log_name)
-    log.info(f"Test logfile: {test_logfile}")
-
-    _handler = logging.FileHandler(test_logfile)
-    _handler.setFormatter(log_format)
-    log.logger.addHandler(_handler)
-
-    # error file handler
-    err_logfile = os.path.join(run_dir, f"{test_name}.err")
-    _err_handler = logging.FileHandler(err_logfile)
-    _err_handler.setFormatter(log_format)
-    _err_handler.setLevel(logging.ERROR)
-    log.logger.addHandler(_err_handler)
-
-    url_base = (
-        magna_url + run_dir.split("/")[-1]
-        if "/ceph/cephci-jenkins" in run_dir
-        else run_dir
-    )
-    log_url = "{url_base}/{log_name}".format(url_base=url_base, log_name=full_log_name)
-    log.debug("Completed log configuration")
-
-    return log_url
-
-
 def create_run_dir(run_id, log_dir=""):
     """
     Create the directory where test logs will be placed.
@@ -516,23 +481,6 @@ def create_run_dir(run_id, log_dir=""):
             raise
 
     return base_dir
-
-
-def close_and_remove_filehandlers(logger=logging.getLogger("cephci")):
-    """
-    Close FileHandlers and then remove them from the loggers handlers list.
-
-    Args:
-        logger: the logger in which to remove the handlers from, defaults to root logger
-
-    Returns:
-        None
-    """
-    handlers = logger.handlers[:]
-    for h in handlers:
-        if isinstance(h, logging.FileHandler):
-            h.close()
-            logger.removeHandler(h)
 
 
 def create_report_portal_session():
@@ -1284,7 +1232,6 @@ def tfacon(launch_id):
     auth_token = tfacon_cfg.get("auth_token")
     platform_url = tfacon_cfg.get("platform_url")
     tfa_url = tfacon_cfg.get("tfa_url")
-    re_url = tfacon_cfg.get("re_url")
     connector_type = tfacon_cfg.get("connector_type")
     cmd = (
         f"~/.local/bin/tfacon run --auth-token {auth_token} "
@@ -1292,7 +1239,6 @@ def tfacon(launch_id):
         f"--platform-url {platform_url} "
         f"--project-name {project_name} "
         f"--tfa-url {tfa_url} "
-        f"--re-url {re_url} -r "
         f"--launch-id {launch_id}"
     )
     log.info(cmd)
@@ -1460,37 +1406,59 @@ def perform_env_setup(config, node, ceph_cluster):
         )
 
 
-def run_fio(**kw):
+def run_mkfs(**kw):
+    """Create fs on a raw device using mkfs.
+
+    Args:
+        type: ext4/xfs
+        device_name: name of the device on which fs needs to be created.
+    """
+
+    long_running = kw.get("long_running", True)
+    cmd = f"mkfs -t {kw.get('type', 'xfs')} {kw.get('device_name')}"
+
+    return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=True)
+
+
+def run_fio(**fio_args):
     """Run IO using fio tool on given target.
 
     Args:
-        filename: Target device or file.
+        device_name: Target device
+        filename: Target file
         rbdname: rbd image name
         pool: name of rbd image pool
         runtime: fio runtime
         long_running(bool): True for long running required
-
+        client_node: node where fio needs to be run
+        size: 'size' for file size/io size
     Prerequisite: fio package must have been installed on the client node.
+    One of device_name, filename, (rbdname,pool) is required.
     """
-    sudo = False
-    if kw.get("filename"):
-        opt_args = f"--filename={kw['filename']}"
-        sudo = True
+    log.debug(f"Config Recieved for fio: {fio_args}")
+
+    if fio_args.get("filename"):
+        opt_args = f" --filename={fio_args['filename']}/file"
+
+    elif fio_args.get("device_name"):
+        opt_args = f" --ioengine=libaio --filename={fio_args['device_name']}"
+
     else:
-        opt_args = (
-            f"--ioengine=rbd --rbdname={kw['image_name']} --pool={kw['pool_name']}"
-        )
+        opt_args = f" --ioengine=rbd --rbdname={fio_args['image_name']} --pool={fio_args['pool_name']}"
 
-    opt_args += f" --runtime={kw.get('runtime', 120)}"
+    if fio_args.get("size"):
+        opt_args += f" --size={fio_args.get('size', '100M')}"
 
-    long_running = kw.get("long_running", False)
+    long_running = fio_args.get("long_running", False)
     cmd = (
         "fio --name=test-1  --numjobs=1 --rw=write"
-        " --bs=1M --iodepth=8 --fsync=32  --time_based"
-        f" --group_reporting {opt_args}"
+        " --iodepth=8 --fsync=32  --time_based"
+        f" --group_reporting --runtime={fio_args.get('runtime', 120)} {opt_args}"
     )
 
-    return kw["client_node"].exec_command(cmd=cmd, long_running=long_running, sudo=sudo)
+    return fio_args["client_node"].exec_command(
+        cmd=cmd, long_running=long_running, sudo=True
+    )
 
 
 def fetch_image_tag(rhbuild):

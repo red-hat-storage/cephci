@@ -65,6 +65,7 @@ tests:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_ordered.yaml
         timeout: 300
+        run-on-rgw: true
 
   # versioning tests
   - test:
@@ -76,6 +77,7 @@ tests:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_delete.yaml
         timeout: 300
+        run-on-rgw: true
 
   # resharding tests
   - test:
@@ -87,6 +89,7 @@ tests:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
         timeout: 500
+        run-on-rgw: true
   - test:
       name: Dynamic Resharding tests with version pre upgrade
       desc: Resharding test - dynamic
@@ -96,6 +99,7 @@ tests:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
         timeout: 500
+        run-on-rgw: true
 
   # lifecycle tests
   - test:
@@ -107,6 +111,7 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration.py
         config-file-name: test_lc_rule_prefix_and_tag.yaml
         timeout: 300
+        run-on-rgw: true
 
   - test:
       name: object expiration for non current version expiration pre upgrade
@@ -117,12 +122,14 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration.py
         config-file-name: test_lc_rule_prefix_non_current_days.yaml
         timeout: 300
+        run-on-rgw: true
 
   - test:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_radoslist.yaml
         timeout: 300
+        run-on-rgw: true
       desc: Test bucket stats and radoslist on all buckets
       module: sanity_rgw.py
       name: test bucket stats and radoslist

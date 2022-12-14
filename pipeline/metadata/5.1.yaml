@@ -505,7 +505,7 @@ suites:
       - stage-4
   #Cron pipeline test suite for 5.1 to run as schedule
   - name: "test-rados-pool-functionalities"
-    suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-pool-functionalities.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-8"
     rhbuild: "5.1"
@@ -611,7 +611,7 @@ suites:
       - dmfg
       - stage-2
   - name: "test-rados-stretch-cluster-upgrade"
-    suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
+    suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode-upgrade.yaml"
     global-conf: "conf/pacific/rados/11-node-cluster.yaml"
     platform: "rhel-8"
     rhbuild: "5.1"

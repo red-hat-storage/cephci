@@ -247,29 +247,22 @@ def setup_subscription_manager(
             config_ = get_cephci_config()
             command = "sudo subscription-manager register --force "
             if is_production or cloud_type.startswith("ibmc"):
-                command += "--serverurl=subscription.rhsm.redhat.com:443/subscription "
+                command += (
+                    "--serverurl=subscription.rhsm.redhat.com:443/subscription"
+                    " --baseurl=https://cdn.redhat.com "
+                )
                 username_ = config_["cdn_credentials"]["username"]
                 password_ = config_["cdn_credentials"]["password"]
-                pool_id = "8a85f99a7db4827d017dc5134ff800ba"
-
             else:
                 command += (
-                    "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription "
+                    "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription"
+                    " --baseurl=https://cdn.stage.redhat.com "
                 )
                 username_ = config_["stage_credentials"]["username"]
                 password_ = config_["stage_credentials"]["password"]
-                pool_id = "8a82d25480dceec60180dcf7d4d20d78"
 
-            command += f"--baseurl=https://cdn.redhat.com --username={username_}"
-            command += f" --password={password_}"
-
+            command += f"--username={username_} --password={password_}"
             ceph.exec_command(cmd=command, timeout=720, long_running=True)
-
-            ceph.exec_command(
-                cmd=f"sudo subscription-manager attach --pool {pool_id}",
-                timeout=720,
-                long_running=True,
-            )
             break
         except (KeyError, AttributeError):
             required_key = "stage_credentials"
@@ -319,6 +312,8 @@ def enable_rhel_rpms(ceph, distro_ver):
         "9": ["rhel-9-for-x86_64-appstream-rpms", "rhel-9-for-x86_64-baseos-rpms"],
     }
 
+    ceph.exec_command(sudo=True, cmd=f"subscription-manager release --set {distro_ver}")
+
     for repo in repos.get(distro_ver[0]):
         ceph.exec_command(
             sudo=True,
@@ -338,17 +333,6 @@ def enable_rhel_eus_rpms(ceph, distro_ver, cloud_type="openstack"):
     """
 
     eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
-
-    if not cloud_type.startswith("ibmc"):
-        # This pool ID would not work for production.
-        ceph.exec_command(
-            sudo=True,
-            cmd="subscription-manager attach --pool 8a99f9ad77a7d7290177ce3852fc0c44",
-            timeout=720,
-        )
-        ceph.exec_command(
-            sudo=True, cmd="subscription-manager repos --disable=*", long_running=True
-        )
 
     for repo in eus_repos.get(distro_ver[0]):
         ceph.exec_command(

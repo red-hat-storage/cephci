@@ -139,70 +139,60 @@ tests:
                 value: "8"
                 location_type: "host"
                 location_value: "host"
-      desc: Verify config changes for section & masks like device class, host etc
-
-  - test:
-      name: Monitor configuration - runtime changes
-      module: rados_prep.py
-      polarion-id:  CEPH-83573473
-      config:
-        Verify_config_parameters:
-          configurations:
-            - config-1:
+            - config-3:
                 section: "global"
                 name: "debug_mgr"
                 value: "10/10"
-            - config-2:
-                section: "osd.2"
-                name: "debug_ms"
-                value: "10/10"
-      desc: Verify config changes for mon config params during runtime
-
-  - test:
-      name: Monitor configuration - global and local changes
-      module: rados_prep.py
-      polarion-id: CEPH-83573471
-      config:
-        Verify_config_parameters:
-          configurations:
-            - config-1:
-                section: "global"
-                name: "debug_mgr"
-                value: "10/10"
-            - config-2:
+            - config-4:
                 section: "osd"
                 name: "osd_max_scrubs"
                 value: "5"
-            - config-3:
+            - config-5:
                 section: "osd.1"
                 name: "osd_max_scrubs"
                 value: "3"
-            - config-4:
+            - config-6:
                 section: "mds"
                 name: "mds_op_history_size"
                 value: "40"
-            - config-5:
+            - config-7:
                 section: "client.rgw"
                 name: "rgw_lc_debug_interval"
                 value: "1"
-      desc: Verify config source changes at both global and local levels
+            - config-8:
+                section: "global"
+                name: "debug_mgr"
+                value: "10/10"
+            - config-9:
+                section: "osd.2"
+                name: "debug_ms"
+                value: "10/10"
+      desc: Verify config changes for section & masks like device class, host etc
 
   - test:
-      name: Monitor configuration - mgr plugins
+      name: Monitor configuration - msgrv2 compression modes
       module: rados_prep.py
-      polarion-id: CEPH-83573475
+      polarion-id: CEPH-83574961
       config:
         Verify_config_parameters:
           configurations:
             - config-1:
-                section: "mgr"
-                name: "mgr/pg_autoscaler/log_level"
-                value: "debug"
+                section: "mon"
+                name: "ms_osd_compress_mode"
+                value: "snappy"
             - config-2:
-                section: "mgr"
-                name: "mgr/alerts/interval"
-                value: "15"
-      desc: Verify config source changes for mgr plugins
+                section: "mon"
+                name: "ms_osd_compress_min_size"
+                value: "512"
+            - config-3:
+                section: "mon"
+                name: "ms_osd_compress_mode"
+                value: "none"
+            - config-4:
+                section: "mon"
+                name: "ms_osd_compress_min_size"
+                value: "1024"
+      desc: Verify the health status of the cluster by randomly changing the compression configuration values
 
   - test:
       name: Replicated pool LC

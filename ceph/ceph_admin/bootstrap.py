@@ -5,7 +5,7 @@ from typing import Dict
 
 from ceph.ceph import ResourceNotFoundError
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
-from ceph.utils import setup_repos
+from ceph.utils import get_public_network, setup_repos
 from utility.log import Log
 from utility.utils import fetch_build_artifacts, get_cephci_config
 
@@ -293,6 +293,8 @@ class BootstrapMixin:
             else:
                 raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
 
+        #
+
         # apply-spec
         specs = args.get("apply-spec")
         if specs:
@@ -366,6 +368,16 @@ class BootstrapMixin:
         # https://docs.ceph.com/en/latest/rados/configuration/network-config-ref/
         public_nws = self.cluster.get_public_networks()
         cluster_nws = self.cluster.get_cluster_networks()
+
+        # Todo: Temporary fix issue for RHCEPHQE-6072
+        # Todo: get network address(es) from node rather than config.
+        # Todo: remove this code commit once we have network config from node_obj.
+        if config.get("update_public_nw", True):
+            public_nws = ",".join(
+                [public_nws, get_public_network(self.cluster.get_nodes())]
+            )
+            public_nws = ",".join(filter(lambda x: x, list(set(public_nws.split(",")))))
+
         if public_nws:
             self.shell(args=["ceph", "config", "set", "mon public_network", public_nws])
         if cluster_nws:

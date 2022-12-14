@@ -100,6 +100,7 @@ tests:
       module: sanity_rgw.py
       polarion-id: CEPH-83574066
       config:
+        run-on-rgw: true
         extra-pkgs:
           - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
         install_start_kafka: true
@@ -113,6 +114,7 @@ tests:
       polarion-id: CEPH-83574066
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml
         timeout: 300
@@ -123,6 +125,7 @@ tests:
       polarion-id: CEPH-83574066
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_multipart.yaml
         timeout: 300
@@ -135,6 +138,7 @@ tests:
       module: sanity_rgw.py
       polarion-id: CEPH-83574070
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_persistent_delete.yaml
         timeout: 300
@@ -145,6 +149,7 @@ tests:
       polarion-id: CEPH-83574070
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_persistent_copy.yaml
         timeout: 300
@@ -155,6 +160,7 @@ tests:
       polarion-id: CEPH-83574070
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_multipart.yaml
         timeout: 300
@@ -167,6 +173,7 @@ tests:
       module: sanity_rgw.py
       polarion-id: CEPH-83574064
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_delete.yaml
         timeout: 300
@@ -177,6 +184,7 @@ tests:
       polarion-id: CEPH-83574064
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_copy.yaml
         timeout: 300
@@ -187,6 +195,7 @@ tests:
       polarion-id: CEPH-83574064
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_multipart.yaml
         timeout: 300
@@ -199,6 +208,7 @@ tests:
       module: sanity_rgw.py
       polarion-id: CEPH-83574069
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_delete.yaml
         timeout: 300
@@ -209,6 +219,7 @@ tests:
       polarion-id: CEPH-83574069
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_copy.yaml
         timeout: 300
@@ -219,6 +230,7 @@ tests:
       polarion-id: CEPH-83574069
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_multipart.yaml
         timeout: 300

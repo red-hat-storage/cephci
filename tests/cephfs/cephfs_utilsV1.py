@@ -106,6 +106,26 @@ class FsUtils(object):
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
 
+    def validate_fs_info(self, client, fs_name="cephfs"):
+        """
+        Validates fs info command.
+        ceph fs volume info
+        if fs_name not given.it fetches the default cephfs info
+        Checks the mon Ips based on Cluster configuration in CI
+        Args:
+            client:
+            fs_name:
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph fs volume info {fs_name} --format json"
+        )
+        fs_info = json.loads(out)
+        mon_ips = self.get_mon_node_ips()
+        if not set([f"{i}:6789" for i in mon_ips]).issubset(fs_info["mon_addrs"]):
+            log.error("Mon IPs are not matching with FS Info IPs")
+            return False
+        return True
+
     def get_fs_details(self, client, **kwargs):
         """
         Gets all filesystems information
@@ -183,7 +203,13 @@ class FsUtils(object):
             fuse_cmd = f"ceph-fuse -n client.{kwargs.get('new_client_hostname', client.node.hostname)} {mount_point} "
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
-            client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
+            if kwargs.get("wait_for_mount"):
+                if not self.wait_for_cmd_to_succeed(
+                    client, cmd=fuse_cmd, timeout=300, interval=60
+                ):
+                    raise CommandFailed("Failed to mount Filesystem even after 5 min")
+            else:
+                client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
             if not self.wait_until_mount_succeeds(client, mount_point):
                 raise CommandFailed("Failed to appear in mount cmd even after 5 min")
             if kwargs.get("fstab"):
@@ -1237,6 +1263,7 @@ class FsUtils(object):
         endtime = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while datetime.datetime.now() < endtime:
             try:
+                sleep(20)
                 ceph_node.node.reconnect()
                 return
             except BaseException:
@@ -1245,7 +1272,6 @@ class FsUtils(object):
                         node=ceph_node.node.ip_address
                     )
                 )
-                sleep(5)
         raise RuntimeError(
             "Failed to reconnect to the node {node} after reboot ".format(
                 node=ceph_node.node.ip_address

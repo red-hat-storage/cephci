@@ -37,12 +37,8 @@ def run(ceph_cluster, **kw):
             )
             return 1
         client1 = clients[0]
-        host_list = [
-            client1.node.hostname.replace("node7", "node2"),
-            client1.node.hostname.replace("node7", "node3"),
-            client1.node.hostname.replace("node7", "node4"),
-            client1.node.hostname.replace("node7", "node5"),
-        ]
+        nodes_list = ceph_cluster.get_nodes()
+        host_list = [node.hostname for node in nodes_list[1:5]]
         hosts = " ".join(host_list[:2])
         fs_name = "cephfs_df_fs"
         client1.exec_command(

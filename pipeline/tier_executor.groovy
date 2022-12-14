@@ -7,6 +7,7 @@ def sharedLib
 def rhcephVersion
 def tags_list
 def tierLevel
+def tierNumber
 def stageLevel
 def currentStageLevel = ""
 def overrides
@@ -16,6 +17,8 @@ def final_stage = false
 def run_type
 def nodeName = "rhel-8-medium || ceph-qe-ci"
 def tags = ""
+def majorVersion
+def minorVersion
 
 def branch='origin/master'
 def repo='https://github.com/red-hat-storage/cephci.git'
@@ -45,7 +48,7 @@ node(nodeName) {
                 branches: [[name: branch]],
                 extensions: [[
                     $class: 'CleanBeforeCheckout',
-                        deleteUntrackedNestedRepositories: true
+                    deleteUntrackedNestedRepositories: true
                 ], [
                     $class: 'WipeWorkspace'
                 ], [
@@ -95,6 +98,12 @@ node(nodeName) {
         tags_list = tags.split(',') as List
         def index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
         tierLevel = tags_list.get(index)
+
+        tierNumber = tierLevel.split("-") as List
+        tierNumber = tierNumber[1] as Integer
+        if (tierNumber > 2){
+            error "Executions for tiers above tier 2 is not supported in this pipeline"
+        }
         def stageIndex = tags_list.findIndexOf { it ==~ /stage-\w+/ }
         currentStageLevel = tags_list.get(stageIndex)
 
@@ -114,8 +123,8 @@ node(nodeName) {
             overrides.put("build", "rc")
         }
 
-        if ("openstack" in tags_list){
-            def (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
+        if ("openstack" in tags_list || "openstack-only" in tags_list){
+            (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
             /*
                Read the release yaml contents to get contents,
                before other listener/Executor Jobs updates it.
@@ -123,6 +132,7 @@ node(nodeName) {
             releaseContent = sharedLib.readFromReleaseFile(
                 majorVersion, minorVersion, lockFlag=false
             )
+            println("releaseContent")
             println(releaseContent)
         }
 
@@ -153,7 +163,8 @@ node(nodeName) {
         testStages = fetchStages["testStages"]
         final_stage = fetchStages["final_stage"]
         println("final_stage : ${final_stage}")
-        currentBuild.description = "${params.rhcephVersion} - ${tierLevel} - ${currentStageLevel}"
+        ceph_version = buildArtifacts['ceph-version'] ?: buildArtifacts['recipe']['ceph-version']
+        currentBuild.description = "${params.rhcephVersion} - ${tierLevel} - ${currentStageLevel} \n ceph-version : ${ceph_version}"
     }
 
     parallel testStages
@@ -166,13 +177,42 @@ node(nodeName) {
             if ("openstack-only" in tags_list){
                 run_type = "PSI Only Run"
             }
-            sharedLib.sendEmail(
-                run_type,
-                testResults,
-                sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
-                tierLevel.capitalize(),
-                currentStageLevel.capitalize()
-            )
+            if (testResults && run_type != "Manual Run") {
+
+                testStatus = "SUCCESS"
+                if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
+                    currentBuild.result = "FAILED"
+                    buildStatus = "fail"
+                    testStatus = "FAILURE"
+                }
+                sharedLib.writeToResultsFile(
+                    ceph_version,
+                    tierLevel,
+                    currentStageLevel,
+                    testStatus,
+                    run_type,
+                    env.RUN_DISPLAY_URL
+                )
+                if(final_stage && tierLevel == "tier-2"){
+
+                    def testConsolidatedResults = sharedLib.readFromResultsFile(ceph_version)
+                    sharedLib.updateConfluencePage(
+                        majorVersion,
+                        minorVersion,
+                        ceph_version,
+                        run_type,
+                        testConsolidatedResults
+                    )
+                    sharedLib.sendConsolidatedEmail(
+                        run_type,
+                        testConsolidatedResults,
+                        sharedLib.buildArtifactsDetails(releaseContent, rhcephVersion, overrides.get("build")),
+                        majorVersion,
+                        minorVersion,
+                        ceph_version
+                    )
+                }
+            }
         }
 
         stage('postBuildAction') {
@@ -208,7 +248,10 @@ node(nodeName) {
                 buildStatus = "fail"
             }
             // Execute post tier based on run execution
-            if(!final_stage || (final_stage && tierLevel != "tier-2")){
+            // Do not trigger next stage of execution
+            // if the current stage was final_stage of a particular tier and tier is greater than 2
+            //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
+            if(!final_stage || (final_stage && tierNumber < 2)){
                 build ([
                     wait: false,
                     job: "rhceph-test-execution-pipeline",
@@ -267,6 +310,13 @@ node(nodeName) {
             writeYaml file: "${env.WORKSPACE}/${dirName}/metadata.yaml", data: content
             sharedLib.uploadResults(dirName, "${env.WORKSPACE}/${dirName}")
 
+            testStatus = "SUCCESS"
+            if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
+                currentBuild.result = "FAILED"
+                buildStatus = "fail"
+                testStatus = "FAILURE"
+            }
+
             def msgMap = [
                 "artifact": [
                     "type": "product-build",
@@ -305,7 +355,7 @@ node(nodeName) {
                 "test": [
                     "type": buildType,
                     "category": "functional",
-                    "result": currentBuild.currentResult,
+                    "result": testStatus,
                     "object-prefix": dirName,
                 ],
                 "recipe": buildArtifacts,
@@ -350,16 +400,12 @@ node(nodeName) {
             }
             overrides = writeJSON returnText: true, json: overrides
 
-            if ("FAIL" in sharedLib.fetchStageStatus(testResults)) {
-                currentBuild.result = "FAILED"
-                buildStatus = "fail"
-            }
             // Do not trigger next stage of execution
-                // 1) if the current tier executed is tier-0 and it failed
-                // 2) if the current stage was final_stage of a particular tier and tier is not tier-2
-                //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
+            // 1) if the current tier executed is tier-0 and it failed
+            // 2) if the current stage was final_stage of a particular tier and tier is greater than 2
+            //    because the pipeline supports execution only till tier-2, tier-3 onwards will be part of system test
             if((!(tierLevel == "tier-0" && buildStatus == "fail")) &&
-               (!final_stage || (final_stage && tierLevel != "tier-2"))){
+               (!final_stage || (final_stage && tierNumber < 2))){
                 build ([
                     wait: false,
                     job: "rhceph-test-execution-pipeline",

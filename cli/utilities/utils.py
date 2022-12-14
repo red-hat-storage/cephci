@@ -1,3 +1,6 @@
+import re
+
+
 def get_disk_list(node, expr=None, **kw):
     """Get disks used by ceph cluster
 
@@ -89,3 +92,89 @@ def get_custom_repo_url(base_url, cloud_type="openstack"):
         base_url += "compose/Tools/x86_64/os/"
 
     return base_url
+
+
+def get_nodes_by_ids(nodes, ids):
+    """
+    Fetch nodes using provided substring of nodes
+
+    Args:
+        nodes (list|tuple): CephNode objects
+        ids (list|tuple): node name list (eg., ['node1'])
+
+    Returns:
+        list of nodes identified by given ids
+    """
+    node_details = []
+    for name in ids:
+        node = get_node_by_id(nodes, name)
+        if node:
+            node_details.append(node)
+    return node_details
+
+
+def get_node_by_id(nodes, id):
+    """
+    Fetch node using provided node substring::
+        As per the naming convention used at VM creation, where each node.shortname
+        is framed with hyphen("-") separated string as below, please refer
+        ceph.utils.create_ceph_nodes definition
+            "ceph-<name>-node1-<roles>"
+            name: RHOS-D username or provided --instances-name
+            roles: roles attached to node in inventory file
+        In this method we use hyphen("-") appended to node_name string to try fetch exact node.
+        for example,
+            "node1" ----> "node1-"
+        Note: But however if node_name doesn't follow naming convention as mentioned in
+        inventory, the first searched node will be returned.
+        for example,
+            "node" ----> it might return any node which matched first, like node11.
+        return None, If this cluster has no nodes with this substring.
+
+    Args:
+        nodes: Cli obj containing node details
+        id: node1        # try to use node<Id>
+
+    Returns:
+        node instance (CephVMNode)
+    """
+    for node in nodes:
+        searches = re.findall(rf"{id}?\d*", node.hostname, re.IGNORECASE)
+        for ele in searches:
+            if ele == id:
+                return node
+    return None
+
+
+def build_cmd_from_args(seperator="=", **kw):
+    """This method checks from the dictionary the optional arguments
+    if present it adds them in "cmd" and returns cmd.
+
+    Args:
+        seperator: the separator for parameters, '=' by default
+        kw (dict) : takes a dictionary as an input.
+
+    Returns:
+        cmd (str): returns a command string.
+
+    eg:
+        Args:
+            kw={"uid": "<uid>", "purge-keys": True, "purge-data": True}
+            kw={"placement=": "<placement_groups>", "purge-data": True}
+        Returns:
+            " --uid <uid> --purge-keys --purge-data"
+            " --placment=<placement_groups> --purge-data"
+    """
+    if not kw:
+        return ""
+
+    cmd = ""
+    for k, v in kw.items():
+        if v is True:
+            cmd += f" {k}"
+        else:
+            if seperator and seperator in k:
+                cmd += f" --{k}{v}"
+            else:
+                cmd += f" --{k} {v}"
+    return cmd

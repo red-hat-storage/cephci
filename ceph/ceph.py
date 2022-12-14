@@ -1383,13 +1383,13 @@ class CephNode(object):
             )
         )
 
-        stdin, stdout, stderr = self.rssh().exec_command("dmesg")
+        self.rssh().exec_command("dmesg")
         self.rssh_transport().set_keepalive(15)
-        changepwd = (
-            "echo " + "'" + self.username + ":" + self.password + "'" + "|" + "chpasswd"
+        _, stdout, stderr = self.rssh().exec_command(
+            f"echo '{self.username}:{self.password}' | chpasswd"
         )
-        logger.info("Running command %s", changepwd)
-        stdin, stdout, stderr = self.rssh().exec_command(changepwd)
+        logger.info(stdout.readlines())
+        _, stdout, stderr = self.rssh().exec_command("echo 'root:passwd' | chpasswd")
         logger.info(stdout.readlines())
         self.rssh().exec_command("echo 120 > /proc/sys/net/ipv4/tcp_keepalive_time")
         self.rssh().exec_command("echo 60 > /proc/sys/net/ipv4/tcp_keepalive_intvl")

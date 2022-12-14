@@ -7,7 +7,7 @@
 # parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
 # platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
 #=====================================================================================
-
+suites:
 - name: "Core Feature Upstream Testing For DMFG"
   suite: "suites/quincy/cephadm/sanity-test.yaml"
   global-conf: "conf/3-node-cluster-with-1-client.yaml"
@@ -98,3 +98,40 @@
     - openstack
     - rbd
     - stage-2
+- name: "Upstream Testing For Rados Regression"
+  suite: "suites/quincy/upstream/tier-2_rados_basic_regression.yaml"
+  global-conf: "conf/quincy/rados/7-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rados
+    - stage-2
+- name: "Upstream Testing For Rados Stretch cluster"
+  suite: "suites/quincy/upstream/tier-2_rados_test-stretch-mode.yaml"
+  global-conf: "conf/quincy/rados/11-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rados
+    - stage-2
+- name: "Upstream Testing For CephFS Regression"
+  suite: "suites/quincy/cephfs/tier-1_cephfs_upstream-core-functionality.yaml"
+  global-conf: "conf/pacific/cephfs/tier-1_fs.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - cephfs
+    - stage-2
+

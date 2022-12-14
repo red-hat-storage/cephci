@@ -42,8 +42,8 @@ suites:
       - stage-1
 
   - name: "Testing RADOS basic regression scenarios"
-    suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
-    global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_basic_regression.yaml"
+    global-conf: "conf/quincy/rados/7-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -58,8 +58,8 @@ suites:
       - stage-3
 
   - name: "Testing RADOS EC Pool recovery"
-    suite: "suites/pacific/rados/tier-2_rados_ec-pool_recovery.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_ec-pool_recovery.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -74,8 +74,8 @@ suites:
       - stage-2
 
   - name: "Testing RADOS robust osd rebalance scenarios"
-    suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-osd-rebalance.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -90,8 +90,8 @@ suites:
       - stage-2
 
   - name: "RADOS regression testing for stretched Clusters"
-    suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-stretch-mode.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -106,8 +106,8 @@ suites:
       - stage-4
 
   - name: "RADOS regression for testing various pool functionalities"
-    suite: "suites/pacific/rados/tier-3_rados_test-pool-functionalities.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-pool-functionalities.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -122,24 +122,22 @@ suites:
       - stage-2
 
   - name: "RADOS regression testing for Scrubbing scenarios"
-    suite: "suites/pacific/rados/tier-3_rados_test-scrubbing.yaml"
-    global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-scrubbing.yaml"
+    global-conf: "conf/quincy/rados/7-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
       openstack: "conf/inventory/rhel-9-latest.yaml"
-      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
     metadata:
       - schedule
-      - tier-3
+      - tier-2
       - openstack-only
-      - ibmc
       - rados
       - stage-1
 
   - name: "Testing RADOS regression for ec pool osd rebalance"
-    suite: "suites/pacific/rados/tier-3_rados_test-ecpool-osd-rebalance.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-ecpool-osd-rebalance.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -154,8 +152,8 @@ suites:
       - stage-2
 
   - name: "Testing RADOS regression for in-progress osd rebalance"
-    suite: "suites/pacific/rados/tier-3_rados_test-osd-inprogress-rebalance.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-osd-inprogress-rebalance.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -170,8 +168,8 @@ suites:
       - stage-2
 
   - name: "Testing RADOS regression for Stretch mode upgrade"
-    suite: "suites/pacific/rados/tier-3_rados_test-stretch-mode-upgrade.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-stretch-mode-upgrade.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -186,24 +184,22 @@ suites:
       - stage-1
 
   - name: "RADOS regression testing for Mon DB trimming"
-    suite: "suites/pacific/rados/tier-3_rados_test-mon-db-trimming.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-mon-db-trimming.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
       openstack: "conf/inventory/rhel-9-latest.yaml"
-      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
     metadata:
       - sanity
       - tier-2
-      - openstack
-      - ibmc
+      - openstack-only
       - rados
       - stage-4
 
   - name: "RADOS regression testing osd rebalance with many pools"
-    suite: "suites/pacific/rados/tier-3_rados_test-osd-rebalance.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    suite: "suites/quincy/rados/tier-2_rados_test-osd-rebalance-many-pools.yaml"
+    global-conf: "conf/quincy/rados/11-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -232,6 +228,22 @@ suites:
       - ibmc
       - rgw
       - stage-1
+
+  - name: "test-rgw-sse-s3-encryption-GA"
+    suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
+    global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+    platform: "rhel-9"
+    rhbuild: "5.3"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - rgw
+      - stage-2
 
   - name: "Testing RBD basic regression scenarios"
     suite: "suites/quincy/rbd/tier-1_rbd.yaml"
@@ -290,10 +302,9 @@ suites:
       openstack: "conf/inventory/rhel-9-latest.yaml"
       ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
     metadata:
-      - sanity
+      - schedule
       - tier-2
-      - openstack
-      - ibmc
+      - openstack-only
       - rbd
       - stage-1
 
@@ -491,8 +502,8 @@ suites:
       - stage-2
 
   - name: "RGW STS functionality testing"
-    suite: "suites/pacific/rgw/tier-1-extn_rgw.yaml"
-    global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+    suite: "suites/quincy/rgw/tier-1-extn_rgw.yaml"
+    global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -748,7 +759,7 @@ suites:
       - stage-1
 
   - name: "Tier-2 RGW bucket notification on the latest development build"
-    suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications.yaml"
+    suite: "suites/quincy/rgw/tier-2_rgw_test_bucket_notifications.yaml"
     global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
@@ -858,3 +869,35 @@ suites:
       - ibmc
       - rgw
       - stage-3
+
+  - name: "tier-1_rgw_ms_upgrade_5_to_6_latest"
+    suite: "suites/quincy/rgw/tier-1_rgw_ms_upgrade_5_to_6_latest.yaml"
+    global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack
+      - ibmc
+      - rgw
+      - stage-4
+
+  - name: "tier-1_rgw_upgrade_5-2GA_to_6x_latest"
+    suite: "suites/quincy/rgw/tier-1_rgw_upgrade_5-2GA_to_6x_latest.yaml"
+    global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack
+      - ibmc
+      - rgw
+      - stage-4

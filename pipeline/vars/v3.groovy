@@ -99,6 +99,9 @@ def sendEmail(
     if (artifactDetails.repository) {
         body += "<tr><td>Container Image</td><td>${artifactDetails.repository}</td></tr>"
     }
+    if (artifactDetails.rp_link) {
+        body += "<tr><td>Report Portal</td><td>${artifactDetails.rp_link}</td></tr>"
+    }
     if (artifactDetails.log) {
         body += "<tr><td>Log</td><td>${artifactDetails.log}</td></tr>"
     } else {
@@ -225,6 +228,9 @@ def sendConsolidatedEmail(
     }
     if (artifactDetails.repository) {
         body += "<tr><td>Container Image</td><td>${artifactDetails.repository}</td></tr>"
+    }
+    if (artifactDetails.rp_link) {
+        body += "<tr><td>Report Portal</td><td>${artifactDetails.rp_link}</td></tr>"
     }
     if (artifactDetails.log) {
         body += "<tr><td>Log</td><td>${artifactDetails.log}</td></tr>"
@@ -455,6 +461,11 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
     def msgMap = getCIMessageMap()
     def credFile = "${sourceDir}/config.json"
 
+    def suitesWithStatus = [:]
+    runProperties['results'].each{suiteName, suiteStatus->
+        suitesWithStatus[suiteName] = suiteStatus['status']
+    }
+
     // Configure rp_preproc launch
     def launchConfig = [
         "name": "${runProperties['version']} - ${runProperties['stage']}",
@@ -463,6 +474,7 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
             "ceph_version": runProperties["ceph_version"],
             "rhcs": runProperties["version"].split('-')[1],
             "tier": runProperties["stage"],
+            "suites": suitesWithStatus,
         ]
     ]
     if ( stageLevel ) {
@@ -472,8 +484,7 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
     writeJSON file: credFile, json: credPreproc
 
     // Upload xml file to report portal
-    sh(script: ".venv/bin/python utility/rp_client.py -c ${credFile} -d ${sourceDir}/payload")
-
+    rp_launch_id = sh(returnStdout: true, script: ".venv/bin/python utility/rp_client.py -c ${credFile} -d ${sourceDir}/payload")
     // Upload test result to polarion using xUnit Xml file
     withCredentials([
         usernamePassword(
@@ -494,6 +505,10 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
             sh script: "${localCmd}"
         }
     }
+    def launch_rgex = (rp_launch_id =~ /launch id: (\d+)/)
+	if(launch_rgex){
+	return launch_rgex[0][1]
+	}
 }
 
 def fetchStageStatus(def testResults) {

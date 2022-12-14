@@ -109,6 +109,8 @@ def upload_logs(args):
         launch.finish()
     return_obj["launches"] = rportal.launches.list
     log.info("RETURN OBJECT: %s", return_obj)
+    # Do not Remove this print statement as it is consumed in groovy file
+    print(f"launch id: {launch.launch_id}")
     tfacon(launch.launch_id)
     return return_obj
 
@@ -232,7 +234,7 @@ def generate_log_events(file_handler):
 
 
 def match_start_line(line):
-    matched = re.match(r"\d\d\d\d-\d\d-\d\d\ \d\d:\d\d:\d\d", line)
+    matched = re.match(r"\d\d\d\d-\d\d-\d\d\ \d\d:\d\d:\d\d,\d\d\d", line)
     if matched:
         matchThis = matched.group()
     else:

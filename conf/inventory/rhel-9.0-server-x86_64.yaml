@@ -8,12 +8,11 @@ instance:
 
   setup: |
     #cloud-config
-
-    ssh_pwauth: True
+    ssh_pwauth: true
     disable_root: false
 
     groups:
-        - cephuser
+      - cephuser
 
     users:
       - name: cephuser
@@ -29,7 +28,7 @@ instance:
       list: |
         root:passwd
         cephuser:pass123
-      expire: False
+      expire: false
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers

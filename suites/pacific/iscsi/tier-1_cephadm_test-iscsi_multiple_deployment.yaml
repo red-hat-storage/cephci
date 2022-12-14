@@ -1,0 +1,121 @@
+#===============================================================================================
+#--------------------------------------
+# Conf: conf/pacific/cephadm/sanity-cephadm.yaml
+# Verifies : https://bugzilla.redhat.com/show_bug.cgi?id=2007516
+#
+# 1. Deploy 5.x cluster with mgr,mon, osd services
+# 2. Deploy ISCSI service
+# 3. Check "Ceph orch ls" for service status
+# 4. Perform Removal of service and deploy ISCSI for 2-3 times
+# 5. Check the cluster health and Ceph orch ls
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Create replicated pool
+      desc: Add pool for ISCSI service
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args: # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - iscsi
+          - "3"
+          - "3"
+          - replicated
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable rbd application on pool
+      desc: enable rbd on iscsi pool
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args: # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - iscsi
+          - rbd
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Deploy and Remove ISCSI Service multiple times
+      desc: Deploys and remove ISCSI multiple times to verify no crash
+      module: test_iscsi_multiple_removal_deployment.py
+      polarion-id: CEPH-83575352
+      config:
+        command: apply
+        service: iscsi
+        base_cmd_args: # arguments to ceph orch
+          verbose: true
+        pos_args:
+          - iscsi                 # name of the pool
+          - api_user              # name of the API user
+          - api_pass              # password of the api_user.
+        args:
+          trusted_ip_list: #it can be used both as keyword/positional arg in 5.x
+            - node1
+            - node6
+          placement:
+            nodes:
+              - node1
+              - node6                   # either label or node.
+      destroy-cluster: false
+      abort-on-fail: true

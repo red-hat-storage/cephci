@@ -42,8 +42,6 @@ from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
     ReportPortal,
-    close_and_remove_filehandlers,
-    configure_logger,
     create_run_dir,
     create_unique_test_name,
     email_results,
@@ -160,6 +158,7 @@ Options:
 """
 log = Log()
 test_names = []
+run_summary = {}
 
 
 @retry(LibcloudError, tries=5, delay=15)
@@ -395,6 +394,9 @@ def run(args):
     log_directory = args.get("--log-dir")
     post_to_report_portal = args.get("--report-portal")
 
+    # jenkin job url
+    jenkin_job_url = os.environ.get("BUILD_URL")
+
     run_id = generate_unique_id(length=6)
     rp_logger = None
     if post_to_report_portal:
@@ -448,10 +450,11 @@ def run(args):
 
     platform = args["--platform"]
     build = args.get("--build")
+    upstream_build = args.get("--upstream-build", None)
 
     if build and build not in ["released"] and not ignore_latest_nightly_container:
         base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-            build, rhbuild, platform, args.get("--upstream-build", None)
+            build, rhbuild, platform, upstream_build
         )
 
     store = args.get("--store") or False
@@ -555,7 +558,7 @@ def run(args):
 
     distro = ", ".join(list(set(distro)))
     if not ceph_version and build == "upstream":
-        ceph_version.append(args.get("--upstream-build", None))
+        ceph_version.append(upstream_build)
     ceph_version = ", ".join(list(set(ceph_version)))
     ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
 
@@ -574,29 +577,56 @@ def run(args):
         suite_file_name = " ".join(suite_file_name.split("_"))
         _log = run_dir.replace("/ceph/", "http://magna002.ceph.redhat.com/")
 
-        launch_name = f"RHCS {rhbuild} - {suite_file_name}"
+        launch_name = (
+            f"Upstream {upstream_build} - {suite_file_name}"
+            if build == "upstream"
+            else f"RHCS {rhbuild} - {suite_file_name}"
+        )
         launch_desc = textwrap.dedent(
             """
-            ceph version: {ceph_version}
-            ceph-ansible version: {ceph_ansible_version}
-            compose-id: {compose_id}
-            invoked-by: {user}
-            log-location: {_log}
+            "jenkin-url": {jenkin_job_url},
+            "build": {rhbuild},
+            "ceph-version": {ceph_version},
+            "ceph-ansible-version": {ceph_ansible_version},
+            "base_url": {base_url},
+            "suite-name": {suite_name},
+            "conf-file": {glb_file},
+            "polarion-project-id": "CEPH",
+            "distro": {distro},
+            "container-registry": {docker_registry},
+            "container-image": {docker_image},
+            "container-tag": {docker_tag},
+            "compose-id": {compose_id},
+            "log-dir": {_log},
+            "run-id": {run_id},
+            "cloud-type": {cloud_type},
+            "instance-name": {instances_name},
             """.format(
+                jenkin_job_url=jenkin_job_url,
+                rhbuild=rhbuild,
                 ceph_version=ceph_version,
                 ceph_ansible_version=ceph_ansible_version,
-                user=getuser(),
+                base_url=base_url,
+                suite_name=suite_name,
+                glb_file=glb_file,
+                distro=distro,
+                docker_registry=docker_registry,
+                docker_image=docker_image,
+                docker_tag=docker_tag,
                 compose_id=compose_id,
                 _log=_log,
+                run_id=run_id,
+                cloud_type=cloud_type,
+                instances_name=instances_name,
             )
         )
         if docker_image and docker_registry and docker_tag:
             launch_desc = launch_desc + textwrap.dedent(
                 """
-                docker registry: {docker_registry}
-                docker image: {docker_image}
-                docker tag: {docker_tag}
-                invoked-by: {user}
+                "docker-registry": {docker_registry}
+                "docker-image": {docker_image}
+                "docker-tag": {docker_tag}
+                "invoked-by": {user}
                 """.format(
                     docker_registry=docker_registry,
                     docker_image=docker_image,
@@ -612,6 +642,7 @@ def run(args):
                 "tier": qe_tier,
                 "ceph_version": ceph_version,
                 "os": platform if platform else "-".join(rhbuild.split("-")[1:]),
+                "job_url": jenkin_job_url,
             }
         )
 
@@ -650,6 +681,10 @@ def run(args):
         details["duration"] = "0s"
         details["status"] = "Not Executed"
         details["comments"] = var.get("comments", str())
+        details["jenkin-url"] = jenkin_job_url
+        details["cloud-type"] = cloud_type
+        details["instance-name"] = instances_name
+        details["invoked-by"] = trigger_user
         return details
 
     if reuse is None:
@@ -745,7 +780,7 @@ def run(args):
         unique_test_name = create_unique_test_name(tc["name"], test_names)
         test_names.append(unique_test_name)
 
-        tc["log-link"] = configure_logger(unique_test_name, run_dir)
+        tc["log-link"] = log.configure_logger(unique_test_name, run_dir)
 
         mod_file_name = os.path.splitext(test_file)[0]
         test_mod = importlib.import_module(mod_file_name)
@@ -917,26 +952,32 @@ def run(args):
     )
     log.info("\nAll test logs located here: {base}".format(base=url_base))
 
-    close_and_remove_filehandlers()
+    log.close_and_remove_filehandlers()
 
     test_run_metadata = {
+        "jenkin-url": jenkin_job_url,
         "build": rhbuild,
-        "polarion-project-id": "CEPH",
-        "suite-name": suite_name,
-        "distro": distro,
         "ceph-version": ceph_version,
         "ceph-ansible-version": ceph_ansible_version,
         "base_url": base_url,
+        "suite-name": suite_name,
+        "conf-file": glb_file,
+        "polarion-project-id": "CEPH",
+        "distro": distro,
         "container-registry": docker_registry,
         "container-image": docker_image,
         "container-tag": docker_tag,
         "compose-id": compose_id,
         "log-dir": run_dir,
         "run-id": run_id,
+        "cloud-type": cloud_type,
+        "instance-name": instances_name,
+        "invoked-by": trigger_user,
     }
 
     if post_to_report_portal:
         rp_logger.finish_launch()
+        run_summary["rp_link"] = rp_logger.client.get_launch_ui_url()
 
     if xunit_results:
         create_xunit_results(suite_name, tcs, test_run_metadata)
@@ -952,6 +993,8 @@ def run(args):
         "total": f"{int(duration[0])} mins, {int(duration[1])} secs",
     }
     info = {"status": "Pass"}
+    with open(f"{run_dir}/run_summary.json", "w", encoding="utf-8") as f:
+        json.dump(run_summary, f, ensure_ascii=False, indent=4)
     test_res = {
         "result": tcs,
         "run_id": run_id,

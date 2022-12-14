@@ -1,0 +1,44 @@
+---
+version_id: 9.1
+id: rhel
+instance:
+  create:
+    image-name: rhel-91-server-released
+    network_name: sn-01-cephqe-pvt-network
+    private_key: ibmc-shared
+    group_access: cephqe-sec-grp-all-access
+    profile: bx2-2x8
+
+  setup:  |
+    #cloud-config
+    ssh_pwauth: true
+    disable_root: false
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCyaKj0phxJTD2ZblCbujHOlH3KWx4WlEUdKWxftfBarFbN9tztClUXC4WtSDXsJeith9/JaiXkJMNulSEmZ1+WfpaS1CKiBxyy/6lzwaiqnphiIJIZu7mQTOydcc0ACIE1g/sm0yBpOQRaa28BFAlQxN5IFVzQqws1M3uSYU9iyOj8CZagnavIHMPfw7wOVX+ncUl+YIySRgsjbtrLPm1cfEcutpT8SphNOu6mKDq5jN9jVqn5j+2KxAmJRjkKmEyNXrzhTUgdBrxfJ877JkeyNfjzaptX29ms1LzJxVPV0pitJ7gHirc3LlZ8PihIdWR52Ts2BwcF86/2CB39nw+NCXSICbGmWues0m5BjIC7utGERA/fU5eE7CnTKFuUaONkL7CGqQN/7bak0E9IUJqzyRswDub93j9QyXfV305wHF4nfOeHLDKbcQHgLM1/rjs6BQMZvJlS+f+2kJHMfFD9UYCrnhdMpLXTvJ8amlF9J+HUhu7zLPNuEjJf9I4aNb0= psathyan@psathyan.remote.csb
+
+    chpasswd:
+      users:
+        - name: cephuser
+          password: $y$j9T$PxJ09a3yVNnPj0Veb8QDT.$bdWoyLq1IdGwlimyJC98P5OsSFE2w7.9ac68z4eoa01
+        - name: root
+          password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
+      expire: false
+
+    runcmd:
+      - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - curl -k -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem https://10.245.4.89/.ceph-qe-ca.pem
+      - curl -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://10.245.4.89/.RH-IT-Root-CA.crt
+      - update-ca-trust
+      - yum-config-manager --add-repo https://10.245.4.89/repos/9/lab-extras.repo
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - touch /ceph-qa-ready
