@@ -134,7 +134,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node6
+        node: node8
         install_packages:
           - ceph-common
         copy_admin_keyring: true
