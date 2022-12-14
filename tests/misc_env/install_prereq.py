@@ -95,6 +95,7 @@ def install_prereq(
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
     log.info("cloud config to completed on " + ceph.hostname)
+    _is_client = len(ceph.role.role_list) == 1 and "client" in ceph.role.role_list
 
     # Update certs
     update_ca_cert(
@@ -142,7 +143,8 @@ def install_prereq(
             else:
                 log.info("Skipped enabling the RHEL RPM's provided by Subscription")
 
-        if repo:
+        # todo: check if thge additional repos are needed for client setup
+        if repo and not _is_client:
             setup_addition_repo(ceph, repo)
 
         ceph.exec_command(cmd="sudo yum -y upgrade", check_ec=False)
@@ -170,7 +172,7 @@ def install_prereq(
 
         if skip_enabling_rhel_rpms and skip_subscription:
             # Ansible is required for RHCS 4.x
-            if distro_ver.startswith("8"):
+            if distro_ver.startswith("8") and not _is_client:
                 # TODO(vamahaja): Temporary changes. Revert ansible package with latest epel repo.
                 ansible_pkg = (
                     "http://download-node-02.eng.bos.redhat.com/nightly/rhel-8/ANSIBLE/latest-ANSIBLE-2-RHEL-8/"
@@ -182,7 +184,7 @@ def install_prereq(
                     check_ec=False,
                 )
 
-            if distro_ver.startswith("7"):
+            if distro_ver.startswith("7") and not _is_client:
                 ceph.exec_command(
                     sudo=True,
                     cmd="yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
@@ -190,7 +192,7 @@ def install_prereq(
                 )
                 ceph.exec_command(sudo=True, cmd="yum install -y ansible-2.9.27-1.el7")
 
-        if ceph.role == "client":
+        if _is_client:
             ceph.exec_command(cmd="sudo yum install -y attr gcc", long_running=True)
             ceph.exec_command(cmd="sudo pip install crefi", long_running=True)
 

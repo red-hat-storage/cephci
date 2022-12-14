@@ -49,10 +49,68 @@ def add(cls, config: Dict) -> None:
     nodes_ = config.get("nodes", config.get("node"))
     if nodes_:
         if not isinstance(nodes_, list):
-            nodes = [nodes_]
+            nodes_ = [{nodes_: {}}]
 
         def setup(host):
-            node = get_node_by_id(cls.cluster, host)
+            rhcs_version = str(
+                [host[entry].get("release", "default") for entry in host][0]
+            )
+            name = [entry for entry in host][0]
+            node = get_node_by_id(cls.cluster, name)
+
+            rhel_version = node.distro_info["VERSION_ID"][0]
+            log.debug(
+                f"Passed RHCS version is : {rhcs_version} for host : {node.hostname}\n"
+                f"with RHEL major version as : {rhel_version}"
+            )
+            enable_cmd = "subscription-manager repos --enable="
+            disable_all = [
+                r"subscription-manager repos --disable=*",
+                r"yum-config-manager --disable \*",
+            ]
+            cmd = 'subscription-manager repos --list-enabled | grep -i "Repo ID"'
+            cdn_ceph_repo = {
+                "7": {"4": ["rhel-7-server-rhceph-4-tools-rpms"]},
+                "8": {
+                    "4": ["rhceph-4-tools-for-rhel-8-x86_64-rpms"],
+                    "5": ["rhceph-5-tools-for-rhel-8-x86_64-rpms"],
+                },
+                "9": {"5": ["rhceph-5-tools-for-rhel-9-x86_64-rpms"]},
+            }
+
+            rhel_repos = {
+                "7": ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"],
+                "8": [
+                    "rhel-8-for-x86_64-baseos-rpms",
+                    "rhel-8-for-x86_64-appstream-rpms",
+                ],
+                "9": [
+                    "rhel-9-for-x86_64-appstream-rpms",
+                    "rhel-9-for-x86_64-baseos-rpms",
+                ],
+            }
+
+            # Collecting already enabled repos
+            out, _ = node.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            enabled_repos = list()
+            if out:
+                out = out.strip().split("\n")
+                for entry in out:
+                    repo = entry.split(":")[-1].strip()
+                    enabled_repos.append(repo)
+            log.debug(f"Enabled repos on the system are : {enabled_repos}")
+            if rhcs_version != "default":
+                # Disabling all the repos and enabling the ones we need to install the ceph client
+                for cmd in disable_all:
+                    node.exec_command(sudo=True, cmd=cmd, timeout=1200)
+
+                # Enabling the required CDN repos
+                for repos in rhel_repos[rhel_version]:
+                    cmd = f"{enable_cmd}{repos}"
+                    node.exec_command(sudo=True, cmd=cmd)
+                for repos in cdn_ceph_repo[rhel_version][rhcs_version]:
+                    cmd = f"{enable_cmd}{repos}"
+                    node.exec_command(sudo=True, cmd=cmd)
 
             # Copy the keyring to client
             node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
@@ -95,8 +153,18 @@ def add(cls, config: Dict) -> None:
             if config.get("store-keyring"):
                 put_file(cls.installer, client_file, cnt_key, "w")
 
+            if rhcs_version != "default":
+                for cmd in disable_all:
+                    node.exec_command(sudo=True, cmd=cmd)
+                # Enabling all the repos that were disabled to install the ceph client
+                for repos in enabled_repos:
+                    cmd = f"{enable_cmd}{repos}"
+                    node.exec_command(sudo=True, cmd=cmd)
+
         with parallel() as p:
-            for node in nodes:
+            for node in nodes_:
+                if not isinstance(node, dict):
+                    node = {node: {}}
                 p.spawn(
                     setup,
                     node,
