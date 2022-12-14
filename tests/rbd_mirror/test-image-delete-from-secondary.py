@@ -44,7 +44,6 @@ def run(**kw):
         imagespec = poolname + "/" + imagename
 
         mirror1.initial_mirror_config(
-            mirror1,
             mirror2,
             poolname=poolname,
             imagename=imagename,
