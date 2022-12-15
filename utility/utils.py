@@ -149,7 +149,7 @@ def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     """
     verify RGW multisite sync status
     """
-    ceph_version = verify_io_on_site_node.exec_command(cmd="ceph version")
+    ceph_version = verify_io_on_site_node.exec_command(cmd="sudo ceph version")
     ceph_version = ceph_version[0].split()[4]
     if ceph_version == "pacific":
         out = verify_io_on_site_node.exec_command(cmd="ceph orch ps | grep rgw")
