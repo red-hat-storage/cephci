@@ -26,16 +26,21 @@ def run(ceph_cluster, **kw):
           output, error   returned by the command.
     """
     config = kw.get("config")
+    tests = config.get("steps", [{"config": config}])
 
-    # Manage Ceph using ceph-admin orchestration
-    command = config.pop("command")
-    log.info("Executing service %s service" % command)
-    daemon = Daemon(cluster=ceph_cluster, **config)
+    for test in tests:
+        # Manage Ceph daemon using ceph-admin daemon orchestration commands
+        _test_cfg = test["config"]
+        command = _test_cfg.pop("command")
+        log.info("Executing service %s service" % command)
+        daemon = Daemon(cluster=ceph_cluster, **_test_cfg)
 
-    try:
-        method = fetch_method(daemon, command)
-        method(config)
-    finally:
-        # Get cluster state
-        get_cluster_state(daemon)
+        try:
+            method = fetch_method(daemon, command)
+            method(_test_cfg)
+        except Exception as err:
+            log.error(err)
+        finally:
+            # Get cluster state
+            get_cluster_state(daemon)
     return 0
