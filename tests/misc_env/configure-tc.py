@@ -25,7 +25,9 @@ def exec_command(
 def get_network_device(node: CephNode) -> str:
     """Return the interface configured for default route."""
     out, _ = exec_command(
-        node=node, sudo=True, command="ip route show | awk '/default/ { print $5 }'"
+        node=node,
+        sudo=True,
+        command="ip route show | awk '/default/ { print $5 }' | uniq",
     )
     return out.strip()
 
