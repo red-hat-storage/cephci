@@ -108,7 +108,8 @@ def run(ceph_cluster, **kw):
             sub_dir=f"{subvol_path.strip()}",
         )
         client1.exec_command(
-            sudo=True, cmd=f"cd {kernel_mounting_dir_2};cp .snap/_snap_1_*/* ."
+            sudo=True,
+            cmd=f"cd {kernel_mounting_dir_2};yes | cp -rf .snap/_snap_1_*/* .",
         )
         files_checksum_after_reboot = fs_util.get_files_and_checksum(
             client1, kernel_mounting_dir_2

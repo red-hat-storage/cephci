@@ -146,7 +146,7 @@ def run(ceph_cluster, **kw):
         ]
         for clone_vol in rmclone_list:
             fs_util.remove_subvolume(client1, **clone_vol, force=True, validate=False)
-        if snapshot in locals():
+        if locals().get("snapshot", None):
             fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
         fs_util.remove_subvolume(client1, **subvolume, validate=False, check_ec=False)
         for subvolumegroup in subvolumegroup_list:

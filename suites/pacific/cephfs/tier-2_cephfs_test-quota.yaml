@@ -22,9 +22,9 @@
 #                     verify if the set quota limit is working fine. Remove the quota once it reaches the max number of
 #                     files and try adding more files, verify if set quota is removed. Repeat the procedure for few more
 #                     times.
-#   CEPH-83573399     Test to validate the quota.max_files
+#   CEPH-83573402     Test to validate the quota.max_bytes
 #                     Create a FS and create 10 directories and mount them on kernel client and fuse client
-#                     Set max files quota to a number(say 50) and add up to that number of files to that directory and
+#                     Set max bytes quota to a number(say 5gb) and add up to that number of files to that directory and
 #                     verify if the set quota limit is working fine.
 #                     Similarly set different limit on different directories and verify quota.
 #   CEPH-83573401     Test to validate the increase in quota limit once it reaches the max limit. (bytes)
@@ -184,7 +184,7 @@ tests:
   - test:
         name: Bytes-quota-test
         module: quota.quota_bytes.py
-        polarion-id: CEPH-83573399
+        polarion-id: CEPH-83573402
         desc: Tests the Byte attributes on the directory
         abort-on-fail: false
   - test:

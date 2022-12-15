@@ -122,7 +122,8 @@ def run(ceph_cluster, **kw):
             client1, kernel_mounting_dir_1
         )
         client1.exec_command(
-            sudo=True, cmd=f"cd {kernel_mounting_dir_1};cp .snap/_snap_1_*/* ."
+            sudo=True,
+            cmd=f"cd {kernel_mounting_dir_1};yes | cp -rf .snap/_snap_1_*/* .",
         )
         kernel_mount_revert_snap_fuse = fs_util.get_files_and_checksum(
             client1, kernel_mounting_dir_1
@@ -132,8 +133,9 @@ def run(ceph_cluster, **kw):
                 "checksum is not when reverted to snap1 i.e., from fuse mount snapshot revert"
             )
             return 1
+
         client1.exec_command(
-            sudo=True, cmd=f"cd {fuse_mounting_dir_1};cp .snap/_snap_2_*/* ."
+            sudo=True, cmd=f"cd {fuse_mounting_dir_1};yes | cp -rf .snap/_snap_2_*/* ."
         )
         fuse_mount_revert_snap_kernel = fs_util.get_files_and_checksum(
             client1, kernel_mounting_dir_1
