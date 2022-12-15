@@ -64,7 +64,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node4
+        node: node6
         install_packages:
           - ceph-common
           - fio
@@ -113,3 +113,10 @@ tests:
       module: rbd_trash_remove.py
       name: Test force remove on trash images
       polarion-id: CEPH-83573289
+
+  - test:
+      desc: Move images to trash, restore them and verify
+      destroy-cluster: false
+      module: trash_restore.py
+      name: Check trash restore functionality
+      polarion-id: CEPH-83573298
