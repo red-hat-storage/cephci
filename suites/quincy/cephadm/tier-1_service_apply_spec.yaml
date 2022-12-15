@@ -255,3 +255,11 @@ tests:
               args:              # sleep to get all services deployed
                 - sleep
                 - "120"
+  - test:
+      name: test_label_no_schedule
+      desc: Adding  "__no_schedule" label to a node and verify its functionality in a cluster.
+      polarion-id: CEPH-83574672
+      module: test_label_no_schedule.py
+      config:
+        nodes:
+          - node2
