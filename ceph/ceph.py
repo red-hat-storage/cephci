@@ -1281,6 +1281,7 @@ class CephNode(object):
         if kw.get("ceph_vmnode"):
             self.vm_node = kw["ceph_vmnode"]
             self.osd_scenario = self.vm_node.osd_scenario
+        self.id = kw.get("id", None)
 
         self.volume_list = []
         if kw["no_of_volumes"]:

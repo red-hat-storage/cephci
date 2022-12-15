@@ -1025,6 +1025,9 @@ def get_node_by_id(cluster, node_name):
         for ele in searches:
             if ele == node_name:
                 return node
+        else:
+            if node_name == node.id:
+                return node
 
 
 def get_nodes_by_ids(cluster, node_names):

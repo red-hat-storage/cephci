@@ -3,12 +3,12 @@ import json
 import tempfile
 from typing import Dict
 
-from ceph.ceph import ResourceNotFoundError
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
-from ceph.utils import get_public_network, setup_repos
+from ceph.utils import get_node_by_id, get_public_network, setup_repos
 from utility.log import Log
 from utility.utils import fetch_build_artifacts, get_cephci_config
 
+from ..ceph import ResourceNotFoundError
 from .common import config_dict_to_string
 from .helper import GenerateServiceSpec, create_ceph_config_file, validate_spec_services
 from .typing_ import CephAdmProtocol
@@ -279,31 +279,21 @@ class BootstrapMixin:
 
         # Todo: need to switch installer node on any other node name provided
         #       other than installer node
-        mon_node = args.pop("mon-ip", self.installer.node.shortname)
-        if mon_node:
-            for node in self.cluster.get_nodes():
-                # making sure conditions works in all the scenario
-                if (
-                    node.shortname == mon_node
-                    or node.shortname.endswith(mon_node)
-                    or f"{mon_node}-" in node.shortname
-                ):
-                    cmd += f" --mon-ip {node.ip_address}"
-                    break
-            else:
-                raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
+        mon_node = get_node_by_id(
+            self.cluster, args.pop("mon-ip", self.installer.node.shortname)
+        )
+        if not mon_node:
+            raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
+        cmd += f" --mon-ip {mon_node.ip_address}"
 
-        #
-
-        # apply-spec
+        # Bootstrap with Ceph service specification
         specs = args.get("apply-spec")
         if specs:
-            spec_cls = GenerateServiceSpec(
+            args["apply-spec"] = GenerateServiceSpec(
                 node=self.installer, cluster=self.cluster, specs=specs
-            )
-            args["apply-spec"] = spec_cls.create_spec_file()
+            ).create_spec_file()
 
-        # config
+        # Bootstrap with ceph config options like ceph.conf file
         conf = args.get("config")
         if conf:
             args["config"] = create_ceph_config_file(node=self.installer, config=conf)
