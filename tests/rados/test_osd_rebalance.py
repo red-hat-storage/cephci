@@ -134,7 +134,7 @@ def wait_for_device(host, osd_id, action: str) -> bool:
         container = [
             item["Names"][0]
             for item in json.loads(out)
-            if item.get["Command"] and "ceph" in item["Command"]
+            if item.get("Command") and "ceph" in item["Command"]
         ]
         if not container:
             log.error("Failed to retrieve container ids")
