@@ -247,8 +247,28 @@ tests:
           settings:
             fs.file-max: 100000
             vm.swappiness: 14
-        apply_result: Saved tuned profile test-mon-host-profile
-        ls_result: "profile_name: test-mon-host-profile"
+        result: Saved tuned profile test-mon-host-profile
+  - test:
+      name: verify_tunables
+      desc: Verify tunables mentioned in tuned-profile apply successfully to the node.
+      polarion-id: CEPH-83575319
+      module: test_os_tuning_profile.py
+      config:
+        action: verify
+        hosts:
+            - node1
+            - node2
+        settings:
+            fs.file-max: 100000
+            vm.swappiness: 14
+  - test:
+      name: verify_list
+      desc: Verify users are able to list all tuning profiles using cephadm command.
+      polarion-id: CEPH-83575320
+      module: test_os_tuning_profile.py
+      config:
+        command: ls
+        result: "profile_name: test-mon-host-profile"
   - test:
       name: modify_tuning_profile
       desc: Verify users are able to modify tuning profiles settings using cephadm command.
@@ -261,7 +281,7 @@ tests:
         value: 15
         result: Added setting vm.swappiness with value 15 to tuned profile test-mon-host-profile
   - test:
-      name: modify_tuning_profile_using_re-apply_yaml_spec
+      name: modify_tuning_profile_settings_using_reapply
       desc: Verify users are able to modify tuning profiles settings using re-applying YAML spec.
       polarion-id: CEPH-83575323
       module: test_os_tuning_profile.py
@@ -276,8 +296,25 @@ tests:
           settings:
             fs.file-max: 110000
             vm.swappiness: 15
-        apply_result: Saved tuned profile test-mon-host-profile
-        ls_result: "profile_name: test-mon-host-profile"
+        result: Saved tuned profile test-mon-host-profile
+  - test:
+      name: modify_tuning_profile_placement_using_reapply
+      desc:  Verify users are able to modify tuning profiles placement using re-applying YAML spec.
+      polarion-id: CEPH-83575324
+      module: test_os_tuning_profile.py
+      config:
+        command: re-apply
+        specs:
+          profile_name: test-mon-host-profile
+          placement:
+            hosts:
+              - node1
+              - node2
+              - node3
+          settings:
+            fs.file-max: 110000
+            vm.swappiness: 15
+        result: Saved tuned profile test-mon-host-profile
   - test:
       name: remove_tuning_profile
       desc: Verify users are able to remove tuning profiles  using cephadm command.
@@ -287,3 +324,50 @@ tests:
         command: remove
         profile_name: test-mon-host-profile
         result:  Removed tuned profile test-mon-host-profile
+  - test:
+      name: error_wrong_setting
+      desc: Verify cephadm gives error if wrong tunable mentioned in YAML spec.
+      polarion-id: CEPH-83575325
+      module: test_os_tuning_profile.py
+      config:
+        command: apply
+        specs:
+          profile_name: test-error-mon-host-profile
+          placement:
+            hosts:
+              - node1
+              - node2
+          settings:
+            fs.filex: 100000
+        result: "Failed to apply tuned profile"
+  - test:
+      name: error_host_setting
+      desc: Verify cephadm gives error if wrong host mentioned in YAML spec.
+      polarion-id: CEPH-83575326
+      module: test_os_tuning_profile.py
+      config:
+        command: apply
+        specs:
+          profile_name: test-error-mon-host-profile
+          placement:
+            hosts:
+              - hostx
+          settings:
+            fs.filex: 100000
+        result: "Please check 'ceph orch host ls' for available hosts"
+  - test:
+      name: no_profile_name
+      desc: Verify cephadm gives error if profile_name is not mentioned in YAML spec.
+      polarion-id: CEPH-83575327
+      module: test_os_tuning_profile.py
+      config:
+        command: apply
+        specs:
+          profile_name: ""
+          placement:
+            hosts:
+              - node1
+              - node2
+          settings:
+            fs.filex: 100000
+        result: "Failed to apply tuned profile"
