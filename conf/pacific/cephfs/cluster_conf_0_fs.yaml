@@ -1,63 +1,86 @@
----
+# Cluster for Baremetal environment.
+# The below defined cluster has 7 nodes.
+# Cluster configuration:
+#      3 MONS, 2 MGR, 6 OSD, 3 MDS service daemon(s)
 globals:
-  -
-    ceph-cluster:
-      public-network-cidr: 10.1.8.0/24
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 10.8.128.0/21
       nodes:
-        -
-          hostname: dell-r730-015.dsal.lab.eng.rdu2.redhat.com
-          ip: "10.1.8.25"
-          root_password: "None"
+        - hostname: cali013.ceph.redhat.com
+          id: node1
+          ip: 10.8.130.13
+          root_password: passwd
           role:
             - _admin
-            - mon
-            - mgr
             - installer
-        -
-          hostname: dell-r730-017.dsal.lab.eng.rdu2.redhat.com
-          ip: "10.1.8.27"
-          root_password: "None"
-          role:
             - mon
             - mgr
+        - hostname: cali022.ceph.redhat.com
+          id: node2
+          ip: 10.8.130.22
+          root_password: passwd
+          role:
             - osd
+            - mgr
+            - mon
           volumes:
+            - /dev/sda
             - /dev/sdb
-        -
-          hostname: dell-r730-019.dsal.lab.eng.rdu2.redhat.com
-          ip: "10.1.8.29"
-          root_password: "None"
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali023.ceph.redhat.com
+          id: node3
+          ip: 10.8.130.23
+          root_password: passwd
           role:
             - osd
             - mon
           volumes:
+            - /dev/sda
             - /dev/sdb
-        -
-          hostname: dell-r730-018.dsal.lab.eng.rdu2.redhat.com
-          ip: "10.1.8.28"
-          root_password: "None"
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali024.ceph.redhat.com
+          id: node4
+          ip: 10.8.130.24
+          root_password: passwd
           role:
-            - nfs
             - mds
-        -
-          hostname: dell-r730-055.dsal.lab.eng.rdu2.redhat.com
-          ip: "10.1.8.65"
-          root_password: "None"
+            - nfs
+        - hostname: cali025.ceph.redhat.com
+          id: node5
+          ip: 10.8.130.25
+          root_password: passwd
           role:
             - osd
             - mds
           volumes:
+            - /dev/sda
             - /dev/sdb
-        -
-          hostname: dell-r730-029.dsal.lab.eng.rdu2.redhat.com
-          ip: "10.1.8.39"
-          root_password: "None"
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali026.ceph.redhat.com
+          id: node6
+          ip: 10.8.130.26
+          root_password: passwd
           role:
             - nfs
             - mds
-        -
-          hostname: dell-r730-048.dsal.lab.eng.rdu2.redhat.com
-          ip: "10.1.8.58"
-          root_password: "None"
+        - hostname: cali027.ceph.redhat.com
+          id: node7
+          ip: 10.8.130.27
+          root_password: passwd
           role:
             - client
