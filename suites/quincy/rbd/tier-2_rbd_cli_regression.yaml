@@ -1,0 +1,105 @@
+# Tier2: RBD CLI regression test cases
+#
+# This test suite runs addition test scripts to evaluate the existing
+# functionality of Ceph RBD component.
+#
+# Conf File - cephci/conf/quincy/rbd/4-node-cluster-with-1-client.yaml
+#
+# The following tests are covered
+#   - CEPH-10247 - CLI Validation(+ve cases) rbd mirror image enable
+#   - CEPH-10249 - CLI Validation(+ve cases) rbd mirror pool enable
+#   - CEPH-10250 - CLI Validation(+ve cases) rbd mirror pool disable
+
+tests:
+
+  # Setup the cluster
+
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  # Test cases to be executed
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      desc: CLI Validation(+ve cases) rbd mirror image enable
+      destroy-cluster: false
+      module: rbd_system.py
+      name: CEPH-10247
+      config:
+        test_name: cli/rbd_cli_testcase_handler.py
+        test_case_name: mirror_image_enable
+      polarion-id: CEPH-10247
+
+  - test:
+      desc: CLI Validation(+ve cases) rbd mirror pool enable
+      destroy-cluster: false
+      module: rbd_system.py
+      name: CEPH-10249
+      config:
+        test_name: cli/rbd_cli_testcase_handler.py
+        test_case_name: mirror_pool_enable
+      polarion-id: CEPH-10249
+
+  - test:
+      desc: CLI Validation(+ve cases) rbd mirror pool disable
+      destroy-cluster: false
+      module: rbd_system.py
+      name: CEPH-10250
+      config:
+        test_name: cli/rbd_cli_testcase_handler.py
+        test_case_name: mirror_pool_disable
+      polarion-id: CEPH-10250

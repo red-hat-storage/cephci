@@ -8,6 +8,8 @@
 # The following tests are covered
 #   - CEPH-9230 - verification snap and clone on an imported image
 #   - CEPH-83573308, CEPH-83573307 - clones creation with v2clone format and deletion
+#   - CEPH-83573289 - Verify force remove on trash images
+#   - CEPH-83573298 - Move images to trash, restore them and verify
 
 tests:
 
@@ -112,3 +114,10 @@ tests:
       module: rbd_trash_remove.py
       name: Test force remove on trash images
       polarion-id: CEPH-83573289
+
+  - test:
+      desc: Move images to trash, restore them and verify
+      destroy-cluster: false
+      module: trash_restore.py
+      name: Check trash restore functionality
+      polarion-id: CEPH-83573298
