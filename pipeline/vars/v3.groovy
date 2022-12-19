@@ -1136,4 +1136,37 @@ def getBuildUser() {
     ]
 }
 
+def getNodeList(def clusterConf){
+    def conf = yamlToMap(clusterConf, env.WORKSPACE)
+    def nodesMap = conf.globals[0]["ceph-cluster"].nodes
+    def nodeList = []
+
+    nodesMap.eachWithIndex { item, index ->
+        nodeList.add(item.hostname)
+    }
+
+    return nodeList
+}
+
+def reimageNodes(def platform, def nodelist) {
+    // Reimage nodes in Octo lab
+    sh (
+        script: "bash ${env.WORKSPACE}/pipeline/scripts/ci/reimage-octo-node.sh --platform ${platform} --nodes ${nodelist}"
+    )
+}
+
+def get_ceph_version(rhcephVersion){
+    def cephVersion = 'quincy'
+    if(rhcephVersion.contains("5.")){
+        cephVersion = 'pacific'
+    }
+    else if(rhcephVersion.contains("3.")){
+        cephVersion = 'luminous'
+    }
+    else if(rhcephVersion.contains("4.")){
+        cephVersion = 'nautilus'
+    }
+    return cephVersion
+}
+
 return this;

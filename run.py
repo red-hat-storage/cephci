@@ -48,6 +48,7 @@ from utility.utils import (
     fetch_build_artifacts,
     generate_unique_id,
     magna_url,
+    validate_conf,
 )
 from utility.xunit import create_xunit_results
 
@@ -180,15 +181,13 @@ def create_nodes(
         desc = "Ceph cluster preparation"
         rp_logger.start_test_item(name=name, description=desc, item_type="STEP")
 
-    log.info("Destroying existing osp instances..")
+    validate_conf(conf)
     if cloud_type == "openstack":
         cleanup_ceph_nodes(osp_cred, instances_name)
     elif cloud_type == "ibmc":
         cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
 
     ceph_cluster_dict = {}
-
-    log.info("Creating osp instances")
     clients = []
     for cluster in conf.get("globals"):
         if cloud_type == "openstack":
@@ -249,6 +248,7 @@ def create_nodes(
                     private_ip=private_ip,
                     hostname=node.hostname,
                     ceph_vmnode=node,
+                    id=node.id,
                 )
                 ceph_nodes.append(ceph)
 

@@ -54,7 +54,7 @@ tests:
                   label: rgw
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
-      polarion-id: CEPH-83573713
+      polarion-id: CEPH-83574029
       module: test_cephadm.py
       name: RHCS deploy cluster using cephadm
 

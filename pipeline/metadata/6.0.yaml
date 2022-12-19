@@ -233,7 +233,7 @@ suites:
     suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
     global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
     platform: "rhel-9"
-    rhbuild: "5.3"
+    rhbuild: "6.0"
     inventory:
       openstack: "conf/inventory/rhel-9-latest.yaml"
       ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
@@ -564,6 +564,22 @@ suites:
       - ibmc
       - rgw
       - stage-2
+
+  - name: "Tier-2 RGW cloud transitions"
+    suite: "suites/quincy/rgw/tier-2_rgw_cloud_transition.yaml"
+    global-conf: "conf/quincy/rgw/cloud_transition.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-2
+      - openstack
+      - ibmc
+      - rgw
+      - stage-7
 
   - name: "tier-2-rgw-test-fixes"
     suite: "suites/pacific/rgw/tier-2_rgw_test_5.3_specific_fixes.yaml"

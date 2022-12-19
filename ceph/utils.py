@@ -38,6 +38,7 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
          ibm_cred     global configuration file(ibm)
          pattern      pattern to match instance name
     """
+    log.info("Destroying existing IBM instances..")
     glbs = ibm_cred.get("globals")
     ibmc = glbs.get("ibm-credentials")
 
@@ -139,7 +140,7 @@ def create_ibmc_ceph_nodes(
          run_id           unique id for the run
          instances_name   Name of the instance
     """
-    log.info("testing ibm stage")
+    log.info("Creating IBM instances")
     ibm_glbs = ibm_creds.get("globals")
     ibm_cred = ibm_glbs.get("ibm-credentials")
     params = dict()
@@ -281,6 +282,7 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
 def create_ceph_nodes(
     cluster_conf, inventory, osp_cred, run_id, instances_name=None, enable_eus=False
 ):
+    log.info("Creating osp instances")
     osp_glbs = osp_cred.get("globals")
     os_cred = osp_glbs.get("openstack-credentials")
     params = dict()
@@ -444,6 +446,7 @@ def get_openstack_driver(yaml):
 
 
 def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
+    log.info("Destroying existing osp instances..")
     user = os.getlogin()
     name = pattern if pattern else "-{user}-".format(user=user)
     driver = get_openstack_driver(osp_cred)
@@ -1024,6 +1027,9 @@ def get_node_by_id(cluster, node_name):
         searches = re.findall(rf"{node_name}?\d*", node.hostname, re.IGNORECASE)
         for ele in searches:
             if ele == node_name:
+                return node
+        else:
+            if node_name == node.id:
                 return node
 
 

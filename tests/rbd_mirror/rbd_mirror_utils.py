@@ -6,6 +6,7 @@ import string
 import time
 
 from ceph.ceph import CommandFailed
+from ceph.parallel import parallel
 from tests.rbd.exceptions import IOonSecondaryError
 from utility.log import Log
 
@@ -214,7 +215,7 @@ class RbdMirror:
         peer_cluster.wait_for_status(poolname=poolname, health_pattern="OK")
 
     # configure initial mirroring steps
-    def initial_mirror_config(self, mirror1, mirror2, poolname, imagename, **kw):
+    def initial_mirror_config(self, mirror2, poolname, imagename, **kw):
         """
         Calls create_pool function on both the clusters,
         creates an image on primary cluster and configure the mirroring
@@ -229,22 +230,34 @@ class RbdMirror:
             mode - mirror mode to be configured pool or image
             mirrormode - type of mirror configured journal or snapshot
         """
-        mode = kw.get("mode")
         imagespec = poolname + "/" + imagename
         imagesize = kw.get("imagesize")
         io = kw.get("io_total")
-        mirror1.create_pool(poolname=poolname)
-        mirror2.create_pool(poolname=poolname)
-        mirror1.create_image(imagespec=imagespec, size=imagesize)
-        mirror1.config_mirror(mirror2, poolname=poolname, mode=mode)
+        with parallel() as p:
+            p.spawn(self.create_pool, poolname=poolname)
+            p.spawn(mirror2.create_pool, poolname=poolname)
+
+        self.create_image(imagespec=imagespec, size=imagesize)
+        if kw.get("mode"):
+            mode = kw.get("mode")
+            self.config_mirror(mirror2, poolname=poolname, mode=mode)
         if kw.get("mirrormode"):
             mirrormode = kw.get("mirrormode")
-            mirror1.enable_mirror_image(poolname, imagename, mirrormode)
+            self.enable_mirror_image(poolname, imagename, mirrormode)
+
         mirror2.wait_for_status(poolname=poolname, images_pattern=1)
-        mirror1.benchwrite(imagespec=imagespec, io=io)
-        time.sleep(60)
-        mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
-        mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
+        if kw.get("io_total"):
+            self.benchwrite(imagespec=imagespec, io=io)
+            time.sleep(60)
+        with parallel() as p:
+            p.spawn(
+                self.wait_for_status, imagespec=imagespec, state_pattern="up+stopped"
+            )
+            p.spawn(
+                mirror2.wait_for_status,
+                imagespec=imagespec,
+                state_pattern="up+replaying",
+            )
 
     # Wait for required status
     def wait_for_status(self, **kw):

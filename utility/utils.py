@@ -149,7 +149,7 @@ def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
     """
     verify RGW multisite sync status
     """
-    ceph_version = verify_io_on_site_node.exec_command(cmd="ceph version")
+    ceph_version = verify_io_on_site_node.exec_command(cmd="sudo ceph version")
     ceph_version = ceph_version[0].split()[4]
     if ceph_version == "pacific":
         out = verify_io_on_site_node.exec_command(cmd="ceph orch ps | grep rgw")
@@ -1431,20 +1431,23 @@ def run_fio(**fio_args):
         runtime: fio runtime
         long_running(bool): True for long running required
         client_node: node where fio needs to be run
-        file_size: 'size' for file size
+        size: 'size' for file size/io size
     Prerequisite: fio package must have been installed on the client node.
     One of device_name, filename, (rbdname,pool) is required.
     """
     log.debug(f"Config Recieved for fio: {fio_args}")
 
     if fio_args.get("filename"):
-        opt_args = f"--filename={fio_args['filename']}/file --size={fio_args.get('file_size', '100M')}"
+        opt_args = f" --filename={fio_args['filename']}/file"
 
     elif fio_args.get("device_name"):
-        opt_args = f"--ioengine=libaio --filename={fio_args['device_name']}"
+        opt_args = f" --ioengine=libaio --filename={fio_args['device_name']}"
 
     else:
-        opt_args = f"--ioengine=rbd --rbdname={fio_args['image_name']} --pool={fio_args['pool_name']}"
+        opt_args = f" --ioengine=rbd --rbdname={fio_args['image_name']} --pool={fio_args['pool_name']}"
+
+    if fio_args.get("size"):
+        opt_args += f" --size={fio_args.get('size', '100M')}"
 
     long_running = fio_args.get("long_running", False)
     cmd = (
@@ -1479,3 +1482,35 @@ def fetch_image_tag(rhbuild):
         raise TestSetupFailure("Not a live testing")
     except Exception as e:
         raise TestSetupFailure(f"Could not fetch image tag : {e}")
+
+
+def validate_conf(conf):
+    """
+    Validates the global conf by checking unique ID for nodes.
+
+    Rules:
+    1. If id is provided, then it will take the highest precedence.
+    2. If id not provided, then framework will add the node IDs based on its appearance index.
+
+    Note : ID should not follow node{i} which will conflict with the dynamic ID generator. like node1,node2..etc
+    """
+    log.info("Validate global configuration file")
+    for cluster in conf.get("globals"):
+        nodes = cluster.get("ceph-cluster").get("nodes", [])
+        if not nodes:
+            nodes_id = []
+            ceph_cluster = cluster.get("ceph-cluster")
+            for node in sorted(ceph_cluster.keys()):
+                if not node.startswith("node"):
+                    continue
+                nodes_id.append(ceph_cluster[node].get("id") or f"{node}")
+        else:
+            nodes_id = [
+                node.get("id") or f"node{idx+1}" for idx, node in enumerate(nodes)
+            ]
+        log.info(f"List of Node IDs : {nodes_id}")
+        if not (len(nodes_id) == len(set(nodes_id))):
+            raise TestSetupFailure(
+                f"Nodes does not have Unique Identifiers, "
+                f"Please set the unique node Ids in global conf {validate_conf.__doc__}"
+            )

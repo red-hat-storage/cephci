@@ -29,12 +29,15 @@ def run(**kw):
         # Check the mirror status
         poolname = mirror1.random_string() + "_tier_1_rbd_mirror_pool"
         imagename = mirror1.random_string() + "_tier_1_rbd_mirror_image"
-        imagespec = poolname + "/" + imagename
-        mirror1.create_pool(poolname=poolname)
-        mirror2.create_pool(poolname=poolname)
-        mirror1.create_image(imagespec=imagespec, size=config.get("imagesize"))
-        mirror1.config_mirror(mirror2, poolname=poolname, mode="pool")
-        mirror2.wait_for_status(poolname=poolname, images_pattern=1)
+
+        mirror1.initial_mirror_config(
+            mirror2,
+            poolname=poolname,
+            imagename=imagename,
+            imagesize=config.get("imagesize", "1G"),
+            mode="pool",
+        )
+
         # Check rbd-daemon runing status
         out1 = mirror1.mirror_daemon_status("rbd-mirror")
         out2 = mirror1.mirror_daemon_status("rbd-mirror")
