@@ -1,0 +1,58 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: test_cephadm_ansible_wrapper.yaml
+# Test-Case: Perform cephadm operations using cephadm ansible modules
+#
+# Cluster Configuration:
+#    conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+#
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/bootstrap-cluster-custom.yaml' playbook
+      polarion-id: CEPH-83575205
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        args:
+          custom_repo: "cdn"
+          registry-url: registry.redhat.io
+          mon-ip: node1
+        ansible_wrapper:
+          module: "cephadm_bootstrap"
+          playbook: playbooks/bootstrap-cluster-overide-exisitng-keys.yml
+          module_args:
+            mon_node: node1
+
+  - test:
+      name: Get 'mgr' config using cephadm-ansible module 'ceph_config'
+      desc: Execute 'playbooks/get-mgr-config.yml' playbook
+      polarion-id: CEPH-83575215
+      module: test_cephadm_ansible_manage_services.py
+      config:
+        ansible_wrapper:
+          module: "ceph_config"
+          playbook: playbooks/get-mgr-config.yml
+
+  - test:
+      name: Set 'osd' config using cephadm-ansible module 'ceph_config'
+      desc: Execute 'playbooks/set-osd-config.yml' playbook
+      polarion-id: CEPH-83575214
+      module: test_cephadm_ansible_manage_services.py
+      config:
+        ansible_wrapper:
+          module: "ceph_config"
+          playbook: playbooks/set-osd-config.yml

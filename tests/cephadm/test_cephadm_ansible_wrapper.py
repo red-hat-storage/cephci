@@ -2,9 +2,9 @@ import os
 
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.cephadm import CephAdm
-from cli.cephadm.exceptions import CephadmOpsExecutionError
+from cli.cephadm.exceptions import CephadmOpsExecutionError, ConfigNotFoundError
 from cli.utilities.packages import Package, Rpm, RpmError
-from cli.utilities.utils import get_node_ip
+from cli.utilities.utils import get_node_ip, put_cephadm_ansible_playbook
 from utility.install_prereq import (
     ConfigureCephadmAnsibleInventory,
     EnableToolsRepositories,
@@ -13,24 +13,8 @@ from utility.log import Log
 
 log = Log(__name__)
 
-CEPHADM_ANSIBLE_PATH = "/usr/share/cephadm-ansible"
 CEPHADM_PREFLIGHT_PLAYBOOK = "cephadm-preflight.yml"
 CEPHADM_PREFLIGHT_VARS = {"ceph_origin": "rhcs"}
-
-
-class ConfigNotFoundError(Exception):
-    pass
-
-
-def put_cephadm_ansible_playbook(node, playbook):
-    """Put playbook to cephadm ansible location.
-    Args:
-        playbook (str): Playbook need to be copied to cephadm ansible path
-    """
-    dst = os.path.join(CEPHADM_ANSIBLE_PATH, os.path.basename(playbook))
-
-    node.upload_file(sudo=True, src=playbook, dst=dst)
-    log.info(f"Uploaded playbook '{playbook}' to '{dst}' on node.")
 
 
 def run(ceph_cluster, **kwargs):
