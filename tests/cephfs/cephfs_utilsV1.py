@@ -27,6 +27,10 @@ class FsUtils(object):
         self.result_vals = {}
         self.return_counts = {}
         self.ceph_cluster = ceph_cluster
+        self.mons = ceph_cluster.get_ceph_objects("mon")
+        self.mgrs = ceph_cluster.get_ceph_objects("mgr")
+        self.osds = ceph_cluster.get_ceph_objects("osd")
+        self.mdss = ceph_cluster.get_ceph_objects("mds")
 
     def prepare_clients(self, clients, build):
         """
@@ -174,6 +178,7 @@ class FsUtils(object):
                 sudo=True,
                 cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}.keyring",
             )
+        return 0
 
     def fuse_mount(self, fuse_clients, mount_point, **kwargs):
         """
@@ -1889,3 +1894,118 @@ class FsUtils(object):
             ssh_config.flush()
             ceph.exec_command(sudo=True, cmd="chmod 600 ~/.ssh/authorized_keys")
             ceph.exec_command(sudo=True, cmd="chmod 400 ~/.ssh/config")
+
+    # MDS Pinning Support Functions
+    def get_clients(self, build):
+        log.info("Getting Clients")
+
+        self.clients = self.ceph_cluster.get_ceph_objects("client")
+        self.mon_node_ip = self.get_mon_node_ips()
+        # self.mon_node_ip = ",".join(self.mon_node_ip_list)
+        for client in self.clients:
+            node = client.node
+            if node.pkg_type == "rpm":
+                out, rc = node.exec_command(
+                    sudo=True, cmd="rpm -qa | grep -w 'attr\\|xattr'"
+                )
+                if "attr" not in out:
+                    node.exec_command(sudo=True, cmd="yum install -y attr")
+                node.exec_command(
+                    sudo=True, cmd="yum install -y gcc python3-devel", check_ec=False
+                )
+
+                if "xattr" not in out:
+                    pkgs = [
+                        "@development",
+                        "rh-python36",
+                        "rh-python36-numpy rh-python36-scipy",
+                        "rh-python36-python-tools rh-python36-python-six",
+                        "libffi libffi-devel",
+                    ]
+                    if build.endswith("7") or build.startswith("3"):
+                        cmd = "yum install -y " + " ".join(pkgs)
+                        node.exec_command(sudo=True, cmd=cmd, long_running=True)
+
+                    node.exec_command(
+                        sudo=True, cmd="pip3 install xattr", long_running=True
+                    )
+
+                out, rc = node.exec_command(sudo=True, cmd="ls /home/cephuser")
+                log.info("ls /home/cephuser : {}".format(out))
+
+                if "Crefi" not in out:
+                    self._setup_crefi(node)
+
+                if "smallfile" not in out:
+                    node.exec_command(
+                        cmd="git clone https://github.com/bengland2/" "smallfile.git"
+                    )
+
+                out, rc = node.exec_command(sudo=True, cmd="rpm -qa")
+                if "fio" not in out:
+                    node.exec_command(sudo=True, cmd="yum install -y fio")
+                if "fuse-2" not in out:
+                    node.exec_command(sudo=True, cmd="yum install -y fuse")
+                if "ceph-fuse" not in out:
+                    node.exec_command(
+                        sudo=True, cmd="yum install -y --nogpgcheck ceph-fuse"
+                    )
+
+            elif node.pkg_type == "deb":
+                node.exec_command(sudo=True, cmd="pip3 install --upgrade pip3")
+                out, rc = node.exec_command(sudo=True, cmd="apt list libattr1-dev")
+                out = out.split()
+                if "libattr1-dev/xenial,now" not in out:
+                    node.exec_command(sudo=True, cmd="apt-get install -y libattr1-dev")
+                out, rc = node.exec_command(sudo=True, cmd="apt list attr")
+                out = out.split()
+                if "attr/xenial,now" not in out:
+                    node.exec_command(sudo=True, cmd="apt-get install -y attr")
+                out, rc = node.exec_command(sudo=True, cmd="apt list fio")
+                out = out.split()
+                if "fio/xenial,now" not in out:
+                    node.exec_command(sudo=True, cmd="apt-get install -y fio")
+                out, rc = node.exec_command(sudo=True, cmd="pip3 list")
+                if "crefi" not in out:
+                    node.exec_command(sudo=True, cmd="pip3 install crefi")
+
+                out, rc = node.exec_command(sudo=True, cmd="ls /home/cephuser")
+                if "smallfile" not in out:
+                    node.exec_command(
+                        cmd="git clone " "https://github.com/bengland2/smallfile.git"
+                    )
+        self.mounting_dir = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(10))
+        )
+        self.mounting_dir = "/mnt/cephfs_" + self.mounting_dir + "/"
+        # separating clients for fuse and kernel
+        self.fuse_clients = self.clients[0:2]
+        self.kernel_clients = self.clients[2:4]
+        self.result_vals.update({"clients": self.clients})
+        self.result_vals.update({"fuse_clients": self.fuse_clients})
+        self.result_vals.update({"kernel_clients": self.kernel_clients})
+        self.result_vals.update({"mon_node_ip": self.mon_node_ip})
+        self.result_vals.update({"mon_node": self.mons})
+        self.result_vals.update({"osd_nodes": self.osds})
+        self.result_vals.update({"mds_nodes": self.mdss})
+        self.result_vals.update({"mgr_nodes": self.mgrs})
+        self.result_vals.update({"mounting_dir": self.mounting_dir})
+
+        return self.result_vals, 0
+
+    @staticmethod
+    def _setup_crefi(node):
+        """
+        Setup crefi using Crefi repository
+        """
+        # clone crefi repository
+        node.exec_command(
+            cmd="cd /home/cephuser/; git clone {}".format(
+                "https://github.com/yogesh-mane/Crefi.git"
+            ),
+            long_running=True,
+        )
+
+        # Setup Crefi pre-requisites : pyxattr
+        node.exec_command(sudo=True, cmd="pip3 install pyxattr", long_running=True)
