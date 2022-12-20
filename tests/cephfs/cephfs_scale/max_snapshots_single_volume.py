@@ -48,18 +48,20 @@ def run(ceph_cluster, **kw):
     2. creats fs volume create cephfs if the volume is not there
     3. ceph fs subvolume create <vol_name> <subvol_name> [--size <size_in_bytes>] [--group_name <subvol_group_name>]
        [--pool_layout <data_pool_name>] [--uid <uid>] [--gid <gid>] [--mode <octal_mode>]  [--namespace-isolated]
-       Ex: ceph fs subvolume create cephfs subvol_max_snap --size 5368706371 --group_name subvolgroup_1
+       Ex: ceph fs subvolume create cephfs subvol_max_snap_1 --size 5368706371 --group_name subvolgroup_1
     4. Create Data on the subvolume
         Ex:  python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 --files
             100 --files-per-dir 10 --dirs-per-dir 2 --top /mnt/cephfs_fuse1baxgbpaia_1/
 
     Test Script Flow :
-    1. We will get the total available space.
-    2. Based on total Available space we create a number of volumes with 1 GB each
-    3. Verify there is no error after that
+    1. We will Total available space by 10.
+    2. Create 10 snapshots with each having (total spcae)/10 .
+    3. Time the snapshots and collect the details
 
     Clean up:
-    1. Deletes all the subvolumes created
+    1. Deletes all the snapshots created
+    2. Deletes snapshot and subvolume created.
+    Note: Happens only if we provide `clean_up` is set in config of the suite file
     """
     try:
         fs_util = FsUtils(ceph_cluster)
@@ -68,48 +70,71 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        max_snap = 10
+        log.info("checking Pre-requisites")
+        if len(clients) < 1:
+            log.info(
+                f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
+            )
+            return 1
         default_fs = "cephfs"
-        client1 = clients[0]
-        available_space = int(get_available_space(client1, default_fs))
-        log.info(available_space)
-        data_size_iter = int(available_space / 1024000000)
-        percentage_fill = int(config.get("fill_data", 80))
-        data_size_iter_20 = round(data_size_iter * (percentage_fill / 100))
-        subvol_list = [
-            {
-                "vol_name": default_fs,
-                "subvol_name": f"subvol_max_{x}",
-            }
-            for x in range(0, data_size_iter_20)
-        ]
-        log.info(f"Total Sub Volumes that will be created : {data_size_iter_20}")
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(5))
+            for _ in list(range(10))
         )
-        for idx, subvol in enumerate(subvol_list):
+        client1 = clients[0]
+        fs_details = fs_util.get_fs_info(client1)
+        if not fs_details:
+            fs_util.create_fs(client1, "cephfs")
+        subvolume = {
+            "vol_name": default_fs,
+            "subvol_name": "subvol_max_snap_1",
+        }
+        fs_util.create_subvolume(client1, **subvolume)
+        log.info("Get the path of sub volume")
+        subvol_path, rc = client1.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume getpath {default_fs} subvol_max_snap_1",
+        )
+        kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
+        mon_node_ips = fs_util.get_mon_node_ips()
+        fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir_1,
+            ",".join(mon_node_ips),
+            sub_dir=f"{subvol_path.strip()}",
+        )
+        snapshot_list = [
+            {
+                "vol_name": default_fs,
+                "subvol_name": "subvol_max_snap_1",
+                "snap_name": f"snap_limit_{x}",
+            }
+            for x in range(1, max_snap)
+        ]
+        available_space = int(get_available_space(client1, default_fs))
+        log.info(available_space)
+        data_size_iter = int(available_space / max_snap)
+        data_size_per_snap = int(data_size_iter / 1024000000)
+        for idx, snapshot in enumerate(snapshot_list):
             try:
-                fs_util.create_subvolume(clients[0], **subvol, validate=False)
-                fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_{idx}/"
-                subvol_path, rc = clients[0].exec_command(
+                client1.exec_command(
                     sudo=True,
-                    cmd=f"ceph fs subvolume getpath {default_fs} {subvol['subvol_name']}",
+                    cmd=f"mkdir -p {kernel_mounting_dir_1}/{snapshot['snap_name']}",
                 )
-                fs_util.fuse_mount(
-                    [clients[0]],
-                    fuse_mounting_dir_1,
-                    extra_params=f" -r {subvol_path.strip()}",
-                )
-                clients[0].exec_command(
+                client1.exec_command(
                     sudo=True,
-                    cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 1 "
+                    cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py "
+                    f"--operation create --threads {data_size_per_snap} "
                     f"--file-size 1024 "
                     f"--files 1024 --top "
-                    f"{fuse_mounting_dir_1}",
+                    f"{kernel_mounting_dir_1}/{snapshot['snap_name']}",
                     long_running=True,
                 )
-                cmd = f"fusermount -u {fuse_mounting_dir_1} -z"
-                clients[0].exec_command(sudo=True, cmd=cmd)
+                out, rc = fs_util.create_snapshot(
+                    clients[0], **snapshot, validate=False, time=True
+                )
+                log.info(out)
                 log.info(f"{'*' * 20} Report for Iteration {idx} {'*' * 20} ")
                 cmd_list = [
                     "ceph crash ls",
@@ -120,9 +145,9 @@ def run(ceph_cluster, **kw):
                 collect_ceph_details(clients[0], cmd_list, idx, f"{__name__}_1")
                 log.info(f"{'*' * 20} Iteration {idx} completed {'*' * 20} ")
             except CommandFailed:
-                log.info(f"Subvolume Create command failed at index: {idx}")
-                break
-        log.info(f"Subvolume creation is successful from {idx} to {idx + 50}")
+                log.error(
+                    f"Max Snapshots allowed under a root FS sub volume level is {snapshot}"
+                )
         return 0
     except Exception as e:
         log.error(e)
@@ -131,6 +156,6 @@ def run(ceph_cluster, **kw):
     finally:
         if config.get("clean_up", True):
             log.info("Clean Up in progess")
-            for subvol in subvol_list[:-1]:
-                fs_util.remove_subvolume(clients[0], **subvol, validate=False)
-        return 0
+            for snapshot in snapshot_list:
+                fs_util.remove_snapshot(client1, **snapshot)
+            fs_util.remove_subvolume(client1, **subvolume, check_ec=False)
