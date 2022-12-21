@@ -88,7 +88,7 @@ tests:
 
   - test:
       config:
-        script-name: test_ss3_s3_with_vault.py
+        script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
         timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
@@ -98,7 +98,7 @@ tests:
 
   - test:
       config:
-        script-name: test_ss3_s3_with_vault.py
+        script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
         timeout: 300
       desc: test_sse_s3_per_bucket_encryption_version_enabled
@@ -108,7 +108,7 @@ tests:
 
   - test:
       config:
-        script-name: test_ss3_s3_with_vault.py
+        script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_object.yaml
         timeout: 300
       desc: test_sse_s3_per_object
@@ -118,7 +118,7 @@ tests:
 
   - test:
       config:
-        script-name: test_ss3_s3_with_vault.py
+        script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
         timeout: 300
       desc: test_sse_s3_per_object_with_versioning
