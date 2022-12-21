@@ -9,14 +9,14 @@ class TunedProfile(Cli):
         super(TunedProfile, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} tuned-profile"
 
-    def apply(self, spec_file):
+    def apply(self, spec_file, check_ec=False):
         """
         Apply tuned profile.
         Args:
             spec_file: tune spec file details
         """
         cmd = f"{self.base_cmd} apply -i {spec_file}"
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, check_ec=check_ec)
         if isinstance(out, tuple):
             return out[0].strip()
         return out

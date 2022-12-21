@@ -2,6 +2,8 @@ import tempfile
 
 import yaml
 
+from ceph.ceph import CommandFailed
+from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
 from utility.log import Log
 
@@ -30,6 +32,25 @@ def generate_tuned_profile_spec(installler_node, specs):
     spec_file.write(spec)
     spec_file.flush()
     return temp_file.name
+
+
+def verify_tunables(hosts, settings):
+    """
+    Verify tune profile.
+    Args:
+        hosts: tuned profile hosts
+        settings: tuned profile settings
+    """
+    timeout, interval = 10, 3
+    for host in hosts:
+        for setting, value in settings.items():
+            cmd = f"sysctl {setting}"
+            for w in WaitUntil(timeout=timeout, interval=interval):
+                out, _ = host.exec_command(sudo=True, cmd=cmd)
+                if str(value) == out.split("=")[1].strip():
+                    break
+            if w.expired:
+                raise OsTuningProfileError("Fail to verify tuned value")
 
 
 def run(ceph_cluster, **kw):
@@ -62,16 +83,33 @@ def run(ceph_cluster, **kw):
     mount = "/tmp:/tmp"
     if config.get("command") in ("apply", "re-apply"):
         nodes = config.get("specs", {}).get("placement", {}).get("hosts")
-        hosts = [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
+        if "hostx" in nodes:
+            hosts = ["NoHost1", "NoHost2"]
+        else:
+            hosts = [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
         config["specs"]["placement"]["hosts"] = hosts
         spec_file = generate_tuned_profile_spec(installler_node, config.get("specs"))
-        result = CephAdm(installler_node, mount).ceph.orch.tuned_profile.apply(
-            spec_file
-        )
-        if config.get("apply_result") != result:
-            raise OsTuningProfileError("Fail to apply tuned profile")
+        try:
+            result = CephAdm(installler_node, mount).ceph.orch.tuned_profile.apply(
+                spec_file, True
+            )
+            if config.get("result") not in result:
+                raise OsTuningProfileError("Fail to apply tuned profile")
+        except CommandFailed as err:
+            if config.get("result") not in str(err):
+                raise OsTuningProfileError(
+                    "apply command did not fail with the expected error"
+                )
+
+    if config.get("action") == "verify":
+        hosts = [
+            ceph_cluster.get_nodes()[int(node[-1])] for node in config.get("hosts")
+        ]
+        verify_tunables(hosts, config.get("settings"))
+
+    if config.get("command") == "ls":
         result = CephAdm(installler_node).ceph.orch.tuned_profile.list().split("\n")[0]
-        if config.get("ls_result") != result:
+        if config.get("result") != result:
             raise OsTuningProfileError("Fail to list tuned profile")
 
     if config.get("command") == "modify":
