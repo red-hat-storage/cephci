@@ -145,7 +145,7 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
-def verify_sync_status(verify_io_on_site_node, retry=10, delay=60):
+def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     """
     verify RGW multisite sync status
     """
