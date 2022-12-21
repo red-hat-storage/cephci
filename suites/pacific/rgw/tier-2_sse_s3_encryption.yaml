@@ -126,3 +126,35 @@ tests:
       name: test_sse_s3_per_object_with_versioning
       polarion-id: CEPH-83575153
 
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
+        timeout: 300
+      desc: sse_s3_per_bucket_enc_multipart_upload
+      module: sanity_rgw.py
+      name: sse_s3_per_bucket_enc_multipart_upload
+      polarion-id: CEPH-83575155
+      comments: known issue (bz-2153452)
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_kms_per_object_versioninig_enabled.yaml
+        timeout: 300
+      desc: test_sse_kms_per_object_with_versioning
+      module: sanity_rgw.py
+      name: test_sse_kms_per_object_with_versioning
+      polarion-id: CEPH-83574040
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_kms_per_object.yaml
+        timeout: 300
+      desc: test_sse_kms_per_object
+      module: sanity_rgw.py
+      name: test_sse_kms_per_object
+      polarion-id: CEPH-83574040
+
+
