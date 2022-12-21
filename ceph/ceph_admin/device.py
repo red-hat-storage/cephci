@@ -44,7 +44,7 @@ class Device(Orch):
         pos_args = config["pos_args"]
         node = pos_args[0]
         host_id = get_node_by_id(self.cluster, node)
-        host = host_id.shortname
+        host = host_id.hostname
         assert host
         base_cmd.append(host)
         base_cmd.extend(pos_args[1:])
