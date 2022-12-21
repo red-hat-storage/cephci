@@ -1,0 +1,13 @@
+---
+
+- name: Stop mon.0 service
+  hosts: bootstrap
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Stop the osd service
+      ceph_orch_daemon:
+        state: stopped
+        daemon_id: osd.0
+        daemon_type: osd
