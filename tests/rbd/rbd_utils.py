@@ -5,7 +5,7 @@ from time import sleep
 
 from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
-from tests.rbd.exceptions import CreateFileError, ImportFileError, ProtectSnapError
+from tests.rbd.exceptions import CreateFileError, ImportFileError
 from utility.log import Log
 
 log = Log(__name__)
@@ -51,7 +51,7 @@ class Rbd:
         Returns:  0 -> pass, 1 -> fail
         """
         try:
-            cmd = kw.get("cmd")
+            cmd = kw.get("cmd", "")
             node = kw.get("node") if kw.get("node") else self.ceph_client
             if self.k_m and "rbd create" in cmd and "--data-pool" not in cmd:
                 cmd = cmd + " --data-pool {}".format(self.datapool)
@@ -66,10 +66,11 @@ class Rbd:
             if kw.get("output", False):
                 return out
 
+            log.info("Command execution complete")
             return 0
 
         except CommandFailed as e:
-            log.info(e)
+            log.error(f"Command {cmd} executed failed with error {e}")
             self.flag = 1
             return 1
 
@@ -111,6 +112,8 @@ class Rbd:
         if kw.get("image_feature"):
             image_feature = kw.get("image_feature")
             cmd += f" --image-feature {image_feature}"
+        if kw.get("thick_provision"):
+            cmd += " --thick-provision"
         if self.ceph_version > 2 and self.k_m:
             cmd += f" --data-pool {self.datapool}"
         self.exec_cmd(cmd=cmd)
@@ -200,7 +203,7 @@ class Rbd:
         """
 
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
-        self.exec_cmd(cmd=cmd)
+        return self.exec_cmd(cmd=cmd)
 
     def snap_remove(self, pool_name, image_name, snap_name):
         """
@@ -212,7 +215,7 @@ class Rbd:
         """
 
         cmd = f"rbd snap rm {pool_name}/{image_name}@{snap_name}"
-        self.exec_cmd(cmd=cmd)
+        return self.exec_cmd(cmd=cmd)
 
     def protect_snapshot(self, snap_name):
         """
@@ -221,8 +224,7 @@ class Rbd:
             snap_name : snapshot name in pool/image@snap format
         """
         cmd = f"rbd snap protect {snap_name}"
-        if not self.exec_cmd(cmd):
-            raise ProtectSnapError("Protecting the snapshot Failed")
+        return self.exec_cmd(cmd=cmd)
 
     def create_clone(self, snap_name, pool_name, image_name, **kw):
         """
@@ -257,8 +259,12 @@ class Rbd:
         """
         log.info("start flatten")
         cmd = f"rbd flatten {pool_name}/{image_name}"
-        self.exec_cmd(cmd=cmd)
-        log.info("flatten completed")
+        rc = self.exec_cmd(cmd=cmd)
+        if rc != 0:
+            log.error(f"Error while flattening image {image_name}")
+            return rc
+        log.info(f"flatten completed for image {image_name}")
+        return rc
 
     def remove_image(self, pool_name, image_name):
         """
@@ -270,7 +276,83 @@ class Rbd:
         Returns:
 
         """
-        self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
+        return self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
+
+    def move_image(self, image_spec, image_spec_new):
+        """
+        Move/Rename image from the specified spec to new spec
+        Args:
+            image_spec: pool_name/image_name
+            image_spec_new: pool_name_new/image_name_new
+
+        Returns:
+
+        """
+        return self.exec_cmd(cmd=f"rbd mv {image_spec} {image_spec_new}")
+
+    def list_images(self, pool_name):
+        """
+        List images in the given pool
+        Args:
+            pool_name: name of the pool
+
+        Returns:
+
+        """
+        out = self.exec_cmd(cmd=f"rbd ls {pool_name} --format json", output=True)
+        images = json.loads(out)
+        return images
+
+    def image_info(self, pool_name, image_name):
+        """
+        Fetch image info for the given pool and image
+        Args:
+            pool_name: name of the pool
+            image_name: image of the pool
+
+        Returns:
+
+        """
+        out = self.exec_cmd(
+            cmd=f"rbd info {pool_name}/{image_name} --format json", output=True
+        )
+        image_info = json.loads(out)
+        return image_info
+
+    def image_resize(self, pool_name, image_name, size):
+        """
+        Fetch image info for the given pool and image
+        Args:
+            pool_name: name of the pool
+            image_name: image of the pool
+            size: new size for the image
+
+        Returns:
+
+        """
+        return self.exec_cmd(
+            cmd=f"rbd resize -s {size} {pool_name}/{image_name} --allow-shrink"
+        )
+
+    def snap_rollback(self, snap_spec):
+        """
+        Fetch image info for the given pool and image
+        Args:
+            snap_spec: pool_name/image_name@snap_name
+
+        Returns:
+
+        """
+        return self.exec_cmd(cmd=f"rbd snap rollback {snap_spec}")
+
+    def unprotect_snapshot(self, snap_name):
+        """
+        UnProtects the provided snapshot
+        Args:
+            snap_name : snapshot name in pool/image@snap format
+        """
+        cmd = f"rbd snap unprotect {snap_name}"
+        return self.exec_cmd(cmd=cmd)
 
     def image_exists(self, pool_name, image_name):
         """
@@ -295,7 +377,7 @@ class Rbd:
         Returns:
 
         """
-        self.exec_cmd(cmd=f"rbd trash mv {pool_name}/{image_name}")
+        return self.exec_cmd(cmd=f"rbd trash mv {pool_name}/{image_name}")
 
     def remove_image_trash(self, pool_name, image_id):
         """
@@ -306,7 +388,7 @@ class Rbd:
         Returns:
 
         """
-        self.exec_cmd(cmd=f"rbd trash rm {pool_name}/{image_id}")
+        return self.exec_cmd(cmd=f"rbd trash rm {pool_name}/{image_id}")
 
     def get_image_id(self, pool_name, image_name):
         """
@@ -335,15 +417,16 @@ class Rbd:
              image_id: image id of the image
          Returns:
         """
-        self.exec_cmd(cmd=f"rbd trash restore {pool_name}/{image_id}")
+        return self.exec_cmd(cmd=f"rbd trash restore {pool_name}/{image_id}")
 
     def image_meta(self, **kw):
         """Manage image-meta.
         Args:
-            action: get, remove, add.
-            image_spec: image specification.
-            key: meta-key.
-            value: meta-value.
+            kw:
+                action: get, remove, set, list
+                image_spec: image specification.
+                key: meta-key.
+                value: meta-value.
         """
         cmd = f"rbd image-meta {kw.get('action')} {kw.get('image_spec')}"
         if kw.get("key"):
@@ -404,6 +487,7 @@ def initial_rbd_config(**kw):
             <kw["config"]> can be left empty
         Advanced configuration:
             config:
+               do_not_create_image: True  # if not set then images will be created by default
                ec-pool-k-m: 2,1
                ec-pool-only: False
                ec_pool_config:
@@ -447,6 +531,20 @@ def initial_rbd_config(**kw):
                 "image": rbd_reppool.random_string(),
                 "size": "10G",
             }
+
+        if not rbd_reppool.create_pool(
+            poolname=kw["config"]["rep_pool_config"]["pool"]
+        ):
+            log.error(
+                f"Pool creation failed for pool {kw['config']['rep_pool_config']['pool']}"
+            )
+            return None
+        if not kw.get("config").get("do_not_create_image"):
+            rbd_reppool.create_image(
+                pool_name=kw["config"]["rep_pool_config"]["pool"],
+                image_name=kw["config"]["rep_pool_config"]["image"],
+                size=kw["config"]["rep_pool_config"]["size"],
+            )
         kw["config"]["ec-pool-k-m"] = ec_pool_k_m
         rbd_obj.update({"rbd_reppool": rbd_reppool})
 
@@ -482,11 +580,12 @@ def initial_rbd_config(**kw):
                 f"Pool creation failed for pool {kw['config']['ec_pool_config']['pool']}"
             )
             return None
-        rbd_ecpool.create_image(
-            pool_name=kw["config"]["ec_pool_config"]["pool"],
-            image_name=kw["config"]["ec_pool_config"]["image"],
-            size=kw["config"]["ec_pool_config"]["size"],
-        )
+        if not kw.get("config").get("do_not_create_image"):
+            rbd_ecpool.create_image(
+                pool_name=kw["config"]["ec_pool_config"]["pool"],
+                image_name=kw["config"]["ec_pool_config"]["image"],
+                size=kw["config"]["ec_pool_config"]["size"],
+            )
         rbd_obj.update({"rbd_ecpool": rbd_ecpool})
 
     return rbd_obj

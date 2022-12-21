@@ -81,6 +81,7 @@ tests:
         node: node4
         install_packages:
           - ceph-common
+          - fio
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -104,13 +105,39 @@ tests:
             polarion-id: CEPH-9789
         - test:
             config:
-              branch: v16.2.8
-              script: cli_generic.sh
-              script_path: qa/workunits/rbd
-            desc: "Executing upstream RBD CLI Generic scenarios"
-            module: test_rbd.py
-            name: 1_rbd_cli_generic
-            polarion-id: CEPH-83574241
+              ec-pool-k-m: 2,1
+              ec-pool-only: False
+              ec_pool_config:
+                pool: rbd_pool
+                data_pool: rbd_ec_pool
+                ec_profile: rbd_ec_profile
+                image: rbd_image
+                image_thick_provision: rbd_thick_image
+                snap_thick_provision: rbd_thick_snap
+                clone_thick_provision: rbd_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_ec_pool_snap
+                clone: rbd_ec_pool_clone
+              rep_pool_config:
+                pool: rbd_rep_pool
+                image: rbd_rep_image
+                image_thick_provision: rbd_rep_thick_image
+                snap_thick_provision: rbd_rep_thick_snap
+                clone_thick_provision: rbd_rep_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_rep_pool_snap
+                clone: rbd_rep_pool_clone
+              operations:
+                map: true
+                io: true
+                nounmap: false
+            desc: Run RBD tier-0 operations
+            polarion-id: CEPH-83575401
+            destroy-cluster: false
+            module: rbd_tier0.py
+            name: Run RBD tier-0 operations
         - test:
             abort-on-fail: false
             desc: "cephfs basic operations"

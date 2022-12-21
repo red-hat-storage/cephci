@@ -24,13 +24,17 @@ def krbd_io_handler(**kw):
             - pool_name/image_name
           runtime: 30
           file_size: 100M
+          rbd_obj: The RBD object to be used for testing (this is useful when the above method is called
+                    from another test module which has already created an RBD object)
         Note:
         1) if mount is set to true, a mount point will be created and fs will be created on the device by default
         2) Required pool needs to be created.
         3) Run time is per image
     """
-
-    rbd = Rbd(**kw)
+    if kw.get("rbd_obj"):
+        rbd = kw.get("rbd_obj")
+    else:
+        rbd = Rbd(**kw)
     config = kw.get("config")
 
     operations = config["operations"]
@@ -42,7 +46,12 @@ def krbd_io_handler(**kw):
         pool_name = image_spec.split("/")[0]
         image_name = image_spec.split("/")[1]
         try:
-            rbd.create_image(pool_name, image_name, config.get("size", "1G"))
+            rbd.create_image(
+                pool_name,
+                image_name,
+                config.get("size", "1G"),
+                thick_provision=kw.get("config").get("thick_provision"),
+            )
 
             if operations.get("map"):
                 device_names.append(rbd.image_map(pool_name, image_name)[:-1])
