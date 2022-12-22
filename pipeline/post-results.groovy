@@ -63,12 +63,17 @@ node("rhel-8-medium || ceph-qe-ci") {
             println("Test results are available at ${resultDir}")
 
             def tmpDir = sh(returnStdout: true, script: "mktemp -d").trim()
-            sh script: "rclone sync ${remoteName}://${reportBucket} ${tmpDir} --progress --create-empty-src-dirs"
+            tags_list = msgMap["pipeline"]["tags"].split(',') as List
+            if ('ibmc' in tags_list) {
+                sh script: "rclone sync ${remoteName}://${reportBucket} ${tmpDir} --progress --create-empty-src-dirs"
+            } else {
+                sh "sudo cp -r /ceph/cephci-jenkins/${resultDir} ${tmpDir}"
+            }
 
             def metaData = readYaml file: "${tmpDir}/${resultDir}/metadata.yaml"
             def copyFiles = "cp -a ${tmpDir}/${resultDir}/results ${rpPreprocDir}/payload/"
             def copyAttachments = "cp -a ${tmpDir}/${resultDir}/attachments ${rpPreprocDir}/payload/"
-            def rmTmpDir = "rm -rf ${tmpDir}"
+            def rmTmpDir = "sudo rm -rf ${tmpDir}"
 
             // Modifications to reuse methods
             metaData["ceph_version"] = metaData["ceph-version"]
@@ -122,7 +127,11 @@ node("rhel-8-medium || ceph-qe-ci") {
             testStatus = msgMap["test"]["result"]
 
             // Remove the sync results folder
-            sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
+            if ('ibmc' in tags_list) {
+                sh script: "rclone purge ${remoteName}:${reportBucket}/${resultDir}"
+            } else {
+                sh "sudo rm -r /ceph/cephci-jenkins/${resultDir}"
+            }
 
             // Update RH recipe file
             if ( composeInfo != null ) {

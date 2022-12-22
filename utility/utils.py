@@ -475,7 +475,7 @@ def create_run_dir(run_id, log_dir=""):
 
     print(f"log directory - {base_dir}")
     try:
-        os.makedirs(base_dir)
+        os.makedirs(base_dir, exist_ok=True)
     except OSError:
         if "jenkins" in getpass.getuser():
             raise

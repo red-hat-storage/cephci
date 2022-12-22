@@ -478,7 +478,7 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
         ]
     ]
     if ( stageLevel ) {
-        launchConfig["name"] = runType.split(" ")[0] + " " + launchConfig["name"] + " " + stageLevel
+        launchConfig["name"] = runType + " " + launchConfig["name"] + " " + stageLevel
     }
     credPreproc["reportportal"]["launch"] = launchConfig
     writeJSON file: credFile, json: credPreproc
