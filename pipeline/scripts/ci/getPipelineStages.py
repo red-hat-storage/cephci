@@ -112,12 +112,12 @@ def fetch_stages(args):
         execute_cli += " --log-level DEBUG"
         logdir = f"{workspace}/logs/{generate_random_string(5)}-{build_number}"
 
+        execute_cli += " --xunit-results"
+        os.makedirs(logdir)
+        execute_cli += f" --log-dir {logdir}"
         if "ibmc" in tags:
             cloud_type = "ibmc"
-            execute_cli += " --xunit-results"
             execute_cli += " --cloud ibmc"
-            os.makedirs(logdir)
-            execute_cli += f" --log-dir {logdir}"
             cleanup_cli += f" --cloud {cloud_type}"
 
         script.update({"inventory": script["inventory"][cloud_type]})
