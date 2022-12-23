@@ -89,7 +89,7 @@ tests:
         node: node7                       # client node
         install_packages:
           - ceph-common
-          - fio
+          - ceph-base
         copy_admin_keyring: true          # Copy admin keyring to node
         caps:                             # authorize client capabilities
           mon: "allow *"
@@ -97,19 +97,7 @@ tests:
           mds: "allow *"
           mgr: "allow *"
   - test:
-      abort-on-fail: true
-      config:
-        cephadm: true
-        commands:
-          - ceph fs volume create cephfs_Qos --placement='2 label:mds'
-      desc: "Create and configure a volume with 2 MDS limit"
-      destroy-cluster: false
-      module: exec.py
-      name: "Creating cephfs volume"
-  - test:
       name: Mclock parameter settings
       desc: Mclock configuration parameter check
       polarion-id: CEPH-83574902
       module: mclock_test.py
-      config:
-        profile: high_client_ops
