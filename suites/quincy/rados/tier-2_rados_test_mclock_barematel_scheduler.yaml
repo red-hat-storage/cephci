@@ -1,0 +1,158 @@
+# Suite is to be used to test Mclock profiles on the given set of nodes
+# Some keys need to be replaced in the suite
+# 1. In Test: "cluster deployment" -> Modify config for
+#       - "mon-ip" param in cephadm bootstrap section # shortname of the bootstrap mon host
+#
+# 2. In Test: "OSD deployment" -> Modify config for
+#				placement:
+#                    nodes:
+#                      - <host1-shortname>            # shortname of the OSD host1
+#                      - <host2-shortname>            # shortname of the OSD host2
+#					   - ...                          # shortname of the OSD host-n
+#
+# 3. In Test: "Configure client admin" -> Modify config for
+#       - "nodes" param in client section             # shortname of the Client host
+#
+
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: <bootstrap-mon-shortname>
+                orphan-initial-daemons: true
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: mclock_osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    nodes:
+                      - <host1-shortname>
+                      - <host2-shortname>
+                      - <host3-shortname>
+
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: <client-host-shortname>     # client node
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+  - test:
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - ceph fs volume create cephfs_Qos --placement='2 label:mds'
+      desc: "Create and configure a volume with 2 MDS limit"
+      destroy-cluster: false
+      module: exec.py
+      name: "Creating cephfs volume"
+
+  - test:
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - ceph fs volume create cephfs_Qos --placement='2 label:mds'
+      desc: "Create and configure a volume with 2 MDS limit"
+      destroy-cluster: false
+      module: exec.py
+      name: "Creating cephfs volume"
+  - test:
+        name: Mclock parameter settings
+        desc: Mclock configuration parameter check
+        polarion-id: CEPH-83574902
+        module: mclock_test.py
+        config:
+            profile: high_client_ops

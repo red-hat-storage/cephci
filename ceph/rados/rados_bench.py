@@ -6,6 +6,7 @@ the low level native object storage API provided by Ceph.
 
 """
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
+from threading import Thread
 from time import time
 
 from ceph.ceph_admin.common import config_dict_to_string
@@ -278,6 +279,41 @@ class RadosBench:
             delete_osd_pool(node=self.mon, pool_name=pool_name)
 
         return "Done....."
+
+    def radosBench_write(self, client, pool_name, time_in_sec):
+        """
+         Used to  write the objects in to pool
+
+        Args:
+            client (CephNode): client node to execute rados benchmark commands
+            pool_name (Str): ceph OSD pool name
+            time_in_sec (Int): duration of benchmark run in seconds
+        """
+
+        base_cmd = ["rados", "bench"]
+        base_cmd.extend(
+            ["-p", pool_name, str(time_in_sec), "write -b 4096 --no-cleanup"]
+        )
+        base_cmd = " ".join(base_cmd)
+        client.exec_command(cmd=base_cmd, sudo=True)
+
+    def parallel_thread_write(self, client, pool_names, write_time):
+        """
+         Used to  write the objects in parallelly to pools
+        Args:
+            client : client node to execute rados benchmark commands
+            pool_names : List of pool names
+            write_time : List of duration of benchmark run in seconds for pools
+        """
+        threads = []
+        for (pool_name, pool_time) in zip(pool_names, write_time):
+            process = Thread(
+                target=self.radosBench_write, args=[client, pool_name, pool_time]
+            )
+            process.start()
+            threads.append(process)
+        for process in threads:
+            process.join()
 
     def wait_for_completion(self):
         """

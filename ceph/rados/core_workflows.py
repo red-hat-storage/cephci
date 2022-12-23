@@ -13,6 +13,7 @@ import datetime
 import json
 import re
 import time
+from configparser import ConfigParser
 
 from ceph.ceph_admin import CephAdmin
 from utility.log import Log
@@ -1034,18 +1035,183 @@ class RadosOrchestrator:
             log.error(f"Exception hit while command execution. {er}")
         return log_lines
 
-    def set_mclock_profile(self, profile, osd="osd"):
-        """Set OSD MClock Profile.
+    def config_param_chk(self, feature):
+        """
+        Used to check the osd configuration parameter value
+        Args:
+            feature: feature name in the ini file
 
-        ceph config set osd_mclock_profile <profile_name>
+        Returns : True if successful, False otherwise.
+        """
+        # Read Config paramters
+        config_info = ConfigParser()
+        get_config_baseCmd = "ceph config get osd  "
 
-        profile names:
-        - balanced
-        - high_recovery_ops
-        - high_client_ops
+        config_info.read("tests/rados/rados_config_parameters.ini")
+        # Read values from mclock section
+
+        parameters = config_info.items(feature)
+        for param in parameters:
+            get_config_cmd = f"{get_config_baseCmd}{param[0]}"
+            status = self.run_ceph_command(cmd=get_config_cmd)
+            # Return if any parameter is not equal to the default value
+            if str(status).strip() != str(param[-1]).strip():
+                return False
+        # Return True if all parameters are pass
+        return True
+
+    def rados_flag_change(self, status, flag):
+        """
 
         Args:
-            profile: mclock profile name
-            osd: "osd" service by default or "osd.<Id>"
+            status: set/unset the flag
+            flag: Rados flag to set
+
+        Returns: True if successful, False otherwise.
+
         """
-        return self.node.shell([f"ceph config set {osd} osd_mclock_profile {profile}"])
+        try:
+            set_flag_cmd = f"ceph osd {status}  {flag}"
+            self.run_ceph_command(cmd=set_flag_cmd)
+
+            # Max time to check for set/unset flag is one minute
+            timeout = time.time() + 60
+            while time.time() < timeout:
+                if self.flag_chk(flag) and status == "set":
+                    log.info(f"{flag} is {status}")
+                    return True
+                elif not self.flag_chk(flag) and status == "unset":
+                    log.info(f"{flag} is {status}")
+                    return True
+                else:
+                    time.sleep(5)
+            return False
+        except Exception as error:
+            log.error(f"Exception occured while {status} the {flag} : {error}")
+            return False
+
+    def get_pgid_list(self):
+        """
+        To get the pg_id list from the cluster
+        Returns:
+            placement group list
+
+        """
+
+        pgid_cmd = "ceph pg dump"
+        pgid_list = []
+        try:
+            pg_dump = self.run_ceph_command(cmd=pgid_cmd)
+
+            for pg in pg_dump["pg_map"]["pg_stats"]:
+                pgid_list.append(pg["pgid"])
+            return pgid_list
+        except Exception as error:
+            log.error(f"Error while getting the pglist: {error}")
+            return False
+
+    def get_pg_states(self):
+        """
+        Method is used to get the pg states
+        Returns: List of pg states
+        """
+
+        cmd = "ceph -s"
+        pgstate_list = []
+        try:
+            ceph_status_output = self.run_ceph_command(cmd=cmd)
+
+            for pg in ceph_status_output["pgmap"]["pgs_by_state"]:
+                pgstate_list.append(pg["state_name"])
+            return pgstate_list
+        except Exception:
+            log.error("Error while un-setting the flag")
+            return False
+
+    def get_osd_list(self):
+        """
+        Used to get the list of OSDs configured in the cluster nodes
+        Returns:
+             Dictionary with the keys as cluster osd names and values are the list of osd names configured to the node.
+        """
+        try:
+            osd_list = dict()
+            cmd = "ceph osd  tree"
+            osds = self.run_ceph_command(cmd)
+            for entry in osds["nodes"]:
+                if entry["type"] == "host":
+                    osd_list[entry["name"]] = entry["children"]
+        except Exception as e:
+            log.error(f"Failed to  get the osd list:{e}")
+        return osd_list
+
+    def get_osd_pid(self, host_object, osd):
+        """
+        Used to get the process id of an  OSD
+        Args:
+             host_object is osd host object
+             osd is the osd number
+        Returns:
+            PID number of the osd
+        """
+        try:
+            get_pid_cmd = (
+                'ps -ef | grep -w "/usr/bin/ceph-osd .* osd.'
+                + osd
+                + '"| grep -v "/run/podman-init" | grep -v grep | awk \'{print $2 }\''
+            )
+            osd_pid = host_object.exec_command(sudo=True, cmd=get_pid_cmd)
+            osd_pid = ("".join(osd_pid)).strip()
+            return osd_pid
+        except Exception as e:
+            log.error(f"Failed to  get the process id of OSD: {e}")
+
+    def check_osd_status(self, host_object, osd):
+        """
+        Used to check the process is running in osd node or not
+        Args:
+             host_object is osd host object
+             osd is the osd number
+        Returns:
+            If process is up and running then  returns 0 else return non zero
+        """
+        try:
+            osd_status_cmd = (
+                'systemctl is-active --quiet "$(systemctl list-units --type=service | grep -i "ceph-.*@osd.'
+                + osd
+                + ".service\" | awk '{print $1}')\" && echo $?"
+            )
+            status = host_object.exec_command(
+                sudo=True, cmd=osd_status_cmd, long_running=True
+            )
+            if type(status) == tuple:
+                status = ("".join(status)).strip()
+            return status
+        except Exception as e:
+            log.error(f"Failed to check the OSD status:{e}")
+
+    def flag_chk(self, flag):
+        """
+        To get the pg_id list from the cluster
+        Args:
+           flag: Rados flag to set
+
+        Returns:  True if successful, False otherwise.
+
+        """
+        ceph_health_cmd = "ceph health"
+
+        try:
+            health_dump = self.run_ceph_command(cmd=ceph_health_cmd)
+
+            if "OSDMAP_FLAGS" in health_dump["checks"]:
+                flg_msg = health_dump["checks"]["OSDMAP_FLAGS"]["summary"]["message"]
+                if flag in flg_msg:
+                    return True
+                else:
+                    return False
+            else:
+                return False
+        except Exception:
+            log.error("Error while un-setting the flag")
+            return False

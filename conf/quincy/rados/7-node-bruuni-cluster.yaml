@@ -1,0 +1,112 @@
+globals:
+  -
+    ceph-cluster:
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname:  bruuni002.ceph.redhat.com
+          ip: "10.8.129.202"
+          role:
+            - _admin
+            - installer
+            - alertmanager
+            - grafana
+            - prometheus
+            - mon
+            - mgr
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+        -
+          hostname:  bruuni003.ceph.redhat.com
+          ip: "10.8.129.203"
+          role:
+            - mon
+            - mgr
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+        -
+          hostname:  bruuni004.ceph.redhat.com
+          ip: "10.8.129.204"
+          role:
+            - osd
+            - mon
+          root_password: passwd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+        -
+          hostname:  bruuni005.ceph.redhat.com
+          ip: "10.8.129.205"
+          role:
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+        -
+          hostname:  bruuni006.ceph.redhat.com
+          ip: "10.8.129.206"
+          role:
+            - osd
+            - mgr
+          root_password: passwd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+        -
+          hostname:  bruuni007.ceph.redhat.com
+          ip: "10.8.129.207"
+          role:
+            - osd
+            - mds
+          root_password: passwd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+
+        -
+          hostname:  bruuni008.ceph.redhat.com
+          ip: "10.8.129.208"
+          role:
+            - mds
+            - osd
+            - client
+          root_password: passwd
+          volumes:
+            - /dev/sdb
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
