@@ -1059,3 +1059,182 @@ class RadosOrchestrator:
                 return False
         # Return True if all parameters are pass
         return True
+
+    def set_rados_flag(self, flag):
+        """
+        Used to set the rados flag
+        Args:
+            flag: Rados flag to set
+
+        Returns : True -> pass, False -> fail
+        """
+        try:
+            set_flag_cmd = f"{'ceph osd set '} {flag}"
+            self.run_ceph_command(cmd=set_flag_cmd)
+            time.sleep(5)
+            log.info(f"{flag} is set ")
+            return True
+        except Exception:
+            log.error("Error while setting the flag")
+            return False
+
+    def unset_rados_flag(self, flag):
+        """
+        Used to unset the rados flag
+        Args:
+            flag: Rados flag to set
+
+        Returns : True -> pass, False -> fail
+        """
+        try:
+            set_flag_cmd = f"{'ceph osd unset '} {flag}"
+            self.run_ceph_command(cmd=set_flag_cmd)
+            time.sleep(5)
+            log.info(f"{flag} is unset ")
+            return True
+        except Exception:
+            log.error("Error while un-setting the flag")
+            return False
+
+    def get_pgid_list(self):
+        """
+        To get the pg_id list from the cluster
+        Args:
+            flag: Rados flag to set
+            Returns : True -> pass, False -> fail
+        """
+        pgid_cmd = "ceph pg dump"
+        pgid_list = []
+        try:
+            pg_dump = self.run_ceph_command(cmd=pgid_cmd)
+            pg_dump_json = json.dumps(pg_dump)
+            pg_load_json = json.loads(pg_dump_json)
+            for pg in pg_load_json["pg_map"]["pg_stats"]:
+                pgid_list.append(pg["pgid"])
+            print("The pg list is :::::", pgid_list)
+            return pgid_list
+        except Exception:
+            log.error("Error while un-setting the flag")
+            return False
+
+    def start_all_pg_scrub(self):
+
+        base_scrub_pg_cmd = "ceph pg scrub  "
+        try:
+            pg_list = self.get_pgid_list()
+            for pg in pg_list:
+                scrub_pg_cmd = base_scrub_pg_cmd + pg
+                self.run_ceph_command(cmd=scrub_pg_cmd)
+            return True
+        except Exception:
+            log.error("Error while un-setting the flag")
+            return False
+
+    def start_all_pg_deepscrub(self):
+
+        base_deepscrub_pg_cmd = "ceph pg deep-scrub  "
+        try:
+            pg_list = self.get_pgid_list()
+            for pg in pg_list:
+                scrub_pg_cmd = base_deepscrub_pg_cmd + pg
+                self.run_ceph_command(cmd=scrub_pg_cmd)
+            return True
+        except Exception:
+            log.error("Error while un-setting the flag")
+            return False
+
+    def get_pg_states(self):
+        """
+        Used to get the pg states
+        """
+        cmd = "ceph -s -f json"
+        pgstate_list = []
+        try:
+            output = self.run_ceph_command(cmd=cmd)
+            output_dump = json.dumps(output)
+            output_load_json = json.loads(output_dump)
+            for pg in output_load_json["pgmap"]["pgs_by_state"]:
+                pgstate_list.append(pg["state_name"])
+            return pgstate_list
+        except Exception:
+            log.error("Error while un-setting the flag")
+            return False
+
+    def get_osd_list(self):
+        """
+        Used to get the list of OSDs configured in the cluster nodes
+        Returns:
+            Dictionary with the keys as cluster osd names and values are the list of osd names configured to the node.
+        """
+        try:
+            osd_list = dict()
+            cmd = "ceph osd  tree"
+            osds = self.run_ceph_command(cmd)
+            for entry in osds["nodes"]:
+                if entry["type"] == "host":
+                    osd_list[entry["name"]] = entry["children"]
+            return osd_list
+        except Exception as e:
+            log.error("Failed to  get the osd list : %s", str(e))
+
+    def get_osd_pid(self, host_object, osd):
+        """
+        Used to get the process id of an  OSD
+        Args:
+             host_object is osd host object
+             osd is the osd number
+        Returns:
+            PID number of the osd
+        """
+        try:
+            get_pid_cmd = (
+                'ps -ef | grep -w "/usr/bin/ceph-osd .* osd.'
+                + osd
+                + '"| grep -v "/run/podman-init" | grep -v grep | awk \'{print $2 }\''
+            )
+            osd_pid = host_object.exec_command(sudo=True, cmd=get_pid_cmd)
+            osd_pid = ("".join(osd_pid)).strip()
+            return osd_pid
+        except Exception as e:
+            log.error("Failed to  get the process id of OSD : %s", str(e))
+
+    def check_osd_status(self, host_object, osd):
+        """
+        Used to check the process is running in osd node or not
+        Args:
+             host_object is osd host object
+             osd is the osd number
+        Returns:
+            If process is up and running then  returns 0 else return non zero
+        """
+        try:
+            osd_status_cmd = (
+                'systemctl is-active --quiet "$(systemctl list-units --type=service | grep -i "ceph-.*@osd.'
+                + osd
+                + ".service\" | awk '{print $1}')\" && echo $?"
+            )
+            status = host_object.exec_command(
+                sudo=True, cmd=osd_status_cmd, long_running=True
+            )
+            if type(status) == tuple:
+                status = ("".join(status)).strip()
+            return status
+        except Exception as e:
+            log.error("Failed to check the OSD status : %s", str(e))
+
+    def kill_osd_process(self, host_object, osd_pid):
+        """
+        Used to kill the osd process
+        Args:
+            host_object is osd host object
+            osd is the osd number
+        Returns:
+            If process is up and running then  returns 0 else return non zero
+        """
+        try:
+            osd_kill_cmd = "kill -9  " + osd_pid
+            kill_status = host_object.exec_command(sudo=True, cmd=osd_kill_cmd)
+            time.sleep(5)
+            return kill_status
+        except Exception as e:
+            log.error("Failed to kill the OSD process : %s", str(e))
