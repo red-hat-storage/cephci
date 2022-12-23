@@ -135,7 +135,7 @@ def run(**kw):
     script_dir = TEST_DIR[test_version]["script"]
     config_dir = TEST_DIR[test_version]["config"]
     lib_dir = TEST_DIR[test_version]["lib"]
-    timeout = config.get("timeout", 600)
+    # timeout = config.get("timeout", 600)
 
     log.info("flushing iptables")
     exec_from.exec_command(cmd="sudo iptables -F", check_ec=False)
@@ -192,15 +192,17 @@ def run(**kw):
                         io_info, exec_from, verify_io_on_site_node, io_info
                     )
 
-                verify_out, err = verify_io_on_site_node.exec_command(
+                verify_status = verify_io_on_site_node.exec_command(
                     cmd="sudo venv/bin/python "
                     + test_folder_path
                     + lib_dir
                     + f"read_io_info.py -c {config_file_name}",
-                    timeout=timeout,
+                    long_running=True,
                 )
-                log.info(verify_out)
-                log.error(err)
+                log.info(f"verify io status code is : {verify_status}")
+                if verify_status != 0:
+                    log.error(verify_status)
+                    return verify_status
 
     return test_status
 
