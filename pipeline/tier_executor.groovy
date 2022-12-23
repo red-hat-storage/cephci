@@ -447,7 +447,6 @@ node(nodeName) {
             println("Inside post build action")
             buildArtifacts = writeJSON returnText: true, json: buildArtifacts
             def nextbuildType = buildType
-            def buildStatus = "pass"
             if (final_stage){
                 def tierValue = tierLevel.split("-")
                 Increment_tier= tierValue[1].toInteger()+1
