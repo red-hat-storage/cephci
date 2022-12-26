@@ -21,6 +21,19 @@ suites:
     - dmfg
     - stage-1
 
+- name: "Basic Regression Upstream Testing For DMFG"
+  suite: "suites/quincy/upstream/tier-1-cephadm-basic-regression.yaml"
+  global-conf: "conf/quincy/upstream/4-node-cluster-with-1-client.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-8-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - dmfg
+    - stage-1
+
 - name: "Core Feature Upstream Testing For CephFS"
   suite: "suites/quincy/cephfs/test-core-functionality.yaml"
   global-conf: "conf/6-node-cluster-with-1-client.yaml"
