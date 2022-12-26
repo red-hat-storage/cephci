@@ -1213,3 +1213,19 @@ suites:
       - ibmc
       - rgw
       - stage-3
+
+  - name: "test-rgw-ms-dynamic-bucket-resharding"
+    suite: "suites/pacific/rgw/tier-2_rgw_ms-dynamic-bucket-resharding.yaml"
+    global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+    platform: "rhel-8"
+    rhbuild: "5.3"
+    inventory:
+      openstack: "conf/inventory/rhel-8-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack
+      - ibmc
+      - rgw
+      - stage-7
