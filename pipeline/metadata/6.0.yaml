@@ -949,3 +949,19 @@ suites:
       - ibmc
       - rgw
       - stage-4
+
+  - name: "test-rgw-ms-dynamic-bucket-resharding"
+    suite: "suites/pacific/rgw/tier-2_rgw_ms-dynamic-bucket-resharding.yaml"
+    global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack
+      - ibmc
+      - rgw
+      - stage-1
