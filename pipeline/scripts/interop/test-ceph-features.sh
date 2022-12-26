@@ -77,7 +77,7 @@ for suite in "${!TEST_SUITES[@]}" ; do
     if [[ $TEST_SUITE =~ "nautilus" ]]; then
       RHCS_VERSION="4.2"
     elif [[ $TEST_SUITE =~ "pacific" ]]; then
-      RHCS_VERSION="5.1"
+      RHCS_VERSION="5.2"
     fi
 
     random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
