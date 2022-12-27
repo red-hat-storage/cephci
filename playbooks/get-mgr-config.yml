@@ -1,0 +1,16 @@
+- name: Get `osd` config  `osd_memory_target_autotune`
+  hosts: admin
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Validate `osd_memory_target_autotune` of `osd`
+      ceph_config:
+        action: get
+        who: osd
+        option: osd_memory_target_autotune
+      register: osd_memory_target_autotune
+
+    - name: DEBUG. Get `osd_memory_target_autotune` value
+      debug:
+        msg: "{{ osd_memory_target_autotune.stdout }}"

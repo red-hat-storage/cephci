@@ -1,4 +1,11 @@
+import os
 import re
+
+from utility.log import Log
+
+log = Log(__name__)
+
+CEPHADM_ANSIBLE_PATH = "/usr/share/cephadm-ansible"
 
 
 def get_disk_list(node, expr=None, **kw):
@@ -178,3 +185,17 @@ def build_cmd_from_args(seperator="=", **kw):
             else:
                 cmd += f" --{k} {v}"
     return cmd
+
+
+def put_cephadm_ansible_playbook(
+    node, playbook, cephadm_ansible_path=CEPHADM_ANSIBLE_PATH
+):
+    """Put playbook to cephadm ansible location.
+    Args:
+        playbook (str): Playbook need to be copied to cephadm ansible path
+        cephadm_ansible_path (str): Path to where the playbook has to be copied
+    """
+    dst = os.path.join(cephadm_ansible_path, os.path.basename(playbook))
+
+    node.upload_file(sudo=True, src=playbook, dst=dst)
+    log.info(f"Uploaded playbook '{playbook}' to '{dst}' on node.")
