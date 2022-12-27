@@ -136,9 +136,10 @@ def get_launch_details(config_file, launch_id):
                 "failed": ts.get("statistics").get("executions").get("failed", 0),
                 "skipped": ts.get("statistics").get("executions").get("skipped", 0),
             }
-            testsuite.update(
-                {"executionTime": int(ts.get("endTime")) - int(ts.get("startTime"))}
-            )
+            if "endTime" in ts.keys() and "startTime" in ts.keys():
+                testsuite.update(
+                    {"executionTime": int(ts.get("endTime")) - int(ts.get("startTime"))}
+                )
             if rp_host_url:
                 testsuite.update(
                     {"url": url.format(rp_host_url, launch_id, ts.get("id"))}
