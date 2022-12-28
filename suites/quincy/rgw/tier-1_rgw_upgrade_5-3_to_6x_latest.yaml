@@ -1,0 +1,282 @@
+#Polarian ID -CEPH-83574647
+#Objective: Testing single site upgrade from RHCS 5.3 latest to 6.x latest build
+#platform : RHEL-9
+#conf: conf/quincy/rgw/tier-0_rgw.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 5.3
+                release: "tier-0"
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap and deployment services with label placements.
+      polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy RHCS cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw.py
+      name: download objects pre upgrade
+      polarion-id: CEPH-14237
+
+  - test:
+      name: Mbuckets_with_Nobjects with etag verification pre upgrade
+      desc: test etag verification
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574871
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        timeout: 300
+
+  - test:
+      name: Dynamic Resharding tests pre upgrade
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740 # also applies to ceph-11479, ceph-11477
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        timeout: 500
+
+  - test:
+      name: Manual Resharding tests pre upgrade
+      desc: Resharding test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        timeout: 500
+
+  - test:
+      name: Dynamic Resharding tests with version pre upgrade
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        timeout: 500
+
+  - test:
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+        timeout: 300
+      desc: test duration for ordered listing of bucket with top level objects
+      module: sanity_rgw.py
+      name: ordered listing of buckets pre upgrade
+      polarion-id: CEPH-83573545
+
+  - test:
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_unordered.yaml
+        timeout: 300
+      desc: test duration for unordered listing of buckets with top level objects
+      module: sanity_rgw.py
+      name: unordered listing of buckets pre upgrade
+      polarion-id: CEPH-83573545
+
+  - test:
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+        timeout: 300
+      desc: Test object operations with swift
+      module: sanity_rgw.py
+      name: swift basic operations pre upgrade
+      polarion-id: CEPH-11019
+
+  - test:
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_radoslist.yaml
+        timeout: 300
+      desc: Test bucket stats and radoslist on all buckets
+      module: sanity_rgw.py
+      name: test bucket stats and radoslist
+      polarion-id: CEPH-83574480
+
+  - test:
+      name: Upgrade cluster to latest 6.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791,CEPH-83573790
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      desc: Retrieve the versions of the cluster
+      module: exec.py
+      name: post upgrade gather version
+      polarion-id: CEPH-83575200
+      config:
+        cephadm: true
+        commands:
+          - "ceph versions"
+
+# Post upgrade tests
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        timeout: 300
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw.py
+      name: download objects post upgrade
+      polarion-id: CEPH-14237
+
+  - test:
+      name: Mbuckets_with_Nobjects with etag verification post upgrade
+      desc: test etag verification
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574871
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        timeout: 300
+
+  - test:
+      name: Dynamic Resharding tests post upgrade
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        timeout: 500
+
+  - test:
+      name: Manual Resharding tests post upgrade
+      desc: Resharding test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        timeout: 500
+
+  - test:
+      name: Dynamic Resharding tests with version post upgrade
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        timeout: 500
+
+  - test:
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+        timeout: 300
+      desc: test duration for ordered listing of bucket with top level objects
+      module: sanity_rgw.py
+      name: ordered listing of buckets post upgrade
+      polarion-id: CEPH-83573545
+
+  - test:
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_unordered.yaml
+        timeout: 300
+      desc: test duration for unordered listing of buckets with top level objects
+      module: sanity_rgw.py
+      name: unordered listing of buckets post upgrade
+      polarion-id: CEPH-83573545
+
+  - test:
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+        timeout: 300
+      desc: Test object operations with swift
+      module: sanity_rgw.py
+      name: swift basic operations post upgrade
+      polarion-id: CEPH-11019
+
+  - test:
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_radoslist.yaml
+        timeout: 300
+      desc: Test bucket stats and radoslist on all buckets
+      module: sanity_rgw.py
+      name: test bucket stats and radoslist
+      polarion-id: CEPH-83574480
