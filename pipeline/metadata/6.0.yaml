@@ -918,8 +918,8 @@ suites:
       - rgw
       - stage-3
 
-  - name: "tier-1_rgw_ms_upgrade_5_to_6_latest"
-    suite: "suites/quincy/rgw/tier-1_rgw_ms_upgrade_5_to_6_latest.yaml"
+  - name: "tier-1_rgw_ms_upgrade_5-2GA_to_6x_latest"
+    suite: "suites/quincy/rgw/tier-1_rgw_ms_upgrade_5-2GA_to_6x_latest.yaml"
     global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
