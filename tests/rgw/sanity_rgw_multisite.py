@@ -106,6 +106,7 @@ def run(**kw):
                 "ceph-arc", clusters[list(clusters.keys())[2]]
             )
         archive_rgw_node = archive_cluster.get_ceph_object("rgw").node
+        archive_client_node = archive_cluster.get_ceph_object("client").node
         archive_cluster_exists = True
 
     test_folder = "rgw-ms-tests"
@@ -119,6 +120,9 @@ def run(**kw):
         set_test_env(config, secondary_client_node)
         set_test_env(config, primary_rgw_node)
         set_test_env(config, secondary_rgw_node)
+        if archive_cluster_exists:
+            set_test_env(config, archive_rgw_node)
+            set_test_env(config, archive_client_node)
 
         if primary_cluster.rhcs_version.version[0] >= 5:
             setup_cluster_access(primary_cluster, primary_client_node)
@@ -127,6 +131,7 @@ def run(**kw):
             setup_cluster_access(secondary_cluster, secondary_rgw_node)
             if archive_cluster_exists:
                 setup_cluster_access(archive_cluster, archive_rgw_node)
+                setup_cluster_access(archive_cluster, archive_client_node)
     # run the test
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
