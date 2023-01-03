@@ -1,0 +1,57 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: test_cephadm_ansible_wrapper.yaml
+# Test-Case: Perform cephadm operations using cephadm ansible modules
+#
+# Cluster Configuration:
+#    conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/bootstrap-cluster-custom-ssh.yml' playbook
+      polarion-id: CEPH-83575204
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        args:
+          custom_repo: "cdn"
+          registry-url: registry.redhat.io
+          mon-ip: node1
+        ansible_wrapper:
+          module: "cephadm_bootstrap"
+          playbook: playbooks/bootstrap-cluster-custom-ssh.yml
+          module_args:
+            mon_node: node1
+
+  - test:
+      name: Stop 'osd' service using cephadm-ansible module 'ceph_orch_daemon'
+      desc: Execute 'playbooks/stop-osd-service.yml' playbook
+      polarion-id: CEPH-83575211
+      module: test_cephadm_ansible_manage_services.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_daemon"
+          playbook: playbooks/stop-osd-service.yml
+
+  - test:
+      name: Restart mgr service using cephadm-ansible module 'ceph_orch_daemon'
+      desc: Execute 'playbooks/restart-mgr-service.yml' playbook
+      polarion-id: CEPH-83575212
+      module: test_cephadm_ansible_manage_services.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_daemon"
+          playbook: playbooks/restart-mgr-service.yml

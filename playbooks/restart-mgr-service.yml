@@ -1,0 +1,13 @@
+---
+
+- name: Restart mon.0 service
+  hosts: bootstrap
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Restart the mgr service
+      ceph_orch_daemon:
+        state: restarted
+        daemon_id: mgr.0
+        daemon_type: mgr
