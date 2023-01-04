@@ -11,11 +11,14 @@ def remoteName= "ibm-cos"
 def msgMap = [:]
 def tags_list
 def umbLib
+def composeInfo
+def metaData = [:]
+def rp_base_link = "https://reportportal-rhcephqe.apps.ocp-c1.prod.psi.redhat.com"
+def launch_id = ""
 
 node("rhel-8-medium || ceph-qe-ci") {
 
     try {
-
         stage('prepareJenkinsAgent') {
             if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
             checkout(
@@ -45,19 +48,40 @@ node("rhel-8-medium || ceph-qe-ci") {
 
             // prepare the node
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+            sharedLib.prepareNode(3)
+
             msgMap = sharedLib.getCIMessageMap()
             println("msgMap : ${msgMap}")
             println("sharedLib: ${sharedLib}")
-            sharedLib.prepareNode(3)
+
+            emailLib = load("${env.WORKSPACE}/pipeline/vars/email.groovy")
+            println("emailLib : ${emailLib}")
+            reportLib = load("${env.WORKSPACE}/pipeline/vars/upload_results.groovy")
+            println("reportLib : ${reportLib}")
+        }
+
+        stage('updatePipelineMetadata'){
+            println("Stage updatePipelineMetadata")
+            if ( msgMap["pipeline"].containsKey("tags") ) {
+                def tag = msgMap["pipeline"]["tags"]
+                tags_list = tag.split(',') as List
+                def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
+                stageLevel = tags_list.get(stage_index)
+                def tier_index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
+                tierLevel = tags_list.get(tier_index)
+                run_type = msgMap["pipeline"]["run_type"]
+                build_url = msgMap["run"]["url"]
+            }
         }
 
         stage('configureReportPortalWorkDir') {
-            (rpPreprocDir, credsRpProc) = sharedLib.configureRpPreProc()
+            println("Stage configureReportPortalWorkDir")
+            (rpPreprocDir, credsRpProc) = reportLib.configureRpPreProc(sharedLib)
         }
 
-        stage('uploadTestResult') {
-            msgMap = sharedLib.getCIMessageMap()
-            def composeInfo = msgMap["recipe"]
+        stage('uploadTestResultToReportPortal'){
+            println("Stage uploadTestResultToReportPortal")
+            composeInfo = msgMap["recipe"]
 
             def resultDir = msgMap["test"]["object-prefix"]
             println("Test results are available at ${resultDir}")
@@ -70,10 +94,11 @@ node("rhel-8-medium || ceph-qe-ci") {
                 sh "sudo cp -r /ceph/cephci-jenkins/${resultDir} ${tmpDir}"
             }
 
-            def metaData = readYaml file: "${tmpDir}/${resultDir}/metadata.yaml"
+            metaData = readYaml file: "${tmpDir}/${resultDir}/metadata.yaml"
+            println("metadata: ${metaData}")
             def copyFiles = "cp -a ${tmpDir}/${resultDir}/results ${rpPreprocDir}/payload/"
             def copyAttachments = "cp -a ${tmpDir}/${resultDir}/attachments ${rpPreprocDir}/payload/"
-            def rmTmpDir = "sudo rm -rf ${tmpDir}"
+            def rmTmpDir = "rm -rf ${tmpDir}"
 
             // Modifications to reuse methods
             metaData["ceph_version"] = metaData["ceph-version"]
@@ -85,46 +110,13 @@ node("rhel-8-medium || ceph-qe-ci") {
                 metaData["buildArtifacts"] = composeInfo
             }
 
-            def testStatus = "ABORTED"
-            /* Publish results through E-mail and Google Chat */
-            if ( msgMap["pipeline"].containsKey("tags") ) {
-                def tag = msgMap["pipeline"]["tags"]
-                tags_list = tag.split(',') as List
-                def stage_index = tags_list.findIndexOf { it ==~ /stage-\w+/ }
-                stageLevel = tags_list.get(stage_index)
-                def tier_index = tags_list.findIndexOf { it ==~ /tier-\w+/ }
-                tierLevel = tags_list.get(tier_index)
-                run_type = msgMap["pipeline"]["run_type"]
-                build_url = msgMap["run"]["url"]
-            }
-
-            // Send email and gchat notification on tier-0 execution failure
-            if (msgMap["test"]["result"] == "FAILURE" && tierLevel == "tier-0") {
-                sharedLib.sendEmail(
-                    run_type,
-                    metaData['results'],
-                    metaData,
-                    tierLevel,
-                    stageLevel
-                )
-
-                sharedLib.sendGChatNotification(
-                    run_type, metaData["results"], tierLevel, stageLevel, build_url
-                )
-            }
-
             if (metaData["results"]) {
-                if ( ! msgMap["pipeline"].containsKey("tags") ) {
-                    sharedLib.sendEmail(
-                        metaData["results"], metaData, metaData["stage"]
-                    )
-                }
-                def launch_id = sharedLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData, stageLevel, run_type)
+                launch_id = reportLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData, stageLevel, run_type)
+                println("launch_id: ${launch_id}")
                 if (launch_id) {
-                metaData["rp_link"] = "https://reportportal-rhcephqe.apps.ocp-c1.prod.psi.redhat.com/ui/#cephci/launches/all/${launch_id}"
+                    metaData["rp_link"] = "${rp_base_link}/ui/#cephci/launches/all/${launch_id}"
                 }
             }
-            testStatus = msgMap["test"]["result"]
 
             // Remove the sync results folder
             if ('ibmc' in tags_list) {
@@ -132,8 +124,32 @@ node("rhel-8-medium || ceph-qe-ci") {
             } else {
                 sh "sudo rm -r /ceph/cephci-jenkins/${resultDir}"
             }
+        }
 
-            // Update RH recipe file
+        stage('notifyTier-0Failure'){
+            println("Stage notifyTier-0Failure")
+            if (msgMap["test"]["result"] == "FAILURE" && tierLevel == "tier-0") {
+                metaData.put("version", msgMap["artifact"]["nvr"])
+                println("version")
+                println(msgMap["artifact"]["nvr"])
+                emailLib.sendEmail(
+                    sharedLib,
+                    run_type,
+                    metaData['results'],
+                    metaData,
+                    tierLevel,
+                    stageLevel,
+                    msgMap["artifact"]["nvr"]
+                )
+
+                emailLib.sendGChatNotification(
+                    run_type, metaData["results"], tierLevel, stageLevel, build_url
+                )
+            }
+        }
+
+        stage('updateRecipeFile'){
+            println("Stage updateRecipeFile")
             if ( composeInfo != null ) {
                 if ( run_type == "Sanity Run") {
                     if ( tierLevel == null ) {
@@ -161,15 +177,41 @@ node("rhel-8-medium || ceph-qe-ci") {
                         majorVersion, minorVersion, latestContent
                     )
                 }
-                sharedLib.writeToResultsFile(
+            }
+        }
+
+        stage('updateResultsFile'){
+            println("Stage updateResultsFile")
+            if (composeInfo != null){
+                println("Fetching rp_launch_details")
+                def rp_launch_details = [:]
+                if (launch_id){
+                    sh "sleep 60"
+                    rp_launch_details = reportLib.fetchTestItemIdForLaunch(
+                        launch_id,
+                        rp_base_link,
+                        rpPreprocDir,
+                        credsRpProc,
+                        metaData,
+                        stageLevel,
+                        run_type
+                    )
+                }
+                reportLib.writeToResultsFile(
                     msgMap["artifact"]["version"],
+                    run_type,
                     tierLevel,
                     stageLevel,
-                    testStatus,
-                    run_type,
-                    build_url
+                    metaData['results'],
+                    msgMap['run']['url'],
+                    metaData['rp_link'],
+                    rp_launch_details
                 )
             }
+        }
+
+        stage('sendConsolidatedReport'){
+            println("Stage sendConsolidatedReport")
             if (msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2") {
                 def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                 majorVersion = rhcsVersion["major_version"]
@@ -179,16 +221,17 @@ node("rhel-8-medium || ceph-qe-ci") {
                 def testResults = sharedLib.readFromResultsFile(
                     msgMap["artifact"]["version"]
                 )
-                sharedLib.updateConfluencePage(
+                
+                reportLib.updateConfluencePage(
+                    sharedLib,
                     majorVersion,
                     minorVersion,
                     msgMap["artifact"]["version"],
                     run_type,
                     testResults
                 )
-                sharedLib.sendConsolidatedEmail(
+                emailLib.sendConsolidatedEmail(
                     run_type,
-                    testResults,
                     metaData,
                     majorVersion,
                     minorVersion,
@@ -197,9 +240,13 @@ node("rhel-8-medium || ceph-qe-ci") {
                 sharedLib.sendGChatNotification(
                     run_type, metaData["results"], tierLevel, stageLevel, build_url
                 )
-
-                // Remove the release file as it wouldn't be required
             }
+        }
+
+        stage('sendUMBFortier0RC'){
+            // This stage is to send UMB message for OSP interop team
+            // everytime an RC build passes sanity tier-0
+            println("Stage sendUMBFortier0RC")
             if (
                 tags_list.contains("rc") && tierLevel == "tier-0"
                 && msgMap["pipeline"]["final_stage"] && testStatus == "SUCCESS"
@@ -210,7 +257,6 @@ node("rhel-8-medium || ceph-qe-ci") {
                 umbLib = load("${env.WORKSPACE}/pipeline/vars/umb.groovy")
                 umbLib.postUMBTestQueue(nvr, recipeMap, "false")
             }
-            println("Execution complete")
         }
     } catch(Exception err) {
         if (currentBuild.result == "ABORTED") {
