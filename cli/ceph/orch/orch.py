@@ -66,13 +66,16 @@ class Orch(Cli):
             return out[0].strip()
         return out
 
-    def rm(self, service_name):
+    def rm(self, service_name, force=False):
         """
         Removes a service.
         Args:
           service_name (str): name of the service to be removed
+          force (bool) : add or remove --force
         """
         cmd = f"{self.base_cmd} rm {service_name}"
+        if force:
+            cmd += " --force"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
