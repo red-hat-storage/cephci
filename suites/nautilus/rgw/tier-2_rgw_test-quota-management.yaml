@@ -86,6 +86,7 @@ tests:
       module: sanity_rgw.py
       name: test user quota max objects
       polarion-id: CEPH-83575330
+      comments: known issue (bz-2129931)
 
   - test:
       config:
