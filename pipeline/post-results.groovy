@@ -96,9 +96,9 @@ node("rhel-8-medium || ceph-qe-ci") {
 
             metaData = readYaml file: "${tmpDir}/${resultDir}/metadata.yaml"
             println("metadata: ${metaData}")
-            def copyFiles = "cp -a ${tmpDir}/${resultDir}/results ${rpPreprocDir}/payload/"
-            def copyAttachments = "cp -a ${tmpDir}/${resultDir}/attachments ${rpPreprocDir}/payload/"
-            def rmTmpDir = "rm -rf ${tmpDir}"
+            def copyFiles = "sudo cp -a ${tmpDir}/${resultDir}/results ${rpPreprocDir}/payload/"
+            def copyAttachments = "sudo cp -a ${tmpDir}/${resultDir}/attachments ${rpPreprocDir}/payload/"
+            def rmTmpDir = "sudo rm -rf ${tmpDir}"
 
             // Modifications to reuse methods
             metaData["ceph_version"] = metaData["ceph-version"]
