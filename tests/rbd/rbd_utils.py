@@ -35,11 +35,18 @@ class Rbd:
                 continue
 
         if self.ceph_version > 2 and self.k_m:
-            self.datapool = self.config.get("ec_pool_config").get("data_pool")
-            self.ec_profile = self.config.get("ec_pool_config").get(
-                "ec_profile", "rbd_ec_profile"
+            self.datapool = (
+                self.config["ec_pool_config"]["data_pool"]
+                if self.config.get("ec_pool_config", {}).get("data_pool")
+                else "rbd_test_data_pool"
             )
-            self.set_ec_profile(profile=self.ec_profile)
+            if "," in self.k_m:
+                self.ec_profile = self.config.get("ec_pool_config", {}).get(
+                    "ec_profile", "rbd_ec_profile"
+                )
+                self.set_ec_profile(profile=self.ec_profile)
+            else:
+                self.ec_profile = ""
 
     def exec_cmd(self, **kw):
         """

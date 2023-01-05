@@ -88,6 +88,7 @@ tests:
           - ceph-common
           - rbd-nbd
           - jq
+          - fio
         node: node4
       desc: "Configure the client system"
       destroy-cluster: false
@@ -178,3 +179,9 @@ tests:
       module: test_rbd.py
       name: 11_rbd_krbd_exclusive
       polarion-id: CEPH-83574531
+
+  - test:
+      module: delete_clones_with_io.py
+      name: test delete clones with io
+      polarion-id: CEPH-9225
+      Desc: Create clone of an image and delete while krbd IO is running

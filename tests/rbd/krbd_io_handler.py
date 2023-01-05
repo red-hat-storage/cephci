@@ -36,6 +36,7 @@ def krbd_io_handler(**kw):
     else:
         rbd = Rbd(**kw)
     config = kw.get("config")
+    log.debug("Config recieved for execution: ", config)
 
     operations = config["operations"]
     device_names = []
