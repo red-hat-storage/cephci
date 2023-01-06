@@ -10,9 +10,9 @@ globals:
         public: ['10.8.128.0/21']
       nodes:
         -
-          hostname: magna064
+          hostname: argo024
           id: node1
-          ip: 10.8.128.64
+          ip: 10.8.128.224
           root_password: passwd
           role:
             - _admin
@@ -21,26 +21,26 @@ globals:
             - mgr
             - mds
         -
-          hostname: magna065
+          hostname: argo025
           id: node2
-          ip: 10.8.128.65
+          ip: 10.8.128.225
           root_password: passwd
           role:
             - mds
             - mgr
             - mon
         -
-          hostname: magna067
+          hostname: argo026
           id: node3
-          ip: 10.8.128.67
+          ip: 10.8.128.226
           root_password: passwd
           role:
             - mds
             - mon
         -
-          hostname: cali015
+          hostname: argo027
           id: node4
-          ip: 10.8.130.15
+          ip: 10.8.128.227
           root_password: passwd
           role:
             - osd
@@ -54,9 +54,9 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali016
+          hostname: argo028
           id: node5
-          ip: 10.8.130.16
+          ip: 10.8.128.228
           root_password: passwd
           role:
             - osd
@@ -70,9 +70,9 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali017
+          hostname: argo029
           id: node6
-          ip: 10.8.130.17
+          ip: 10.8.128.229
           root_password: passwd
           role:
             - osd
@@ -86,9 +86,9 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali018
+          hostname: argo030
           id: node7
-          ip: 10.8.130.18
+          ip: 10.8.128.230
           root_password: passwd
           role:
             - osd
@@ -102,9 +102,9 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: cali019
+          hostname: argo018
           id: node8
-          ip: 10.8.130.19
+          ip: 10.8.128.218
           root_password: passwd
           role:
             - mds
@@ -118,9 +118,9 @@ globals:
             - /dev/sdf
             - /dev/nvme0n1
         -
-          hostname: cali020
+          hostname: bruuni011
           id: node9
-          ip: 10.8.130.20
+          ip: 10.8.129.211
           root_password: passwd
           role:
             - osd
@@ -133,16 +133,16 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: magna068
+          hostname: bruuni012
           id: node10
-          ip: 10.8.128.68
+          ip: 10.8.129.212
           root_password: passwd
           role:
             - client
         -
-          hostname: magna073
+          hostname: argo019
           id: node11
-          ip: 10.8.128.73
+          ip: 10.8.128.219
           root_password: passwd
           role:
             - client

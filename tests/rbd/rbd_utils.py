@@ -452,7 +452,7 @@ class Rbd:
 
     def image_map(self, pool_name, image_name):
         """Map provided rbd image."""
-        return self.exec_cmd(cmd=f"rbd map {pool_name}/{image_name}", output=True)
+        return self.exec_cmd(cmd=f"rbd map {pool_name}/{image_name}", long_running=True, output=True)
 
     def image_unmap(self, device_name):
         """UnMap provided rbd image."""

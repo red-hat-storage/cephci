@@ -170,7 +170,7 @@ node("magna006") {
         checkout(
             scm: [
                 $class: 'GitSCM',
-                branches: [[name: 'origin/master']],
+                branches: [[name: 'origin/upi_test_bare']],
                 extensions: [[
                     $class: 'CleanBeforeCheckout',
                     deleteUntrackedNestedRepositories: true
@@ -239,13 +239,13 @@ node("magna006") {
         testResults[k].entrySet().each{
             if("${abort_on_failure}" == "true" && "${it.value["result"]}" == "FAIL"){
                 println("ABORT all Stages")
-                publishResultsStage(scenario,testResults, rhBuild, scenarioName)
+//                 publishResultsStage(scenario,testResults, rhBuild, scenarioName)
                 postBuildActionStage(sharedLib,scenario)
                 error("${testResults[k]} failed so aborting all other stages")
             }
         }
         println(testResults)        
     }
-    publishResultsStage(scenario,testResults, rhBuild, scenarioName)
+//     publishResultsStage(scenario,testResults, rhBuild, scenarioName)
     postBuildActionStage(sharedLib,scenario)
 }

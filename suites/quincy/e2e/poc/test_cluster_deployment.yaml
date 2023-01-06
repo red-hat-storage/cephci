@@ -24,7 +24,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                mon-ip: magna064
+                mon-ip: node1
+                allow-fqdn-hostname: true
           - config:
               command: add_hosts
               service: host
@@ -214,10 +215,10 @@ tests:
         id: client.magna068
         install_packages:
           - ceph-common
-          - ceph-base
+#          - ceph-base
           - rbd-nbd
         copy_admin_keyring: true
-        node: magna068
+        node: node10
       desc: "Configure a ceph client"
       destroy-cluster: false
       module: test_client.py
@@ -231,10 +232,10 @@ tests:
         id: client.magna073
         install_packages:
           - ceph-common
-          - ceph-base
+#          - ceph-base
           - rbd-nbd
         copy_admin_keyring: true
-        node: magna073
+        node: node11
       desc: "Configure a ceph client"
       destroy-cluster: false
       module: test_client.py
@@ -245,13 +246,35 @@ tests:
       abort-on-fail: false
       config:
         haproxy_clients:
-          - cali019
+          - node8
         rgw_endpoints:
-          - cali015:80
-          - cali016:80
-          - cali017:80
-          - cali018:80
+          - node4:80
+          - node5:80
+          - node6:80
+          - node7:80
       desc: "Install and configure HA-Proxy for RGW"
       destroy-cluster: false
       module: haproxy.py
       name: "Configure RGW HA Proxy"
+
+  - test:
+      abort-on-fail: false
+      desc: "Fill the cluster with specific percentage"
+      module: test_io.py
+      config:
+        cephfs:
+          "fill_data": 10
+          "io_tool": "smallfile"
+          "mount": "fuse"
+          "filesystem": "cephfs_1"
+          "mount_dir": ""
+#        rbd:
+#          "fill_data": 20
+#          "io_tool": "smallfile"
+#          "pool": "rbd_io"
+#          "image": "test_2"
+#          "mount_dir": ""
+      name: Fill the cluster with configs
+      polarion-id: "~"
+
+

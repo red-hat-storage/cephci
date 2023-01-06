@@ -1,5 +1,6 @@
 import datetime
 import getpass
+import json
 import os
 import random
 import re
@@ -1514,3 +1515,65 @@ def validate_conf(conf):
                 f"Nodes does not have Unique Identifiers, "
                 f"Please set the unique node Ids in global conf {validate_conf.__doc__}"
             )
+def get_storage_stats(client, pool_name=None):
+    """
+    Gets the storage stats for ceph cluster and pools
+    if pool_name is specified then it will return stats of the pool alone
+    Cluster sample Stats:
+    "stats": {
+                "total_bytes": 227010009890816,
+                "total_avail_bytes": 202728810860544,
+                "total_used_bytes": 24281199030272,
+                "total_used_raw_bytes": 24281199030272,
+                "total_used_raw_ratio": 0.10696091502904892,
+                "num_osds": 106,
+                "num_per_pool_osds": 99,
+                "num_per_pool_omap_osds": 99
+        }
+        Pool Sample Stats:
+        "stats": {
+                        "stored": 17594970,
+                        "objects": 87,
+                        "kb_used": 17183,
+                        "bytes_used": 17594970,
+                        "percent_used": 1.3443361979170732e-07,
+                        "max_avail": 43627401183232
+                }
+    """
+    out, rc = client.exec_command(sudo=True, cmd="ceph df -f json")
+    df = json.loads(out)
+    if pool_name:
+        for pool in df.get("pools"):
+            if pool_name == pool.get("name"):
+                return pool.get("stats")
+    return df.get("stats")
+
+
+def convert_bytes(total, unit):
+    """
+    Converts the bytes to specified units
+    agrs:
+     total : bytes
+     unit : mb,gb,tb
+    """
+    unit_dict = {"mb": 2, "gb": 3, "tb": 4}
+    return round(total / pow(1024, unit_dict.get(unit)))
+
+
+def get_smallfile_config(client, percentage, pool_name):
+    cluster_stats = get_storage_stats(client)
+    total_size_in_gb = convert_bytes(cluster_stats.get("total_bytes"), "gb")
+    out, rc = client.exec_command(
+        sudo=True, cmd=f"ceph osd pool get {pool_name} size -f json"
+    )
+    pool = json.loads(out)
+    pool_size = pool.get("size")
+    total_space_to_fill = total_size_in_gb * 0.01 * (percentage / pool_size)
+    if total_space_to_fill > 10:
+        return {
+            "file_size": 1024,
+            "threads": 10,
+            "files": 1024,
+            "iterations": round(total_space_to_fill / 10),
+        }
+    return {"file_size": 1024, "threads": total_space_to_fill, "files": 1024}
