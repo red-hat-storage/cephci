@@ -35,6 +35,49 @@ class RadosOrchestrator:
         self.node = node
         self.ceph_cluster = node.cluster
 
+    def change_recovery_flags(self, action):
+        """Sets and unsets the recovery flags on the cluster
+
+        This method is used to control the recovery and backfill aspects of the cluster by setting/ un-setting
+        the below flags on the cluster at global level.
+        |nobackfill|norebalance|norecover|
+
+        Args:
+            action (str): "set" & "unset" are the allowed actions for the method
+
+        Examples::
+            change_recovery_flags(action="set")
+
+        Returns: None
+        """
+        flags = ["nobackfill", "norebalance", "norecover"]
+        log.debug(
+            f"{action}-ing recovery flags on the cluster to change recovery behaviour"
+        )
+        for flag in flags:
+            cmd = f"ceph osd {action} {flag}"
+            self.node.shell([cmd])
+
+    def check_pg_state(self, pgid: str) -> list:
+        """Fetches and returns the state of PG given
+
+        Args:
+            pgid (str): PG ID
+
+        Examples:
+            check_pg_state(pgid=11.2f)
+
+        Returns: list of PG states for the PG
+        """
+        log.debug(f"Checking the PG state for PG ID : {pgid} ")
+        cmd = "ceph pg dump pgs"
+        pg_stats = self.run_ceph_command(cmd)
+        for pg in pg_stats["pg_stats"]:
+            if pg["pgid"] == pgid:
+                return pg["state"]
+        log.error(f"could not find the given pg : {pgid}")
+        return []
+
     def enable_email_alerts(self, **kwargs) -> bool:
         """
         Enables the email alerts module and configures alerts to be sent
@@ -424,12 +467,16 @@ class RadosOrchestrator:
         Run scrub on the given OSD or on all OSD's
          Args:
             kwargs:
-            1. osd : if a OSD id is passed , scrub to be triggered on that osd
+            1. osd : if an OSD id is passed , scrub to be triggered on that osd
                     eg: obj.run_scrub(osd=3)
-         Returns: True -> pass, False -> fail
+            2. pgid: if a PGID is passed, scrubs are run on that PG
+                    eg: obj.run_scrub(pgid=1.0)
+         Returns: None
         """
         if kwargs.get("osd"):
             cmd = f"ceph osd scrub {kwargs.get('osd')}"
+        elif kwargs.get("pgid"):
+            cmd = f"ceph pg scrub {kwargs.get('pgid')}"
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd scrub all"
@@ -440,12 +487,16 @@ class RadosOrchestrator:
         Run scrub on the given OSD or on all OSD's
             Args:
             kwargs:
-            1. osd : if a OSD id is passed , scrub to be triggered on that osd
+            1. osd : if a OSD id is passed , deep-scrub to be triggered on that osd
                     eg: obj.run_deep_scrub(osd=3)
-            Returns: True -> pass, False -> fail
+            2. pgid: if a PGID is passed, deep-scrubs are run on that PG
+                    eg: obj.run_deep_scrub(pgid=1.0)
+            Returns: None
         """
         if kwargs.get("osd"):
             cmd = f"ceph osd deep-scrub {kwargs.get('osd')}"
+        elif kwargs.get("pgid"):
+            cmd = f"ceph pg deep-scrub {kwargs.get('pgid')}"
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd deep-scrub all"
@@ -1028,7 +1079,7 @@ class RadosOrchestrator:
             systemctl_name = f"ceph-{fsid}@{daemon_type}.{host.shortname}.service"
         try:
             log_lines, err = host.exec_command(
-                cmd=f"sudo journalctl -u {systemctl_name} --since '{start_time}' --until '{end_time}'"
+                cmd=f"sudo journalctl -u {systemctl_name} --since '{start_time.strip()}' --until '{end_time.strip()}'"
             )
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
