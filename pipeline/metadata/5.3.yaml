@@ -709,12 +709,10 @@ suites:
     rhbuild: "5.3"
     inventory:
       openstack: "conf/inventory/rhel-8-latest.yaml"
-      ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
     metadata:
       - sanity
       - tier-2
-      - openstack
-      - ibmc
+      - openstack-only
       - rgw
       - stage-1
 
