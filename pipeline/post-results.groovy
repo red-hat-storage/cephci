@@ -249,13 +249,18 @@ node("rhel-8-medium || ceph-qe-ci") {
             println("Stage sendUMBFortier0RC")
             if (
                 tags_list.contains("rc") && tierLevel == "tier-0"
-                && msgMap["pipeline"]["final_stage"] && testStatus == "SUCCESS"
+                && msgMap.containsKey("pipeline") && msgMap["pipeline"]["final_stage"]
+                && msgMap.containsKey("test") && msgMap["test"]["result"] == "SUCCESS"
             ){
+                def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
+                majorVersion = rhcsVersion["major_version"]
+                minorVersion = rhcsVersion["minor_version"]
+                minorVersion = "${minorVersion}"
                 def recipeMap = sharedLib.readFromReleaseFile(
                     majorVersion, minorVersion, lockFlag=false
                 )
                 umbLib = load("${env.WORKSPACE}/pipeline/vars/umb.groovy")
-                umbLib.postUMBTestQueue(nvr, recipeMap, "false")
+                umbLib.postUMBTestQueue(msgMap["artifact"]["nvr"], recipeMap, "false")
             }
         }
     } catch(Exception err) {

@@ -138,7 +138,7 @@ def get_launch_details(config_file, launch_id):
                 "id": ts.get("id"),
                 "name": ts.get("name"),
                 "status": ts.get("status"),
-                "total": ts.get("statistics").get("executions").get("total"),
+                "total": ts.get("statistics").get("executions").get("total", 0),
                 "passed": ts.get("statistics").get("executions").get("passed", 0),
                 "failed": ts.get("statistics").get("executions").get("failed", 0),
                 "skipped": ts.get("statistics").get("executions").get("skipped", 0),
