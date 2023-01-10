@@ -1,0 +1,285 @@
+#===============================================================================================
+#  Tier-level: 1
+#  Test-Suite: tier-1_skip_dashboard.yaml
+#  Test-Case:
+#      Bootstrap cluster with skip-dashboard, output configuration directories/files,
+#      then enabling the dashboard with provided credentials and validate login
+#
+#  Cluster Configuration:
+#    cephci/conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - RGW
+#     Node5 - Client
+#
+# Test Steps:
+#   (1) Bootstrap cluster with options,
+#       - output-dir : /root/ceph
+#       - output-keyring : /root/ceph/ceph.client.admin.keyring
+#       - output-config : /root/ceph/ceph.conf
+#       - output-pub-ssh-key : /root/ceph/ceph.pub
+#       - skip-dashboard: true
+#       - registry-json: <registry-URL>
+#       - initial-dashboard-user: dashboard-user
+#       - initial-dashboard-password: dashboard-passwd
+#       - fsid: <cluster-fsid>
+#       - mon-ip: <monitor IP address: Required>
+#   (Note: skip-monitoring-stack and orphan-initial-daemons args not used, So expected monitoring and
+#         MON, MGR and Crash services to be deployed with default config)
+#   (2) Copy SSH keys to nodes ad Add it to cluster with address and role labels attached to it.
+#   (3) Deploy services using apply option,
+#       - Deploy Dashboard service and verify its working.
+#       - 3 Mon on node1, node2, node3 using host placements.
+#       - MGR using placement using label(mgr).
+#       - addition of OSD's using "all-avialable-devices" option.
+#       - create FS volume 'cephfs' and MDS service on node2, node3 using host placement.
+#       - RGW on node2, node3 with service Id  using label(rgw) placement.
+#       - alertmanager on node1, node2 using label "alert-manager".
+#       - grafana and prometheus on node1 using host placement with limit.
+#       - crash and node-exporter on all nodes using placement="*".
+#   (4) Configure client node by adding ceph.conf and keying to node.
+#   (5) Setup S3cmd tool and prepare for RGW IO on client Node.
+#   (6) Run IOs from S3cmd tool for 20 mins.
+#   (7) Kernel Mount:
+#       - Create /mnt/cephfs directory and Mount cephfs on client node.
+#           sudo mount -t ceph 10.8.128.110:6789:/ /mnt/cephfs -o name=client.0,secret=<secret-id>
+#       - using dd command create files on /mnt/cephfs directory.
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap with skip-dashboard
+      desc: cephadm bootstrap with skip dashboard, output configuration files
+      module: test_bootstrap.py
+      polarion-id: CEPH-83573716,CEPH-83573715
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+          skip-dashboard: true
+          output-dir: "/root/ceph"
+          output-keyring : "/root/ceph/ceph.client.admin.keyring"
+          output-config : "/root/ceph/ceph.conf"
+          output-pub-ssh-key : "/root/ceph/ceph.pub"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Add all hosts to ceph cluster
+      desc: Add all host node with IP address and labels
+      module: test_host.py
+      polarion-id:
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes: []
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Apply Monitor with limit
+      desc: Apply monitor service with limit count
+      module: test_mon.py
+      abort-on-fail: true
+      polarion-id: CEPH-83573731
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            limit: 3    # no of daemons
+  - test:
+      name: Apply Manager with limit
+      desc: Apply Manager service with limit count
+      module: test_mon.py
+      abort-on-fail: true
+      polarion-id: CEPH-83573733
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            limit: 3    # no of daemons
+  - test:
+      name: Discover devices and Apply OSD Service
+      desc: Discover devices using orch device ls and deploy OSD service
+      module: test_osd.py
+      polarion-id: CEPH-83573769
+      config:
+        command: apply
+        service: osd
+        base_cmd_args:
+          verbose: true
+        args:
+          all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Deploy Service(s) deployment and verify service
+      desc: Validate service(s) deployment using ceph orch ls.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573771
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs                        # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node3
+          - config:
+              command: apply
+              service: rgw
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - myrgw
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: prometheus
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+                  sep: ";"
+          - config:
+              command: apply
+              service: grafana
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+                  sep: ";"
+          - config:
+              command: apply
+              service: alertmanager
+              args:
+                placement:
+                  label: alertmanager
+          - config:
+              command: apply
+              service: node-exporter
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes: "*"
+          - config:
+              command: apply
+              service: crash
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes: "*"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Configure client
+      desc: Configure client on node4
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node4                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable the dashboard
+      desc: After skip-dashboard enable the dashboard and validate login
+      module: test_dashboard.py
+      polarion-id: CEPH-83573717
+      config:
+        command: enable_dashboard
+        args:
+          username: admin123
+          password: admin@123
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable the alertmanager
+      desc: Enables alertmanager monitoring stack
+      module: test_dashboard.py
+      polarion-id: CEPH-83574783
+      config:
+        command: enable_alertmanager
+        args:
+          alertmanager-port: "9093"
+          alertmanager_ssl_set: False
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable the prometheus
+      desc: Enables prometheus monitoring stack
+      module: test_dashboard.py
+      polarion-id: CEPH-83574782
+      config:
+        command: enable_prometheus
+        args:
+          prometheus-port: "9095"
+          prmoetheus-ssl-set: False
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Enable the grafana
+      desc: Enables grafana monitoring stack
+      module: test_dashboard.py
+      polarion-id: CEPH-83574784
+      config:
+        command: enable_grafana
+        args:
+          grafana-port: "3000"
+          grafana-ssl-set: False
+      destroy-cluster: false
+      abort-on-fail: true
