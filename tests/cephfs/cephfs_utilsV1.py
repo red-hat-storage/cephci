@@ -705,6 +705,8 @@ class FsUtils(object):
         )
         if kwargs.get("group_name"):
             snapshot_cmd += f" --group_name {kwargs.get('group_name')}"
+        if kwargs.get("time"):
+            snapshot_cmd = f"time {snapshot_cmd}"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=snapshot_cmd, check_ec=kwargs.get("check_ec", True)
         )
