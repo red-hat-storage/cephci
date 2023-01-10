@@ -844,6 +844,9 @@ def fetchStages(
         upstreamVersion - ex: pacific | quincy
     */
     println("Inside fetch stages from runner")
+
+    def runnerCLI = "cd ${env.WORKSPACE}/pipeline/scripts/ci;"
+
     def rhcephVersion
     if ( ! upstreamVersion ) {
         def RHCSVersion = [:]
@@ -859,13 +862,15 @@ def fetchStages(
         def majorVersion = RHCSVersion.major_version
         def minorVersion = RHCSVersion.minor_version
         rhcephVersion = "${majorVersion}.${minorVersion}"
+        runnerCLI = "${runnerCLI} ${env.WORKSPACE}/.venv/bin/python getTestsForPipeline.py"
     }
-    else { rhcephVersion = upstreamVersion }
+    else {
+        rhcephVersion = upstreamVersion
+        runnerCLI = "${runnerCLI} ${env.WORKSPACE}/.venv/bin/python getPipelineStages.py"
+    }
 
     def overridesStr = writeJSON returnText: true, json: overrides
 
-    def runnerCLI = "cd ${env.WORKSPACE}/pipeline/scripts/ci;"
-    runnerCLI = "${runnerCLI} ${env.WORKSPACE}/.venv/bin/python getPipelineStages.py"
     runnerCLI = "${runnerCLI} --rhcephVersion ${rhcephVersion}"
     runnerCLI = "${runnerCLI} --tags ${tags}"
     runnerCLI = "${runnerCLI} --overrides '${overridesStr}'"

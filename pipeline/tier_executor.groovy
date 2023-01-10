@@ -20,6 +20,7 @@ def tags = ""
 def majorVersion
 def minorVersion
 def buildStatus = "pass"
+def is_openstack_run = false
 
 def branch='origin/master'
 def repo='https://github.com/red-hat-storage/cephci.git'
@@ -124,7 +125,11 @@ node(nodeName) {
             overrides.put("build", "rc")
         }
 
-        if ("openstack" in tags_list || "openstack-only" in tags_list){
+        if (tags_list.findAll{element -> element.contains('openstack')}){
+            is_openstack_run = true
+        }
+
+        if (is_openstack_run){
             (majorVersion, minorVersion) = rhcephVersion.substring(7,).tokenize(".")
             /*
                Read the release yaml contents to get contents,
@@ -227,7 +232,7 @@ node(nodeName) {
 
     parallel testStages
 
-    if ("openstack" in tags_list || "openstack-only" in tags_list){
+    if (is_openstack_run){
         stage('Publish Results') {
 
             // Copy all the results into one folder before upload
@@ -274,8 +279,8 @@ node(nodeName) {
             sh "sudo cp -r ${env.WORKSPACE}/${dirName} /ceph/cephci-jenkins"
 
             run_type = "Manual Run"
-            if ("openstack-only" in tags_list){
-                if ("schedule" in tags_list){
+            if (is_openstack_run){
+                if ("schedule_openstack_only" in tags_list){
                     run_type = "PSI-Only Schedule Run"
                 } else {
                     run_type = "PSI-Only Sanity Run"
