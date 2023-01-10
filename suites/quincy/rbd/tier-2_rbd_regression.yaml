@@ -122,43 +122,19 @@ tests:
       polarion-id: CEPH-83573298
 
   - test:
-      config:
-        ec-pool-k-m: 2,1
-        ec_pool_config:
-          pool: rbd_pool
-          data_pool: rbd_ec_pool
-          ec_profile: rbd_ec_profile
-          image: rbd_image
-          snap: rbd_ecsnap
-          snap_rename: rbd_ecsnap_rename
-          clone: rbd_ecclone
-          size: 10G
-        rep_pool_config:
-          pool: rbd_rep_pool
-          image: rbd_rep_image
-          snap: rbd_snap
-          snap_rename: new_rbd_snap
-          clone: rbd_clone_image
-          size: 10G
       desc: Rename image snapshots on an image on replicated and ecpools and its clones
       module: rbd_snapshot_rename.py
       name: Test Snapshot Rename functionality
       polarion-id: CEPH-9833
 
   - test:
-      config:
-        ec-pool-k-m: 2,1
-        ec_pool_config:
-          pool: rbd_pool_4
-          data_pool: rbd_ec_pool_4
-          ec_profile: rbd_ec_profile_4
-          image: rbd_image_4
-          size: 10G
-        rep_pool_config:
-          pool: rbd_rep_pool
-          image: rbd_rep_image
-          size: 10G
       desc: Rename image snapshot from which another image was cloned on a replicated and ecpool
       module: rbd_rename_cloned_snapshot.py
       name: Test Snapshot Rename for snapshot with clone
       polarion-id: CEPH-9835
+
+  - test:
+      desc: Rename image snapshot when operations on clone/parent image is in progress
+      module: rbd_snapshot_rename_advanced.py
+      name: Test Snapshot Rename with clone operations in progress
+      polarion-id: CEPH-9836
