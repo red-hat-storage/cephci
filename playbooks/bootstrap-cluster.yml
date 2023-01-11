@@ -1,7 +1,7 @@
 ---
 
 - name: Test 'cephadm_bootstrap' module
-  hosts: admin
+  hosts: installer
   gather_facts: false
   become: true
   any_errors_fatal: true
@@ -9,6 +9,7 @@
   tasks:
     - name: Bootstrap with dashboard set to `true` without credenatials
       cephadm_bootstrap:
+        image: "{{ image | default(False) }}"
         mon_ip: "{{ mon_ip }}"
         dashboard: true
         monitoring: false
