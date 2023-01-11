@@ -25,11 +25,13 @@ def run(ceph_cluster, **kw):
     ][0]
     other_cluster = kw.get("ceph_cluster_dict")[other_cluster_name]
 
-    cmd = "hostname -I | awk '{print $1}'"
-    mon_ip = (
-        other_cluster.get_ceph_object("mon").exec_command(cmd=cmd)[0].replace("\n", "")
+    config["ansi_config"]["ceph_rbd_mirror_remote_mon_hosts"] = ",".join(
+        [obj.node.ip_address for obj in other_cluster.get_ceph_objects(role="mon")]
     )
-    config["ansi_config"]["ceph_rbd_mirror_remote_mon_hosts"] = mon_ip
+
+    config["ansi_config"][
+        "ceph_rbd_mirror_remote_cluster"
+    ] = other_cluster.get_cluster_fsid(rhbuild=config["build"])
 
     write_configs_to_rbdmirrors_yaml(ceph_installer, config)
 
@@ -47,8 +49,15 @@ def run(ceph_cluster, **kw):
 
     cmd = (
         "cd /usr/share/ceph-ansible; ANSIBLE_STDOUT_CALLBACK=debug;"
-        f"ansible-playbook -vvvv -i hosts {file_name} --limit rbdmirrors"
+        f"ansible-playbook -vvvv -i hosts {file_name}"
     )
+
+    # Adding a MON node along with rbdmirrors as a workaround for bug 2143209
+    if ceph_cluster.containerized:
+        mon_node = ceph_cluster.get_ceph_object("mon")
+        cmd += f" --limit {mon_node.node.shortname},rbdmirrors"
+    else:
+        cmd += " --limit rbdmirrors"
     rc = ceph_installer.exec_command(cmd=cmd, long_running=True)
 
     return rc

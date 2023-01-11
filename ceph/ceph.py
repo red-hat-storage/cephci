@@ -1097,6 +1097,33 @@ class Ceph(object):
         """Return the list of nodes found in the location."""
         return [node for node in self.node_list if node.vm_node.location == location]
 
+    def get_cluster_fsid(self, rhbuild, cluster_name=None, client=None):
+        """
+            Fetch the fsid of the cluster
+        Args:
+            rhbuild: rhbuild value for the ceph cluster
+            cluster_name: name of the cluster
+            client: client node
+
+        Returns:
+            Returns the fsid of the cluster
+        """
+        cmd = "ceph fsid"
+        pacific = True if (rhbuild and rhbuild.split(".")[0] >= "5") else False
+        if not client:
+            client = (
+                self.get_ceph_object("client")
+                if self.get_ceph_object("client")
+                else self.get_ceph_object("mon")
+            )
+        if cluster_name is not None:
+            cmd += f" --cluster {cluster_name}"
+        if pacific:
+            cmd = f"cephadm shell -- {cmd}"
+
+        out, _ = client.exec_command(cmd=cmd, sudo=True)
+        return out.strip()
+
 
 class CommandFailed(Exception):
     pass

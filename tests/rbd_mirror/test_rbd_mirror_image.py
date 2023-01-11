@@ -43,6 +43,10 @@ def run(**kw):
             io_total=config.get("io-total", "1G"),
             mode="image",
             mirrormode="journal",
+            peer_mode=config.get("peer_mode", "bootstrap"),
+            rbd_client=config.get("rbd_client", "client.admin"),
+            build=config.get("build"),
+            **kw,
         )
 
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
