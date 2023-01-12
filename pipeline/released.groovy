@@ -54,6 +54,10 @@ node("rhel-8-medium || ceph-qe-ci") {
         def cimsg = sharedLib.getCIMessageMap()
         def repoDetails = cimsg.build.extra.image
         def overrides = ["build" : "released"]
+        def workspace = "${env.WORKSPACE}"
+        def build_number = "${currentBuild.number}"
+        overrides.put("workspace", workspace.toString())
+        overrides.put("build_number", build_number.toInteger())
 
         containerImage = repoDetails.index.pull.find({ x -> !(x.contains("sha")) })
 
