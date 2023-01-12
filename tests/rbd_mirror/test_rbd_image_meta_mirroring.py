@@ -61,6 +61,7 @@ def run(**kw):
             imagesize=config.get("imagesize", "1G"),
             mode="image",
             mirrormode="journal",
+            **kw,
         )
 
         # Create image and enable snapshot mirroring"

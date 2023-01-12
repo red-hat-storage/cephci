@@ -46,6 +46,7 @@ def run(**kw):
             imagename=imagename,
             imagesize=config.get("imagesize", "1G"),
             mode="pool",
+            **kw,
         )
 
         mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total", "1G"))

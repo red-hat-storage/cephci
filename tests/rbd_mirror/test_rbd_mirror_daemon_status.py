@@ -36,6 +36,7 @@ def run(**kw):
             imagename=imagename,
             imagesize=config.get("imagesize", "1G"),
             mode="pool",
+            **kw,
         )
 
         # Check rbd-daemon runing status

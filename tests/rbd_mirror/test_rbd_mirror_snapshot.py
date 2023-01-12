@@ -35,6 +35,7 @@ def run(**kw):
             io_total=config.get("io-total", "1G"),
             mode="image",
             mirrormode="snapshot",
+            **kw,
         )
 
         # check if snapshots are created for image created above
