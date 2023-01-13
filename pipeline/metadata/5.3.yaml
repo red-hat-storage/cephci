@@ -350,7 +350,7 @@ suites:
     metadata:
       - schedule
       - tier-2
-      - openstack-only
+      - openstack
       - ibmc
       - rados
       - stage-2
