@@ -126,8 +126,54 @@ tests:
         id: client.1
         install_packages:
           - ceph-common
-        node: node7
+          - ceph-fuse
+        node: node8
       desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
@@ -155,3 +201,10 @@ tests:
       polarion-id: CEPH-83573876
       desc: Test no data sharing between multiple cephfs
       abort-on-fail: false
+  - test:
+      name: Mount single directory and perform IO ops from multiple clients
+      module: clients.multiclients_io_on_same_directory.py
+      polarion-id: CEPH-11224
+      desc: multiple clients performing IO on same directory
+      abort-on-fail: false
+
