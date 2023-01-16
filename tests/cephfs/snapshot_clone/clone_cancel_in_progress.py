@@ -111,6 +111,6 @@ def run(ceph_cluster, **kw):
         fs_util.remove_subvolume(client1, "cephfs", subvolume_name)
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1

@@ -25,6 +25,7 @@
 #   CEPH-83573522	Verify the retained snapshot details with "ceph fs info" command
 #   CEPH-83574724   Create Clone of subvolume which is completely filled with data till disk quota exceeded
 #   CEPH-83575038   verify CRUD operation on metadata of subvolume's snapshot
+#   CEPH-83574681 Cancel the subvolume snapshot clonning
 #===============================================================================================
 tests:
   -
@@ -214,4 +215,10 @@ tests:
       module: snapshot_clone.snapshot_metadata.py
       polarion-id: CEPH-83575038
       desc: verify CRUD operation on metadata of subvolume's snapshot
+      abort-on-fail: false
+  - test:
+      name: cancel the subvolume snapshot clonning
+      module: snapshot_clone.clone_cancel_in_progress.py
+      polarion-id: CEPH-83574681
+      desc: Try to cancel the snapshot while clonning is operating
       abort-on-fail: false
