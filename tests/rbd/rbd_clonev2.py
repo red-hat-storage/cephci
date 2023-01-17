@@ -1,8 +1,71 @@
-from tests.rbd.exceptions import ImageFoundError, ImageNotFoundError, RbdBaseException
-from tests.rbd.rbd_utils import Rbd
+from tests.rbd.exceptions import RbdBaseException
+from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def rbd_clonev2(rbd, pool_type, **kw):
+    """
+    Run snap and clone operations with clonev2 function
+    Args:
+        rbd: rbd object
+        pool_type: pool type (ec_pool_config or rep_pool_config)
+        **kw: test data
+    """
+    pool = kw["config"][pool_type]["pool"]
+    image = kw["config"][pool_type]["image"]
+    snap = kw["config"][pool_type].get("snap", f"{image}_snap")
+    clone = kw["config"][pool_type].get("clone", f"{image}_clone")
+
+    try:
+        if rbd.snap_create(pool, image, snap):
+            log.error(f"Creation of snapshot {snap} failed")
+            return 1
+
+        snap_name = f"{pool}/{image}@{snap}"
+        cmd = "ceph osd set-require-min-compat-client mimic"
+        if rbd.exec_cmd(cmd=cmd):
+            log.error(f"Execution of command {cmd} failed")
+            return 1
+
+        if rbd.create_clone(snap_name, pool, clone):
+            log.error(f"Creation of clone {clone} failed")
+            return 1
+
+        cmd = "ceph config set client rbd_move_parent_to_trash_on_remove true"
+        if rbd.exec_cmd(cmd=cmd):
+            log.error(f"Execution of command {cmd} failed")
+            return 1
+
+        if rbd.snap_remove(pool, image, snap):
+            log.error(f"Removal of snapshot {snap} failed")
+            return 1
+
+        if rbd.remove_image(pool, image):
+            log.error(f"Removal of image {image} failed")
+            return 1
+
+        if not rbd.trash_exist(pool, image):
+            log.error("Deleted Image not found in the Trash")
+            return 1
+
+        if rbd.flatten_clone(pool, clone):
+            log.error(f"Flatten of clone {clone} failed")
+            return 1
+
+        if rbd.trash_exist(pool, image):
+            log.error("Images are found in Trash")
+            return 1
+        return 0
+
+    except RbdBaseException as error:
+        print(error.message)
+        return 1
+
+    finally:
+        if not kw.get("config").get("do_not_cleanup_pool"):
+            rbd.clean_up(pools=[pool])
 
 
 def run(**kw):
@@ -33,37 +96,20 @@ def run(**kw):
     4. Create clone for an image which is having snapshots
     5. Remove parent image snapshot and check the status
     6. Flattened the clone and check the trash views
+    7. Repeat the above steps for ecpool
     """
     log.info("Running snap and clone operations with v2clone function")
     log.info("executing *****")
-    rbd = Rbd(**kw)
-    pool = rbd.random_string()
-    image = rbd.random_string()
-    snap = rbd.random_string()
-    clone = rbd.random_string()
-    size = "1G"
+    rbd_obj = initial_rbd_config(**kw)
+    rc = 1
+    if rbd_obj:
+        log.info("Executing test on replicated pool")
+        rc = rbd_clonev2(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw)
 
-    try:
-        rbd.initial_rbd_config(rbd, pool, image, size=size)
-        rbd.snap_create(pool, image, snap)
-        snap_name = f"{pool}/{image}@{snap}"
-        cmd = "ceph osd set-require-min-compat-client mimic"
-        rbd.exec_cmd(cmd=cmd)
-        rbd.create_clone(snap_name, pool, clone)
-        cmd = "ceph config set client rbd_move_parent_to_trash_on_remove true"
-        rbd.exec_cmd(cmd=cmd)
-        rbd.snap_remove(pool, image, snap)
-        rbd.remove_image(pool, image)
-        if not rbd.trash_exist(pool, image):
-            raise ImageNotFoundError(" Deleted Image not found in the Trash")
-        rbd.flatten_clone(pool, clone)
-        if rbd.trash_exist(pool, image):
-            raise ImageFoundError("Images are found in Trash")
-        return 0
+        if rc:
+            return rc
 
-    except RbdBaseException as error:
-        print(error.message)
-        return 1
+        log.info("Executing test on ec pool")
+        rc = rbd_clonev2(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw)
 
-    finally:
-        rbd.clean_up(pools=[pool])
+    return rc
