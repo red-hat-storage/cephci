@@ -27,6 +27,7 @@ def run(**kw):
             imagesize=config.get("imagesize", "1G"),
             io_total=config.get("io-total", "1G"),
             mode="pool",
+            **kw,
         )
 
         mirror2.wait_for_replay_complete(imagespec=imagespec)

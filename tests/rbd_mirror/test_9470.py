@@ -28,6 +28,7 @@ def run(**kw):
             imagesize=config.get("imagesize", "1G"),
             io_total=config.get("io-total", "1G"),
             mode="pool",
+            **kw,
         )
 
         hard_reboot(osd_cred, name="ceph-rbd1")

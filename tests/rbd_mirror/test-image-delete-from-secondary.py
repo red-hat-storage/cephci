@@ -51,6 +51,7 @@ def run(**kw):
             io_total=config.get("io-total", "1G"),
             mode="image",
             mirrormode="snapshot",
+            **kw,
         )
 
         # promote and demote images
