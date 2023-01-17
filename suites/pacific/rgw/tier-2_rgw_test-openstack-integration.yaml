@@ -1,0 +1,162 @@
+#
+# Objective: Test openstack integration with ceph
+#       - keystone integration with ceph rgw
+#
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: Install standalone openstack platform to integrate with ceph.
+      module: install_standalone_osp.py
+      name: install standalone openstack platform
+      clusters:
+        openstack:
+          config:
+            admin_password: Welcome123#
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+      clusters:
+        ceph:
+          config:
+            key1: value1
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - rgw.1
+                  args:
+                    placement:
+                      label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      clusters:
+        ceph:
+          config:
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_accepted_roles admin"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_admin_domain default"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_admin_password Welcome123#"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_admin_project admin"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_admin_tenant admin"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_admin_user admin"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_api_version 3"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_token_cache_size 10"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_verify_ssl false"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_s3_auth_use_keystone true"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_keystone_url http://{node_ip:openstack#node1}:5000"
+              - "ceph orch restart {service_name:rgw.1}"
+        openstack:
+          config:
+            commands:
+              - "source ./os_auth.sh ; openstack endpoint create --region regionOne swift public 'http://{node_ip:ceph#node5}:80/swift/v1'"
+              - "source ./os_auth.sh ; openstack endpoint create --region regionOne swift internal 'http://{node_ip:ceph#node5}:80/swift/v1'"
+              - "source ./os_auth.sh ; openstack endpoint create --region regionOne swift admin 'http://{node_ip:ceph#node5}:80/swift/v1'"
+      desc: integrate ceph rgw with openstack keystone
+      module: exec.py
+      name: integrate ceph with openstack
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        openstack:
+          config:
+            commands:
+              - "source ./os_auth.sh ; swift post container1"
+              - "source ./os_auth.sh ; swift list"
+        ceph:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin user list"
+              - "radosgw-admin bucket list"
+      desc: create a container on osp node and display it on ceph node
+      module: exec.py
+      name: create and display swift container

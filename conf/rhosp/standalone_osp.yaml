@@ -1,0 +1,11 @@
+globals:
+  - ceph-cluster:
+      name: openstack
+      node1:
+        disk-size: 20
+        no-of-volumes: 4
+        networks: provider_net_cci_13
+        role:
+          - osp
+          - installer
+          - client

@@ -93,6 +93,9 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
         [--skip-sos-report]
+        [--osp-version <osp_version>]
+        [--osp-conf <FILE>]
+        [--osp-inventory <FILE>]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
@@ -156,6 +159,10 @@ Options:
                                     rhel images for Interop runs
   --skip-sos-report                 Enables to collect sos-report on test suite failures
                                     [default: false]
+  --osp-version <17.0>              Version of Openstack to be installed
+                                    eg: 17.0, 16.2
+  --osp-conf <file>                 osp cluster configuration file
+  --osp-inventory <file>            osp hosts inventory file
 """
 log = Log()
 test_names = []
@@ -383,6 +390,9 @@ def run(args):
     # These are not mandatory options
     inventory_file = args.get("--inventory")
     osp_cred_file = args.get("--osp-cred")
+    osp_version = args.get("--osp-version")
+    osp_conf = args.get("--osp-conf")
+    osp_inventory = args.get("--osp-inventory")
 
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
     cleanup_name = args.get("--cleanup")
@@ -517,6 +527,14 @@ def run(args):
 
         if inventory.get("instance", {}).get("create"):
             distro.append(inventory.get("instance").get("create").get("image-name"))
+
+    # merge osp conf with global conf
+    if osp_conf:
+        osp_cluster_conf = load_file(osp_conf)
+        for cluster in osp_cluster_conf["globals"]:
+            if osp_inventory and not cluster.get("ceph-cluster").get("inventory"):
+                cluster["ceph-cluster"]["inventory"] = osp_inventory
+        conf["globals"].extend(osp_cluster_conf["globals"])
 
     for cluster in conf.get("globals"):
 
@@ -860,6 +878,8 @@ def run(args):
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
+
+            config["osp_version"] = osp_version
 
             try:
                 if post_to_report_portal:
