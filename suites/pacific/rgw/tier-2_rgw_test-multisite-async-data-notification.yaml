@@ -313,3 +313,121 @@ tests:
       polarion-id: CEPH-83575231
       module: sanity_rgw_multisite.py
       name: test_async_data_notifications_on_secondary
+# testing bucket and object encryption with sse-s3 and sse-kms on multisite
+# configuring vault agent on both the sites
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+        ceph-sec:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/cephTransit "
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:shared.sec}"
+            timeout: 120
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/cephTransit "
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:shared.pri}"
+            timeout: 120
+      desc: Setting vault configs for sse-s3 on multisite
+      module: exec.py
+      name: set sse-s3 vault configs on multisite
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw_multisite.py
+      name: sse-s3 per bucket encryption test
+      polarion-id: CEPH-83574622
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+            verify-io-on-site: ["ceph-pri"]
+            timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_version_enabled
+      module: sanity_rgw_multisite.py
+      name: sse-s3 per bucket encryption test on a versiond bucket
+      polarion-id: CEPH-83574622
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: test_sse_s3_per_object_with_versioning
+      module: sanity_rgw_multisite.py
+      name: est_sse_s3_per_object_with_versioning
+      polarion-id: CEPH-83575153
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_kms_per_object_versioninig_enabled.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: test_sse_kms_per_object_with_versioning
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_per_object_with_versioning
+      polarion-id: CEPH-83574038
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_kms_per_bucket_encryption_version_enabled.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: test_sse_kms_per_bucket_with_versioning
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_per_bucket_with_versioning
+      polarion-id: CEPH-83575153
+
