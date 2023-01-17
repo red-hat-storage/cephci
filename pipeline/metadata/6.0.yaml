@@ -963,3 +963,131 @@ suites:
       - ibmc
       - rgw
       - stage-1
+
+  - name: "Deploy all services using a spec file option"
+    suite: "suites/quincy/cephadm/tier-1_service_apply_spec.yaml"
+    global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-4
+
+  - name: "Execute cephadm-clients playbook to copy keyring with the same name as specified by the keyring parameter"
+    suite: "suites/quincy/cephadm/tier-1_cephadm-clients.yaml"
+    global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-4
+
+  - name: "Execute os tuning profiles test cases"
+    suite: "suites/quincy/cephadm/tier-1_os_tuning_profiles.yaml"
+    global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-4
+
+  - name: "Execute purge cluster using rm-cluster commands"
+    suite: "suites/quincy/cephadm/tier-1_remove_cluster.yaml"
+    global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-4
+
+  - name: "Deploy all services using a spec file option"
+    suite: "suites/quincy/cephadm/tier-1_test-container-cli-args.yaml"
+    global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-5
+
+  - name: "Bootstrap cluster with skip-dashboard, output configuration directories/files."
+    suite: "suites/quincy/cephadm/tier-1_skip_dashboard.yaml"
+    global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-5
+
+  - name: "Bootstrap cluster with custom ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key and apply-spec options."
+    suite: "suites/quincy/cephadm/tier-1_ssl_dashboard_port.yaml"
+    global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-1
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-5
+
+  - name: "cephadm cluster bootstrap with mutiple public network."
+    suite: "suites/quincy/cephadm/tier-2_multiple_subnet_openstack_only.yaml"
+    global-conf: "conf/quincy/cephadm/tier-2_multiple_subnet_openstack_only.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-2
+      - openstack
+      - ibmc
+      - dmfg
+      - stage-5
