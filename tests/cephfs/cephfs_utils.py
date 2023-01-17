@@ -83,7 +83,7 @@ class FsUtils(object):
                 + self.mon_node_ip[-1].strip("/0")
             )
             self.mon_node_ip = self.mon_node_ip.split(" ")
-            if build.startswith("4") or build.startswith("5"):
+            if build.startswith(("4", "5", "6")):
                 self.mon_node_ip[0] = re.search(
                     r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
                     self.mon_node_ip[0],

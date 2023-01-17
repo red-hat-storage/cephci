@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import re
 import time
@@ -587,7 +588,7 @@ def check_ceph_healthly(
                     )
                 )
         else:
-            out, _ = ceph_mon.exec_command(cmd="sudo ceph -s")
+            out, _ = ceph_mon.exec_command(sudo=True, cmd="ceph -s -f json")
 
         if not any(state in out for state in pending_states):
             if all(state in out for state in valid_states):
@@ -604,6 +605,10 @@ def check_ceph_healthly(
     all_osds = int(match.group(1))
     up_osds = int(match.group(2))
     in_osds = int(match.group(3))
+    cluster_status = json.loads(out)
+    all_osds = cluster_status["osdmap"]["num_osds"]
+    up_osds = cluster_status["osdmap"]["num_up_osds"]
+    in_osds = cluster_status["osdmap"]["num_in_osds"]
     if num_osds != all_osds:
         log.error("Not all osd's are up. %s / %s" % (num_osds, all_osds))
         return 1
@@ -615,7 +620,7 @@ def check_ceph_healthly(
     match = re.search(r"(\d+) daemons, quorum", out)
     if not match:
         match = re.search(r"(\d+) mons at", out)
-    all_mons = int(match.group(1))
+    all_mons = cluster_status["monmap"]["num_mons"]
     if all_mons != num_mons:
         log.error("Not all monitors are in cluster")
         return 1
