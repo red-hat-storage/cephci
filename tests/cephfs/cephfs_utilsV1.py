@@ -387,6 +387,7 @@ class FsUtils(object):
         log.info("Wait for the mount to appear")
         while end_time > datetime.datetime.now():
             out, rc = client.exec_command(sudo=True, cmd="mount", check_ec=False)
+            log.info(out)
             mount_output = out.rstrip("\n").split()
             log.info("Validate Fuse Mount:")
             if mount_point.rstrip("/") in mount_output:
@@ -411,7 +412,7 @@ class FsUtils(object):
         """
         for client in kernel_clients:
             log.info("Creating mounting dir:")
-            client.exec_command(sudo=True, cmd="mkdir %s" % mount_point)
+            client.exec_command(sudo=True, cmd="mkdir -p %s" % mount_point)
             client.exec_command(
                 sudo=True,
                 cmd=f"ceph auth get-key client.{kwargs.get('new_client_hostname', client.node.hostname)} -o "
@@ -426,14 +427,17 @@ class FsUtils(object):
 
             if kwargs.get("extra_params"):
                 kernel_cmd += f"{kwargs.get('extra_params')}"
-            client.exec_command(
+            cmd_rc = client.exec_command(
                 sudo=True,
                 cmd=kernel_cmd,
                 long_running=True,
             )
             log.info("validate kernel mount:")
-            if not self.wait_until_mount_succeeds(client, mount_point):
-                raise CommandFailed("Failed to appear in mount cmd even after 5 min")
+            if kwargs.get("validate", True):
+                if not self.wait_until_mount_succeeds(client, mount_point):
+                    raise CommandFailed(
+                        "Failed to appear in mount cmd even after 5 min"
+                    )
             if kwargs.get("fstab"):
                 try:
                     client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
@@ -456,6 +460,7 @@ class FsUtils(object):
                 fstab.write(fstab_entry + "\n")
                 fstab.flush()
                 fstab.close()
+        return cmd_rc
 
     def get_mon_node_ips(self):
         """
