@@ -42,11 +42,17 @@ def run(**kw):
         snapshot_schedule_level = config.get("snapshot_schedule_level")
         if not snapshot_schedule_level or snapshot_schedule_level == "cluster":
             mirror1.mirror_snapshot_schedule_add()
+            mirror1.mirror_snapshot_schedule_add(interval="1h")
         elif snapshot_schedule_level == "pool":
             mirror1.mirror_snapshot_schedule_add(poolname=poolname)
+            mirror1.mirror_snapshot_schedule_add(poolname=poolname, interval="1h")
         else:
             mirror1.mirror_snapshot_schedule_add(poolname=poolname, imagename=imagename)
-        mirror1.verify_snapshot_schedule(imagespec)
+            mirror1.mirror_snapshot_schedule_add(
+                poolname=poolname, imagename=imagename, interval="1h"
+            )
+        # this is the verification of interval 1h
+        mirror1.verify_snapshot_schedule(imagespec, interval=40)
         mirror1.mirror_snapshot_schedule_list(poolname=poolname, imagename=imagename)
         mirror1.mirror_snapshot_schedule_status(poolname=poolname, imagename=imagename)
 
@@ -67,12 +73,17 @@ def run(**kw):
 
         # snapshot schedule should be removed at the level (cluster, pool, image) at which it was added
         if not snapshot_schedule_level or snapshot_schedule_level == "cluster":
+            mirror1.mirror_snapshot_schedule_remove(interval="1h")
             mirror1.mirror_snapshot_schedule_remove()
             mirror1.verify_snapshot_schedule_remove()
         elif snapshot_schedule_level == "pool":
+            mirror1.mirror_snapshot_schedule_remove(poolname=poolname, interval="1h")
             mirror1.mirror_snapshot_schedule_remove(poolname=poolname)
             mirror1.verify_snapshot_schedule_remove(poolname=poolname)
         else:
+            mirror1.mirror_snapshot_schedule_remove(
+                poolname=poolname, imagename=imagename, interval="1h"
+            )
             mirror1.mirror_snapshot_schedule_remove(
                 poolname=poolname, imagename=imagename
             )
