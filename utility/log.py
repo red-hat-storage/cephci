@@ -26,8 +26,7 @@ from typing import Any, Dict
 
 from .config import TestMetaData
 
-LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-# EX: 2022-11-15 11:37:00,346 - DEBUG  - Completed log configuration
+LOG_FORMAT = "%(asctime)s (%(name)s) [%(levelname)s] - %(message)s"
 magna_server = "http://magna002.ceph.redhat.com"
 magna_url = f"{magna_server}/cephci-jenkins/"
 
