@@ -539,12 +539,12 @@ def initial_rbd_config(**kw):
         **kw:
 
     Examples: In default configuration, pool and image names will be taken as random values.
-        Default configuration for ecpools:
+        Default configuration for ecpools only :
             config:
-                ec-pool-k-m: 2,1
                 ec-pool-only: True
-        Default configuration for replicated pools:
-            <kw["config"]> can be left empty
+        Default configuration for replicated pools only :
+            config:
+                rep-pool-only: True
         Advanced configuration:
             config:
                do_not_create_image: True  # if not set then images will be created by default
@@ -570,25 +570,25 @@ def initial_rbd_config(**kw):
         if not kw.get("config"):
             kw["config"] = {
                 "rep_pool_config": {
-                    "pool": rbd_reppool.random_string(),
-                    "image": rbd_reppool.random_string(),
+                    "pool": "rep_pool_" + rbd_reppool.random_string(),
+                    "image": "rep_image_" + rbd_reppool.random_string(),
                     "size": "10G",
                 }
             }
         elif kw.get("config").get("rep_pool_config"):
             kw["config"]["rep_pool_config"]["pool"] = kw["config"][
                 "rep_pool_config"
-            ].get("pool", rbd_reppool.random_string())
+            ].get("pool", "rep_pool_" + rbd_reppool.random_string())
             kw["config"]["rep_pool_config"]["image"] = kw["config"][
                 "rep_pool_config"
-            ].get("image", rbd_reppool.random_string())
+            ].get("image", "rep_image_" + rbd_reppool.random_string())
             kw["config"]["rep_pool_config"]["size"] = kw["config"][
                 "rep_pool_config"
             ].get("size", "10G")
         else:
             kw["config"]["rep_pool_config"] = {
-                "pool": rbd_reppool.random_string(),
-                "image": rbd_reppool.random_string(),
+                "pool": "rep_pool_" + rbd_reppool.random_string(),
+                "image": "rep_image_" + rbd_reppool.random_string(),
                 "size": "10G",
             }
 
@@ -608,7 +608,9 @@ def initial_rbd_config(**kw):
         kw["config"]["ec-pool-k-m"] = ec_pool_k_m
         rbd_obj.update({"rbd_reppool": rbd_reppool})
 
-    if kw.get("config").get("ec-pool-k-m"):
+    if not kw.get("config").get("rep-pool-only"):
+        if not kw.get("config").get("ec-pool-k-m"):
+            kw["config"]["ec-pool-k-m"] = "go_with_default"
         if kw.get("config").get("ec_pool_config"):
             kw["config"]["ec_pool_config"]["data_pool"] = kw["config"][
                 "ec_pool_config"
@@ -626,10 +628,10 @@ def initial_rbd_config(**kw):
 
         rbd_ecpool = Rbd(**kw)
         kw["config"]["ec_pool_config"]["pool"] = kw["config"]["ec_pool_config"].get(
-            "pool", rbd_ecpool.random_string()
+            "pool", "ec_img_pool_" + rbd_ecpool.random_string()
         )
         kw["config"]["ec_pool_config"]["image"] = kw["config"]["ec_pool_config"].get(
-            "image", rbd_ecpool.random_string()
+            "image", "ec_image" + rbd_ecpool.random_string()
         )
         kw["config"]["ec_pool_config"]["size"] = kw["config"]["ec_pool_config"].get(
             "size", "10G"
