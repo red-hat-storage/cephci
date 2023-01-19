@@ -1,9 +1,9 @@
 ---
-version_id: 8.5
+version_id: 8.7
 id: rhel
 instance:
   create:
-    image-name: rhel-8.5.0-x86_64-released
+    image-name: RHEL-8.7.0-x86_64-ga-latest
     vm-size: ci.m1.large
 
   setup: |

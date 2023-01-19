@@ -2,13 +2,13 @@
 
 def argsMap = [
     "4": [
-        "inventory": "conf/inventory/rhel-8.5-server-x86_64-large.yaml",
+        "inventory": "conf/inventory/rhel-8.7-server-x86_64-large.yaml",
         "globalConf": "conf/nautilus/integrations/7_node_ceph.yaml",
         "suite": "suites/nautilus/integrations/ocs.yaml",
         "platform": "rhel-8"
     ],
     "5": [
-        "inventory": "conf/inventory/rhel-8.5-server-x86_64-large.yaml",
+        "inventory": "conf/inventory/rhel-8.7-server-x86_64-large.yaml",
         "globalConf": "conf/pacific/integrations/7_node_ceph.yaml",
         "suite": "suites/pacific/integrations/ocs.yaml",
         "platform": "rhel-8",
