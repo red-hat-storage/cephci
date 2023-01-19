@@ -38,11 +38,11 @@ class Rbd:
             self.datapool = (
                 self.config["ec_pool_config"]["data_pool"]
                 if self.config.get("ec_pool_config", {}).get("data_pool")
-                else "rbd_test_data_pool"
+                else "rbd_test_data_pool_" + self.random_string()
             )
             if "," in self.k_m:
                 self.ec_profile = self.config.get("ec_pool_config", {}).get(
-                    "ec_profile", "rbd_ec_profile"
+                    "ec_profile", "rbd_ec_profile_" + self.random_string()
                 )
                 self.set_ec_profile(profile=self.ec_profile)
             else:
@@ -63,10 +63,19 @@ class Rbd:
             if self.k_m and "rbd create" in cmd and "--data-pool" not in cmd:
                 cmd = cmd + " --data-pool {}".format(self.datapool)
 
+            if kw.get("long_running"):
+                out = node.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                    long_running=True,
+                    check_ec=kw.get("check_ec", True),
+                )
+                return out
+
             out, err = node.exec_command(
                 sudo=True,
                 cmd=cmd,
-                long_running=kw.get("long_running", False),
+                long_running=False,
                 check_ec=kw.get("check_ec", True),
             )
 
@@ -262,7 +271,7 @@ class Rbd:
             )
             return 0
         else:
-            log.error(f"Snapshot rename failed for {current_snap_name}")
+            log.error(f"Snapshot rename verification failed for {current_snap_name}")
             return 1
 
     def snap_remove(self, pool_name, image_name, snap_name):
@@ -511,6 +520,21 @@ class Rbd:
         """UnMap provided rbd image."""
         return self.exec_cmd(cmd=f"rbd unmap {device_name}", output=True)
 
+    def rbd_bench(self, **kw):
+        """
+        This method writes IOs using rbd bench
+        Args:
+            **kw: test data
+                io: Amount of IO to be written, default size is 500MB
+                imagespec: pool/image on which IO needs to be run
+        """
+        cmd = f"rbd bench --io-type {kw.get('io_type', 'write')} --io-threads {kw.get('io_threads', 16)}"
+        cmd += f" --io-total {kw.get('io', '500M')} {kw.get('imagespec')}"
+        return self.exec_cmd(
+            cmd=cmd,
+            long_running=True,
+        )
+
     def clean_up(self, **kw):
         if kw.get("dir_name"):
             self.exec_cmd(cmd="rm -rf {}".format(kw.get("dir_name")))
@@ -523,7 +547,7 @@ class Rbd:
             # mon_allow_pool_delete must be True for removing pool
             if self.ceph_version >= 5:
                 self.exec_cmd(cmd="ceph config set mon mon_allow_pool_delete true")
-                sleep(60)
+                sleep(20)
 
             for pool in pool_list:
                 self.exec_cmd(
@@ -611,31 +635,25 @@ def initial_rbd_config(**kw):
     if not kw.get("config").get("rep-pool-only"):
         if not kw.get("config").get("ec-pool-k-m"):
             kw["config"]["ec-pool-k-m"] = "go_with_default"
-        if kw.get("config").get("ec_pool_config"):
-            kw["config"]["ec_pool_config"]["data_pool"] = kw["config"][
-                "ec_pool_config"
-            ].get("data_pool", "rbd_datapool")
-            kw["config"]["ec_pool_config"]["ec_profile"] = kw["config"][
-                "ec_pool_config"
-            ].get("ec_profile", "rbd_ecprofile")
-        else:
-            kw["config"] = {
-                "ec_pool_config": {
-                    "data_pool": "rbd_datapool",
-                    "ec_profile": "rbd_ecprofile",
-                }
-            }
 
         rbd_ecpool = Rbd(**kw)
-        kw["config"]["ec_pool_config"]["pool"] = kw["config"]["ec_pool_config"].get(
-            "pool", "ec_img_pool_" + rbd_ecpool.random_string()
-        )
-        kw["config"]["ec_pool_config"]["image"] = kw["config"]["ec_pool_config"].get(
-            "image", "ec_image" + rbd_ecpool.random_string()
-        )
-        kw["config"]["ec_pool_config"]["size"] = kw["config"]["ec_pool_config"].get(
-            "size", "10G"
-        )
+
+        if kw.get("config").get("ec_pool_config"):
+            kw["config"]["ec_pool_config"]["pool"] = kw["config"]["ec_pool_config"].get(
+                "pool", "ec_img_pool_" + rbd_ecpool.random_string()
+            )
+            kw["config"]["ec_pool_config"]["image"] = kw["config"][
+                "ec_pool_config"
+            ].get("image", "ec_image" + rbd_ecpool.random_string())
+            kw["config"]["ec_pool_config"]["size"] = kw["config"]["ec_pool_config"].get(
+                "size", "10G"
+            )
+        else:
+            kw["config"]["ec_pool_config"] = {
+                "pool": "ec_img_pool_" + rbd_reppool.random_string(),
+                "image": "ec_image" + rbd_reppool.random_string(),
+                "size": "10G",
+            }
 
         if not rbd_ecpool.create_pool(poolname=kw["config"]["ec_pool_config"]["pool"]):
             log.error(
@@ -651,3 +669,24 @@ def initial_rbd_config(**kw):
         rbd_obj.update({"rbd_ecpool": rbd_ecpool})
 
     return rbd_obj
+
+
+def execute_dynamic(rbd, test, results: dict, **kwargs):
+    """
+    Executes the test specified in test parameter with inputs args and returns results
+    Args:
+        rbd: rbd object
+        test: test to be executed
+        results: test result
+        **kwargs: input args required for the test
+
+    Returns:
+        results updated to results dict
+    """
+    method = getattr(rbd, test)
+    rc = method(**kwargs)
+    log.info(f"Return value for execution of method: {test} is {rc}")
+    if rc:
+        results.update({test: 1})
+    else:
+        results.update({test: 0})
