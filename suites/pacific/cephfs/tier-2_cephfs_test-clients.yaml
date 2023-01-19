@@ -207,4 +207,9 @@ tests:
       polarion-id: CEPH-11224
       desc: multiple clients performing IO on same directory
       abort-on-fail: false
-
+  - test:
+      name: smallfile IO on multiple clients with diff operations
+      module: clients.smallfiles_with_different_operations.py
+      polarion-id: CEPH-10625
+      desc: smallfiles with different operations
+      abort-on-fail: false
