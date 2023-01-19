@@ -1,25 +1,27 @@
 from ceph.parallel import parallel
-from tests.rbd.rbd_utils import Rbd
+from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 
 log = Log(__name__)
 
 
-def run(**kw):
-    log.info("Running rbd export tests")
-    rbd = Rbd(**kw)
-    config = kw.get("config")
-    pool = rbd.random_string()
-    image = rbd.random_string()
-    snap = rbd.random_string()
+def faster_exports(rbd, pool_type, **kw):
+    """
+    Run rbd export tests
+    Args:
+        rbd: RBD object
+        pool_type: pool type (ec_pool_config or rep_pool_config)
+        **kw: test data
+    """
+    pool = kw["config"][pool_type]["pool"]
+    image = kw["config"][pool_type]["image"]
+    snap = kw["config"][pool_type].get("snap", f"{image}_snap")
+    clone = kw["config"][pool_type].get("clone", f"{image}_clone")
     dir_name = rbd.random_string()
-    clone = rbd.random_string()
+    config = kw.get("config")
 
     rbd.exec_cmd(cmd="mkdir {}".format(dir_name))
-    if not rbd.create_pool(poolname=pool):
-        log.error(f"Pool : {pool} could not be created.. Exiting test....")
-        return 1
-    rbd.exec_cmd(cmd="rbd create -s {} {}/{}".format("10G", pool, image))
+
     rbd.exec_cmd(
         cmd="rbd bench-write --io-total {} {}/{}".format(
             config.get("io-total"), pool, image
@@ -94,3 +96,42 @@ def run(**kw):
         rbd.clean_up(dir_name=dir_name, pools=[pool])
 
     return rbd.flag
+
+
+def run(**kw):
+    """
+    Run clone exports on rbd
+    Args:
+        **kw: test data
+
+    Returns:
+        int: The return value. 0 for success, 1 otherwise
+
+    Test case covered -
+    CEPH-9876 - Export clones while read/write operations are happening on the clones
+    Pre-requisites :
+    1. Cluster must be up and running with capacity to create pool
+       (At least with 64 pgs)
+    2. We need atleast one client node with ceph-common package,
+       conf and keyring files
+
+    Test Case Flow:
+    1. Create a pool and an Image, write some data on it
+    2. Create snapshot for Image, protect it and create a clone
+    3. Export the clone when read/write operations are running on clone
+    4. Repeat the above steps for ecpool
+    """
+    log.info("Running rbd export tests")
+    rbd_obj = initial_rbd_config(**kw)
+    rc = 1
+    if rbd_obj:
+        log.info("Executing test on replicated pool")
+        rc = faster_exports(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw)
+
+        if rc:
+            return rc
+
+        log.info("Executing test on ec pool")
+        rc = faster_exports(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw)
+
+    return rc
