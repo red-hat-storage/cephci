@@ -232,10 +232,11 @@ tests:
   - test:
       name: Mirroring of cloned image
       module: test_rbd_clone_mirror.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
       polarion-id: CEPH-9521
       desc: Testing mirroring of cloned image
+
+  - test:
+      name: Mirroring from journal to snapshot
+      module: test_rbd_mirror_journal_to_snap.py
+      polarion-id: CEPH-83573618
+      desc: Testing journal mirroring to snapshot mirroring

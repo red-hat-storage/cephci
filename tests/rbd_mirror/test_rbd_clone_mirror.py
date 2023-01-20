@@ -77,7 +77,9 @@ def run(**kw):
         ]
         imagespec = poolname + "/" + imagename
         mirror2.create_pool(poolname=poolname)
-        mirror1.config_mirror(mirror2, poolname=poolname, mode="pool")
+        kw["peer_mode"] = kw.get("peer_mode", "bootstrap")
+        kw["rbd_client"] = kw.get("rbd_client", "client.admin")
+        mirror1.config_mirror(mirror2, poolname=poolname, mode="pool", **kw)
         mirror2.wait_for_status(poolname=poolname, images_pattern=2)
         mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
