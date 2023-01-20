@@ -5,6 +5,8 @@ def versions
 def cephVersion
 def composeUrl
 def platform
+def failureReason = ""
+def cimsg = ""
 
 // Pipeline script entry point
 node("rhel-8-medium || ceph-qe-ci") {
@@ -45,7 +47,7 @@ node("rhel-8-medium || ceph-qe-ci") {
             def minorVersion = versions.minor_version
             platform = versions.platform
 
-            def cimsg = sharedLib.getCIMessageMap()
+            cimsg = sharedLib.getCIMessageMap()
             composeUrl = cimsg["compose-path"].replace(
                 "/mnt/redhat/", "http://download-node-02.eng.bos.redhat.com/"
             )
@@ -115,19 +117,26 @@ node("rhel-8-medium || ceph-qe-ci") {
 
             sharedLib.SendUMBMessage(msgContent, overrideTopic, "ProductBuildDone")
             println "Updated UMB Message Successfully"
+            currentBuild.result = "SUCCESS"
         }
     } catch(Exception err) {
-        if (currentBuild.result == "ABORTED") {
-            println "Aborting the workflow."
+        failureReason = err.getMessage()
+        if (currentBuild.result != "ABORTED") {
+            currentBuild.result = "FAILURE"
+            println "Failure Reason: ${failureReason}"
         }
-
-        // notify about failure
-        currentBuild.result = "FAILURE"
-        def failureReason = err.getMessage()
-        def subject =  "[CEPHCI-PIPELINE-ALERT] [JOB-FAILURE] - ${env.JOB_NAME}/${env.BUILD_NUMBER}"
-        def body = "<body><h3><u>Job Failure</u></h3></p>"
-        body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
-        body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
+    } finally {
+        def body = "<body><h3><u>Job ${currentBuild.result}</u></h3>"
+        body += "<dl><dt>RHCS Version:</dt><dd>RHCEPH-${versions.major_version}.${versions.minor_version}</dd>"
+        body += "<dt>Ceph Version:</dt><dd>${cephVersion}</dd>"
+        body += "<dt>Compose Label:</dt><dd>${cimsg['compose-label']}</dd>"
+        body += "<dt>Compose URL:</dt><dd>${composeUrl}</dd>"
+        if (currentBuild.result != "SUCCESS") {
+            body += "<dt>${currentBuild.result} Reason:</dt><dd>${failureReason}</dd>"
+            body += "<dt>UMB Message:</dt><dd>${cimsg}</dd>"
+        }
+        body += "<dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd></dl></body>"
+        def subject = "RHCEPH-${versions.major_version}.${versions.minor_version} (RC) Release Candidate build - ${currentBuild.result}"
 
         emailext (
             mimeType: 'text/html',

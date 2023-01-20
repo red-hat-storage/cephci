@@ -6,6 +6,8 @@ def cephVersion
 def composeUrl
 def containerImage
 def releaseMap = [:]
+def failureReason = ""
+def cimsg = ""
 
 // Pipeline script entry point
 node("rhel-8-medium || ceph-qe-ci") {
@@ -47,7 +49,7 @@ node("rhel-8-medium || ceph-qe-ci") {
             def majorVersion = versions.major_version
             def minorVersion = versions.minor_version
 
-            def cimsg = sharedLib.getCIMessageMap()
+            cimsg = sharedLib.getCIMessageMap()
             def repoDetails = cimsg.build.extra.image
 
             containerImage = repoDetails.index.pull.find({ x -> !(x.contains("sha")) })
@@ -118,26 +120,35 @@ node("rhel-8-medium || ceph-qe-ci") {
 
             sharedLib.SendUMBMessage(msgContent, overrideTopic, "ProductBuildDone")
             println "Updated UMB Message Successfully"
+            currentBuild.result = "SUCCESS"
         }
     } catch(Exception err) {
+        failureReason = err.getMessage()
         if (currentBuild.result != "ABORTED") {
-            // notify about failure
             currentBuild.result = "FAILURE"
-            def failureReason = err.getMessage()
-            def subject =  "[CEPHCI-PIPELINE-ALERT] [JOB-FAILURE] - ${env.JOB_NAME}/${env.BUILD_NUMBER}"
-            def body = "<body><h3><u>Job Failure</u></h3></p>"
-            body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
-            body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
-
-            emailext (
-                mimeType: 'text/html',
-                subject: "${subject}",
-                body: "${body}",
-                from: "cephci@redhat.com",
-                to: "cephci@redhat.com"
-            )
-            subject += "\n Jenkins URL: ${env.BUILD_URL}"
-            googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
+            println "Failure Reason: ${failureReason}"
         }
+    } finally {
+        def body = "<body><h3><u>Job ${currentBuild.result}</u></h3>"
+        body += "<dl><dt>RHCS Version:</dt><dd>RHCEPH-${versions.major_version}.${versions.minor_version}</dd>"
+        body += "<dt>Ceph Version:</dt><dd>${cephVersion}</dd>"
+        body += "<dt>Compose Label:</dt><dd>${releaseMap.rc.'compose-label'}</dd>"
+        body += "<dt>Container Image:</dt><dd>${containerImage}</dd>"
+        if (currentBuild.result != "SUCCESS") {
+            body += "<dt>${currentBuild.result} Reason:</dt><dd>${failureReason}</dd>"
+            body += "<dt>UMB Message:</dt><dd>${cimsg}</dd>"
+        }
+        body += "<dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd></dl></body>"
+        def subject = "RHCEPH-${versions.major_version}.${versions.minor_version} (RC) Release Candidate build - ${currentBuild.result}"
+
+        emailext (
+            mimeType: 'text/html',
+            subject: "${subject}",
+            body: "${body}",
+            from: "cephci@redhat.com",
+            to: "cephci@redhat.com"
+        )
+        subject += "\n Jenkins URL: ${env.BUILD_URL}"
+        googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
     }
 }
