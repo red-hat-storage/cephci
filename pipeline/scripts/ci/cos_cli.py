@@ -10,6 +10,7 @@ import sys
 from docopt import docopt
 
 from storage.ibm_cos import CloudObjectStorage
+from utility.retry import retry
 
 LOG = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ def delete_objfile(bucket: str, obj_key: str):
     LOG.info(f"Deleted successfully the file object({obj_key})")
 
 
+@retry(BaseException, tries=5, delay=30)
 def upload_directory(bucket: str, local_dir: str, prefix: str) -> None:
     """
     Uploads the given file to the provided bucket with the mentioned name.
