@@ -38,6 +38,7 @@ globals:
           - rgw
           - mds
           - haproxy
+          - rbd-mirror
         no-of-volumes: 6
         disk-size: 15
       node4:
