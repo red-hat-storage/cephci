@@ -54,13 +54,15 @@ class Package(Cli):
             return out[0].strip()
         return out
 
-    def install(self, pkg):
+    def install(self, pkg, nogpgcheck=False):
         """install a package or packages
 
         Args:
             pkg (str): package need to be installed
         """
         cmd = f"{self.manager} install -y {pkg}"
+        if nogpgcheck:
+            cmd += " --nogpgcheck"
         if self.execute(sudo=True, long_running=True, cmd=cmd):
             raise PackageError(f"Failed to install package '{pkg}'")
 
@@ -74,18 +76,16 @@ class Package(Cli):
         if self.execute(sudo=True, long_running=True, cmd=cmd):
             raise PackageError(f"Failed to upgrade package '{pkg}'")
 
-    def add_repo(self, repo, nogpgcheck=False):
+    def add_repo(self, repo):
         """enable repos with config-manager command
 
         Args:
             repo (str): repo to be enabled
         """
         cmd = f"yum-config-manager --add-repo {repo}"
-        if nogpgcheck:
-            cmd += " --nogpgcheck"
-
-        if self.execute(sudo=True, cmd=cmd):
-            raise PackageError(f"Failed to add repo '{repo}'")
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
 
     def clean(self):
         """clean repos"""
