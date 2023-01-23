@@ -1,5 +1,4 @@
 from ceph.parallel import parallel
-from tests.rbd.exceptions import RbdBaseException
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 from utility.log import Log
 
@@ -71,9 +70,13 @@ def run(**kw):
 
         # Cleans up the configuration
         mirror1.clean_up(peercluster=mirror2, pools=[poolname])
-
         return 0
 
-    except RbdBaseException as error:
-        print(error.message)
+    except ValueError:
+        log.error(
+            f"{kw.get('ceph_cluster_dict').values} has less or more clusters Than Expected(2 clusters expected)"
+        )
+
+    except Exception as e:
+        log.error(e)
         return 1
