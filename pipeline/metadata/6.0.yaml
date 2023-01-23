@@ -1091,3 +1091,19 @@ suites:
       - ibmc
       - dmfg
       - stage-5
+
+  - name: "test-rgw-ssl-bucket-notifications"
+    suite: "suites/quincy/rgw/tier-2_rgw_ssl_test_bucket_notifications.yaml"
+    global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - sanity
+      - tier-2
+      - openstack
+      - ibmc
+      - rgw
+      - stage-3
