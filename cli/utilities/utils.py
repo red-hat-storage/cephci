@@ -6,6 +6,7 @@ from utility.log import Log
 log = Log(__name__)
 
 CEPHADM_ANSIBLE_PATH = "/usr/share/cephadm-ansible"
+RHBUILD_PATTERN = r"(\d\.\d)-(rhel-\d)"
 
 
 def get_disk_list(node, expr=None, **kw):
@@ -199,3 +200,17 @@ def put_cephadm_ansible_playbook(
 
     node.upload_file(sudo=True, src=playbook, dst=dst)
     log.info(f"Uploaded playbook '{playbook}' to '{dst}' on node.")
+
+
+def get_builds_by_rhbuild(rhbuild):
+    """
+    Get RHCS and RHEL version from rhbuild
+
+    Args:
+        rhbuild (str): build version
+    """
+    match = re.search(RHBUILD_PATTERN, rhbuild)
+    if match:
+        return match.group(1, 2)
+
+    return
