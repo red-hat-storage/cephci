@@ -1087,8 +1087,7 @@ suites:
     metadata:
       - sanity
       - tier-2
-      - openstack
-      - ibmc
+      - openstack-only
       - dmfg
       - stage-5
 
