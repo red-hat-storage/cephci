@@ -26,10 +26,12 @@ def validate_configs(config):
     if not playbook:
         raise ConfigNotFoundError("Mandatory resource 'playbook' not found")
 
-    module = aw.get("module")
     module_args = aw.get("module_args", {})
+    module = aw.get("module")
 
     mon_node = module_args.get("mon_node")
+    daemon_id = module_args.get("daemon_id")
+    daemon_type = module_args.get("daemon_type")
     osd_node = module_args.get("osd_node")
     label = module_args.get("label")
     if module == "cephadm_bootstrap" and not mon_node:
@@ -40,6 +42,16 @@ def validate_configs(config):
     elif module in ["ceph_orch_host", "ceph_orch_apply"] and not osd_node and not label:
         raise ConfigNotFoundError(
             f"'{module}' module requires 'osd_node' and 'label' parameter"
+        )
+
+    elif module == "ceph_orch_daemon" and (not daemon_id or not daemon_type):
+        raise ConfigNotFoundError(
+            "'ceph_orch_daemon' module requires 'daemon_id' and 'daemon_type' parameter"
+        )
+
+    elif module == "ceph_orch_host" and not osd_node:
+        raise ConfigNotFoundError(
+            "'ceph_orch_host' module requires 'osd_node' parameter"
         )
 
 
@@ -96,7 +108,6 @@ def run(ceph_cluster, **kwargs):
     nodes = ceph_cluster.get_nodes()
     installer = ceph_cluster.get_ceph_object("installer")
     aw = config.get("ansible_wrapper")
-
     extra_vars, extra_args = aw.get("extra_vars", {}), aw.get("extra_args")
     module = aw.get("module")
     module_args = aw.get("module_args", {})
@@ -115,6 +126,15 @@ def run(ceph_cluster, **kwargs):
             extra_vars["osd_node"] = osd_node.hostname
             extra_vars["ip_address"] = get_node_ip(nodes, osd_node.hostname)
             CopyCephSshKeyToHost.run(installer, osd_node)
+
+    elif module == "ceph_orch_host":
+        osd_node = module_args.get("osd_node")
+        extra_vars["osd_node"] = get_node_by_id(nodes, osd_node).hostname
+        extra_vars["ip_address"] = get_node_ip(nodes, osd_node)
+
+    elif module == "ceph_orch_daemon":
+        extra_vars["daemon_id"] = module_args.get("daemon_id")
+        extra_vars["daemon_type"] = module_args.get("daemon_type")
 
     playbook = aw.get("playbook")
     validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)

@@ -1,5 +1,5 @@
 - name: Set `osd` config  `osd_memory_target_autotune` to `true`
-  hosts: admin
+  hosts: installer
   gather_facts: false
   become: true
   any_errors_fatal: true

@@ -4,7 +4,7 @@
 # Test-Case: Perform cephadm operations using cephadm ansible modules
 #
 # Cluster Configuration:
-#    conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#    conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)

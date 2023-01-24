@@ -1,0 +1,13 @@
+---
+
+- name: Stop service
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Stop the service
+      ceph_orch_daemon:
+        state: stopped
+        daemon_id: "{{ daemon_id }}"
+        daemon_type: "{{ daemon_type }}"
