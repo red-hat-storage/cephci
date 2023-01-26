@@ -141,7 +141,8 @@ tests:
                 - "2"
       destroy-cluster: false
       abort-on-fail: true
-  - test:
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
@@ -149,12 +150,14 @@ tests:
         id: client.1
         install_packages:
           - ceph-common
+          - ceph-fuse
         node: node8
       desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-  - test:
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
@@ -162,8 +165,39 @@ tests:
         id: client.2
         install_packages:
           - ceph-common
+          - ceph-fuse
         node: node9
       desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
