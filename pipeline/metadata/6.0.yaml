@@ -367,7 +367,7 @@ suites:
 
   - name: "Tier-2 Cephfs test clients"
     suite: "suites/pacific/cephfs/tier-2_cephfs_test-clients.yaml"
-    global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+    global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "6.0"
     inventory:
@@ -460,6 +460,22 @@ suites:
       - ibmc
       - cephfs
       - stage-5
+
+  - name: "Tier-2 Cephfs test mds pinning"
+    suite: "suites/pacific/cephfs/tier-2_cephfs_test_mds_pinning.yaml"
+    global-conf: "conf/pacific/cephfs/tier-2_cephfs_mds_pinning.yaml"
+    platform: "rhel-8"
+    rhbuild: "5.3"
+    inventory:
+      openstack: "conf/inventory/rhel-8-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+    metadata:
+      - sanity
+      - tier-2
+      - openstack
+      - ibmc
+      - cephfs
+      - stage-1
 
   - name: "Testing Rgw Single site"
     suite: "suites/pacific/rgw/tier-1_rgw.yaml"

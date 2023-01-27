@@ -1,4 +1,4 @@
-# Conf file used - conf/pacific/cephfs/tier-0_fs.yaml
+# Conf file used - conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
 # This suite is used for tier 2 testcases of cephfs client feature
 ---
 tests:
