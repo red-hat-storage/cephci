@@ -105,6 +105,12 @@ tests:
 
   - test:
       abort-on-fail: true
+      desc: "Check Ceph health"
+      module: test_cluster_health.py
+      name: "Get ceph cluster details."
+
+  - test:
+      abort-on-fail: true
       desc: "Retrieve the deployed cluster information."
       module: gather_cluster_info.py
       name: "Get ceph cluster details."
