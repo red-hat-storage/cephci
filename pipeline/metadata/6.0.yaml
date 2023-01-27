@@ -40,6 +40,7 @@ suites:
       - ibmc
       - dmfg
       - stage-1
+      - rc
 
   - name: "Testing RADOS basic regression scenarios"
     suite: "suites/quincy/rados/tier-2_rados_basic_regression.yaml"
@@ -182,6 +183,7 @@ suites:
       - ibmc
       - rados
       - stage-1
+      - rc
 
   - name: "RADOS regression testing for Mon DB trimming"
     suite: "suites/quincy/rados/tier-2_rados_test-mon-db-trimming.yaml"
@@ -228,6 +230,7 @@ suites:
       - ibmc
       - rgw
       - stage-1
+      - rc
 
   - name: "test-rgw-sse-s3-encryption-GA"
     suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
@@ -244,6 +247,7 @@ suites:
       - ibmc
       - rgw
       - stage-2
+      - rc
 
   - name: "Testing RBD basic regression scenarios"
     suite: "suites/quincy/rbd/tier-1_rbd.yaml"
@@ -260,6 +264,7 @@ suites:
       - ibmc
       - rbd
       - stage-1
+      - rc
 
   - name: "Testing RBD tier-2 regression scenarios"
     suite: "suites/quincy/rbd/tier-2_rbd_regression.yaml"
@@ -292,6 +297,7 @@ suites:
       - ibmc
       - rbd
       - stage-1
+      - rc
 
   - name: "Testing RBD-mirror tier-2 regression scenarios"
     suite: "suites/quincy/rbd/tier-2_rbd_mirror_regression.yaml"
@@ -340,6 +346,7 @@ suites:
       - ibmc
       - cephfs
       - stage-3
+      - rc
 
   - name: "Tier-1 Cephfs Mirror"
     suite: "suites/pacific/cephfs/tier-1_cephfs_mirror.yaml"
@@ -356,6 +363,7 @@ suites:
       - ibmc
       - cephfs
       - stage-2
+      - rc
 
   - name: "Tier-2 Cephfs test clients"
     suite: "suites/pacific/cephfs/tier-2_cephfs_test-clients.yaml"
@@ -468,6 +476,7 @@ suites:
       - ibmc
       - rgw
       - stage-1
+      - rc
 
   - name: "test-rgw-ecpool-ms-bucket-listing-versioning-on-primary"
     suite: "suites/pacific/rgw/tier-1_rgw_ecpool_ms-bucket-listing-versioning-on-primary.yaml"
@@ -484,6 +493,7 @@ suites:
       - ibmc
       - rgw
       - stage-2
+      - rc
 
   - name: "test-rgw-ms-bucket-object-gc-policy-on-secondary"
     suite: "suites/pacific/rgw/tier-1_rgw_ms-bucket-object-gc-policy-on-secondary.yaml"
@@ -500,6 +510,7 @@ suites:
       - ibmc
       - rgw
       - stage-2
+      - rc
 
   - name: "RGW STS functionality testing"
     suite: "suites/quincy/rgw/tier-1-extn_rgw.yaml"
@@ -979,6 +990,7 @@ suites:
       - ibmc
       - dmfg
       - stage-4
+      - rc
 
   - name: "Execute cephadm-clients playbook to copy keyring with the same name as specified by the keyring parameter"
     suite: "suites/quincy/cephadm/tier-1_cephadm-clients.yaml"
@@ -995,6 +1007,7 @@ suites:
       - ibmc
       - dmfg
       - stage-4
+      - rc
 
   - name: "Execute os tuning profiles test cases"
     suite: "suites/quincy/cephadm/tier-1_os_tuning_profiles.yaml"
@@ -1011,6 +1024,7 @@ suites:
       - ibmc
       - dmfg
       - stage-4
+      - rc
 
   - name: "Execute purge cluster using rm-cluster commands"
     suite: "suites/quincy/cephadm/tier-1_remove_cluster.yaml"
@@ -1027,6 +1041,7 @@ suites:
       - ibmc
       - dmfg
       - stage-4
+      - rc
 
   - name: "Deploy all services using a spec file option"
     suite: "suites/quincy/cephadm/tier-1_test-container-cli-args.yaml"
@@ -1043,6 +1058,7 @@ suites:
       - ibmc
       - dmfg
       - stage-5
+      - rc
 
   - name: "Bootstrap cluster with skip-dashboard, output configuration directories/files."
     suite: "suites/quincy/cephadm/tier-1_skip_dashboard.yaml"
@@ -1059,6 +1075,7 @@ suites:
       - ibmc
       - dmfg
       - stage-5
+      - rc
 
   - name: "Bootstrap cluster with custom ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key and apply-spec options."
     suite: "suites/quincy/cephadm/tier-1_ssl_dashboard_port.yaml"
@@ -1075,6 +1092,7 @@ suites:
       - ibmc
       - dmfg
       - stage-5
+      - rc
 
   - name: "cephadm cluster bootstrap with mutiple public network."
     suite: "suites/quincy/cephadm/tier-2_multiple_subnet_openstack_only.yaml"
