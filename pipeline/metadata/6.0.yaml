@@ -260,8 +260,7 @@ suites:
     metadata:
       - sanity
       - tier-1
-      - openstack
-      - ibmc
+      - openstack-only
       - rbd
       - stage-1
       - rc
