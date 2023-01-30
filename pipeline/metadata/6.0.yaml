@@ -953,11 +953,11 @@ suites:
       ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
     metadata:
       - schedule
-      - tier-2
+      - tier-1
       - openstack
       - ibmc
       - rgw
-      - stage-4
+      - stage-2
 
   - name: "tier-1_rgw_upgrade_5-2GA_to_6x_latest"
     suite: "suites/quincy/rgw/tier-1_rgw_upgrade_5-2GA_to_6x_latest.yaml"
@@ -969,11 +969,43 @@ suites:
       ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
     metadata:
       - schedule
-      - tier-2
+      - tier-1
       - openstack
       - ibmc
       - rgw
-      - stage-4
+      - stage-2
+
+  - name: "tier-1_rgw_upgrade_5-3_to_6x_latest"
+    suite: "suites/quincy/rgw/tier-1_rgw_upgrade_5-3_to_6x_latest.yaml"
+    global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - schedule
+      - tier-1
+      - openstack
+      - ibmc
+      - rgw
+      - stage-2
+
+  - name: "tier-1_rgw_ms_upgrade_5-3latest_to_6x_latest"
+    suite: "suites/quincy/rgw/tier-1_rgw_ms_upgrade_5-3_latest_to_6x_latest.yaml"
+    global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - schedule
+      - tier-1
+      - openstack
+      - ibmc
+      - rgw
+      - stage-3
 
   - name: "test-rgw-ms-dynamic-bucket-resharding"
     suite: "suites/pacific/rgw/tier-2_rgw_ms-dynamic-bucket-resharding.yaml"
