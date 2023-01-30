@@ -210,12 +210,6 @@ tests:
       desc: test no recover session mount by blocking the client node
       abort-on-fail: false
   - test:
-      name: Clone Operations
-      module: bug-1980920.py
-      desc: Cancel the clone operation and validate error message
-      polarion-id: CEPH-83574681
-      abort-on-fail: false
-  - test:
       abort-on-fail: false
       desc: "Ensure kernel mounts works with all available options and validate the functionality of each option"
       module: fs_kernel_mount_options.py
