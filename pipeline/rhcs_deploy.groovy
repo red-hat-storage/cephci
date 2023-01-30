@@ -20,6 +20,13 @@ def argsMap = [
         "suite": "suites/quincy/integrations/ocs.yaml",
         "platform": "rhel-9",
         "rgwSecure": "suites/quincy/integrations/ocs_rgw_ssl.yaml"
+        "overrides": [
+            "grafana_image": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:ceph-6.0-rhel-9-containers-candidate-99494-20221026123006",
+            "promtail_image": "registry-proxy.engineering.redhat.com/rh-osbs/promtail:ceph-6.0-rhel-9-containers-candidate-10191-20221026120801",
+            "haproxy_image": "registry-proxy.engineering.redhat.com/rh-osbs/haproxy:ceph-6.0-rhel-9-containers-candidate-53939-20221026121907",
+            "keepalived_image": "registry-proxy.engineering.redhat.com/rh-osbs/keepalived:ceph-6.0-rhel-9-containers-candidate-18945-20221026120854",
+            "snmp_gateway_image": "registry-proxy.engineering.redhat.com/rh-osbs/snmp-notifier:ceph-6.0-rhel-9-containers-candidate-15559-20221026120853"
+        ]
     ]
 ]
 def ciMap = [:]
@@ -79,6 +86,10 @@ node ("rhel-8-medium || ceph-qe-ci") {
             cliArgs += " --suite ${argsMap[majorVersion]['rgwSecure']}"
         } else {
             cliArgs += " --suite ${argsMap[majorVersion]['suite']}"
+        }
+
+        if ( ciMap.containsKey("overrides") ) {
+            ciMap.each { k, v -> cliArgs += " --custom-config ${k}=${v}" }
         }
 
         println "Debug: ${cliArgs}"
