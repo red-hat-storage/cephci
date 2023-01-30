@@ -4,8 +4,17 @@ from cli.cephadm.ansible import Ansible
 from cli.cephadm.cephadm import CephAdm
 from cli.cephadm.exceptions import CephadmOpsExecutionError, ConfigNotFoundError
 from cli.utilities.packages import Rpm, RpmError
-from cli.utilities.utils import get_node_ip, put_cephadm_ansible_playbook
-from utility.install_prereq import ConfigureCephadmAnsibleNode, ExecutePreflightPlaybook
+from cli.utilities.utils import (
+    get_node_by_id,
+    get_node_ip,
+    put_cephadm_ansible_playbook,
+)
+from utility.install_prereq import (
+    ConfigureCephadmAnsibleNode,
+    CopyCephSshKeyToHost,
+    ExecutePreflightPlaybook,
+    SetUpSSHKeys,
+)
 
 
 def validate_configs(config):
@@ -17,11 +26,19 @@ def validate_configs(config):
     if not playbook:
         raise ConfigNotFoundError("Mandatory resource 'playbook' not found")
 
-    mon_node = aw.get("module_args", {}).get("mon_node")
     module = aw.get("module")
+    module_args = aw.get("module_args", {})
+
+    mon_node = module_args.get("mon_node")
+    osd_node = module_args.get("osd_node")
     if module == "cephadm_bootstrap" and not mon_node:
         raise ConfigNotFoundError(
             "'cephadm_bootstrap' module requires 'mon_node' parameter"
+        )
+
+    elif module == "ceph_orch_host" and not osd_node:
+        raise ConfigNotFoundError(
+            "'ceph_orch_host' module requires 'osd_node' parameter"
         )
 
 
@@ -37,7 +54,7 @@ def setup_cluster(ceph_cluster, config):
     try:
         Rpm(installer).query("cephadm-ansible")
     except RpmError:
-        ceph_cluster.setup_ssh_keys()
+        SetUpSSHKeys.run(installer, nodes)
         ConfigureCephadmAnsibleNode.run(
             installer, nodes, build_type, base_url, rhbuild, cloud_type
         )
@@ -69,29 +86,34 @@ def run(ceph_cluster, **kwargs):
                     playbook: bootstrap-cluster.yaml
                     module_args:
                         mon_node: node1
-                    extra_vars:
-                        ceph_origin: rhcs
-                    extra_args:
-                        limit: osds
     """
     config = kwargs.get("config")
 
     validate_configs(config)
     setup_cluster(ceph_cluster, config)
 
+    nodes = ceph_cluster.get_nodes()
+    installer = ceph_cluster.get_ceph_object("installer")
     aw = config.get("ansible_wrapper")
 
     extra_vars, extra_args = aw.get("extra_vars", {}), aw.get("extra_args")
     module = aw.get("module")
-    mon_node = aw.get("module_args", {}).get("mon_node")
+    module_args = aw.get("module_args", {})
 
-    if module == "cephadm_bootstrap" and mon_node:
-        nodes = ceph_cluster.get_nodes()
-        extra_vars["mon_ip"] = get_node_ip(nodes, mon_node)
+    if module == "cephadm_bootstrap":
+        extra_vars["mon_ip"] = get_node_ip(nodes, module_args.get("mon_node"))
         if config.get("build_type") not in ["ga", "ga-async"]:
             extra_vars["image"] = config.get("container_image")
 
-    installer = ceph_cluster.get_ceph_object("installer")
+    elif module == "ceph_orch_host":
+        osd_node = module_args.get("osd_node")
+        osd_node = get_node_by_id(nodes, osd_node)
+        extra_vars["osd_node"] = osd_node.hostname
+        extra_vars["ip_address"] = get_node_ip(nodes, osd_node.hostname)
+        extra_vars["label"] = module_args.get("label")
+
+        CopyCephSshKeyToHost.run(installer, osd_node)
+
     playbook = aw.get("playbook")
     validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
 
