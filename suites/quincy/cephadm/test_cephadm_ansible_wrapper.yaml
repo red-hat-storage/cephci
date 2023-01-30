@@ -1,0 +1,34 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: test_cephadm_ansible_wrapper.yaml
+# Test-Case: Perform cephadm operations using cephadm ansible modules
+#
+# Cluster Configuration:
+#    conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter
+#     Node4 - Client
+#
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/bootstrap-cluster.yaml' playbook
+      polarion-id: CEPH-83575201
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "cephadm_bootstrap"
+          playbook: playbooks/bootstrap-cluster.yml
+          module_args:
+            mon_node: node1
