@@ -123,6 +123,12 @@ tests:
       polarion-id: CEPH-83573298
 
   - test:
+      desc: Move image to trash restore back and try create snap and clone on restored image
+      module: trash_restore_create_clone_snap.py
+      name: Test snap and clone creation on restored image from trash
+      polarion-id: CEPH-11413
+
+  - test:
       desc: Rename image snapshots on an image on replicated and ecpools and its clones
       module: rbd_snapshot_rename.py
       name: Test Snapshot Rename functionality
