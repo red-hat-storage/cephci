@@ -19,7 +19,7 @@ def argsMap = [
         "globalConf": "conf/quincy/integrations/7_node_ceph.yaml",
         "suite": "suites/quincy/integrations/ocs.yaml",
         "platform": "rhel-9",
-        "rgwSecure": "suites/quincy/integrations/ocs_rgw_ssl.yaml"
+        "rgwSecure": "suites/quincy/integrations/ocs_rgw_ssl.yaml",
         "overrides": [
             "grafana_image": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:ceph-6.0-rhel-9-containers-candidate-99494-20221026123006",
             "promtail_image": "registry-proxy.engineering.redhat.com/rh-osbs/promtail:ceph-6.0-rhel-9-containers-candidate-10191-20221026120801",
@@ -88,8 +88,9 @@ node ("rhel-8-medium || ceph-qe-ci") {
             cliArgs += " --suite ${argsMap[majorVersion]['suite']}"
         }
 
-        if ( ciMap.containsKey("overrides") ) {
-            ciMap.each { k, v -> cliArgs += " --custom-config ${k}=${v}" }
+        if ( argsMap[majorVersion].containsKey("overrides") ) {
+            def overrides = argsMap[majorVersion]['overrides']
+            overrides.each { k, v -> cliArgs += " --custom-config ${k}=${v}" }
         }
 
         println "Debug: ${cliArgs}"
