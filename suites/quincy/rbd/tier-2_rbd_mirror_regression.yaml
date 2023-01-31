@@ -155,6 +155,17 @@ tests:
       desc: Verify that image deleted at primary site updated at secondary
 
   - test:
+      name: test mirror on image having snap and clone after restoring from trash
+      module: test_mirror_move_primary_trash_restore.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-11417
+      desc: Verify that image is restore and mirroring is intact
+
+  - test:
       name: test image delete from secondary after multiple promote and demote
       module: test-image-delete-from-secondary.py
       clusters:
@@ -226,11 +237,19 @@ tests:
   - test:
       name: Mirroring of cloned image
       module: test_rbd_clone_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
       polarion-id: CEPH-9521
       desc: Testing mirroring of cloned image
 
   - test:
       name: Mirroring from journal to snapshot
       module: test_rbd_mirror_journal_to_snap.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
       polarion-id: CEPH-83573618
       desc: Testing journal mirroring to snapshot mirroring
