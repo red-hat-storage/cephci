@@ -11,7 +11,13 @@ def buildType = "upstream"
 def yamlData
 def cephVersion
 def tags = "${buildType},${currentStage}"
-def overrides = [build:buildType, "upstream-build":upstreamVersion, "post-results": "", "report-portal": ""]
+def overrides = [
+    "build": buildType,
+    "upstream-build": upstreamVersion,
+    "post-results": "",
+    "report-portal": "",
+    "workspace": "${env.WORKSPACE}"
+]
 
 // Pipeline script entry point
 node('ceph-qe-ci || rhel-8-medium') {
