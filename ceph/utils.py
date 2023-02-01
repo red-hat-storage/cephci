@@ -602,9 +602,6 @@ def check_ceph_healthly(
         match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up\s\(\w+\s\w+\),\s(\d+)\sin", out)
     else:
         match = re.search(r"(\d+)\s+osds:\s+(\d+)\s+up,\s+(\d+)\s+in", out)
-    all_osds = int(match.group(1))
-    up_osds = int(match.group(2))
-    in_osds = int(match.group(3))
     cluster_status = json.loads(out)
     all_osds = cluster_status["osdmap"]["num_osds"]
     up_osds = cluster_status["osdmap"]["num_up_osds"]
