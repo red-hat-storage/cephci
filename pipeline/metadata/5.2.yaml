@@ -894,8 +894,7 @@ suites:
     metadata:
       - sanity
       - tier-2
-      - openstack
-      - ibmc
+      - openstack-only
       - cephfs
       - stage-5
 
