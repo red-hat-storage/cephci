@@ -210,7 +210,7 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
-@retry(RuntimeError, tries=2, delay=30)
+@retry(RuntimeError, tries=3, delay=30)
 def setup_subscription_manager(
     ceph, is_production=False, cloud_type="openstack", timeout=1800
 ):
@@ -246,23 +246,18 @@ def setup_subscription_manager(
             # and then test it with --baseurl=cdn.stage.redhat.com.
             config_ = get_cephci_config()
             command = "sudo subscription-manager register --force "
-            if is_production or cloud_type.startswith("ibmc"):
-                command += (
-                    "--serverurl=subscription.rhsm.redhat.com:443/subscription"
-                    " --baseurl=https://cdn.redhat.com "
-                )
-                username_ = config_["cdn_credentials"]["username"]
-                password_ = config_["cdn_credentials"]["password"]
-            else:
-                command += (
-                    "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription"
-                    " --baseurl=https://cdn.stage.redhat.com "
-                )
-                username_ = config_["stage_credentials"]["username"]
-                password_ = config_["stage_credentials"]["password"]
+
+            # Todo: Pointing to CDN QA account, Revert these changes
+            #       once stage refresh maintenance is completed
+            command += (
+                "--serverurl=subscription.rhsm.redhat.com:443/subscription"
+                " --baseurl=https://cdn.redhat.com "
+            )
+            username_ = config_["cdn_credentials"]["username"]
+            password_ = config_["cdn_credentials"]["password"]
 
             command += f"--username={username_} --password={password_}"
-            ceph.exec_command(cmd=command, timeout=720, long_running=True)
+            ceph.exec_command(cmd=command, timeout=720)
             break
         except (KeyError, AttributeError):
             required_key = "stage_credentials"
