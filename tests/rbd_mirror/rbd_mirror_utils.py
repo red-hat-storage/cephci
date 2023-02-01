@@ -291,7 +291,8 @@ class RbdMirror:
             kw["peer_mode"] = kw.get("peer_mode", "bootstrap")
             kw["rbd_client"] = kw.get("rbd_client", "client.admin")
             self.config_mirror(mirror2, poolname=poolname, **kw)
-        if kw.get("mirrormode"):
+        # Enable image level mirroring only when mode is image type
+        if kw.get("mirrormode") and kw.get("mode") == "image":
             mirrormode = kw.get("mirrormode")
             self.enable_mirror_image(poolname, imagename, mirrormode)
 
