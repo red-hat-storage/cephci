@@ -95,7 +95,6 @@ node('ceph-qe-ci || rhel-8-medium') {
                 ])
             }
         }
-
     } catch(Exception err) {
         // notify about failure
         currentBuild.result = "FAILURE"
