@@ -874,7 +874,6 @@ class FsUtils(object):
     @staticmethod
     def file_locking(clients, mounting_dir):
         for client in clients:
-
             to_lock_file = """
 import fcntl
 import subprocess
@@ -1533,7 +1532,6 @@ os.system('sudo systemctl start  network')
                 )
 
     def standby_rank(self, mds_nodes, mon_nodes, **kwargs):
-
         host_names = []
         for mds in mds_nodes:
             host_names.append(mds.node.hostname)
@@ -2251,7 +2249,6 @@ mds standby for rank = 1
             return self.result_vals, 0
 
     def setfattr(self, clients, ops, val, mounting_dir, file_name):
-
         if ops == "max_bytes" or ops == "max_files":
             for client in clients:
                 rc = self.check_mount_exists(client)

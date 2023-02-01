@@ -9,7 +9,6 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-
     ansible_dir = "/usr/share/ceph-ansible"
     ceph_installer = ceph_cluster.get_ceph_object("installer")
     config = kw.get("config")

@@ -15,11 +15,9 @@ class ClientKeyringOpFailure(Exception):
 
 
 class ClientKeyring(Orch):
-
     SERVICE_NAME = "client-keyring"
 
     def ls(self, config):
-
         """
         List the client keyrings available
         Args:
@@ -39,7 +37,6 @@ class ClientKeyring(Orch):
         return self.shell(args=cmd)
 
     def rm(self, config):
-
         """
         Remove client-keyring from cluster
         Args:

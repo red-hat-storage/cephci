@@ -10,7 +10,6 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-
     """
     Test operation:
     1. Generate random name fo subvolume creation
@@ -21,7 +20,6 @@ def run(ceph_cluster, **kw):
     6. Verify if trash directory is empty
     """
     try:
-
         tc = "CEPH-83574186"
         log.info(f"Running CephFS tests for BZ-{tc}")
         fs_util = FsUtils(ceph_cluster)

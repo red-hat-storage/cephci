@@ -20,7 +20,6 @@ def run(ceph_cluster, **kw):
     4. Remove the subvolume
     """
     try:
-
         tc = "CEPH-83574187"
         log.info(f"Running CephFS tests for Polarion ID -{tc}")
         fs_util = FsUtils(ceph_cluster)

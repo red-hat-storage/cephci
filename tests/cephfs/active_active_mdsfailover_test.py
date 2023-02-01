@@ -140,7 +140,6 @@ def run(**kw):
     log.info("Execution of Test case 11230 started:")
     tc = "11130"
     with parallel() as p:
-
         p.spawn(
             utils.mkdir_pinning,
             fuse_clients,
@@ -160,7 +159,6 @@ def run(**kw):
         )
 
     with parallel() as p:
-
         p.spawn(
             utils.pinned_dir_io,
             kernel_clients,

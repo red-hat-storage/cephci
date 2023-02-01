@@ -59,7 +59,6 @@ def run(**kw):
     print(md5sum_file_lock)
 
     if md5sum_file_lock[0] == md5sum_file_lock[1]:
-
         log.info(
             "File Locking mechanism is working,data is not corrupted,test case CEPH-10529 passed"
         )

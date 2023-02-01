@@ -119,7 +119,6 @@ def run(ceph_cluster, **kw):
     ceph_cluster_dict = kw.get("ceph_cluster_dict")
 
     for cluster_name, cluster in ceph_cluster_dict.items():
-
         LOG.info(f"Starting Ceph cluster deployment for version: {install_version}")
         if install_version >= 5.0:
             config["steps"] = config["suite_setup"]["steps"]

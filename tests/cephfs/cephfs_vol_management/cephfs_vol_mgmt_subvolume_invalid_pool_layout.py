@@ -18,7 +18,6 @@ def run(ceph_cluster, **kw):
     3. Using get_path, check if subvolume path is cleaned up
     """
     try:
-
         tc = "CEPH-83574192"
         log.info(f"Running CephFS tests for Polarion ID -{tc}")
         fs_util = FsUtils(ceph_cluster)

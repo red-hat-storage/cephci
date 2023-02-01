@@ -112,7 +112,6 @@ def do_failover(iscsi_initiators, device_list, ceph_nodes):
     print(active_device_status)
     print(active_device)
     if rc == "active":
-
         return 0
     else:
         return 1

@@ -9,7 +9,6 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-
     """
     pre-requisites:
     1. Create a volume with a name
