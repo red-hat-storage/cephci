@@ -204,7 +204,6 @@ def run(ceph_cluster, **kw):
     client = ceph_cluster.get_ceph_object("mon")
 
     if build.startswith("5"):
-
         cmd = (
             "cd {};"
             "ANSIBLE_STDOUT_CALLBACK=debug;"

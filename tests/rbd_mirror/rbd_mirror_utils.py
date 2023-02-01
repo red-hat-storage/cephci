@@ -15,7 +15,6 @@ log = Log(__name__)
 
 class RbdMirror:
     def __init__(self, cluster, config):
-
         self.ceph_nodes = cluster
         self.k_m = config.get("ec-pool-k-m", None)
         self.ceph_version = int(config.get("rhbuild")[0])
@@ -207,7 +206,6 @@ class RbdMirror:
                     poolname=poolname, cluster_name=secondary_cluster_name
                 )
             else:
-
                 primary_mon = ",".join(
                     [
                         obj.node.ip_address
@@ -682,7 +680,6 @@ class RbdMirror:
 
     # Remove Peer
     def peer_remove(self, **kw):
-
         peer_uuid = self.mirror_info(kw.get("poolname"), "uuid")
         return self.exec_cmd(
             cmd="rbd mirror pool peer remove {} {}".format(

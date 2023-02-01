@@ -427,7 +427,6 @@ def rc_verify(tc, RC):
     return_codes_set = set(RC)
 
     if len(return_codes_set) == 1:
-
         out = "Test case %s Passed" % (tc)
 
         return out

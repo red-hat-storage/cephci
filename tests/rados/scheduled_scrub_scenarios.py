@@ -44,7 +44,6 @@ def set_default_params(rados_obj):
 
 
 def run(ceph_cluster, **kw):
-
     osd_scrub_min_interval = 1800
     osd_scrub_max_interval = 3600
     osd_deep_scrub_interval = 3600

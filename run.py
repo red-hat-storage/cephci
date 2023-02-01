@@ -363,7 +363,6 @@ def get_html_page(url: str) -> str:
 
 
 def run(args):
-
     import urllib3
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -519,7 +518,6 @@ def run(args):
             distro.append(inventory.get("instance").get("create").get("image-name"))
 
     for cluster in conf.get("globals"):
-
         if cluster.get("ceph-cluster").get("inventory"):
             cluster_inventory_path = os.path.abspath(
                 cluster.get("ceph-cluster").get("inventory")

@@ -7,7 +7,6 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-
     """
     Test operation:
     1. Create a subvolume_group name that does not exist
@@ -16,7 +15,6 @@ def run(ceph_cluster, **kw):
     4. Check if the command is failed
     """
     try:
-
         tc = "CEPH-83574169"
         log.info(f"Running CephFS tests for BZ-{tc}")
         fs_util = FsUtils(ceph_cluster)

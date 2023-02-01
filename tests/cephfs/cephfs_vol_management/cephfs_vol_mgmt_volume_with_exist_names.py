@@ -18,7 +18,6 @@ def run(ceph_cluster, **kw):
     5. If the creation and deletion are failed, return 0
     """
     try:
-
         tc = "CEPH-83573428"
         log.info(f"Running CephFS tests{tc}")
         fs_util = FsUtils(ceph_cluster)

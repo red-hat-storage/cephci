@@ -126,7 +126,7 @@ def fetch_stages(args):
         script.update(metadata_overrides)
         script.update(overrides)
 
-        for (k, v) in script.items():
+        for k, v in script.items():
             if isinstance(v, list):
                 for item in v:
                     execute_cli += f" --{k} {item}"

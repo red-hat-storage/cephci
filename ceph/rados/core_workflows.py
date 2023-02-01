@@ -1040,7 +1040,6 @@ class RadosOrchestrator:
         return True
 
     def get_cluster_date(self):
-
         """
         Used to get the osd parameter value
         Args:

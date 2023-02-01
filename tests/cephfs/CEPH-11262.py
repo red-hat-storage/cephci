@@ -99,7 +99,6 @@ def run(ceph_cluster, **kw):
             )
 
         for node in client_info["mds_nodes"]:
-
             rc = fs_util.heartbeat_map(node)
             if rc == 0:
                 log.info("heartbeat_map entry not found")

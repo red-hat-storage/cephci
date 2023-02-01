@@ -473,7 +473,6 @@ class FsUtils(object):
     def client_clean_up(
         *args, fuse_clients=[], kernel_clients=[], mounting_dir="", **kwargs
     ):
-
         """
         This method cleans up all the client nodes and mount points
         Args:
@@ -1472,7 +1471,6 @@ class FsUtils(object):
         return total_bytes
 
     def file_byte_quota_test(self, client, mounting_dir, quota_attrs):
-
         total_bytes = quota_attrs.get("bytes")
         temp_str = "".join([random.choice(string.ascii_letters) for _ in range(3)])
         bytes_in_dir = int(self.get_total_no_bytes(client, mounting_dir))

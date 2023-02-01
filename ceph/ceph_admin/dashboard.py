@@ -154,7 +154,6 @@ def enable_alertmanager(cls, config):
     daemon_obj = loads(out)
 
     if daemon_obj:
-
         # To get hostname in which daemon got deployed
         for daemon in daemon_obj:
             host = daemon["hostname"]

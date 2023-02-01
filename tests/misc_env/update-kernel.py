@@ -30,7 +30,6 @@ def run(**kw):
 
 
 def update_kernel_and_reboot(client, repo_url):
-
     kernel_repo_file = """
 [KernelUpdate]
 name=KernelUpdate

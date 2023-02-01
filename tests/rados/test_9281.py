@@ -25,7 +25,6 @@ def prepare_sdata(mon):
     sfd = None
 
     try:
-
         sfd = mon.remote_file(file_name=sdata, file_mode="w+")
         sfd.write(dbuf)
         sfd.flush()

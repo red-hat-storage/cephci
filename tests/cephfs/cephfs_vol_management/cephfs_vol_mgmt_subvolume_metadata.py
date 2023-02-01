@@ -22,7 +22,6 @@ def run(ceph_cluster, **kw):
     5. Check if the metadata key and value are deleted
     """
     try:
-
         fs_util = FsUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
@@ -79,7 +78,6 @@ def run(ceph_cluster, **kw):
         log.info("Metadata CREATION testing is done")
 
         for k1, v1 in key_value.items():
-
             if k1 in metadata_result and metadata_result[k1] == v1:
                 pass
             else:
@@ -115,7 +113,6 @@ def run(ceph_cluster, **kw):
         # Remove Testing
 
         for k1, v1 in key_value.items():
-
             client1.exec_command(
                 sudo=True,
                 cmd=f"ceph fs subvolume metadata rm cephfs {subvol_name} {k1}",

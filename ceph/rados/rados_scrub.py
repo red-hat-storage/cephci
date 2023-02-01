@@ -61,7 +61,6 @@ class RadosScrubber(RadosOrchestrator):
             return 1
 
     def get_pg_dump(self, *args):
-
         """
         Used to get the pg dump logs
 

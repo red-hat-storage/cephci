@@ -21,7 +21,6 @@ def run(ceph_cluster, **kw):
 
     """
     try:
-
         tc = "CEPH-83573528"
         log.info(f"Running CephFS tests for BZ-{tc}")
         fs_util = FsUtils(ceph_cluster)

@@ -10,7 +10,6 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-
     """
     Test operation:
     1. Create a subvolume

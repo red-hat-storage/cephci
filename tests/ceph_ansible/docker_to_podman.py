@@ -5,7 +5,6 @@ log = Log(__name__)
 
 
 def run(**kw):
-
     log.info("Running exec test")
     ceph_nodes = kw.get("ceph_nodes")
     config = kw.get("config")

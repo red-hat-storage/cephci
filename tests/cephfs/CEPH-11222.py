@@ -239,7 +239,6 @@ def run(ceph_cluster, **kw):
             )
         return 1
     except Exception as e:
-
         log.info(e)
 
         log.info(traceback.format_exc())

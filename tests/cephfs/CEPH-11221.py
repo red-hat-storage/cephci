@@ -56,7 +56,6 @@ def run(ceph_cluster, **kw):
             raise CommandFailed("kernel mount failed")
 
         while c1:
-
             with parallel() as p:
                 p.spawn(
                     fs_util.read_write_IO,

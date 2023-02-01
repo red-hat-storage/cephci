@@ -17,7 +17,6 @@ def run(ceph_cluster, **kw):
     4. Check if number of files in the directory is equal to 0
     """
     try:
-
         tc = "CEPH-83574188"
         log.info(f"Running CephFS tests for BZ-{tc}")
         fs_util = FsUtils(ceph_cluster)

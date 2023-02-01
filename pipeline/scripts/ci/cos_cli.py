@@ -119,7 +119,6 @@ OPS = {
 }
 
 if __name__ == "__main__":
-
     _args = docopt(usage, help=True, version=None, options_first=False)
     logging.basicConfig(
         handlers=[logging.StreamHandler(sys.stdout)],
