@@ -166,6 +166,13 @@ tests:
   -
     test:
       abort-on-fail: false
+      desc: "test cephfs nfs export path"
+      module: nfs.nfs_export_path.py
+      name: "cephfs nfs export path"
+      polarion-id: "CEPH-83574028"
+  -
+    test:
+      abort-on-fail: false
       desc: "test cephfs nfs snapshot clone operations"
       module: nfs.nfs_snaphshot_clone.py
       name: "cephfs nfs snapshot clone operations"
