@@ -18,6 +18,8 @@ def overrides = [
     "report-portal": "",
     "workspace": "${env.WORKSPACE}"
 ]
+def status = "STABLE"
+def upstreamArtifact = []
 
 // Pipeline script entry point
 node('ceph-qe-ci || rhel-8-medium') {
@@ -68,19 +70,15 @@ node('ceph-qe-ci || rhel-8-medium') {
         parallel testStages
 
         stage('publish result') {
-            def upstreamArtifact = ["composes": yamlData[upstreamVersion]["composes"],
+            upstreamArtifact = ["composes": yamlData[upstreamVersion]["composes"],
                                     "product": "Ceph Storage",
                                     "ceph_version": cephVersion,
                                     "repository": yamlData[upstreamVersion]["image"],
                                     "upstreamVersion": upstreamVersion]
-            def status = "STABLE"
             if ( "FAIL" in sharedLib.fetchStageStatus(testResults) ) {
                 currentBuild.result = "FAILURE"
                 status = "UNSTABLE"
             }
-            sharedLib.sendEmail(buildType, testResults, upstreamArtifact, null, currentStage)
-            def msg = "Upstream test report status of ${currentStage} ceph version:${cephVersion}-${upstreamVersion} is ${status} .Log:${env.BUILD_URL}"
-            googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
         }
 
         stage('Post Build Action') {
@@ -103,5 +101,9 @@ node('ceph-qe-ci || rhel-8-medium') {
         currentBuild.result = "FAILURE"
         def failureReason = err.getMessage()
         echo failureReason
+    } finally {
+        sharedLib.sendEmail(buildType, testResults, upstreamArtifact, null, currentStage)
+        def msg = "Upstream test report status of ${currentStage} ceph version:${cephVersion}-${upstreamVersion} is ${status} .Log:${env.BUILD_URL}"
+        googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
     }
 }
