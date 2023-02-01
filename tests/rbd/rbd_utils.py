@@ -192,7 +192,7 @@ class Rbd:
         Returns:  True -> pass, False -> fail
         """
         cmd = f"dd if=/dev/urandom of={filename} bs=4 count=5M"
-        if not self.exec_cmd(cmd, long_running=True):
+        if self.exec_cmd(cmd=cmd, long_running=True):
             raise CreateFileError("Creating a file to import failed")
 
     def import_file(self, filename="dummy", pool_name="dummy", image_name="dummy"):
@@ -206,7 +206,7 @@ class Rbd:
         Note: run create_file_to_import before this module in positive scenarios
         """
         cmd = f"rbd import {filename} {pool_name}/{image_name}"
-        if not self.exec_cmd(cmd, long_running=True):
+        if self.exec_cmd(cmd=cmd, long_running=True):
             raise ImportFileError("Importing the file failed")
 
     def snap_create(self, pool_name, image_name, snap_name):
