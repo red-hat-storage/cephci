@@ -97,7 +97,7 @@ def create_baremetal_ceph_nodes(cluster_conf):
 
     with parallel() as p:
         for n, node in enumerate(nodes):
-            node_id = node.get("id") or f"node{n}"
+            node_id = node.get("id") or f"node{n + 1}"
             params = dict(
                 {
                     "ip": node.get("ip"),
