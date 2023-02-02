@@ -162,6 +162,15 @@ tests:
         config-file-name: test_sts_using_boto_invalid_arn_policy.yaml
         timeout: 500
   - test:
+      name: STS test with invalid principal in the role's policy
+      desc: STS test with invalid principal in the role's policy
+      polarion-id: CEPH-83574537
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_using_boto.py
+        config-file-name: test_sts_invalid_principal.yaml
+        timeout: 500
+  - test:
       name: reshard cancel command
       desc: reshard cancel command
       polarion-id: CEPH-11474
