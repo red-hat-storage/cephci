@@ -295,3 +295,13 @@ tests:
           - "mkdir /mnt/nfs1"
           - "mount -t nfs -o nfsvers=4,noauto,soft,sync,proto=tcp {node_ip:node5}:/ /mnt/nfs1"
       module: exec.py
+
+  - test:
+      name: Test no crash during deleting bucket with aborted multipart upload
+      desc: Test no crash during deleting bucket with aborted multipart upload
+      polarion-id: CEPH-83574831
+      module: sanity_rgw.py
+      config:
+        script-name: test_LargeObjGet_GC.py
+        config-file-name: test_bucket_remove_with_multipart_abort.yaml
+        timeout: 500
