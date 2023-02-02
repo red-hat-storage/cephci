@@ -190,10 +190,9 @@ suites:
       - sanity
       - tier-1
       - rc
-      - openstack
-      - ibmc
+      - openstack-only
       - rbd
-      - stage-2
+      - stage-1
 
   - name: "Tier-1 test suite for 5x for RBD-mirror functionality"
     suite: "suites/pacific/rbd/tier-1_rbd_mirror.yaml"
