@@ -50,7 +50,7 @@ node("rhel-8-medium || ceph-qe-ci") {
         def buildArtifacts = "${params.CI_MESSAGE}"
 
         // Trigger psi_only pipeline based on ciMessage content
-        if (ciMap.pipeline.final_stage && ciMap.pipeline.tags.contains("tier-0")) {
+        if (ciMap.pipeline.final_stage && ciMap.pipeline.tags.contains("tier-0") && ciMap.test.result == "SUCCESS") {
             println "Starting test execution with parameters:"
             println "\trhcephVersion: ${rhcephVersion}\n\tbuildType: ${buildType}\n\tbuildArtifacts: ${buildArtifacts}\n\toverrides: ${overrides}\n\ttags: ${tags}"
 
@@ -69,6 +69,7 @@ node("rhel-8-medium || ceph-qe-ci") {
         {
             println("Failed to start the psi_only pipeline. CIMessage did not satisfy psi_only requirement.")
             println("ciMap.pipeline.final_stage : ${ciMap.pipeline.final_stage} \n ciMap.pipeline.tags : ${ciMap.pipeline.tags}")
+            println("ciMap.test.result : ${ciMap.test.result}")
         }
     }
 }
