@@ -12,6 +12,10 @@ def tierLevel = "live"
 def stageLevel = null
 def testStages = [:]
 def testResults = [:]
+def majorVersion
+def minorVersion
+def rp_base_link = "https://reportportal-rhcephqe.apps.ocp-c1.prod.psi.redhat.com"
+def launch_id = ""
 
 
 // Pipeline script entry point
@@ -45,12 +49,14 @@ node("rhel-8-medium || ceph-qe-ci") {
         )
         sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
         sharedLib.prepareNode()
+        reportLib = load("${env.WORKSPACE}/pipeline/vars/upload_results.groovy")
+        println("reportLib : ${reportLib}")
     }
 
     stage("fetchTestSuites") {
         versions = sharedLib.fetchMajorMinorOSVersion("released")
-        def majorVersion = versions.major_version
-        def minorVersion = versions.minor_version
+        majorVersion = versions.major_version
+        minorVersion = versions.minor_version
         def cimsg = sharedLib.getCIMessageMap()
         def repoDetails = cimsg.build.extra.image
         def overrides = ["build" : "released"]
@@ -78,6 +84,69 @@ node("rhel-8-medium || ceph-qe-ci") {
     }
 
     parallel testStages
+
+    stage('uploadTestResultToReportPortal'){
+
+        // Copy all the results into one folder before upload
+        def dirName = "psi_${currentBuild.projectName}_${currentBuild.number}"
+        def targetDir = "${env.WORKSPACE}/${dirName}/results"
+        def attachDir = "${env.WORKSPACE}/${dirName}/attachments"
+
+        sh (script: "mkdir -p ${targetDir} ${attachDir}")
+        print(testResults)
+        testResults.each { key, value ->
+            def fileName = key.replaceAll(" ", "-")
+            def logDir = value["logdir"]
+            sh "find ${logDir} -maxdepth 1 -type f -name xunit.xml -exec cp '{}' ${targetDir}/${fileName}.xml \\;"
+            sh "tar -zcvf ${logDir}/${fileName}.tar.gz ${logDir}/*.log"
+            sh "mkdir -p ${attachDir}/${fileName}"
+            sh "cp ${logDir}/${fileName}.tar.gz ${attachDir}/${fileName}/"
+            sh "find ${logDir} -maxdepth 1 -type f -not -size 0 -name '*.err' -exec cp '{}' ${attachDir}/${fileName}/ \\;"
+        }
+
+        println("directories created..")
+        // Adding metadata information
+
+        println("tierLevel : ${tierLevel}")
+        println("cephVersion : ${cephVersion}")
+        def content = [:]
+        content["product"] = "Red Hat Ceph Storage"
+        content["version"] = "RHCEPH-${majorVersion}.${minorVersion}"
+        content["ceph_version"] = cephVersion
+        content["date"] = sh(returnStdout: true, script: "date")
+        content["log"] = env.RUN_DISPLAY_URL
+        content["stage"] = tierLevel
+        content["results"] = testResults
+
+        println("content : ${content}")
+        writeYaml file: "${env.WORKSPACE}/${dirName}/metadata.yaml", data: content
+        sh "sudo cp -r ${env.WORKSPACE}/${dirName} /ceph/cephci-jenkins"
+
+        println("configureReportPortalWorkDir")
+        (rpPreprocDir, credsRpProc) = reportLib.configureRpPreProc(sharedLib)
+
+        def resultDir = dirName
+        println("Test results are available at ${resultDir}")
+
+        def tmpDir = sh(returnStdout: true, script: "mktemp -d").trim()
+        sh "sudo cp -r /ceph/cephci-jenkins/${resultDir} ${tmpDir}"
+
+        metaData = readYaml file: "${tmpDir}/${resultDir}/metadata.yaml"
+        println("metadata: ${metaData}")
+        def copyFiles = "sudo cp -a ${tmpDir}/${resultDir}/results ${rpPreprocDir}/payload/"
+        def copyAttachments = "sudo cp -a ${tmpDir}/${resultDir}/attachments ${rpPreprocDir}/payload/"
+        def rmTmpDir = "sudo rm -rf ${tmpDir}"
+
+        sh script: "${copyFiles} && ${copyAttachments} && ${rmTmpDir}"
+
+        if (metaData["results"]) {
+                launch_id = reportLib.uploadTestResults(rpPreprocDir, credsRpProc, metaData, stageLevel, run_type)
+                println("launch_id: ${launch_id}")
+                if (launch_id) {
+                    metaData["rp_link"] = "${rp_base_link}/ui/#cephci/launches/all/${launch_id}"
+                }
+        }
+    }
 
     stage('postResults') {
         def status = 'PASSED'
