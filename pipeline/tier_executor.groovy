@@ -195,7 +195,7 @@ node(nodeName) {
                         "type": buildType,
                         "category": "functional",
                         "result": "ABORTED",
-                        "object-prefix": dirName,
+                        "object-prefix": null,
                     ],
                     "recipe": buildArtifacts,
                     "generated_at": env.BUILD_ID,
