@@ -123,3 +123,13 @@ tests:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_disable_object_exp.yaml
         timeout: 300
+
+  - test:
+      name: Add a new lifecycle configuration to a bucket
+      desc: Apply lc configuration to bucket which already has lc configuration set
+      polarion-id: CEPH-11199
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_add_new_lc_to_bucket.yaml
+        timeout: 300
