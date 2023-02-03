@@ -166,6 +166,8 @@ def run(ceph_cluster, **kw):
     script_dir = DIR[test_version]["script"]
     config_dir = DIR[test_version]["config"]
     lib_dir = DIR[test_version]["lib"]
+    avail_storage = utils.calculate_available_storage(rgw_node)
+    log.info(f"Available Storage present on cluster {avail_storage}")
     # timeout = config.get("timeout", 300)
 
     if test_config["config"]:
