@@ -213,3 +213,14 @@ tests:
       polarion-id: CEPH-10625
       desc: smallfiles with different operations
       abort-on-fail: false
+  - test:
+       name: Running basic bash commands on fuse,Kernel and NFS mounts
+       module: fs_basic_bash_cmds.py
+       polarion-id: CEPH-11300
+       desc: Running basic bash commands on fuse,Kernel and NFS mounts
+       abort-on-fail: false
+       config:
+         no_of_files: 1000
+         size_of_files: 1
+         num_dir: 100
+
