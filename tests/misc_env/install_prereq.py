@@ -373,29 +373,27 @@ def registry_login(ceph, distro_ver):
         ceph.exec_command(cmd="sudo systemctl restart docker", long_running=True)
 
     config = get_cephci_config()
-    registries = [
-        {
-            "registry": "registry.redhat.io",
-            "user": config["cdn_credentials"]["username"],
-            "passwd": config["cdn_credentials"]["password"],
+    registries = {
+        "registry.redhat.io": {
+            "username": config["cdn_credentials"]["username"],
+            "password": config["cdn_credentials"]["password"],
         }
-    ]
-
-    if (
-        config.get("registry_credentials")
-        and config["registry_credentials"]["registry"] != "registry.redhat.io"
-    ):
-        registries.append(
-            {
-                "registry": config["registry_credentials"]["registry"],
-                "user": config["registry_credentials"]["username"],
-                "passwd": config["registry_credentials"]["password"],
-            }
-        )
+    }
     auths = {}
-    for r in registries:
-        b64_auth = base64.b64encode(f"{r['user']}:{r['passwd']}".encode("ascii"))
-        auths[r["registry"]] = {"auth": b64_auth.decode("utf-8")}
+    if config.get("registry_credentials"):
+        registries.update(config.get("registry_credentials"))
+    try:
+        for k, v in registries.items():
+            b64_auth = base64.b64encode(
+                f"{v['username']}:{v['password']}".encode("ascii")
+            )
+            auths[k] = {"auth": b64_auth.decode("utf-8")}
+    except Exception as e:
+        log.error(e)
+        log.error(traceback.format_exc())
+        raise RuntimeError(
+            "Can you please verify the .cepchi.yaml and modify registry_credentials to new format"
+        )
     auths_dict = {"auths": auths}
     ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
     ceph.exec_command(cmd="mkdir -p ~/.docker")

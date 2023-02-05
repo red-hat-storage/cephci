@@ -879,6 +879,22 @@ def get_cephci_config():
     return cfg
 
 
+def get_registry_creds(registry):
+    """
+    Fetches the registry details from cephci.yaml file
+    Args:
+        registry:
+
+    Returns:
+        None if the registry details not specified
+    """
+    registries = get_cephci_config().get("registry_credentials")
+    if not (registries or registries.get(registry)):
+        log.error(f"Did not find the {registry} details in cephci.yaml")
+        return
+    return registries.get(registry)
+
+
 def get_run_status(results_list):
     """
     Returns overall run status either Pass or Fail.

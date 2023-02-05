@@ -6,7 +6,7 @@ from typing import Dict
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from ceph.utils import get_node_by_id, get_public_network, setup_repos
 from utility.log import Log
-from utility.utils import fetch_build_artifacts, get_cephci_config
+from utility.utils import fetch_build_artifacts, get_cephci_config, get_registry_creds
 
 from ..ceph import ResourceNotFoundError
 from .common import config_dict_to_string
@@ -42,9 +42,10 @@ def construct_registry(cls, registry: str, json_file: bool = False):
     """
     # Todo: Retrieve credentials based on registry name
     _config = get_cephci_config()
-    cdn_cred = _config.get("registry_credentials", _config["cdn_credentials"])
+    creds = get_registry_creds(registry)
+    cdn_cred = creds if creds else _config["cdn_credentials"]
     reg_args = {
-        "registry-url": cdn_cred.get("registry", registry),
+        "registry-url": registry,
         "registry-username": cdn_cred.get("username"),
         "registry-password": cdn_cred.get("password"),
     }
