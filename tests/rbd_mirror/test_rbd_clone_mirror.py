@@ -1,4 +1,3 @@
-from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 from utility.log import Log
@@ -105,9 +104,13 @@ def run(**kw):
         mirror1.delete_image(imagespec2)
         mirror1.delete_image(imagespec)
         mirror1.clean_up(peercluster=mirror2, pools=[poolname])
-
         return 0
 
-    except RbdBaseException as error:
-        print(error.message)
+    except ValueError as ve:
+        log.error(
+            f"{kw.get('ceph_cluster_dict').values} has less or more clusters Than Expected(2 clusters expected)"
+        )
+        log.exception(ve)
+    except Exception as e:
+        log.exception(e)
         return 1
