@@ -295,3 +295,12 @@ tests:
       desc: Adding admin node again with different labels  does not remove ceph.client.admin.keyring  and ceph.conf file
       polarion-id: CEPH-83574671
       module: test_admin_add_labels.py
+  - test:
+      name: test_deploy_collocated_RGW_with_node_count
+      desc: Deploy collocated RGW with just node count
+      config:
+        pos_args:
+          - foo
+        result: count-per-host must be combined with label or hosts or host_pattern
+      polarion-id: CEPH-83574642
+      module: test_collocate_rgw_node_count.py

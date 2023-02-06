@@ -98,4 +98,10 @@ tests:
       desc: Check the latest ceph image using cephadm pull
       polarion-id: CEPH-83573787
       module: test_cephadm_pull.py
-
+  - test:
+      name: test_prepare-host_command
+      desc: Check-host/prepare-host for cephadm use/host configuration
+      polarion-id: CEPH-83573789
+      module: test_prepare_host.py
+      config:
+        result: Host looks OK
