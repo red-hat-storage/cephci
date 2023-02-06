@@ -1417,7 +1417,9 @@ class CephNode(object):
             f"echo '{self.username}:{self.password}' | chpasswd"
         )
         logger.info(stdout.readlines())
-        _, stdout, stderr = self.rssh().exec_command("echo 'root:passwd' | chpasswd")
+        _, stdout, stderr = self.rssh().exec_command(
+            f"echo 'root:{self.root_passwd}' | chpasswd"
+        )
         logger.info(stdout.readlines())
         self.rssh().exec_command("echo 120 > /proc/sys/net/ipv4/tcp_keepalive_time")
         self.rssh().exec_command("echo 60 > /proc/sys/net/ipv4/tcp_keepalive_intvl")
