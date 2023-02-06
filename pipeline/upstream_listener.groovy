@@ -5,7 +5,7 @@
 def sharedLib
 
 // Pipeline script entry point
-node("rhel-8-medium || ceph-qe-ci") {
+node("rhel-9-medium") {
     try {
         timeout(unit: "MINUTES", time: 30) {
             stage('prepareNode') {
