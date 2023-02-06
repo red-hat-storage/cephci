@@ -1,9 +1,10 @@
 #===============================================================================================
-# Conf: conf/pacific/cephadm/tier-1.yaml
+# Conf: conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
 # Test cases for cephadm ansible modules
 #    - Bootstrap
 #    - Host management
 #    - Ceph role Service deployment,
+#    - Verify View of Cluster and MON IPs updated in ceph.conf
 #    - Configure client for RGW and RBD systems
 #    - Purge cluster using rm-cluster command
 #
@@ -70,6 +71,14 @@ tests:
       polarion-id: CEPH-83573713
       module: test_cephadm.py
       name: Deploy cluster using cephadm
+
+  - test:
+      name: Verify Cluster View
+      desc: Verify admin nodes has updated view of cluster
+      abort-on-fail: true
+      module: test_cluster_view.py
+      destroy-cluster: false
+      polarion-id: CEPH-83574667
 
   - test:
       abort-on-fail: true
