@@ -1147,6 +1147,20 @@ suites:
       - rgw
       - stage-3
 
+  - name: "test-rgw-ingress-with-and-without-ssl-tier-2"
+    suite: "suites/pacific/rgw/tier-2_rgw_ingress_with_ssl.yaml"
+    global-conf: "conf/pacific/rgw/tier-1_rgw_cephadm.yaml"
+    platform: "rhel-8"
+    rhbuild: "5.3"
+    inventory:
+      openstack: "conf/inventory/rhel-8-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack-only
+      - rgw
+      - stage-1
+
   - name: "test cephadm cluster bootstrap with mutiple public network"
     suite: "suites/pacific/cephadm/customer_bz/tier-2_multiple_subnet_openstack_only.yaml"
     global-conf: "conf/pacific/cephadm/5-node-cluster-multiple-subnet-openstack-only.yaml"
