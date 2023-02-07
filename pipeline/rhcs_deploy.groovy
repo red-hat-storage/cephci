@@ -73,11 +73,12 @@ node ("rhel-8-medium || ceph-qe-ci") {
 
         majorVersion = ciMap.build.substring(0,1)
         clusterName = ciMap["cluster_name"]
+        def buildType = "${ciMap.build}" ?: "tier-0"
 
         // Prepare the CLI arguments
-        cliArgs += "--rhbuild ${ciMap.build}"
+        cliArgs += "--rhbuild ${ciMap.rhbuild}"
         cliArgs += " --platform ${argsMap[majorVersion]['platform']}"
-        cliArgs += " --build tier-0"
+        cliArgs += " --build ${buildType}"
         cliArgs += " --skip-sos-report"
         cliArgs += " --inventory ${argsMap[majorVersion]['inventory']}"
         cliArgs += " --global-conf ${argsMap[majorVersion]['globalConf']}"
