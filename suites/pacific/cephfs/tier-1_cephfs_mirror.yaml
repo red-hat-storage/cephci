@@ -147,3 +147,28 @@ tests:
       module: test_cephadm.py
       polarion-id: CEPH-83574114
       name: deploy cephfs-mirror
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph1:
+            config:
+              command: add
+              copy_admin_keyring: true
+              id: client.1
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              node: node7
+          ceph2:
+            config:
+              command: add
+              copy_admin_keyring: true
+              id: client.1
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              node: node6
+        desc: "Configure the Cephfs client system 1"
+        destroy-cluster: false
+        module: test_client.py
+        name: "configure client"
