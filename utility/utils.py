@@ -1374,6 +1374,15 @@ def clone_the_repo(config, node, path_to_clone):
     node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
 
 
+def calculate_available_storage(node):
+    log.info("Calculate current storage present in cluster")
+    out, err = node.exec_command(cmd="ceph df --format json")
+    import json
+
+    out = json.loads(out)
+    return out["stats"]["total_avail_bytes"]
+
+
 def perform_env_setup(config, node, ceph_cluster):
     config["git-url"] = config.get(
         "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
