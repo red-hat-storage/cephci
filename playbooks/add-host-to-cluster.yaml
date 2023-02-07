@@ -1,0 +1,13 @@
+---
+
+- name: Add host to cluster with label
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Add host node with single label
+      ceph_orch_host:
+        name: "{{ osd_node }}"
+        address: "{{ ip_address }}"
+        labels: "{{ label }}"
