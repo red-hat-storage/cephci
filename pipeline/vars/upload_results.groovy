@@ -46,17 +46,19 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
     }
 
     // Configure rp_preproc launch
+    def prefix = (runType == "upstream")? "Upstream " : ""
+    def rhcs = (runType == "upstream")? runProperties["version"] : runProperties["version"].split('-')[1]
     def launchConfig = [
-        "name": "${runProperties['version']} - ${runProperties['stage']}",
+        "name": "${prefix}${runProperties['version']} - ${runProperties['stage']}",
         "description": "Test executed on ${runProperties['date']}",
         "attributes": [
             "ceph_version": runProperties["ceph_version"],
-            "rhcs": runProperties["version"].split('-')[1],
+            "rhcs": rhcs,
             "tier": runProperties["stage"],
             "suites": suitesWithStatus,
         ]
     ]
-    if ( stageLevel ) {
+    if ( stageLevel && runType != "upstream") {
         launchConfig["name"] = runType.split(" ")[0] + " " + launchConfig["name"] + " " + stageLevel
     }
     credPreproc["reportportal"]["launch"] = launchConfig
