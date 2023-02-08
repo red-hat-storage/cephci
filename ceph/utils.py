@@ -526,14 +526,19 @@ def setup_repos(
     repos: List[str] = None,
     cloud_type: str = "openstack",
 ):
-    if not repos:
-        repos = ["MON", "OSD", "Tools"]
-    base_repo = generate_repo_file(base_url, repos, cloud_type)
-    base_file = ceph.remote_file(
-        sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
-    )
-    base_file.write(base_repo)
-    base_file.flush()
+    if base_url.endswith(".repo"):
+        cmd = f"yum-config-manager --add-repo {base_url}"
+        ceph.exec_command(sudo=True, cmd=cmd)
+    else:
+        if not repos:
+            repos = ["MON", "OSD", "Tools"]
+        base_repo = generate_repo_file(base_url, repos, cloud_type)
+        base_file = ceph.remote_file(
+            sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
+        )
+        base_file.write(base_repo)
+        base_file.flush()
+
     if installer_url is not None:
         installer_repos = ["Agent", "Main", "Installer"]
         inst_repo = generate_repo_file(installer_url, installer_repos)

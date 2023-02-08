@@ -100,6 +100,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         cloud_type = self.config.get("cloud-type", "openstack")
         logger.info(f"cloud type is {cloud_type}")
         hotfix_repo = self.config.get("hotfix_repo")
+        base_url = self.config["base_url"]
         if hotfix_repo:
             for node in self.cluster.get_nodes():
                 logger.info(
@@ -115,8 +116,12 @@ class CephAdmin(BootstrapMixin, ShellMixin):
                     ),
                 )
                 node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
+
+        elif base_url.endswith(".repo"):
+            cmd = f"yum-config-manager --add-repo {base_url}"
+            for node in self.cluster.get_nodes():
+                node.exec_command(sudo=True, cmd=cmd)
         else:
-            base_url = self.config["base_url"]
             if not base_url.endswith("/"):
                 base_url += "/"
             if cloud_type == "ibmc":
