@@ -71,7 +71,7 @@ node ("rhel-8-medium || ceph-qe-ci") {
         def cliArgs = ""
         ciMap = sharedLib.getCIMessageMap()
 
-        majorVersion = ciMap.build.substring(0,1)
+        majorVersion = ciMap.rhbuild.substring(0,1)
         clusterName = ciMap["cluster_name"]
         def buildType = "${ciMap.build}" ?: "tier-0"
 
@@ -112,7 +112,7 @@ node ("rhel-8-medium || ceph-qe-ci") {
             "artifact": [
                 "type": "product-build",
                 "name": "Red Hat Ceph Storage",
-                "nvr": "RHCEPH-${ciMap.build}",
+                "nvr": "RHCEPH-${ciMap.rhbuild}",
                 "phase": "integration",
             ],
             "extra": sutInfo,
