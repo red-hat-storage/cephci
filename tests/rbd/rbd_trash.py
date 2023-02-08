@@ -74,12 +74,13 @@ def run(**kw):
     """
     log.info("Running Trash function")
     rbd_obj = initial_rbd_config(**kw)
-    rc = 1
     if rbd_obj:
-        log.info("Executing test on Replication pool")
-        rc = rbd_trash(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw)
-        if rc:
-            return rc
-        log.info("Executing test on EC pool")
-        rc = rbd_trash(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw)
-    return rc
+        if "rbd_reppool" in rbd_obj:
+            log.info("Executing test on Replication pool")
+            if rbd_trash(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw):
+                return 1
+        if "rbd_ecpool" in rbd_obj:
+            log.info("Executing test on EC pool")
+            if rbd_trash(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw):
+                return 1
+    return 0
