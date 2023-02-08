@@ -1,5 +1,74 @@
 /* Library module that contains methods to send UMB message. */
 
+def postUMBForPipeline(
+    def rhcephVersion,
+    def cephVersion,
+    def buildArtifacts,
+    def tierLevel,
+    def tags,
+    def overrides,
+    def runType,
+    def buildType,
+    def result,
+    def finalStage = false,
+    def dirName = null,
+){
+    /*
+    */
+    def msgMap = [
+        "artifact": [
+            "type": "product-build",
+            "name": "Red Hat Ceph Storage",
+            "version": cephVersion,
+            "nvr": rhcephVersion,
+            "phase": "testing",
+            "build": "tier-0",
+        ],
+        "contact": [
+            "name": "Downstream Ceph QE",
+            "email": "cephci@redhat.com",
+        ],
+        "system": [
+            "os": "centos-7",
+            "label": "agent-01",
+            "provider": "IBM-Cloud",
+        ],
+        "pipeline": [
+            "name": tierLevel,
+            "id": currentBuild.number,
+            "tags": tags,
+            "overrides": overrides,
+            "run_type": runType,
+            "final_stage": finalStage,
+        ],
+        "run": [
+            "url": env.RUN_DISPLAY_URL,
+            "additional_urls": [
+                "doc": "https://docs.engineering.redhat.com/display/rhcsqe/RHCS+QE+Pipeline",
+                "repo": "https://github.com/red-hat-storage/cephci",
+                "report": "https://reportportal-rhcephqe.apps.ocp4.prod.psi.redhat.com/",
+                "tcms": "https://polarion.engineering.redhat.com/polarion/",
+            ],
+        ],
+        "test": [
+            "type": buildType,
+            "category": "functional",
+            "result": result,
+            "object-prefix": dirName,
+        ],
+        "recipe": buildArtifacts,
+        "generated_at": env.BUILD_ID,
+        "version": "3.0.0",
+    ]
+    def msgType = "Custom"
+
+    sharedLib.SendUMBMessage(
+        msgMap,
+        "VirtualTopic.qe.ci.rhcephqe.product-build.test.complete",
+        msgType,
+    )
+}
+
 def postUMBTestQueue(def version, Map recipeMap, def scratch) {
     /*
         This method posts a message to the UMB using the version information provided.
