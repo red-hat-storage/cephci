@@ -1,4 +1,70 @@
 /* Library module that contains methods to send email and gchat notifications. */
+// def artifactDetails,
+def sendEmailForListener(
+    def rhcephVersion,
+    def cephVersion,
+    def composeInfo,
+    def ciMsg,
+    def failureReason,
+    def subject,
+    def toList="cephci@redhat.com"
+){
+    /*
+        Send an Email notification when a listener job has failed
+        Arguments:
+            failureReason: Reason for failure
+            rhcephVersion: RHCS-<major>.<minor>
+            cephVersion: Ceph Version for which listener failed
+            composeInfo:
+                Example: composeInfo = [
+                    "composeId": composeId,
+                    "composeUrl": composeUrl,
+                    "composeLabel": composeLabel,
+                    "containerImage": containerImage
+                ]
+            ciMsg: UMB message contents
+            subject: Email subject
+    */
+    def testResults = [
+        "jobName": "${env.JOB_NAME}",
+        "cephVersion": cephVersion,
+        "rhcephVersion": rhcephVersion,
+        "composeId": composeInfo.get("composeId", ""),
+        "composeLabel": composeInfo.get("composeLabel", ""),
+        "composeUrl": composeInfo.get("composeUrl", ""),
+        "containerImage": composeInfo.get("containerImage", ""),
+        "result": "${currentBuild.result}",
+        "ciMsg": ciMsg,
+        "jobUrl": "${env.BUILD_URL}",
+        "failureReason": failureReason
+    ]
+    def testResultsJson = writeJSON returnText: true, json: testResults
+    try {
+        def cmd = "cd ${env.WORKSPACE}/pipeline/scripts/ci;"
+        cmd = "${cmd} sudo ${env.WORKSPACE}/.venv/bin/python get_email_body.py"
+        cmd = "${cmd} --template listener_email.jinja"
+        cmd = "${cmd} --testResults '${testResultsJson}'"
+
+        println("email cmd")
+        println("${cmd}")
+
+        def emailBody = sh (returnStdout: true, script: cmd)
+        emailBody = readYaml text: emailBody
+        body = emailBody["email_body"]
+
+        emailext (
+            mimeType: 'text/html',
+            subject: "${subject}",
+            body: "${body}",
+            from: "cephci@redhat.com",
+            to: "${toList}"
+        )
+    } catch(Exception exc) {
+        println "Encountered a failure during email body creation."
+        println exc
+    }
+}
+
 
 def sendEmail(
     def sharedLib,

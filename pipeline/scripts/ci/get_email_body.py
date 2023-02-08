@@ -11,8 +11,8 @@ This script updates the confluence page titled "RHCS Test Execution Summary"
 with the results of execution given as input.
 
 Usage:
-get_email_body.py --template <template_name> --testResults <test_results> --testArtifacts <test_artifacts>
-get_email_body.py --template <template> --testResultsFile <file> --testArtifacts <test_artifacts> --runType <run_type>
+get_email_body.py --template <template_name> --testResults <test_results> [--testArtifacts <test_artifacts>]
+get_email_body.py --template <template> --testResultsFile <file> --runType <run_type> [--testArtifacts <test_artifacts>]
 
 get_email_body.py (-h | --help)
 
@@ -172,7 +172,7 @@ class GenerateEmailBody:
             test_results=test_results, test_artifacts=artifactDetails
         )
 
-    def get_stage_email(self, **kwargs):
+    def get_basic_email(self, **kwargs):
         """
         This method creates stage level email html body based on the template specified
         Args:
@@ -193,6 +193,8 @@ class GenerateEmailBody:
 if __name__ == "__main__":
     cli_args = docopt(doc)
     template = cli_args.get("--template")
+    testResults = dict()
+    testArtifacts = dict()
     if cli_args.get("--testResults"):
         testResults = json.loads(cli_args.get("--testResults"))
     if cli_args.get("--testArtifacts"):
@@ -200,8 +202,8 @@ if __name__ == "__main__":
     try:
         cls = GenerateEmailBody()
 
-        if template == "stage_email.jinja":
-            html = cls.get_stage_email(
+        if template != "consolidated_email.jinja":
+            html = cls.get_basic_email(
                 template=template, testResults=testResults, testArtifacts=testArtifacts
             )
         else:
