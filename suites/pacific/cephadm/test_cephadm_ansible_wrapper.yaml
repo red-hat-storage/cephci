@@ -45,3 +45,16 @@ tests:
           module_args:
             osd_node: node2
             label: osd.1
+
+  - test:
+      name: Deploy ODD service to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/deploy-osd-service.yml' playbook
+      polarion-id: CEPH-83575213
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_apply"
+          playbook: playbooks/deploy-osd-service.yml
+          module_args:
+            osd_node: node2
+            label: osd.1
