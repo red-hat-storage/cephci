@@ -36,9 +36,18 @@ class RbdMirror:
                 continue
 
         if self.ceph_version > 2 and self.k_m:
-            self.datapool = "rbd_datapool"
-            self.ec_profile = "rbd_ec_profile"
-            self.set_ec_profile(profile=self.ec_profile)
+            self.datapool = (
+                config["ec_pool_config"]["data_pool"]
+                if config.get("ec_pool_config", {}).get("data_pool")
+                else "rbd_test_data_pool_" + self.random_string()
+            )
+            if "," in self.k_m:
+                self.ec_profile = config.get("ec_pool_config", {}).get(
+                    "ec_profile", "rbd_ec_profile_" + self.random_string()
+                )
+                self.set_ec_profile(profile=self.ec_profile)
+            else:
+                self.ec_profile = ""
 
     def exec_cmd(self, **kw):
         try:
@@ -887,3 +896,158 @@ class RbdMirror:
         if daemon_status.strip("\n") != "active":
             return 1
         return 0
+
+
+def rbd_mirror_config(**kw):
+    """
+    Configure RBD mirroring on replicated pools, ecpools or both based on arguments specified
+    Args:
+        **kw:
+
+    Examples: In default configuration, pool and image names will be taken as random values.
+        Default configuration for ecpools only :
+            config:
+                ec-pool-only: True
+        Default configuration for replicated pools only :
+            config:
+                rep-pool-only: True
+        Advanced configuration:
+            config:
+               do_not_create_image: True  # if not set then images will be created by default
+               ec-pool-k-m: 2,1
+               ec-pool-only: False
+               ec_pool_config:
+                  pool: rbd_pool_4
+                  data_pool: rbd_ec_pool_4
+                  ec_profile: rbd_ec_profile_4
+                  image: rbd_image_4
+                  size: 10G
+                  io_total: 1G
+                  mode: image (default pool)
+                  mirrormode: snapshot (default journal)
+               rep_pool_config:
+                  pool: rbd_rep_pool
+                  image: rbd_rep_image
+                  size: 10G
+                  io_total: 1G
+                  mode: image (default pool)
+                  mirrormode: snapshot (default journal)
+    Args:
+        **kw:
+
+    Returns:
+        RBD mirror objects for ecpool and replicated pool
+    """
+    rbd_obj = dict()
+
+    # Create all the necessary configuration for replicated pool if not specified by user
+    if not kw.get("config") or not kw.get("config").get("ec-pool-only"):
+        ec_pool_k_m = kw.get("config", {}).pop("ec-pool-k-m", None)
+
+        rep_mirror1, rep_mirror2 = [
+            RbdMirror(cluster, kw.get("config", {}))
+            for cluster in kw.get("ceph_cluster_dict").values()
+        ]
+
+        # Create rep pool config when no configuration is specified for the module
+        if not kw.get("config"):
+            kw["config"] = {
+                "rep_pool_config": {
+                    "pool": "rep_pool_" + rep_mirror1.random_string(),
+                    "image": "rep_image_" + rep_mirror1.random_string(),
+                    "size": "1G",
+                    "io_total": "1G",
+                    "mode": "pool",
+                }
+            }
+        # Create rep pool config with all necessary config when only some are specified
+        elif kw.get("config").get("rep_pool_config"):
+            kw["config"]["rep_pool_config"]["pool"] = kw["config"][
+                "rep_pool_config"
+            ].get("pool", "rep_pool_" + rep_mirror1.random_string())
+            kw["config"]["rep_pool_config"]["image"] = kw["config"][
+                "rep_pool_config"
+            ].get("image", "rep_image_" + rep_mirror1.random_string())
+            kw["config"]["rep_pool_config"]["size"] = kw["config"][
+                "rep_pool_config"
+            ].get("size", "1G")
+            kw["config"]["rep_pool_config"]["io_total"] = kw["config"][
+                "rep_pool_config"
+            ].get("io_total", "1G")
+            kw["config"]["ec_pool_config"]["mode"] = kw["config"][
+                "rep_pool_config"
+            ].get("mode", "pool")
+        # Create rep pool config with all necessary config when no rep pool config is specified
+        else:
+            kw["config"]["rep_pool_config"] = {
+                "pool": "rep_pool_" + rep_mirror1.random_string(),
+                "image": "rep_image_" + rep_mirror1.random_string(),
+                "size": "1G",
+                "io_total": "1G",
+                "mode": "pool",
+            }
+
+        rep_mirror1.initial_mirror_config(
+            rep_mirror2,
+            poolname=kw["config"]["rep_pool_config"]["pool"],
+            imagename=kw["config"]["rep_pool_config"]["image"],
+            imagesize=kw["config"]["rep_pool_config"]["size"],
+            io_total=kw["config"]["rep_pool_config"]["io_total"],
+            mode=kw["config"]["rep_pool_config"]["mode"],
+            **kw,
+        )
+
+        kw["config"]["ec-pool-k-m"] = ec_pool_k_m
+        rbd_obj.update(
+            {"rep_rbdmirror": {"mirror1": rep_mirror1, "mirror2": rep_mirror2}}
+        )
+
+    # Create ec pool object only when rep-pool-only is not specified or set to false
+    if not kw.get("config").get("rep-pool-only"):
+        if not kw.get("config").get("ec-pool-k-m"):
+            kw["config"]["ec-pool-k-m"] = "go_with_default"
+
+        ec_mirror1, ec_mirror2 = [
+            RbdMirror(cluster, kw.get("config", {}))
+            for cluster in kw.get("ceph_cluster_dict").values()
+        ]
+
+        # Create ec pool config with all necessary config when some ec pool config is specified
+        if kw.get("config").get("ec_pool_config"):
+            kw["config"]["ec_pool_config"]["pool"] = kw["config"]["ec_pool_config"].get(
+                "pool", "ec_img_pool_" + ec_mirror1.random_string()
+            )
+            kw["config"]["ec_pool_config"]["image"] = kw["config"][
+                "ec_pool_config"
+            ].get("image", "ec_image" + ec_mirror1.random_string())
+            kw["config"]["ec_pool_config"]["size"] = kw["config"]["ec_pool_config"].get(
+                "size", "1G"
+            )
+            kw["config"]["ec_pool_config"]["io_total"] = kw["config"][
+                "ec_pool_config"
+            ].get("io_total", "1G")
+            kw["config"]["ec_pool_config"]["mode"] = kw["config"]["ec_pool_config"].get(
+                "mode", "pool"
+            )
+        # Create ec pool config with all necessary config when no ec pool config is specified
+        else:
+            kw["config"]["ec_pool_config"] = {
+                "pool": "ec_img_pool_" + ec_mirror1.random_string(),
+                "image": "ec_image" + ec_mirror1.random_string(),
+                "size": "1G",
+                "io_total": "1G",
+                "mode": "pool",
+            }
+        ec_mirror1.initial_mirror_config(
+            ec_mirror2,
+            poolname=kw["config"]["ec_pool_config"]["pool"],
+            imagename=kw["config"]["ec_pool_config"]["image"],
+            imagesize=kw["config"]["ec_pool_config"]["size"],
+            io_total=kw["config"]["ec_pool_config"]["io_total"],
+            mode=kw["config"]["ec_pool_config"]["mode"],
+            **kw,
+        )
+
+        rbd_obj.update({"ec_rbdmirror": {"mirror1": ec_mirror1, "mirror2": ec_mirror2}})
+
+    return rbd_obj

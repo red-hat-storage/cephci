@@ -20,6 +20,7 @@ tests:
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
+
   - test:
       abort-on-fail: true
       clusters:
@@ -217,6 +218,17 @@ tests:
             io-total: 200M
       polarion-id: CEPH-9471
       desc: Test planned failover and failback scenario
+
+  - test:
+      name: Recovery of abrupt failure of secondary cluster
+      module: test_9474.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9474
+      desc: Recovery of abrupt failure of secondary cluster
 
   - test:
       name: Recovery of shutdown secondary cluster
