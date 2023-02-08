@@ -114,6 +114,36 @@ tests:
       desc: Configure email alerts on ceph cluster
 
   - test:
+      name: Test configuration Assimilation
+      module: test_config_assimilation.py
+      polarion-id: CEPH-83573480
+      config:
+        cluster_conf_path: "conf/quincy/rados/test-confs/cluster-configs"
+        Verify_config_parameters:
+          configurations:
+            - config-1:
+                section: "mon"
+                name: "mon_cluster_log_to_syslog"
+                value: "true"
+            - config-2:
+                section: "osd"
+                name: "debug_osd"
+                value: "5/5"
+            - config-3:
+                section: "mgr"
+                name: "mgr_stats_period"
+                value: "10"
+            - config-4:
+                section: "mgr"
+                name: "debug_mgr"
+                value: "5/5"
+            - config-5:
+                section: "mds"
+                name: "mds_op_history_size"
+                value: "40"
+      desc: Verify config assimilation into ceph mon configuration database
+
+  - test:
       name: Enable logging to file
       module: rados_prep.py
       config:
