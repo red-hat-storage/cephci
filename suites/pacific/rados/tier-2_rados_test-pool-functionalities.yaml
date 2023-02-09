@@ -291,3 +291,11 @@ tests:
           pool_name: pool_num_chk
           delete_pool: true
 
+  - test:
+      name: OSD min-alloc size and fragmentation checks
+      module: rados_prep.py
+      polarion-id: CEPH-83573808
+      config:
+        Verify_osd_alloc_size:
+          allocation_size: 4096
+      desc: Verify the minimum allocation size for OSDs along with fragmentation scores.
