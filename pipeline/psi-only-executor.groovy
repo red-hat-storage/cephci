@@ -44,7 +44,7 @@ node("rhel-8-medium || ceph-qe-ci") {
         ciMap = sharedLib.getCIMessageMap()
         def rhcephVersion = ciMap.artifact.nvr
         def buildType = "tier-0"
-        def tags = "openstack-only,tier-1,stage-1"
+        def tags = "sanity_openstack_only,tier-1,stage-1"
         def overrides = ["build": "tier-0"]
         def overridesStr = writeJSON returnText: true, json: overrides
         def buildArtifacts = "${params.CI_MESSAGE}"

@@ -8,7 +8,7 @@ def recipeFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
 // Default job parameters
 def buildType = "${params.buildType}" ? "tier-1" : "${params.buildType}"
 def overrides = "${params.overrides}" ? "{}" : "${params.overrides}"
-def tags = "${params.tags}" ? "schedule,psi,tier-1,stage-1" : "${params.tags}"
+def tags = "${params.tags}" ? "schedule_openstack_only,tier-1,stage-1" : "${params.tags}"
 
 
 // Pipeline script entry point

@@ -85,7 +85,7 @@ node("rhel-8-medium || ceph-qe-ci") {
                     "name": "Red Hat Ceph Storage",
                     "version": cephVersion,
                     "nvr": "RHCEPH-${versions.major_version}.${versions.minor_version}",
-                    "phase": "tier-0",
+                    "phase": "sanity",
                     "build_action": "latest"
                 ],
                 "contact": [
