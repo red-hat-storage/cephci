@@ -475,6 +475,23 @@ suites:
       - cephfs
       - stage-1
 
+  - name: "Tier-2 cephfs upgrade 5.3 to 6.0"
+    suite: "suites/quincy/cephfs/tier-0_cephfs_upgrade_53_to_6x.yaml"
+    global-conf: "conf/quincy/cephfs/tier-2_cephfs_upgrade.yaml"
+    platform: "rhel-9"
+    rhbuild: "6.0"
+    inventory:
+      openstack: "conf/inventory/rhel-9-latest.yaml"
+      ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+    metadata:
+      - schedule
+      - tier-2
+      - openstack
+      - ibmc
+      - cephfs
+      - upgrades
+      - stage-1
+
   - name: "Testing Rgw Single site"
     suite: "suites/pacific/rgw/tier-1_rgw.yaml"
     global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"

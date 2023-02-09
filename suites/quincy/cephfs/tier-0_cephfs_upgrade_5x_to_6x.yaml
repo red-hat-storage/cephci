@@ -113,17 +113,19 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-  - test:
+  -
+    test:
       abort-on-fail: false
-      desc: "Deploy MDS with default values using cephadm"
-      module: mds_default_values.py
-      name: cephfs default values for mds
-      polarion-id: "CEPH-83574284"
-  - test:
-      abort-on-fail: false
-      desc: Validates the data after upgrade
-      module: cephfs_upgrade.metadata_version_validation.py
+      desc: Creates all the fs related components before upgrade
+      module: cephfs_upgrade.upgrade_pre_req.py
       name: "creation of Prerequisites for Upgrade"
+      polarion-id: CEPH-83575312
+  -
+    test:
+      abort-on-fail: false
+      desc: Collects all the info required for validating the upgrade
+      module: cephfs_upgrade.metadata_version_validation.py
+      name: "Metadata validation for Upgrade"
       polarion-id: CEPH-83575313
 
   - test:
