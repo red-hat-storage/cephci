@@ -296,6 +296,9 @@ class RbdMirror:
             p.spawn(mirror2.create_pool, poolname=poolname)
 
         self.create_image(imagespec=imagespec, size=imagesize)
+        if kw.get("image_feature"):
+            image_feature = kw.get("image_feature")
+            self.image_feature_enable(imagespec=imagespec, image_feature=image_feature)
         if kw.get("mode"):
             kw["peer_mode"] = kw.get("peer_mode", "bootstrap")
             kw["rbd_client"] = kw.get("rbd_client", "client.admin")
@@ -604,12 +607,32 @@ class RbdMirror:
             self.exec_cmd(cmd="rbd pool init {}".format(kw.get("poolname")))
 
     def create_image(self, **kw):
-        cmd = "rbd create -s {} {} --image-feature exclusive-lock,journaling".format(
-            kw.get("size", "2G"), kw.get("imagespec")
+        """
+        Create image on provided pool with default image feature
+        like exclusive-lock, layering, objectmap, fast-diff, deepflatten
+        Args:
+            **kw:
+                imagespec: pool/image_name
+                size: size of the image
+        """
+        cmd = "rbd create {} --size {}".format(
+            kw.get("imagespec"), kw.get("size", "2G")
         )
-
         if kw.get("datapool", self.datapool):
             cmd = cmd + " --data-pool {}".format(kw.get("datapool", self.datapool))
+        self.exec_cmd(cmd=cmd)
+
+    def image_feature_enable(self, **kw):
+        """
+        enable image features on the existing image
+        Args:
+            **kw:
+                imagespec: pool/image_name on which image features will enable
+                image_features: comma seperated value for image features
+        """
+        cmd = "rbd feature enable {} {}".format(
+            kw.get("imagespec"), kw.get("image_feature")
+        )
         self.exec_cmd(cmd=cmd)
 
     def export_image(self, **kw):
