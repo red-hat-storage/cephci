@@ -31,14 +31,15 @@ def validate_configs(config):
 
     mon_node = module_args.get("mon_node")
     osd_node = module_args.get("osd_node")
+    label = module_args.get("label")
     if module == "cephadm_bootstrap" and not mon_node:
         raise ConfigNotFoundError(
             "'cephadm_bootstrap' module requires 'mon_node' parameter"
         )
 
-    elif module == "ceph_orch_host" and not osd_node:
+    elif module in ["ceph_orch_host", "ceph_orch_apply"] and not osd_node and not label:
         raise ConfigNotFoundError(
-            "'ceph_orch_host' module requires 'osd_node' parameter"
+            f"'{module}' module requires 'osd_node' and 'label' parameter"
         )
 
 
@@ -105,14 +106,15 @@ def run(ceph_cluster, **kwargs):
         if config.get("build_type") not in ["ga", "ga-async"]:
             extra_vars["image"] = config.get("container_image")
 
-    elif module == "ceph_orch_host":
+    elif module in ["ceph_orch_host", "ceph_orch_apply"]:
         osd_node = module_args.get("osd_node")
         osd_node = get_node_by_id(nodes, osd_node)
-        extra_vars["osd_node"] = osd_node.hostname
-        extra_vars["ip_address"] = get_node_ip(nodes, osd_node.hostname)
         extra_vars["label"] = module_args.get("label")
 
-        CopyCephSshKeyToHost.run(installer, osd_node)
+        if module == "ceph_orch_host":
+            extra_vars["osd_node"] = osd_node.hostname
+            extra_vars["ip_address"] = get_node_ip(nodes, osd_node.hostname)
+            CopyCephSshKeyToHost.run(installer, osd_node)
 
     playbook = aw.get("playbook")
     validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
