@@ -22,7 +22,7 @@ def failureReason
 def reportPotalLink
 
 // Pipeline script entry point
-node('ceph-qe-ci || rhel-8-medium') {
+node('ceph-qe-ci || rhel-9-medium') {
     try {
         stage('Preparing') {
             if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
