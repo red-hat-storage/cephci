@@ -216,10 +216,11 @@ class BootstrapMixin:
 
         if build_type == "upstream":
             self.setup_upstream_repository()
-            logger.info(
-                "Enabling cdn tool repo to workaround ",
-                "unavailability of ceph x86_64 RPM pkgs in upstream builds",
-            )
+            # Todo: This is temporary workaround of installing Red Hat Ceph
+            #       Storage tools repo to compensate ceph-common and other pkg RPMs
+            #       used in the CI test modules.
+            #       The `set_cdn_tool_repo` should be taken out, once
+            #       we have upstream build with all necessary pkg sources.
             self.set_cdn_tool_repo()
         elif build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False
