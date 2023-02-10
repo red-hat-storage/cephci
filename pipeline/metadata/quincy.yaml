@@ -24,7 +24,7 @@ suites:
 - name: "Basic Regression Upstream Testing For DMFG"
   suite: "suites/quincy/upstream/tier-1-cephadm-basic-regression.yaml"
   global-conf: "conf/quincy/upstream/4-node-cluster-with-1-client.yaml"
-  platform: "rhel-9"
+  platform: "rhel-8"
   rhbuild: "6.0"
   inventory:
     openstack: "conf/inventory/rhel-8-latest.yaml"
