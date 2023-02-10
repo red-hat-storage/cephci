@@ -333,8 +333,8 @@ def uploadCompose(def rhBuild, def cephVersion, def baseUrl) {
 
         sh script: "${cpFile} && ${cmd} ${scriptFile} ${args}"
     } catch(Exception exc) {
-        println "Encountered a failure during compose upload."
         println exc
+        error("Encountered a failure during compose upload. ${exc}")
     }
 }
 

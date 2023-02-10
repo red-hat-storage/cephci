@@ -7,6 +7,7 @@ def composeUrl
 def platform
 def failureReason = ""
 def cimsg = ""
+def emailLib
 
 // Pipeline script entry point
 node("rhel-8-medium || ceph-qe-ci") {
@@ -38,6 +39,7 @@ node("rhel-8-medium || ceph-qe-ci") {
                 poll: false
             )
             sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
+            emailLib = load("${env.WORKSPACE}/pipeline/vars/email.groovy")
             sharedLib.prepareNode()
         }
 
@@ -126,25 +128,13 @@ node("rhel-8-medium || ceph-qe-ci") {
             println "Failure Reason: ${failureReason}"
         }
     } finally {
-        def body = "<body><h3><u>Job ${currentBuild.result}</u></h3>"
-        body += "<dl><dt>RHCS Version:</dt><dd>RHCEPH-${versions.major_version}.${versions.minor_version}</dd>"
-        body += "<dt>Ceph Version:</dt><dd>${cephVersion}</dd>"
-        body += "<dt>Compose Label:</dt><dd>${cimsg['compose-label']}</dd>"
-        body += "<dt>Compose URL:</dt><dd>${composeUrl}</dd>"
-        if (currentBuild.result != "SUCCESS") {
-            body += "<dt>${currentBuild.result} Reason:</dt><dd>${failureReason}</dd>"
-            body += "<dt>UMB Message:</dt><dd>${cimsg}</dd>"
-        }
-        body += "<dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd></dl></body>"
-        def subject = "RHCEPH-${versions.major_version}.${versions.minor_version} (RC) Release Candidate build - ${currentBuild.result}"
-
-        emailext (
-            mimeType: 'text/html',
-            subject: "${subject}",
-            body: "${body}",
-            from: "cephci@redhat.com",
-            to: "cephci@redhat.com"
-        )
+        rhcephVersion = "RHCEPH-${versions.major_version}.${versions.minor_version}"
+        composeInfo = [
+            "composeLabel": "${cimsg['compose-label']}",
+            "composeUrl": composeUrl
+        ]
+        def subject = "${env.JOB_NAME} ${currentBuild.result} for ${rhcephVersion} - ${cephVersion} (RC) Release Candidate build"
+        emailLib.sendEmailForListener(rhcephVersion, cephVersion, composeInfo, cimsg, failureReason, subject)
         subject += "\n Jenkins URL: ${env.BUILD_URL}"
         googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
     }
