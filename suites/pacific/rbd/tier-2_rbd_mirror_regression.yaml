@@ -185,6 +185,18 @@ tests:
       desc: Verify that deleting primary image also delete the secondary image
 
   - test:
+      name: image removal from secondary after journaling feature disable
+      module: test_image_removal_from_secondary.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            repeat_count: 10
+      polarion-id: CEPH-10470
+      desc: verify that image removal from secondary after disabling journaling feature
+
+  - test:
       name: Attempt shrinking secondary image
       module: test_9500_shrink_img_at_secondary.py
       clusters:

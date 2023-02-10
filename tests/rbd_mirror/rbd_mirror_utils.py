@@ -635,6 +635,19 @@ class RbdMirror:
         )
         self.exec_cmd(cmd=cmd)
 
+    def image_feature_disable(self, **kw):
+        """
+        Disable image features on the existing image
+        Args:
+            **kw:
+                imagespec: pool/image_name on which image features will disable
+                image_features: comma seperated value for image features
+        """
+        cmd = "rbd feature disable {} {}".format(
+            kw.get("imagespec"), kw.get("image_feature")
+        )
+        self.exec_cmd(cmd=cmd)
+
     def export_image(self, **kw):
         self.exec_cmd(
             cmd="rbd export {} {}".format(kw.get("imagespec"), kw.get("path")),
