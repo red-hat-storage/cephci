@@ -296,6 +296,8 @@ class RbdMirror:
             p.spawn(mirror2.create_pool, poolname=poolname)
 
         self.create_image(imagespec=imagespec, size=imagesize)
+        if kw.get("mirrormode") != "snapshot":
+            self.image_feature_enable(imagespec=imagespec, image_feature="journaling")
         if kw.get("image_feature"):
             image_feature = kw.get("image_feature")
             self.image_feature_enable(imagespec=imagespec, image_feature=image_feature)
@@ -1013,6 +1015,7 @@ def rbd_mirror_config(**kw):
             kw["config"]["ec_pool_config"]["mode"] = kw["config"][
                 "rep_pool_config"
             ].get("mode", "pool")
+
         # Create rep pool config with all necessary config when no rep pool config is specified
         else:
             kw["config"]["rep_pool_config"] = {
@@ -1030,6 +1033,8 @@ def rbd_mirror_config(**kw):
             imagesize=kw["config"]["rep_pool_config"]["size"],
             io_total=kw["config"]["rep_pool_config"]["io_total"],
             mode=kw["config"]["rep_pool_config"]["mode"],
+            mirrormode=kw["config"]["rep_pool_config"].get("mirrormode", ""),
+            image_feature=kw["config"]["ec_pool_config"].get("image_feature"),
             **kw,
         )
 
@@ -1065,6 +1070,7 @@ def rbd_mirror_config(**kw):
             kw["config"]["ec_pool_config"]["mode"] = kw["config"]["ec_pool_config"].get(
                 "mode", "pool"
             )
+
         # Create ec pool config with all necessary config when no ec pool config is specified
         else:
             kw["config"]["ec_pool_config"] = {
@@ -1074,6 +1080,7 @@ def rbd_mirror_config(**kw):
                 "io_total": "1G",
                 "mode": "pool",
             }
+
         ec_mirror1.initial_mirror_config(
             ec_mirror2,
             poolname=kw["config"]["ec_pool_config"]["pool"],
@@ -1081,6 +1088,8 @@ def rbd_mirror_config(**kw):
             imagesize=kw["config"]["ec_pool_config"]["size"],
             io_total=kw["config"]["ec_pool_config"]["io_total"],
             mode=kw["config"]["ec_pool_config"]["mode"],
+            mirrormode=kw["config"]["ec_pool_config"].get("mirrormode", ""),
+            image_feature=kw["config"]["ec_pool_config"].get("image_feature"),
             **kw,
         )
 

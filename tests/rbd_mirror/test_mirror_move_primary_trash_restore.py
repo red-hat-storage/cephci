@@ -51,14 +51,12 @@ def run(**kw):
         poolname = mirror1.random_string()
         imagename = mirror1.random_string()
         imagespec = poolname + "/" + imagename
-        image_feature = "journaling"
         mirror1.initial_mirror_config(
             mirror2,
             poolname=poolname,
             imagename=imagename,
             imagesize=config.get("imagesize", "1G"),
             mode="pool",
-            image_feature=image_feature,
             **kw,
         )
 
