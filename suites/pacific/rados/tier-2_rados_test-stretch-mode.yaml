@@ -164,6 +164,11 @@ tests:
       module: rbd_faster_exports.py
       config:
         io-total: 100M
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
       desc: Perform export during read/write,resizing,flattening,lock operations
       polarion-id: CEPH-9876
 
