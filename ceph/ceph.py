@@ -1888,13 +1888,18 @@ class CephNode(object):
             base_url (str): compose url for rhel
             installer_url (str): installer repos url
         """
-        repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
-        base_repo = Ceph.generate_repository_file(base_url, repos, cloud_type)
-        base_file = self.remote_file(
-            sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
-        )
-        base_file.write(base_repo)
-        base_file.flush()
+        if base_url.endswith(".repo"):
+            cmd = f"yum-config-manager --add-repo {base_url}"
+            self.exec_command(sudo=True, cmd=cmd)
+
+        else:
+            repos = ["MON", "OSD", "Tools", "Calamari", "Installer"]
+            base_repo = Ceph.generate_repository_file(base_url, repos, cloud_type)
+            base_file = self.remote_file(
+                sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
+            )
+            base_file.write(base_repo)
+            base_file.flush()
 
         if installer_url is not None:
             installer_repos = ["Agent", "Main", "Installer"]
