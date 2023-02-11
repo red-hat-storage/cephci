@@ -41,14 +41,14 @@ def collect_ceph_details(client, cmd_list, iteration, file):
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered:
-    CEPH-83573520	Validate the max snapshot that can be created under a root FS sub volume level.
+    CEPH-83573517:   Create Subvolumes until we hit an Exception
 
     Pre-requisites :
     1. We need atleast one client node to execute this test case
     2. creats fs volume create cephfs if the volume is not there
     3. ceph fs subvolume create <vol_name> <subvol_name> [--size <size_in_bytes>] [--group_name <subvol_group_name>]
        [--pool_layout <data_pool_name>] [--uid <uid>] [--gid <gid>] [--mode <octal_mode>]  [--namespace-isolated]
-       Ex: ceph fs subvolume create cephfs subvol_max_snap --size 5368706371 --group_name subvolgroup_1
+       Ex: ceph fs subvolume create cephfs subvol_max_snap
     4. Create Data on the subvolume
         Ex:  python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 --files
             100 --files-per-dir 10 --dirs-per-dir 2 --top /mnt/cephfs_fuse1baxgbpaia_1/
@@ -132,5 +132,7 @@ def run(ceph_cluster, **kw):
         if config.get("clean_up", True):
             log.info("Clean Up in progess")
             for subvol in subvol_list[:-1]:
-                fs_util.remove_subvolume(clients[0], **subvol, validate=False)
+                fs_util.remove_subvolume(
+                    clients[0], **subvol, validate=False, check_ec=False
+                )
         return 0
