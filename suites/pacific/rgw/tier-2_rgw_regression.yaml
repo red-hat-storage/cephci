@@ -741,3 +741,12 @@ tests:
         config-file-name: test_indexless_buckets_s3.yaml
         timeout: 500
 
+  - test:
+      name: Versioning with copy objects and delete with differnt user
+      desc: Versioning with copy objects and delete with differnt user
+      polarion-id: CEPH-9353
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_delete_version_object_using_different_user.yaml
+        timeout: 300
