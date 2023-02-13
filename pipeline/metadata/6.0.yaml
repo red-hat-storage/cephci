@@ -153,7 +153,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Bootstrap cluster with skip-dashboard, output configuration directories/files."
+        - name: "Bootstrap cluster with skip-dashboard output configuration directories or files"
           execution_time: ""
           suite: "suites/quincy/cephadm/tier-1_skip_dashboard.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
@@ -163,7 +163,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Bootstrap cluster with custom ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key and apply-spec options."
+        - name: "Bootstrap cluster with custom ssl-dashboard-port ssh-user ssh-public-key ssh-private-key and apply-spec options"
           execution_time: ""
           suite: "suites/quincy/cephadm/tier-1_ssl_dashboard_port.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
@@ -422,7 +422,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "test-rgw-ms-omap-datalog-on-primary.yaml"
+        - name: "test-rgw-ms-omap-datalog-on-primary"
           execution_time: "1h 26m 11s"
           suite: "suites/pacific/rgw/tier-1_rgw_ms-omap-datalog-on-primary.yaml"
           global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
@@ -699,7 +699,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "Tier-2 cephfs upgrade 5.3 to 6.0"
+        - name: "Tier-2 cephfs upgrade 5-3 to 6-0"
           execution_time: ""
           suite: "suites/quincy/cephfs/tier-0_cephfs_upgrade_53_to_6x.yaml"
           global-conf: "conf/quincy/cephfs/tier-2_cephfs_upgrade.yaml"
@@ -731,7 +731,7 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
           metadata:
             - cephfs
-        - name: "cephadm cluster bootstrap with mutiple public network."
+        - name: "cephadm cluster bootstrap with mutiple public network"
           execution_time: ""
           suite: "suites/quincy/cephadm/tier-2_multiple_subnet_openstack_only.yaml"
           global-conf: "conf/quincy/cephadm/tier-2_multiple_subnet_openstack_only.yaml"
@@ -919,7 +919,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Bootstrap cluster with skip-dashboard, output configuration directories/files."
+        - name: "Bootstrap cluster with skip-dashboard output configuration directories or files."
           execution_time: ""
           suite: "suites/quincy/cephadm/tier-1_skip_dashboard.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
@@ -929,7 +929,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Bootstrap cluster with custom ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key and apply-spec options."
+        - name: "Bootstrap cluster with custom ssl-dashboard-port ssh-user ssh-public-key ssh-private-key and apply-spec options"
           execution_time: ""
           suite: "suites/quincy/cephadm/tier-1_ssl_dashboard_port.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
@@ -1086,7 +1086,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Bootstrap cluster with skip-dashboard, output configuration directories/files."
+        - name: "Bootstrap cluster with skip-dashboard output configuration directories or files."
           execution_time: ""
           suite: "suites/quincy/cephadm/tier-1_skip_dashboard.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
@@ -1096,7 +1096,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Bootstrap cluster with custom ssl-dashboard-port, ssh-user, ssh-public-key, ssh-private-key and apply-spec options."
+        - name: "Bootstrap cluster with custom ssl-dashboard-port ssh-user ssh-public-key ssh-private-key and apply-spec options"
           execution_time: ""
           suite: "suites/quincy/cephadm/tier-1_ssl_dashboard_port.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
