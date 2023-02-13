@@ -203,7 +203,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - cephfs
-        - name: "test-5.3-specific-fixes"
+        - name: "test-53-specific-fixes"
           execution_time: "41m 40s"
           suite: "suites/pacific/rgw/tier-2_rgw_test_5.3_specific_fixes.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
@@ -326,7 +326,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - cephfs
-        - name: "test-rgw-ms-omap-datalog-on-primary.yaml"
+        - name: "test-rgw-ms-omap-datalog-on-primary"
           execution_time: "1h 54m 39s"
           suite: "suites/pacific/rgw/tier-1_rgw_ms-omap-datalog-on-primary.yaml"
           global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
@@ -347,7 +347,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rados
-        - name: "Tier-2 RGW multisite test async data notifications on 5.3"
+        - name: "Tier-2 RGW multisite test async data notifications on 53"
           execution_time: "2h 14m 43s"
           suite: "suites/pacific/rgw/tier-2_rgw_test-multisite-async-data-notification.yaml"
           global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
@@ -398,7 +398,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
-        - name: "Tier-2 RGW single site upgrade from 5.x GA to latest developmet build"
+        - name: "Tier-2 RGW single site upgrade from 5x GA to latest development build"
           execution_time: "2h 58m 22s"
           suite: "suites/pacific/rgw/tier-1_rgw_ssl_test-upgrade-5-to-latest.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
