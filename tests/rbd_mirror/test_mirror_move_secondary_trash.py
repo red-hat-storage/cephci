@@ -1,3 +1,4 @@
+from tests.rbd.exceptions import ImageFoundError
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 from utility.log import Log
@@ -54,20 +55,14 @@ def run(**kw):
             imagename=imagename,
             imagesize=config.get("imagesize", "1G"),
             mode="pool",
-
             **kw,
         )
 
         mirror1.benchwrite(imagespec=imagespec, io=config.get("io-total", "1G"))
 
         # Move secondary image to trash
-        if rbd2.move_image_trash(poolname, imagename):
-
-
-        image_id = rbd1.get_image_id(poolname, imagename)
-        log.info(f"image id is {image_id}")
-
-        if rbd2.trash_exist(pool, image):
+        rbd2.move_image_trash(poolname, imagename)
+        if rbd2.trash_exist(poolname, imagename):
             raise ImageFoundError(" Image is found in the Trash")
         else:
             return 0
