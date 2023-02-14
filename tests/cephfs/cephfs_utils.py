@@ -2279,6 +2279,28 @@ mds standby for rank = 1
         return osd_count
 
     @staticmethod
+    def wait_until_umount_succeeds(client, mount_point, timeout=180, interval=5):
+        """
+        Checks for the mount point and returns the status based on mount command
+        :param client:
+        :param mount_point:
+        :param timeout:
+        :param interval:
+        :return: boolean
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the mount to appear")
+        while end_time > datetime.datetime.now():
+            out, rc = client.exec_command(sudo=True, cmd="mount", check_ec=False)
+            mount_output = out.rstrip("\n").split()
+            log.info(mount_output)
+            log.info("Validate Un mount:")
+            if mount_point.rstrip("/") not in mount_output:
+                return True
+            time.sleep(interval)
+        return False
+
+    @staticmethod
     def client_clean_up(fuse_clients, kernel_clients, mounting_dir, *args, **kwargs):
         if kwargs:
             client_name = str()
@@ -2305,6 +2327,7 @@ mds standby for rank = 1
                         client.exec_command(
                             sudo=True, cmd="fusermount -u %s -z" % mounting_dir
                         )
+                        FsUtils.wait_until_umount_succeeds(client, mounting_dir)
                         log.info("Removing mounting directory:")
                         client.exec_command(sudo=True, cmd="rmdir %s" % mounting_dir)
                         log.info("Removing keyring file:")
@@ -2354,6 +2377,7 @@ mds standby for rank = 1
                             client.exec_command(
                                 sudo=True, cmd="umount %s -l" % mounting_dir
                             )
+                            FsUtils.wait_until_umount_succeeds(client, mounting_dir)
                             client.exec_command(
                                 sudo=True, cmd="rmdir %s" % mounting_dir
                             )

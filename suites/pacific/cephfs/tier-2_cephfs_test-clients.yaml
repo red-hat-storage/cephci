@@ -235,4 +235,10 @@ tests:
       polarion-id: CEPH-11299
       desc: scp bw filesystem and remote directory and vice versa
       abort-on-fail: false
+  - test:
+        name: Filesystem information restriction for client
+        module: clients.multiclient_cephx_restrict_fs.py
+        polarion-id: CEPH-11338
+        desc: Test Filesystem information restriction for client for multiple cephfs
+        abort-on-fail: false
 
