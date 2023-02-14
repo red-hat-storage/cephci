@@ -1202,7 +1202,8 @@ finally:
                             ops = ["create", "setxattr", "getxattr", "chmod", "rename"]
                             client.exec_command(
                                 sudo=True,
-                                cmd="python3 smallfile/smallfile_cli.py "
+                                cmd="python3 /home/cephuser/smallfile/"
+                                "smallfile_cli.py "
                                 "--operation %s --threads 10 "
                                 "--file-size 4 --files 1000 "
                                 "--files-per-dir 10 --dirs-per-dir 2"
