@@ -51,16 +51,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "Testing RBD basic regression scenarios"
-          execution_time: "36m 36s"
-          suite: "suites/quincy/rbd/tier-1_rbd.yaml"
-          global-conf: "conf/quincy/rbd/4-node-cluster-with-1-client.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rbd
         - name: "test-rgw-sse-s3-encryption-GA"
           execution_time: "26m 13s"
           suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
@@ -713,6 +703,16 @@ pipelines:
   sanity_openstack_only:
     tier-2:
       stage-1:
+        - name: "Testing RBD basic regression scenarios"
+          execution_time: "36m 36s"
+          suite: "suites/quincy/rbd/tier-1_rbd.yaml"
+          global-conf: "conf/quincy/rbd/4-node-cluster-with-1-client.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
         - name: "RADOS regression testing for Mon DB trimming"
           execution_time: "1h 18m 55s"
           suite: "suites/quincy/rados/tier-2_rados_test-mon-db-trimming.yaml"
