@@ -33,7 +33,7 @@ setup(
         "paramiko",
         "pyyaml",
         "reportportal-client",
-        "requests==2.27.1",
+        "requests",
         "softlayer",
     ],
     zip_safe=True,

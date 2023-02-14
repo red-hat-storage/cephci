@@ -98,6 +98,7 @@ class ReportPortalV1:
                 project=self.project,
                 token=self.api_token,
                 log_batch_size=1,
+                verify_ssl=False,
             )
             self._service.session.verify = False
 
