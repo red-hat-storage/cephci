@@ -790,6 +790,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rbd
+        - name: "RBD mirroring with OSD add and remove"
+          execution_time: "4h 16m 0s"
+          suite: "suites/pacific/rbd/tier-2_rbd_mirror_scale_osd.yaml"
+          global-conf: "conf/pacific/rbd/rbd_mirror_large.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rbd
         - name: "RGW Regression testing"
           execution_time: "4h 49m 28s"
           suite: "suites/pacific/rgw/tier-2_rgw_regression.yaml"
@@ -812,6 +822,7 @@ pipelines:
             - upgrades
             - dmfg
             - again
+      stage-5:
         - name: "test-cephfs-upgrade-4-to-latest"
           execution_time: ""
           suite: "suites/pacific/cephfs/tier-2_cephfs_upgrade_4x_5x.yaml"

@@ -741,6 +741,16 @@ pipelines:
             - rbd
             - upgrades
       stage-4:
+        - name: "RBD mirroring with OSD add and remove"
+          execution_time: "4h 16m 0s"
+          suite: "suites/quincy/rbd/tier-2_rbd_mirror_scale_osd.yaml"
+          global-conf: "conf/quincy/rbd/rbd_mirror_large.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
         - name: "RADOS regression for testing various pool functionalities"
           execution_time: ""
           suite: "suites/quincy/rados/tier-2_rados_test-pool-functionalities.yaml"

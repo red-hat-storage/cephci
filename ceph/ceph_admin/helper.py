@@ -1033,3 +1033,67 @@ def validate_spec_services(installer, specs, rhcs_version) -> None:
             rhcs_version=rhcs_version,
         ):
             raise Exception(f"{svc_name or svc_type} service deployment failed!!!")
+
+
+def add_remove_osd(command, osd_nodes, ceph_nodes, orch_obj, osd_obj, ceph_admin):
+    """
+    Performs the operation specified in command on all the OSDs in the osd_nodes specified
+    Args:
+        command: add, rm
+        osd_nodes: [node4,node5]
+        config:
+            ceph_cluster_config
+    """
+    if command == "add":
+        try:
+            add_config = {
+                "service": "orch",
+                "validate-spec-services": "true",
+                "specs": [
+                    {
+                        "service_type": "osd",
+                        "service_id": "osd_add_nodes",
+                        "placement": {"nodes": osd_nodes},
+                        "spec": {"data_devices": {"all": "true"}},
+                    }
+                ],
+            }
+            orch_obj.apply_spec(add_config)
+            add_config.update({"validate-spec-services": "false"})
+            add_config["specs"][0].update({"unmanaged": "true"})
+            orch_obj.apply_spec(add_config)
+        except BaseException as e:
+            LOG.error(f"Adding OSDs failed on nodes {osd_nodes} with error {e}")
+            return 1
+        return 0
+
+    if command == "rm":
+        nodes = get_nodes_by_ids(ceph_nodes, osd_nodes)
+        for node in nodes:
+            osds = json.loads(
+                orch_obj.ps(
+                    {
+                        "base_cmd_args": {"format": "json"},
+                        "args": {"hostname": node.hostname},
+                    }
+                )[0]
+            )
+            for osd in osds[:-1]:
+                try:
+                    rm_config = {
+                        "command": command,
+                        "base_cmd_args": {"zap": "true"},
+                        "pos_args": [osd["daemon_id"]],
+                    }
+                    osd_obj.rm(rm_config)
+                except BaseException as e:
+                    LOG.error(
+                        f"OSD removal failed for osd {osd['daemon_id']} with error {e}"
+                    )
+                    return 1
+
+            LOG.info(
+                f"Fetching cluster state after removal of OSD from node {node.hostname}"
+            )
+            get_cluster_state(cls=ceph_admin)
+        return 0
