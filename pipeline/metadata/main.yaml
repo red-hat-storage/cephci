@@ -1,0 +1,149 @@
+#=====================================================================================
+# Metadata file for quincy upstream testing.
+# Single file to specify test suites to be executed for all regression (sanity) and schedule tests
+# as per defined in each stages.
+# Each stage will execute in sequential pattern.
+# Contains all Default parameter used for Execution when no override is specified.
+# parameter required to create a similar custom file is suite name, suite yaml file, global configuration file,
+# platform, rhbuild, inventory and metadata information like frequency of execution, tier, cloud type, functional group and stage.
+#=====================================================================================
+suites:
+- name: "Core Feature Upstream Testing For DMFG"
+  suite: "suites/quincy/cephadm/sanity-test.yaml"
+  global-conf: "conf/3-node-cluster-with-1-client.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - dmfg
+    - stage-1
+
+- name: "Basic Regression Upstream Testing For DMFG"
+  suite: "suites/quincy/upstream/tier-1-cephadm-basic-regression.yaml"
+  global-conf: "conf/quincy/upstream/4-node-cluster-with-1-client.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - dmfg
+    - stage-1
+
+- name: "Core Feature Upstream Testing For CephFS"
+  suite: "suites/quincy/cephfs/test-core-functionality.yaml"
+  global-conf: "conf/6-node-cluster-with-1-client.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - cephfs
+    - stage-1
+
+- name: "Core Feature Upstream Testing For RBD"
+  suite: "suites/quincy/rbd/basic-operations-unit-testing.yaml"
+  global-conf: "conf/5-node-cluster-with-1-client.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rbd
+    - stage-1
+
+- name: "Core Feature Upstream Testing For RGW"
+  suite: "suites/quincy/rgw/test-basic-object-operations.yaml"
+  global-conf: "conf/5-node-cluster-1-client-with-1-rgw.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rgw
+    - stage-1
+
+- name: "Upstream Testing For RGW Multisite"
+  suite: "suites/quincy/upstream/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
+  global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rgw
+    - stage-2
+
+- name: "Core Feature Upstream Testing For RGW and RGW LC tests"
+  suite: "suites/quincy/upstream/tier-1_rgw_and_lc.yaml"
+  global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rgw
+    - stage-2
+
+- name: "Upstream Testing For rbd and rbd-mirror"
+  suite: "suites/quincy/upstream/tier-1_rbd_mirror_and_rbd.yaml"
+  global-conf: "conf/quincy/upstream/5-node-2-clusters.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rbd
+    - stage-2
+- name: "Upstream Testing For Rados Regression"
+  suite: "suites/quincy/upstream/tier-2_rados_basic_regression.yaml"
+  global-conf: "conf/quincy/rados/7-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rados
+    - stage-2
+- name: "Upstream Testing For Rados Stretch cluster"
+  suite: "suites/quincy/upstream/tier-2_rados_test-stretch-mode.yaml"
+  global-conf: "conf/quincy/rados/11-node-cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - rados
+    - stage-3
+- name: "Upstream Testing For CephFS Regression"
+  suite: "suites/quincy/cephfs/tier-1_cephfs_upstream-core-functionality.yaml"
+  global-conf: "conf/pacific/cephfs/tier-1_fs.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - upstream
+    - openstack
+    - cephfs
+    - stage-2
