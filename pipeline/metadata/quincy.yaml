@@ -11,10 +11,10 @@ suites:
 - name: "Core Feature Upstream Testing For DMFG"
   suite: "suites/quincy/cephadm/sanity-test.yaml"
   global-conf: "conf/3-node-cluster-with-1-client.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
   metadata:
     - upstream
     - openstack
@@ -24,10 +24,10 @@ suites:
 - name: "Basic Regression Upstream Testing For DMFG"
   suite: "suites/quincy/upstream/tier-1-cephadm-basic-regression.yaml"
   global-conf: "conf/quincy/upstream/4-node-cluster-with-1-client.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
   metadata:
     - upstream
     - openstack
@@ -37,10 +37,10 @@ suites:
 - name: "Core Feature Upstream Testing For CephFS"
   suite: "suites/quincy/cephfs/test-core-functionality.yaml"
   global-conf: "conf/6-node-cluster-with-1-client.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
   metadata:
     - upstream
     - openstack
@@ -50,10 +50,10 @@ suites:
 - name: "Core Feature Upstream Testing For RBD"
   suite: "suites/quincy/rbd/basic-operations-unit-testing.yaml"
   global-conf: "conf/5-node-cluster-with-1-client.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
   metadata:
     - upstream
     - openstack
@@ -63,10 +63,10 @@ suites:
 - name: "Core Feature Upstream Testing For RGW"
   suite: "suites/quincy/rgw/test-basic-object-operations.yaml"
   global-conf: "conf/5-node-cluster-1-client-with-1-rgw.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
   metadata:
     - upstream
     - openstack
@@ -76,10 +76,10 @@ suites:
 - name: "Upstream Testing For RGW Multisite"
   suite: "suites/quincy/upstream/tier-1-extn_rgw_multisite-secondary-to-primary.yaml"
   global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
   metadata:
     - upstream
     - openstack
@@ -89,10 +89,10 @@ suites:
 - name: "Core Feature Upstream Testing For RGW and RGW LC tests"
   suite: "suites/quincy/upstream/tier-1_rgw_and_lc.yaml"
   global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-  platform: "rhel-8"
+  platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
-    openstack: "conf/inventory/rhel-8-latest.yaml"
+    openstack: "conf/inventory/rhel-9-latest.yaml"
   metadata:
     - upstream
     - openstack
