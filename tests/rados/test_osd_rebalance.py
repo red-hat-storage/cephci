@@ -170,15 +170,15 @@ def wait_for_device(host, osd_id, action: str) -> bool:
         time.sleep(120)
         container, device_path = validate(host, osd_id)
 
-        match action:
-            case "add":
-                if device_path and container:
-                    log.info(f"[osd.{osd_id}] {container}-{device_path} added..")
-                    return True
-            case "remove":
-                if not (device_path and container):
-                    log.info(f"[osd.{osd_id}] {container}-{device_path} removed..")
-                    return True
+        if action == "add":
+            if device_path and container:
+                log.info(f"[osd.{osd_id}] {container}-{device_path} added..")
+                return True
+        elif action == "remove":
+            if not (device_path and container):
+                log.info(f"[osd.{osd_id}] {container}-{device_path} removed..")
+                return True
+
         log.info(
             f"waiting for the {action} to complete...\n"
             f"container: {container}, device_path: {device_path}"
