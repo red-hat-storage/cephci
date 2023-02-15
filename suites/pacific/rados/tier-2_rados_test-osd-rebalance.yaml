@@ -81,7 +81,6 @@ tests:
         node: node8                       # client node
         install_packages:
           - ceph-common
-          - ceph-base
         copy_admin_keyring: true          # Copy admin keyring to node
         caps: # authorize client capabilities
           mon: "allow *"
