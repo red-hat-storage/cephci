@@ -41,7 +41,7 @@ def collect_ceph_details(client, cmd_list, iteration, file):
 def run(ceph_cluster, **kw):
     """
     Test Cases Covered:
-    CEPH-83573520	Validate the max snapshot that can be created under a root FS sub volume level.
+     CEPH-83575405	Validate the max snapshot that can be created under a root FS sub volume level.
 
     Pre-requisites :
     1. We need atleast one client node to execute this test case

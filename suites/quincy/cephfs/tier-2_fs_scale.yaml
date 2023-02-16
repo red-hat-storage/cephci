@@ -111,10 +111,10 @@ tests:
       config:
         fill_data: 80
         clean_up: true
-      desc: "Snapshots for single volume"
+      desc: "Cephfs Scale test for max Snapshots under single subvolume"
       module: cephfs_scale.max_snapshots_single_volume.py
-      name: cephfs Scale test for max Snapshots
-      polarion-id: "CEPH-83573520"
+      name: cephfs Scale test for max Snapshots under single subvolume
+      polarion-id: "CEPH-83575405"
   - test:
       abort-on-fail: false
       config:
@@ -123,10 +123,10 @@ tests:
       desc: "Max subvolumess"
       module: cephfs_scale.max_subvolumes.py
       name: cephfs Scale test for max subvolumes
-      polarion-id: ~
+      polarion-id: "CEPH-83573517"
   - test:
       abort-on-fail: false
       desc: "Max snaps per volume"
       module: cephfs_scale.max_smallfile_snap.py
-      name: cephfs Scale test for max Snapshots
-      polarion-id: ~
+      name: cephfs Scale test for max Snapshots per volume
+      polarion-id: "CEPH-83574957"
