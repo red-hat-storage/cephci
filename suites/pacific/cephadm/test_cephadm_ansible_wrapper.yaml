@@ -45,11 +45,11 @@ tests:
           module: "ceph_orch_host"
           playbook: playbooks/add-host-to-cluster.yaml
           module_args:
-            osd_node: node2
+            host: node2
             label: osd.1
 
   - test:
-      name: Deploy ODD service to cluster using cephadm-ansible wrapper modules
+      name: Deploy OSD service to cluster using cephadm-ansible wrapper modules
       desc: Execute 'playbooks/deploy-osd-service.yml' playbook
       polarion-id: CEPH-83575213
       module: test_cephadm_ansible_wrapper.py
@@ -82,7 +82,7 @@ tests:
           playbook: playbooks/set-osd-config.yml
 
   - test:
-      name: Restart 'mon' service using cephadm-ansible module 'ceph_orch_daemon'
+      name: Restart 'osd' service using cephadm-ansible module 'ceph_orch_daemon'
       desc: Execute 'playbooks/restart-service.yml' playbook
       polarion-id: CEPH-83575212
       module: test_cephadm_ansible_wrapper.py
@@ -91,7 +91,7 @@ tests:
           module: "ceph_orch_daemon"
           playbook: playbooks/restart-service.yml
           module_args:
-            daemon_id: "0"
+            daemon_id: "1"
             daemon_type: "osd"
 
   - test:
@@ -106,3 +106,29 @@ tests:
           module_args:
             daemon_id: "0"
             daemon_type: "osd"
+
+  - test:
+      name: Set host to drain state using cephadm-ansible module 'ceph_orch_host'
+      desc: Execute 'playbooks/set-ceph-orch-host-state.yml' playbook
+      polarion-id: CEPH-83575208
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_host"
+          playbook: playbooks/set-ceph-orch-host-state.yml
+          module_args:
+            host: node4
+            state: drain
+
+  - test:
+      name: Remove host from cluster using cephadm-ansible module 'ceph_orch_host'
+      desc: Execute 'playbooks/set-ceph-orch-host-state.yml' playbook
+      polarion-id: CEPH-83575209
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_host"
+          playbook: playbooks/set-ceph-orch-host-state.yml
+          module_args:
+            host: node4
+            state: absent

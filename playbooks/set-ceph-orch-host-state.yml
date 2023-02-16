@@ -1,0 +1,14 @@
+---
+
+- name: Set host to specified 'state'
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+
+  tasks:
+    - name: Set the host state using ceph_orch_host module
+      ceph_orch_host:
+        name: "{{ node }}"
+        address: "{{ ip_address }}"
+        state: "{{ state }}"
