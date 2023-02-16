@@ -40,6 +40,8 @@ class Rbd:
                 if self.config.get("ec_pool_config", {}).get("data_pool")
                 else "rbd_test_data_pool_" + self.random_string()
             )
+            self.k_m = "2,1"
+            # Temporary change untill we get more info on default value of k and m
             if "," in self.k_m:
                 self.ec_profile = self.config.get("ec_pool_config", {}).get(
                     "ec_profile", "rbd_ec_profile_" + self.random_string()
