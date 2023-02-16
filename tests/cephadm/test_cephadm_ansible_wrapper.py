@@ -32,6 +32,7 @@ def validate_configs(config):
     mon_node = module_args.get("mon_node")
     daemon_id = module_args.get("daemon_id")
     daemon_type = module_args.get("daemon_type")
+    daemon_state = module_args.get("state")
     node = module_args.get("host")
     label = module_args.get("label")
 
@@ -45,9 +46,11 @@ def validate_configs(config):
             f"'{module}' module requires 'host' and 'label' parameter"
         )
 
-    elif module == "ceph_orch_daemon" and (not daemon_id or not daemon_type):
+    elif module == "ceph_orch_daemon" and (
+        not daemon_id or not daemon_type or not daemon_state
+    ):
         raise ConfigNotFoundError(
-            "'ceph_orch_daemon' module requires 'daemon_id' and 'daemon_type' parameter"
+            "'ceph_orch_daemon' module requires 'daemon_id' and 'daemon_type' and 'daemon_state' parameter"
         )
 
     elif module == "ceph_orch_host" and not node:
@@ -123,6 +126,7 @@ def run(ceph_cluster, **kwargs):
         node = module_args.get("host")
         state = module_args.get("state")
         label = module_args.get("label")
+
         extra_vars["ip_address"] = get_node_ip(nodes, node)
         node = get_node_by_id(nodes, node)
         extra_vars["node"] = node.hostname
@@ -138,6 +142,7 @@ def run(ceph_cluster, **kwargs):
     elif module == "ceph_orch_daemon":
         extra_vars["daemon_id"] = module_args.get("daemon_id")
         extra_vars["daemon_type"] = module_args.get("daemon_type")
+        extra_vars["daemon_state"] = module_args.get("state")
 
     playbook = aw.get("playbook")
     validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
