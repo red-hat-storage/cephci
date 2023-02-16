@@ -86,7 +86,7 @@ class Rbd:
             return 0
 
         except CommandFailed as e:
-            log.error(f"Command {cmd} executed failed with error {e}")
+            log.error(f"Command {cmd} execution failed with error:\n{e}")
             self.flag = 1
             return 1
 
@@ -380,12 +380,17 @@ class Rbd:
             image_name: image of the pool
 
         Returns:
-
+            image_info (dict): if fetching image info was successful.
+            1 (int): if fetching image info failed.
         """
         out = self.exec_cmd(
             cmd=f"rbd info {pool_name}/{image_name} --format json", output=True
         )
-        image_info = json.loads(out)
+        try:
+            image_info = json.loads(out)
+        except TypeError:
+            log.error("Failed to recieve json complaint image info")
+            return 1
         return image_info
 
     def image_resize(self, pool_name, image_name, size):
