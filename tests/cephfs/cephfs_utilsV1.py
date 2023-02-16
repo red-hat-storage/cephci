@@ -155,7 +155,7 @@ class FsUtils(object):
         Returns:
 
         """
-
+        fs_info = self.get_fs_info(clients[0])
         for client in clients:
             log.info("Giving required permissions for clients:")
             client.exec_command(
@@ -167,17 +167,83 @@ class FsUtils(object):
                 client.exec_command(
                     sudo=True, cmd=f"ceph auth del client.{client.node.hostname}"
                 )
-            client.exec_command(
-                sudo=True,
-                cmd=f"ceph auth get-or-create client.{client.node.hostname}"
-                f" mon 'allow *' mds "
-                f"'allow *, allow * path=/' osd 'allow *'"
-                f" -o /etc/ceph/ceph.client.{client.node.hostname}.keyring",
-            )
-            client.exec_command(
-                sudo=True,
-                cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}.keyring",
-            )
+            if kwargs.get("mds"):
+                client.exec_command(
+                    sudo=True,
+                    cmd="ceph auth get-or-create client.%s_%s"
+                    " mon 'allow r' mds "
+                    "'allow %s path=/%s' osd 'allow "
+                    "rw pool=%s'"
+                    " -o /etc/ceph/ceph.client.%s_%s.keyring"
+                    % (
+                        client.node.hostname,
+                        kwargs.get("path"),
+                        kwargs.get("permission"),
+                        kwargs.get("path"),
+                        fs_info.get("data_pool_name"),
+                        client.node.hostname,
+                        kwargs.get("path"),
+                    ),
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}_{kwargs.get('path')}.keyring",
+                )
+            elif kwargs.get("osd"):
+                client.exec_command(
+                    sudo=True,
+                    cmd="ceph auth get-or-create client.%s_%s"
+                    " mon 'allow r' mds "
+                    "'allow r, allow rw  path=/' osd 'allow "
+                    "%s pool=%s'"
+                    " -o /etc/ceph/ceph.client.%s_%s.keyring"
+                    % (
+                        client.node.hostname,
+                        kwargs.get("path"),
+                        kwargs.get("permission"),
+                        fs_info.get("data_pool_name"),
+                        client.node.hostname,
+                        kwargs.get("path"),
+                    ),
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}_{kwargs.get('path')}.keyring",
+                )
+
+            elif kwargs.get("layout_quota"):
+                p_flag = kwargs.get("layout_quota")
+                client.exec_command(
+                    sudo=True,
+                    cmd="ceph auth get-or-create client.%s_%s"
+                    " mon 'allow r' mds "
+                    "'allow %s' osd 'allow rw"
+                    " tag cephfs data=cephfs'"
+                    " -o /etc/ceph/ceph.client.%s_%s.keyring"
+                    % (
+                        client.node.hostname,
+                        kwargs.get("path"),
+                        p_flag,
+                        client.node.hostname,
+                        kwargs.get("path"),
+                    ),
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}_{kwargs.get('path')}.keyring",
+                )
+            else:
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph auth get-or-create client.{client.node.hostname}"
+                    f" mon 'allow *' mds "
+                    f"'allow *, allow * path=/' osd 'allow *'"
+                    f" -o /etc/ceph/ceph.client.{client.node.hostname}.keyring",
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}.keyring",
+                )
         return 0
 
     def fuse_mount(self, fuse_clients, mount_point, **kwargs):
@@ -195,7 +261,7 @@ class FsUtils(object):
         """
         for client in fuse_clients:
             log.info("Creating mounting dir:")
-            client.exec_command(sudo=True, cmd="mkdir %s" % mount_point)
+            client.exec_command(sudo=True, cmd="mkdir -p %s" % mount_point)
             log.info("Mounting fs with ceph-fuse on client %s:" % client.node.hostname)
             if kwargs.get("new_client_hostname"):
                 client.exec_command(
