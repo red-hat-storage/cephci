@@ -241,4 +241,16 @@ tests:
         polarion-id: CEPH-11338
         desc: Test Filesystem information restriction for client for multiple cephfs
         abort-on-fail: false
+  - test:
+      name: Filesystem mount with fstab entry and reboot the client
+      module: clients.client_fstab_auto_mount.py
+      polarion-id: CEPH-11336
+      desc: Update fstab and reboot client to check auto mount of FS works
+      abort-on-fail: false
+  - test:
+      name: Client eviction
+      module: clients.client_evict.py
+      polarion-id: CEPH-11335
+      desc: Test Filesystem client eviction
+      abort-on-fail: false
 
