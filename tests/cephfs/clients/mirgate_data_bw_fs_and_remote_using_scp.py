@@ -162,7 +162,6 @@ def run(ceph_cluster, **kw):
         ]
         for cmd in verify_data_movement:
             clients[1].exec_command(sudo=True, cmd=cmd)
-
     except Exception as e:
         log.error(e)
         log.error(traceback.format_exc())
