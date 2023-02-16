@@ -12,7 +12,6 @@ import time
 import requests
 import yaml
 from docopt import docopt
-from packaging import version
 from yaml.loader import SafeLoader
 
 LOG = logging.getLogger(__name__)
@@ -72,13 +71,34 @@ def update_upstream(file_name, content, repo, image, upstream_version):
             )
 
 
+def compare(ex, new):
+    """Returns true if new version > than existing.
+
+    Args:
+        ex: Existing ceph version
+        new: Newer Ceph version
+
+    Returns:
+        Boolean
+    """
+    ev = "".join(re.split("[-.]", ex))
+    nv = "".join(re.split("[-.]", new))
+
+    length = ev.__len__() if ev.__len__() > nv.__len__() else nv.__len__()
+
+    def zero_padding(x):
+        return x if len(x) == length else x.ljust(length, "0")
+
+    return zero_padding(nv) > zero_padding(ev)
+
+
 def store_in_upstream(branch_name, repo, image, upstream_version):
     """Method to update it in upstream.yaml.
     Args:
         branch_name: Name of upstream branch
         repo: upstream branch compose URL
         image: upstream branch image
-        version: upstream branch ceph version.
+        upstream_version: upstream branch ceph version.
     """
     file_name = "/ceph/cephci-jenkins/latest-rhceph-container-info/upstream.yaml"
     repo_details = {}
@@ -87,11 +107,8 @@ def store_in_upstream(branch_name, repo, image, upstream_version):
         repo_details = yaml.load(stream, Loader=SafeLoader) or {}
     if repo_details and repo_details.get(branch_name):
         existing_version = repo_details[branch_name]["ceph-version"]
-        # version.parse helps to compare version as easy as integers.
-        old_version = version.parse(existing_version)
-        new_version = version.parse(upstream_version)
         # update only if current version is greater than existing version.
-        if new_version <= old_version:
+        if not compare(existing_version, upstream_version):
             print(
                 f"Current version:{upstream_version} not greater than existing version:{existing_version}"
             )
@@ -124,27 +141,42 @@ Options:
 """
 
 
-def fetch_upstream_build(branch: str):
+def fetch_upstream_build(branch: str, centos_version: str = "9", arch: str = "x86_64"):
     """
     Method to get rpm repo path,container image and ceph version of given branch.
 
     Args:
-        branch: str    Upstream branch name
+        branch: str         Upstream branch name
+        centos_version: str Centos Version (default: 9)
+        arch: str           CPU Architecture (default: x86_64)
     """
-    branch = branch.lower()
-    branch_repo = branch + "/latest/centos/8/repo/"
-    url = "https://shaman.ceph.com/api/repos/ceph/" + branch_repo
+    url = "https://shaman.ceph.com/api/repos/ceph/"
+    url += f"{branch.lower()}/latest/centos/{centos_version}"
+
+    def check_status(resp):
+        if resp.ok:
+            resp.raise_for_status()
 
     # if any connection issue to URL it will wait for 30 seconds to establish connection.
     response = requests.get(url, timeout=30)
-    if response.status_code != 200:
-        response.raise_for_status()
-    repo = response.url
-    LOG.info(f"Upstream repo for the given branch is {repo}")
+    check_status(response)
+    _repo, _id, _version = None, None, None
+    for srcs in response.json():
+        if arch in srcs["archs"]:
+            _version = srcs["extra"]["version"]
+            _url = srcs["chacra_url"]
+            _repo = f"{_url}repo" if _url.endswith("/") else f"{_url}/repo"
+            _id = srcs["sha1"]
+            break
+    else:
+        raise Exception(
+            f"Could not find build source for {branch}-centos-{centos_version}-{arch}"
+        )
+
+    LOG.info(f"Upstream repo for the given branch is {_repo}")
 
     # To get image for that rpm repo
-    id = re.search("[0-9a-f]{5,40}", repo).group()
-    image = "quay.ceph.io/ceph-ci/ceph:" + id
+    image = "quay.ceph.io/ceph-ci/ceph:" + _id
     LOG.info(f"Upstream image for the given branch is {image}")
 
     cmd = "podman -v"
@@ -157,20 +189,8 @@ def fetch_upstream_build(branch: str):
     if exit_status:
         raise Exception(f"{image} is unable to pull")
 
-    # Regex to get sprm url to find ceph version
-    content = response.text
-    regex = "(?i)(https?://|www.|\\w+\\.)[^\\s]+"
-    urls = [match.group() for match in re.finditer(regex, content)]
-    srpm = urls[2]
-
-    response = requests.get(srpm, timeout=30)
-    content = response.text
-
-    # Regex to match ceph version
-    pattern = re.search(r"ceph.*rpm", content).group(0)
-    version = re.search(r"\d(?:.*?(-).[0-9]*){1}", pattern).group(0)
-    LOG.info(f"Upstream version for the given branch is {version}")
-    store_in_upstream(branch_name, repo, image, version)
+    LOG.info(f"Upstream version for the given branch is {_version}")
+    store_in_upstream(branch_name, _repo, image, _version)
 
 
 OPS = {

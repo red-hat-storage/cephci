@@ -1,13 +1,14 @@
 ---
 
-- name: Add host to cluster with label
+- name: Set host to specified 'state'
   hosts: installer
   gather_facts: false
   become: true
   any_errors_fatal: true
+
   tasks:
-    - name: Add host node with single label
+    - name: Set the host state using ceph_orch_host module
       ceph_orch_host:
         name: "{{ node }}"
         address: "{{ ip_address }}"
-        labels: "{{ label }}"
+        state: "{{ state }}"

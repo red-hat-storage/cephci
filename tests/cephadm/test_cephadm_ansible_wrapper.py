@@ -32,27 +32,29 @@ def validate_configs(config):
     mon_node = module_args.get("mon_node")
     daemon_id = module_args.get("daemon_id")
     daemon_type = module_args.get("daemon_type")
-    osd_node = module_args.get("osd_node")
+    daemon_state = module_args.get("state")
+    node = module_args.get("host")
     label = module_args.get("label")
+
     if module == "cephadm_bootstrap" and not mon_node:
         raise ConfigNotFoundError(
             "'cephadm_bootstrap' module requires 'mon_node' parameter"
         )
 
-    elif module in ["ceph_orch_host", "ceph_orch_apply"] and not osd_node and not label:
+    elif module == "ceph_orch_apply" and not node and not label:
         raise ConfigNotFoundError(
-            f"'{module}' module requires 'osd_node' and 'label' parameter"
+            f"'{module}' module requires 'host' and 'label' parameter"
         )
 
-    elif module == "ceph_orch_daemon" and (not daemon_id or not daemon_type):
+    elif module == "ceph_orch_daemon" and (
+        not daemon_id or not daemon_type or not daemon_state
+    ):
         raise ConfigNotFoundError(
-            "'ceph_orch_daemon' module requires 'daemon_id' and 'daemon_type' parameter"
+            "'ceph_orch_daemon' module requires 'daemon_id' and 'daemon_type' and 'daemon_state' parameter"
         )
 
-    elif module == "ceph_orch_host" and not osd_node:
-        raise ConfigNotFoundError(
-            "'ceph_orch_host' module requires 'osd_node' parameter"
-        )
+    elif module == "ceph_orch_host" and not node:
+        raise ConfigNotFoundError("'ceph_orch_host' module requires 'host' parameter")
 
 
 def setup_cluster(ceph_cluster, config):
@@ -117,24 +119,30 @@ def run(ceph_cluster, **kwargs):
         if config.get("build_type") not in ["ga", "ga-async"]:
             extra_vars["image"] = config.get("container_image")
 
-    elif module in ["ceph_orch_host", "ceph_orch_apply"]:
-        osd_node = module_args.get("osd_node")
-        osd_node = get_node_by_id(nodes, osd_node)
+    elif module == "ceph_orch_apply":
         extra_vars["label"] = module_args.get("label")
 
-        if module == "ceph_orch_host":
-            extra_vars["osd_node"] = osd_node.hostname
-            extra_vars["ip_address"] = get_node_ip(nodes, osd_node.hostname)
-            CopyCephSshKeyToHost.run(installer, osd_node)
-
     elif module == "ceph_orch_host":
-        osd_node = module_args.get("osd_node")
-        extra_vars["osd_node"] = get_node_by_id(nodes, osd_node).hostname
-        extra_vars["ip_address"] = get_node_ip(nodes, osd_node)
+        node = module_args.get("host")
+        state = module_args.get("state")
+        label = module_args.get("label")
+
+        extra_vars["ip_address"] = get_node_ip(nodes, node)
+        node = get_node_by_id(nodes, node)
+        extra_vars["node"] = node.hostname
+        if state:
+            extra_vars["state"] = state
+        if label:
+            extra_vars["label"] = label
+
+        # NOTE: This logic has to be revisited to work when state is present
+        # and also when the state is not passed
+        CopyCephSshKeyToHost.run(installer, node)
 
     elif module == "ceph_orch_daemon":
         extra_vars["daemon_id"] = module_args.get("daemon_id")
         extra_vars["daemon_type"] = module_args.get("daemon_type")
+        extra_vars["daemon_state"] = module_args.get("state")
 
     playbook = aw.get("playbook")
     validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)

@@ -21,3 +21,16 @@ class Label(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def rm(self, hostname, label):
+        """
+        Removes label.
+        Args:
+          hostname (str): host name
+          label (str): label name
+        """
+        cmd = f"{self.base_cmd} rm {hostname} {label}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
