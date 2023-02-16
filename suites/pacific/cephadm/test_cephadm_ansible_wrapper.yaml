@@ -112,7 +112,7 @@ tests:
   - test:
       name: Start service using cephadm-ansible module 'ceph_orch_daemon'
       desc: Execute 'playbooks/set-ceph-orch-daemon-state.yml' playbook
-      polarion-id: CEPH-83575212
+      polarion-id: CEPH-83575210
       module: test_cephadm_ansible_wrapper.py
       config:
         ansible_wrapper:
