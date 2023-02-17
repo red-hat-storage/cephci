@@ -79,6 +79,7 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
 
+
   - test:
       name: Configure clients
       desc: Configures multiple client nodes on cluster
@@ -93,9 +94,10 @@ tests:
               command: add
               id: client.1                      # client Id (<type>.<Id>)
               nodes:
-                  - node7                       # client node
-                  - node8
-                  - node9
+                  - node8:
+                      release: 5
+                  - node7:
+                      release: 5
               install_packages:
                 - ceph-common
               copy_admin_keyring: true          # Copy admin keyring to node
@@ -113,13 +115,33 @@ tests:
               command: add
               id: client.2                     # client Id (<type>.<Id>)
               nodes:
-                - node10
-                - node11
-                - node12
+                - node9:
+                    release: 5
+                - node10:
+                    release: 4
+                - node11:
+                    release: 5
               install_packages:
                 - ceph-common
               copy_admin_keyring: true          # Copy admin keyring to node
               caps: # authorize client capabilities
+                mon: "allow *"
+                osd: "allow *"
+                mds: "allow *"
+                mgr: "allow *"
+        - test:
+            name: Configure client 3
+            desc: Configures client admin node on cluster
+            module: test_client.py
+            polarion-id:
+            config:
+              command: add
+              id: client.3                      # client Id (<type>.<Id>)
+              node: node12                       # client node
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true          # Copy admin keyring to node
+              caps:                             # authorize client capabilities
                 mon: "allow *"
                 osd: "allow *"
                 mds: "allow *"
@@ -144,9 +166,5 @@ tests:
           pool-2:
             type: replicated
             conf: sample-pool-2
-# TODO: add support for ec pools as data pools for rbd images, and blocklist the clients
-#          pool-3:
-#            type: erasure
-#            conf: sample-pool-3
         pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
       desc: CIDR Blocklisting of ceph rbd clients

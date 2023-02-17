@@ -49,6 +49,7 @@ from utility.utils import (
     generate_unique_id,
     magna_url,
     validate_conf,
+    validate_image,
 )
 from utility.xunit import create_xunit_results
 
@@ -182,6 +183,7 @@ def create_nodes(
         rp_logger.start_test_item(name=name, description=desc, item_type="STEP")
 
     validate_conf(conf)
+    validate_image(conf, cloud_type)
     if cloud_type == "openstack":
         cleanup_ceph_nodes(osp_cred, instances_name)
     elif cloud_type == "ibmc":

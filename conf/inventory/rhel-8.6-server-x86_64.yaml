@@ -34,6 +34,8 @@ instance:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - subscription-manager clean
       - hostnamectl set-hostname $(hostname -s)
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
       - curl -m 120 -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
       - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://password.corp.redhat.com/RH-IT-Root-CA.crt
       - update-ca-trust

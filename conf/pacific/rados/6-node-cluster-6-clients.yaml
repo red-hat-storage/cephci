@@ -11,11 +11,9 @@ globals:
           - mon
           - mgr
           - installer
-          - node-exporter
           - alertmanager
           - grafana
           - prometheus
-          - crash
       node2:
         networks:
           - provider_net_cci_12
@@ -24,16 +22,11 @@ globals:
           - mgr
           - mds
           - rgw
-          - node-exporter
-          - alertmanager
-          - crash
       node3:
         networks:
           - provider_net_cci_12
         role:
           - osd
-          - node-exporter
-          - crash
         no-of-volumes: 5
         disk-size: 25
       node4:
@@ -41,15 +34,11 @@ globals:
           - provider_net_cci_12
         role:
           - osd
-          - node-exporter
-          - crash
         no-of-volumes: 5
         disk-size: 25
       node5:
         role:
           - osd
-          - node-exporter
-          - crash
         no-of-volumes: 5
         disk-size: 25
       node6:
@@ -60,34 +49,50 @@ globals:
           - mgr
           - mds
           - rgw
-          - node-exporter
-          - crash
       node7:
+        image-name:
+          openstack: RHEL-8.6.0-x86_64-ga-latest
+          ibmc: rhel-86-server-released
         networks:
           - provider_net_cci_8
         role:
           - client
       node8:
+        image-name:
+          openstack: RHEL-8.6.0-x86_64-ga-latest
+          ibmc: rhel-86-server-released
         networks:
           - provider_net_cci_8
         role:
           - client
       node9:
+        image-name:
+          openstack: RHEL-8.6.0-x86_64-ga-latest
+          ibmc: rhel-86-server-released
         networks:
           - provider_net_cci_9
         role:
           - client
       node10:
+        image-name:
+          openstack: rhel-7.9-server-x86_64-released
+          ibmc: rhel-server-79-x86-64-kvm
         networks:
           - provider_net_cci_9
         role:
           - client
       node11:
+        image-name:
+          openstack: RHEL-9.1.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
         networks:
           - provider_net_cci_7
         role:
           - client
       node12:
+        image-name:
+          openstack: RHEL-9.1.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
         networks:
           - provider_net_cci_7
         role:

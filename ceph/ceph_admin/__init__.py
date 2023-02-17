@@ -148,7 +148,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         }
 
         cmd = f"subscription-manager repos --enable={cdn_repo[os_major_version]}"
-        for node in self.cluster.get_nodes():
+        for node in self.cluster.get_nodes(ignore="client"):
             node.exec_command(sudo=True, cmd=cmd)
 
     def setup_upstream_repository(self, repo_url=None):
@@ -193,7 +193,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         if kwargs.get("nogpgcheck", True):
             cmd += " --nogpghceck"
 
-        for node in self.cluster.get_nodes():
+        for node in self.cluster.get_nodes(ignore="client"):
             node.exec_command(
                 sudo=True,
                 cmd="yum install cephadm -y --nogpgcheck",

@@ -1587,3 +1587,40 @@ def get_smallfile_config(client, percentage, pool_name):
             "iterations": round(total_space_to_fill / 10),
         }
     return {"file_size": 1024, "threads": total_space_to_fill, "files": 1024}
+
+
+def validate_image(conf, cloud_type):
+    """Validate the global conf for image_name.
+
+    This module validates the global conf, by checking if the user has provided image-name.
+    If image-name key is provided, then it should have the specific image specified along with it.
+
+    Note:
+        for psi based, "openstack" is the key, followed by required image name, similarly, "ibmc" for ibmc env.
+        This check is required with the introduction of multi-version ceph clients.
+
+    Args:
+        conf (dict): cluster global configuration provided
+        cloud_type (str): underlying deployment infrastructure used
+
+    example::
+      node7:
+        image-name:
+          openstack: RHEL-8.6.0-x86_64-ga-latest
+          ibmc: rhel-86-server-released
+    """
+    log.info("Validate global configuration file")
+    if cloud_type == "baremetal":
+        return
+    for cluster in conf.get("globals"):
+        nodes = cluster.get("ceph-cluster")
+        for node in nodes.keys():
+            if "node" in node:
+                attrs = nodes[node].get("image-name")
+                if attrs:
+                    log.info(f"Image attributes provided for node {node} : {attrs} ")
+                    if cloud_type not in attrs.keys():
+                        raise TestSetupFailure(
+                            f"Node {node} has image-name provided , but no corresponding image given for {cloud_type} "
+                            f"Please set the {cloud_type}:image in global conf {validate_image.__doc__}"
+                        )
