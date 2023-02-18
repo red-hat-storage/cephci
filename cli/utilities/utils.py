@@ -24,7 +24,34 @@ def get_disk_list(node, expr=None, **kw):
     return node.exec_command(cmd=cmd, **kw)
 
 
-def get_running_containers(node, expr=None, **kw):
+def get_container_images(node, name=None, tag=None, expr=None, format=None, **kw):
+    """Get container images on node
+
+    Args:
+        node (ceph): ceph node object
+        name (str): name of the image
+        tag (str): tag expression
+        expr (str): expression to filter containers
+        kw (dict): execute command parameters
+    """
+    cmd = "podman images --noheading"
+
+    if name:
+        cmd += f" {name}"
+
+    if name and tag:
+        cmd += f":{tag}"
+
+    if expr:
+        cmd += f" --filter {expr}"
+
+    if format:
+        cmd += f' --format "{format}"'
+
+    return node.exec_command(cmd=cmd, **kw)
+
+
+def get_running_containers(node, expr=None, format=None, **kw):
     """Get containers running on nodes
 
     Args:
@@ -36,6 +63,21 @@ def get_running_containers(node, expr=None, **kw):
     if expr:
         cmd += f" --filter {expr}"
 
+    if format:
+        cmd += f' --format "{format}"'
+
+    return node.exec_command(cmd=cmd, **kw)
+
+
+def exec_command_on_container(node, ctr, cmd, **kw):
+    """Execute command on container
+
+    Args:
+        node (ceph): ceph node object
+        ctr (str): container id
+        cmd (str): command to be expected
+    """
+    cmd = f'podman exec {ctr} /bin/sh -c "{cmd}"'
     return node.exec_command(cmd=cmd, **kw)
 
 
@@ -45,6 +87,28 @@ def os_major_version(node, **kw):
         node (ceph): Ceph node object
     """
     cmd = r"cat /etc/os-release | tr -dc '0-9.'| cut -d \. -f1"
+    return node.exec_command(cmd=cmd, **kw)
+
+
+def get_release_info(node, **kw):
+    """Get release info from node
+
+    Args:
+        node (ceph): ceph node object
+        kw (dict): execute command parameters
+    """
+    cmd = "cat /etc/redhat-release"
+    return node.exec_command(cmd=cmd, **kw)
+
+
+def get_kernel_version(node, **kw):
+    """Get kernel version from node
+
+    Args:
+        node (ceph): ceph node object
+        kw (dict): execute command parameters
+    """
+    cmd = "uname -a"
     return node.exec_command(cmd=cmd, **kw)
 
 
