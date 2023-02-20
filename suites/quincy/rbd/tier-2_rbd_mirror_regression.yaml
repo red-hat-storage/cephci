@@ -190,6 +190,12 @@ tests:
       desc: verify that image removal from secondary after disabling journaling feature
 
   - test:
+      name: move_primary_to_trash_force_promote_secondary_resync_primary
+      module: test_trash_primary_image.py
+      polarion-id: CEPH-11418
+      desc: move primary to trash, force promote secondary, restore and resync primary
+
+  - test:
       name: Attempt shrinking secondary image
       module: test_9500_shrink_img_at_secondary.py
       clusters:

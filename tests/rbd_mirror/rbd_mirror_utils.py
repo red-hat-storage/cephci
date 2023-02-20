@@ -1,6 +1,7 @@
 import ast
 import datetime
 import json
+import pdb
 import random
 import string
 import time
@@ -9,6 +10,7 @@ from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.rbd.exceptions import IOonSecondaryError
+from tests.rbd.rbd_utils import Rbd
 from utility.log import Log
 
 log = Log(__name__)
@@ -42,6 +44,8 @@ class RbdMirror:
                 if config.get("ec_pool_config", {}).get("data_pool")
                 else "rbd_test_data_pool_" + self.random_string()
             )
+            self.k_m = "2,1"
+            # Temporary change until we get more info on default value of k and m
             if "," in self.k_m:
                 self.ec_profile = config.get("ec_pool_config", {}).get(
                     "ec_profile", "rbd_ec_profile_" + self.random_string()
@@ -293,6 +297,7 @@ class RbdMirror:
             mode - mirror mode to be configured pool or image
             mirrormode - type of mirror configured journal or snapshot
         """
+        pdb.set_trace()
         log.debug(
             f"Config Recieved for initial mirror config: poolname:{poolname}, imagename:{imagename}\nkw:{kw}"
         )
@@ -318,8 +323,8 @@ class RbdMirror:
             self.config_mirror(mirror2, poolname=poolname, **kw)
 
         # Enable image level mirroring only when mode is image type
-        if kw.get("mirrormode") and kw.get("mode") == "image":
-            mirrormode = kw.get("mirrormode")
+        if kw.get("mode") == "image":
+            mirrormode = kw.get("mirrormode", "")
             self.enable_mirror_image(poolname, imagename, mirrormode)
             self.wait_for_status(poolname=poolname, health_pattern="OK")
             mirror2.wait_for_status(poolname=poolname, health_pattern="OK")
@@ -1006,7 +1011,7 @@ def rbd_mirror_config(**kw):
                 rep-pool-only: True
         Advanced configuration:
             config:
-               do_not_create_image: True  # if not set then images will be created by default
+               create_rbd_object: True  # if set then rbd objects will also be created along with mirror objects
                ec-pool-k-m: 2,1
                ec-pool-only: False
                ec_pool_config:
@@ -1031,6 +1036,7 @@ def rbd_mirror_config(**kw):
     Returns:
         RBD mirror objects for ecpool and replicated pool
     """
+    pdb.set_trace()
     rbd_obj = dict()
     log.debug(
         f'config recieved for rbd_mirror_config: {kw.get("config", "Config not recieved, assuming default values")}'
@@ -1043,6 +1049,13 @@ def rbd_mirror_config(**kw):
             RbdMirror(cluster, kw.get("config", {}))
             for cluster in kw.get("ceph_cluster_dict").values()
         ]
+
+        if kw.get("config", {}).get("create_rbd_object"):
+            rep_rbd1, rep_rbd2 = [
+                Rbd(**kw, req_cname=cluster_name)
+                for cluster_name in kw.get("ceph_cluster_dict").keys()
+            ]
+            rbd_obj.update({"rep_rbd": {"rbd1": rep_rbd1, "rbd2": rep_rbd2}})
 
         # Create rep pool config when no configuration is specified for the module
         if not kw.get("config"):
@@ -1109,6 +1122,13 @@ def rbd_mirror_config(**kw):
             RbdMirror(cluster, kw.get("config", {}))
             for cluster in kw.get("ceph_cluster_dict").values()
         ]
+
+        if kw.get("config", {}).get("create_rbd_object"):
+            ec_rbd1, ec_rbd2 = [
+                Rbd(**kw, req_cname=cluster_name)
+                for cluster_name in kw.get("ceph_cluster_dict").keys()
+            ]
+            rbd_obj.update({"ec_rbd": {"rbd1": ec_rbd1, "rbd2": ec_rbd2}})
 
         # Create ec pool config with all necessary config when some ec pool config is specified
         if kw.get("config").get("ec_pool_config"):

@@ -34,21 +34,24 @@ class Rbd:
                 self.ceph_client = node
                 continue
 
-        if self.ceph_version > 2 and self.k_m:
-            self.datapool = (
-                self.config["ec_pool_config"]["data_pool"]
-                if self.config.get("ec_pool_config", {}).get("data_pool")
-                else "rbd_test_data_pool_" + self.random_string()
-            )
-            self.k_m = "2,1"
-            # Temporary change untill we get more info on default value of k and m
-            if "," in self.k_m:
-                self.ec_profile = self.config.get("ec_pool_config", {}).get(
-                    "ec_profile", "rbd_ec_profile_" + self.random_string()
+        if not self.config.get("create_rbd_object"):
+            # If create_rbd_object config is set to true, then ec profile would already be created
+            # as part of mirror object creation
+            if self.ceph_version > 2 and self.k_m:
+                self.datapool = (
+                    self.config["ec_pool_config"]["data_pool"]
+                    if self.config.get("ec_pool_config", {}).get("data_pool")
+                    else "rbd_test_data_pool_" + self.random_string()
                 )
-                self.set_ec_profile(profile=self.ec_profile)
-            else:
-                self.ec_profile = ""
+                self.k_m = "2,1"
+                # Temporary change until we get more info on default value of k and m
+                if "," in self.k_m:
+                    self.ec_profile = self.config.get("ec_pool_config", {}).get(
+                        "ec_profile", "rbd_ec_profile_" + self.random_string()
+                    )
+                    self.set_ec_profile(profile=self.ec_profile)
+                else:
+                    self.ec_profile = ""
 
     def exec_cmd(self, **kw):
         """
@@ -561,6 +564,47 @@ class Rbd:
                     cmd="ceph osd pool delete {pool} {pool} "
                     "--yes-i-really-really-mean-it".format(pool=pool)
                 )
+
+    def create_multiple_snapshots(
+        self, pool_name, image_name, snap_names, snap_count, wait=None
+    ):
+        """
+        Creates multiple snapshots of given image, based on name and count specified.
+        Args:
+            pool_name: pool in which image and snapshots required
+            image_name: image on which snapshots to be created
+            snap_names: list of snapshot names to be created,
+                        if single value mentioned and snap_count > 1,
+                            then snapshots will be created with name <snap_names>_1,....<snap_names>_<snap_count>
+            snap_count: number of snapshots to be created
+            wait: specify if sleep required between snapshot creation (time in seconds)
+        Returns:
+            0 if success, 1 if failure
+        """
+        log.info(
+            f"Creating snapshots for spec: snap_names: {snap_names}, snap_count: {snap_count}"
+        )
+        if type(snap_names) is list:
+            for snap in snap_names:
+                if self.snap_create(pool_name, image_name, snap):
+                    log.error(f"Snap creation failed for snapshot {snap}")
+                    return 1
+                if wait:
+                    sleep(wait)
+        elif type(snap_names) is str and snap_count >= 1:
+            for i in range(0, snap_count):
+                if self.snap_create(pool_name, image_name, f"{snap_names}_{i}"):
+                    log.error(f"Snap creation failed for snapshot {snap_names}_{i}")
+                    return 1
+                if wait:
+                    sleep(wait)
+        else:
+            log.error(
+                f"Snapshots cannot be created for spec: snap_names: {snap_names}, snap_count: {snap_count}"
+            )
+            return 1
+        log.info("Snapshots created successfully")
+        return 0
 
 
 def initial_rbd_config(**kw):
