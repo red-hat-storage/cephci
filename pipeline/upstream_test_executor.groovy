@@ -20,6 +20,7 @@ def status = "STABLE"
 def upstreamArtifact =  [:]
 def failureReason
 def reportPotalLink
+def executionResult
 
 // Pipeline script entry point
 node('ceph-qe-ci || rhel-9-medium') {
@@ -122,6 +123,7 @@ node('ceph-qe-ci || rhel-9-medium') {
             metaData["rp_link"] = "${rp_base_link}/ui/#cephci/launches/all/${launch_id}"
             println("metadata: ${metaData}")
             reportPotalLink = metaData["rp_link"]
+            executionResult = metaData["results"]
         }
 
         stage('publish result') {
@@ -163,7 +165,7 @@ node('ceph-qe-ci || rhel-9-medium') {
         body += "<h3><u>Test Summary</u></h3>"
         body += "<table>"
         body += "<tr><th>Test Suite</th><th>Result</th></tr>"
-        testResults.each{k,v->
+        executionResult.each{k,v->
             def test_name = k.replace("-", " ")
             body += "<tr><td>${test_name.capitalize()}</td><td>${v['status']}</td></tr>"
         }
