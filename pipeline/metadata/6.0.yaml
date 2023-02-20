@@ -667,7 +667,18 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
-            - rgw
+            - rbd
+        - name: "tier-2_rbd_mirror_multiple_daemon_failure"
+          execution_time: "66 m, 25 s"
+          suite: "suites/quincy/rbd/tier-2_rbd_upgrade_5x_to_6x.yaml"
+          global-conf: "conf/quincy/rbd/5-node-2-clusters.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
+            - upgrades
       stage-4:
         - name: "RADOS regression for testing various pool functionalities"
           execution_time: ""
