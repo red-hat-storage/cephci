@@ -47,20 +47,27 @@ def add(cls, config: Dict) -> None:
         file_.flush()
 
     nodes_ = config.get("nodes", config.get("node"))
+    default_version = cls.cluster.rhcs_version.version[0]
+    use_cdn = cls.cluster.use_cdn
     if nodes_:
         if not isinstance(nodes_, list):
             nodes_ = [{nodes_: {}}]
 
         def setup(host):
             rhcs_version = str(
-                [host[entry].get("release", "default") for entry in host][0]
+                [
+                    host[entry].get(
+                        "release", default_version if not use_cdn else "default"
+                    )
+                    for entry in host
+                ][0]
             )
             name = [entry for entry in host][0]
             node = get_node_by_id(cls.cluster, name)
 
             rhel_version = node.distro_info["VERSION_ID"][0]
             log.debug(
-                f"Passed RHCS version is : {rhcs_version} for host : {node.hostname}\n"
+                f"RHCS version is : {rhcs_version} for host : {node.hostname}\n"
                 f"with RHEL major version as : {rhel_version}"
             )
             enable_cmd = "subscription-manager repos --enable="
@@ -99,6 +106,7 @@ def add(cls, config: Dict) -> None:
                     repo = entry.split(":")[-1].strip()
                     enabled_repos.append(repo)
             log.debug(f"Enabled repos on the system are : {enabled_repos}")
+
             if rhcs_version != "default":
                 # Disabling all the repos and enabling the ones we need to install the ceph client
                 for cmd in disable_all:
@@ -106,11 +114,14 @@ def add(cls, config: Dict) -> None:
 
                 # Enabling the required CDN repos
                 for repos in rhel_repos[rhel_version]:
-                    cmd = f"{enable_cmd}{repos}"
-                    node.exec_command(sudo=True, cmd=cmd)
+                    node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
+
+                # Todo: Sticking to RHCS 5 CDN repo rpms, Since 6x not yet GAed
+                #       Revert this commit/code changes once 6x is GAed.
+                if rhcs_version > "5":
+                    rhcs_version = "5"
                 for repos in cdn_ceph_repo[rhel_version][rhcs_version]:
-                    cmd = f"{enable_cmd}{repos}"
-                    node.exec_command(sudo=True, cmd=cmd)
+                    node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
             # Copy the keyring to client
             node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
@@ -152,14 +163,6 @@ def add(cls, config: Dict) -> None:
             # Hold local copy of the client key-ring in the installer node
             if config.get("store-keyring"):
                 put_file(cls.installer, client_file, cnt_key, "w")
-
-            if rhcs_version != "default":
-                for cmd in disable_all:
-                    node.exec_command(sudo=True, cmd=cmd)
-                # Enabling all the repos that were disabled to install the ceph client
-                for repos in enabled_repos:
-                    cmd = f"{enable_cmd}{repos}"
-                    node.exec_command(sudo=True, cmd=cmd)
 
         with parallel() as p:
             for node in nodes_:

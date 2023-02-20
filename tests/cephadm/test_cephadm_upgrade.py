@@ -98,6 +98,7 @@ def run(ceph_cluster, **kwargs) -> int:
                 rhbuild=config.get("rhbuild"), client=orch.installer
             ):
                 raise UpgradeFailure("Cluster is in HEALTH_ERR state")
+        ceph_cluster.rhcs_version = config.get("rhbuild")
     except BaseException as be:  # noqa
         log.error(be, exc_info=True)
         return 1
