@@ -34,20 +34,21 @@ def create_pools(config, rados_obj, client_node):
     return pool
 
 
-def write_to_pools(config, rados_obj, client_node):
+def write_to_pools(config, rados_obj, client_node, nobj=100):
     """
     This function will create pool, write data to pool and return pool information
     Args:
         config: config parameters from suite file
         rados_obj: RadosOrchestrator object
         client_node: client node details
+        nobj: number of objects
     Returns:  pool information
     """
     pools = config.get("create_pools")
     for each_pool in pools:
         cr_pool = each_pool["create_pool"]
         if cr_pool.get("rados_put", False):
-            do_rados_put(mon=client_node, pool=cr_pool["pool_name"], nobj=100)
+            do_rados_put(mon=client_node, pool=cr_pool["pool_name"], nobj=nobj)
         else:
             method_should_succeed(rados_obj.bench_write, **cr_pool)
 

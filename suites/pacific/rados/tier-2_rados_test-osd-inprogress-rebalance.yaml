@@ -151,7 +151,7 @@ tests:
         create_pools:
           - create_pool:
               snapshot: true
-              num_snaps: 5
+              num_snaps: 2
               pool_name: repool_1
               pg_num: 1
               rados_put: true

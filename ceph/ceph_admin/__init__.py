@@ -148,7 +148,10 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         }
 
         cmd = f"subscription-manager repos --enable={cdn_repo[os_major_version]}"
-        for node in self.cluster.get_nodes(ignore="client"):
+
+        # Todo: Figure out a way to bail out CDN repo installation on clients
+        #       now clients go through installation, But need to avoid CDN repo enablement.
+        for node in self.cluster.get_nodes():
             node.exec_command(sudo=True, cmd=cmd)
 
     def setup_upstream_repository(self, repo_url=None):
@@ -157,17 +160,26 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         Args:
             repo_url: repo file URL link (default: None)
         """
+        EPEL_REPOS = {
+            "7": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
+            "8": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+            "9": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+        }
+
         if not repo_url:
             repo_url = self.config["base_url"]
 
         for node in self.cluster.get_nodes():
+            # Ceph Repo
             node.exec_command(
                 sudo=True, cmd=f"curl -o /etc/yum.repos.d/upstream_ceph.repo {repo_url}"
             )
             node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
+
+            # Epel Repo
             node.exec_command(
                 sudo=True,
-                cmd="dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm -y",
+                cmd=f"dnf install {EPEL_REPOS[node.distro_info['VERSION_ID'][0]]} -y",
                 check_ec=False,
             )
 

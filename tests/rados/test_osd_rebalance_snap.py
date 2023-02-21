@@ -11,7 +11,7 @@ from tests.rados.rados_test_util import (
     write_to_pools,
 )
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
-from tests.rados.test_9281 import do_rados_get
+from tests.rados.test_9281 import do_rados_get, do_rados_snap_get
 from utility.log import Log
 from utility.utils import method_should_succeed, should_not_be_empty
 
@@ -45,7 +45,7 @@ def run(ceph_cluster, **kw):
         log.info("Running osd in progress rebalance tests")
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
-        write_to_pools(config, rados_obj, client_node)
+        write_to_pools(config, rados_obj, client_node, nobj=100)
 
         # Set recover threads configurations
         if not rhbuild.startswith("6"):
@@ -102,6 +102,7 @@ def run(ceph_cluster, **kw):
                 ):
                     log.error("Snapshot of pool does not exists")
                     return 1
+                do_rados_snap_get(client_node, pool["pool_name"], 1, snap_name)
 
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
         rados_obj.change_recover_threads(config=pool, action="rm")
