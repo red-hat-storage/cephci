@@ -148,7 +148,10 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         }
 
         cmd = f"subscription-manager repos --enable={cdn_repo[os_major_version]}"
-        for node in self.cluster.get_nodes(ignore="client"):
+
+        # Todo: Figure out a way to bail out CDN repo installation on clients
+        #       now clients go through installation, But need to avoid CDN repo enablement.
+        for node in self.cluster.get_nodes():
             node.exec_command(sudo=True, cmd=cmd)
 
     def setup_upstream_repository(self, repo_url=None):
