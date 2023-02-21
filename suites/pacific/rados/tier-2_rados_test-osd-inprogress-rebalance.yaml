@@ -140,3 +140,25 @@ tests:
           - repool_2
           - ercpool_1
           - ercpool_2
+
+  - test:
+      name: Taking snaps during rebalance
+      module: test_osd_rebalance_snap.py
+      desc: Taking snaps while data migration is in progress
+      polarion-id: CEPH-9235
+      abort-on-fail: true
+      config:
+        create_pools:
+          - create_pool:
+              snapshot: true
+              num_snaps: 5
+              pool_name: repool_1
+              pg_num: 1
+              rados_put: true
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+
+        delete_pools:
+          - repool_1
