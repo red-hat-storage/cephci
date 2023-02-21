@@ -1,0 +1,12 @@
+---
+
+- name: Log out from registry
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Logout from image registry
+      cephadm_registry_login:
+        registry_url: "{{ registry_url }}"
+        state: logout

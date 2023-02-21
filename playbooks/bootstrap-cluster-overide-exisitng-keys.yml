@@ -1,7 +1,7 @@
 ---
 
 - name: Test 'cephadm_bootstrap' module
-  hosts: admin
+  hosts: installer
   gather_facts: false
   become: true
   any_errors_fatal: true
