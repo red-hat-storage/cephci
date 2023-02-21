@@ -1,5 +1,8 @@
+import json
+
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 
@@ -29,6 +32,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
+    pool_obj = PoolFunctions(node=cephadm)
     out, err = cephadm.shell(["uuidgen"])
     uuid = out.split("-")[0]
 
@@ -173,5 +177,76 @@ def run(ceph_cluster, **kw):
                 return 1
         log.info("deleted all the given pools successfully")
 
-    log.info("All Pre-requisites completed to run Rados suite")
+    if config.get("Verify_osd_alloc_size"):
+        alloc_size = config["Verify_osd_alloc_size"].get("allocation_size", 4096)
+        log.info(
+            "Verification of min-alloc size & fragmentation scores for Bluestore OSDs"
+        )
+
+        # Creating a test pool, filling it with some data and then checking fragmentation scores.
+        pool_name = "alloc-test-pool"
+        rados_obj.create_pool(pool_name=pool_name)
+        rados_obj.bench_write(pool_name=pool_name)
+        pool_id = pool_obj.get_pool_id(pool_name=pool_name)
+        pgid = f"{pool_id}.0"
+        pg_set = rados_obj.get_pg_acting_set(pg_num=pgid)
+
+        log.info(f"Checking the fragmentation & min-alloc scores on OSDs : {pg_set}")
+        for osd in pg_set:
+            host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=str(osd))
+
+            # Checking min-alloc size config param for the OSD
+            params = ["bluestore_min_alloc_size_hdd", "bluestore_min_alloc_size_ssd"]
+            for param in params:
+                alloc_cmd = (
+                    f"ceph daemon /var/run/ceph/ceph-osd.{osd}.asok config get {param}"
+                )
+                cmd = f"cephadm -v shell -- {alloc_cmd} -f json"
+                log.debug(f"Checking the {param} on {osd} on host {host.hostname}.")
+                out, err = host.exec_command(sudo=True, cmd=cmd)
+                details = json.loads(out)
+                if int(details[param]) != alloc_size:
+                    log.error(
+                        f"Allocation unit for osd {osd} is not {alloc_size},but it is {details[param]}"
+                    )
+                    raise Exception(f"Allocation unit on osd {osd} is not {alloc_size}")
+
+            # Checking min-alloc size for the OSD from the dump
+            alloc_cmd = f"ceph daemon /var/run/ceph/ceph-osd.{osd}.asok bluestore allocator dump block"
+            cmd = f"cephadm -v shell -- {alloc_cmd} -f json"
+            log.debug(f"Checking the allocation size on {osd} on host {host.hostname}.")
+            out, err = host.exec_command(sudo=True, cmd=cmd)
+            details = json.loads(out)
+            if int(details["alloc_unit"]) != alloc_size:
+                log.error(
+                    f"Allocation unit for osd {osd} is not {alloc_size},but it is {details['alloc_unit']}"
+                )
+                raise Exception(f"Allocation unit on osd {osd} is not {alloc_size}")
+
+            # Checking fragmentation scores for OSD
+            frag_cmd = f"ceph daemon /var/run/ceph/ceph-osd.{osd}.asok bluestore allocator score block"
+            cmd = f"cephadm -v shell -- {frag_cmd} -f json"
+            log.debug(
+                f"Checking the Fragmentation score on {osd} on host {host.hostname}."
+            )
+            out, err = host.exec_command(sudo=True, cmd=cmd)
+            details = json.loads(out)
+            log.info(
+                f"Fragmentation score for the OSD : {details['fragmentation_rating']}"
+            )
+
+            if 0.9 < float(details["fragmentation_rating"]) < 1.0:
+                log.error(
+                    f"Fragmentation on osd {osd} is dangerously high."
+                    f"Ideal range 0.0 to 0.7. Actual fragmentation on OSD: {details['alloc_unit']}"
+                )
+                raise Exception(f"Fragmentation on osd {osd} is dangerously high.")
+            log.info(
+                f"Completed checking fragmentation & min-alloc scores on OSD : {osd}"
+            )
+        log.info(
+            f"Completed check of fragmentation & min-alloc scores on OSDs : {pg_set}. Pass"
+        )
+
+    log.info("All the test cases have been completed. Pass")
     return 0
