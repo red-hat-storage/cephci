@@ -1,8 +1,7 @@
 import os
 
 from cli.cephadm.ansible import Ansible
-from cli.cephadm.cephadm import CephAdm
-from cli.cephadm.exceptions import CephadmOpsExecutionError, ConfigNotFoundError
+from cli.cephadm.exceptions import ConfigNotFoundError
 from cli.utilities.packages import Rpm, RpmError
 from cli.utilities.utils import (
     get_node_by_id,
@@ -15,6 +14,7 @@ from utility.install_prereq import (
     ExecutePreflightPlaybook,
     SetUpSSHKeys,
 )
+from utility.utils import get_cephci_config
 
 
 def validate_configs(config):
@@ -84,9 +84,6 @@ def validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
         extra_args=extra_args,
     )
 
-    if not CephAdm(installer).ceph.status():
-        raise CephadmOpsExecutionError("Failed to bootstrap cluster")
-
 
 def run(ceph_cluster, **kwargs):
     """Module to execute cephadm-ansible wrapper playbooks
@@ -119,6 +116,15 @@ def run(ceph_cluster, **kwargs):
         if config.get("build_type") not in ["ga", "ga-async"]:
             extra_vars["image"] = config.get("container_image")
 
+        # Checking if the bootstrap has to be done using given registry details
+        if module_args.get("registry-url"):
+            extra_vars["registry_url"] = module_args.get("registry-url")
+
+            # Fetch creds from the cephci config
+            _config = get_cephci_config()["cdn_credentials"]
+            extra_vars["registry_username"] = _config["username"]
+            extra_vars["registry_password"] = _config["password"]
+
     elif module == "ceph_orch_apply":
         extra_vars["label"] = module_args.get("label")
 
@@ -143,6 +149,14 @@ def run(ceph_cluster, **kwargs):
         extra_vars["daemon_id"] = module_args.get("daemon_id")
         extra_vars["daemon_type"] = module_args.get("daemon_type")
         extra_vars["daemon_state"] = module_args.get("state")
+
+    elif module == "cephadm_registry_login":
+        extra_vars["registry_url"] = module_args.get("registry-url")
+
+        # Fetch registry details from cephci config
+        _config = get_cephci_config()["cdn_credentials"]
+        extra_vars["registry_username"] = _config["username"]
+        extra_vars["registry_password"] = _config["password"]
 
     playbook = aw.get("playbook")
     validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
