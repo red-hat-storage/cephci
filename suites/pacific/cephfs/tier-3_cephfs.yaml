@@ -98,3 +98,9 @@ tests:
       polarion-id: CEPH-11260
       desc: test decrease & increase in pg size of cephfs pools
       abort-on-fail: false
+  - test:
+      name: Add & remove osd while doing CephFS IOs
+      module: osd_add_rm_FS_IO.py
+      polarion-id: CEPH-11258
+      desc: Add & remove osd while doing CephFS IOs & check cluster health
+      abort-on-fail: false
