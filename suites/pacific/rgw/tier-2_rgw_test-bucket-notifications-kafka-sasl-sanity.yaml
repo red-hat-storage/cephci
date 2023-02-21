@@ -1,0 +1,202 @@
+#
+# Objective: Test bucket notifications with kafka endpoint
+#       - with ack_type broker
+#       - with persistent flag
+#       - with SASL security type i.e., both SASL_PLAINTEXT and SASL_SSL
+#       - with both mechanisms - PLAIN and SCRAM-SHA-256
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  # Tests for SASL_PLAINTEXT security type and PLAIN mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_PLAINTEXT PLAIN
+      desc: notify put,copy,delete events with SASL_PLAINTEXT PLAIN
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+        install_start_kafka: true
+        configure_kafka_security: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with SASL_PLAINTEXT PLAIN
+      desc: notify on multipart upload events with SASL_PLAINTEXT PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent_multipart.yaml
+        timeout: 300
+
+  # Tests for SASL_PLAINTEXT security type and SCRAM-SHA-256 mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify put,copy,delete events with SASL_PLAINTEXT SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker_persistent.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify on multipart upload events with SASL_PLAINTEXT SCRAM-SHA-256
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker_persistent_multipart.yaml
+        timeout: 300
+
+  # Tests for SASL_SSL security type and PLAIN mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_SSL PLAIN
+      desc: notify put,copy,delete events with SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker_persistent.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with SASL_SSL PLAIN
+      desc: notify on multipart upload events with SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker_persistent_multipart.yaml
+        timeout: 300
+
+  # Tests for SASL_SSL security type and SCRAM-SHA-256 mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_SSL SCRAM-SHA-256
+      desc: notify put,copy,delete events with SASL_SSL SCRAM-SHA-256
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker_persistent.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with SASL_SSL SCRAM-SHA-256
+      desc: notify on multipart upload events with SASL_SSL SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker_persistent_multipart.yaml
+        timeout: 300
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cephadm: true
+        commands:
+          - "ceph -s"
+      desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200

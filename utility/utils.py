@@ -1296,6 +1296,107 @@ def install_start_kafka(rgw_node, cloud_type):
     time.sleep(30)
 
 
+def configure_kafka_security(rgw_node):
+    """Configure kafka security and restart zookeeper and kafka services."""
+    KAFKA_HOME = "/usr/local/kafka"
+
+    # append security types configuration into server.properties
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="curl -o /tmp/kafka_server.properties http://magna002.ceph.redhat.com/cephci-jenkins"
+        + "/kafka_server.properties",
+    )
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"yes | cp /tmp/kafka_server.properties {KAFKA_HOME}/config/server.properties",
+    )
+
+    # download kafka_security.sh script, create certs and and store them in keystore and truststore
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="curl -o /tmp/kafka-security.sh http://magna002.ceph.redhat.com/cephci-jenkins/kafka-security.sh",
+    )
+    status = rgw_node.exec_command(
+        sudo=True,
+        cmd=f"chmod +x /tmp/kafka-security.sh ; cd {KAFKA_HOME} ; /tmp/kafka-security.sh",
+        long_running=True,
+    )
+    if status != 0:
+        raise Exception("kafka-security.sh script failed")
+
+    # stop kafka service
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/kafka-server-stop.sh",
+    )
+
+    # wait for kafka service to stop
+    time.sleep(30)
+
+    # stop zookeeper service
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/zookeeper-server-stop.sh",
+    )
+
+    # wait for zookeepeer service to stop
+    time.sleep(30)
+
+    # start zookeeper service
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/zookeeper-server-start.sh -daemon {KAFKA_HOME}/config/zookeeper.properties",
+    )
+
+    # wait for zookeepeer service to start
+    time.sleep(30)
+
+    # start kafka servicee
+    rgw_node.exec_command(
+        check_ec=False,
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/kafka-server-start.sh -daemon {KAFKA_HOME}/config/server.properties",
+    )
+
+    # wait for kafka service to start
+    time.sleep(30)
+
+    # add config for user alice
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"{KAFKA_HOME}/bin/kafka-configs.sh --zookeeper localhost:2181 --alter --add-config"
+        + " 'SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]'"
+        + " --entity-type users --entity-name alice",
+    )
+
+    # set rgw_allow_notification_secrets_in_cleartext to true
+    out = rgw_node.exec_command(sudo=True, cmd="ceph orch ps | grep rgw")
+    rgw_process_name = out[0].split()[0]
+    out = rgw_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.{rgw_process_name} rgw_allow_notification_secrets_in_cleartext true",
+    )
+
+    # mount kafka directory to rgw container by modifying podman run command in unit.run
+    out = rgw_node.exec_command(sudo=True, cmd="ceph fsid")
+    log.info(out)
+    ceph_fsid = out[0].strip()
+    unit_run_path = f"/var/lib/ceph/{ceph_fsid}/{rgw_process_name}/unit.run"
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"grep -q '.*podman run -v /usr/local/kafka:/usr/local/kafka.*' {unit_run_path}"
+        + f" || sed -i 's|podman run|podman run -v /usr/local/kafka:/usr/local/kafka|' {unit_run_path}",
+    )
+
+    # restart rgw service
+    out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
+    rgw_name = out[0].split()[0]
+    rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_name}")
+
+
 def method_should_succeed(function, *args, **kwargs):
     """
     Wrapper function to verify the return value of executed method.
