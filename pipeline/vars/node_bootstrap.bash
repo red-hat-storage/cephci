@@ -20,7 +20,7 @@ sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.
 sudo yum install -y p7zip
 
 # Mount reesi for storing logs
-if [ ! -d "/ceph" ]; then
+if [ ! -d "/cephh/cephci-jenkins" ]; then
     echo "Mounting ressi004"
     sudo mkdir -p /ceph
     sudo mount -t nfs -o sec=sys,nfsvers=4.1 reesi004.ceph.redhat.com:/ /ceph
