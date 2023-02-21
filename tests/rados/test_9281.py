@@ -104,6 +104,45 @@ def do_rados_get(mon, pool, niter):
             dfd.close()
 
 
+def do_rados_snap_get(client, pool, niter, snap_name):
+    """
+    scan the pool snaps, get all snap objs and verify checksum with
+    fcsum
+    Args:
+        client: client node details
+        pool: pool name
+        snap_name: snapshot name
+        niter: number of times to read
+    """
+    global fcsum
+    for i in range(niter):
+        for obj in objlist:
+            file_name = "/tmp/s{obj}".format(obj=obj)
+            get_cmd = (
+                "sudo rados -p {pool} -s {snap_name} get {obj} {file_name}".format(
+                    pool=pool, snap_name=snap_name, obj=obj, file_name=file_name
+                )
+            )
+            try:
+                client.exec_command(cmd=get_cmd, check_ec=True, timeout=1000)
+            except Exception:
+                log.error("rados snap get failed for {obj}".format(obj=obj))
+                log.error(traceback.format_exc)
+            dfd = client.remote_file(file_name=file_name, file_mode="r")
+            dcsum = hashlib.md5(dfd.read()).hexdigest()
+            log.debug(
+                "csum of snap obj {objname}={dcsum}".format(objname=obj, dcsum=dcsum)
+            )
+            log.info(type(fcsum))
+            log.info("fcsum=", fcsum)
+            log.info(type(dcsum))
+            if fcsum != dcsum:
+                log.error("checksum mismatch for snap obj {obj}".format(obj=obj))
+                dfd.close()
+                return 1
+            dfd.close()
+
+
 def run(ceph_cluster, **kw):
     """
      1. Create a LRC profile and then create a ec pool
