@@ -18,7 +18,7 @@ def launch_id = ""
 def testStatus
 def date
 
-node("rhel-8-medium || ceph-qe-ci") {
+node("rhel-8-medium") {
 
     try {
         stage('prepareJenkinsAgent') {
