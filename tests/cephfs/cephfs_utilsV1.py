@@ -9,12 +9,14 @@ import datetime
 import json
 import os
 import random
+import re
 import string
 from time import sleep
 
 from ceph.ceph import CommandFailed
 from mita.v2 import get_openstack_driver
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -111,6 +113,257 @@ class FsUtils(object):
                 output_dict["metadata_pool_name"] = fs["metadata_pool"]
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
+
+    @staticmethod
+    def deamon_op(node, service, op):
+        """
+        It performs given operation on service given
+        Args:
+            node:
+            service:
+            op:  start,stop,restart
+
+        Returns:
+
+        """
+        out, rc = node.exec_command(
+            sudo=True,
+            cmd=f"systemctl list-units --type=service | grep {service}.ceph | awk {{'print $1'}}",
+        )
+        service_deamon = out.strip()
+        node.exec_command(sudo=True, cmd=f"systemctl {op} {service_deamon}")
+
+    @staticmethod
+    @retry(CommandFailed, tries=5, delay=60)
+    def check_deamon_status(node, service, expected_status):
+        """
+        Checks the deamon status.
+        This retries till
+        Args:
+            node:
+            service:
+            expected_status:
+
+        Returns:
+
+        """
+        out, rc = node.exec_command(
+            sudo=True,
+            cmd=f"systemctl list-units --type=service | grep {service}.ceph | awk {{'print $1'}}",
+        )
+        service_deamon = out.strip()
+        node.exec_command(
+            sudo=True, cmd=f"systemctl status {service_deamon} | grep {expected_status}"
+        )
+
+    @staticmethod
+    def get_active_mdss(client, fs_name="cephfs"):
+        """
+        Get Active MDS service names
+        Args:
+            client:
+            fs_name:
+
+        Returns:
+
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph fs status {fs_name} --format json"
+        )
+        output = json.loads(out)
+        active_mds = [
+            mds["name"] for mds in output["mdsmap"] if mds["state"] == "active"
+        ]
+        return active_mds
+
+    def get_mds_info(self, active_mds_node_1, active_mds_node_2, **kwargs):
+        """
+        Collects info from mds nodes by executing on respective mds nodes cephadm shell
+        Args:
+            active_mds_node_1:
+            active_mds_node_2:
+            **kwargs:
+
+        Returns:
+
+        """
+        active_mds_node_obj_1 = self.ceph_cluster.get_node_by_hostname(
+            active_mds_node_1.split(".")[1]
+        )
+        active_mds_node_obj_2 = self.ceph_cluster.get_node_by_hostname(
+            active_mds_node_2.split(".")[1]
+        )
+        for key, val in list(kwargs.items()):
+            if val == "get subtrees":
+                out_1, err_1 = active_mds_node_obj_1.exec_command(
+                    sudo=True,
+                    cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s."
+                    "asok %s | grep path" % (active_mds_node_1, val),
+                )
+                out_2, err_2 = active_mds_node_obj_2.exec_command(
+                    sudo=True,
+                    cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s."
+                    "asok %s| grep path" % (active_mds_node_2, val),
+                )
+                return (
+                    out_1.rstrip("\n"),
+                    out_2.rstrip("\n"),
+                    0,
+                )
+
+            elif val == "session ls":
+                out_1, err_1 = active_mds_node_obj_1.exec_command(
+                    sudo=True,
+                    cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s."
+                    "asok %s" % (active_mds_node_1, val),
+                )
+                out_2, err_2 = active_mds_node_obj_2.exec_command(
+                    sudo=True,
+                    cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s."
+                    "asok %s" % (active_mds_node_2, val),
+                )
+                return (
+                    out_1.rstrip("\n"),
+                    out_2.rstrip("\n"),
+                    0,
+                )
+
+    @staticmethod
+    def auto_evict(client_node, clients, rank):
+        """
+        Evict Client from the ceph cluster
+        Args:
+            client_node:
+            clients:
+            rank:
+
+        Returns:
+
+        """
+        grep_pid_cmd = """sudo ceph tell mds.%d client ls | grep '"pid":'"""
+        out, rc = client_node.exec_command(cmd=grep_pid_cmd % rank)
+        client_pid = re.findall(r"\d+", out)
+        while True:
+            for client in clients:
+                try:
+                    for pid in client_pid:
+                        client.exec_command(
+                            sudo=True, cmd="kill -9 %s" % pid, container_exec=False
+                        )
+                        return 0
+                except Exception as e:
+                    print(e)
+                    pass
+
+    @staticmethod
+    def manual_evict(client_node, rank):
+        """
+        Manual evict Client from the ceph cluster
+        Args:
+            client_node:
+            rank:
+
+        Returns:
+
+        """
+        grep_cmd = """ sudo ceph tell mds.%d client ls | grep '"id":'"""
+        out, rc = client_node.exec_command(cmd=grep_cmd % rank)
+        client_ids = re.findall(r"\d+", out)
+        grep_cmd = """ sudo ceph tell mds.%d client ls | grep '"inst":'"""
+        log.info("Getting IP address of Evicted client")
+        out, rc = client_node.exec_command(cmd=grep_cmd % rank)
+        op = re.findall(r"\d+.+\d+.", out)
+        ip_add = op[0]
+        ip_add = ip_add.split(" ")
+        ip_add = ip_add[1].strip('",')
+        id_cmd = "sudo ceph tell mds.%d client evict id=%s"
+        for client_id in client_ids:
+            client_node.exec_command(cmd=id_cmd % (rank, client_id))
+            break
+
+        return ip_add
+
+    @staticmethod
+    def osd_blacklist_rm_client(client_node, ip_add):
+        """
+        Blacklist client ip from OSD
+        Args:
+            client_node:
+            ip_add:
+
+        Returns:
+
+        """
+        out, rc = client_node.exec_command(sudo=True, cmd="ceph osd blacklist ls")
+        if ip_add in out:
+            client_node.exec_command(sudo=True, cmd="ceph osd blacklist rm %s" % ip_add)
+            if "listed 0 entries" in out:
+                log.info("Evicted client %s unblacklisted successfully" % ip_add)
+        return 0
+
+    def config_blacklist_auto_evict(self, active_mds, rank, service_name, **kwargs):
+        """
+        Configure black list on osd and evict client
+        Args:
+            active_mds:
+            rank:
+            service_name:
+            **kwargs:
+
+        Returns:
+
+        """
+        if kwargs:
+            active_mds.exec_command(
+                sudo=True,
+                cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s.asok"
+                " config set mds_session_blacklist_on_timeout true" % service_name,
+            )
+            return 0
+        else:
+            active_mds.exec_command(
+                sudo=True,
+                cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s.asok "
+                "config set mds_session_blacklist_on_timeout false" % service_name,
+            )
+            clients = self.ceph_cluster.get_ceph_objects("client")
+            self.auto_evict(clients[0], clients[0:2], rank)
+            log.info("Waiting 300 seconds for auto eviction---")
+            sleep(300)
+            return 0
+
+    def config_blacklist_manual_evict(self, active_mds, rank, service_name, **kwargs):
+        """
+        Configure black list on osd and manually evict client
+        Args:
+            active_mds:
+            rank:
+            service_name:
+            **kwargs:
+
+        Returns:
+
+        """
+        if kwargs:
+            active_mds.exec_command(
+                sudo=True,
+                cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s.asok"
+                " config set mds_session_blacklist_on_evict true" % service_name,
+            )
+            return 0
+        else:
+            active_mds.exec_command(
+                sudo=True,
+                cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s.asok "
+                "config set mds_session_blacklist_on_evict false" % service_name,
+            )
+            clients = self.ceph_cluster.get_ceph_objects("client")
+            ip_add = self.manual_evict(clients[0], rank)
+            out, rc = clients[0].exec_command(sudo=True, cmd="ceph osd blacklist ls")
+            print(out)
+            log.info(f"{ip_add} which is evicated manually")
+            if ip_add not in out:
+                return 0
 
     def validate_fs_info(self, client, fs_name="cephfs"):
         """
