@@ -700,17 +700,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "Tier-2 cephfs upgrade 5-3 to 6-0"
-          execution_time: ""
-          suite: "suites/quincy/cephfs/tier-0_cephfs_upgrade_53_to_6x.yaml"
-          global-conf: "conf/quincy/cephfs/tier-2_cephfs_upgrade.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - cephfs
-            - upgrades
   sanity_openstack_only:
     tier-2:
       stage-1:
@@ -783,6 +772,16 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
           metadata:
             - rgw
+        - name: "Tier-2 cephfs upgrade 5-3 to 6-0"
+          execution_time: "54m 21s"
+          suite: "suites/quincy/cephfs/tier-0_cephfs_upgrade_53_to_6x.yaml"
+          global-conf: "conf/quincy/cephfs/tier-2_cephfs_upgrade.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+          metadata:
+            - cephfs
+            - upgrades
   rc:
     tier-0:
       stage-1:
