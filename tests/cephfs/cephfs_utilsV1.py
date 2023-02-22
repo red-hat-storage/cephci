@@ -7,11 +7,13 @@ It installs all the pre-requisites on client nodes
 import argparse
 import datetime
 import json
+import os
 import random
 import string
 from time import sleep
 
 from ceph.ceph import CommandFailed
+from mita.v2 import get_openstack_driver
 from utility.log import Log
 
 log = Log(__name__)
@@ -1354,6 +1356,53 @@ class FsUtils(object):
                 node=ceph_node.node.ip_address
             )
         )
+
+    def node_power_failure(
+        self,
+        node,
+        sleep_time=300,
+        **kwargs,
+    ):
+        """
+        This is used for node power failures.
+        Limitation : This works only for Openstack Vms
+
+
+        Args:
+            sleep_time:
+            node_1:
+            **kwargs:
+
+        Returns:
+
+        """
+        user = os.getlogin()
+        log.info(f"{user} logged in")
+        if kwargs.get("cloud_type") == "openstack":
+            kwargs.pop("cloud_type")
+            driver = get_openstack_driver(**kwargs)
+            for node_obj in driver.list_nodes():
+                if node.private_ip in node_obj.private_ips:
+                    log.info("Doing power-off on %s" % node_obj.name)
+                    driver.ex_stop_node(node_obj)
+                    sleep(20)
+                    op = driver.ex_get_node_details(node_obj)
+                    if op.state == "stopped":
+                        log.info("Node stopped successfully")
+                    sleep(sleep_time)
+                    log.info("Doing power-on on %s" % node_obj.name)
+                    driver.ex_start_node(node_obj)
+                    sleep(20)
+                    op = driver.ex_get_node_details(node_obj)
+                    if op.state == "running":
+                        log.info("Node restarted successfully")
+                    sleep(20)
+        elif kwargs.get("cloud_type") == "ibmc":
+            # To DO for IBM
+            pass
+        else:
+            pass
+        return 0
 
     def create_file_data(self, client, directory, no_of_files, file_name, data):
         """

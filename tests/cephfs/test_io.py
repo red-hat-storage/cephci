@@ -1,4 +1,5 @@
 import traceback
+from time import sleep
 
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -35,6 +36,23 @@ def run(ceph_cluster, **kw):
         with parallel() as p:
             for io in io_func:
                 p.spawn(io)
+        if config.get("wait_for_io"):
+            while True:
+                out, rc = clients[0].exec_command(sudo=True, cmd="podman ps -q")
+                log.info(out)
+                if not out:
+                    break
+                sleep(30)
+            out, rc = clients[0].exec_command(sudo=True, cmd="podman ps -a -q")
+            contiainter_ids = out.strip().split("\n")
+            for container_id in contiainter_ids:
+                out, rc = clients[0].exec_command(
+                    sudo=True, cmd=f"podman rm {container_id}"
+                )
+                if out:
+                    print(out)
+                else:
+                    print(f"Container {container_id} removed")
         out, rc = clients[0].exec_command(sudo=True, cmd="ceph df")
         log.info(out)
         return 0
