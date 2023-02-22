@@ -158,3 +158,40 @@ tests:
       desc: Verification of mirorring with failures of mirror daemons
       module: test_rbd_mirror_multi_daemon.py
       polarion-id: CEPH-83574962
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+        ceph-rbd2:
+          config:
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+      desc: Reduce mirroring daemons to 1
+      module: test_cephadm.py
+      name: Reduce mirroring daemons
+
+  - test:
+      name: test rbd mirror daemon restartwith resync
+      module: test_rbd_mirror_daemon_restart_imagesync.py
+      clusters:
+        ceph-rbd1:
+          config:
+            dummy: true
+      polarion-id: CEPH-10468
+      desc: Verification of image sync continuation after multiple rbd mirror daemon restarts
