@@ -289,13 +289,13 @@ node("rhel-8-medium") {
                 // This stage is to send UMB message for OSP interop team
                 // everytime an RC build passes sanity tier-0
                 println("Stage sendUMBFortier0RC")
+                majorVersion = rhcsVersion["major_version"]
+                minorVersion = rhcsVersion["minor_version"]
                 if (
                     tags_list.contains("rc") && tierLevel == "tier-0"
                     && msgMap.containsKey("pipeline") && msgMap["pipeline"]["final_stage"]
                     && msgMap.containsKey("test") && msgMap["test"]["result"] == "SUCCESS"
                 ){
-                    majorVersion = rhcsVersion["major_version"]
-                    minorVersion = rhcsVersion["minor_version"]
                     minorVersion = "${minorVersion}"
                     def recipeMap = sharedLib.readFromReleaseFile(
                         majorVersion, minorVersion, lockFlag=false
@@ -323,7 +323,7 @@ node("rhel-8-medium") {
             body += "<dt>UMB Message:</dt><dd>${msgMap}</dd>"
         }
         body += "<dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd></dl></body>"
-        def subject = "${run_type} RHCEPH-${majorVersion}.${minorVersion} Post Result - ${currentBuild.result}"
+        def subject = "${run_type} RHCEPH-${majorVersion}.${minorVersion} ${tierLevel} Post Result - ${currentBuild.result}"
 
         emailext (
             mimeType: 'text/html',
