@@ -17,6 +17,10 @@ def rp_base_link = "https://reportportal-rhcephqe.apps.ocp-c1.prod.psi.redhat.co
 def launch_id = ""
 def testStatus
 def date
+def rhcsVersion
+def majorVersion
+def minorVersion
+def failureReason
 
 node("rhel-8-medium") {
 
@@ -62,6 +66,8 @@ node("rhel-8-medium") {
             println("reportLib : ${reportLib}")
             testStatus = msgMap["test"]["result"]
             date = sh(returnStdout: true, script: "date")
+            rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
+            currentBuild.result = "SUCCESS"
         }
 
         stage('updatePipelineMetadata'){
@@ -80,7 +86,6 @@ node("rhel-8-medium") {
 
         if (testStatus == 'ABORTED' && msgMap["pipeline"]["final_stage"]) {
             stage('sendConsolidatedReport'){
-                def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                 majorVersion = rhcsVersion["major_version"]
                 minorVersion = rhcsVersion["minor_version"]
 
@@ -194,7 +199,6 @@ node("rhel-8-medium") {
                         if ( tierLevel == null ) {
                             tierLevel = msgMap["pipeline"]["name"]
                         }
-                        def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                         majorVersion = rhcsVersion["major_version"]
                         minorVersion = rhcsVersion["minor_version"]
                         minorVersion = "${minorVersion}"
@@ -252,7 +256,6 @@ node("rhel-8-medium") {
             stage('sendConsolidatedReport'){
                 println("Stage sendConsolidatedReport")
                 if (msgMap["pipeline"]["final_stage"] && tierLevel == "tier-2") {
-                    def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                     majorVersion = rhcsVersion["major_version"]
                     minorVersion = rhcsVersion["minor_version"]
                     minorVersion = "${minorVersion}"
@@ -291,7 +294,6 @@ node("rhel-8-medium") {
                     && msgMap.containsKey("pipeline") && msgMap["pipeline"]["final_stage"]
                     && msgMap.containsKey("test") && msgMap["test"]["result"] == "SUCCESS"
                 ){
-                    def rhcsVersion = sharedLib.getRHCSVersionFromArtifactsNvr()
                     majorVersion = rhcsVersion["major_version"]
                     minorVersion = rhcsVersion["minor_version"]
                     minorVersion = "${minorVersion}"
@@ -307,14 +309,21 @@ node("rhel-8-medium") {
         if (currentBuild.result == "ABORTED") {
             println("The workflow has been aborted.")
         }
-
         // notify about failure
         currentBuild.result = "FAILURE"
-        def failureReason = err.getMessage()
-        def subject =  "[CEPHCI-PIPELINE-ALERT] [JOB-FAILURE] - ${env.JOB_NAME}/${env.BUILD_NUMBER}"
-        def body = "<body><h3><u>Job Failure</u></h3></p>"
-        body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
-        body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
+        failureReason = err.getMessage()
+    } finally {
+        def body = "<body><h3><u>Job ${currentBuild.result}</u></h3></p>"
+        body += "<dl><dt>Job Discription:</dt><dd>${run_type} ${majorVersion}.${minorVersion} ${tierLevel} ${stageLevel}</dd>"
+        if (launch_id) {
+            body += "<dt>Report portal URL</dt><dd>${rp_base_link}/ui/#cephci/launches/all/${launch_id}</dd>"
+        }
+        if (currentBuild.result != "SUCCESS") {
+            body += "<dt>${currentBuild.result}:</dt><dd>${failureReason}</dd>"
+            body += "<dt>UMB Message:</dt><dd>${msgMap}</dd>"
+        }
+        body += "<dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd></dl></body>"
+        def subject = "${run_type} RHCEPH-${majorVersion}.${minorVersion} Post Result - ${currentBuild.result}"
 
         emailext (
             mimeType: 'text/html',
