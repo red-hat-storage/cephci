@@ -214,6 +214,7 @@ class BootstrapMixin:
             rhbuild = f"{_rhcs_version}-{_platform}"
             base_url = _details[0]
 
+        self.cluster.rhcs_version = _rhcs_version or rhbuild
         if build_type == "upstream":
             self.setup_upstream_repository()
             # Todo: This is temporary workaround of installing Red Hat Ceph
@@ -225,6 +226,7 @@ class BootstrapMixin:
         elif build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False
             self.set_cdn_tool_repo()
+            self.cluster.use_cdn = True
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
