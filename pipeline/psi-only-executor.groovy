@@ -51,6 +51,14 @@ node("rhel-8-medium || ceph-qe-ci") {
 
         // Trigger psi_only pipeline based on ciMessage content
         if (ciMap.pipeline.final_stage && ciMap.pipeline.tags.contains("tier-0") && ciMap.test.result == "SUCCESS") {
+            def recipeFileContent = sharedLib.yamlToMap("${rhcephVersion}.yaml")
+            def content = recipeFileContent['latest']
+            println "recipeFile ceph-version : ${content['ceph-version']}"
+            println "buildArtifacts ceph-version : ${ciMap.recipe.'ceph-version'}"
+            if ( ciMap.recipe."ceph-version" != content['ceph-version']) {
+                currentBuild.result = "ABORTED"
+                error "Aborting the execution as new builds are available.."
+            }
             println "Starting test execution with parameters:"
             println "\trhcephVersion: ${rhcephVersion}\n\tbuildType: ${buildType}\n\tbuildArtifacts: ${buildArtifacts}\n\toverrides: ${overrides}\n\ttags: ${tags}"
 

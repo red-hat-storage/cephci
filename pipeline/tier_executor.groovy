@@ -144,6 +144,15 @@ node(nodeName) {
             def build_number = "${currentBuild.number}"
             overrides.put("workspace", workspace.toString())
             overrides.put("build_number", build_number.toInteger())
+            def recipeFileContent = sharedLib.yamlToMap("${rhcephVersion}.yaml")
+            def content = recipeFileContent['latest']
+            println "recipeFile ceph-version : ${content['ceph-version']}"
+            def currentCephVersion = buildArtifacts['ceph-version'] ?: buildArtifacts['recipe']['ceph-version']
+            println "buildArtifacts ceph-version : ${currentCephVersion}"
+            if ( currentCephVersion != content['ceph-version']) {
+                currentBuild.result = "ABORTED"
+                error "Aborting the execution as new builds are available.."
+            }
         }
 
         if("ibmc" in tags_list) {
