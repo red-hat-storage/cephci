@@ -306,22 +306,19 @@ node("rhel-8-medium") {
             }
         }
     } catch(Exception err) {
-        if (currentBuild.result == "ABORTED") {
-            println("The workflow has been aborted.")
+        if (currentBuild.result != "ABORTED") {
+            currentBuild.result = "FAILURE"
         }
         // notify about failure
-        currentBuild.result = "FAILURE"
         failureReason = err.getMessage()
-    } finally {
         def body = "<body><h3><u>Job ${currentBuild.result}</u></h3></p>"
         body += "<dl><dt>Job Discription:</dt><dd>${run_type} ${majorVersion}.${minorVersion} ${tierLevel} ${stageLevel}</dd>"
         if (launch_id) {
             body += "<dt>Report portal URL</dt><dd>${rp_base_link}/ui/#cephci/launches/all/${launch_id}</dd>"
         }
-        if (currentBuild.result != "SUCCESS") {
-            body += "<dt>${currentBuild.result}:</dt><dd>${failureReason}</dd>"
-            body += "<dt>UMB Message:</dt><dd>${msgMap}</dd>"
-        }
+        body += "<dt>${currentBuild.result} Reason:</dt><dd>${failureReason}</dd>"
+        body += "<dt>${currentBuild.result} Snippet:</dt><dd>${sharedLib.returnSnippet()}</dd>"
+        body += "<dt>UMB Message:</dt><dd>${msgMap}</dd>"
         body += "<dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd></dl></body>"
         def subject = "${run_type} RHCEPH-${majorVersion}.${minorVersion} ${tierLevel} Post Result - ${currentBuild.result}"
 
