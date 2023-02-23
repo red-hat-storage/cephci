@@ -1,5 +1,7 @@
 from cli import Cli
 
+RPM_QUERY_ERROR_MSG = "package {} is not installed"
+
 
 class PackageError(Exception):
     pass
@@ -207,5 +209,18 @@ class Rpm(Cli):
         """
         cmd = f"{self.base_cmd} --query {pkg}"
 
-        if self.execute(sudo=True, long_running=True, cmd=cmd):
-            raise RpmError(f"Package '{pkg}' not installed on node(s)")
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            if out[0].strip() == RPM_QUERY_ERROR_MSG.format(pkg):
+                return None
+            else:
+                return out[0].strip()
+        else:
+            result = {}
+            for node in out.keys():
+                if out[node][0].strip() == RPM_QUERY_ERROR_MSG.format(pkg):
+                    result[node] = None
+                else:
+                    result[node] = out[node]
+
+            return result
