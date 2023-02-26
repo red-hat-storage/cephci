@@ -92,6 +92,11 @@ def run(ceph_cluster, **kw):
             f"{kernel_mounting_dir_1}",
             long_running=True,
         )
+        client1.exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={kernel_mounting_dir_1}/file_5gb bs=1M count=5000",
+            long_running=True,
+        )
         c_out2, c_err2 = client1.exec_command(
             sudo=True,
             cmd="ceph fs subvolume info cephfs subvol_full_vol --group_name subvolgroup_full_vol_1 -f json",
