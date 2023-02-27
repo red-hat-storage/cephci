@@ -5,6 +5,8 @@ playbooks supported,
 - cephadm-purge-cluster.yaml
 - cephadm-clients.yaml
 """
+import re
+
 from ceph.ceph_admin.common import config_dict_to_string
 from utility.log import Log
 
@@ -39,7 +41,14 @@ class CephadmAnsible:
 
     def install_cephadm_ansible(self):
         """Enable ansible rpm repos and install cephadm-ansible."""
-        if float(self.cluster._Ceph__rhcs_version) >= 6.0:
+        rhcs_version = re.match(r"(\d)\.(.?)(.*)", self.cluster._Ceph__rhcs_version)
+        if not rhcs_version:
+            raise CephadmAnsibleError(
+                f"Invalid string for RHCS version - '{self.cluster.__Ceph_rhcs_version}'"
+            )
+
+        rhcs_version = rhcs_version.groups(0)[0]
+        if float(rhcs_version) >= 6.0:
             self.admin.exec_command(
                 cmd="yum install ansible-core -y --nogpgcheck",
                 sudo=True,
