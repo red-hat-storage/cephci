@@ -1104,6 +1104,39 @@ def fetch_build_artifacts(build, ceph_version, platform, upstream_build=None):
         raise TestSetupFailure(f"Could not fetch build details of : {e}")
 
 
+def check_build_overrides(
+    rpm: any,
+    registry: any,
+    image: any,
+    tag: any,
+):
+    """Validate Ceph build Override arguments.
+
+    Ceph build parameter values can be overridden by below args. they are,
+     --rhs-ceph-repo
+     --docker-registry
+     --docker-image
+     --docker-image-tag
+
+    Conditions:
+    - Over-ridden :  all arguments has value, then return True
+    - Not-Over-ridden : all arguments has no value, then return False
+    - Exception : Not all args are provided, then raise Exception.
+
+    Returns:
+        Boolean
+    """
+    values = [i for i in [rpm, registry, image, tag] if i].__len__()
+    length = 4
+
+    if values == length:
+        return True
+    elif values == 0:
+        return False
+    elif 0 < values < length:
+        raise Exception(f"{check_build_overrides.__doc__}")
+
+
 def rp_deco(func):
     def inner_method(cls, *args, **kwargs):
         if not cls.client:
