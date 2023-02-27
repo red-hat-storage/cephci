@@ -9,8 +9,6 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
 
 log = Log(__name__)
-
-
 global stop_flag
 
 
@@ -36,12 +34,12 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-11261 - MON node power failure, with client IO
+    CEPH-11262 - OSD node power failure, with client IO
 
     Test Steps:
     1. Mount Fuse and Kernel mounts
-    2. Run IOs and perform mon power off parallel
-    3. Do this on all the mon nodes in serial fashion
+    2. Run IOs and perform osd power off parallel
+    3. Do this on all the osd nodes in serial fashion
     Args:
         ceph_cluster:
         **kw:
@@ -51,7 +49,7 @@ def run(ceph_cluster, **kw):
     """
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
-        mon_nodes = ceph_cluster.get_ceph_objects("mon")
+        osd_nodes = ceph_cluster.get_ceph_objects("osd")
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
         osp_cred = config.get("osp_cred")
@@ -99,6 +97,7 @@ def run(ceph_cluster, **kw):
             new_client_hostname="admin",
             extra_params=f" --client_fs {fs_name}",
         )
+        global stop_flag
         with parallel() as p:
             p.spawn(
                 start_io_time,
@@ -113,21 +112,20 @@ def run(ceph_cluster, **kw):
                 clients[0],
                 kernel_mount_dir,
             )
-            global stop_flag
-            for mon in mon_nodes:
+            for osd in osd_nodes:
                 cluster_health_beforeIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
-                    len(mon_nodes),
+                    len(osd_nodes),
                     build,
                     None,
                     300,
                 )
-                fs_util_v1.node_power_failure(node=mon.node, sleep_time=120, **params)
+                fs_util_v1.node_power_failure(node=osd.node, sleep_time=120, **params)
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
-                    len(mon_nodes),
+                    len(osd_nodes),
                     build,
                     None,
                     300,
@@ -136,13 +134,14 @@ def run(ceph_cluster, **kw):
                     log.info("cluster is healthy")
                 else:
                     log.error("cluster is not healty")
+
             log.info("Setting stop flag")
             stop_flag = True
         return 0
 
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     finally:
         log.info("Cleaning up the system")
