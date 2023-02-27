@@ -451,9 +451,16 @@ class Rbd:
             pool_name : name of the pool
             image_name : mane of the image
         Returns:
-
+            0: on success
+            1: on failure
         """
-        return self.exec_cmd(cmd=f"rbd trash mv {pool_name}/{image_name}")
+        cmd = f"rbd trash mv {pool_name}/{image_name}"
+        rc = self.exec_cmd(sudo=True, cmd=cmd)
+        if rc:
+            log.error("Error while moving image to trash")
+            return rc
+        log.info("Moving image to trash is successful")
+        return rc
 
     def remove_image_trash(self, pool_name, image_id):
         """

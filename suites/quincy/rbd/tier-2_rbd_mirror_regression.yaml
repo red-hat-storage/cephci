@@ -201,6 +201,17 @@ tests:
       desc: Verify that deleting secondary image fails
 
   - test:
+      name: Attempt moving secondary image to trash
+      module: test_mirror_move_secondary_trash.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-11416
+      desc: Verify that moving secondary to trash fails
+
+  - test:
       name: test image meta operations sync to secondary
       module: test_rbd_image_meta_mirroring.py
       clusters:
