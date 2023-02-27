@@ -4,3 +4,4 @@ python-openstackclient
 xmltodict
 tfacon
 uplink
+awscli

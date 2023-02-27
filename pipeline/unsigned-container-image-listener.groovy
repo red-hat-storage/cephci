@@ -10,7 +10,7 @@ def releaseDetails = [:]
 
 // Pipeline script entry point
 
-node("rhel-8-medium || ceph-qe-ci") {
+node("rhel-9-medium || ceph-qe-ci") {
 
     try {
         stage('prepareNode') {
