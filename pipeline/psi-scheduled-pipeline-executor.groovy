@@ -53,9 +53,12 @@ node("rhel-8-medium || ceph-qe-ci") {
             error("There no new RHCS build since last Friday")
         }
 
+        println("Valid recipe files : ${validRecipeFiles}")
+
         for (validRecipeFile in validRecipeFiles) {
             def rhcephVersion = validRecipeFile.split("/").last().replace(".yaml", "")
             def recipeContent = readYaml file: "${validRecipeFile}"
+            recipeContent = recipeContent.get("tier-0")
             recipeContent = writeJSON returnText: true, json:  recipeContent
 
             println "Starting test execution with parameters:"
@@ -69,7 +72,7 @@ node("rhel-8-medium || ceph-qe-ci") {
                     string(name: 'tags', value: tags),
                     string(name: 'buildType', value: buildType.toString()),
                     string(name: 'overrides', value: overrides.toString()),
-                    string(name: 'buildArtifacts', value: recipeContent.get("tier-0").toString())]
+                    string(name: 'buildArtifacts', value: recipeContent.toString())]
             ])
         }
     }
