@@ -1,5 +1,7 @@
 from cli import Cli
 
+RPM_QUERY_ERROR_MSG = "package {} is not installed"
+
 
 class PackageError(Exception):
     pass
@@ -54,13 +56,19 @@ class Package(Cli):
             return out[0].strip()
         return out
 
-    def install(self, pkg, nogpgcheck=False):
+    def install(self, pkg, nogpgcheck=False, env_vars={}):
         """install a package or packages
 
         Args:
             pkg (str): package need to be installed
+            env_vars (dict): dictiory with environment variables
         """
-        cmd = f"{self.manager} install -y {pkg}"
+        cmd = ""
+        if env_vars:
+            for k, v in env_vars.items():
+                cmd += f"{k}={v} "
+
+        cmd += f"{self.manager} install -y {pkg}"
         if nogpgcheck:
             cmd += " --nogpgcheck"
         if self.execute(sudo=True, long_running=True, cmd=cmd):
@@ -207,5 +215,18 @@ class Rpm(Cli):
         """
         cmd = f"{self.base_cmd} --query {pkg}"
 
-        if self.execute(sudo=True, long_running=True, cmd=cmd):
-            raise RpmError(f"Package '{pkg}' not installed on node(s)")
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            if out[0].strip() == RPM_QUERY_ERROR_MSG.format(pkg):
+                return None
+            else:
+                return out[0].strip()
+        else:
+            result = {}
+            for node in out.keys():
+                if out[node][0].strip() == RPM_QUERY_ERROR_MSG.format(pkg):
+                    result[node] = None
+                else:
+                    result[node] = out[node]
+
+            return result

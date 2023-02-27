@@ -2,7 +2,7 @@ import os
 
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.exceptions import ConfigNotFoundError
-from cli.utilities.packages import Rpm, RpmError
+from cli.utilities.packages import Rpm
 from cli.utilities.utils import (
     get_node_by_id,
     get_node_ip,
@@ -66,9 +66,12 @@ def setup_cluster(ceph_cluster, config):
     cloud_type = config.get("cloud-type")
     build_type = config.get("build_type")
 
-    try:
-        Rpm(installer).query("cephadm-ansible")
-    except RpmError:
+    if not Rpm(installer).query("cephadm-ansible"):
+        """
+        NOTE (vamahaja): Enable below code once code to identify build type added.
+            import utility.install_prereq.SetupLicence
+            SetupLicence.run(installer)
+        """
         SetUpSSHKeys.run(installer, nodes)
         ConfigureCephadmAnsibleNode.run(
             installer, nodes, build_type, base_url, rhbuild, cloud_type
