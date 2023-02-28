@@ -253,4 +253,10 @@ tests:
       polarion-id: CEPH-11335
       desc: Test Filesystem client eviction
       abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "MDS failover while IO is going on each client"
+      module: clients.MDS_failover_while_client_IO.py
+      polarion-id: CEPH-11242
+      name: "MDS failover whi client IO"
 
