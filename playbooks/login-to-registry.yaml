@@ -8,6 +8,7 @@
   tasks:
     - name: Login to image registry
       cephadm_registry_login:
+        docker: "{{ docker | default(False) }}"
         registry_url: "{{ registry_url }}"
         registry_username: "{{ registry_username }}"
         registry_password: "{{ registry_password }}"
