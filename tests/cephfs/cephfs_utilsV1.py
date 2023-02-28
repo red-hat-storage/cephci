@@ -1519,6 +1519,29 @@ class FsUtils(object):
 
         return cmd_out, cmd_rc
 
+    def get_snapshot_info(self, client, vol_name, subvol_name, snap_name, **kwargs):
+        """
+
+        Args:
+            client:
+            vol_name:
+            snap_name:
+            **kwargs:
+
+        Returns:
+
+        """
+        snap_info_cmd = (
+            f"ceph fs subvolume snapshot info {vol_name} {subvol_name} {snap_name}"
+        )
+        if kwargs.get("group_name"):
+            snap_info_cmd += f" --group_name {kwargs.get('group_name')}"
+        snap_info_cmd += " --format json"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=snap_info_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+        return cmd_out, cmd_rc
+
     def clone_cancel(self, client, vol_name, clone_name, **kwargs):
         """
         Cancels the clone operation
