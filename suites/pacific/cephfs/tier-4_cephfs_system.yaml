@@ -136,13 +136,3 @@ tests:
       name: "OSD node power failure, with client IO"
       config:
           num_of_osds: 12
-  - test:
-      abort-on-fail: false
-      desc: "MDS failover while IO is going on each client"
-      module: cephfs_system.MDS_failover_while_client_IO.py
-      polarion-id: CEPH-11242
-      name: "MDS failover whi client IO"
-      config:
-        num_of_osds: 12
-
-
