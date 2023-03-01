@@ -45,29 +45,36 @@ def add(cls, config: Dict) -> None:
         file_ = client.remote_file(sudo=sudo, file_name=file_name, file_mode=file_mode)
         file_.write(content)
         file_.flush()
+        file_.close()
 
     nodes_ = config.get("nodes", config.get("node"))
-    default_version = cls.cluster.rhcs_version.version[0]
+    default_version = str(cls.cluster.rhcs_version.version[0])
     use_cdn = cls.cluster.use_cdn
     if nodes_:
         if not isinstance(nodes_, list):
             nodes_ = [{nodes_: {}}]
 
         def setup(host):
-            rhcs_version = str(
-                [
-                    host[entry].get(
-                        "release", default_version if not use_cdn else "default"
-                    )
-                    for entry in host
-                ][0]
-            )
-            name = [entry for entry in host][0]
-            node = get_node_by_id(cls.cluster, name)
+            name = list(host.keys()).pop()
+            _build = list(host.values()).pop()
+            _node = get_node_by_id(cls.cluster, name)
+            if _build.get("release"):
+                rhcs_version = _build["release"]
+                if not isinstance(rhcs_version, str):
+                    rhcs_version = str(rhcs_version)
 
-            rhel_version = node.distro_info["VERSION_ID"][0]
+                # Todo: Pointing to RHCS 5 CDN repo rpms, Since 6x not yet GAed
+                #       Revert this commit/code changes once 6x is GAed.
+                if rhcs_version > "5":
+                    rhcs_version = "5"
+            elif use_cdn:
+                rhcs_version = default_version
+            else:
+                rhcs_version = "default"
+
+            rhel_version = _node.distro_info["VERSION_ID"][0]
             log.debug(
-                f"RHCS version is : {rhcs_version} for host : {node.hostname}\n"
+                f"RHCS version : {rhcs_version} on host {_node.hostname}\n"
                 f"with RHEL major version as : {rhel_version}"
             )
             enable_cmd = "subscription-manager repos --enable="
@@ -98,7 +105,7 @@ def add(cls, config: Dict) -> None:
             }
 
             # Collecting already enabled repos
-            out, _ = node.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            out, _ = _node.exec_command(sudo=True, cmd=cmd, check_ec=False)
             enabled_repos = list()
             if out:
                 out = out.strip().split("\n")
@@ -110,22 +117,18 @@ def add(cls, config: Dict) -> None:
             if rhcs_version != "default":
                 # Disabling all the repos and enabling the ones we need to install the ceph client
                 for cmd in disable_all:
-                    node.exec_command(sudo=True, cmd=cmd, timeout=1200)
+                    _node.exec_command(sudo=True, cmd=cmd, timeout=1200)
 
                 # Enabling the required CDN repos
                 for repos in rhel_repos[rhel_version]:
-                    node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
+                    _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
-                # Todo: Sticking to RHCS 5 CDN repo rpms, Since 6x not yet GAed
-                #       Revert this commit/code changes once 6x is GAed.
-                if rhcs_version > "5":
-                    rhcs_version = "5"
                 for repos in cdn_ceph_repo[rhel_version][rhcs_version]:
-                    node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
+                    _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
             # Copy the keyring to client
-            node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
-            put_file(node, client_file, cnt_key, "w")
+            _node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+            put_file(_node, client_file, cnt_key, "w")
 
             if config.get("copy_ceph_conf", True):
                 # Get minimal ceph.conf
@@ -133,7 +136,7 @@ def add(cls, config: Dict) -> None:
                     args=["ceph", "config", "generate-minimal-conf"]
                 )
                 # Copy the ceph.conf to client
-                put_file(node, "/etc/ceph/ceph.conf", ceph_conf, "w")
+                put_file(_node, "/etc/ceph/ceph.conf", ceph_conf, "w")
 
             # Copy admin keyring to client node
             if config.get("copy_admin_keyring"):
@@ -141,13 +144,13 @@ def add(cls, config: Dict) -> None:
                     args=["ceph", "auth", "get", "client.admin"]
                 )
                 put_file(
-                    node, "/etc/ceph/ceph.client.admin.keyring", admin_keyring, "w"
+                    _node, "/etc/ceph/ceph.client.admin.keyring", admin_keyring, "w"
                 )
 
             # Install ceph-common
             if config.get("install_packages"):
                 for pkg in config.get("install_packages"):
-                    node.exec_command(
+                    _node.exec_command(
                         cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True
                     )
             if config.get("git_clone", False):
@@ -157,7 +160,7 @@ def add(cls, config: Dict) -> None:
                 node_value = ceph_object.node
                 utils.perform_env_setup(config, node_value, cls.cluster)
 
-            out, _ = node.exec_command(cmd="ls -ltrh /etc/ceph/", sudo=True)
+            out, _ = _node.exec_command(cmd="ls -ltrh /etc/ceph/", sudo=True)
             log.info(out)
 
             # Hold local copy of the client key-ring in the installer node

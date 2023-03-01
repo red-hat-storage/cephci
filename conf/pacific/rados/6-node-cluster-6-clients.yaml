@@ -51,24 +51,24 @@ globals:
           - rgw
       node7:
         image-name:
-          openstack: RHEL-8.6.0-x86_64-ga-latest
-          ibmc: rhel-86-server-released
+          openstack: RHEL-8.7.0-x86_64-ga-latest
+          ibmc: rhel-87-server-released
         networks:
           - provider_net_cci_8
         role:
           - client
       node8:
         image-name:
-          openstack: RHEL-8.6.0-x86_64-ga-latest
-          ibmc: rhel-86-server-released
+          openstack: RHEL-8.7.0-x86_64-ga-latest
+          ibmc: rhel-87-server-released
         networks:
           - provider_net_cci_8
         role:
           - client
       node9:
         image-name:
-          openstack: RHEL-8.6.0-x86_64-ga-latest
-          ibmc: rhel-86-server-released
+          openstack: RHEL-8.7.0-x86_64-ga-latest
+          ibmc: rhel-87-server-released
         networks:
           - provider_net_cci_9
         role:
