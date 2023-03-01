@@ -56,13 +56,19 @@ class Package(Cli):
             return out[0].strip()
         return out
 
-    def install(self, pkg, nogpgcheck=False):
+    def install(self, pkg, nogpgcheck=False, env_vars={}):
         """install a package or packages
 
         Args:
             pkg (str): package need to be installed
+            env_vars (dict): dictiory with environment variables
         """
-        cmd = f"{self.manager} install -y {pkg}"
+        cmd = ""
+        if env_vars:
+            for k, v in env_vars.items():
+                cmd += f"{k}={v} "
+
+        cmd += f"{self.manager} install -y {pkg}"
         if nogpgcheck:
             cmd += " --nogpgcheck"
         if self.execute(sudo=True, long_running=True, cmd=cmd):
