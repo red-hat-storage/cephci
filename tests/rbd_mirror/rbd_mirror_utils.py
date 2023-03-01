@@ -1091,7 +1091,7 @@ def rbd_mirror_config(**kw):
             io_total=kw["config"]["rep_pool_config"]["io_total"],
             mode=kw["config"]["rep_pool_config"]["mode"],
             mirrormode=kw["config"]["rep_pool_config"].get("mirrormode", ""),
-            image_feature=kw["config"]["ec_pool_config"].get("image_feature"),
+            image_feature=kw["config"]["rep_pool_config"].get("image_feature"),
             **kw,
         )
 
