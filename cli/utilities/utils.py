@@ -91,6 +91,9 @@ def get_custom_repo_url(base_url, cloud_type="openstack"):
         cloud_type (str): cloudtype (openstack|ibmc)
         base_url (str): base URL of repository
     """
+    if base_url.endswith(".repo"):
+        return base_url
+
     if not base_url.endswith("/"):
         base_url += "/"
 

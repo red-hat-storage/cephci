@@ -9,6 +9,7 @@ scenarios for verifying and validating cephadm.
 """
 from typing import Dict
 
+from utility.install_prereq import SetupLicence
 from utility.log import Log
 
 from .bootstrap import BootstrapMixin
@@ -204,6 +205,8 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             cmd += " --nogpghceck"
 
         for node in self.cluster.get_nodes(ignore="client"):
+            if self.config.get("ibm_build"):
+                SetupLicence.run(node)
             node.exec_command(
                 sudo=True,
                 cmd="yum install cephadm -y --nogpgcheck",
