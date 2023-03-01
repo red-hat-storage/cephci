@@ -46,6 +46,18 @@ class ConfigureCephadmAnsibleNodeError(Exception):
     pass
 
 
+class SetupLicence:
+    """Setup Storage Licence"""
+
+    @staticmethod
+    def run(node, accept_eula={"ACCEPT_EULA": "Y"}):
+        cmd = "cat" if accept_eula else "touch"
+        cmd += " /usr/share/ibm-storage-ceph-license/accept"
+
+        Package(node).install("ibm-storage-ceph-license", env_vars=accept_eula)
+        return node.exec_command(sudo=True, cmd=cmd, check_ec=True)
+
+
 class SetUpSSHKeys:
     """Set up SSH keys"""
 
