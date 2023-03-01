@@ -42,6 +42,7 @@ from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (
     ReportPortal,
+    check_build_overrides,
     create_run_dir,
     create_unique_test_name,
     email_results,
@@ -86,7 +87,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--filestore]
         [--use-ec-pool <k,m>]
         [--hotfix-repo <repo>]
-        [--ignore-latest-container]
         [--skip-version-compare]
         [--custom-config <key>=<value>]...
         [--custom-config-file <file>]
@@ -144,7 +144,6 @@ Options:
   --filestore                       To specify filestore as osd object store
   --use-ec-pool <k,m>               To use ec pools instead of replicated pools
   --hotfix-repo <repo>              To run sanity on hotfix build
-  --ignore-latest-container         Skip getting latest nightly container
   --skip-version-compare            Skip verification that ceph versions change post
                                     upgrade
   -c --custom-config <name>=<value> Add a custom config key/value to ceph_conf_overrides
@@ -388,8 +387,6 @@ def run(args):
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
     cleanup_name = args.get("--cleanup")
 
-    ignore_latest_nightly_container = args.get("--ignore-latest-container")
-
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
@@ -453,19 +450,19 @@ def run(args):
     build = args.get("--build")
     upstream_build = args.get("--upstream-build", None)
 
-    if build and build not in ["released"] and not ignore_latest_nightly_container:
-        base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-            build, rhbuild, platform, upstream_build
-        )
-
-    store = args.get("--store") or False
-
-    base_url = args.get("--rhs-ceph-repo") or base_url
-    ubuntu_repo = args.get("--ubuntu-repo") or ubuntu_repo
-    docker_registry = args.get("--docker-registry") or docker_registry
-    docker_image = args.get("--docker-image") or docker_image
-    docker_tag = args.get("--docker-tag") or docker_tag
+    base_url = args.get("--rhs-ceph-repo")
+    ubuntu_repo = args.get("--ubuntu-repo")
+    docker_registry = args.get("--docker-registry")
+    docker_image = args.get("--docker-image")
+    docker_tag = args.get("--docker-tag")
     kernel_repo = args.get("--kernel-repo")
+
+    if not check_build_overrides(base_url, docker_registry, docker_image, docker_tag):
+        if build and build not in ["released"]:
+            base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
+                build, rhbuild, platform, upstream_build
+            )
+    store = args.get("--store") or False
 
     docker_insecure_registry = args.get("--insecure-registry")
 
