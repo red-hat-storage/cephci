@@ -161,3 +161,9 @@ tests:
       module: rbd_snapshot_rename_advanced.py
       name: Test Snapshot Rename with clone operations in progress
       polarion-id: CEPH-9836
+
+  - test:
+      desc: Image migration from two different EC pools to EC pool
+      module: rbd_migration_2diff_ec_pool_ec.py
+      name: Test image migration on ecpool with different K_m values
+      polarion-id: CEPH-83573322
