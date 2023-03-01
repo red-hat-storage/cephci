@@ -424,7 +424,7 @@ tests:
   - test:
       name: test sharding on primary
       desc: test_Mbuckets_with_Nobjects_sharding on primary
-      polarion-id: CEPH-9245
+      polarion-id: CEPH-83573597
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
