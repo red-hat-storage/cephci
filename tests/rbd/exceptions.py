@@ -56,3 +56,9 @@ class ImageFoundError(RbdBaseException):
     """Raised when image is found in Trash"""
 
     pass
+
+
+class ImageIsDeletedError(RbdBaseException):
+    """Raised when image is deleted when exclusive image is enabled IO in progress"""
+
+    pass
