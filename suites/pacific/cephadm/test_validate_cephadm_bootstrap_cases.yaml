@@ -1,6 +1,6 @@
 #===============================================================================================
 # Tier-level: 1
-# Test-Suite: test_cephadm_ansible_wrapper.yaml
+# Test-Suite: test_validate_cephadm_bootstrap_cases.yaml
 # Test-Case: Perform cephadm operations using cephadm ansible modules
 #
 # Cluster Configuration:

@@ -2,7 +2,7 @@ import os
 
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.exceptions import ConfigNotFoundError
-from cli.utilities.packages import Rpm
+from cli.utilities.packages import Package, Rpm
 from cli.utilities.utils import (
     get_node_by_id,
     get_node_ip,
@@ -108,6 +108,12 @@ def run(ceph_cluster, **kwargs):
     extra_vars, extra_args = aw.get("extra_vars", {}), aw.get("extra_args")
     module = aw.get("module")
     module_args = aw.get("module_args", {})
+
+    # Check if the scenario includes docker
+    if module_args.get("docker"):
+        extra_vars["docker"] = "true"
+        if not Rpm(installer).query("docker"):
+            Package(nodes).install("docker", nogpgcheck=True)
 
     if module == "cephadm_bootstrap":
         extra_vars["mon_ip"] = get_node_ip(nodes, module_args.get("mon_node"))

@@ -214,3 +214,15 @@ def get_builds_by_rhbuild(rhbuild):
         return match.group(1, 2)
 
     return
+
+
+def verify_execution_status(out, cmd):
+    """
+    Helper method to verify whether the installation or upgrade happened
+    on all the nodes specified
+    """
+    for node, result in out.items():
+        if result != 0:
+            log.error(f"Execution failed for '{cmd}' on '{node}'")
+            return False
+    return True

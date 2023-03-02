@@ -9,6 +9,7 @@
   tasks:
     - name: Bootstrap with dashboard set to `true` without credenatials
       cephadm_bootstrap:
+        docker: "{{ docker | default(False) }}"
         image: "{{ image | default(False) }}"
         mon_ip: "{{ mon_ip }}"
         dashboard: true
