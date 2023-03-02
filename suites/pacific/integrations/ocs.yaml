@@ -94,9 +94,10 @@ tests:
       config:
         command: add
         id: client.1
-        node: node1
+        node: node8
         install_packages:
           - ceph-common
+          - cephadm
         copy_admin_keyring: true
       desc: Configure the ceph client
       destroy-cluster: false
