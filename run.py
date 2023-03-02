@@ -830,6 +830,11 @@ def run(args):
                 docker_tag,
             )
 
+            if custom_config:
+                ibm_build = [c for c in custom_config if "ibm-build=" in c]
+                if ibm_build:
+                    config["ibm_build"] = bool(ibm_build[0].split("=")[1])
+
             config["ceph_docker_registry"] = docker_registry
             report_portal_description += f"docker registry: {docker_registry}"
             config["ceph_docker_image"] = docker_image

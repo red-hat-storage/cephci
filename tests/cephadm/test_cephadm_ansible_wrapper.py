@@ -65,13 +65,16 @@ def setup_cluster(ceph_cluster, config):
     rhbuild = config.get("rhbuild")
     cloud_type = config.get("cloud-type")
     build_type = config.get("build_type")
+    ibm_build = config.get("ibm_build")
 
     if not Rpm(installer).query("cephadm-ansible"):
         SetUpSSHKeys.run(installer, nodes)
         ConfigureCephadmAnsibleNode.run(
-            installer, nodes, build_type, base_url, rhbuild, cloud_type
+            installer, nodes, build_type, base_url, rhbuild, cloud_type, ibm_build
         )
-        ExecutePreflightPlaybook.run(installer, base_url, cloud_type, build_type)
+        ExecutePreflightPlaybook.run(
+            installer, base_url, cloud_type, build_type, ibm_build
+        )
 
 
 def validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args):
