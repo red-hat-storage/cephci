@@ -75,7 +75,7 @@ globals:
           - client
       node10:
         image-name:
-          openstack: rhel-7.9-server-x86_64-released
+          openstack: RHEL-7.9-x86_64-ga-latest
           ibmc: rhel-server-79-x86-64-kvm
         networks:
           - provider_net_cci_9
