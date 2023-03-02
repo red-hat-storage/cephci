@@ -296,6 +296,10 @@ class RbdMirror:
         log.debug(
             f"Config Recieved for initial mirror config: poolname:{poolname}, imagename:{imagename}\nkw:{kw}"
         )
+        if kw["mirrormode"] == "snapshot" and kw["mode"] == "pool":
+            log.error("Invalid scenario for configuring mirror")
+            return 1
+
         imagespec = poolname + "/" + imagename
         imagesize = kw.get("imagesize")
         io = kw.get("io_total")
@@ -304,11 +308,14 @@ class RbdMirror:
             p.spawn(mirror2.create_pool, poolname=poolname)
 
         self.create_image(imagespec=imagespec, size=imagesize)
-        if kw.get("mirrormode") != "snapshot":
+        if kw.get("mirrormode") != "snapshot" and "journaling" not in kw.get(
+            "image_feature"
+        ):
             self.image_feature_enable(imagespec=imagespec, image_feature="journaling")
         if kw.get("image_feature"):
-            image_feature = kw.get("image_feature")
-            self.image_feature_enable(imagespec=imagespec, image_feature=image_feature)
+            self.image_feature_enable(
+                imagespec=imagespec, image_feature=kw["image_feature"]
+            )
 
         if kw.get("mode"):
             kw["peer_mode"] = kw.get("peer_mode", "bootstrap")
@@ -344,13 +351,21 @@ class RbdMirror:
 
     # Wait for required status
     def wait_for_status(self, **kw):
-        # Waiting for cluster to be aware of new event
+        """Wait for cluster to be aware of new event.
+        Args:
+            kw:
+            poolname: Name of the pool
+            imagespec: Image specification of the image of which status needs to be checked
+            state_pattern: Required mirror image state
+            description_pattern: Required mirror image description
+            retry_interval: sleep duration in between retries.
+        """
         starttime = datetime.datetime.now()
         if kw.get("tout"):
             tout = kw.get("tout")
         else:
             tout = datetime.timedelta(seconds=1200)
-        time.sleep(20)
+        time.sleep(kw.get("retry_interval", 20))
         while True:
             if kw.get("poolname", False):
                 if kw.get("health_pattern"):
@@ -384,28 +399,34 @@ class RbdMirror:
                     if kw.get("images_pattern") == num_image:
                         return 0
             else:
-                if kw.get("state_pattern"):
-                    out = self.mirror_status("image", kw.get("imagespec"), "state")
-                    log.info(
-                        "State of {} image in {} cluster: {}".format(
-                            kw.get("imagespec"), self.cluster_name, out
+                try:
+                    if kw.get("state_pattern"):
+                        out = self.mirror_status("image", kw.get("imagespec"), "state")
+                        log.info(
+                            "State of {} image in {} cluster: {}".format(
+                                kw.get("imagespec"), self.cluster_name, out
+                            )
                         )
-                    )
-                    if kw.get("state_pattern") in out:
-                        return 0
-                if kw.get("description_pattern"):
-                    out = self.get_position(
-                        imagespec=kw.get("imagespec"),
-                        pattern=kw.get("description_pattern"),
-                    )
-                    log.info(
-                        "Description of {} image in {} cluster: {}".format(
-                            kw.get("imagespec"), self.cluster_name, out
+                        if kw["state_pattern"] in out:
+                            return 0
+                    if kw.get("description_pattern"):
+                        out = self.get_position(
+                            imagespec=kw.get("imagespec"),
+                            pattern=kw.get("description_pattern"),
                         )
-                    )
-                    return out
+                        log.info(
+                            "Description of {} image in {} cluster: {}".format(
+                                kw.get("imagespec"), self.cluster_name, out
+                            )
+                        )
+                        return out
+                except CommandFailed:
+                    if kw["state_pattern"] == "down+unknown":
+                        continue
+                    else:
+                        raise
             if datetime.datetime.now() - starttime <= tout:
-                time.sleep(20)
+                time.sleep(kw.get("retry_interval", 20))
             else:
                 raise Exception("Required status can not be attained")
 
@@ -614,8 +635,9 @@ class RbdMirror:
             )
         else:
             self.exec_cmd(
-                cmd="rbd bench --io-type write --io-threads 16 --io-total {} {}".format(
-                    kw.get("io", "500M"), kw.get("imagespec")
+                cmd=(
+                    "rbd bench --io-type write --io-threads 16 "
+                    f"--io-total {kw.get('io', '500M')} {kw.get('imagespec')}"
                 ),
                 long_running=True,
             )
@@ -649,11 +671,9 @@ class RbdMirror:
         Args:
             **kw:
                 imagespec: pool/image_name on which image features will enable
-                image_features: comma seperated value for image features
+                image_feature: comma seperated value for image features, default: journaling
         """
-        cmd = "rbd feature enable {} {}".format(
-            kw.get("imagespec"), kw.get("image_feature")
-        )
+        cmd = f"rbd feature enable {kw.get('imagespec')} {kw.get('image_feature')}"
         self.exec_cmd(cmd=cmd)
 
     def image_feature_disable(self, **kw):
@@ -712,6 +732,7 @@ class RbdMirror:
 
     # Mirroring Status
     def mirror_status(self, *args):
+        """Returns pool or image mirror status based on the input."""
         output = self.exec_cmd(
             output=True,
             cmd="rbd mirror {} status {} --format=json".format(args[0], args[1]),
@@ -833,11 +854,11 @@ class RbdMirror:
                 self.delete_pool(poolname=pool)
                 peercluster.delete_pool(poolname=pool)
 
-    def get_rbd_service_name(self, service_name):
+    def get_rbd_service_name(self, service_name="rbd-mirror"):
         """
         Gets the rbd mirror service name where the rbd mirror daemon running
         Args:
-            service_name:
+            service_name: By default it would be "rbd-mirror"
 
         Returns:
             service_name --> str
@@ -859,6 +880,9 @@ class RbdMirror:
         Returns:
             None
         """
+        if not service_name:
+            service_name = self.get_rbd_service_name()
+
         log.info(f"{operation}ing the service : {service_name} ")
         self.ceph_rbdmirror.exec_command(
             sudo=True, cmd=f"systemctl {operation} {service_name}"
@@ -1069,7 +1093,7 @@ def rbd_mirror_config(**kw):
             kw["config"]["rep_pool_config"]["io_total"] = kw["config"][
                 "rep_pool_config"
             ].get("io_total", "1G")
-            kw["config"]["ec_pool_config"]["mode"] = kw["config"][
+            kw["config"]["rep_pool_config"]["mode"] = kw["config"][
                 "rep_pool_config"
             ].get("mode", "pool")
 
