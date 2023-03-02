@@ -129,6 +129,14 @@ tests:
       polarion-id: CEPH-11413
 
   - test:
+      desc: verify for parent image deletion after flattening the clone and removing snap
+      config:
+        io-total: 5G
+      module: rbd_clone_delete_parent_image.py
+      name: Test for parent image deletion after flattening the clone and removing snap
+      polarion-id: CEPH-11409
+
+  - test:
       desc: Rename image snapshots on an image on replicated and ecpools and its clones
       module: rbd_snapshot_rename.py
       name: Test Snapshot Rename functionality

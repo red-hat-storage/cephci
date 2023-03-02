@@ -176,7 +176,7 @@ class Rbd:
 
             log.info(
                 f"Pool '{pool_name}' not populated yet.\n"
-                f"Waitinig for {interval} seconds and retrying"
+                f"Waiting for {interval} seconds and retrying"
             )
 
         if w.expired:
@@ -276,7 +276,7 @@ class Rbd:
             log.error(f"Snapshot rename verification failed for {current_snap_name}")
             return 1
 
-    def snap_remove(self, pool_name, image_name, snap_name):
+    def snap_remove(self, pool_name, image_name, snap_name, **kw):
         """
         Removes a snap of an image in a specified pool name and image name
         Args:
@@ -284,8 +284,10 @@ class Rbd:
             image_name : name of the image file to be imported as
             snap_name  : name of the snapshot
         """
-
-        cmd = f"rbd snap rm {pool_name}/{image_name}@{snap_name}"
+        if kw.get("image_id"):
+            cmd = f"rbd snap rm --image-id {kw['image_id']} --pool {pool_name} --snap {snap_name}"
+        else:
+            cmd = f"rbd snap rm {pool_name}/{image_name}@{snap_name}"
         return self.exec_cmd(cmd=cmd)
 
     def protect_snapshot(self, snap_name):
@@ -343,11 +345,15 @@ class Rbd:
         Args:
             pool_name: name of the pool
             image_name: name of the image
-
-        Returns:
-
         """
-        return self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}")
+        log.info("removing image")
+        cmd = f"rbd rm {pool_name}/{image_name}"
+        rc = self.exec_cmd(cmd=cmd)
+        if rc:
+            log.error(f"Error while removing image {image_name}")
+            return rc
+        log.info(f"Removing image {image_name} is successful")
+        return rc
 
     def move_image(self, image_spec, image_spec_new):
         """
@@ -421,13 +427,19 @@ class Rbd:
         """
         return self.exec_cmd(cmd=f"rbd snap rollback {snap_spec}")
 
-    def unprotect_snapshot(self, snap_name):
+    def unprotect_snapshot(self, snap_name, **kw):
         """
         UnProtects the provided snapshot
         Args:
-            snap_name : snapshot name in pool/image@snap format
+            kw :
+                snap_name : in pool/image@snap format or just snap name
+                image_id : unique id of an image in trash
+                pool : name of the pool where the snap is present
         """
-        cmd = f"rbd snap unprotect {snap_name}"
+        if kw.get("image_id"):
+            cmd = f"rbd snap unprotect --image-id {kw['image_id']} --pool {kw.get('pool')} --snap {snap_name}"
+        else:
+            cmd = f"rbd snap unprotect {snap_name}"
         return self.exec_cmd(cmd=cmd)
 
     def image_exists(self, pool_name, image_name):
