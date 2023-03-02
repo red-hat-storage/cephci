@@ -372,7 +372,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
       module: sanity_rgw_multisite.py
@@ -385,7 +384,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
-            verify-io-on-site: ["ceph-pri"]
             timeout: 300
       desc: test_sse_s3_per_bucket_encryption_version_enabled
       module: sanity_rgw_multisite.py
@@ -398,7 +396,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
-            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: test_sse_s3_per_object_with_versioning
       module: sanity_rgw_multisite.py
@@ -411,7 +408,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_per_object_versioninig_enabled.yaml
-            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: test_sse_kms_per_object_with_versioning
       module: sanity_rgw_multisite.py
@@ -424,7 +420,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_per_bucket_encryption_version_enabled.yaml
-            verify-io-on-site: ["ceph-sec"]
             timeout: 300
       desc: test_sse_kms_per_bucket_with_versioning
       module: sanity_rgw_multisite.py
