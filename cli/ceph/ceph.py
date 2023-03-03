@@ -37,3 +37,11 @@ class Ceph(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def insights(self):
+        """Returns ceph insights"""
+        cmd = f"{self.base_cmd} insights"
+        out = self.execute(sudo=True, check_ec=False, long_running=False, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
