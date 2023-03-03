@@ -192,6 +192,6 @@ node('ceph-qe-ci || rhel-9-medium') {
         if (currentBuild.result != "SUCCESS") {
             subject += "\n${currentBuild.result} Reason: ${failureReason}"
         }
-        googlechatnotification(url: "id:rhcephCIGChatRoom", message: msg)
+        googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
     }
 }
