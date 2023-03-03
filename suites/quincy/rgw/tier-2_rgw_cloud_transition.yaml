@@ -164,7 +164,7 @@ tests:
             timeout: 500
       desc: test clould transition basic workflow
       module: sanity_rgw.py
-      name: Test cloud transition
+      name: Test cloud transition retain headobject
       polarion-id: CEPH-83575276
 
   - test:
@@ -190,5 +190,17 @@ tests:
             timeout: 500
       desc: test clould transition basic workflow
       module: sanity_rgw.py
-      name: Test cloud transition
+      name: Test cloud transition no retain headobject
       polarion-id: CEPH-83575278
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_multipart.yaml
+            timeout: 500
+      desc: test clould transition basic workflow
+      module: sanity_rgw.py
+      name: Test cloud transition multipart upload
+      polarion-id: CEPH-83575283
