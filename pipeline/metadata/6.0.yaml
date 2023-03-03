@@ -389,6 +389,26 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - cephfs
+        - name: "test-kafka-ssl-bucket-notifications"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-ssl.yaml"
+          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-kafka-sasl-sanity-bucket-notifications"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-sasl-sanity.yaml"
+          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
   schedule:
     tier-1:
       stage-1:
@@ -570,6 +590,16 @@ pipelines:
           execution_time: "52m 12s"
           suite: "suites/quincy/rgw/tier-2_rgw_test_bucket_notifications.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-kafka-sasl-scheduled-bucket-notifications"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-sasl-scheduled.yaml"
+          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"

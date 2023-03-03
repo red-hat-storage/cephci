@@ -50,7 +50,11 @@ import yaml
 
 from utility import utils
 from utility.log import Log
-from utility.utils import install_start_kafka, setup_cluster_access
+from utility.utils import (
+    configure_kafka_security,
+    install_start_kafka,
+    setup_cluster_access,
+)
 
 log = Log(__name__)
 
@@ -82,6 +86,7 @@ def run(ceph_cluster, **kw):
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
     install_start_kafka_broker = config.get("install_start_kafka")
+    configure_kafka_broker_security = config.get("configure_kafka_security")
     cloud_type = config.get("cloud-type")
     test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
@@ -113,9 +118,6 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
         )
 
-    if install_start_kafka_broker:
-        install_start_kafka(rgw_node, cloud_type)
-
     log.info("Flushing iptables")
     exec_from.exec_command(cmd="sudo iptables -F", check_ec=False)
     config["git-url"] = config.get(
@@ -146,8 +148,13 @@ def run(ceph_cluster, **kw):
                     cmd="yum install -y ceph-common --nogpgcheck",
                     check_ec=False,
                 )
-    out, err = exec_from.exec_command(cmd="ls -l venv", check_ec=False)
 
+    if install_start_kafka_broker:
+        install_start_kafka(rgw_node, cloud_type)
+    if configure_kafka_broker_security:
+        configure_kafka_security(rgw_node)
+
+    out, err = exec_from.exec_command(cmd="ls -l venv", check_ec=False)
     if not out:
         exec_from.exec_command(
             cmd="yum install python3 -y --nogpgcheck", check_ec=False, sudo=True
