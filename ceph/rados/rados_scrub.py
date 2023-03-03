@@ -88,23 +88,26 @@ class RadosScrubber(RadosOrchestrator):
         else:
             return pgDump
 
-    def verify_scrub(self, before_scrub_data, after_scrub_data):
+    def verify_scrub_deepscrub(self, before_scrub_data, after_scrub_data, flag):
         """
-        Used to validate the scrubbing done or not
+        Used to validate the scrubbing and deep scrubbing done or not
 
         Args:
             1.before_scrub_data - It is dictionary which conatin the
               pgId and last scrub time data before scrubbing.
             2.after_scrub_data - It is a dictionary that conatins the
               PDId and lst surb time data after scrubbing.
+            3.flag - scrub or deep-scrub
         Return: 0 for Pass or 1 for Failure
         """
+        if flag == "scrub":
+            stamp = "last_scrub_stamp"
+        else:
+            stamp = "last_deep_scrub_stamp"
         before_scrub_log = dict(
-            zip(before_scrub_data["pgid"], before_scrub_data["last_scrub_stamp"])
+            zip(before_scrub_data["pgid"], before_scrub_data[stamp])
         )
-        after_scrub_log = dict(
-            zip(after_scrub_data["pgid"], after_scrub_data["last_scrub_stamp"])
-        )
+        after_scrub_log = dict(zip(after_scrub_data["pgid"], after_scrub_data[stamp]))
 
         number_of_pgs = len(before_scrub_log.keys())
         count_pg = 0
