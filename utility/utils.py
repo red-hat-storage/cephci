@@ -1329,15 +1329,21 @@ def install_start_kafka(rgw_node, cloud_type):
     time.sleep(30)
 
 
-def configure_kafka_security(rgw_node):
+def configure_kafka_security(rgw_node, cloud_type):
     """Configure kafka security and restart zookeeper and kafka services."""
     KAFKA_HOME = "/usr/local/kafka"
 
     # append security types configuration into server.properties
+    if cloud_type == "ibmc":
+        curl_server_properties = "curl -o /tmp/kafka_server.properties https://10.245.4.89/kafka_server.properties"
+    else:
+        curl_server_properties = (
+            "curl -o /tmp/kafka_server.properties http://magna002.ceph.redhat.com/cephci-jenkins"
+            + "/kafka_server.properties"
+        )
     rgw_node.exec_command(
         sudo=True,
-        cmd="curl -o /tmp/kafka_server.properties http://magna002.ceph.redhat.com/cephci-jenkins"
-        + "/kafka_server.properties",
+        cmd=curl_server_properties,
     )
     rgw_node.exec_command(
         sudo=True,
@@ -1345,9 +1351,18 @@ def configure_kafka_security(rgw_node):
     )
 
     # download kafka_security.sh script, create certs and and store them in keystore and truststore
+    if cloud_type == "ibmc":
+        curl_security_sh = (
+            "curl -o /tmp/kafka-security.sh https://10.245.4.89/kafka-security.sh"
+        )
+    else:
+        curl_security_sh = (
+            "curl -o /tmp/kafka-security.sh http://magna002.ceph.redhat.com/cephci-jenkins"
+            + "/kafka-security.sh"
+        )
     rgw_node.exec_command(
         sudo=True,
-        cmd="curl -o /tmp/kafka-security.sh http://magna002.ceph.redhat.com/cephci-jenkins/kafka-security.sh",
+        cmd=curl_security_sh,
     )
     status = rgw_node.exec_command(
         sudo=True,
