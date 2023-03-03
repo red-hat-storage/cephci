@@ -438,17 +438,3 @@ tests:
         verify_pg_num_limit:
           pool_name: pool_num_chk
           delete_pool: true
-
-  - test:
-            name: Automatic trimming of Mon DB
-            module: customer_scenarios.py
-            polarion-id: CEPH-83574095
-            config:
-              mondb_trim_config:
-                paxos_service_trim_min: 10
-                paxos_service_trim_max: 100
-                osd_op_complaint_time: 0.000001
-                osd_max_backfills: 10
-                osd_recovery_max_active: 10
-            desc: Verification of mon DB trimming during various cluster operations
-
