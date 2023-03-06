@@ -89,6 +89,7 @@ tests:
   - test:
       name: notify on multipart upload events with kafka_broker_persistent
       desc: notify on multipart upload events with kafka_broker_persistent
+      comments: Known issue BZ-2149259
       polarion-id: CEPH-83574066
       module: sanity_rgw.py
       config:
@@ -194,6 +195,7 @@ tests:
   - test:
       name: notify on multipart upload events with kafka_broker
       desc: notify on multipart upload events with kafka_broker
+      comments: Known issue BZ-2149259
       polarion-id: CEPH-83574069
       module: sanity_rgw.py
       config:
