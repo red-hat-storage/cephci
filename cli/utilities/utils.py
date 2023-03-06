@@ -1,6 +1,7 @@
 import os
 import re
 
+from ceph.waiter import WaitUntil
 from utility.log import Log
 
 log = Log(__name__)
@@ -228,4 +229,94 @@ def verify_execution_status(out, cmd):
         if result != 0:
             log.error(f"Execution failed for '{cmd}' on '{node}'")
             return False
+    return True
+
+
+def set_selinux_mode(nodes, enforcing_mode):
+    """
+    Sets the selinux mode to the specified value and validate whether the selinux mode is set
+    Args:
+        nodes (ceph): ceph node objects
+        enforcing_mode (str): enforcing/permissive
+    """
+    if enforcing_mode == "permissive":
+        mode = "0"
+    elif enforcing_mode == "enforcing":
+        mode = "1"
+    else:
+        log.error(
+            f"Only permissive and enforcing modes accepted, given {enforcing_mode}"
+        )
+        return False
+
+    # Set selinux to the given mode
+    for node in nodes:
+        _, err = node.exec_command(cmd=f"setenforce {mode}", sudo=True)
+        if err:
+            log.error(
+                f"Failed to set selinux mode to {enforcing_mode} on {node.hostname}"
+            )
+            return False
+
+    # Verify the selinux mode is as expected
+    for node in nodes:
+        out, _ = node.exec_command(cmd="getenforce")
+        if str(out.strip()).lower() != enforcing_mode:
+            log.error(f"Setenforce failed on {node.hostname}")
+            return False
+
+    return True
+
+
+def reboot_node(node):
+    """
+    Reboots a given node and waits till the reboot complete
+    Args:
+        node (ceph): Node to reboot
+
+    Returns (bool): Based on reboot status
+    """
+    reboot_cmd = "sleep 3; /sbin/shutdown -r now 'Reboot triggered by CephCI'"
+    node.exec_command(sudo=True, cmd=reboot_cmd, check_ec=False)
+    # If service was removed, wait for a timeout to check whether its removed
+    timeout, interval = 300, 10
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        try:
+            node.reconnect()
+            log.info(f"Node {node.hostname} reconnected after reboot")
+            return True
+        except Exception:
+            log.warning(f"Node {node.hostname} is not back after reboot")
+    if w.expired:
+        return False
+
+
+def get_service_id(node, service_name):
+    """
+    Returns the service id of a given service
+    Args:
+        node (ceph): Node to execute the cmd
+        service_name: Service name
+
+    Returns (str): Service ID
+    """
+    out, err = node.exec_command(cmd=f"systemctl --type=service | grep {service_name}")
+    if err:
+        return None
+    return out.split(" ")[0]
+
+
+def set_service_state(node, service_id, state):
+    """
+    Sets the service to given state using systemctl
+    Args:
+        node (ceph): Node to execute the cmd
+        service_id: Service id
+        state: state [start /stop/ restart]
+
+    Returns (str): Service ID
+    """
+    _, err = node.exec_command(cmd=f"systemctl {state} {service_id}", sudo=True)
+    if err:
+        return False
     return True

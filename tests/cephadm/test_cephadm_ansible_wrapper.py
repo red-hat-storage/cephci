@@ -7,6 +7,7 @@ from cli.utilities.utils import (
     get_node_by_id,
     get_node_ip,
     put_cephadm_ansible_playbook,
+    set_selinux_mode,
 )
 from utility.install_prereq import (
     ConfigureCephadmAnsibleNode,
@@ -15,6 +16,10 @@ from utility.install_prereq import (
     SetUpSSHKeys,
 )
 from utility.utils import get_cephci_config
+
+
+class ClusterConfigurationFailure(Exception):
+    pass
 
 
 def validate_configs(config):
@@ -111,6 +116,12 @@ def run(ceph_cluster, **kwargs):
     extra_vars, extra_args = aw.get("extra_vars", {}), aw.get("extra_args")
     module = aw.get("module")
     module_args = aw.get("module_args", {})
+
+    # Check if selinux mode has to be changed
+    selinux_mode = module_args.get("selinux")
+    if selinux_mode:
+        if not set_selinux_mode(nodes, selinux_mode):
+            raise ClusterConfigurationFailure("Failed to set Selinux to specified mode")
 
     # Check if the scenario includes docker
     if module_args.get("docker"):
