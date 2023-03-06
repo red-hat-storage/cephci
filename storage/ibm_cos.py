@@ -35,6 +35,7 @@ import logging
 import ibm_boto3
 from ibm_botocore.client import ClientError, Config
 
+from storage.ibm_cos_awscli import CloudObjectStorageAWS
 from utility.utils import get_cephci_config
 
 LOG = logging.getLogger(__name__)
@@ -229,7 +230,9 @@ class CloudObjectStorage:
         except BaseException as be:
             # COS-Aspera package is unavailable in Python 3.7
             LOG.debug(be)
-            raise NotImplementedError("Method is unsupported in this platform.")
+            cos_v1 = CloudObjectStorageAWS()
+            cos_v1.upload_directory(bucket_name, local_dir, object_prefix)
+            return
 
         with AsperaTransferManager(client=self.client) as _mgr:
             future = _mgr.upload_directory(local_dir, bucket_name, object_prefix)

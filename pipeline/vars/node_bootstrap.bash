@@ -30,6 +30,9 @@ if [ ${1:-0} -ne 1 ]; then
     sudo yum install -y wget python3
     # Copy the config from internal file server to the Jenkins user home directory
     wget http://magna002.ceph.redhat.com/cephci-jenkins/.cephci.yaml -O ${HOME}/.cephci.yaml
+    sudo mkdir -p /root/.aws
+    sudo wget http://magna002.ceph.redhat.com/cephci-jenkins/.ibm-cos-aws.conf -O /root/.aws/credentials
+
 
     # Install cephci prerequisites
     rm -rf .venv
@@ -53,6 +56,7 @@ if [ ${1:-0} -eq 3 ]; then
     curl https://rclone.org/install.sh | sudo bash || echo 0
     mkdir -p ${HOME}/.config/rclone
     wget http://magna002.ceph.redhat.com/cephci-jenkins/.ibm-cos.conf -O ${HOME}/.config/rclone/rclone.conf
+
 fi
 
 echo "Done bootstrapping the Jenkins node."
