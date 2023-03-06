@@ -1,0 +1,123 @@
+---
+# ==================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephadm_scenarios_with_permissive_mode.yaml
+# Cluster Configuration:
+#    conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+# Test Scenarios:
+#   Bootstap a cluster with selinux set to Permissive mode
+#   Add OSD nodes
+#   Check cluster status when nodes are performed with reboot/powercycle
+#   Check cluster status when daemon services are started/restart/stop with systemctl
+# ==================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster with selinux set to Permissive
+      desc: Execute 'playbooks/bootstrap-cluster.yaml' playbook
+      polarion-id: CEPH-83573579
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "cephadm_bootstrap"
+          playbook: playbooks/bootstrap-cluster.yml
+          module_args:
+            mon_node: node1
+            selinux: permissive  # permissive or enforcing
+  - test:
+      name: Add host with labels to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/add-host-to-cluster.yaml' playbook
+      polarion-id: CEPH-83575203
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_host"
+          playbook: playbooks/add-host-to-cluster.yaml
+          module_args:
+            host: node2
+            label: osd.1
+
+  - test:
+      name: Deploy OSD service to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/deploy-osd-service.yml' playbook
+      polarion-id: CEPH-83575213
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_apply"
+          playbook: playbooks/deploy-osd-service.yml
+          module_args:
+            node: node2
+            label: osd.1
+  - test:
+      name: Add host with labels to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/add-host-to-cluster.yaml' playbook
+      polarion-id: CEPH-83575203
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_host"
+          playbook: playbooks/add-host-to-cluster.yaml
+          module_args:
+            host: node3
+            label: osd.2
+
+  - test:
+      name: Deploy OSD service to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/deploy-osd-service.yml' playbook
+      polarion-id: CEPH-83575213
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_apply"
+          playbook: playbooks/deploy-osd-service.yml
+          module_args:
+            node: node3
+            label: osd.2
+
+  - test:
+      name: Add host with labels to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/add-host-to-cluster.yaml' playbook
+      polarion-id: CEPH-83575203
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_host"
+          playbook: playbooks/add-host-to-cluster.yaml
+          module_args:
+            host: node4
+            label: osd.3
+
+  - test:
+      name: Deploy OSD service to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/deploy-osd-service.yml' playbook
+      polarion-id: CEPH-83575213
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_orch_apply"
+          playbook: playbooks/deploy-osd-service.yml
+          module_args:
+            node: node4
+            label: osd.3
+
+  - test:
+      name: Check cluster status when nodes are performed with reboot
+      desc: Perform reboot and check ceph status
+      polarion-id: CEPH-83573754
+      module: test_verify_cluster_health_after_reboot.py
+      config:
+        action: node-reboot
+
+  - test:
+      name: Check cluster status when daemon services are started restart stop with systemctl
+      desc: Verify systemctl ops of services
+      polarion-id: CEPH-83573755
+      module: test_verify_cluster_health_after_reboot.py
+      config:
+        action: service-state
