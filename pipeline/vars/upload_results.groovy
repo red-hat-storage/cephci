@@ -1,3 +1,5 @@
+import groovy.json.JsonOutput
+
 /* Library module that contains methods to upload results to magna and report portal. */
 
 def configureRpPreProc(
@@ -40,26 +42,20 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
     println("Inside uploadTestResults")
     def credFile = "${sourceDir}/config.json"
 
-    def suitesWithStatus = [:]
-    runProperties['results'].each{suiteName, suiteStatus->
-        suitesWithStatus[suiteName] = suiteStatus['status']
-    }
-
     // Configure rp_preproc launch
     def prefix = (runType == "upstream")? "Upstream " : ""
     def rhcs = (runType == "upstream")? runProperties["version"] : runProperties["version"].split('-')[1]
     def launchConfig = [
-        "name": "${prefix}${runProperties['version']} - ${runProperties['stage']}",
+        "name": "${prefix}${runProperties['version']}",
         "description": "Test executed on ${runProperties['date']}",
         "attributes": [
             "ceph_version": runProperties["ceph_version"],
-            "rhcs": rhcs,
-            "tier": runProperties["stage"],
-            "suites": suitesWithStatus,
+            "rhceph": rhcs,
+            "build_type": runType
         ]
     ]
     if ( stageLevel && runType != "upstream") {
-        launchConfig["name"] = runType.split(" ")[0] + " " + launchConfig["name"] + " " + stageLevel
+        launchConfig["name"] = runType + " " + launchConfig["name"] + " " + runProperties["ceph_version"]
     }
     credPreproc["reportportal"]["launch"] = launchConfig
     writeJSON file: credFile, json: credPreproc
@@ -95,6 +91,52 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
 	}
 }
 
+def getRPLaunches(def sourceDir, def credPreproc, def runProperties, def runType=null) {
+    /*
+        get launches from report portal based on query parameters
+
+        Args:
+            sourceDir       Working directory containing payload
+            credPreproc     rp_preproc creds
+            runProperties   Metadata information about the launch.
+    */
+    println("Inside getRPLaunches")
+    def credFile = "${sourceDir}/config.json"
+    def attributesFile = "${sourceDir}/attributes.json"
+
+    def rhcs = (runType == "upstream")? runProperties["version"] : runProperties["version"].split('-')[1]
+    writeJSON file: credFile, json: credPreproc
+
+    attributes = [
+        "ceph_version": runProperties["ceph_version"],
+        "rhceph": rhcs,
+        "build_type": runType
+    ]
+    def json = JsonOutput.toJson(attributes)
+    json = JsonOutput.prettyPrint(json)
+    writeJSON file: attributesFile, json: json
+    rp_launches = sh(returnStdout: true, script: ".venv/bin/python utility/rp_client.py -c ${credFile} --attributes ${attributesFile}")
+    def output = readJSON file: attributesFile
+    return output['launches']
+}
+
+def mergeRPLaunches(def sourceDir, def credPreproc, def runProperties, def launchFile, def runType=null) {
+    /*
+        merge report portal launches
+        Args:
+            sourceDir       Working directory containing payload
+            credPreproc     rp_preproc creds
+            runProperties   Metadata information about the launch.
+    */
+    println("Inside mergeRPLaunches")
+    def credFile = "${sourceDir}/config.json"
+    println("credPreproc in mergeRPLaunches : ${credPreproc}")
+    writeJSON file: credFile, json: credPreproc
+    rp_launches = sh(returnStdout: true, script: ".venv/bin/python utility/rp_client.py -c ${credFile} --merge ${launchFile}")
+    def output = readJSON file: launchFile
+    return output['mergedLaunch']
+}
+
 def fetchTestItemIdForLaunch(
     def launchId, def rp_base_link, def sourceDir, def credPreproc, def runProperties, def stageLevel=null, def runType=null) {
     /*
@@ -110,24 +152,20 @@ def fetchTestItemIdForLaunch(
     def credFile = "${sourceDir}/config.json"
     def outFile = "${sourceDir}/output.json"
 
-    def suitesWithStatus = [:]
-    runProperties['results'].each{suiteName, suiteStatus->
-        suitesWithStatus[suiteName] = suiteStatus['status']
-    }
-
     // Configure rp_preproc launch
+    def prefix = (runType == "upstream")? "Upstream " : ""
+    def rhcs = (runType == "upstream")? runProperties["version"] : runProperties["version"].split('-')[1]
     def launchConfig = [
-        "name": "${runProperties['version']} - ${runProperties['stage']}",
+        "name": "${prefix}${runProperties['version']}",
         "description": "Test executed on ${runProperties['date']}",
         "attributes": [
             "ceph_version": runProperties["ceph_version"],
-            "rhcs": runProperties["version"].split('-')[1],
-            "tier": runProperties["stage"],
-            "suites": suitesWithStatus,
+            "rhceph": rhcs,
+            "build_type": runType
         ]
     ]
-    if ( stageLevel ) {
-        launchConfig["name"] = runType.split(" ")[0] + " " + launchConfig["name"] + " " + stageLevel
+    if ( stageLevel && runType != "upstream") {
+        launchConfig["name"] = runType + " " + launchConfig["name"] + " " + runProperties["ceph_version"]
     }
     credPreproc["reportportal"]["launch"] = launchConfig
 
@@ -186,6 +224,27 @@ def writeToResultsFile(
     } catch(Exception exc) {
         println "Encountered a failure during updating results to results file."
         println exc
+    }
+}
+
+def updateResultsFile(def sourceDir, def ceph_version, def run_type, def rp_link) {
+    def type = run_type.replaceAll(" ", "_")
+    println("type in groovy -- ${type}")
+
+    linkAttributes = [
+        "rp_link": rp_link,
+        "build_type": type
+    ]
+    def resultsJson1 = writeJSON returnText: true, json: linkAttributes
+
+    try {
+        def cmd = "cd ${env.WORKSPACE}/pipeline/scripts/ci;"
+        cmd = "${cmd} sudo ${env.WORKSPACE}/.venv/bin/python update_results.py"
+        cmd = "${cmd} --cephVersion ${ceph_version} --rpLink '${resultsJson1}'"
+        sh (returnStdout: false, script: cmd)
+    } catch(Exception err) {
+        println err.getMessage()
+        error "Encountered an error during writing of results."
     }
 }
 

@@ -1,3 +1,5 @@
+import groovy.json.JsonOutput
+
 // Pipeline script for uploading IBM test run results to report portal.
 def credsRpProc = [:]
 def sharedLib
@@ -170,6 +172,55 @@ node("rhel-8-medium") {
                 }
             }
 
+            stage('updateResultsFile'){
+                println("Stage updateResultsFile")
+                if (composeInfo != null){
+                    println("Fetching rp_launch_details")
+                    def rp_launch_details = [:]
+                    if (launch_id){
+                        sh "sleep 60"
+                        rp_launch_details = reportLib.fetchTestItemIdForLaunch(
+                            launch_id,
+                            rp_base_link,
+                            rpPreprocDir,
+                            credsRpProc,
+                            metaData,
+                            stageLevel,
+                            run_type
+                        )
+                    }
+                    reportLib.writeToResultsFile(
+                        msgMap["artifact"]["version"],
+                        run_type,
+                        tierLevel,
+                        stageLevel,
+                        metaData['results'],
+                        msgMap['run']['url'],
+                        metaData['rp_link'],
+                        rp_launch_details
+                    )
+                }
+            }
+
+            stage('getAndMergeReportPortalLaunches'){
+                println("Stage getAndMergeReportPortalLaunches")
+                launches = reportLib.getRPLaunches(rpPreprocDir, credsRpProc, metaData, run_type)
+                println("Launches : ${launches}")
+
+                def launchFile = "${rpPreprocDir}/launches.json"
+                launch_json = [
+                    "launch": launches,
+                ]
+                def json = JsonOutput.toJson(launch_json)
+                json = JsonOutput.prettyPrint(json)
+                writeJSON file: launchFile, json: json
+                merged_launch = reportLib.mergeRPLaunches(rpPreprocDir, credsRpProc, metaData, launchFile, run_type)
+                println("Merged_launch : ${merged_launch}")
+                merged_rplink = "${rp_base_link}/ui/#cephci/launches/all/${merged_launch}"
+                println("Merged report portal link : ${merged_rplink}")
+                reportLib.updateResultsFile(rpPreprocDir, msgMap["artifact"]["version"], run_type, merged_rplink)
+            }
+
             stage('notifyTier-0Failure'){
                 println("Stage notifyTier-0Failure")
                 if (msgMap["test"]["result"] == "FAILURE" && tierLevel == "tier-0") {
@@ -220,36 +271,6 @@ node("rhel-8-medium") {
                             majorVersion, minorVersion, latestContent
                         )
                     }
-                }
-            }
-
-            stage('updateResultsFile'){
-                println("Stage updateResultsFile")
-                if (composeInfo != null){
-                    println("Fetching rp_launch_details")
-                    def rp_launch_details = [:]
-                    if (launch_id){
-                        sh "sleep 60"
-                        rp_launch_details = reportLib.fetchTestItemIdForLaunch(
-                            launch_id,
-                            rp_base_link,
-                            rpPreprocDir,
-                            credsRpProc,
-                            metaData,
-                            stageLevel,
-                            run_type
-                        )
-                    }
-                    reportLib.writeToResultsFile(
-                        msgMap["artifact"]["version"],
-                        run_type,
-                        tierLevel,
-                        stageLevel,
-                        metaData['results'],
-                        msgMap['run']['url'],
-                        metaData['rp_link'],
-                        rp_launch_details
-                    )
                 }
             }
 
