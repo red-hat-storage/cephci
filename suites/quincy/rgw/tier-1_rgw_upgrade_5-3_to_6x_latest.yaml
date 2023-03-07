@@ -166,6 +166,29 @@ tests:
       name: test bucket stats and radoslist
       polarion-id: CEPH-83574480
 
+  # configuring vault agent
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: configure vault agent with transit engine
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+        timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_version_enabled
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test on a versiond bucket
+      polarion-id: CEPH-83574619 # CEPH-83575150
+
   - test:
       name: Upgrade cluster to latest 6.x ceph version
       desc: Upgrade cluster to latest version
@@ -280,3 +303,13 @@ tests:
       module: sanity_rgw.py
       name: test bucket stats and radoslist
       polarion-id: CEPH-83574480
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+        timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_version_enabled
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test on a versiond bucket
+      polarion-id: CEPH-83574619 # CEPH-83575150 #CEPH-83575152
