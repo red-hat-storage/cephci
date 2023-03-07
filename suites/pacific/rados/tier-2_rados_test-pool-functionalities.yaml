@@ -316,3 +316,13 @@ tests:
         Verify_osd_alloc_size:
           allocation_size: 4096
       desc: Verify the minimum allocation size for OSDs along with fragmentation scores.
+
+  - test:
+      name: Verify pool behaviour at min_size
+      module: pool_tests.py
+      polarion-id: CEPH-9167
+      config:
+        Verify_pool_min_size_behaviour:
+          pool_name: test-pool-3
+      desc: Verify that Clients can read and write data into pools with min_size OSDs
+      abort-on-fail: true
