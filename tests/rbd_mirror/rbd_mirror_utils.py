@@ -325,8 +325,8 @@ class RbdMirror:
             self.config_mirror(mirror2, poolname=poolname, **kw)
 
         # Enable image level mirroring only when mode is image type
-        if kw.get("mirrormode") and kw.get("mode") == "image":
-            mirrormode = kw.get("mirrormode")
+        if kw.get("mode") == "image":
+            mirrormode = kw.get("mirrormode", "")
             self.enable_mirror_image(poolname, imagename, mirrormode)
             self.wait_for_status(poolname=poolname, health_pattern="OK")
             mirror2.wait_for_status(poolname=poolname, health_pattern="OK")
@@ -498,7 +498,7 @@ class RbdMirror:
             cmd1 += f" --image {kwargs.get('imagename')}"
         cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else " 1m"
         cmd1 += f" {kwargs.get('starttime')}" if kwargs.get("starttime") else ""
-        self.exec_cmd(cmd=cmd1)
+        return self.exec_cmd(cmd=cmd1)
 
     def verify_snapshot_schedule(self, imagespec, interval=1):
         """
@@ -513,6 +513,9 @@ class RbdMirror:
             output=True, cmd=f"rbd mirror image status {imagespec} --format=json"
         )
         json_dict = json.loads(output)
+        if not json_dict.get("snapshots"):
+            log.error(f"No snapshots present for the given image {imagespec}")
+            return 1
         snapshot_ids = [i["id"] for i in json_dict.get("snapshots")]
         log.info(f"snapshot_ids Before : {snapshot_ids}")
         time.sleep(interval * 120)
@@ -524,7 +527,8 @@ class RbdMirror:
         log.info(f"snapshot_ids After : {snapshot_ids_1}")
         if snapshot_ids != snapshot_ids_1:
             return 0
-        raise Exception("snapshots not generated after the intervel")
+        log.error("snapshots not generated after the intervel")
+        return 1
 
     def mirror_snapshot_schedule_list(self, poolname, **kwargs):
         """
@@ -538,7 +542,7 @@ class RbdMirror:
         cmd1 = f"rbd mirror snapshot schedule list --pool {poolname}"
         if kwargs.get("imagename"):
             cmd1 += f" --image {kwargs.get('imagename')} --format=json --recursive"
-        self.exec_cmd(cmd=cmd1)
+        return self.exec_cmd(cmd=cmd1, output=True)
 
     def mirror_snapshot_schedule_status(self, poolname, **kwargs):
         """
@@ -553,7 +557,7 @@ class RbdMirror:
         cmd1 = f"rbd mirror snapshot schedule status --pool {poolname}"
         if kwargs.get("imagename"):
             cmd1 += f" --image {kwargs.get('imagename')} --format=json"
-        self.exec_cmd(cmd=cmd1)
+        return self.exec_cmd(cmd=cmd1, output=True)
 
     def mirror_snapshot_schedule_remove(self, **kwargs):
         """
@@ -573,7 +577,7 @@ class RbdMirror:
             cmd1 += f" --image {kwargs.get('imagename')}"
         cmd1 += f" {kwargs.get('interval')}" if kwargs.get("interval") else ""
         cmd1 += f" {kwargs.get('starttime')}" if kwargs.get("starttime") else ""
-        self.exec_cmd(cmd=cmd1)
+        return self.exec_cmd(cmd=cmd1)
 
     def verify_snapshot_schedule_remove(self, **kwargs):
         """
@@ -663,7 +667,7 @@ class RbdMirror:
         )
         if kw.get("datapool", self.datapool):
             cmd = cmd + " --data-pool {}".format(kw.get("datapool", self.datapool))
-        self.exec_cmd(cmd=cmd)
+        return self.exec_cmd(cmd=cmd)
 
     def image_feature_enable(self, **kw):
         """
@@ -840,7 +844,7 @@ class RbdMirror:
         Returns:
 
         """
-        self.exec_cmd(cmd=f"rbd mirror image enable {poolname}/{imagename} {mode}")
+        return self.exec_cmd(cmd=f"rbd mirror image enable {poolname}/{imagename} {mode}")
 
     def clean_up(self, peercluster, **kw):
         if kw.get("dir_name"):
@@ -1081,6 +1085,10 @@ def rbd_mirror_config(**kw):
             }
         # Create rep pool config with all necessary config when only some are specified
         elif kw.get("config").get("rep_pool_config"):
+            # If mirrormode is snapshot, then by default mode should be image
+            if kw["config"]["rep_pool_config"].get("mirrormode") == "snapshot":
+                kw["config"]["rep_pool_config"]["mode"] = "image"
+
             kw["config"]["rep_pool_config"]["pool"] = kw["config"][
                 "rep_pool_config"
             ].get("pool", "rep_pool_" + rep_mirror1.random_string())
@@ -1136,6 +1144,10 @@ def rbd_mirror_config(**kw):
 
         # Create ec pool config with all necessary config when some ec pool config is specified
         if kw.get("config").get("ec_pool_config"):
+            # If mirrormode is snapshot, then by default mode should be image
+            if kw["config"]["ec_pool_config"].get("mirrormode") == "snapshot":
+                kw["config"]["ec_pool_config"]["mode"] = "image"
+
             kw["config"]["ec_pool_config"]["pool"] = kw["config"]["ec_pool_config"].get(
                 "pool", "ec_img_pool_" + ec_mirror1.random_string()
             )
