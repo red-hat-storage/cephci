@@ -10,6 +10,7 @@ from tests.rbd.exceptions import (
     ImageIsDeletedError,
     ImageNotFoundError,
     ImportFileError,
+    ProtectSnapError,
     RbdBaseException,
 )
 from utility.log import Log
@@ -306,7 +307,14 @@ class Rbd:
             cmd = f"rbd snap rm --image-id {kw['image_id']} --pool {pool_name} --snap {snap_name}"
         else:
             cmd = f"rbd snap rm {pool_name}/{image_name}@{snap_name}"
-        return self.exec_cmd(cmd=cmd)
+        out, err = self.exec_cmd(cmd=cmd, all=True, check_ec=False)
+        if "Removing snap: 0% complete...failed" not in err:
+            log.error(f"{out}")
+            raise ProtectSnapError(f" Removal of protected Snap failed: {out}")
+        log.debug(
+            f"Snapshot '{snap_name}' for image '{image_name}' in pool '{pool_name}' removed successfully: {out}"
+        )
+        log.info(f"{err}")
 
     def protect_snapshot(self, snap_name):
         """

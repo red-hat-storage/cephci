@@ -172,3 +172,15 @@ tests:
       module: rbd_image_Live_migration_rep2Rep.py
       name: Test image migration on replication pool
       polarion-id: CEPH-83573293
+
+  - test:
+      desc: Trying to delete a protected snapshot should fail - negative
+      config:
+        do_not_create_image: True
+        operations:
+          map: true
+          io: true
+          nounmap: true
+      module: rbd_delete_protected_snapshot_krbd.py
+      name: krbd client - Test to Perform Deletion of protected snapshot
+      polarion-id: CEPH-9224
