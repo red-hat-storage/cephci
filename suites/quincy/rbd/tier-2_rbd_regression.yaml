@@ -83,6 +83,22 @@ tests:
       polarion-id: CEPH-9230
 
   - test:
+      desc: Verify Delayed deletion with exclusive feature on RBD image
+      module: rbd_exclusive_lock_rm_image.py
+      config:
+        io-total: 5G
+      name: Verify exclusive lock feature
+      polarion-id: CEPH-11408
+
+  - test:
+      desc: verify for parent image deletion after flattening the clone and removing snap
+      config:
+        io-total: 5G
+      module: rbd_clone_delete_parent_image.py
+      name: Test for parent image deletion after flattening the clone and removing snap
+      polarion-id: CEPH-11409
+
+  - test:
       desc: Verify that clones creation and deletion of parent image with V2 enabled
       destroy-cluster: false
       module: rbd_clonev2.py
@@ -126,14 +142,6 @@ tests:
       module: trash_restore_create_clone_snap.py
       name: Test snap and clone creation on restored image from trash
       polarion-id: CEPH-11413
-
-  - test:
-      desc: verify for parent image deletion after flattening the clone and removing snap
-      config:
-        io-total : 5G
-      module: rbd_clone_delete_parent_image.py
-      name: Test for parent image deletion after flattening the clone and removing snap
-      polarion-id: CEPH-11409
 
   - test:
       desc: Rename image snapshots on an image on replicated and ecpools and its clones

@@ -5,7 +5,7 @@ from time import sleep
 
 from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
-from tests.rbd.exceptions import CreateFileError, ImportFileError
+from tests.rbd.exceptions import CreateFileError, ImageIsDeletedError, ImportFileError
 from utility.log import Log
 
 log = Log(__name__)
@@ -83,6 +83,9 @@ class Rbd:
 
             if kw.get("output", False):
                 return out
+
+            if kw.get("all", False):
+                return out, err
 
             log.info("Command execution complete")
             return 0
@@ -339,21 +342,17 @@ class Rbd:
         log.info(f"flatten completed for image {image_name}")
         return rc
 
-    def remove_image(self, pool_name, image_name):
+    def remove_image(self, pool_name, image_name, **kw):
         """
         Remove image from the specified pool
         Args:
+            kw: remove image config
             pool_name: name of the pool
             image_name: name of the image
+
         """
-        log.info("removing image")
-        cmd = f"rbd rm {pool_name}/{image_name}"
-        rc = self.exec_cmd(cmd=cmd)
-        if rc:
-            log.error(f"Error while removing image {image_name}")
-            return rc
-        log.info(f"Removing image {image_name} is successful")
-        return rc
+        log.info("Removal of image started")
+        return self.exec_cmd(cmd=f"rbd rm {pool_name}/{image_name}", **kw)
 
     def move_image(self, image_spec, image_spec_new):
         """
@@ -716,3 +715,18 @@ def execute_dynamic(rbd, test, results: dict, **kwargs):
         results.update({test: 1})
     else:
         results.update({test: 0})
+
+
+def rbd_remove_image_negative_validate(rbd, pool, image):
+    """
+    This method validate the remove image when exclusive lock is enabled
+    Args:
+        rbd: rbd object
+        pool: pool name
+        image: image name
+    """
+    out, err = rbd.remove_image(pool, image, all=True, check_ec=False)
+    if "rbd: error: image still has watchers" not in err:
+        log.error(f"{out}")
+        raise ImageIsDeletedError(f" RBD image is deleted: {out}")
+    log.info(f"{err}")
