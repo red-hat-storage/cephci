@@ -1099,3 +1099,27 @@ class RadosOrchestrator:
             osd: "osd" service by default or "osd.<Id>"
         """
         return self.node.shell([f"ceph config set {osd} osd_mclock_profile {profile}"])
+
+    def get_cephdf_stats(self, pool_name: str = None) -> dict:
+        """
+        Retrieves and returns the output ceph df command
+        as a dictionary
+        Args:
+            pool_name: name of the pool whose stats are
+            specifically required
+        Returns:  dictionary output of ceph df
+        """
+        cephdf_stats = self.run_ceph_command(cmd="ceph df")
+
+        if pool_name:
+            try:
+                pool_stats = cephdf_stats["pools"]
+                for pool_stat in pool_stats:
+                    if pool_stat.get("name") == pool_name:
+                        return pool_stat
+                raise KeyError
+            except KeyError:
+                log.error(f"{pool_name} not found in ceph df stats")
+                return {}
+
+        return cephdf_stats

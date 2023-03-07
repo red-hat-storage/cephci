@@ -14,6 +14,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
+from tests.rados.test_9281 import do_rados_put
 from utility.log import Log
 from utility.utils import method_should_succeed
 
@@ -451,4 +452,76 @@ def run(ceph_cluster, **kw):
             cmd = f'{"ceph tell mgr config set debug_mgr 2"}'
             rados_obj.run_ceph_command(cmd=cmd)
         log.info(" Verification of pg num checking completed")
+        return 0
+
+    if config.get("verify_cephdf_stats"):
+        """
+        #CEPH-83571666
+        This test is to verify whether ceph df displays the
+        correct number of objects in a pool upon creation
+        and deletion
+        Script cover the following steps-
+            1. Creating a pool with default pg number
+            2. Create 'n' number of objects using rados put
+            3. Verify ceph df stats
+            4. Remove all the objects from the given pool
+            5. Verify ceph df stats updated with 0 objects
+        """
+        ctrlr = ceph_cluster.get_nodes(role="client")[0]
+
+        df_config = config.get("verify_cephdf_stats")
+        pool_name = df_config["pool_name"]
+        obj_nums = df_config["obj_nums"]
+
+        # create pool with given config
+        if df_config["create_pool"]:
+            rados_obj.create_pool(pool_name=pool_name)
+
+        for obj_num in obj_nums:
+            # create 'obj_num' number of objects
+            do_rados_put(mon=ctrlr, pool=pool_name, nobj=obj_num)
+
+            time.sleep(5)  # blind sleep to let all the objs show up in ceph df
+
+            # Verify Ceph df output post object creation
+            try:
+                pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                ceph_df_obj = pool_stat.get("stats")["objects"]
+                if ceph_df_obj == obj_num:
+                    log.info(
+                        f"ceph df stats display correct objects {ceph_df_obj} for {pool_name}"
+                    )
+                else:
+                    log.error(
+                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                    )
+                    return 1
+            except KeyError:
+                log.error("No stats about the pools requested found on the cluster")
+                return 1
+
+            # delete all objects from the pool
+            pool_obj.do_rados_delete(pool_name=pool_name)
+
+            # Verify Ceph df output post objects deletion
+            try:
+                pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                ceph_df_obj = pool_stat.get("stats")["objects"]
+                if ceph_df_obj == 0:
+                    log.info(f"ceph df stats display 0 objects for {pool_name}")
+                else:
+                    log.error(
+                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                    )
+                    return 1
+            except KeyError:
+                log.error("No stats about the pools requested found on the cluster")
+                return 1
+
+            log.info(f"ceph df stats verification completed for {obj_num} objects")
+
+        if df_config.get("delete_pool"):
+            rados_obj.detete_pool(pool=pool_name)
+
+        log.info("ceph df stats verification completed")
         return 0
