@@ -152,7 +152,7 @@ def run(ceph_cluster, **kw):
     if install_start_kafka_broker:
         install_start_kafka(rgw_node, cloud_type)
     if configure_kafka_broker_security:
-        configure_kafka_security(rgw_node)
+        configure_kafka_security(rgw_node, cloud_type)
 
     out, err = exec_from.exec_command(cmd="ls -l venv", check_ec=False)
     if not out:
