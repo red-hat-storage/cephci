@@ -51,16 +51,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "test-rgw-sse-s3-encryption-GA"
-          execution_time: "26m 13s"
-          suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
-          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rgw
         - name: "Basic operation test suite for Cephfs"
           execution_time: "30m 13s"
           suite: "suites/pacific/cephfs/tier-0_fs.yaml"
@@ -389,6 +379,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - cephfs
+      stage-5:
         - name: "test-kafka-ssl-bucket-notifications"
           execution_time: ""
           suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-ssl.yaml"
@@ -403,6 +394,16 @@ pipelines:
           execution_time: ""
           suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-sasl-sanity.yaml"
           global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-rgw-sse-s3-encryption-GA"
+          execution_time: "26m 13s"
+          suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
@@ -731,7 +732,7 @@ pipelines:
           metadata:
             - rgw
   sanity_openstack_only:
-    tier-2:
+    tier-1:
       stage-1:
         - name: "Testing RBD basic regression scenarios"
           execution_time: "36m 36s"
@@ -743,6 +744,8 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rbd
+    tier-2:
+      stage-1:
         - name: "RADOS regression testing for Mon DB trimming"
           execution_time: "1h 18m 55s"
           suite: "suites/quincy/rados/tier-2_rados_test-mon-db-trimming.yaml"
@@ -847,16 +850,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rbd
-        - name: "test-rgw-sse-s3-encryption-GA"
-          execution_time: "26m 13s"
-          suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
-          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rgw
         - name: "Basic operation test suite for Cephfs"
           execution_time: "30m 13s"
           suite: "suites/pacific/cephfs/tier-0_fs.yaml"
@@ -979,6 +972,18 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+    tier-2:
+      stage-1:
+        - name: "test-rgw-sse-s3-encryption-GA"
+          execution_time: "26m 13s"
+          suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
   live:
     tier-0:
       stage-1:
@@ -1014,16 +1019,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rbd
-        - name: "test-rgw-sse-s3-encryption-GA"
-          execution_time: "26m 13s"
-          suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
-          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rgw
         - name: "Basic operation test suite for Cephfs"
           execution_time: "30m 13s"
           suite: "suites/pacific/cephfs/tier-0_fs.yaml"
@@ -1146,4 +1141,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+    tier-2:
+      stage-1:
+        - name: "test-rgw-sse-s3-encryption-GA"
+          execution_time: "26m 13s"
+          suite: "suites/pacific/rgw/tier-2_sse_s3_encryption.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
   stage:
