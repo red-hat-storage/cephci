@@ -744,7 +744,7 @@ tests:
   - test:
       name: Versioning with copy objects and delete with differnt user
       desc: Versioning with copy objects and delete with differnt user
-      polarion-id: CEPH-9353
+      polarion-id: CEPH-9353 # Also applies for CEPH-10215
       module: sanity_rgw.py
       config:
         script-name: test_versioning_copy_objects.py
