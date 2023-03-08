@@ -296,7 +296,7 @@ class RbdMirror:
         log.debug(
             f"Config Recieved for initial mirror config: poolname:{poolname}, imagename:{imagename}\nkw:{kw}"
         )
-        if kw["mirrormode"] == "snapshot" and kw["mode"] == "pool":
+        if kw.get("mirrormode") == "snapshot" and kw.get("mode") == "pool":
             log.error("Invalid scenario for configuring mirror")
             return 1
 
@@ -309,7 +309,7 @@ class RbdMirror:
 
         self.create_image(imagespec=imagespec, size=imagesize)
         if kw.get("mirrormode") != "snapshot" and "journaling" not in kw.get(
-            "image_feature"
+            "image_feature", ""
         ):
             self.image_feature_enable(imagespec=imagespec, image_feature="journaling")
         if kw.get("image_feature"):
@@ -1115,7 +1115,7 @@ def rbd_mirror_config(**kw):
             io_total=kw["config"]["rep_pool_config"]["io_total"],
             mode=kw["config"]["rep_pool_config"]["mode"],
             mirrormode=kw["config"]["rep_pool_config"].get("mirrormode", ""),
-            image_feature=kw["config"]["rep_pool_config"].get("image_feature"),
+            image_feature=kw["config"]["rep_pool_config"].get("image_feature", ""),
             **kw,
         )
 
@@ -1170,7 +1170,7 @@ def rbd_mirror_config(**kw):
             io_total=kw["config"]["ec_pool_config"]["io_total"],
             mode=kw["config"]["ec_pool_config"]["mode"],
             mirrormode=kw["config"]["ec_pool_config"].get("mirrormode", ""),
-            image_feature=kw["config"]["ec_pool_config"].get("image_feature"),
+            image_feature=kw["config"]["ec_pool_config"].get("image_feature", ""),
             **kw,
         )
 
