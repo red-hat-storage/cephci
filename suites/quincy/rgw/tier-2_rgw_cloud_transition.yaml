@@ -152,7 +152,7 @@ tests:
               - "ceph orch restart {service_name:rgw.1}"
       desc: Setting up cloud transition environment
       module: exec.py
-      name: setup multisite
+      name: setup cloud transition
       polarion-id: CEPH-10362
 
   - test:
@@ -178,8 +178,8 @@ tests:
               - "ceph orch restart {service_name:rgw.1}"
       desc: Setting "retain_head_object" to false
       module: exec.py
-      name: setup multisite
-      polarion-id: CEPH-10362
+      name: Modify storage class
+      polarion-id: CEPH-83575279
 
   - test:
       clusters:
@@ -204,3 +204,17 @@ tests:
       module: sanity_rgw.py
       name: Test cloud transition multipart upload
       polarion-id: CEPH-83575283
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zonegroup placement rm --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Zonegroup placement remove
+      module: exec.py
+      name: Remove Cloudtier placement
+      polarion-id: CEPH-83575281
