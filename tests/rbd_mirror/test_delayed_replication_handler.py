@@ -11,15 +11,23 @@ different test case.
 Based on the user config, particular test case will be executed.
 
 1. polarion-id: CEPH-11492 - Delayed Replication-Delay on secondary.
-   config: delay_at_secondary
+   config: delay_at_secondary (bool)
 
    a. Record initial md5sum value of images,
    b. Set delay at secondary site using config rbd_mirroring_replay_delay.
    c. Observe secondary image till mentioned delay that there are no mirroring
       activity between clusters,if nochanged observed,testcase passed.
 
-2. polarion-id: CEPH-11490- Delayed Replication-Failover with delay set.
-   config: direct_failover_with_delay
+2. polarion-id: CEPH-11494 - Delayed Replication-Delay set on primary.
+   config: delay_at_primary (bool)
+
+   a. Record initial md5sum value of images.
+   b. set image metadata at primary of particular images
+      key - conf_rbd_mirroring_replay_delay, value - delay value
+   c. Write some data and make sure that there are no mirroring activity untill desired delay.
+
+3. polarion-id: CEPH-11490- Delayed Replication-Failover with delay set.
+   config: direct_failover_with_delay (bool)
 
    a. Record initial md5sum value of images.
    b. perform force failover operation after some io operation.
@@ -45,6 +53,7 @@ def run(**kw):
     Args:
         kw:
           skip_initial_config: Skip initial config of mirroring.
+          delay_at_primary: Execute delay scenario of per image delay.
           direct_failover_with_delay: Execute failover scenario directly.
           pool_image_config: details of rep_pool_config and ec_pool_config.
           delay: delay duration in seconds (default: 600)
@@ -176,6 +185,16 @@ def run(**kw):
                 "Executing delayed replication scenario when delay configured at secondary"
             )
             config_delay_at_secondary()
+            return write_data_and_verify_no_mirror_till_delay()
+
+        if config.get("delay_at_primary"):
+            for imagespec in imagespecs:
+                rbd1.image_meta(
+                    action="set",
+                    image_spec=imagespec,
+                    key="conf_rbd_mirroring_replay_delay",
+                    value=delay,
+                )
             return write_data_and_verify_no_mirror_till_delay()
 
         if config.get("direct_failover_with_delay"):
