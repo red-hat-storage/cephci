@@ -7,7 +7,7 @@
 */
 def featureCompleteReleases = ['RHCEPH-4.3.yaml', 'RHCEPH-5.3.yaml', 'RHCEPH-6.0.yaml']
 
-node('rhel-8-medium || ceph-qe-ci') {
+node('rhel-9-medium || ceph-qe-ci') {
     stage('prepareNode') {
         checkout(
             scm: [

@@ -15,7 +15,7 @@ def buildArtifacts
 def buildType
 def final_stage = false
 def run_type
-def nodeName = "rhel-8-medium || ceph-qe-ci"
+def nodeName = "rhel-9-medium"
 def tags = ""
 def majorVersion
 def minorVersion
@@ -37,7 +37,7 @@ if (params.containsKey('tags')){
     tags=params.tags
     tags_list = tags.split(',') as List
     if (tags_list.contains('ibmc')){
-        nodeName = "agent-01 || ceph-qe-ci"
+        nodeName = "agent-rhel9"
     }
 }
 
