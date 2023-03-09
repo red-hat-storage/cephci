@@ -346,3 +346,16 @@ tests:
             config-file-name:  test_Mbuckets_with_Nobjects_reshard_cancel_cmd.yaml
             timeout: 300
             verify-io-on-site: ["ceph-pri"]
+
+  - test:
+      name: Test LC Expiration on multisite
+      desc: Test LC Expiration on multisite
+      polarion-id: CEPH-10737
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name:  test_bucket_lifecycle_object_expiration.py
+            config-file-name:  test_lc_rule_prefix_and_tag.yaml
+            timeout: 300
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
