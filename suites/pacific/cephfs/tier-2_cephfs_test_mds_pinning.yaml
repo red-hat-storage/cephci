@@ -95,7 +95,8 @@ tests:
                   label: mds
       destroy-cluster: false
       abort-on-fail: true
-  - test:
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
@@ -104,12 +105,13 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node5
-      desc: Configure the Cephfs client system 1
+        node: node8
+      desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
       module: test_client.py
-      name: configure client
-  - test:
+      name: "configure client"
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
@@ -118,12 +120,13 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node7
-      desc: Configure the Cephfs client system 2
+        node: node9
+      desc: "Configure the Cephfs client system 2"
       destroy-cluster: false
       module: test_client.py
-      name: configure client
-  - test:
+      name: "configure client"
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
@@ -132,12 +135,13 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node8
-      desc: Configure the Cephfs client system 1
+        node: node10
+      desc: "Configure the Cephfs client system 3"
       destroy-cluster: false
       module: test_client.py
-      name: configure client
-  - test:
+      name: "configure client"
+  -
+    test:
       abort-on-fail: true
       config:
         command: add
@@ -146,11 +150,11 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node9
-      desc: Configure the Cephfs client system 2
+        node: node11
+      desc: "Configure the Cephfs client system 4"
       destroy-cluster: false
       module: test_client.py
-      name: configure client
+      name: "configure client"
   - test:
       name: cephfs-mdsfailover-pinning-io
       module: cephfs_mds_pinning.mds_pinning_load_balancing.py
@@ -160,3 +164,14 @@ tests:
       desc: MDSfailover on active-active mdss,performing client IOs with no pinning at
         the first,later pin 10 dirs with IOs
       abort-on-fail: false
+  - test:
+      name: MAX directory pinning test
+      module: cephfs_mds_pinning.mds_pinning_max_dir_pinning.py
+      config:
+          num_of_dirs: 10
+      polarion-id: CEPH-11228
+      desc: MAX directory pinning test
+      abort-on-fail: false
+
+
+
