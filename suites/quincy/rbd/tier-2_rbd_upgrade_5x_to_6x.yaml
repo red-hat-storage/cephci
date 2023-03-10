@@ -207,6 +207,17 @@ tests:
       polarion-id: CEPH-11492
 
   - test:
+      name: Test delayed replication - primary
+      clusters:
+        ceph-rbd1:
+          config:
+            skip_initial_config: true
+            delay_at_primary: true
+      desc: Testing Delayed replication with delay set in primary per image
+      module: test_delayed_replication_handler.py
+      polarion-id: CEPH-11494
+
+  - test:
       name: Test delayed replication - Failover
       clusters:
         ceph-rbd1:
