@@ -1123,3 +1123,19 @@ class RadosOrchestrator:
                 return {}
 
         return cephdf_stats
+
+    def get_pg_state(self, pg_id):
+        """Function to get the current state of a PG for the specified PG ID.
+
+        This method queries the PG to get teh current state of the PG.
+        Example:
+            get_pg_state(pg_id="1.f")
+        Args:
+            pg_id: PG id
+
+        Returns: Pg state as a string of values
+        """
+        cmd = f"ceph pg {pg_id} query"
+        pg_query = self.run_ceph_command(cmd=cmd)
+        log.debug(f"The status of pg : {pg_id} is {pg_query['state']}")
+        return pg_query["state"]
