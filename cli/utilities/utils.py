@@ -1,5 +1,8 @@
 import os
 import re
+from subprocess import PIPE, Popen
+from threading import Thread
+from time import sleep
 
 from ceph.waiter import WaitUntil
 from utility.log import Log
@@ -320,3 +323,53 @@ def set_service_state(node, service_id, state):
     if err:
         return False
     return True
+
+
+def bring_node_offline(node, interface="eth0", timeout=120):
+    """
+    Brings a node offlibe by making network interface down for a defined time
+        Args:
+            node (ceph): Node at which the interface has to be bought down
+            interface (str): Node interface name ens3/eth0 etc.
+            timeout (int): Time duration (in secs) for which network has to
+                           be down
+        Returns (Thread): Thread object, None if failed
+        Example:
+            bring_node_offline(mon_node, installer_node, timout=120)
+    """
+    cmd = f"ifconfig {interface} down;sleep {timeout};ifconfig {interface} up"
+    thread = Thread(target=(lambda: node.exec_command(cmd=cmd, sudo=True)))
+    thread.start()
+
+    # Adding a sleep for network interface update to take place
+    sleep(3)
+
+    if is_node_online(node):
+        log.error(
+            f"{node.hostname} is online even after bringing the n/w interface down"
+        )
+        log.info("Waiting for the interface update command to complete")
+        thread.join()
+        return None
+
+    log.info(f"{node.hostname} is made offline for {timeout} seconds")
+    return thread
+
+
+def is_node_online(node):
+    """
+    Checks whether the given node is online. Uses ping to verify the node status
+    Args:
+        node (ceph): Node to be checked for online/offline status
+
+    Returns (bool): Based on if the node is online or not
+
+    """
+    cmd = ["ping", node.ip_address, "-c1", "-t1 "]
+    ping_proc = Popen(cmd, stdout=PIPE)
+    _, _ = ping_proc.communicate()
+    if not ping_proc.returncode:
+        log.info("{} is UP".format(node.ip_address))
+        return True
+    log.error(f"{node.hostname} is DOWN, Ping failed")
+    return False

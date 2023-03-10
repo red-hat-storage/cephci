@@ -46,9 +46,11 @@ class Ceph(Cli):
             return out[0].strip()
         return out
 
-    def health(self):
+    def health(self, detail=False):
         """Returns the Ceph cluster health"""
         cmd = f"{self.base_cmd} health"
+        if detail:
+            cmd += " detail"
         out = self.execute(sudo=True, check_ec=False, long_running=False, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
