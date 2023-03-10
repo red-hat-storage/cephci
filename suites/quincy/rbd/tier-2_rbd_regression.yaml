@@ -58,7 +58,7 @@ tests:
       destroy-clster: false
       module: test_cephadm.py
       name: deploy cluster
- # Test cases to be executed
+# # Test cases to be executed
   - test:
       abort-on-fail: true
       config:
@@ -220,3 +220,9 @@ tests:
             data_pool: data_pool_ec2
       name: Test image migration on EC pool with default k_m value
       polarion-id: CEPH-83573327
+
+  - test:
+      desc: Disable the image features on image when image is moved to trash and verify
+      module: rbd_features_disable.py
+      name: Test to disable the image features on image when image is moved to trash
+      polarion-id: CEPH-11415
