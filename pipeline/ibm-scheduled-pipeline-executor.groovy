@@ -6,7 +6,7 @@
 def SSHServer = "ssh 10.245.4.89"
 
 // Set default values
-def nodeName = "agent-01"
+def nodeName = "agent-rhel9"
 
 // Recipe file path details
 def recipeFile = "RHCEPH-*.yaml"

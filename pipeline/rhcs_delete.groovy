@@ -3,7 +3,7 @@
 */
 def sharedLib
 
-node("rhel-8-medium || ceph-qe-ci") {
+node("rhel-9-medium || ceph-qe-ci") {
 
     stage("prepareNode") {
         if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }

@@ -37,7 +37,7 @@ def sendEMail(def bodyMap) {
     )
 }
 
-node('rhel-8-medium || ceph-qe-ci') {
+node('rhel-9-medium || ceph-qe-ci') {
 
     stage('prepareJenkinsNode') {
 

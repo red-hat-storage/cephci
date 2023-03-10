@@ -22,7 +22,7 @@ def majorVersion
 def minorVersion
 def failureReason
 
-node("rhel-8-medium") {
+node("rhel-9-medium") {
 
     try {
         stage('prepareJenkinsAgent') {
