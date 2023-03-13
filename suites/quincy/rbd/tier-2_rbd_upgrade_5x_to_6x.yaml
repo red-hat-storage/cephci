@@ -227,3 +227,14 @@ tests:
       desc: Testing Delayed replication with failover for journal mirroring
       module: test_delayed_replication_handler.py
       polarion-id: CEPH-11490
+
+  - test:
+      name: Test delayed replication - Failback
+      clusters:
+        ceph-rbd1:
+          config:
+            direct_failback_scenario: true
+            skip_initial_config: true
+      desc: Testing Delayed replication with failback for journal mirroring
+      module: test_delayed_replication_handler.py
+      polarion-id: CEPH-11493
