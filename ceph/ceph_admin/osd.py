@@ -219,7 +219,7 @@ class OSD(ApplyMixin, Orch):
         """
         Execute the command ceph osd out.
         Args:
-            config (Dict): OSD Remove status configuration parameters
+            config (Dict): OSD 'out' configuration parameters
         Returns:
           output, error   returned by the command.
         Example::
@@ -235,4 +235,35 @@ class OSD(ApplyMixin, Orch):
             base_cmd.append(config_dict_to_string(config["base_cmd_args"]))
         osd_id = config["pos_args"][0]
         base_cmd.append(str(osd_id))
+        return self.shell(args=base_cmd)
+
+    def osd_in(self, config: dict):
+        """
+        Execute the command ceph osd in.
+        Args:
+            config (Dict): OSD 'in' configuration parameters
+        Returns:
+          output, error   returned by the command.
+        Example::
+            config:
+                command: in
+                base_cmd_args:
+                    verbose: true
+                pos_args:
+                    - 4
+        """
+        base_cmd = ["ceph", "osd", "in"]
+        if config.get("base_cmd_args"):
+            base_cmd.append(config_dict_to_string(config["base_cmd_args"]))
+        osd_id = config["pos_args"][0]
+        osd_ids = config["pos_args"][1]
+        any_all = config["pos_args"][2]
+
+        if any_all:
+            base_cmd.append("all")
+        else:
+            if osd_id is not None and osd_id.is_integer():
+                base_cmd.append(str(osd_id))
+            if osd_ids is not None:
+                base_cmd.extend([str(ele) for ele in osd_ids])
         return self.shell(args=base_cmd)

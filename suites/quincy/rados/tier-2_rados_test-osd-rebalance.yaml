@@ -1,4 +1,5 @@
 # Suite contains tests related to osd re-balance upon OSD addition / removal
+# conf - conf/quincy/rados/11-node-cluster.yaml
 tests:
   - test:
       name: setup install pre-requisistes
@@ -107,3 +108,16 @@ tests:
               osd_recovery_max_active: 16
         delete_pools:
           - pool_p1
+
+  - test:
+      name: ceph osd df stats
+      module: test_osd_df.py
+      desc: Mark osd out and inspect stats change in ceph osd df
+      polarion-id: CEPH-10787
+      abort-on-fail: true
+      config:
+        run_iteration: 3
+        create_pool: true
+        pool_name: test-osd-df
+        write_iteration: 4
+        delete_pool: true
