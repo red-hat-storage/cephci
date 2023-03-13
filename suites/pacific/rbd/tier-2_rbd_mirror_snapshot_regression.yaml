@@ -155,8 +155,13 @@ tests:
         ceph-rbd1:
           config:
             imagesize: 2G
-            io-total: 200M
-            snapshot_schedule_level: "pool" #snapshots can be scheduled at pool, image or cluster(default) level
+            ec_pool_config:
+              mirrormode: snapshot
+              mode: image
+            rep_pool_config:
+              mirrormode: snapshot
+              mode: image
+            snapshot_schedule_level: "pool"
       polarion-id: CEPH-83575375
       desc: Create snapshot based RBD mirrored pools, schedule snapshots at pool level and verify
   - test:
@@ -166,7 +171,12 @@ tests:
         ceph-rbd1:
           config:
             imagesize: 2G
-            io-total: 200M
-            snapshot_schedule_level: "cluster" #snapshots can be scheduled at pool, image or cluster(default) level
+            ec_pool_config:
+              mirrormode: snapshot
+              mode: image
+            rep_pool_config:
+              mirrormode: snapshot
+              mode: image
+            snapshot_schedule_level: "cluster"
       polarion-id: CEPH-83575376
       desc: Create snapshot based RBD mirrored pools, schedule snapshots at cluster level and verify
