@@ -383,17 +383,6 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             timeout: 300
   - test:
-      name: test sharding on secondary
-      desc: test_Mbuckets_with_Nobjects_sharding on secondary
-      polarion-id: CEPH-9245
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
-            timeout: 300
-  - test:
       name: test Mbuckets on secondary
       desc: test_Mbuckets on secondary
       polarion-id: CEPH-9789
