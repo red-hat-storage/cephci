@@ -259,4 +259,11 @@ tests:
       module: clients.MDS_failover_while_client_IO.py
       polarion-id: CEPH-11242
       name: "MDS failover whi client IO"
+  - test:
+      name: Client File locking on mounts
+      module: clients.file_lock_on_mounts.py
+      polarion-id: CEPH-11313
+      desc: Test File locking on mounts
+      abort-on-fail: false
+
 
