@@ -1,7 +1,8 @@
 #===============================================================================================
 # Tier-level: 2
-# Test-Suite: test_validate_cephmgr_insights_functionality.yaml
+# Test-Suite: test-2_cephmgr.yaml
 # Test-Case: Perform operations to validate ceph insights functionality
+# Test-Case: Verify cephmgr throttling
 #
 # Cluster Configuration:
 #    conf/pacific/cephmgr/tier-2-cephmgr-4node.yaml
@@ -112,3 +113,14 @@ tests:
       module: test_cephmgr_validate_insights.py
       config:
         operation: disable
+
+  - test:
+      name: Verify cephmgr throttling
+      desc: Verify cephmgr throttling
+      polarion-id: CEPH-83573248
+      module: test_cephmgr_throttling
+      config:
+        operation: enable
+        module: balancer
+        key: target_max_misplaced_ratio
+        value: .07
