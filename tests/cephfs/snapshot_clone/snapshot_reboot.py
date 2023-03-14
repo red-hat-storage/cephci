@@ -2,8 +2,10 @@ import random
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -107,7 +109,8 @@ def run(ceph_cluster, **kw):
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
         )
-        client1.exec_command(
+        retry_revert = retry(CommandFailed, tries=3, delay=60)(client1.exec_command)
+        retry_revert(
             sudo=True,
             cmd=f"cd {kernel_mounting_dir_2};yes | cp -rf .snap/_snap_1_*/* .",
         )
