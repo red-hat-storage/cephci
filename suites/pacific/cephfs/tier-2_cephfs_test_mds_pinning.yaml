@@ -165,13 +165,26 @@ tests:
         the first,later pin 10 dirs with IOs
       abort-on-fail: false
   - test:
-      name: MAX directory pinning test
-      module: cephfs_mds_pinning.mds_pinning_max_dir_pinning.py
+      name: Directory pinning on two MDss with max:min number of directories
+      module: cephfs_mds_pinning.mds_pinning_max_min_dir_on_two_mdss.py
       config:
-          num_of_dirs: 10
+          num_of_dirs: 100
       polarion-id: CEPH-11228
-      desc: MDSfailover on active-active mdss,performing client IOs with max-min directory pinning with 2 active mdss
+      desc: MDSfailover on active-active mdss,performing client IOs with max:min directory pinning with 2 active mdss
       abort-on-fail: false
-
-
-
+  - test:
+      name: Directory pinning on two MDSs with unequal ratio of directories
+      module: cephfs_mds_pinning.mds_pinning_unequal_dir_on_two_mdss.py
+      config:
+          num_of_dirs: 100
+      polarion-id: CEPH-11229
+      desc: MDSfailover on active-active mdss,performing client IOs with 10:2 directory pinning with 2 active mdss
+      abort-on-fail: false
+  - test:
+      name: Directory pinning on two MDS with equal ratio of directories
+      module: cephfs_mds_pinning.mds_pinning_equal_dir_on_two_mdss.py
+      config:
+          num_of_dirs: 100
+      polarion-id: CEPH-11230
+      desc: MDSfailover on active-active mdss,performing client IOs with equal directory pinning with 2 active mdss
+      abort-on-fail: false
