@@ -5,6 +5,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -62,7 +63,8 @@ def run(ceph_cluster, **kw):
             extra_params=f"--client_fs {fs_names[0]}",
             fstab=True,
         )
-        fs_util.fuse_mount(
+        retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.fuse_mount)
+        retry_mount(
             [clients[0]],
             fuse_mounting_dir_2,
             extra_params=f"--client_fs {fs_names[1]}",

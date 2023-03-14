@@ -105,7 +105,7 @@ def postUMB(Map arg, String status) {
 
 // Pipeline script entry point
 
-node("rhel-8-medium") {
+node("rhel-9-medium") {
 
     stage('prepareNode') {
         if (env.WORKSPACE) {

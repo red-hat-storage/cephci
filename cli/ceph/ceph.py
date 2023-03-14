@@ -1,5 +1,7 @@
 from cli import Cli
 
+from .balancer import Balancer
+from .config_key import ConfigKey
 from .mgr import Mgr
 from .orch.orch import Orch
 
@@ -13,6 +15,8 @@ class Ceph(Cli):
         self.base_cmd = f"{base_cmd} ceph" if base_cmd else "ceph"
         self.mgr = Mgr(nodes, self.base_cmd)
         self.orch = Orch(nodes, self.base_cmd)
+        self.balancer = Balancer(nodes, self.base_cmd)
+        self.config_key = ConfigKey(nodes, self.base_cmd)
 
     def version(self):
         """Get ceph version."""
@@ -46,9 +50,11 @@ class Ceph(Cli):
             return out[0].strip()
         return out
 
-    def health(self):
+    def health(self, detail=False):
         """Returns the Ceph cluster health"""
         cmd = f"{self.base_cmd} health"
+        if detail:
+            cmd += " detail"
         out = self.execute(sudo=True, check_ec=False, long_running=False, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()

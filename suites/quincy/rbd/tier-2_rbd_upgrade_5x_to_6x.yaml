@@ -195,3 +195,35 @@ tests:
             dummy: true
       polarion-id: CEPH-10468
       desc: Verification of image sync continuation after multiple rbd mirror daemon restarts
+
+  - test:
+      name: Test delayed replication - Secondary
+      clusters:
+        ceph-rbd1:
+          config:
+            delay_at_secondary: true
+      desc: Testing Delayed replication for journal mirroring
+      module: test_delayed_replication_handler.py
+      polarion-id: CEPH-11492
+
+  - test:
+      name: Test delayed replication - primary
+      clusters:
+        ceph-rbd1:
+          config:
+            skip_initial_config: true
+            delay_at_primary: true
+      desc: Testing Delayed replication with delay set in primary per image
+      module: test_delayed_replication_handler.py
+      polarion-id: CEPH-11494
+
+  - test:
+      name: Test delayed replication - Failover
+      clusters:
+        ceph-rbd1:
+          config:
+            direct_failover_with_delay: true
+            skip_initial_config: true
+      desc: Testing Delayed replication with failover for journal mirroring
+      module: test_delayed_replication_handler.py
+      polarion-id: CEPH-11490

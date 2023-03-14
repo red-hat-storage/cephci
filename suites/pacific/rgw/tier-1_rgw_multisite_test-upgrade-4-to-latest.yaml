@@ -211,6 +211,7 @@ tests:
       module: sanity_rgw_multisite.py
       name: Create bucket for Testing manual resharding brownfield scenario after upgrade
       polarion-id: CEPH-83574735
+
 #  datalog offload tests
   - test:
       clusters:
@@ -222,7 +223,7 @@ tests:
       desc: change datalog type to fifo before upgrade
       module: sanity_rgw_multisite.py
       name: change datalog type to fifo before upgrade
-      polarion-id: CEPH-83573697
+      polarion-id: CEPH-83573696
 
   # Performing cluster upgrade
 
@@ -478,4 +479,4 @@ tests:
       desc: verify datalog type is fifo after upgrade
       module: sanity_rgw_multisite.py
       name: verify datalog type is fifo after upgrade
-      polarion-id: CEPH-83573697
+      polarion-id: CEPH-83573696

@@ -85,7 +85,7 @@ def buildArtifactDetails(def sharedLib){
     return artifactDetails
 }
 
-node("rhel-8-medium"){
+node("rhel-9-medium"){
     stage('Install pre req') {
         if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
         checkout([

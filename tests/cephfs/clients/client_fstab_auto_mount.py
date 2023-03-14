@@ -110,7 +110,7 @@ def run(ceph_cluster, **kw):
             log.info("Dir created")
         else:
             raise CommandFailed("Dir creation failed")
-        fs_util.reboot(client1[0])
+        fs_util_v1.reboot_node(client1[0])
         with parallel() as p:
             p.spawn(
                 fs_util.read_write_IO,
@@ -158,7 +158,7 @@ def run(ceph_cluster, **kw):
                 for op in p:
                     res.append(op)
         print(res)
-        fs_util.reboot(client2[0])
+        fs_util_v1.reboot_node(client2[0])
         with parallel() as p:
             p.spawn(
                 fs_util.read_write_IO,
@@ -241,7 +241,7 @@ def run(ceph_cluster, **kw):
                 iotype="touch",
             )
             for node in client_info["osd_nodes"]:
-                fs_util.reboot(node)
+                fs_util_v1.reboot_node(node)
         with parallel() as p:
             p.spawn(
                 fs_util.stress_io,

@@ -4,6 +4,7 @@ import json
 import random
 import string
 import time
+from typing import List
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
@@ -296,7 +297,7 @@ class RbdMirror:
         log.debug(
             f"Config Recieved for initial mirror config: poolname:{poolname}, imagename:{imagename}\nkw:{kw}"
         )
-        if kw["mirrormode"] == "snapshot" and kw["mode"] == "pool":
+        if kw.get("mirrormode") == "snapshot" and kw.get("mode") == "pool":
             log.error("Invalid scenario for configuring mirror")
             return 1
 
@@ -309,7 +310,7 @@ class RbdMirror:
 
         self.create_image(imagespec=imagespec, size=imagesize)
         if kw.get("mirrormode") != "snapshot" and "journaling" not in kw.get(
-            "image_feature"
+            "image_feature", ""
         ):
             self.image_feature_enable(imagespec=imagespec, image_feature="journaling")
         if kw.get("image_feature"):
@@ -421,7 +422,7 @@ class RbdMirror:
                         )
                         return out
                 except CommandFailed:
-                    if kw["state_pattern"] == "down+unknown":
+                    if kw.get("state_pattern") == "down+unknown":
                         continue
                     else:
                         raise
@@ -626,6 +627,13 @@ class RbdMirror:
 
     # CLIs
     def benchwrite(self, **kw):
+        """Executes rbd bench write operation on provided image.
+
+        Args:
+          kw:
+            io: io size - Default 500M
+            imagespec: image specification
+        """
         if self.ceph_version < 3:
             self.exec_cmd(
                 cmd="rbd bench-write --io-total {} {}".format(
@@ -690,6 +698,13 @@ class RbdMirror:
         self.exec_cmd(cmd=cmd)
 
     def export_image(self, **kw):
+        """Exports provided image as provided path.
+
+        Args:
+          kw:
+            imagespec: image specification
+            path: path where image needs to be exported
+        """
         self.exec_cmd(
             cmd="rbd export {} {}".format(kw.get("imagespec"), kw.get("path")),
             long_running=True,
@@ -775,12 +790,17 @@ class RbdMirror:
             )
         )
 
-    # Promote Image
     def promote(self, **kw):
+        """Promote an image based on the given inputs.
+        Args:
+          kw:
+            force: True if image needs to be promoted forcefully.
+            imagespec: image specification.
+        """
         if kw.get("force"):
             return self.exec_cmd(
                 output=True,
-                cmd="rbd mirror image promote --force {}".format(kw.get("imagespec")),
+                cmd=f"rbd mirror image promote --force {kw.get('imagespec')}",
             )
         else:
             return self.exec_cmd(
@@ -1115,7 +1135,7 @@ def rbd_mirror_config(**kw):
             io_total=kw["config"]["rep_pool_config"]["io_total"],
             mode=kw["config"]["rep_pool_config"]["mode"],
             mirrormode=kw["config"]["rep_pool_config"].get("mirrormode", ""),
-            image_feature=kw["config"]["rep_pool_config"].get("image_feature"),
+            image_feature=kw["config"]["rep_pool_config"].get("image_feature", ""),
             **kw,
         )
 
@@ -1170,10 +1190,24 @@ def rbd_mirror_config(**kw):
             io_total=kw["config"]["ec_pool_config"]["io_total"],
             mode=kw["config"]["ec_pool_config"]["mode"],
             mirrormode=kw["config"]["ec_pool_config"].get("mirrormode", ""),
-            image_feature=kw["config"]["ec_pool_config"].get("image_feature"),
+            image_feature=kw["config"]["ec_pool_config"].get("image_feature", ""),
             **kw,
         )
 
         rbd_obj.update({"ec_rbdmirror": {"mirror1": ec_mirror1, "mirror2": ec_mirror2}})
 
     return rbd_obj
+
+
+def parallel_bench_on_n_images(
+    cluster: RbdMirror, imagespecs: List[str], io: str
+) -> None:
+    """Run benchwrite on list of provided images parallelly.
+
+    Args:
+        imagespec(List(str)): list of image specifications.
+        io(string): ios on each image.
+    """
+    with parallel() as p:
+        for imagespec in imagespecs:
+            p.spawn(cluster.benchwrite, imagespec=imagespec, io=io)

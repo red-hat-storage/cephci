@@ -10,7 +10,7 @@ def overrides = (params.overrides)?.trim() ?: "{}"
 def tags = (params.tags)?.trim() ?: "schedule,openstack-only,tier-3,stage-1"
 
 // Pipeline script entry point
-node("rhel-8-medium || ceph-qe-ci") {
+node("rhel-9-medium || ceph-qe-ci") {
     stage('prepareNode') {
         if (env.WORKSPACE) { sh script: "sudo rm -rf * .venv" }
         checkout(
