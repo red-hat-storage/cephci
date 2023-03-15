@@ -925,12 +925,14 @@ class RadosOrchestrator:
         log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
         return True
 
-    def change_osd_state(self, action: str, target: int) -> bool:
+    def change_osd_state(self, action: str, target: int, timeout: int = 15) -> bool:
         """
         Changes the state of the OSD daemons wrt the action provided
         Args:
-            action: operation to be performed on the service, i.e start, stop, restart
+            action: operation to be performed on the service, i.e
+            start, stop, restart, disable, enable
             target: ID osd the target OSD
+            timeout: timeout in seconds, (default = 10s)
         Returns: Pass -> True, Fail -> False
         """
         cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
@@ -943,8 +945,34 @@ class RadosOrchestrator:
             f"Performing {action} on osd-{target} on host {host.hostname}. Command {cmd}"
         )
         host.exec_command(sudo=True, cmd=cmd)
-        # Sleeping for 5 seconds for status to be updated
-        time.sleep(5)
+        # verifying the osd state
+        if action in ["start", "stop"]:
+            start_time = datetime.datetime.now()
+            timeout_time = start_time + datetime.timedelta(seconds=timeout)
+
+            while datetime.datetime.now() <= timeout_time:
+                osd_status, status_desc = self.get_daemon_status(
+                    daemon_type="osd", daemon_id=target
+                )
+                log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
+                if (osd_status == 0 or status_desc == "stopped") and action == "stop":
+                    break
+                elif (
+                    osd_status == 1 or status_desc == "running"
+                ) and action == "start":
+                    break
+                time.sleep(3)
+
+            if action == "stop" and osd_status != 0:
+                log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
+                return False
+            if action == "start" and osd_status != 1:
+                log.error(
+                    f"Failed to start the OSD.{target} service on {host.hostname}"
+                )
+                return False
+        else:
+            time.sleep(5)
         return True
 
     def fetch_host_node(self, daemon_type: str, daemon_id: str = None):
@@ -1139,3 +1167,37 @@ class RadosOrchestrator:
         pg_query = self.run_ceph_command(cmd=cmd)
         log.debug(f"The status of pg : {pg_id} is {pg_query['state']}")
         return pg_query["state"]
+
+    def get_osd_map(self, pool: str, obj: str, nspace: str = None) -> dict:
+        """
+        Retrieve the osd map for an object in a pool
+        Args:
+            pool: pool name to which the object belongs
+            obj: object name whose osd map is to retrieved
+            nspace (optional): namespace
+        Returns:  dictionary output of ceph osd map command
+        """
+        cmd = f"ceph osd map {pool} {obj}"
+        if nspace:
+            cmd += " " + nspace
+
+        return self.run_ceph_command(cmd=cmd)
+
+    def get_daemon_status(self, daemon_type, daemon_id) -> tuple:
+        """
+        Returns the status of a specific daemon using ceph orch ps utility
+        Usage: orch ps --daemon_type <> --daemon_id <>
+        Args:
+            daemon_type: type of daemon known to orchestrator
+            daemon_id: id of daemon provided in daemon_type
+        Returns: tuple containing status of the daemon (0 or 1) and
+                 status description (running or stopped)
+        """
+
+        cmd_ = (
+            f"ceph orch ps --daemon_type {daemon_type} "
+            f"--daemon_id {daemon_id} --refresh"
+        )
+        orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
+        log.debug(orch_ps_out)
+        return orch_ps_out["status"], orch_ps_out["status_desc"]

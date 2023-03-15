@@ -1202,3 +1202,21 @@ def is_legacy_container_present(ceph_cluster):
             return True
 
     return False
+
+
+def systemctl(node, op, unit):
+    """Execute systemctl command operation(op) on specific service unit.
+
+    Args:
+        node: node to execute command
+        op: systemctl supported action (ex., start|stop|enable|disable..,)
+        unit: unit service-name
+
+    Returns:
+        out, err
+
+    """
+    cmd_ = f"systemctl {op} {unit}.service"
+    out, err = node.exec_command(cmd=cmd_, sudo=True)
+    log.info(out)
+    return out, err

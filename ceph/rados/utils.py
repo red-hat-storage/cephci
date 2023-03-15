@@ -204,3 +204,25 @@ def add_osd(ceph_cluster, host, device_path, osd_id):
     log.info(f"Executing daemon {config.pop('command')} service")
     daemon = Daemon(cluster=ceph_cluster, **config)
     daemon.add(config)
+
+
+def configure_osd_flag(ceph_cluster, action, flag):
+    """
+    set/unset the osd flag
+    Command example: ceph osd set noscrub
+    Args:
+        ceph_cluster: ceph cluster
+        action: set or unset
+          example: set|unset
+        flag - value of the flag
+          example:pause|noup|nodown|noout|noin|nobackfill|
+            norebalance|norecover|noscrub|nodeep-scrub|notieragent
+    Returns: True/False
+    """
+    config = {"command": action, "service": "osd", "flag": flag}
+    log.info(f"Executing OSD {action} {flag}")
+    osd = OSD(cluster=ceph_cluster, **config)
+    out, err = osd.flag(config)
+    if f"{flag} is {action}" in err:
+        return True
+    return False

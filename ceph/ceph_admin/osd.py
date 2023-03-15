@@ -236,3 +236,22 @@ class OSD(ApplyMixin, Orch):
         osd_id = config["pos_args"][0]
         base_cmd.append(str(osd_id))
         return self.shell(args=base_cmd)
+
+    def flag(self, config: dict):
+        """
+        Execute the command ceph osd set/unset flag.
+        Args:
+            config (Dict): OSD flag configuration parameters
+        Returns:
+          output, error   returned by the command.
+        Example::
+            config:
+                command: set/unset
+                base_cmd_args:
+                    verbose: true
+                flag: value of flag
+        """
+        command = config.get("command")
+        flag = config.get("flag")
+        cmd = f"ceph osd {command} {flag}"
+        return self.shell(args=[cmd])

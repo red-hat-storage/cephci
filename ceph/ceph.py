@@ -1118,7 +1118,7 @@ class Ceph(object):
             )
         if cluster_name is not None:
             cmd += f" --cluster {cluster_name}"
-        if pacific:
+        if pacific and not self.get_ceph_object("client"):
             cmd = f"cephadm shell -- {cmd}"
 
         out, _ = client.exec_command(cmd=cmd, sudo=True)
