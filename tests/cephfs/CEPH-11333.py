@@ -1,114 +1,109 @@
+import json
+import random
+import string
 import traceback
 
 from ceph.ceph import CommandFailed
-from tests.cephfs.cephfs_utils import FsUtils
+from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
 log = Log(__name__)
+"""
+pre-requisites:
+1. The cluster should be up and remove all the existing filesystem if any
+Test operation:
+1.Create a new FS with custom name using cmd "fs new <filesystem name> <metadata pool name> <data pool name>"
+2.List the existing FS using cmd "fs ls"
+3.Remove the FS created in Step 2 using cmd "fs rm <filesystem name> [--yes-i-really-mean-it]"
+4.Do Step 2 and reset the FS using cmd "fs reset <filesystem name>"-> pacific 없음
+5.Get attributes of the FS using cmd "fs get <filesystem name>"
+6.Set attributed of the FS using cmd "fs set <filesystem name> <var> <val>"
+7.Add one more data pool to the existing FS using cmd "fs add_data_pool <filesystem name> <pool name/id>"
+8.Remove a data-pol from the existing FS using cmd "fs rm_data_pool <filesystem name> <pool name/id>"
+"""
 
 
 def run(ceph_cluster, **kw):
+    pool_list = []
     try:
-        log.info("Running  11333 test")
+        tc = "CEPH-11333"
+        log.info(f"Running CephFS tests for BZ-{tc}")
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
-        client_info, rc = fs_util.get_clients(build)
-        k_and_m = config.get("ec-pool-k-m")
-        new_fs_name = "cephfs_new"
-        new_fs_datapool = "data_pool"
-        new_pool = "new_pool"
-        fs_info = fs_util.get_fs_info(client_info["mon_node"][0])
-        if rc == 0:
-            log.info("Got client info")
-        else:
-            raise CommandFailed("fetching client info failed")
-        if k_and_m:
-            fs_util.del_cephfs(client_info["mds_nodes"], fs_info.get("fs_name"))
-            profile_name = fs_util.create_erasure_profile(
-                client_info["mon_node"][0], "ec_profile_new", k_and_m[0], k_and_m[2]
+        clients = ceph_cluster.get_ceph_objects("client")
+        client1 = clients[0]
+        fs_util.auth_list([client1])
+        fs_util.prepare_clients(clients, build)
+        rand = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(5))
+        )
+        out1, ec1 = client1.exec_command(sudo=True, cmd="ceph fs ls --format json")
+        output1 = json.loads(out1)
+        client1.exec_command(
+            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+        )
+        for output in output1:
+            log.info(print(output))
+            exist_fs = output["name"]
+            client1.exec_command(sudo=True, cmd=f"ceph fs fail {exist_fs}")
+            out2, ec2 = client1.exec_command(
+                sudo=True, cmd="ceph fs rm {exist_fs} --yes-i-really-mean-it"
             )
-            fs_util.create_pool(
-                client_info["mon_node"][0],
-                new_fs_datapool,
-                64,
-                64,
-                pool_type="erasure",
-                profile_name=profile_name,
-            )
-            fs_util.create_fs(
-                client_info["mds_nodes"],
-                new_fs_name,
-                new_fs_datapool,
-                fs_info.get("metadata_pool_name"),
-                pool_type="erasure_pool",
-            )
-            fs_util.del_cephfs(client_info["mds_nodes"], new_fs_name)
-            fs_util.create_fs(
-                client_info["mds_nodes"],
-                new_fs_name,
-                new_fs_datapool,
-                fs_info.get("metadata_pool_name"),
-                pool_type="erasure_pool",
-            )
-            fs_util.set_attr(client_info["mds_nodes"], new_fs_name)
-            fs_util.create_pool(
-                client_info["mon_node"][0],
-                new_pool,
-                64,
-                64,
-                pool_type="erasure",
-                profile_name=profile_name,
-            )
-            fs_util.add_pool_to_fs(client_info["mon_node"][0], new_fs_name, new_pool)
-            fs_util.remove_pool_from_fs(
-                client_info["mon_node"][0], new_fs_name, new_pool
-            )
-            fs_util.del_cephfs(client_info["mds_nodes"], new_fs_name)
-            fs_util.create_fs(
-                client_info["mds_nodes"],
-                new_fs_name,
-                new_fs_datapool,
-                fs_info.get("metadata_pool_name"),
-                pool_type="erasure_pool",
-            )
-        else:
-            fs_util.del_cephfs(client_info["mds_nodes"], fs_info.get("fs_name"))
-            fs_util.create_pool(client_info["mon_node"][0], new_fs_datapool, 64, 64)
-            fs_util.create_fs(
-                client_info["mds_nodes"],
-                new_fs_name,
-                new_fs_datapool,
-                fs_info.get("metadata_pool_name"),
-            )
-            fs_util.del_cephfs(client_info["mds_nodes"], new_fs_name)
-            fs_util.create_fs(
-                client_info["mds_nodes"],
-                new_fs_name,
-                new_fs_datapool,
-                fs_info.get("metadata_pool_name"),
-            )
-            fs_util.set_attr(client_info["mds_nodes"], new_fs_name)
-            fs_util.create_pool(client_info["mon_node"][0], new_pool, 64, 64)
-            fs_util.add_pool_to_fs(client_info["mon_node"][0], new_fs_name, new_pool)
-            fs_util.remove_pool_from_fs(
-                client_info["mon_node"][0], new_fs_name, new_pool
-            )
-            fs_util.del_cephfs(client_info["mds_nodes"], new_fs_name)
-            fs_util.create_fs(
-                client_info["mds_nodes"],
-                new_fs_name,
-                new_fs_datapool,
-                fs_info.get("metadata_pool_name"),
-            )
-
+            if ec2:
+                raise CommandFailed(f"Removing {exist_fs} fas failed")
+        pool_data = f"cephfs_data_{rand}"
+        pool_meta = f"cephfs_metadata_{rand}"
+        pool_list.append(pool_meta)
+        pool_list.append(pool_data)
+        client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_data}")
+        client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_meta}")
+        fs_name = f"cephfs_{rand}"
+        create_cmd = f"ceph fs new {fs_name} {pool_meta} {pool_data}"
+        client1.exec_command(sudo=True, cmd=create_cmd)
+        client1.exec_command(sudo=True, cmd=f"ceph fs fail {fs_name}")
+        out4, ec4 = client1.exec_command(
+            sudo=True, cmd=f"ceph fs rm {fs_name} --yes-i-really-mean-it"
+        )
+        log.info(print(out4))
+        if ec4:
+            raise CommandFailed("Removing fs fas failed")
+        client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_data}_1")
+        client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_meta}_1")
+        pool_list.append(f"{pool_data}_1")
+        pool_list.append(f"{pool_meta}_1")
+        mounting_dir = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(10))
+        )
+        kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
+        mon_node_ips = fs_util.get_mon_node_ips()
+        create_cmd = f"ceph fs new {fs_name} {pool_meta}_1 {pool_data}_1"
+        client1.exec_command(sudo=True, cmd=create_cmd)
+        fs_util.kernel_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
+        fs_util.run_ios(client1, kernel_mounting_dir_1, ["dd", "smallfile"])
+        out7, ec7 = client1.exec_command(sudo=True, cmd=f"ceph fs get {fs_name}")
+        log.info(print(out7))
+        if ec7:
+            raise CommandFailed("Getting fs has failed")
+        out8, ec8 = client1.exec_command(
+            sudo=True, cmd=f"ceph fs set {fs_name} max_mds 3"
+        )
+        log.info(print(out8))
+        if ec8:
+            raise CommandFailed("Setting fs has failed")
+        # Adding addiotional pool in the cephfs since we can not remove the default pool
+        pool_name_remove = "remove_pool"
+        client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_name_remove}")
+        client1.exec_command(
+            sudo=True, cmd=f"ceph fs add_data_pool {fs_name} {pool_name_remove}"
+        )
+        client1.exec_command(
+            sudo=True, cmd=f"ceph fs rm_data_pool {fs_name} {pool_name_remove}"
+        )
         return 0
-    except CommandFailed as e:
-        log.info(e)
-        log.info(traceback.format_exc())
-        return 1
-
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
