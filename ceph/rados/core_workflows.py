@@ -1250,3 +1250,16 @@ class RadosOrchestrator:
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
         return orch_ps_out["status"], orch_ps_out["status_desc"]
+    def get_osd_stat(self):
+        """
+        This Function is to get the OSD stats.
+           Example:
+               get_osd_stat()
+           Args:
+           Returns:  OSD Statistics
+        """
+
+        cmd = "ceph osd stat"
+        osd_stats = self.run_ceph_command(cmd=cmd)
+        log.debug(f" The OSD Statistics are : {osd_stats}")
+        return osd_stats
