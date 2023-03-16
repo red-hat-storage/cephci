@@ -37,7 +37,6 @@ def run(ceph_cluster, **kw):
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
         write_to_pools(config, rados_obj, client_node)
-        rados_obj.change_recover_threads(config=pool, action="set")
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
         if not pool["pg_num"] == prop["pg_num"]:
@@ -55,7 +54,7 @@ def run(ceph_cluster, **kw):
         if not new_bulk:
             log.error("Expected bulk flag should be True.")
             raise Exception("Expected bulk flag should be True.")
-        time.sleep(10)
+        time.sleep(20)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         new_prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
         if not new_prop["pg_num"] > prop["pg_num"]:
@@ -66,21 +65,22 @@ def run(ceph_cluster, **kw):
                 f"Actual pg_num {new_prop['pg_num']} is expected to be greater than {prop['pg_num']}"
             )
         pool_obj.rm_bulk_flag(pool["pool_name"])
-        time.sleep(10)
+        time.sleep(3)
         rm_bulk = pool_obj.get_bulk_details(pool["pool_name"])
         if rm_bulk:
             log.error("Expected bulk flag should be False.")
             raise Exception("Expected bulk flag should be False.")
+        time.sleep(10)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+        time.sleep(20)
         new_prop1 = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
         if not new_prop1["pg_num"] < new_prop["pg_num"]:
             log.error(
-                f"Actual pg_num {new_prop1['pg_num']} is expected to be greater than {new_prop['pg_num']}"
+                f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
             )
             raise Exception(
-                f"Actual pg_num {new_prop1['pg_num']} is expected to be greater than {new_prop['pg_num']}"
+                f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
             )
-        rados_obj.change_recover_threads(config=pool, action="rm")
         if config.get("delete_pools"):
             for name in config["delete_pools"]:
                 method_should_succeed(rados_obj.detete_pool, name)
