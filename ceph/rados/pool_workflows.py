@@ -4,6 +4,7 @@ Module to change pool attributes
 2. Snapshots
 """
 import time
+import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -127,6 +128,95 @@ class PoolFunctions:
             f"Wrote {omap_data} bytes of omap data on the pool."
             f"Total stored omap data on pool : {total_omap_data}"
         )
+        return True
+
+    def prepare_static_data(self, node):
+        """
+        creates a 4MB obj, same obj will be put nobj times
+        because in do_rados_get we have to verify checksum
+        """
+        tmp_file = "/tmp/sdata.txt"
+        DSTR = "hello world"
+        sfd = None
+
+        try:
+            sfd = node.remote_file(file_name=tmp_file, file_mode="w+")
+            sfd.write(DSTR * 4)
+            sfd.flush()
+            cmd = f"truncate -s 4M {tmp_file}"
+            node.exec_command(cmd=cmd)
+        except Exception as e:
+            log.error(f"file creation failed with exception: {e}")
+            log.error(traceback.format_exc())
+
+        sfd.seek(0)
+        sfd.close()
+        return tmp_file
+
+    def do_rados_put(
+        self, client, pool: str, obj_name: str = None, nobj: int = 1, offset: int = 0
+    ):
+        """
+        write static data to one object or nobjs in an app pool
+        Args:
+            client: client node
+            pool: pool name to which data needs to added
+            obj_name (optional): Name of the existing object or
+            new object to be created in the pool
+            nobj: Number of times data will be put to object 'obj_name'
+            with incremental offset if 'obj_name' is specified, else
+            data will be put once to nobj number of objects -
+            obj0, obj1, obj2 and so on...
+            offset: write object with start offset, default - 0
+        Returns: 0 -> pass, 1 -> fail
+        """
+        infile = self.prepare_static_data(client)
+        log.debug(f"Input file is {infile}")
+
+        for i in range(nobj):
+            log.info(f"running command on {client.hostname}")
+            put_cmd = (
+                f"rados put -p {pool} obj{i} {infile} --offset {offset}"
+                if obj_name is None
+                else f"rados put -p {pool} {obj_name} {infile} --offset {offset}"
+            )
+            try:
+                out, _ = client.exec_command(sudo=True, cmd=put_cmd)
+                if obj_name is not None and offset:
+                    offset += offset
+            except Exception:
+                log.error(traceback.format_exc)
+                return 1
+        return 0
+
+    def do_rados_append(self, client, pool: str, obj_name: str = None, nobj: int = 1):
+        """
+        Append static data to nobjs already present in a pool
+        Args:
+            client: client node
+            pool: pool name to which the object belongs
+            obj_name (optional): Name of the existing object in the pool
+            nobj (optional): Number of times data will be appended
+            to object 'obj_name' if 'obj_name' is specified, else
+            data will be appended once to nobj number of objects -
+            obj0, obj1, obj2 and so on...
+        Returns: 0 -> pass, 1 -> fail
+        """
+        infile = self.prepare_static_data(client)
+        log.debug(f"Input file is {infile}")
+
+        for i in range(nobj):
+            log.info(f"running command on {client.hostname}")
+            append_cmd = (
+                f"rados append obj{i} {infile} -p {pool}"
+                if obj_name is None
+                else f"rados append {obj_name} {infile} -p {pool}"
+            )
+            try:
+                out, _ = client.exec_command(sudo=True, cmd=append_cmd)
+            except Exception:
+                log.error(traceback.format_exc)
+                return False
         return True
 
     def do_rados_delete(self, pool_name: str, pg_id: str = None):
