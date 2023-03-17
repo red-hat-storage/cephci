@@ -3,6 +3,7 @@ Module to change pool attributes
 1. Autoscaler tunables
 2. Snapshots
 """
+import datetime
 import time
 import traceback
 
@@ -446,3 +447,57 @@ class PoolFunctions:
             if entry["name"] == pool_name:
                 return entry["id"]
         log.error(f"Pool: {pool_name} not found")
+
+    def wait_for_clean_pool_pgs(self, pool_name: str, timeout: int = 9000) -> bool:
+        """
+        Waiting for up to 2.5 hours for the PG's to enter active + Clean state
+        Args:
+            pool_name: Name of the pool on which clean PGs should be checked
+            timeout: timeout in seconds or "unlimited"
+
+        Returns:  True -> pass, False -> fail
+        """
+        end_time = 0
+        if timeout == "unlimited":
+            condition = lambda x: "unlimited" == x
+        elif isinstance(timeout, int):
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+            condition = lambda x: end_time > datetime.datetime.now()
+
+        pool_id = self.get_pool_id(pool_name=pool_name)
+        while condition(end_time if isinstance(timeout, int) else timeout):
+            flag = False
+            cmd = "ceph pg dump pgs"
+            pg_dump = self.rados_obj.run_ceph_command(cmd=cmd)
+            for entry in pg_dump["pg_stats"]:
+                if str(entry["pgid"]).startswith(str(pool_id)):
+                    # Proceeding to check if the PG is in active + clean on the pool
+                    rec = (
+                        "remapped",
+                        "backfilling",
+                        "degraded",
+                        "incomplete",
+                        "peering",
+                        "recovering",
+                        "recovery_wait",
+                        "undersized",
+                        "backfilling_wait",
+                    )
+                    flag = (
+                        False
+                        if any(key in rec for key in entry["state"].split("+"))
+                        else True
+                    )
+                    log.info(
+                        f"PG ID : {entry['pgid']}    ---------      PG State : {entry['state']}"
+                    )
+                    if not flag:
+                        break
+            if flag:
+                log.info("The recovery and back-filling of the OSD is completed")
+                return True
+            log.info("Waiting for active + clean. checking status again in a minute")
+            time.sleep(60)
+
+        log.error("The cluster did not reach active + Clean state")
+        return False
