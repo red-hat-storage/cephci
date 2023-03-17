@@ -120,3 +120,15 @@ tests:
         pool_name: test-osd-df
         write_iteration: 4
         delete_pool: true
+
+  - test:
+      name: ObjectStore block stats verification
+      module: test_objectstore_block.py
+      desc: Reduce data from an object and verify the decrease in blocks
+      polarion-id: CEPH-83571714
+      abort-on-fail: true
+      config:
+        create_pool: true
+        pool_name: test-objectstore
+        write_iteration: 3
+        delete_pool: true

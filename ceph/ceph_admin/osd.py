@@ -267,3 +267,18 @@ class OSD(ApplyMixin, Orch):
             if osd_ids is not None:
                 base_cmd.extend([str(ele) for ele in osd_ids])
         return self.shell(args=base_cmd)
+
+    def flag(self, config: dict):
+        """
+        Execute the command ceph osd set/unset flag.
+        Args:
+            config (Dict): OSD flag configuration parameters
+                command: set/unset
+                base_cmd_args:
+                    verbose: true
+                flag: value of flag
+        """
+        command = config.get("command")
+        flag = config.get("flag")
+        cmd = f"ceph osd {command} {flag}"
+        return self.shell(args=[cmd])

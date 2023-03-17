@@ -204,6 +204,31 @@ class MonConfigMethods:
         log.info(f"Value for config: {kwargs['name']} was set")
         return True
 
+    def get_config(self, section: str, param: str) -> str:
+        """
+        Retrieves the config param in monitor config database,
+        Usage - config get <section> <name>
+        This is not symmetric with 'config set' because it also
+        returns compiled-in default values along with values which
+        have been explicitly set
+
+        Args:
+            **kwargs:
+                - section: which section of daemons to target
+                    allowed values: mon, mgr, osd, mds, client
+                - param: name of the config param for the selection
+        Returns: string output of ceph config get <section> <name> command
+
+        E.g.
+            - # ceph config get mon public_network
+                10.0.208.0/22
+            - # ceph config get osd bluestore_min_alloc_size_hdd
+                4096
+        """
+
+        cmd = f"ceph config get {section} {param}"
+        return self.rados_obj.node.shell([cmd])[0]
+
     def remove_config(self, **kwargs):
         """
         Removes the sent config param from monitor config database

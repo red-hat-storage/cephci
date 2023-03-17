@@ -176,10 +176,12 @@ class PoolFunctions:
         for i in range(nobj):
             log.info(f"running command on {client.hostname}")
             put_cmd = (
-                f"rados put -p {pool} obj{i} {infile} --offset {offset}"
+                f"rados put -p {pool} obj{i} {infile}"
                 if obj_name is None
-                else f"rados put -p {pool} {obj_name} {infile} --offset {offset}"
+                else f"rados put -p {pool} {obj_name} {infile}"
             )
+            if offset:
+                put_cmd = f"{put_cmd} --offset {offset}"
             try:
                 out, _ = client.exec_command(sudo=True, cmd=put_cmd)
                 if obj_name is not None and offset:
