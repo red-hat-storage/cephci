@@ -1183,6 +1183,27 @@ class RadosOrchestrator:
 
         return self.run_ceph_command(cmd=cmd)
 
+    def get_osd_df_stats(
+        self, tree: bool = False, filter_by: str = None, filter: str = None
+    ) -> dict:
+        """
+        Retrieves the output of ceph osd df command
+        Args:
+            tree: enables tree view
+            filter_by: filter type, either class or name
+            filter: a pool, crush node or device class name
+        Returns: dictionary output of ceph osd df
+        """
+        cmd = "ceph osd df"
+        if tree:
+            cmd += " tree"
+        if filter_by == "class" or filter_by == "name":
+            cmd += " " + filter_by
+        if filter:
+            cmd += " " + filter
+
+        return self.run_ceph_command(cmd=cmd)
+
     def get_daemon_status(self, daemon_type, daemon_id) -> tuple:
         """
         Returns the status of a specific daemon using ceph orch ps utility

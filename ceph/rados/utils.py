@@ -153,6 +153,38 @@ def set_osd_out(ceph_cluster, osd_id):
     return False
 
 
+def set_osd_in(
+    ceph_cluster, osd_id: int = None, osd_ids: list = None, all: bool = False
+):
+    """
+    Sets osd in
+    if only 'ceph_cluster' argument is provided,
+    all the previously 'out' osds will be set 'in'
+    Args:
+        ceph_cluster: ceph cluster
+        osd_id: osd id
+        osd_ids: list of osds which need to be marked in
+        all: set all the previously 'out' osds 'in'
+    Returns:
+        Pass->true, Fail->false
+    """
+    if osd_id is None and osd_ids is None:
+        all = True
+    config = {"command": "in", "service": "osd", "pos_args": [osd_id, osd_ids, all]}
+    log.info(f"Executing OSD {config.pop('command')} service")
+    osd = OSD(cluster=ceph_cluster, **config)
+    out, err = osd.osd_in(config)
+    if all and "marked in osd" in err:
+        return True
+    if osd_id and f"marked in osd.{osd_id}" in err:
+        return True
+    ret_val = True
+    for o_id in osd_ids:
+        if f"marked in osd.{o_id}" not in err:
+            ret_val = False
+    return ret_val
+
+
 def osd_remove(ceph_cluster, osd_id):
     """
     osd remove

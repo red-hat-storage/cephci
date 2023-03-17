@@ -4,6 +4,7 @@ Module to change pool attributes
 2. Snapshots
 """
 import time
+import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator

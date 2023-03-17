@@ -1,5 +1,4 @@
-# Suite contains tests related to osd re-balance upon OSD addition / removal
-# conf - conf/pacific/rados/11-node-cluster.yaml
+# Suite contains tests related pg split and merge scenario
 tests:
   - test:
       name: setup install pre-requisistes
@@ -11,15 +10,13 @@ tests:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
       module: test_cephadm.py
-      polarion-id:
+      polarion-id: CEPH-83573713
       config:
         verify_cluster_health: true
         steps:
           - config:
               command: bootstrap
               service: cephadm
-              base_cmd_args:
-                verbose: true
               args:
                 mon-ip: node1
                 orphan-initial-daemons: true
@@ -79,7 +76,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node8                       # client node
+        node: node7                       # client node
         install_packages:
           - ceph-common
         copy_admin_keyring: true          # Copy admin keyring to node
@@ -90,45 +87,18 @@ tests:
           mgr: "allow *"
 
   - test:
-      name: Robust rebalancing - osd replacement
-      module: test_osd_rebalance.py
-      desc: Remove and add osd to verify data migration
-      polarion-id: CEPH-9205, CEPH-9170
-      abort-on-fail: true
+      name: Verify PG split and merge
+      module: test_pg_split.py
+      desc: Verify PG splitting and merging
+      polarion-id: CEPH-11674
       config:
         create_pools:
           - create_pool:
-              pool_name: pool_p1
+              pool_name: pool1
               pg_num: 64
-              rados_write_duration: 50
+              rados_put: true
+              num_objs: 200
               byte_size: 1024
               pool_type: replicated
-              osd_max_backfills: 16
-              osd_recovery_max_active: 16
         delete_pools:
-          - pool_p1
-
-  - test:
-      name: ceph osd df stats
-      module: test_osd_df.py
-      desc: Mark osd out and inspect stats change in ceph osd df
-      polarion-id: CEPH-10787
-      abort-on-fail: true
-      config:
-        run_iteration: 3
-        create_pool: true
-        pool_name: test-osd-df
-        write_iteration: 4
-        delete_pool: true
-
-  - test:
-      name: ObjectStore block stats verification
-      module: test_objectstore_block.py
-      desc: Reduce data from an object and verify the decrease in blocks
-      polarion-id: CEPH-83571714
-      abort-on-fail: true
-      config:
-        create_pool: true
-        pool_name: test-objectstore
-        write_iteration: 3
-        delete_pool: true
+          - pool1

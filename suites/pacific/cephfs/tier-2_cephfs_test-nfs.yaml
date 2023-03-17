@@ -18,7 +18,7 @@
 # CEPH-83573995 - Create cephfs nfs export on existing path
 # CEPH-11310 -  Run IOs by mounting same subvolume with all the three mounts
 # CEPH-11314 - Backup and restore data using existing NFS backup tools
-
+# CEPH-83573992 - Verifying ceph nfs ls export with --detailed option and info with cluster_id
 #=======================================================================================================================
 tests:
   -
@@ -261,3 +261,11 @@ tests:
       module: nfs.data_backup_restore_bw_nfs_and_local_mounts.py
       name: "backup and restore data bw nfs exports and local dir"
       polarion-id: "CEPH-11314"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Verifying ceph nfs ls export with --detailed option and info with cluster_id"
+      module: nfs.nfs_info_cluster_id_and_ls_export_detailed.py
+      name: "nfs ls export verification and info with cluster_id"
+      polarion-id: "CEPH-83573992"
+

@@ -13,7 +13,7 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-11313 - Perform read and write operation on the file at the same time from both CephFs and NFS client
+    CEPH-11304 - file locking -- utility for file locking
 
     Steps Performed:
     1. Create FS and mount on all the ways (Fuse, kernel, NFS)

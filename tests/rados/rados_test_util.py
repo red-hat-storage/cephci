@@ -46,8 +46,9 @@ def write_to_pools(config, rados_obj, client_node):
     pools = config.get("create_pools")
     for each_pool in pools:
         cr_pool = each_pool["create_pool"]
+        nobj = cr_pool.get("num_objs", 100)
         if cr_pool.get("rados_put", False):
-            do_rados_put(mon=client_node, pool=cr_pool["pool_name"], nobj=100)
+            do_rados_put(mon=client_node, pool=cr_pool["pool_name"], nobj=nobj)
         else:
             method_should_succeed(rados_obj.bench_write, **cr_pool)
 
