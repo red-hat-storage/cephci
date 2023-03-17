@@ -209,13 +209,16 @@ tests:
       desc: Create RBD mirrored images and run IOs
 
   - test:
-      name: test_rbd_mirror
-      module: test_rbd_mirror.py
+      name: verify sync snap deletion
+      module: test_sync_point_snapshot_deletion.py
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 2G
-            io-total: 200M
-            resize_to: 5G
+            ec_pool_config:
+              pool: sync_snap_del_1
+              image: image_ec
+            rep_pool_config:
+              pool: sync_snap_del_1
+              image: image_rep
       polarion-id: CEPH-83573332
-      desc: Create RBD mirrored image in pools and run IOs
+      desc: Verify sync point snapshot deletion in journal based
