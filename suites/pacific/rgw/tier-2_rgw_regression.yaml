@@ -311,7 +311,7 @@ tests:
   - test:
       name: Versioning with copy objects
       desc: Versioning with copy objects
-      polarion-id: CEPH-9221
+      polarion-id: CEPH-9221 # Also applies CEPH-10643
       module: sanity_rgw.py
       config:
         script-name: test_versioning_copy_objects.py
