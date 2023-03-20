@@ -348,9 +348,9 @@ class RadosOrchestrator:
             pool_name: name of the pool being created.
             kwargs: Any other args that need to be passed
                 1. pg_num -> number of PG's and PGP's
-                2. ec_profile_name -> name of EC profile if pool being created is a EC pool
-                3. min_size -> min replication size for pool for pool to serve data
-                4. size -> min replication size for pool for pool to write data
+                2. ec_profile_name -> name of EC profile if pool being created is an EC pool
+                3. min_size -> min replication size for pool to serve data
+                4. size -> min replication size for pool to write data
                 5. erasure_code_use_overwrites -> allows overrides in an erasure coded pool
                 6. allow_ec_overwrites -> This lets RBD and CephFS store their data in an erasure coded pool
                 7. disable_pg_autoscale -> sets auto-scale mode off on the pool
@@ -871,41 +871,48 @@ class RadosOrchestrator:
 
     def create_erasure_pool(self, name: str, **kwargs) -> bool:
         """
-        Creates a erasure code profile and then creates a pool with the same
+        Creates an erasure code profile and then creates a pool with the same
         References: https://docs.ceph.com/en/latest/rados/operations/erasure-code/
         Args:
             name: Name of the profile to create
             **kwargs: Any other param that needs to be set in the EC profile
                 1. k -> the number of data chunks (int)
                 2. m -> the number of coding chunks (int)
-                3. l -> Group the coding and data chunks into sets of size locality.
+                3. l -> Group the coding and data chunks into sets of size locality (int)
+                4. d -> Number of OSDs requested to send data during recovery of a single chunk
+                        d needs to be chosen such that k+1 <= d <= k+m-1. (int)
                 4. crush-failure-domain -> crush object to be us to store replica sets (str)
                 5. plugin -> plugin to be set (str)
                     supported plugins:
                     1. jerasure (default)
-                    2. isa
-                    3. lrc
-                    4. shec
-                    5. clay
+                    2. lrc -> Upstream Only
+                    3. clay -> Upstream Only
                 6. pool_name -> pool name to create and associate with the EC profile being created
+                7. force -> Override an existing profile by the same name.
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
-        k = kwargs.get("k", 3)
+        k = kwargs.get("k", 4)
         m = kwargs.get("m", 2)
         l = kwargs.get("l")
+        d = kwargs.get("d", 5)
         plugin = kwargs.get("plugin", "jerasure")
         pool_name = kwargs.get("pool_name")
+        force = kwargs.get("force")
         profile_name = f"ecprofile_{name}"
 
-        # Creating a erasure coded profile with the options provided
+        # Creating an erasure coded profile with the options provided
         cmd = (
             f"ceph osd erasure-code-profile set {profile_name}"
-            f" crush-failure-domain={failure_domain} k={k} m={m} plugin={plugin} --force "
+            f" crush-failure-domain={failure_domain} k={k} m={m} plugin={plugin}"
         )
 
         if plugin == "lrc":
             cmd = cmd + f" l={l}"
+        if plugin == "clay":
+            cmd = cmd + f" d={d}"
+        if force:
+            cmd = cmd + " --force"
         try:
             self.node.shell([cmd])
         except Exception as err:
@@ -1014,23 +1021,34 @@ class RadosOrchestrator:
                 Supported kw args:
                     1. image_name : name of the RBD image
                     2. image_size : size of the RBD image
+                    3. metadata_pool: Name of the metadata pool to be created
         Returns: True -> pass, False -> fail
 
         """
 
         # Creating a replicated pool for metadata
         metadata_pool = kwargs.get("metadata_pool", "re_pool_overwrite")
-        if not self.create_pool(pool_name=metadata_pool, app_name="rbd"):
-            log.error("Failed to create Metadata pool for rbd images")
+        if metadata_pool not in self.list_pools():
+            if not self.create_pool(pool_name=metadata_pool, app_name="rbd"):
+                log.error("Failed to create Metadata pool for rbd images")
         pool_name = kwargs["pool_name"]
         image_name = kwargs.get("image_name", "image_ec_pool")
         image_size = kwargs.get("image_size", "40M")
         image_create = f"rbd create --size {image_size} --data-pool {pool_name} {metadata_pool}/{image_name}"
         self.node.shell([image_create])
         # tbd: create filesystem on image and mount it. Part of tire 3
-        cmd = f"rbd --image {image_name} info --pool {metadata_pool}"
-        out, err = self.node.shell([cmd])
-        log.info(f"The image details are : {out}")
+
+        try:
+            cmd = f"rbd --image {image_name} info --pool {metadata_pool}"
+            out, err = self.node.shell([cmd])
+            log.info(f"The image details are : {out}")
+        except Exception:
+            log.error("Hit error during image creation")
+            return False
+
+        # running rbd bench on the image created
+        cmd = f"rbd bench-write {image_name} --pool={metadata_pool}"
+        self.node.shell([cmd])
         return True
 
     def check_compression_size(self, pool_name: str, **kwargs) -> bool:
@@ -1066,6 +1084,16 @@ class RadosOrchestrator:
             return False
         log.info(f"data on pool is compressed in accordance of ratio : {ratio_set}")
         return True
+
+    def do_crash_ls(self):
+        """Runs clash ls on the ceph cluster. returns crash ID's if any
+
+        Examples::
+            crash_list = obj.do_crash_ls()
+        """
+
+        cmd = "ceph crash ls"
+        return self.run_ceph_command(cmd=cmd)
 
     def get_cluster_date(self):
         """
