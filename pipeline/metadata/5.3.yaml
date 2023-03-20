@@ -68,6 +68,46 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - cephfs
+        - name: "Basic operation test suite for Cephadm Ansible Modules"
+          execution_time: "17m 1s"
+          suite: "suites/pacific/cephadm/tier-1-cephadm-ansible-wrapper-modules.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Basic operation test suite for Cephadm Ansible Bootstrap Module"
+          execution_time: "19m 18s"
+          suite: "suites/pacific/cephadm/tier-1-cephadm-ansible-wrapper-bootstrap-module.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Basic operation test suite for Cephadm Ansible Modules"
+          execution_time: "17m 1s"
+          suite: "suites/pacific/cephadm/tier-1-cephadm-ansible-wrapper-modules.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Basic operation test suite for Cephadm Ansible Bootstrap Module"
+          execution_time: "19m 18s"
+          suite: "suites/pacific/cephadm/tier-1-cephadm-ansible-wrapper-bootstrap-module.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - dmfg
       stage-2:
         - name: "Tier-0 test suite for 5x for RGW sanity"
           execution_time: "1h 16m 25s"
