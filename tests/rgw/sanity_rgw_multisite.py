@@ -52,7 +52,12 @@ import yaml
 
 from utility import utils
 from utility.log import Log
-from utility.utils import setup_cluster_access, verify_sync_status
+from utility.utils import (
+    configure_kafka_security,
+    install_start_kafka,
+    setup_cluster_access,
+    verify_sync_status,
+)
 
 log = Log(__name__)
 
@@ -78,6 +83,10 @@ def run(**kw):
     )
 
     set_env = config.get("set-env", False)
+    extra_pkgs = config.get("extra-pkgs")
+    install_start_kafka_broker = config.get("install_start_kafka")
+    configure_kafka_broker_security = config.get("configure_kafka_security")
+    cloud_type = config.get("cloud-type")
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
     primary_rgw_node = primary_cluster.get_ceph_object("rgw").node
@@ -141,9 +150,29 @@ def run(**kw):
     config_dir = TEST_DIR[test_version]["config"]
     lib_dir = TEST_DIR[test_version]["lib"]
     # timeout = config.get("timeout", 600)
+    # install extra package which are test specific
+    distro_version_id = primary_rgw_node.distro_info["VERSION_ID"]
+    if extra_pkgs:
+        log.info(f"got extra pkgs: {extra_pkgs}")
+        if isinstance(extra_pkgs, dict):
+            _pkgs = extra_pkgs.get(int(distro_version_id[0]))
+            pkgs = " ".join(_pkgs)
+        else:
+            pkgs = " ".join(extra_pkgs)
+
+        exec_from.exec_command(
+            sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
+        )
 
     log.info("flushing iptables")
     exec_from.exec_command(cmd="sudo iptables -F", check_ec=False)
+
+    if install_start_kafka_broker:
+        install_start_kafka(primary_rgw_node, cloud_type)
+        install_start_kafka(secondary_rgw_node, cloud_type)
+    if configure_kafka_broker_security:
+        configure_kafka_security(primary_rgw_node, cloud_type)
+        install_start_kafka(secondary_rgw_node, cloud_type)
 
     if test_config["config"]:
         log.info("creating custom config")
