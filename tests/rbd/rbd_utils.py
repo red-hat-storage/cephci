@@ -5,7 +5,13 @@ from time import sleep
 
 from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
-from tests.rbd.exceptions import CreateFileError, ImageIsDeletedError, ImportFileError
+from tests.rbd.exceptions import (
+    CreateFileError,
+    ImageIsDeletedError,
+    ImageNotFoundError,
+    ImportFileError,
+    RbdBaseException,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -19,6 +25,7 @@ class Rbd:
         self.datapool = None
         self.flag = 0
         self.k_m = self.config.get("ec-pool-k-m", None)
+        self.failure_domain = self.config.get("crush-failure-domain", None)
 
         if kw.get("req_cname"):
             self.ceph_nodes = kw["ceph_cluster_dict"][kw["req_cname"]]
@@ -40,7 +47,8 @@ class Rbd:
                 if self.config.get("ec_pool_config", {}).get("data_pool")
                 else "rbd_test_data_pool_" + self.random_string()
             )
-            self.k_m = "2,1"
+            if not self.k_m:
+                self.k_m = "2,1"
             # Temporary change untill we get more info on default value of k and m
             if "," in self.k_m:
                 self.ec_profile = self.config.get("ec_pool_config", {}).get(
@@ -141,11 +149,18 @@ class Rbd:
 
     def set_ec_profile(self, profile):
         self.exec_cmd(cmd="ceph osd erasure-code-profile rm {}".format(profile))
-        self.exec_cmd(
-            cmd="ceph osd erasure-code-profile set {} k={} m={}".format(
-                profile, self.k_m[0], self.k_m[2]
+        if self.failure_domain == "osd":
+            self.exec_cmd(
+                cmd="ceph osd erasure-code-profile set {} crush-failure-domain=osd k={} m={}".format(
+                    profile, self.k_m[0], self.k_m[2]
+                )
             )
-        )
+        else:
+            self.exec_cmd(
+                cmd="ceph osd erasure-code-profile set {} k={} m={}".format(
+                    profile, self.k_m[0], self.k_m[2]
+                )
+            )
 
     def create_ecpool(self, **kw):
         poolname = kw.get("poolname", self.datapool)
@@ -580,6 +595,30 @@ class Rbd:
                     "--yes-i-really-really-mean-it".format(pool=pool)
                 )
 
+    def migration_prepare(self, src_spec, dest_spec):
+        """Migration Prepare.
+
+        This method prepare the live migration of image from source to destination
+
+        Args:
+            src_spec : source image spec SOURCE_POOL_NAME/SOURCE_IMAGE_NAME
+            dest_spec: Target image spec TARGET_POOL_NAME/SOURCE_IMAGE_NAME
+        """
+        log.info("Starting prepare Live migration of image ")
+        return self.exec_cmd(cmd=f"rbd migration prepare {src_spec} {dest_spec}")
+
+    def migration_action(self, action, dest_spec):
+        """Migration action
+
+        This method will execute/commit the live migration as per the provided action
+
+        Args:
+            action: execute or commit
+            dest_spec: Target image spec in format of TARGET_POOL_NAME/SOURCE_IMAGE_NAME
+        """
+        log.info(f"Starting the {action} migration process")
+        return self.exec_cmd(cmd=f"rbd migration {action} {dest_spec}")
+
 
 def initial_rbd_config(**kw):
     """
@@ -611,7 +650,9 @@ def initial_rbd_config(**kw):
                   size: 10G
     """
     rbd_obj = dict()
-
+    log.debug(
+        f'config recieved for rbd_config: {kw.get("config", "Config not recieved, assuming default values")}'
+    )
     if not kw.get("config") or not kw.get("config").get("ec-pool-only"):
         ec_pool_k_m = kw.get("config", {}).pop("ec-pool-k-m", None)
         rbd_reppool = Rbd(**kw)
@@ -730,3 +771,47 @@ def rbd_remove_image_negative_validate(rbd, pool, image):
         log.error(f"{out}")
         raise ImageIsDeletedError(f" RBD image is deleted: {out}")
     log.info(f"{err}")
+
+
+def verify_migration_state(rbd, dest_spec):
+    """verify the migration status.
+
+    This method will verify the migration state for an image for destination pool after executing
+    prepare migration and execute migration steps for live image migration.
+
+    Args:
+        rbd: rbd object
+        dest_spec: Target_pool/image
+    """
+    log.info("verify migration process started")
+    out = rbd.exec_cmd(cmd=f"rbd status {dest_spec} --format json", output=True)
+    log.info(out)
+    status = json.loads(out)
+    try:
+        if "prepared" in status["migration"]["state"]:
+            log.info(f"Live Migration successfully prepared for {dest_spec}")
+            return 0
+        elif "executed" in status["migration"]["state"]:
+            log.info(f"Live migration successfully executed for {dest_spec}")
+            return 0
+    except RbdBaseException as error:
+        log.error(error.message)
+        return 1
+
+
+def verify_migration_commit(rbd, pool, image):
+    """Verify migration commit.
+
+    This method will verify for the commit migration is success or not.
+
+    Args:
+        rbd: rbd object
+        pool_name: pool name
+        image_name: image name
+    """
+    if rbd.image_exists(pool, image):
+        log.info(f"Image migration is successful for image {image} to pool {pool}")
+        return 0
+    else:
+        log.error((f"Image {image} is not found in pool {pool}"))
+        raise ImageNotFoundError("Image Not found.")
