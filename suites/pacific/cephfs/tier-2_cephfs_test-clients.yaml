@@ -258,6 +258,8 @@ tests:
       desc: "MDS failover while IO is going on each client"
       module: clients.MDS_failover_while_client_IO.py
       polarion-id: CEPH-11242
+      config:
+        num_of_file_dir: 1000
       name: "MDS failover whi client IO"
   - test:
       name: Client File locking on mounts
