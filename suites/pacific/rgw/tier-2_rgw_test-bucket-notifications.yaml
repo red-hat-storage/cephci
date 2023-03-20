@@ -236,6 +236,17 @@ tests:
         timeout: 300
 
   - test:
+      name: put and get bucket notification using tenant user
+      desc: put and get bucket notification using tenant user
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575500
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_with_tenant_user.yaml
+        timeout: 300
+
+  - test:
       name: check-ceph-health
       module: exec.py
       config:
