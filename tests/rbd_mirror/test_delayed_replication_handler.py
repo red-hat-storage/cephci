@@ -33,6 +33,16 @@ Based on the user config, particular test case will be executed.
    b. perform force failover operation after some io operation.
    c. Check md5sum of images and comapre with initial value.
    d. If md5sum remains same, testcase is passed.
+4. polarion-id: CEPH-11493 - Delayed Replication-Failback with delay set.
+   config: direct_failback_scenario (bool)
+
+   a. Set delay at primary as image config
+   b. Failback the images
+   c. Record md5sum value of images.
+   d. Set delay at primary as image config
+   e. Perform some IO operations on primary
+   f. observe image data till mentioned delay that
+      there are no mirroring activity between clusters.
 """
 
 import datetime
@@ -41,6 +51,7 @@ import time
 from ceph.parallel import parallel
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
+from tests.rbd_mirror.rbd_mirror_utils import fail_back
 from tests.rbd_mirror.rbd_mirror_utils import parallel_bench_on_n_images as write_data
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
@@ -73,11 +84,11 @@ def run(**kw):
                 "mode": "pool",
                 "mirrormode": "journal",
                 "image": "rbd_image_rep",
-                "pool": "rbd_pool_delayed_replication_handler_200",
+                "pool": "rbd_pool_delayed_replication_handler_3",
                 "io_total": "100M",
             },
             "ec_pool_config": {
-                "pool": "rbd_pool_delayed_replication_handler_200",
+                "pool": "rbd_pool_delayed_replication_handler_3",
                 "image": "rbd_image_ec",
                 "mode": "image",
                 "data_pool": "data_pool",
@@ -174,10 +185,28 @@ def run(**kw):
             cmd=f"ceph config set client rbd_mirroring_replay_delay {delay}"
         )
 
+    def config_delay_at_primary(rbd):
+        for imagespec in imagespecs:
+            rbd.image_meta(
+                action="set",
+                image_spec=imagespec,
+                key="conf_rbd_mirroring_replay_delay",
+                value=delay,
+            )
+
     try:
         if not config.get("skip_initial_config"):
             rbd_mirror_config(**kw)
 
+        if config.get("direct_failback_scenario"):
+            config_delay_at_primary(rbd2)
+            with parallel() as p:
+                for imagespec in imagespecs:
+                    p.spawn(fail_back, mirror2, mirror1, imagespec, False)
+                for result in p:
+                    if result:
+                        log.error("Failback of images Failed, Testcase failed.")
+                        return 1
         initial_md5sums = get_initial_md5sums()
 
         if config.get("delay_at_secondary"):
@@ -185,17 +214,9 @@ def run(**kw):
                 "Executing delayed replication scenario when delay configured at secondary"
             )
             config_delay_at_secondary()
-            return write_data_and_verify_no_mirror_till_delay()
 
         if config.get("delay_at_primary"):
-            for imagespec in imagespecs:
-                rbd1.image_meta(
-                    action="set",
-                    image_spec=imagespec,
-                    key="conf_rbd_mirroring_replay_delay",
-                    value=delay,
-                )
-            return write_data_and_verify_no_mirror_till_delay()
+            config_delay_at_primary(rbd1)
 
         if config.get("direct_failover_with_delay"):
             config_delay_at_secondary()
@@ -215,6 +236,9 @@ def run(**kw):
                     "Delay has been respected during Image force promote, TC passed"
                 )
                 return 0
+
+        else:
+            return write_data_and_verify_no_mirror_till_delay()
 
     finally:
         if config.get("delay_at_primary"):
