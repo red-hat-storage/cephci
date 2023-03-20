@@ -121,7 +121,7 @@ pipelines:
             - rgw
         - name: "Deploy all services at 5x using a spec file"
           execution_time: "1h 18m 12s"
-          suite: "suites/pacific/cephadm/test-container-cli-args.yaml"
+          suite: "suites/pacific/cephadm/tier-1-container-cli-args.yaml"
           global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-8"
           inventory:
@@ -1007,7 +1007,7 @@ pipelines:
             - rgw
         - name: "Deploy all services at 5x using a spec file"
           execution_time: "1h 18m 12s"
-          suite: "suites/pacific/cephadm/test-container-cli-args.yaml"
+          suite: "suites/pacific/cephadm/tier-1-container-cli-args.yaml"
           global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-8"
           inventory:

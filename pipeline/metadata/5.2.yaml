@@ -44,7 +44,7 @@ suites:
       - stage-2
 
   - name: "Deploy all services at 5x using a spec file"
-    suite: "suites/pacific/cephadm/test-container-cli-args.yaml"
+    suite: "suites/pacific/cephadm/tier-1-container-cli-args.yaml"
     global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
     platform: "rhel-8"
     rhbuild: "5.2"
