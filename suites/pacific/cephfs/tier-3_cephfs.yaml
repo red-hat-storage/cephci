@@ -106,3 +106,8 @@ tests:
       polarion-id: CEPH-11238
       desc: Converting standy MDS to active MDS while IO is going on each directories
       abort-on-fail: false
+  - test:
+      name: Add & remove osd while doing CephFS IOs
+      module: osd_add_rm_FS_IO.py
+      polarion-id: CEPH-11258
+      desc: Add & remove osd while doing CephFS IOs & check cluster health

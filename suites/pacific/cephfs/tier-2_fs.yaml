@@ -104,3 +104,20 @@ tests:
       polarion-id: CEPH-83574592
       desc: Concurrent-clone-test
       abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "Fill the cluster with specific percentage"
+      module: test_io.py
+      config:
+        cephfs:
+          "fill_data": 60
+          "io_tool": "smallfile"
+          "mount": "fuse"
+          "filesystem": "cephfs"
+          "mount_dir": ""
+  - test:
+      name: Stanby-replay mds
+      module: stand_by_replay_mds.py
+      polarion-id: CEPH-83573269
+      desc: Stanby-replay mds testt
+      abort-on-fail: false
