@@ -133,9 +133,9 @@ globals:
             - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: magna054
+          hostname: magna056
           id: node10
-          ip: 10.8.128.54
+          ip: 10.8.128.56
           root_password: passwd
           role:
             - client
