@@ -10,7 +10,6 @@ globals:
           - installer
           - mgr
           - mon
-          - client
 
       node2:
         disk-size: 20
@@ -55,3 +54,6 @@ globals:
         role:
           - osd
           - rgw
+
+      node8:
+        role: client
