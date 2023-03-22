@@ -750,3 +750,23 @@ tests:
         script-name: test_versioning_copy_objects.py
         config-file-name: test_delete_version_object_using_different_user.yaml
         timeout: 300
+
+  - test:
+      name: Test deleting the current version of the object
+      desc: Deleting the current version of the object
+      polarion-id: CEPH-10647
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_delete_current_version_object.yaml
+        timeout: 300
+
+  - test:
+      name: Test copy versioned objects to another versioned bucket
+      desc: copy versioned objects to another versioned bucket
+      polarion-id: CEPH-10644
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_copy_version_object_to_version_bucket.yaml
+        timeout: 300
