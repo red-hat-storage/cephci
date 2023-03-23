@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import yaml
 from docopt import docopt
@@ -9,14 +10,15 @@ doc = """
 
     Usage:
         update_results.py --cephVersion <cephVersion> --testResults <results>
-
-        update_confluence.py (-h | --help)
+        update_results.py --cephVersion <cephVersion> --rpLink <link>
+        update_results.py (-h | --help)
 
     Options:
         -h --help          Shows the command usage
-        -c --cephVersion cephVersion     The ceph version for which the results have to be updated
-        --testResults testResults          The test results to be updated in json format.
-                                            Ex: '{"Sanity_Run": {"tier-0": {"stage-1": {"build_url": "",
+        -c --cephVersion cephVersion        The ceph version for which the results have to be updated
+        --rpLink attributes                 rplink attributes
+        --testResults testResults           The test results to be updated in json format.
+                                                Ex: '{"Sanity_Run": {"tier-0": {"stage-1": {"build_url": "",
                                                                                         "report_portal": "",
                                                                                         "test_suite_name": {
                                                                                             "result": "PASS",
@@ -72,8 +74,36 @@ def update_results(ceph_version, test_results):
             yaml.dump(current_content, f)
 
 
+def update_rp_link(ceph_version, build_type, rp_link):
+    """
+    Update the results file with report portal link
+    Args:
+        ceph_version: the ceph version for which test results need to be updated
+        build_type: name of the pipeline
+        rp_link: report portal url
+    """
+    file_path = f"/ceph/cephci-jenkins/results/{ceph_version}.yaml"
+    with open(file_path, "r") as f:
+        current_content = f.read()
+    print("current_content")
+    print(current_content)
+    content = yaml.safe_load(current_content)
+    for key in content:
+        if key == build_type:
+            content[key]["rp_link"] = rp_link
+            print(content[key])
+    print(f"content after update --- {content}")
+    with open(file_path, "w", encoding="utf-8") as wf:
+        yaml.dump(content, wf)
+
+
 if __name__ == "__main__":
     cli_args = docopt(doc)
     cephVersion = cli_args.get("--cephVersion")
     testResults = cli_args.get("--testResults")
+    rpLink = cli_args.get("--rpLink")
+    attributes = json.loads(rpLink)
+    if attributes:
+        update_rp_link(cephVersion, attributes["build_type"], attributes["rp_link"])
+        sys.exit(0)
     update_results(cephVersion, testResults)
