@@ -56,6 +56,7 @@ from utility.utils import (
     configure_kafka_security,
     install_start_kafka,
     setup_cluster_access,
+    test_sync_via_bucket_stats,
     verify_sync_status,
 )
 
@@ -210,6 +211,12 @@ def run(**kw):
                     user_details_file,
                 )
             verify_sync_status(copy_user_to_site.get_ceph_object("rgw").node)
+        monitor_consistency_via_bucket_stats = config.get(
+            "monitor-consistency-bucket-stats"
+        )
+        if monitor_consistency_via_bucket_stats:
+            log.info("Monitor sync consistency via bucket stats across sites.")
+            test_sync_via_bucket_stats(primary_rgw_node, secondary_rgw_node)
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:
