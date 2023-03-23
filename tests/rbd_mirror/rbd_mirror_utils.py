@@ -59,10 +59,18 @@ class RbdMirror:
             if kw.get("ceph_args", True):
                 cmd = cmd + self.ceph_args
 
-            out = node.exec_command(
+            if kw.get("long_running"):
+                out = node.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                    long_running=True,
+                    check_ec=kw.get("check_ec", True),
+                )
+                return out
+
+            out, err = node.exec_command(
                 sudo=True,
                 cmd=cmd,
-                long_running=kw.get("long_running", False),
                 check_ec=kw.get("check_ec", True),
             )
             log.info(f"Output of command {cmd}: {out}")
@@ -72,6 +80,8 @@ class RbdMirror:
                     return out[0]
                 return out
 
+            if kw.get("all", False):
+                return out, err
             return 0
 
         except CommandFailed:
@@ -743,13 +753,15 @@ class RbdMirror:
                 mode: pool if mirroring has to be enabled on all images in a pool by default,
                       image if mirroring has to be enabled explicitly on images in a pool
         """
-        self.exec_cmd(
+        out = self.exec_cmd(
+            output=True,
             cmd="rbd mirror {} enable {} {}".format(
                 kw.get("mirror_level", "pool"),
                 kw.get("specs", "rbd"),
                 kw.get("mode", ""),
-            )
+            ),
         )
+        return out
 
     # Disable Pool or Image Mirroring
     def disable_mirroring(self, *args):
@@ -790,22 +802,22 @@ class RbdMirror:
     def bootstrap_peers(self, **kw):
         """Create a bootstrap token on primary cluster and store under root"""
         cmd = "rbd mirror pool peer bootstrap create"
-        cmd += " --site-name primary"
+        cmd += f" --site-name {kw['cluster_name']}"
         cmd += f" {kw['poolname']} > /root/bootstrap_token_primary"
-        return self.exec_cmd(cmd=cmd)
+        return self.exec_cmd(cmd=cmd, **kw)
 
     def import_bootstrap(self, **kw):
         """Import bootstrap token that is created on primary from scecondary cluster"""
         if "one-way" in kw.get("way", ""):
             cmd = "rbd mirror pool peer bootstrap import"
-            cmd += " --site-name secondary --direction rx-only"
+            cmd += f" --site-name {kw['cluster_name']} --direction rx-only"
             cmd += f" {kw['poolname']} /root/bootstrap_token_primary"
-            return self.exec_cmd(cmd=cmd)
+            return self.exec_cmd(cmd=cmd, **kw)
         else:
             cmd = "rbd mirror pool peer bootstrap import"
-            cmd += " --site-name secondary"
+            cmd += f" --site-name {kw['cluster_name']}"
             cmd += f" {kw['poolname']} /root/bootstrap_token_primary"
-            return self.exec_cmd(cmd=cmd)
+            return self.exec_cmd(cmd=cmd, **kw)
 
     # Remove Peer
     def peer_remove(self, **kw):

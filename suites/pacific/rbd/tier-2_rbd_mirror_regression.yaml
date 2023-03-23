@@ -294,3 +294,12 @@ tests:
             imagesize: 2G
       polarion-id: CEPH-83573618
       desc: Testing journal mirroring to snapshot mirroring
+  - test:
+      name: Mirroring in same cluster should be prevented
+      module: test_rbd_mirror_reconfig.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+      polarion-id: CEPH-9511
+      desc: Verify configuring mirror to same source and target should fail
