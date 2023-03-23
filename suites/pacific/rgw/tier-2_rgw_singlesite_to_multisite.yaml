@@ -544,6 +544,7 @@ tests:
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_with_tenant_user.yaml
             timeout: 300
+
 # Log trimming tests
   - test:
       name: Mdlog trimming test on primary
