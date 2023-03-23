@@ -190,3 +190,34 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
         timeout: 300
+
+  - test:
+      name: Test Ratelimit for regular buckets
+      desc: Test Ratelimit for regular buckets
+      polarion-id: CEPH-83574910
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
+        timeout: 300
+
+  - test:
+      name: Test Ratelimit for versioned buckets
+      desc: Test Ratelimit for versioned buckets
+      polarion-id: CEPH-83574912
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_versioned_bucket.yaml
+        timeout: 300
+
+  - test:
+      name: Test Ratelimit for tenanted users
+      desc: Test Ratelimit for tenanted users
+      polarion-id: CEPH-83574914
+      module: sanity_rgw.py
+      comments: known issue (bz-2179360)
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
+        timeout: 300
