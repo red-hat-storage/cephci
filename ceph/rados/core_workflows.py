@@ -1139,3 +1139,39 @@ class RadosOrchestrator:
         pg_query = self.run_ceph_command(cmd=cmd)
         log.debug(f"The status of pg : {pg_id} is {pg_query['state']}")
         return pg_query["state"]
+
+    def get_osd_map(self, pool: str, obj: str, nspace: str = None) -> dict:
+        """
+        Retrieve the osd map for an object in a pool
+        Args:
+            pool: pool name to which the object belongs
+            obj: object name whose osd map is to retrieved
+            nspace (optional): namespace
+        Returns:  dictionary output of ceph osd map command
+        """
+        cmd = f"ceph osd map {pool} {obj}"
+        if nspace:
+            cmd += " " + nspace
+
+        return self.run_ceph_command(cmd=cmd)
+
+    def get_osd_df_stats(
+        self, tree: bool = False, filter_by: str = None, filter: str = None
+    ) -> dict:
+        """
+        Retrieves the output of ceph osd df command
+        Args:
+            tree: enables tree view
+            filter_by: filter type, either class or name
+            filter: a pool, crush node or device class name
+        Returns: dictionary output of ceph osd df
+        """
+        cmd = "ceph osd df"
+        if tree:
+            cmd += " tree"
+        if filter_by == "class" or filter_by == "name":
+            cmd += " " + filter_by
+        if filter:
+            cmd += " " + filter
+
+        return self.run_ceph_command(cmd=cmd)
