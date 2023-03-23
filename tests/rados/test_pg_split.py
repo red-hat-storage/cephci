@@ -23,6 +23,7 @@ def run(ceph_cluster, **kw):
     6. Set bulk flag to false
     7. Wait for pg to be active+clean
     8. Verify latest pg_num has decreased.
+    9. Verify restart osd when split is in progress.
     """
     try:
         log.info(run.__doc__)
@@ -55,6 +56,19 @@ def run(ceph_cluster, **kw):
             log.error("Expected bulk flag should be True.")
             raise Exception("Expected bulk flag should be True.")
         time.sleep(20)
+        if pool["restart_osd"]:
+            acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
+            log.info(f"Acting set {acting_pg_set}")
+            if not acting_pg_set:
+                log.error("Failed to retrieve acting pg set")
+                raise Exception("Failed to retrieve acting pg set")
+            osd_id = acting_pg_set[0]
+            if not rados_obj.change_osd_state(action="stop", target=osd_id):
+                log.error(f"Unable to stop the OSD : {osd_id}")
+                raise Exception(f"Unable to stop the OSD : {osd_id}")
+            if not rados_obj.change_osd_state(action="start", target=osd_id):
+                log.error(f"Unable to start the OSD : {osd_id}")
+                raise Exception(f"Unable to start the OSD : {osd_id}")
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         new_prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
         if not new_prop["pg_num"] > prop["pg_num"]:
