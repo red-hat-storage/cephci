@@ -528,6 +528,23 @@ tests:
             config-file-name: test_bucket_policy_replace.yaml
             verify-io-on-site: ["ceph-sec"]
             timeout: 300
+
+  - test:
+      name: put and get bucket notification using tenant user
+      desc: put and get bucket notification using tenant user
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83575500
+      clusters:
+        ceph-pri:
+          config:
+            run-on-rgw: true
+            extra-pkgs:
+              - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+            install_start_kafka: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_with_tenant_user.yaml
+            timeout: 300
+
 # Log trimming tests
   - test:
       name: Mdlog trimming test on primary
