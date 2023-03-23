@@ -1251,7 +1251,6 @@ def prepare_for_failback(demoted: RbdMirror, imagespec: str):
     """Prepare image for failback after non-orderly failover.
 
     Args:
-        promoted: RbdMirror object of cluster with promoted image.
         demoted: RbdMirror object of cluster with previou primary.
         imagespec: Image specification of image to be failed back.
     """

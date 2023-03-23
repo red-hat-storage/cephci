@@ -241,7 +241,7 @@ class Rbd:
         cmd = f"rbd snap create {pool_name}/{image_name}@{snap_name}"
         return self.exec_cmd(cmd=cmd)
 
-    def snap_ls(self, pool_name, image_name, snap_name=None):
+    def snap_ls(self, pool_name: str, image_name: str, snap_name=None, all=False):
         """
         Lists the snapshots present for an image and returns the given snap_name if present
         Args:
@@ -255,6 +255,8 @@ class Rbd:
             None if no specified snaps are present.
         """
         cmd = f"rbd snap ls {pool_name}/{image_name} --format json"
+        if all:
+            cmd += " --all"
         out = self.exec_cmd(cmd=cmd, output=True)
         if out == 1:
             log.error(
