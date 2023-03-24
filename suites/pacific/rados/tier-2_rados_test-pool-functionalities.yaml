@@ -98,7 +98,7 @@ tests:
   - test:
       name: Verify ceph df stats
       desc: Verify ceph df stats after creating and deleting objects from an app pool
-      module: pool_tests.py
+      module: test_cephdf.py
       polarion-id: CEPH-83571666
       config:
         verify_cephdf_stats:
