@@ -102,3 +102,15 @@ class Orch(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def stop(self, service):
+        """
+        stop a service.
+        Args:
+          service (str): name of the service to be stopped
+        """
+        cmd = f"{self.base_cmd} stop {service}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
