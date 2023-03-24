@@ -770,3 +770,13 @@ tests:
         script-name: test_versioning_copy_objects.py
         config-file-name: test_copy_version_object_to_version_bucket.yaml
         timeout: 300
+
+  - test:
+      name: Test Write modify and read objects in the versioned bucket
+      desc: Test Write, modify and read objects in the versioned bucket
+      polarion-id: CEPH-10641
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_access_versioned_objects.yaml
+        timeout: 300
