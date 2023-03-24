@@ -269,6 +269,21 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     else:
         raise Exception("sync is either in progress or stuck")
 
+    # check for large omap in cluster status
+    check_ceph_status(verify_io_on_site_node)
+
+
+def check_ceph_status(site):
+    """
+    get the ceph cluster status and health
+    """
+    log.info("get ceph status")
+    ceph_status = site.exec_command(cmd="sudo ceph status")
+    if "HEALTH_ERR" in ceph_status or "large omap objects" in ceph_status:
+        raise Exception(
+            "ceph status is either in HEALTH_ERR or we have large omap objects."
+        )
+
 
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
     try:
