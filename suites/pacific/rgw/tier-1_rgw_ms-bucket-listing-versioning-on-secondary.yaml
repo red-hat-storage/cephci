@@ -310,6 +310,7 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
+            monitor-consistency-bucket-stats: true
             timeout: 300
   - test:
       name: listing flat ordered buckets on secondary
@@ -321,6 +322,7 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
+            monitor-consistency-bucket-stats: true
             timeout: 300
   - test:
       name: listing flat unordered buckets on secondary
@@ -332,6 +334,7 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
+            monitor-consistency-bucket-stats: true
             timeout: 300
   - test:
       name: listing pseudo ordered dir only buckets on secondary
@@ -343,6 +346,7 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
+            monitor-consistency-bucket-stats: true
             timeout: 300
   - test:
       name: ordered listing of bucket with pseudo directories and objects
@@ -354,6 +358,7 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered.yaml
+            monitor-consistency-bucket-stats: true
             timeout: 300
   - test:
       name: Test Copy of objects with Versioned and non-versionsed buckets on secondary
@@ -365,6 +370,7 @@ tests:
           config:
             script-name: test_versioning_copy_objects.py
             config-file-name: test_versioning_copy_objects.yaml
+            monitor-consistency-bucket-stats: true
             timeout: 300
   - test:
       name: enable bucket versioning on secondary
@@ -376,6 +382,7 @@ tests:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_enable.yaml
+            monitor-consistency-bucket-stats: true
             verify-io-on-site: ["ceph-pri"]
             timeout: 300
   - test:
