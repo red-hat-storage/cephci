@@ -20,7 +20,6 @@ def status = "STABLE"
 def upstreamArtifact =  [:]
 def failureReason
 def reportPotalLink
-def executionResult
 
 // Pipeline script entry point
 node('ceph-qe-ci || rhel-9-medium') {
@@ -71,6 +70,19 @@ node('ceph-qe-ci || rhel-9-medium') {
         }
 
         parallel testStages
+
+        stage('publish result') {
+            upstreamArtifact = ["composes": yamlData[upstreamVersion]["composes"],
+                                    "product": "Ceph Storage",
+                                    "ceph_version": cephVersion,
+                                    "repository": yamlData[upstreamVersion]["image"],
+                                    "upstreamVersion": upstreamVersion]
+            if ( "FAIL" in sharedLib.fetchStageStatus(testResults) ) {
+                currentBuild.result = "FAILURE"
+                status = "UNSTABLE"
+                failureReason = "Failure found in suite execution of ${currentStage}"
+            }
+        }
 
         stage('uploadTestResultToReportPortal'){
 
@@ -123,36 +135,10 @@ node('ceph-qe-ci || rhel-9-medium') {
             metaData["rp_link"] = "${rp_base_link}/ui/#cephci/launches/all/${launch_id}"
             println("metadata: ${metaData}")
             reportPotalLink = metaData["rp_link"]
-            executionResult = metaData["results"]
         }
 
-        stage('publish result') {
-            upstreamArtifact = ["composes": yamlData[upstreamVersion]["composes"],
-                                    "product": "Ceph Storage",
-                                    "ceph_version": cephVersion,
-                                    "repository": yamlData[upstreamVersion]["image"],
-                                    "upstreamVersion": upstreamVersion]
-            if ( "FAIL" in sharedLib.fetchStageStatus(testResults) ) {
-                currentBuild.result = "FAILURE"
-                status = "UNSTABLE"
-                failureReason = "Failure found in suite execution of ${currentStage}"
-            }
-        }
+        currentBuild.result = "SUCCESS"
 
-        stage('Post Build Action') {
-            nextStage = "stage-" + ((currentStage.split('-')[-1] as int) + 1)
-            tags = "${buildType},${nextStage}"
-            fetchStages = sharedLib.fetchStages(tags, overrides, testResults, null, null, upstreamVersion)
-            testStages = fetchStages["testStages"]
-            if ( !testStages.isEmpty() ) {
-                build ([
-                    wait: false,
-                    job: "rhceph-upstream-test-executor",
-                    parameters: [string(name: 'Upstream_Version', value: upstreamVersion.toString()),
-                                string(name: 'Current_Stage', value: nextStage.toString())]
-                ])
-            }
-        }
     } catch(Exception err) {
         // notify about failure
         currentBuild.result = "FAILURE"
@@ -165,7 +151,7 @@ node('ceph-qe-ci || rhel-9-medium') {
         body += "<h3><u>Test Summary</u></h3>"
         body += "<table>"
         body += "<tr><th>Test Suite</th><th>Result</th></tr>"
-        executionResult.each{k,v->
+        testResults.each{k,v->
             def test_name = k.replace("-", " ")
             body += "<tr><td>${test_name.capitalize()}</td><td>${v['status']}</td></tr>"
         }
@@ -175,7 +161,9 @@ node('ceph-qe-ci || rhel-9-medium') {
         body += "<tr><td>Ceph Version</td><td>${cephVersion}</td></tr>"
         body += "<tr><td>Compose URL</td><td>${yamlData[upstreamVersion]['composes']}</td></tr>"
         body += "<tr><td>Container Image</td><td>${yamlData[upstreamVersion]['image']}</td></tr>"
-        body += "<tr><td>Report portal URL</td><td>${reportPotalLink}</td></tr>"
+        if (reportPotalLink) {
+            body += "<tr><td>Report portal URL</td><td>${reportPotalLink}</td></tr>"
+        }
         if (currentBuild.result != "SUCCESS") {
             body += "<tr><td>${currentBuild.result} Reason</td><td>${failureReason}</td></tr>"
         }
@@ -193,5 +181,28 @@ node('ceph-qe-ci || rhel-9-medium') {
             subject += "\n${currentBuild.result} Reason: ${failureReason}"
         }
         googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
+
+        stage('Post Build Action') {
+            nextStage = "stage-" + ((currentStage.split('-')[-1] as int) + 1)
+            tags = "${buildType},${nextStage}"
+            fetchStages = sharedLib.fetchStages(tags, overrides, testResults, null, null, upstreamVersion)
+            testStages = fetchStages["testStages"]
+            if ( testStages.isEmpty() && upstreamVersion == "main" ) {
+                upstreamVersion = "quincy"
+                nextStage = "stage-1"
+                tags = "${buildType},${nextStage}"
+                overrides["upstream-build"] = upstreamVersion
+                fetchStages = sharedLib.fetchStages(tags, overrides, testResults, null, null, upstreamVersion)
+                testStages = fetchStages["testStages"]
+            }
+            if ( !testStages.isEmpty() ) {
+                build ([
+                    wait: false,
+                    job: "rhceph-upstream-test-executor",
+                    parameters: [string(name: 'Upstream_Version', value: upstreamVersion.toString()),
+                                string(name: 'Current_Stage', value: nextStage.toString())]
+                ])
+            }
+        }
     }
 }
