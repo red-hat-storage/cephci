@@ -285,6 +285,38 @@ def check_ceph_status(site):
         )
 
 
+def set_config_param(node):
+    """
+    To set configuration parameters across sites
+    :param node: exec_node from site
+    """
+    # select the rgw daemon name to set the configuration parameter/s
+    rgw_process = node.exec_command(cmd="ceph orch ps | grep rgw")
+    rgw_process_name = rgw_process[0].split()[0]
+
+    # add the configuration/s to be set on service
+    configs = ["rgw_max_objs_per_shard 5", "rgw_lc_debug_interval 30"]
+    for config_cmd in configs:
+        node.exec_command(cmd=f"ceph config set client.{rgw_process_name} {config_cmd}")
+
+    # restart rgw service for changes to take effect
+    rgw_service = node.exec_command(cmd="ceph orch ls | grep rgw")
+    rgw_service_name = rgw_service[0].split()[0]
+    node.exec_command(cmd=f"ceph orch restart {rgw_service_name}")
+
+    # select osd service name to set configuration parameter/s
+    osd_process = node.exec_command(cmd="ceph orch ls | grep osd")
+    osd_process_name = osd_process[0].split()[0]
+
+    # add the configuration/s to be set on service
+    configs = ["osd_deep_scrub_large_omap_object_key_threshold 200"]
+    for config_cmd in configs:
+        node.exec_command(cmd=f"ceph config set osd {config_cmd}")
+    # restart osd service
+    node.exec_command(cmd=f"ceph orch restart {osd_process_name}")
+    node.exec_command(cmd="ceph config dump")
+
+
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
     try:
         for client in kernel_clients:
