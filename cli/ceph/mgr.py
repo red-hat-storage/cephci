@@ -1,4 +1,5 @@
 from cli import Cli
+from cli.utilities.utils import build_cmd_from_args
 
 
 class Mgr(Cli):
@@ -33,3 +34,9 @@ class Mgr(Cli):
         """
         cmd = f"{self.base_cmd} fail {mgr}"
         return self.execute(sudo=True, check_ec=False, long_running=True, cmd=cmd)
+
+    def services(self, **kw):
+        """Get MGR service module"""
+        cmd = f"{self.base_cmd} services{build_cmd_from_args(**kw)}"
+
+        return self.execute(sudo=True, cmd=cmd)
