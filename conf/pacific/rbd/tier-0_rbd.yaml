@@ -28,6 +28,7 @@ globals:
         role:
           - mds
           - osd
+          - rgw
         no-of-volumes: 3
         disk-size: 20
       node6:
