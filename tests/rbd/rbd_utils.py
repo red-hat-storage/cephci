@@ -111,8 +111,9 @@ class Rbd:
             self.flag = 1
             return 1
 
-    def random_string(self):
-        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(10)])
+    def random_string(self, **kw):
+        length = kw.get("len", 10)
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(length)])
         return temp_str
 
     def initial_rbd_config(self, rbd, pool, image, **kw):
@@ -351,15 +352,22 @@ class Rbd:
             log.info("clone creation is failed")
             return 1
 
-    def flatten_clone(self, pool_name, image_name):
+    def flatten_clone(self, pool_name, image_name, **kw):
         """
         Flattens a clone of an image from parent image
         Args:
             pool_name: name of the pool which clone is created
             image_name: name of th clones image
+            kw: any other extra arguments including but not limited to encryption_config
         """
         log.info("start flatten")
         cmd = f"rbd flatten {pool_name}/{image_name}"
+
+        if kw.get("encryption_config"):
+            for encryption in kw.get("encryption_config"):
+                for format, phrase in encryption.items():
+                    cmd += f" --encryption-format={format} --encryption-passphrase-file={phrase}"
+
         rc = self.exec_cmd(cmd=cmd)
         if rc != 0:
             log.error(f"Error while flattening image {image_name}")
@@ -456,20 +464,25 @@ class Rbd:
         cmd = f"rbd feature disable {pool_name}/{image_name} {feature_name}"
         return self.exec_cmd(cmd=cmd, **kwargs)
 
-    def image_resize(self, pool_name, image_name, size):
+    def image_resize(self, pool_name, image_name, size, **kw):
         """
         Fetch image info for the given pool and image
         Args:
             pool_name: name of the pool
             image_name: image of the pool
             size: new size for the image
-
+            kw: any other extra arguments including but not limited to encryption-passphrase-file
         Returns:
 
         """
-        return self.exec_cmd(
-            cmd=f"rbd resize -s {size} {pool_name}/{image_name} --allow-shrink"
-        )
+        cmd = f"rbd resize --size {size} {pool_name}/{image_name}"
+        if kw.get("passphrase"):
+            for passphrase in kw.get("passphrase"):
+                for key, value in passphrase.items():
+                    cmd += f" --{key} {value}"
+            return self.exec_cmd(cmd=cmd, all=kw.get("all", False))
+
+        return self.exec_cmd(cmd=f"{cmd} --allow-shrink")
 
     def snap_rollback(self, snap_spec):
         """
@@ -730,6 +743,43 @@ class Rbd:
         """
         return self.exec_cmd(cmd=f"rbd config {level} set {entity} {key} {value}", **kw)
 
+    def encrypt(self, image_spec, encryption_type, passphrase):
+        """Apply luks encryption of the specified format on the given image
+
+        Args:
+            image_spec (str): pool/image on which encryption to be applied
+            encryption_type (str): luks1, luks2
+            passphrase (str): path to passphrase file
+
+        Returns:
+            int: 0 if encryption successful else 1
+        """
+        cmd = f"rbd encryption format {image_spec} {encryption_type} {passphrase}"
+        return self.exec_cmd(cmd=cmd)
+
+    def device_map(self, operation, image_spec, device_type, encryption_config):
+        """Perform rbd device map operation using given parameters
+
+        Args:
+            operation: map or unmap
+            image_spec (str): pool_name/image_name
+            device_type (str):  arg device type [ggate, krbd (default), nbd]
+            encryption_config (list(dict)): ["<encryption_type>": "<corresponding_passphrase>"]
+
+        Returns:
+            Status of rbd device map command execution (1 if failed, 0 if passed)
+        """
+        cmd = f"rbd device {operation} -t {device_type} "
+        if encryption_config:
+            cmd += "-o "
+            for encryption in encryption_config:
+                for format, phrase in encryption.items():
+                    cmd += f"encryption-format={format},encryption-passphrase-file={phrase},"
+            cmd = cmd[:-1]  # remove trailing comma
+        cmd += f" {image_spec}"
+        # add validations to return value as per document
+        return self.exec_cmd(cmd=cmd, all=True)
+
     def trash_purge(self, pool_name, **kw):
         """
         Purge/Remove all expired images in trash from the pool
@@ -793,7 +843,7 @@ def initial_rbd_config(**kw):
     """
     rbd_obj = dict()
     log.debug(
-        f'config recieved for rbd_config: {kw.get("config", "Config not recieved, assuming default values")}'
+        f'config received for rbd_config: {kw.get("config", "Config not received, assuming default values")}'
     )
     if not kw.get("config") or not kw.get("config").get("ec-pool-only"):
         ec_pool_k_m = kw.get("config", {}).pop("ec-pool-k-m", None)
@@ -981,3 +1031,54 @@ def verify_migration_abort(rbd, pool, image):
         f"Image {image} is not found in pool {pool}, abort image migration is successful"
     )
     return 0
+
+
+def create_passphrase_file(rbd, file):
+    """Creates a file in the given path and adds a random passphrase in the file
+    The passphrase generated and saved in the file will be used for luks encryption
+
+    Args:
+        file (str): file_path/file_name in which the passphrase needs to be saved
+    """
+    passphrase = rbd.random_string()
+
+    passphrase_file = rbd.ceph_client.remote_file(
+        sudo=True, file_name=file, file_mode="w"
+    )
+    passphrase_file.write(passphrase)
+    passphrase_file.flush()
+
+
+def device_cleanup(rbd, file_name, **kw):
+    """
+    Unmout the given file_name, unmap the given device_name encrypted using encryption_config
+    Args:
+        rbd: rbd object
+        file_name: <path>/<file> to be unmounted
+        kw:
+            "image_spec": image which was encrypted
+            "encryption_config": {<type>:<passphrase>} used for encryption
+            "device_type": default "nbd"
+            "device_name": device created for image map without encryption
+    """
+    flag = 0
+    if rbd.exec_cmd(
+        cmd=f"umount {file_name}",
+        sudo=True,
+    ):
+        log.error(f"Umount failed for {file_name}")
+        flag = 1
+
+    if kw.get("image_spec"):
+        if rbd.device_map(
+            "unmap",
+            f"{kw['image_spec']}",
+            kw.get("device_type", "nbd"),
+            kw["encryption_config"],
+        ):
+            log.error(
+                f"Device unmap failed for {kw['image_spec']} with encryption config {kw['encryption_config']}"
+            )
+            flag = 1
+
+    return flag

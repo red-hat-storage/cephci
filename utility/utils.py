@@ -1788,7 +1788,9 @@ def run_fio(**fio_args):
 
     Args:
         device_name: Target device
-        filename: Target file
+        filename: <path>/<file_name> or <path>
+                  if only directory is given, then a file with name "file"
+                  will be created and data written into it.
         rbdname: rbd image name
         pool: name of rbd image pool
         runtime: fio runtime
@@ -1801,7 +1803,10 @@ def run_fio(**fio_args):
     log.debug(f"Config Recieved for fio: {fio_args}")
 
     if fio_args.get("filename"):
-        opt_args = f" --filename={fio_args['filename']}/file"
+        file_name = fio_args["filename"]
+        if os.path.isdir(file_name):
+            file_name = f"{file_name}/file"
+        opt_args = f" --filename={file_name}"
 
     elif fio_args.get("device_name"):
         opt_args = f" --ioengine=libaio --filename={fio_args['device_name']}"
