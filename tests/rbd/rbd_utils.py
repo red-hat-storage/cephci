@@ -323,15 +323,21 @@ class Rbd:
             log.info("clone creation is failed")
             return 1
 
-    def flatten_clone(self, pool_name, image_name):
+    def flatten_clone(self, pool_name, image_name, **kw):
         """
         Flattens a clone of an image from parent image
         Args:
             pool_name: name of the pool which clone is created
             image_name: name of th clones image
+            kw: any other extra arguments including but not limited to encryption-passphrase-file, encryption-format
         """
         log.info("start flatten")
         cmd = f"rbd flatten {pool_name}/{image_name}"
+        
+        if kw.get("encryption-passphrase-file"):
+            for format, passphrase in zip(kw["encryption-format"], kw["encryption-passphrase-file"]):
+                cmd += f" --encryption-format={format}  --encryption-passphrase-file={passphrase}"
+        
         rc = self.exec_cmd(cmd=cmd)
         if rc != 0:
             log.error(f"Error while flattening image {image_name}")
@@ -401,19 +407,24 @@ class Rbd:
             return 1
         return image_info
 
-    def image_resize(self, pool_name, image_name, size):
+    def image_resize(self, pool_name, image_name, size, **kw):
         """
         Fetch image info for the given pool and image
         Args:
             pool_name: name of the pool
             image_name: image of the pool
             size: new size for the image
-
+            kw: any other extra arguments including but not limited to encryption-passphrase-file
         Returns:
 
         """
+        cmd = f"rbd resize --size {size} {pool_name}/{image_name}"
+        if kw.get("encryption-passphrase-file"):
+            cmd += f"encryption-passphrase-file {kw['encryption-passphrase-file']}"
+            return self.exec_cmd(cmd=cmd)
+        
         return self.exec_cmd(
-            cmd=f"rbd resize -s {size} {pool_name}/{image_name} --allow-shrink"
+            cmd=f"{cmd} --allow-shrink"
         )
 
     def snap_rollback(self, snap_spec):
@@ -580,6 +591,28 @@ class Rbd:
                     cmd="ceph osd pool delete {pool} {pool} "
                     "--yes-i-really-really-mean-it".format(pool=pool)
                 )
+                
+    def encrypt(self, image_spec, encryption_type, passphrase, **kw):
+        """Apply luks encryption of the specified format on the given image
+
+        Args:
+            image_spec (str): pool/image on which encryption to be applied
+            encryption_type (str): luks1, luks2
+            passphrase (str): path to passphrase file
+
+        Returns:
+            int: 0 if encryption successful else 1
+        """
+        cmd = f"rbd encryption format {image_spec} {encryption_type} {passphrase}"
+        return self.exec_cmd(cmd=cmd)
+    
+    def device_map(self, image_spec, t, encryption_format, passphrase, **kw):
+        cmd = f"rbd device map -t {t} -o "
+        for format, phrase in zip(encryption_format, passphrase):
+            cmd += f"encryption-format={format},encryption-passphrase-file={passphrase} {image_spec},"
+        cmd += f" {image_spec}"
+        # add validations to return value as per document
+        return self.exec_cmd(cmd=cmd)
 
 
 def initial_rbd_config(**kw):
