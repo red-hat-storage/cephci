@@ -1407,3 +1407,37 @@ class RadosOrchestrator:
         cmd = "ceph osd tree"
         osds = self.run_ceph_command(cmd)
         return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]
+
+    def change_heap_profiler_state(self, osd_list, action):
+        """
+        Start/stops the OSD heap profile
+        Args:
+             osd_list: The list with the osd IDs
+             action : start  or stop actions for heap profiler
+        Return: 0 for Pass , 1 for fail
+        """
+        if not osd_list:
+            log.error("OSD list is empty")
+            return 1
+        for osd_id in osd_list:
+            cmd = f"ceph tell osd.{osd_id} heap {action}_profiler"
+            self.node.shell([cmd])
+        log.info(f"The OSD {osd_list} heap profile is in {action} state")
+        return 0
+
+    def get_heap_dump(self, osd_list):
+        """
+        Returns the heap dump of the OSD
+        Args:
+            osd_list: The list with the osd IDs
+        Return : string
+        """
+        if not osd_list:
+            log.error("OSD list is empty")
+            return 1
+        heap_dump = {}
+        for osd_id in osd_list:
+            cmd = f"ceph tell osd.{osd_id} heap dump"
+            out, err = self.node.shell([cmd])
+            heap_dump[osd_id] = out.strip()
+        return heap_dump
