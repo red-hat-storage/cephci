@@ -253,7 +253,8 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm RealmOne"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup RealmOneZonegroup"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone RealmOneZoneB"
-              - "ceph orch restart {service_name:shared.pri}"
+              - "ceph orch restart {service_name:RealmOneZonegroup.pri}"
+              - "sleep 360"
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
