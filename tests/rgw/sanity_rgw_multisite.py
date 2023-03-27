@@ -58,6 +58,7 @@ from utility.utils import (
     set_config_param,
     setup_cluster_access,
     test_sync_via_bucket_stats,
+    test_user_stats_consistency,
     verify_sync_status,
 )
 
@@ -216,6 +217,12 @@ def run(**kw):
                     user_details_file,
                 )
             verify_sync_status(copy_user_to_site.get_ceph_object("rgw").node)
+
+        monitor_user_stats = config.get("monitor-user-stats")
+        if monitor_user_stats:
+            log.info("Test user stats consistency on multisite.")
+            test_user_stats_consistency(primary_rgw_node, secondary_rgw_node)
+
         monitor_consistency_via_bucket_stats = config.get(
             "monitor-consistency-bucket-stats"
         )

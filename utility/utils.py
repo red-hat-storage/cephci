@@ -146,6 +146,110 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
+def test_user_stats_consistency(primary_rgw_node, secondary_rgw_node):
+    """
+    verify and monitor sync consistency via user stats across sites.
+    """
+    log.info("Test number of users are consistent across sites")
+    total_users_on_primary = json.loads(
+        primary_rgw_node.exec_command(cmd="sudo radosgw-admin user list | wc -l")[0]
+    )
+    total_users_on_secondary = json.loads(
+        secondary_rgw_node.exec_command(cmd="sudo radosgw-admin user list | wc -l")[0]
+    )
+    user_list_primary = json.loads(
+        primary_rgw_node.exec_command(cmd="sudo radosgw-admin user list")[0]
+    )
+    if total_users_on_primary == total_users_on_secondary:
+        total_user = total_users_on_secondary - 2
+        for user in range(0, total_user):
+            user_name = user_list_primary[user]
+            (
+                tenancy,
+                uid,
+                tenant,
+                pri_size,
+                sec_size,
+                pri_objects,
+                sec_objects,
+            ) = test_tenancy(primary_rgw_node, secondary_rgw_node, user_name)
+            if pri_size == sec_size and pri_objects == sec_objects:
+                log.info(f"user stats are consistent across sites for {user_name}")
+            else:
+                log.info(
+                    "user stats inconsistent, perform sync-stats on both sites and retest for consistency"
+                )
+                cmd = f"sudo radosgw-admin user stats --sync-stats --uid {uid}"
+                if tenancy:
+                    cmd = f"{cmd} --tenant {tenant}"
+                primary_rgw_node.exec_command(cmd=cmd)
+                secondary_rgw_node.exec_command(cmd=cmd)
+
+                (
+                    tenancy,
+                    uid,
+                    tenant,
+                    pri_size,
+                    sec_size,
+                    pri_objects,
+                    sec_objects,
+                ) = test_tenancy(primary_rgw_node, secondary_rgw_node, user_name)
+
+                if pri_size == sec_size and pri_objects == sec_objects:
+                    log.info(
+                        "user stats for {user_name} are consistent after sync-stats."
+                    )
+
+                else:
+                    raise Exception(
+                        "User {user_name} not synced across sites even after sync-stats, test failure."
+                    )
+    else:
+        raise Exception("Users not synced across sites, test failure.")
+
+
+def test_tenancy(primary_rgw_node, secondary_rgw_node, user_name):
+    at_index = user_name.find("$")
+    if at_index != -1:
+        log.info("It is a tenanted user, find uid and tenant.")
+        tenancy = "true"
+        len_str = len(user_name)
+        tenant = user_name[0:at_index]
+        uid = user_name[at_index + 1 : len_str]
+        cmd = f"sudo radosgw-admin user stats --uid {uid}"
+        user_stat_pri_doc = json.loads(
+            primary_rgw_node.exec_command(cmd=f"{cmd} --tenant {tenant}")[0]
+        )
+        user_stat_sec_doc = json.loads(
+            secondary_rgw_node.exec_command(cmd=f"{cmd} --tenant {tenant}")[0]
+        )
+
+    else:
+        log.info("It is a non-tenanted user.")
+        tenancy = "false"
+        uid = user_name
+        tenant = "default"
+        cmd = f"sudo radosgw-admin user stats --uid {uid}"
+
+        user_stat_pri_doc = json.loads(primary_rgw_node.exec_command(cmd=f"{cmd}")[0])
+        user_stat_sec_doc = json.loads(secondary_rgw_node.exec_command(cmd=f"{cmd}")[0])
+
+    primary_size = user_stat_pri_doc["stats"]["size"]
+    secondary_size = user_stat_sec_doc["stats"]["size"]
+    primary_objects = user_stat_pri_doc["stats"]["num_objects"]
+    secondary_objects = user_stat_sec_doc["stats"]["num_objects"]
+
+    return (
+        tenancy,
+        uid,
+        tenant,
+        primary_size,
+        secondary_size,
+        primary_objects,
+        secondary_objects,
+    )
+
+
 def test_sync_via_bucket_stats(primary_rgw_node, secondary_rgw_node):
     """
     verify and monitor sync consistency via bucket stats across sites.
