@@ -250,9 +250,9 @@ tests:
               - "radosgw-admin period pull --url http://{node_ip:ceph-sec#node4}:80 --access-key test123 --secret test123"
               - "radosgw-admin zone create --rgw-realm RealmOne --rgw-zonegroup RealmOneZonegroup  --rgw-zone RealmOneZoneB --endpoints http://{node_ip:node4}:80 --access-key test123 --secret test123"
               - "radosgw-admin period update --rgw-realm RealmOne --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm RealmOne"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup RealmOneZonegroup"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone RealmOneZoneB"
+              - "ceph config set client.rgw.{daemon_id:RealmOneZonegroup.pri} rgw_realm RealmOne"
+              - "ceph config set client.rgw.{daemon_id:RealmOneZonegroup.pri} rgw_zonegroup RealmOneZonegroup"
+              - "ceph config set client.rgw.{daemon_id:RealmOneZonegroup.pri} rgw_zone RealmOneZoneB"
               - "ceph orch restart {service_name:RealmOneZonegroup.pri}"
               - "sleep 360"
       desc: Setting up RGW multisite replication environment
