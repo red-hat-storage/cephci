@@ -1314,3 +1314,73 @@ class RadosOrchestrator:
             pgid_list.append(pg_stats["pgid"])
 
         return pgid_list
+
+    def run_pool_sanity_check(self):
+        """
+        Runs sanity on the pools after triggering scrub and deep-scrub on pools, waiting 600 Secs
+
+        This method is used to assess the health of Pools after any operation, where in a scrub and deep scrub is
+        triggered, and the method scans the cluster for few health warnings, if generated
+
+        Returns: True-> Pass,  false -> Fail
+        """
+        self.run_scrub()
+        self.run_deep_scrub()
+        time.sleep(10)
+
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+        flag = False
+        while end_time > datetime.datetime.now():
+            status_report = self.run_ceph_command(cmd="ceph report")
+            ceph_health_status = status_report["health"]
+            health_warns = (
+                "PG_AVAILABILITY",
+                "PG_DEGRADED",
+                "PG_RECOVERY_FULL",
+                "TOO_FEW_OSDS",
+                "PG_BACKFILL_FULL",
+                "PG_DAMAGED",
+                "OSD_SCRUB_ERRORS",
+                "OSD_TOO_MANY_REPAIRS",
+                "CACHE_POOL_NEAR_FULL",
+                "SMALLER_PGP_NUM",
+                "MANY_OBJECTS_PER_PG",
+                "OBJECT_MISPLACED",
+                "OBJECT_UNFOUND",
+                "SLOW_OPS",
+            )
+
+            flag = (
+                False
+                if any(
+                    key in health_warns for key in ceph_health_status["checks"].keys()
+                )
+                else True
+            )
+            if flag:
+                log.info("No warnings on the cluster")
+                break
+
+            log.info(
+                f"Observing a health warning on cluster {ceph_health_status['checks'].keys()}"
+            )
+            time.sleep(10)
+
+        if not flag:
+            log.error(
+                "Health warning generated on cluster and not cleared post waiting of 600 seconds"
+            )
+            return False
+
+        log.info("Completed check on the cluster. Pass!")
+        return True
+
+    def get_osd_hosts(self):
+        """
+        lists the names of the OSD hosts in the cluster
+        Returns: list of osd host names as used in the crush map
+
+        """
+        cmd = "ceph osd tree"
+        osds = self.run_ceph_command(cmd)
+        return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]
