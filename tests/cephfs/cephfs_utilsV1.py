@@ -1939,7 +1939,7 @@ class FsUtils(object):
         mds_map = fs_status["mdsmap"]
         active_list = [i["name"] for i in mds_map if i["state"] == expected_status]
         log.info(f"{mds_map}")
-        if len(active_list) == num_of_mds:
+        if len(active_list) >= num_of_mds:
             return active_list
         log.info(f"{active_list}")
         raise CommandFailed(
