@@ -102,3 +102,21 @@ tests:
               pool_type: replicated
         delete_pools:
           - pool1
+
+  - test:
+      name: Verify restart osd during PG split
+      module: test_pg_split.py
+      desc: Verify restart osd when PG split in progress
+      polarion-id: CEPH-11667
+      config:
+        create_pools:
+          - create_pool:
+              restart_osd: true
+              pool_name: pool1
+              pg_num: 64
+              rados_put: true
+              num_objs: 200
+              byte_size: 1024
+              pool_type: replicated
+        delete_pools:
+          - pool1
