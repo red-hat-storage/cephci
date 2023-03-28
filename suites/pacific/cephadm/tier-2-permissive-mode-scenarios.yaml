@@ -1,7 +1,7 @@
 ---
 # ==================================================================================
 # Tier-level: 2
-# Test-Suite: tier-2_cephadm_scenarios_with_permissive_mode.yaml
+# Test-Suite: tier-2-permissive-mode-scenarios.yaml
 # Cluster Configuration:
 #    conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
 # Test Scenarios:
@@ -29,6 +29,7 @@ tests:
           module_args:
             mon_node: node1
             selinux: permissive  # permissive or enforcing
+
   - test:
       name: Add host with labels to cluster using cephadm-ansible wrapper modules
       desc: Execute 'playbooks/add-host-to-cluster.yaml' playbook
@@ -54,6 +55,7 @@ tests:
           module_args:
             node: node2
             label: osd.1
+
   - test:
       name: Add host with labels to cluster using cephadm-ansible wrapper modules
       desc: Execute 'playbooks/add-host-to-cluster.yaml' playbook

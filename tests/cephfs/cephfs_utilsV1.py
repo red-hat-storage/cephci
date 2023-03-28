@@ -1919,6 +1919,34 @@ class FsUtils(object):
             command += f" {kwargs.get('extra_params')}"
             client.exec_command(sudo=True, cmd=command)
 
+    def get_mds_status(self, client, num_of_mds, expected_status="active", **kwargs):
+        """
+
+        Args:
+            client:
+            num_of_mds:
+            expected_status:
+
+        Returns:
+
+        """
+        fs_status_cmd = "ceph fs status"
+        if kwargs.get("vol_name"):
+            fs_status_cmd += f" {kwargs.get('vol_name')}"
+        fs_status_cmd += " --format json"
+        out, rc = client.exec_command(sudo=True, cmd=fs_status_cmd)
+        fs_status = json.loads(out)
+        mds_map = fs_status["mdsmap"]
+        active_list = [i["name"] for i in mds_map if i["state"] == expected_status]
+        log.info(f"{mds_map}")
+        if len(active_list) == num_of_mds:
+            return active_list
+        log.info(f"{active_list}")
+        raise CommandFailed(
+            f"expected {num_of_mds} in {expected_status} status but only {len(active_list)} "
+            f"are in {expected_status}"
+        )
+
     def get_pool_df(self, client, pool_name, **kwargs):
         """
         Gets the pool Avaialble space and used space details

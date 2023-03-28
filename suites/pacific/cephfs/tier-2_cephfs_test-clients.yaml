@@ -258,6 +258,8 @@ tests:
       desc: "MDS failover while IO is going on each client"
       module: clients.MDS_failover_while_client_IO.py
       polarion-id: CEPH-11242
+      config:
+        num_of_file_dir: 1000
       name: "MDS failover whi client IO"
   - test:
       name: Client File locking on mounts
@@ -265,5 +267,13 @@ tests:
       polarion-id: CEPH-11313
       desc: Test File locking on mounts
       abort-on-fail: false
+  - test:
+      name: cross delete operations
+      module: clients.cross_delete_ops_bw_fuse_and_kernel_clients.py
+      polarion-id: CEPH-83573532
+      desc: Cross Delete Ops b/w Fuse and Kernel mounts
+      abort-on-fail: false
+
+
 
 

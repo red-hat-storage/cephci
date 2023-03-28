@@ -52,7 +52,15 @@ import yaml
 
 from utility import utils
 from utility.log import Log
-from utility.utils import setup_cluster_access, verify_sync_status
+from utility.utils import (
+    configure_kafka_security,
+    install_start_kafka,
+    set_config_param,
+    setup_cluster_access,
+    test_sync_via_bucket_stats,
+    test_user_stats_consistency,
+    verify_sync_status,
+)
 
 log = Log(__name__)
 
@@ -78,6 +86,10 @@ def run(**kw):
     )
 
     set_env = config.get("set-env", False)
+    extra_pkgs = config.get("extra-pkgs")
+    install_start_kafka_broker = config.get("install_start_kafka")
+    configure_kafka_broker_security = config.get("configure_kafka_security")
+    cloud_type = config.get("cloud-type")
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
     primary_rgw_node = primary_cluster.get_ceph_object("rgw").node
@@ -132,6 +144,10 @@ def run(**kw):
             if archive_cluster_exists:
                 setup_cluster_access(archive_cluster, archive_rgw_node)
                 setup_cluster_access(archive_cluster, archive_client_node)
+                set_config_param(archive_client_node)
+            ms_clusters = [primary_client_node, secondary_client_node]
+            for cluster_node in ms_clusters:
+                set_config_param(cluster_node)
     # run the test
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
@@ -141,9 +157,29 @@ def run(**kw):
     config_dir = TEST_DIR[test_version]["config"]
     lib_dir = TEST_DIR[test_version]["lib"]
     # timeout = config.get("timeout", 600)
+    # install extra package which are test specific
+    distro_version_id = primary_rgw_node.distro_info["VERSION_ID"]
+    if extra_pkgs:
+        log.info(f"got extra pkgs: {extra_pkgs}")
+        if isinstance(extra_pkgs, dict):
+            _pkgs = extra_pkgs.get(int(distro_version_id[0]))
+            pkgs = " ".join(_pkgs)
+        else:
+            pkgs = " ".join(extra_pkgs)
+
+        exec_from.exec_command(
+            sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
+        )
 
     log.info("flushing iptables")
     exec_from.exec_command(cmd="sudo iptables -F", check_ec=False)
+
+    if install_start_kafka_broker:
+        install_start_kafka(primary_rgw_node, cloud_type)
+        install_start_kafka(secondary_rgw_node, cloud_type)
+    if configure_kafka_broker_security:
+        configure_kafka_security(primary_rgw_node, cloud_type)
+        install_start_kafka(secondary_rgw_node, cloud_type)
 
     if test_config["config"]:
         log.info("creating custom config")
@@ -181,6 +217,18 @@ def run(**kw):
                     user_details_file,
                 )
             verify_sync_status(copy_user_to_site.get_ceph_object("rgw").node)
+
+        monitor_user_stats = config.get("monitor-user-stats")
+        if monitor_user_stats:
+            log.info("Test user stats consistency on multisite.")
+            test_user_stats_consistency(primary_rgw_node, secondary_rgw_node)
+
+        monitor_consistency_via_bucket_stats = config.get(
+            "monitor-consistency-bucket-stats"
+        )
+        if monitor_consistency_via_bucket_stats:
+            log.info("Monitor sync consistency via bucket stats across sites.")
+            test_sync_via_bucket_stats(primary_rgw_node, secondary_rgw_node)
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:

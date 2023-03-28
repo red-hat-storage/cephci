@@ -61,6 +61,26 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - cephfs
+        - name: "Basic operation test suite for Cephadm Ansible Modules"
+          execution_time: "13m 3s"
+          suite: "suites/quincy/cephadm/tier-1-cephadm-ansible-wrapper-modules.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Basic operation test suite for Cephadm Ansible Bootstrap Module"
+          execution_time: "17m 5s"
+          suite: "suites/pacific/cephadm/tier-1-cephadm-ansible-wrapper-bootstrap-module.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
       stage-2:
         - name: "Testing RBD-mirror tier-1 regression scenarios"
           execution_time: "1h 6m 0s"
@@ -124,8 +144,8 @@ pipelines:
           metadata:
             - dmfg
         - name: "Deploy all services using a spec file option"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_test-container-cli-args.yaml"
+          execution_time: "44m 45s"
+          suite: "suites/quincy/cephadm/tier-1-container-cli-args.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-9"
           inventory:
@@ -226,6 +246,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rados
+        - name: "Permissive Mode Scenarios"
+          execution_time: "16m 25s"
+          suite: "suites/quincy/cephadm/tier-2-permissive-mode-scenarios.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
       stage-2:
         - name: "Testing RBD tier-2 regression scenarios"
           execution_time: "37m 6s"
@@ -267,6 +297,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
+        - name: "Deploy cluster using cephadm and configure RGW in warn state"
+          execution_time: "26m 21s"
+          suite: "suites/quincy/cephadm/tier-2-rgw-with-warn-state.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
       stage-3:
         - name: "Tier-2 RGW cloud transitions"
           execution_time: "47m 35s"
@@ -953,8 +993,8 @@ pipelines:
           metadata:
             - dmfg
         - name: "Deploy all services using a spec file option"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_test-container-cli-args.yaml"
+          execution_time: "44m 45s"
+          suite: "suites/quincy/cephadm/tier-1-container-cli-args.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-9"
           inventory:
@@ -1122,8 +1162,8 @@ pipelines:
           metadata:
             - dmfg
         - name: "Deploy all services using a spec file option"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_test-container-cli-args.yaml"
+          execution_time: "44m 45s"
+          suite: "suites/quincy/cephadm/tier-1-container-cli-args.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-9"
           inventory:

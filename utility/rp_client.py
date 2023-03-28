@@ -88,7 +88,7 @@ from functools import partial
 import xmltodict
 from docopt import docopt
 from rp_utils.preproc import PreProcClient
-from rp_utils.reportportalV1 import Launch, ReportPortalV1, RpLog
+from rp_utils.reportportalV1 import Launch, Launches, ReportPortalV1, RpLog
 from rp_utils.xunit_xml import TestCase, TestSuite, XunitXML
 from utils import create_run_dir, generate_unique_id, tfacon
 
@@ -102,13 +102,17 @@ Standard script to push all the logs from Xunit files and get launcher details f
         rp_client.py --config_file <str> --payload_dir <str>
         rp_client.py --config_file <str> --launch_id <int>
         rp_client.py --config_file <str> --launch_id <int> --output <file-path>
+        rp_client.py --config_file <str> --attributes <attributes_file>
+        rp_client.py --config_file <str> --merge <launch_file>
         rp_client.py (-h | --help)
 
     Options:
-        -h --help          Shows the command usage
+        -h --help               Shows the command usage
         -c --config_file <str>  Config file with report portal details.
         -d --payload_dir <str>  Paylod directory where we have results and attachments
         -l --launch_id <int>    Report portal launch id
+        -a --attributes <str>   Report portal launch attributes
+        -m --merge <str>        Report portal launches file
         -o --output <str>       File path to json output
 """
 
@@ -156,6 +160,60 @@ def get_launch_details(config_file, launch_id):
 
         return testsuites
     except Exception as e:
+        raise e
+
+
+def get_launches(config_file, attributes):
+    """
+    Get the launches by using attribute details
+    Args:
+        config_file: config_file details
+        attributes: attributes details for querying launches
+    """
+    args = {"config_file": config_file}
+    log.info(f"attributes are : {attributes}")
+    try:
+        preproc = PreProcClient((args))
+        rportal = ReportPortalV1(preproc.configs.rp_config)
+
+        api = "launch?page.page=1&page.size=50"
+        api += "&filter.has.compositeAttribute=ceph_version:{},build_type:{}&filter.cnt.name={} RHCEPH-{}"
+        get_resp = rportal.api_get(
+            api.format(
+                attributes["ceph_version"],
+                attributes["build_type"],
+                attributes["build_type"],
+                attributes["rhceph"],
+            )
+        )
+        results = json.loads(get_resp.content).get("content")
+        launch_ids = []
+        for result in results:
+            launch_ids.append(result["id"])
+        return launch_ids
+    except Exception as e:
+        log.error(f"Exception : {e}")
+        raise e
+
+
+def merge_launches(config_file, launches_list):
+    """
+    Merge the launches
+    Args:
+        config_file: config_file details
+        launches_list: list of launches
+    """
+    args = {"config_file": config_file}
+    try:
+        preproc = PreProcClient((args))
+        rportal = ReportPortalV1(preproc.configs.rp_config)
+        launches = Launches(rportal)
+        for launch in launches_list:
+            launches.add(launch)
+        merged_launch = launches.merge()
+        return merged_launch
+    except Exception as e:
+        log.error(f"Exception : {e}")
         raise e
 
 
@@ -358,6 +416,26 @@ if __name__ == "__main__":
             with open(file_path, "w") as outfile:
                 outfile.write(json.dumps(launch_details, indent=4))
 
+        sys.exit(0)
+
+    attributes_file = args.get("--attributes")
+    if attributes_file:
+        with open(attributes_file, "r") as af:
+            attributes = json.load(af)
+        launch_ids = get_launches(config_file, attributes)
+        attributes["launches"] = launch_ids
+        with open(attributes_file, "w") as waf:
+            json.dump(attributes, waf, indent=4)
+        sys.exit(0)
+
+    merge_file = args.get("--merge")
+    if merge_file:
+        with open(merge_file, "r") as lf:
+            launchList = json.load(lf)
+        mergedLaunch = merge_launches(config_file, launchList["launch"][::-1])
+        launchList["mergedLaunch"] = mergedLaunch
+        with open(merge_file, "w") as wmf:
+            json.dump(launchList, wmf, indent=4)
         sys.exit(0)
 
     payload_dir = args.get("--payload_dir")
