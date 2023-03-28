@@ -621,6 +621,66 @@ class Rbd:
         log.info(f"Starting the {action} migration process")
         return self.exec_cmd(cmd=f"rbd migration {action} {dest_spec}")
 
+    def list_config(self, level, entity, **kw):
+        """List all RBD config settings.
+
+        rbd config <global|pool|image> list <entity>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global or image-name or pool-name)
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} list {entity}", **kw)
+
+    def get_config(self, level, entity, key, **kw):
+        """Get RBD config settings.
+
+        rbd config <global|pool|image> get <entity> <key>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global or image-name or pool-name)
+            key: config option key (ex., rbd_move_to_trash_on_remove)
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} get {entity} {key}", **kw)
+
+    def remove_config(self, level, entity, key, **kw):
+        """Remove RBD config settings.
+
+        rbd config <global|pool|image> remove <entity> <key>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global or image-name or pool-name)
+            key: config option key (ex., rbd_move_to_trash_on_remove)
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} remove {entity} {key}", **kw)
+
+    def set_config(self, level, entity, key, value, **kw):
+        """Override RBD config settings.
+
+        rbd config <global|pool|image> set <entity> <key> <value>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global, image-name, pool-name)
+            key: config option key (ex., rbd_move_to_trash_on_remove)
+            value: config option value to be set
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} set {entity} {key} {value}", **kw)
+
 
 def initial_rbd_config(**kw):
     """
