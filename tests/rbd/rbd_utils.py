@@ -697,7 +697,8 @@ def initial_rbd_config(**kw):
                 image_name=kw["config"]["rep_pool_config"]["image"],
                 size=kw["config"]["rep_pool_config"]["size"],
             )
-        kw["config"]["ec-pool-k-m"] = ec_pool_k_m
+        if ec_pool_k_m:
+            kw["config"]["ec-pool-k-m"] = ec_pool_k_m
         rbd_obj.update({"rbd_reppool": rbd_reppool})
 
     if not kw.get("config").get("rep-pool-only"):
