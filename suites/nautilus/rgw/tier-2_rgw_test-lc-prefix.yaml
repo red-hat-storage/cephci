@@ -52,7 +52,7 @@ tests:
 
   - test:
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_dot.yaml
         timeout: 300
       desc: test lc with prefix containing dot
@@ -62,7 +62,7 @@ tests:
 
   - test:
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_hyphen.yaml
         timeout: 300
       desc: test lc with prefix containing hyphen
@@ -72,7 +72,7 @@ tests:
 
   - test:
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_slash.yaml
         timeout: 300
       desc: test lc with prefix containing slash
@@ -82,7 +82,7 @@ tests:
 
   - test:
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_underscore.yaml
         timeout: 300
       desc: test lc with prefix containing underscore
