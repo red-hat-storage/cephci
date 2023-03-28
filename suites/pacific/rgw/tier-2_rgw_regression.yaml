@@ -357,7 +357,7 @@ tests:
       polarion-id: CEPH-11177 # also applies to CEPH-11182, CEPH-11188 and CEPH-11187
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
         timeout: 300
 
@@ -367,7 +367,7 @@ tests:
       polarion-id: CEPH-11185 # also applies to CEPH-83574679
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_date.yaml
         timeout: 300
 
@@ -377,7 +377,7 @@ tests:
       polarion-id: CEPH-11189
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_delete_marker.yaml
         timeout: 300
 

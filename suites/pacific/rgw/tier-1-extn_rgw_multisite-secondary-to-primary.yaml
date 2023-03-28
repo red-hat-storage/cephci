@@ -355,7 +355,7 @@ tests:
       clusters:
         ceph-sec:
           config:
-            script-name:  test_bucket_lifecycle_object_expiration.py
+            script-name:  test_bucket_lifecycle_object_expiration_transition.py
             config-file-name:  test_lc_rule_prefix_and_tag.yaml
             timeout: 300
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
