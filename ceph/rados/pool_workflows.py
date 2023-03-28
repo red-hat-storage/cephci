@@ -26,6 +26,7 @@ class PoolFunctions:
             node: CephAdmin object
         """
         self.rados_obj = RadosOrchestrator(node=node)
+        self.node = node
 
     def verify_target_ratio_set(self, pool_name, ratio):
         """
@@ -84,7 +85,7 @@ class PoolFunctions:
                 Valid args:
                 1. obj_start: start count for object creation
                 2. obj_end : end count for object creation
-                3. num_keys_obj: Number of KW paris to be added to each object
+                3. num_keys_obj: Number of KW pairs to be added to each object
 
         Returns: True -> pass, False -> fail
         """
@@ -94,7 +95,7 @@ class PoolFunctions:
         obj_end = kwargs.get("obj_end", 2000)
         num_keys_obj = kwargs.get("num_keys_obj", 20000)
         log.debug(
-            f"Writing {(obj_end - obj_start) * num_keys_obj} Key paris"
+            f"Writing {(obj_end - obj_start) * num_keys_obj} Key pairs"
             f" to increase the omap entries on pool {pool_name}"
         )
         script_loc = "https://raw.githubusercontent.com/red-hat-storage/cephci/master/utility/generate_omap_entries.py"
@@ -114,6 +115,13 @@ class PoolFunctions:
         # removing the py file copied
         client_node.exec_command(sudo=True, cmd="rm -rf generate_omap_entries.py")
 
+        # restarting primary osd as metadata does not get updated automatically
+        # when number of object containing omap entries is below ~40
+        # this a workaround and will be addressed when RCA is complete
+        primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[0]
+        self.rados_obj.change_osd_state(action="restart", target=primary_osd)
+
+        time.sleep(5)  # blind sleep to let omap metadata get updated
         log.debug("Checking the amount of omap entries created on the pool")
         pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
         for detail in pool_stats:
@@ -122,7 +130,7 @@ class PoolFunctions:
                 total_omap_data = pool_1_stats["omap_bytes_used"]
                 omap_data = pool_1_stats["stored_omap"]
                 break
-        if omap_data < 0:
+        if omap_data <= 0:
             log.error("No omap entries written into pool")
             return False
         log.info(
@@ -500,4 +508,52 @@ class PoolFunctions:
             time.sleep(60)
 
         log.error("The cluster did not reach active + Clean state")
+
+    def check_large_omap_warning(
+        self, pool, obj_num: int, check: bool, timeout: int = 30
+    ) -> bool:
+        """
+        Perform deep-scrub on given pool and check if "Large omap object"
+        warning is found
+        Args:
+            pool: Name of the pool
+            obj_num: number of objects which are expected to have
+                    large omap entries
+            check: boolean value to decide whether warning should exist or not
+            timeout: timeout in seconds for warning to show up
+        Returns:
+            True-> pass | False-> Fail
+        """
+        warn_found = False
+        threshold, _ = self.node.shell(
+            ["ceph config get osd osd_deep_scrub_large_omap_object_key_threshold"]
+        )
+        if int(threshold) != 200000:
+            log.error(
+                f"Large omap object threshold has changed from 200000 to {threshold}."
+                f"Aborting execution, please align test input params with new threshold"
+            )
+            return False
+
+        self.rados_obj.run_deep_scrub(pool=pool)
+        timeout_time = datetime.datetime.now() + datetime.timedelta(
+            seconds=timeout
+        )  # Timeout to let health warning show up
+        while datetime.datetime.now() < timeout_time:
+            health_detail, _ = self.node.shell(["ceph health detail"])
+            log.info(health_detail)
+            if (
+                f"{obj_num} large omap objects" in health_detail
+                and f"{obj_num} large objects found in pool '{pool}'" in health_detail
+            ):
+                warn_found = True
+                break
+            time.sleep(5)
+
+        if (warn_found and check) or (not warn_found and not check):
+            log.info(
+                f"Large omap objects warning found: {warn_found} | Expected: {check}"
+            )
+            return True
+        log.error("Large omap warning was not as per expectation")
         return False
