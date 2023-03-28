@@ -460,7 +460,7 @@ class GenerateServiceSpec:
         Returns:
             service_spec (Str)
 
-        Example::
+        Example1::
 
         specs:
               - service_type: snmp-destination
@@ -468,6 +468,14 @@ class GenerateServiceSpec:
                   credentials:
                     snmp_v3_auth_username: myadmin
                     snmp_v3_auth_password: mypassword
+        Example2::
+
+        specs:
+              - service_type: snmp-destination
+                spec:
+                  credentials:
+                    snmp_community: public
+
         """
         template = self._get_template("snmp")
         destination_node = spec["spec"].pop("snmp_destination", None)
@@ -481,6 +489,19 @@ class GenerateServiceSpec:
         engine_id = out.replace("-", "")
         if engine_id:
             spec["spec"]["engine_id"] = engine_id
+        # Check whether SNMPv2 or SNMPv3 credentials are present in spec
+        if "snmp_community" in spec["spec"]["credentials"]:
+            # Use SNMPv2
+            spec["spec"]["snmp_version"] = "V2c"
+        elif (
+            "snmp_v3_auth_username" in spec["spec"]["credentials"]
+            and "snmp_v3_auth_password" in spec["spec"]["credentials"]
+        ):
+            # Use SNMPv3
+            spec["spec"]["snmp_version"] = "V3"
+        else:
+            # Raise an exception for unexpected credentials
+            raise ValueError("Unexpected credentials")
         return template.render(spec=spec)
 
     def generate_snmp_dest_conf(self, spec):
@@ -493,7 +514,7 @@ class GenerateServiceSpec:
         Returns:
             destination_conf (Str)
 
-        Example::
+        Example1::
 
             spec:
                 - service_type: snmp-gateway
@@ -507,6 +528,19 @@ class GenerateServiceSpec:
                     port: 9464
                     snmp_destination: node
                     snmp_version: V3
+        Example2::
+
+            spec:
+                - service_type: snmp-gateway
+                  service_name: snmp-gateway
+                  placement:
+                    count: 1
+                  spec:
+                    credentials:
+                      snmp_community: public
+                    port: 9464
+                    snmp_destination: node
+                    snmp_version: V2c
 
         """
         template = self._get_template("snmp_destination")
