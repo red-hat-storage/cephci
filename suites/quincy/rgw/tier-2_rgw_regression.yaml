@@ -228,6 +228,17 @@ tests:
         config-file-name: test_versioning_objects_delete_from_another_user.yaml
         timeout: 300
 
+  # BucketPolicy Tests
+  - test:
+      name: ListBucketVersions with bucket policy for users in same tenant
+      desc: Test ListBucketVersions bucket policy for users in same tenant
+      polarion-id: CEPH-11574
+      module: sanity_rgw.py
+      config:
+        script-name: test_list_all_multipart_uploads.py
+        config-file-name: test_listbucketversion_with_bucketpolicy_for_tenant_user.yaml
+        timeout: 300
+
   # Bucket Lifecycle Tests
   - test:
       name: object expiration for versioned buckets with filter Prefix test multiple rules.
