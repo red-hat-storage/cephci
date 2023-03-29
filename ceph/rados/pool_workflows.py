@@ -222,7 +222,7 @@ class PoolFunctions:
                 return False
         return True
 
-    def do_rados_delete(self, pool_name: str, pg_id: str = None):
+    def do_rados_delete(self, pool_name: str, pg_id: str = None, objects: list = []):
         """
         deletes all the objects from the given pool / PG ID
         Args:
@@ -236,6 +236,9 @@ class PoolFunctions:
             obj_cmd = f"rados --pgid {pg_id} ls"
 
         delete_obj_list = self.rados_obj.run_ceph_command(cmd=obj_cmd, timeout=1000)
+        if objects:
+            delete_obj_list = objects
+        log.info(f"Objects to be deleted : {delete_obj_list}")
         for obj in delete_obj_list:
             cmd = f"rados -p {pool_name} rm {obj['name']}"
             self.rados_obj.node.shell([cmd], long_running=True)
