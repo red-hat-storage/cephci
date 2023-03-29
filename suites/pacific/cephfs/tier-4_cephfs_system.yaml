@@ -136,3 +136,19 @@ tests:
       name: "OSD node power failure, with client IO"
       config:
           num_of_osds: 12
+  - test:
+      abort-on-fail: false
+      desc: "MON node failures ops with client IO"
+      module: cephfs_system.mon_node_failure_ops.py
+      polarion-id: CEPH-11254
+      name: "MON node power failure with client IO"
+      config:
+        num_of_osds: 12
+  - test:
+      abort-on-fail: false
+      desc: "MDS node failures ops with client IO"
+      module: cephfs_system.mds_node_failure_ops.py
+      polarion-id: CEPH-11256
+      name: "MDS node power failure with client IO"
+      config:
+        num_of_osds: 12
