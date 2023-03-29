@@ -459,6 +459,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
+        - name: "tier-1_rgw_ms_archive_test-upgrade-5-to-latest"
+          execution_time: "3h 19m 29s"
+          suite: "suites/quincy/rgw/tier-1_rgw_ms_archive_test-upgrade-5-to-latest.yaml"
+          global-conf: "conf/pacific/rgw/rgw_ms_archive.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
       stage-2:
         - name: "test-rgw-ms-bucket-listing-versioning-on-secondary"
           execution_time: "3h 50m 55s"
