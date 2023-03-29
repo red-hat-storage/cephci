@@ -94,7 +94,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node1
+        node: node8           # new client node
         install_packages:
           - ceph-common
         copy_admin_keyring: true
