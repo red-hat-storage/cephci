@@ -637,6 +637,15 @@ class Rbd:
         log.info(f"Starting the {action} migration process")
         return self.exec_cmd(cmd=f"rbd migration {action} {dest_spec}")
 
+    def create_namespace(self, pool_name, namespace_name):
+        """
+        This method will create the new namespace within the pool provided.
+        Args:
+            pool_name : Name of the pool within the namespace will create
+            namespace_name : name for the namespace to be created
+        """
+        return self.exec_cmd(cmd=f"rbd namespace create --pool {pool_name} --namespace {namespace_name}")
+
     def list_config(self, level, entity, **kw):
         """List all RBD config settings.
 
