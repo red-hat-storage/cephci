@@ -353,3 +353,24 @@ tests:
       module: rbd_resize_image_with_image_feature.py
       name: Test to verify image resize operation while changing image feature
       polarion-id: CEPH-9861
+
+  - test:
+      desc: Image migration pool namespace
+      module: readonly_namespace_image_migration.py
+      config:
+        source:
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool1
+          ec_pool_config:
+            pool: rbd_ECpool1
+            data_pool: data_pool_ec1
+        destination:
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool2
+          ec_pool_config:
+            pool: rbd_ECpool1
+            data_pool: data_pool_ec2
+      name: Test image migration from pool namespace
+      polarion-id: CEPH-83573341
