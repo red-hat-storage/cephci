@@ -226,3 +226,9 @@ tests:
       module: rbd_features_disable.py
       name: Test to disable the image features on image when image is moved to trash
       polarion-id: CEPH-11415
+
+  - test:
+      desc: Perform flatten operations while changing the image feature
+      module: rbd_flatten_image_feature_disable.py
+      name: Test to disable image feature when flatten operation is performed
+      polarion-id: CEPH-9862
