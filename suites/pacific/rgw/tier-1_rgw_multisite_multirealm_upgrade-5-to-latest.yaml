@@ -1,5 +1,5 @@
 # Polarion ID: CEPH-83574647
-# Objective: Testing Multisite upgrade from RHCS 5 GA to RHCS 5 latest development build.
+# Objective: Testing multirealm-Multisite upgrade from RHCS 5 GA to RHCS 5 latest development build.
 # conf: rgw_multisite.yaml
 # platform: rhel-8
 ---
@@ -544,7 +544,7 @@ tests:
             timeout: 300
       desc: Test manual resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
-      name: Test dynamic resharding brownfield scenario after upgrade
+      name: Test manual resharding brownfield scenario after upgrade
       polarion-id: CEPH-83574735
 
   - test:
