@@ -413,9 +413,25 @@ class Rbd:
         try:
             image_info = json.loads(out)
         except TypeError:
-            log.error("Failed to recieve json complaint image info")
+            log.error("Failed to receive json complaint image info")
             return 1
         return image_info
+
+    def disable_rbd_feature(self, pool_name, image_name, feature_name, **kwargs):
+        """
+        Disable the given feature on the given RBD image.
+
+        Args:
+            kwargs: input args required for the test
+            pool_name (str): Name of the pool containing the image.
+            image_name (str): Name of the image.
+            feature_name (str): Name of the feature to disable.
+
+        Returns:
+
+        """
+        cmd = f"rbd feature disable {pool_name}/{image_name} {feature_name}"
+        return self.exec_cmd(cmd=cmd, **kwargs)
 
     def image_resize(self, pool_name, image_name, size):
         """
