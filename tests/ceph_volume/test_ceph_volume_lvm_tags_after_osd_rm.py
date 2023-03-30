@@ -2,10 +2,18 @@ from json import loads
 
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
-from cli.utilities.utils import get_lvm_on_osd_container, get_running_containers
+from cli.utilities.utils import (
+    exec_command_on_container,
+    get_lvm_on_osd_container,
+    get_running_containers,
+)
 
 
 class RemoveOsdError(Exception):
+    pass
+
+
+class RemoveLvmError(Exception):
     pass
 
 
@@ -14,6 +22,8 @@ def run(ceph_cluster, **kw):
     Args:
         **kw: Key/value pairs of configuration information to be used in the test.
     """
+    config = kw.get("config")
+
     osd_node = ceph_cluster.get_nodes(role="osd")[0]
 
     # Get the lvm list before osd remove
@@ -25,6 +35,7 @@ def run(ceph_cluster, **kw):
 
     # Identify an OSD ID to perform
     osd_id = list(lvm_list.keys())[0]
+    osd_lvm = lvm_list.get(osd_id)[0].get("lv_path")
 
     # Change the replication to 2 / default is 3
     out = CephAdm(osd_node).ceph.osd(command="pool ls detail", format="json")
@@ -41,7 +52,7 @@ def run(ceph_cluster, **kw):
             raise RemoveOsdError("Failed to update the pool size")
 
     # Perform osd remove
-    conf = {"--zap": True}
+    conf = {"--zap": True} if config.get("operation") else {}
     osd_rm = CephAdm(osd_node).ceph.orch.osd.rm(osd_id=osd_id, **conf)
     if not osd_rm:
         raise RemoveOsdError("Failed to remove osd")
@@ -56,16 +67,36 @@ def run(ceph_cluster, **kw):
     if w.expired:
         raise RemoveOsdError("Failed to perform osd rm operation. Timed out!")
 
-    # Get osd tree and check whether the deleted osd is present or not
-    out = CephAdm(osd_node).ceph.osd(command="tree", format="json")
-    osd_tree = loads(out[0])
-    for osd_ in osd_tree.get("nodes"):
-        if osd_.get("id") == osd_id and osd_.get("status") == "up":
-            raise RemoveOsdError("The osd is up after rm operation")
+    # Step to validate lvm zap
+    if config.get("operation"):
+        timeout, interval = 60, 5
+        for w in WaitUntil(timeout=timeout, interval=interval):
+            try:
+                cmd = f" ceph-volume lvm zap --destroy {osd_lvm}"
+                _ = exec_command_on_container(
+                    node=osd_node, ctr=container_ids[0], cmd=cmd, sudo=True
+                )
+                break
+            except Exception:
+                pass
+        if w.expired:
+            raise RemoveOsdError("Failed to perform lvm zap operation. Timed out!")
 
-    # Get the lvm list after osd remove
-    lvm_list = get_lvm_on_osd_container(container_ids[0], osd_node)
-    if osd_id in (list(lvm_list.keys())):
-        raise RemoveOsdError("OSD id still in lvm even after rm operation")
+        # Verify the lvm list has been updated
+        new_lvm_list = get_lvm_on_osd_container(container_ids[0], osd_node)
+        if lvm_list == new_lvm_list:
+            raise RemoveLvmError("LVM not removed after the osd remove")
+    else:
+        # Get osd tree and check whether the deleted osd is present or not
+        out = CephAdm(osd_node).ceph.osd(command="tree", format="json")
+        osd_tree = loads(out[0])
+        for osd_ in osd_tree.get("nodes"):
+            if osd_.get("id") == osd_id and osd_.get("status") == "up":
+                raise RemoveOsdError("The osd is up after rm operation")
+
+        # Get the lvm list after osd remove
+        lvm_list = get_lvm_on_osd_container(container_ids[0], osd_node)
+        if osd_id in (list(lvm_list.keys())):
+            raise RemoveOsdError("OSD id still in lvm even after rm operation")
 
     return 0

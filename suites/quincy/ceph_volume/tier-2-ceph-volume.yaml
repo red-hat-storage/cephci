@@ -10,7 +10,6 @@
 #
 # Test cases:
 #   - Test Validate lvm tags post osd rm command
-#
 #===============================================================================================
 tests:
   - test:
@@ -80,5 +79,11 @@ tests:
       desc: Verify the lvm tags are removed after osd rm
       polarion-id: CEPH-83575103
       module: test_ceph_volume_lvm_tags_after_osd_rm.py
+
+  - test:
+      name: ceph volume fails to zap the lvm device
+      desc: Verify the lvm is removed after zap on lvm device
+      polarion-id: CEPH-83575121
+      module: test_ceph_volume_lvm_tags_after_osd_rm.py
       config:
-        operation: enable
+        operation: lvm-zap
