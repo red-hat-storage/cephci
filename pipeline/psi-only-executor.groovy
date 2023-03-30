@@ -70,7 +70,7 @@ node("rhel-9-medium || ceph-qe-ci") {
                     string(name: 'tags', value: tags),
                     string(name: 'buildType', value: buildType),
                     string(name: 'overrides', value: overridesStr),
-                    string(name: 'buildArtifacts', value: buildArtifacts.toString())]
+                    string(name: 'buildArtifacts', value: buildArtifacts['recipe'].toString())]
             ])
         }
         else
