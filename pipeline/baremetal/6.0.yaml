@@ -2,7 +2,7 @@
 -
   cluster_conf: conf/quincy/upi/octo_11_node_env.yaml
   name: "Tier-1: End to End scenarios executed on greenfield deployment"
-  os_version: 9.0
+  os_version: 9.1
   platform: rhel-9
   rhbuild: "6.0"
   scenario: 1
