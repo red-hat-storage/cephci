@@ -5,7 +5,7 @@
 # Test-Case: Verify cephmgr throttling
 #
 # Cluster Configuration:
-#    conf/pacific/cephmgr/tier-2-cephmgr-4node.yaml
+#    conf/quincy/cephmgr/tier-2-cephmgr-4node.yaml
 #
 #    4-Node cluster
 #    3 MONS, 2 MDS, 2 MGR, 3 OSD and 2 RGW service daemon(s)

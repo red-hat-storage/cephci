@@ -24,3 +24,12 @@ class Mgr(Cli):
             cmd += " --force"
 
         return self.execute(sudo=True, long_running=True, cmd=cmd)
+
+    def fail(self, mgr):
+        """
+        Fail/down a given mgr
+        Args:
+            mgr (str): mgr to bring down
+        """
+        cmd = f"{self.base_cmd} fail {mgr}"
+        return self.execute(sudo=True, check_ec=False, long_running=True, cmd=cmd)
