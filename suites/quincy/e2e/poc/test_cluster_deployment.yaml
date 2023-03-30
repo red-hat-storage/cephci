@@ -24,7 +24,7 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                mon-ip: magna064
+                mon-ip: node1
           - config:
               command: add_hosts
               service: host
@@ -211,13 +211,13 @@ tests:
       abort-on-fail: true
       config:
         command: add
-        id: client.magna068
+        id: client.node10
         install_packages:
           - ceph-common
           - ceph-base
           - rbd-nbd
         copy_admin_keyring: true
-        node: magna068
+        node: node10
       desc: "Configure a ceph client"
       destroy-cluster: false
       module: test_client.py
@@ -228,13 +228,13 @@ tests:
       abort-on-fail: true
       config:
         command: add
-        id: client.magna073
+        id: client.node11
         install_packages:
           - ceph-common
           - ceph-base
           - rbd-nbd
         copy_admin_keyring: true
-        node: magna073
+        node: node11
       desc: "Configure a ceph client"
       destroy-cluster: false
       module: test_client.py
@@ -245,12 +245,12 @@ tests:
       abort-on-fail: false
       config:
         haproxy_clients:
-          - cali019
+          - argo024
         rgw_endpoints:
-          - cali015:80
-          - cali016:80
-          - cali017:80
-          - cali018:80
+          - argo020:80
+          - argo021:80
+          - argo022:80
+          - argo023:80
       desc: "Install and configure HA-Proxy for RGW"
       destroy-cluster: false
       module: haproxy.py
