@@ -475,6 +475,26 @@ class RbdMirror:
                 if int(out.split("=")[-1]) == 0:
                     return 0
 
+    def wait_for_snapshot_complete(self, imagespec):
+        """verify for snapshot completion
+        Args:
+            imagespec: Image specification.
+        """
+        timeout = 600
+        while timeout:
+            log.info(f"verifying for snapshot completion for {imagespec}")
+            data = self.mirror_status("image", imagespec, "description").split(", ")[1:]
+            for value in data:
+                out = eval(value)
+                if out["local_snapshot_timestamp"] == out["remote_snapshot_timestamp"]:
+                    log.info("Snapshot is successfully completed")
+                    return 0
+                else:
+                    log.debug(
+                        f"remote_snapshot_timestamp : {data['remote_snapshot_timestamp']}"
+                    )
+            timeout = timeout - 1
+
     # Get Position
     def get_position(self, imagespec, pattern=None):
         out = self.mirror_status("image", imagespec, "description")
