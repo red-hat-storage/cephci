@@ -56,7 +56,6 @@ def run(ceph_cluster, **kw):
         if not new_bulk:
             log.error("Expected bulk flag should be True.")
             raise Exception("Expected bulk flag should be True.")
-        time.sleep(20)
         if pool.get("restart_osd", False):
             acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
             log.info(f"Acting set {acting_pg_set}")
@@ -79,6 +78,7 @@ def run(ceph_cluster, **kw):
             ):
                 log.error("Failed to delete objects from pool.")
                 raise Exception("Failed to delete objects from pool.")
+        time.sleep(20)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         new_prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
         if not new_prop["pg_num"] > prop["pg_num"]:
@@ -105,14 +105,15 @@ def run(ceph_cluster, **kw):
             raise Exception(
                 f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
             )
-        if config.get("delete_pools"):
-            for name in config["delete_pools"]:
-                method_should_succeed(rados_obj.detete_pool, name)
-            log.info("deleted all the given pools successfully")
-
-        return 0
 
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+
+    finally:
+        if config.get("delete_pools"):
+            for name in config["delete_pools"]:
+                method_should_succeed(rados_obj.detete_pool, name)
+            log.info("deleted all the given pools successfully")
+    return 0
