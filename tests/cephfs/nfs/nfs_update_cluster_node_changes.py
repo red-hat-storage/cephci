@@ -26,7 +26,7 @@ Test operation:
 
 def run(ceph_cluster, **kw):
     try:
-        tc = "CEPH-83574012"
+        tc = "CEPH-83574013"
         log.info(f"Running CephFS tests for {tc}")
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
