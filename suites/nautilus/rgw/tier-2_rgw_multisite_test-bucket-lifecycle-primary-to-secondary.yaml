@@ -107,7 +107,7 @@ tests:
         ceph-rgw1:
           config:
             config-file-name: test_lc_rule_prefix_and_tag.yaml
-            script-name: test_bucket_lifecycle_object_expiration.py
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
             timeout: 300
       desc: test_lifecycle  on secondary with AND rule filter
       module: sanity_rgw_multisite.py
@@ -121,6 +121,6 @@ tests:
       clusters:
         ceph-rgw1:
           config:
-            script-name: test_bucket_lifecycle_object_expiration.py
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_rule_prefix_non_current_days.yaml
             timeout: 300
