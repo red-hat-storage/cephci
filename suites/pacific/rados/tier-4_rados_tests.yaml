@@ -100,3 +100,15 @@ tests:
           - "reweight-by-utilization"
           - "test-reweight-by-pg"
           - "test-reweight-by-utilization"
+
+  - test:
+      name: Verify Ceph df MAX_AVAIL
+      desc: MAX_AVAIL value should not change to 0 upon addition of OSD with weight 0
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      config:
+        verify_cephdf_max_avail:
+          create_pool: true
+          pool_name: test-max-avail
+          obj_nums: 5
+          delete_pool: true
