@@ -229,6 +229,7 @@ def sendConsolidatedEmail(
 }
 
 def sendGChatNotification(
+    def sharedLib,
     def run_type,
     def testResults,
     def tierLevel,
@@ -248,9 +249,9 @@ def sendGChatNotification(
                          Notification message to be sent.
                          Notification message to be sent.
     */
-    def ciMsg = getCIMessageMap()
+    def ciMsg = sharedLib.getCIMessageMap()
     def status = "STABLE"
-    if ('FAIL' in fetchStageStatus(testResults)) {
+    if ('FAIL' in sharedLib.fetchStageStatus(testResults)) {
         status = "UNSTABLE"
     }
     if (! build_url){
