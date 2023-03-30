@@ -4,6 +4,7 @@ import string
 from time import sleep
 
 from ceph.ceph import CommandFailed
+from ceph.ceph_admin.common import config_dict_to_string
 from ceph.waiter import WaitUntil
 from tests.rbd.exceptions import (
     CreateFileError,
@@ -395,6 +396,21 @@ class Rbd:
         out = self.exec_cmd(cmd=f"rbd ls {pool_name} --format json", output=True)
         images = json.loads(out)
         return images
+
+    def image_status(self, image_spec, **kw):
+        """Get Image status.
+
+        Command: rbd status <pool-name>/<image-name>
+
+        Args:
+            image_spec: image specification (ex., pool1/image1)
+            kw: other test parameters ( ex., {output: True, json: true})
+        Returns:
+            exec_cmd response
+        """
+        cmd = f"rbd status {image_spec} "
+        cmd += config_dict_to_string(kw.pop("cmd_args")) if kw.get("cmd_args") else ""
+        return self.exec_cmd(cmd=cmd, **kw)
 
     def image_info(self, pool_name, image_name):
         """
