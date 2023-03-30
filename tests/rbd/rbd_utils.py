@@ -593,6 +593,15 @@ class Rbd:
             long_running=True,
         )
 
+    def export_image(self, imagespec, path):
+        """Exports provided image as provided path.
+
+        Args:
+            imagespec: image specification
+            path: path where image needs to be exported
+        """
+        self.exec_cmd(cmd=f"rbd export {imagespec} {path}", long_running=True)
+
     def clean_up(self, **kw):
         if kw.get("dir_name"):
             self.exec_cmd(cmd="rm -rf {}".format(kw.get("dir_name")))
