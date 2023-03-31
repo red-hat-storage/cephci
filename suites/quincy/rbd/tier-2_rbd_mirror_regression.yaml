@@ -287,6 +287,7 @@ tests:
             imagesize: 2G
       polarion-id: CEPH-83573618
       desc: Testing journal mirroring to snapshot mirroring
+
   - test:
       name: Mirroring in same cluster should be prevented
       module: test_rbd_mirror_reconfig.py
@@ -323,3 +324,30 @@ tests:
                 io_total: 10
       polarion-id: CEPH-9499
       desc: Verify image size at secondary when image shrink at primary cluster
+
+  - test:
+      desc: Enable and disable image feature from primary gets reflected to secondary
+      module: test_rbd_mirror_image_features.py
+      clusters:
+        ceph-rbd1:
+          config:
+            journal:
+              ec_pool_config:
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                size: 2G
+                io_total: 10
+            snapshot:
+              ec_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+      name: Testing change of image feature reflection from primary to secondary
+      polarion-id: CEPH-9520
