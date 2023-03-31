@@ -14,6 +14,7 @@ import yaml
 from paramiko.ssh_exception import SSHException
 
 from ceph.parallel import parallel
+from cli.ceph.ceph import Ceph as CephCli
 from utility import lvm_utils
 from utility.log import Log
 from utility.utils import custom_ceph_config
@@ -1123,6 +1124,18 @@ class Ceph(object):
 
         out, _ = client.exec_command(cmd=cmd, sudo=True)
         return out.strip()
+
+    def get_mgr_services(self):
+        """Fetch `mgr` services"""
+        # Set json format & get client node
+        args, node = {"format": "json"}, self.get_ceph_object("client")
+
+        # Check for mandatory client node
+        if not node:
+            raise ResourceNotFoundError("Client node not provided")
+
+        # Return json data
+        return json.loads(CephCli(node).mgr.services(**args)[0])
 
 
 class CommandFailed(Exception):
