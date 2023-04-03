@@ -181,5 +181,5 @@ tests:
       module: sanity_rgw.py
       config:
         script-name: test_object_lock.py
-        config-file-name: test_object_lock.yaml
+        config-file-name: test_object_lock_compliance.yaml
         timeout: 500
