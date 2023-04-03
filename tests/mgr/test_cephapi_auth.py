@@ -1,6 +1,5 @@
 from api import BadRequestError
 from api.cephapi.auth.auth import Auth
-
 from utility.log import Log
 
 # LOG constant
