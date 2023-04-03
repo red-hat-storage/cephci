@@ -102,8 +102,9 @@ if __name__ == "__main__":
     cephVersion = cli_args.get("--cephVersion")
     testResults = cli_args.get("--testResults")
     rpLink = cli_args.get("--rpLink")
-    attributes = json.loads(rpLink)
-    if attributes:
-        update_rp_link(cephVersion, attributes["build_type"], attributes["rp_link"])
-        sys.exit(0)
+    if rpLink:
+        attributes = json.loads(rpLink)
+        if attributes:
+            update_rp_link(cephVersion, attributes["build_type"], attributes["rp_link"])
+            sys.exit(0)
     update_results(cephVersion, testResults)
