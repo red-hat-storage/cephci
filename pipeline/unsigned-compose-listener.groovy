@@ -85,7 +85,8 @@ node("rhel-9-medium || ceph-qe-ci") {
             sharedLib.writeToReleaseFile(majorVer, minorVer, releaseContent)
 
             def bucket = "ceph-${majorVer}.${minorVer}-${platform}"
-            sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
+            //Commenting uploadCompose as IBM environment is not available
+            //sharedLib.uploadCompose(bucket, cephVersion, composeUrl)
 
         }
 
