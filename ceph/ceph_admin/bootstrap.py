@@ -229,6 +229,8 @@ class BootstrapMixin:
             self.cluster.use_cdn = True
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
+        elif build_type == "crimson":
+            self.setup_upstream_repository()
         else:
             repos = ["Tools"]
             for node in self.cluster.get_nodes():

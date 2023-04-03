@@ -1,0 +1,104 @@
+# DSAL lab environment to be used for Ceph Crimson RADOS testing
+# The below defined cluster has 7 nodes(6 hosts and 1 client)
+# Cluster configuration for rbd tier-1 and tier-2 testcases:
+#       3 MONs, 3 MGRs, 15 OSDs, 1-Client
+globals:
+  -
+    ceph-cluster:
+      name: "ceph-crimson"
+      networks:
+        public: ["10.1.240.0/23"]
+        cluster: ["10.1.240.0/24"]
+      nodes:
+        -
+          hostname: "dell-r640-056.dsal.lab.eng.rdu2.redhat.com"
+          id: node1
+          ip: "10.1.240.31"
+          root_password: ""
+          role:
+            - _admin
+            - mon
+            - mgr
+            - installer
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
+            - crash
+        -
+          hostname: "dell-r640-079.dsal.lab.eng.rdu2.redhat.com"
+          id: node2
+          ip: "10.1.240.54"
+          root_password: ""
+          role:
+            - mon
+            - mgr
+            - mds
+            - rgw
+            - node-exporter
+            - alertmanager
+            - crash
+        -
+          hostname: "dell-r640-083.dsal.lab.eng.rdu2.redhat.com"
+          id: node3
+          ip: "10.1.240.58"
+          root_password: ""
+          role:
+            - osd
+            - node-exporter
+            - crash
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+        -
+          hostname: "dell-r640-084.dsal.lab.eng.rdu2.redhat.com"
+          id: node4
+          ip: "10.1.240.59"
+          root_password: ""
+          role:
+            - osd
+            - node-exporter
+            - crash
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+        -
+          hostname: "dell-r640-085.dsal.lab.eng.rdu2.redhat.com"
+          id: node5
+          ip: "10.1.240.60"
+          root_password: ""
+          role:
+            - mon
+            - mgr
+            - mds
+            - rgw
+            - node-exporter
+            - crash
+        -
+          hostname: "dell-r640-087.dsal.lab.eng.rdu2.redhat.com"
+          id: node6
+          ip: "10.1.240.62"
+          root_password: ""
+          role:
+            - osd
+            - node-exporter
+            - crash
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+        -
+          hostname: ""            # rhos-d VM to be used as a client
+          id: node7
+          ip: ""
+          root_password: "passwd"
+          role:
+            - client

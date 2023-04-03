@@ -1,0 +1,69 @@
+# DSAL lab environment to be used for Ceph Crimson RBD testing
+# The below defined cluster has 4 nodes(3 hosts and 1 client)
+# Cluster configuration for rbd tier-1 and tier-2 testcases:
+#       3 MONs, 2 MGRs, 9 OSDs, 1-Client
+globals:
+  -
+    ceph-cluster:
+      name: "ceph-crimson"
+      networks:
+        public: ["10.1.240.0/23"]
+        cluster: ["10.1.240.0/24"]
+      nodes:
+        -
+          hostname: "dell-r640-079.dsal.lab.eng.rdu2.redhat.com"
+          id: node1
+          ip: "10.1.240.54"
+          root_password: ""
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - crash
+            - alertmanager
+            - prometheus
+            - osd
+            - grafana
+            - node-exporter
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        -
+          hostname: "dell-r640-083.dsal.lab.eng.rdu2.redhat.com"
+          id: node2
+          ip: "10.1.240.58"
+          root_password: ""
+          role:
+            - mon
+            - crash
+            - osd
+            - node-exporter
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        -
+          hostname: "dell-r640-084.dsal.lab.eng.rdu2.redhat.com"
+          id: node3
+          ip: "10.1.240.59"
+          root_password: ""
+          role:
+            - mon
+            - mgr
+            - crash
+            - osd
+            - node-exporter
+            - alertmanager
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        -
+          hostname: "dell-r640-085.dsal.lab.eng.rdu2.redhat.com"
+          id: node4
+          ip: "10.1.240.60"
+          root_password: ""
+          role:
+            - client

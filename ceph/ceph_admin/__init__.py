@@ -154,7 +154,7 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             node.exec_command(sudo=True, cmd=cmd)
 
     def setup_upstream_repository(self, repo_url=None):
-        """Download upstream repository to inidividual nodes.
+        """Download upstream repository to individual nodes.
 
         Args:
             repo_url: repo file URL link (default: None)

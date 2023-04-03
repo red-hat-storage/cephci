@@ -112,7 +112,7 @@ Options:
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
   --build <latest>                  Type of build to be use for testing
-                                    eg: latest|tier-0|tier-1|tier-2|released|upstream
+                                    eg: latest|tier-0|tier-1|tier-2|released|upstream|crimson
                                     [default: released]
   --upstream-build <upstream-build> eg: quincy|pacific
   --platform <rhel-8>               select platform version eg., rhel-8, rhel-7
@@ -529,7 +529,7 @@ def run(args):
             distro.append(image_name.replace(".iso", ""))
 
         # get COMPOSE ID and ceph version
-        if build not in ["released", "cvp", "upstream", None]:
+        if build not in ["released", "cvp", "upstream", "crimson", None]:
             compose_id = get_html_page(url=f"{base_url}/COMPOSE_ID")
 
             ver_url = f"{base_url}/compose/Tools/x86_64/os/Packages/"
