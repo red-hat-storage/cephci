@@ -1,13 +1,13 @@
 ---
 # ==================================================================================
 # Tier-level: 2
-# Test-Suite: tier-2_cluster_scaleup_scaledown.yaml
+# Test-Suite: tier-2-cluster-elasticity.yaml
 # Test-Case:
 # Bootstrap cluster with all daemons and scale up and scale down the deployed
 # daemons and verify
 #
 # Cluster Configuration:
-#   cephci/conf/pacific/cephadm/tier-2_10node_cephadm_scale.yaml
+#   cephci/conf/quincy/cephadm/tier-2_10node_cephadm_scale.yaml
 #
 #    10-Node cluster(RHEL-8.3 and above)
 #    Initial cluster config
@@ -55,15 +55,18 @@
 ##   (14) Deploy ISCSI service using spec file,
 ##       (a) Create replicated pool 'iscsi'
 ##       (b) Enable rbd application on pool
-##   (15) Run rados bench, RBD and RGW IOs
-##   (16) Scale down MONs to 3 nodes
-##   (17) Scale down MGRs to 3 nodes
-##   (18) Scale down OSDs to 3 nodes
-##   (19) Scale down RGWs to 2 nodes
-##   (20) Scale down MDSs to 2 nodes
-##   (21) Scale down NFSs to 2 nodes
-##   (22) Scale down ISCSIs to 2 nodes
-##   (23) Run rados bench, RBD and RGW IOs
+##   (15) Deploy SNMP V2c Gateway service
+##        (a) Setup destination node for SNMP traps
+##        (b) Add SNMP V2c Gateway services using spec file
+##   (16) Run rados bench, RBD and RGW IOs
+##   (17) Scale down MONs to 3 nodes
+##   (18) Scale down MGRs to 3 nodes
+##   (19) Scale down OSDs to 3 nodes
+##   (20) Scale down RGWs to 2 nodes
+##   (21) Scale down MDSs to 2 nodes
+##   (22) Scale down NFSs to 2 nodes
+##   (23) Scale down ISCSIs to 2 nodes
+##   (24) Run rados bench, RBD and RGW IOs
 # ==================================================================================
 tests:
   - test:
@@ -120,10 +123,22 @@ tests:
                     - node2
                     - node3
           - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  encrypted: "true"
+                  placement:
+                    nodes:
+                      - node1
+                      - node2
+                      - node3
+                  spec:
+                    data_devices:
+                      all: "true"
+                    encrypted: "true"
           - config:
               command: apply
               service: rgw
@@ -349,15 +364,29 @@ tests:
   - test:
       name: Scale up OSD Service
       desc: Scale up OSD service with all available devices
-      module: test_osd.py
-      polarion-id: CEPH-83573735
+      module: test_cephadm.py
+      polarion-id: CEPH-83574032
       config:
-        command: apply
-        service: osd
-        base_cmd_args:
-          verbose: true
-        args:
-          all-available-devices: true
+        command: apply_spec
+        service: orch
+        validate-spec-services: true
+        specs:
+          - service_type: osd
+            service_id: all-available-devices
+            encrypted: "true"
+            placement:
+              nodes:
+                - node1
+                - node2
+                - node3
+                - node5
+                - node6
+                - node9
+                - node10
+            spec:
+              data_devices:
+                all: "true"
+              encrypted: "true"
       destroy-cluster: false
       abort-on-fail: true
 
@@ -522,6 +551,43 @@ tests:
       abort-on-fail: true
 
   - test:
+      name: Setup destination node for SNMP traps
+      desc: Install snmptrapd tool and install CEPH MIB on destination node
+      module: snmp_destination.py
+      polarion-id: CEPH-83574775
+      config:
+        node: node3
+        specs:
+              - service_type: snmp-destination
+                spec:
+                  credentials:
+                    snmp_v2_community: authCommunity
+      abort-on-fail: true
+
+  - test:
+      name: SNMP V2C Gateway Service deployment with spec
+      desc: Add SNMP V2c Gateway services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574744
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: snmp-gateway
+                  service_name: snmp-gateway
+                  placement:
+                    count: 1
+                  spec:
+                    credentials:
+                      snmp_community: public
+                    port: 9464
+                    snmp_destination: node3
+                    snmp_version: V2c
+
+  - test:
       name: check-ceph-health
       module: exec.py
       config:
@@ -600,15 +666,19 @@ tests:
       config:
         command: apply_spec
         service: orch
+        validate-spec-services: true
         specs:
           - service_type: osd
             service_id: all-available-devices
+            encrypted: "true"
             placement:
-              host_pattern: "node[5-7]"
+              nodes:
+                - node5
+                - node6
+                - node7
             spec:
               data_devices:
                 all: "true"
-              encrypted: "true"                     # boolean as string
       destroy-cluster: false
       abort-on-fail: true
 

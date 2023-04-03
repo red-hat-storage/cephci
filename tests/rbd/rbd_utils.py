@@ -10,7 +10,6 @@ from tests.rbd.exceptions import (
     ImageIsDeletedError,
     ImageNotFoundError,
     ImportFileError,
-    ProtectSnapError,
     RbdBaseException,
 )
 from utility.log import Log
@@ -309,14 +308,7 @@ class Rbd:
             cmd = f"rbd snap rm --image-id {kw['image_id']} --pool {pool_name} --snap {snap_name}"
         else:
             cmd = f"rbd snap rm {pool_name}/{image_name}@{snap_name}"
-        out, err = self.exec_cmd(cmd=cmd, all=True, check_ec=False)
-        if "Removing snap: 0% complete...failed" not in err:
-            log.error(f"{out}")
-            raise ProtectSnapError(f" Removal of protected Snap failed: {out}")
-        log.debug(
-            f"Snapshot '{snap_name}' for image '{image_name}' in pool '{pool_name}' removed successfully: {out}"
-        )
-        log.info(f"{err}")
+        return self.exec_cmd(cmd=cmd, **kw)
 
     def protect_snapshot(self, snap_name):
         """
@@ -421,9 +413,25 @@ class Rbd:
         try:
             image_info = json.loads(out)
         except TypeError:
-            log.error("Failed to recieve json complaint image info")
+            log.error("Failed to receive json complaint image info")
             return 1
         return image_info
+
+    def disable_rbd_feature(self, pool_name, image_name, feature_name, **kwargs):
+        """
+        Disable the given feature on the given RBD image.
+
+        Args:
+            kwargs: input args required for the test
+            pool_name (str): Name of the pool containing the image.
+            image_name (str): Name of the image.
+            feature_name (str): Name of the feature to disable.
+
+        Returns:
+
+        """
+        cmd = f"rbd feature disable {pool_name}/{image_name} {feature_name}"
+        return self.exec_cmd(cmd=cmd, **kwargs)
 
     def image_resize(self, pool_name, image_name, size):
         """
@@ -585,6 +593,15 @@ class Rbd:
             long_running=True,
         )
 
+    def export_image(self, imagespec, path):
+        """Exports provided image as provided path.
+
+        Args:
+            imagespec: image specification
+            path: path where image needs to be exported
+        """
+        self.exec_cmd(cmd=f"rbd export {imagespec} {path}", long_running=True)
+
     def clean_up(self, **kw):
         if kw.get("dir_name"):
             self.exec_cmd(cmd="rm -rf {}".format(kw.get("dir_name")))
@@ -628,6 +645,66 @@ class Rbd:
         """
         log.info(f"Starting the {action} migration process")
         return self.exec_cmd(cmd=f"rbd migration {action} {dest_spec}")
+
+    def list_config(self, level, entity, **kw):
+        """List all RBD config settings.
+
+        rbd config <global|pool|image> list <entity>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global or image-name or pool-name)
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} list {entity}", **kw)
+
+    def get_config(self, level, entity, key, **kw):
+        """Get RBD config settings.
+
+        rbd config <global|pool|image> get <entity> <key>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global or image-name or pool-name)
+            key: config option key (ex., rbd_move_to_trash_on_remove)
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} get {entity} {key}", **kw)
+
+    def remove_config(self, level, entity, key, **kw):
+        """Remove RBD config settings.
+
+        rbd config <global|pool|image> remove <entity> <key>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global or image-name or pool-name)
+            key: config option key (ex., rbd_move_to_trash_on_remove)
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} remove {entity} {key}", **kw)
+
+    def set_config(self, level, entity, key, value, **kw):
+        """Override RBD config settings.
+
+        rbd config <global|pool|image> set <entity> <key> <value>
+
+        Args:
+            level: global|pool|image level configuration
+            entity: config entity (global, image-name, pool-name)
+            key: config option key (ex., rbd_move_to_trash_on_remove)
+            value: config option value to be set
+            kw: other rbd arguments like config options
+        Returns:
+            exec_cmd response
+        """
+        return self.exec_cmd(cmd=f"rbd config {level} set {entity} {key} {value}", **kw)
 
 
 def initial_rbd_config(**kw):
@@ -705,7 +782,8 @@ def initial_rbd_config(**kw):
                 image_name=kw["config"]["rep_pool_config"]["image"],
                 size=kw["config"]["rep_pool_config"]["size"],
             )
-        kw["config"]["ec-pool-k-m"] = ec_pool_k_m
+        if ec_pool_k_m:
+            kw["config"]["ec-pool-k-m"] = ec_pool_k_m
         rbd_obj.update({"rbd_reppool": rbd_reppool})
 
     if not kw.get("config").get("rep-pool-only"):

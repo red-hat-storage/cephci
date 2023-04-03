@@ -432,3 +432,21 @@ tests:
       module: test_pg_autoscale_flag.py
       polarion-id: CEPH-83574794
       desc: verify autoscaler flags functionality
+
+# Tier-4 test, to be moved once we have tier-4 suites
+  - test:
+      name: Crushtool to change crush maps
+      module: test_crushtool_workflows.py
+      polarion-id: CEPH-83572695
+      config:
+        add_buckets:
+          DC1: datacenter
+          DC2: datacenter
+          Arbiter: datacenter
+          test-host-1: host
+          test-host-2: host
+        bin_tests:
+          - show-statistics
+          - show-mappings
+          - show-utilization-all
+      desc: Verify Crushtool to change crush maps ( -ve Tests )

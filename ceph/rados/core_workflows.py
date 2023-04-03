@@ -468,15 +468,19 @@ class RadosOrchestrator:
          Args:
             kwargs:
             1. osd : if an OSD id is passed , scrub to be triggered on that osd
-                    eg: obj.run_scrub(osd=3)
+                    eg- obj.run_scrub(osd=3)
             2. pgid: if a PGID is passed, scrubs are run on that PG
-                    eg: obj.run_scrub(pgid=1.0)
+                    eg- obj.run_scrub(pgid=1.0)
+            3. pool: if pool name is passed, scrubs are run on that pool
+                    eg- obj.run_scrub(pool="test-pool")
          Returns: None
         """
         if kwargs.get("osd"):
             cmd = f"ceph osd scrub {kwargs.get('osd')}"
         elif kwargs.get("pgid"):
             cmd = f"ceph pg scrub {kwargs.get('pgid')}"
+        elif kwargs.get("pool"):
+            cmd = f"ceph osd pool scrub {kwargs.get('pool')}"
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd scrub all"
@@ -486,17 +490,21 @@ class RadosOrchestrator:
         """
         Run scrub on the given OSD or on all OSD's
             Args:
-            kwargs:
-            1. osd : if a OSD id is passed , deep-scrub to be triggered on that osd
-                    eg: obj.run_deep_scrub(osd=3)
-            2. pgid: if a PGID is passed, deep-scrubs are run on that PG
-                    eg: obj.run_deep_scrub(pgid=1.0)
+                kwargs:
+                1. osd : if an OSD id is passed , deep-scrub to be triggered on that osd
+                        eg- obj.run_deep_scrub(osd=3)
+                2. pgid: if a PGID is passed, deep-scrubs are run on that PG
+                        eg- obj.run_deep_scrub(pgid=1.0)
+                3. pool: if pool name is passed, deep-scrubs are run on that pool
+                        eg- obj.run_deep_scrub(pool="test-pool")
             Returns: None
         """
         if kwargs.get("osd"):
             cmd = f"ceph osd deep-scrub {kwargs.get('osd')}"
         elif kwargs.get("pgid"):
             cmd = f"ceph pg deep-scrub {kwargs.get('pgid')}"
+        elif kwargs.get("pool"):
+            cmd = f"ceph osd pool deep-scrub {kwargs.get('pool')}"
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd deep-scrub all"
@@ -936,10 +944,10 @@ class RadosOrchestrator:
         """
         Changes the state of the OSD daemons wrt the action provided
         Args:
-            action: operation to be performed on the service, i.e
+            action: operation to be performed on the service, i.e.
             start, stop, restart, disable, enable
             target: ID osd the target OSD
-            timeout: timeout in seconds, (default = 10s)
+            timeout: timeout in seconds, (default = 15s)
         Returns: Pass -> True, Fail -> False
         """
         cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
@@ -979,7 +987,7 @@ class RadosOrchestrator:
                 )
                 return False
         else:
-            time.sleep(5)
+            time.sleep(7)
         return True
 
     def fetch_host_node(self, daemon_type: str, daemon_id: str = None):
@@ -1250,3 +1258,59 @@ class RadosOrchestrator:
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
         return orch_ps_out["status"], orch_ps_out["status_desc"]
+
+    def get_osd_stat(self):
+        """
+        This Function is to get the OSD stats.
+           Example:
+               get_osd_stat()
+           Args:
+           Returns:  OSD Statistics
+        """
+
+        cmd = "ceph osd stat"
+        osd_stats = self.run_ceph_command(cmd=cmd)
+        log.debug(f" The OSD Statistics are : {osd_stats}")
+        return osd_stats
+
+    def get_pgid(
+        self,
+        pool_name: str = None,
+        pool_id: int = None,
+        osd: int = None,
+        osd_primary: int = None,
+    ) -> list:
+        """
+        Retrieves all the PG IDs for a pool or PG IDs where a
+        certain osd is primary in the acting set or PG IDs which are
+        utilizing the concerned osd
+        Ideally, only one argument should be provided
+        Args:
+            pool_name: name of the pool
+            pool_id: pool id
+            osd: osd id whose pgs are to be retrieved
+            osd_primary: primary osd id whose pgs are to be retrieved
+        Returns:
+            list having pgids in string format
+        """
+
+        pgid_list = []
+        cmd = "ceph pg "
+        if pool_name:
+            cmd += f"ls-by-pool {pool_name}"
+        elif pool_id:
+            cmd += f"ls {pool_id}"
+        elif osd:
+            cmd += f"ls-by-osd {osd}"
+        elif osd_primary:
+            cmd += f"ls-by-primary {osd_primary}"
+        else:
+            log.info("No argument was provided.")
+            return pgid_list
+
+        pgid_dict = self.run_ceph_command(cmd=cmd)
+
+        for pg_stats in pgid_dict["pg_stats"]:
+            pgid_list.append(pg_stats["pgid"])
+
+        return pgid_list

@@ -23,6 +23,8 @@ def run(ceph_cluster, **kw):
     6. Set bulk flag to false
     7. Wait for pg to be active+clean
     8. Verify latest pg_num has decreased.
+    9. Verify restart osd when split is in progress.
+    10. Verify delete object when split is in progress.
     """
     try:
         log.info(run.__doc__)
@@ -54,6 +56,28 @@ def run(ceph_cluster, **kw):
         if not new_bulk:
             log.error("Expected bulk flag should be True.")
             raise Exception("Expected bulk flag should be True.")
+        if pool.get("restart_osd", False):
+            acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
+            log.info(f"Acting set {acting_pg_set}")
+            if not acting_pg_set:
+                log.error("Failed to retrieve acting pg set")
+                raise Exception("Failed to retrieve acting pg set")
+            osd_id = acting_pg_set[0]
+            if not rados_obj.change_osd_state(action="stop", target=osd_id):
+                log.error(f"Unable to stop the OSD : {osd_id}")
+                raise Exception(f"Unable to stop the OSD : {osd_id}")
+            if not rados_obj.change_osd_state(action="start", target=osd_id):
+                log.error(f"Unable to start the OSD : {osd_id}")
+                raise Exception(f"Unable to start the OSD : {osd_id}")
+        if pool.get("del_obj", False):
+            del_objects = [
+                {"name": f"obj{i}"} for i in range(pool.get("objs_to_del", 5))
+            ]
+            if not pool_obj.do_rados_delete(
+                pool_name=pool["pool_name"], objects=del_objects
+            ):
+                log.error("Failed to delete objects from pool.")
+                raise Exception("Failed to delete objects from pool.")
         time.sleep(20)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         new_prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
@@ -81,14 +105,15 @@ def run(ceph_cluster, **kw):
             raise Exception(
                 f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
             )
-        if config.get("delete_pools"):
-            for name in config["delete_pools"]:
-                method_should_succeed(rados_obj.detete_pool, name)
-            log.info("deleted all the given pools successfully")
-
-        return 0
 
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+
+    finally:
+        if config.get("delete_pools"):
+            for name in config["delete_pools"]:
+                method_should_succeed(rados_obj.detete_pool, name)
+            log.info("deleted all the given pools successfully")
+    return 0

@@ -228,6 +228,57 @@ tests:
         config-file-name: test_versioning_objects_delete_from_another_user.yaml
         timeout: 300
 
+  - test:
+      name: Versioning with copy objects and delete with different user
+      desc: Versioning with copy objects and delete with different user
+      polarion-id: CEPH-9353 # Also applies for CEPH-10215
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_delete_version_object_using_different_user.yaml
+        timeout: 300
+
+  - test:
+      name: Test deleting the current version of the object
+      desc: Deleting the current version of the object
+      polarion-id: CEPH-10647
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_delete_current_version_object.yaml
+        timeout: 300
+
+  - test:
+      name: Test copy versioned objects to another versioned bucket
+      desc: copy versioned objects to another versioned bucket
+      polarion-id: CEPH-10644
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_copy_version_object_to_version_bucket.yaml
+        timeout: 300
+
+  - test:
+      name: Test Write modify and read objects in the versioned bucket
+      desc: Test Write modify and read objects in the versioned bucket
+      polarion-id: CEPH-10641
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_access_versioned_objects.yaml
+        timeout: 300
+
+  # BucketPolicy Tests
+  - test:
+      name: ListBucketVersions with bucket policy for users in same tenant
+      desc: Test ListBucketVersions bucket policy for users in same tenant
+      polarion-id: CEPH-11574
+      module: sanity_rgw.py
+      config:
+        script-name: test_list_all_multipart_uploads.py
+        config-file-name: test_listbucketversion_with_bucketpolicy_for_tenant_user.yaml
+        timeout: 300
+
   # Bucket Lifecycle Tests
   - test:
       name: object expiration for versioned buckets with filter Prefix test multiple rules.
@@ -235,7 +286,7 @@ tests:
       polarion-id: CEPH-11177 # also applies to CEPH-11182, CEPH-11188 and CEPH-11187
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
         timeout: 300
 
@@ -245,7 +296,7 @@ tests:
       polarion-id: CEPH-11185
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_date.yaml
         timeout: 300
 
@@ -255,7 +306,7 @@ tests:
       polarion-id: CEPH-11189
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_delete_marker.yaml
         timeout: 300
 
@@ -540,4 +591,3 @@ tests:
         script-name: test_indexless_buckets.py
         config-file-name: test_indexless_buckets_s3.yaml
         timeout: 500
-

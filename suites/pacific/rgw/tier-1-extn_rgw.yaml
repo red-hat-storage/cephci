@@ -165,6 +165,15 @@ tests:
         config-file-name: test_sts_invalid_principal.yaml
         timeout: 500
   - test:
+      name: Test rename of large object using sts user through AWS
+      desc: Test rename of large object using sts user through AWS
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+        timeout: 500
+  - test:
       name: reshard cancel command
       desc: reshard cancel command
       polarion-id: CEPH-11474
@@ -210,7 +219,7 @@ tests:
       polarion-id: CEPH-11186
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_invalid_date.yaml
         timeout: 300
 
@@ -230,7 +239,7 @@ tests:
       polarion-id: CEPH-83575046
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_rgw_enable_lc_threads.yaml
         timeout: 300
 
@@ -251,7 +260,7 @@ tests:
       polarion-id: CEPH-83574806
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_multiple_delete_marker.yaml
         timeout: 300
 

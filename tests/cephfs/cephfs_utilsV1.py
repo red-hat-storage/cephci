@@ -115,7 +115,7 @@ class FsUtils(object):
         return output_dict
 
     @staticmethod
-    def deamon_op(node, service, op):
+    def deamon_op(node, service, op, **kwargs):
         """
         It performs given operation on service given
         Args:
@@ -126,12 +126,21 @@ class FsUtils(object):
         Returns:
 
         """
+        if kwargs.get("service_name"):
+            node.exec_command(
+                sudo=True, cmd=f"systemctl {op} {kwargs.get('service_name')}"
+            )
+        service_deamon = FsUtils.deamon_name(node, service)
+        node.exec_command(sudo=True, cmd=f"systemctl {op} {service_deamon}")
+
+    @staticmethod
+    def deamon_name(node, service):
         out, rc = node.exec_command(
             sudo=True,
             cmd=f"systemctl list-units --type=service | grep {service}.ceph | awk {{'print $1'}}",
         )
         service_deamon = out.strip()
-        node.exec_command(sudo=True, cmd=f"systemctl {op} {service_deamon}")
+        return service_deamon
 
     @staticmethod
     @retry(CommandFailed, tries=5, delay=60)
@@ -1633,6 +1642,34 @@ class FsUtils(object):
             )
         )
 
+    def pid_kill(self, node, daemon):
+        out, rc = node.exec_command(cmd="pgrep %s " % daemon, container_exec=False)
+        out = out.split("\n")
+        out.pop()
+        for pid in out:
+            node.exec_command(sudo=True, cmd="kill -9 %s" % pid, container_exec=False)
+            sleep(10)
+        return 0
+
+    def network_disconnect(self, ceph_object, sleep_time=20):
+        script = f"""import time,os
+os.system('sudo systemctl stop network')
+time.sleep({sleep_time})
+os.system('sudo systemctl start  network')
+    """
+        node = ceph_object.node
+        nw_disconnect = node.remote_file(
+            sudo=True, file_name="/home/cephuser/nw_disconnect.py", file_mode="w"
+        )
+        nw_disconnect.write(script)
+        nw_disconnect.flush()
+
+        log.info("Stopping the network..")
+        node.exec_command(sudo=True, cmd="yum install -y python3")
+        node.exec_command(sudo=True, cmd="python3 /home/cephuser/nw_disconnect.py")
+        log.info("Starting the network..")
+        return 0
+
     def node_power_failure(
         self,
         node,
@@ -1939,7 +1976,7 @@ class FsUtils(object):
         mds_map = fs_status["mdsmap"]
         active_list = [i["name"] for i in mds_map if i["state"] == expected_status]
         log.info(f"{mds_map}")
-        if len(active_list) == num_of_mds:
+        if len(active_list) >= num_of_mds:
             return active_list
         log.info(f"{active_list}")
         raise CommandFailed(

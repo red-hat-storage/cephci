@@ -127,7 +127,7 @@ tests:
   - test:
       name: Verify Ceph df stats
       desc: Verify Ceph df stats after creating and deleting objects from a pool
-      module: pool_tests.py
+      module: test_cephdf.py
       polarion-id: CEPH-83571666
       config:
         verify_cephdf_stats:
@@ -187,25 +187,36 @@ tests:
       polarion-id: CEPH-83571702
       config:
         verify_osd_omap_entries:
-          configurations:
-            pool-1:
-              pool_name: ec_pool_3
-              pool_type: erasure
-              pg_num: 1
-              k: 8
-              m: 4
-              plugin: jerasure
-              crush-failure-domain: osd
-              disable_pg_autoscale: true
+          pool_config:
+            # EC pool config is commented out because
+            # omap entries is not working on an EC pool
+#            pool-1:
+#              pool_name: ec_pool_3
+#              pool_type: erasure
+#              pg_num: 1
+#              k: 8
+#              m: 4
+#              plugin: jerasure
+#              crush-failure-domain: osd
+#              disable_pg_autoscale: true
             pool-2:
               pool_type: replicated
               pool_name: re_pool_3
               pg_num: 1
               disable_pg_autoscale: true
           omap_config:
-            obj_start: 0
-            obj_end: 4000
-            num_keys_obj: 20000
+            small_omap:
+              large_warn: false
+              obj_start: 0
+              obj_end: 5
+              normal_objs: 400
+              num_keys_obj: 200000
+            large_omap:
+              large_warn: true
+              obj_start: 0
+              obj_end: 5
+              normal_objs: 400
+              num_keys_obj: 200001
       desc: Large number of omap creations on objects backed by bluestore
 
   - test:

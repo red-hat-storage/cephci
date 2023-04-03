@@ -53,4 +53,4 @@ class AddMixin:
         if config.get("args"):
             base_cmd.append(config_dict_to_string(config["args"]))
 
-        out, _ = self.shell(base_cmd)
+        return self.shell(base_cmd)
