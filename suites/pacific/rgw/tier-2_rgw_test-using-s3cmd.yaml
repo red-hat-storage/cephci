@@ -226,7 +226,6 @@ tests:
       desc: Test Ratelimit for tenanted users
       polarion-id: CEPH-83574914
       module: sanity_rgw.py
-      comments: known issue (bz-2179360)
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
