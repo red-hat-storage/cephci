@@ -19,6 +19,7 @@
 # CEPH-11310 -  Run IOs by mounting same subvolume with all the three mounts
 # CEPH-11314 - Backup and restore data using existing NFS backup tools
 # CEPH-83573992 - Verifying ceph nfs ls export with --detailed option and info with cluster_id
+# CEPH-83574013 - nfs cluster host changes and verification
 #=======================================================================================================================
 tests:
   -
@@ -268,4 +269,10 @@ tests:
       module: nfs.nfs_info_cluster_id_and_ls_export_detailed.py
       name: "nfs ls export verification and info with cluster_id"
       polarion-id: "CEPH-83573992"
+  - test:
+      abort-on-fail: false
+      desc: "Apply various number of hosts to nfs cluster and verify the changes"
+      module: nfs.nfs_update_cluster_node_changes.py
+      name: "nfs cluster host changes and verification"
+      polarion-id: "CEPH-83574013"
 

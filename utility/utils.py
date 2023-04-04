@@ -146,6 +146,110 @@ def fuse_mount(fuse_clients, mounting_dir):
         log.error(e)
 
 
+def test_user_stats_consistency(primary_rgw_node, secondary_rgw_node):
+    """
+    verify and monitor sync consistency via user stats across sites.
+    """
+    log.info("Test number of users are consistent across sites")
+    total_users_on_primary = json.loads(
+        primary_rgw_node.exec_command(cmd="sudo radosgw-admin user list | wc -l")[0]
+    )
+    total_users_on_secondary = json.loads(
+        secondary_rgw_node.exec_command(cmd="sudo radosgw-admin user list | wc -l")[0]
+    )
+    user_list_primary = json.loads(
+        primary_rgw_node.exec_command(cmd="sudo radosgw-admin user list")[0]
+    )
+    if total_users_on_primary == total_users_on_secondary:
+        total_user = total_users_on_secondary - 2
+        for user in range(0, total_user):
+            user_name = user_list_primary[user]
+            (
+                tenancy,
+                uid,
+                tenant,
+                pri_size,
+                sec_size,
+                pri_objects,
+                sec_objects,
+            ) = test_tenancy(primary_rgw_node, secondary_rgw_node, user_name)
+            if pri_size == sec_size and pri_objects == sec_objects:
+                log.info(f"user stats are consistent across sites for {user_name}")
+            else:
+                log.info(
+                    "user stats inconsistent, perform sync-stats on both sites and retest for consistency"
+                )
+                cmd = f"sudo radosgw-admin user stats --sync-stats --uid {uid}"
+                if tenancy:
+                    cmd = f"{cmd} --tenant {tenant}"
+                primary_rgw_node.exec_command(cmd=cmd)
+                secondary_rgw_node.exec_command(cmd=cmd)
+
+                (
+                    tenancy,
+                    uid,
+                    tenant,
+                    pri_size,
+                    sec_size,
+                    pri_objects,
+                    sec_objects,
+                ) = test_tenancy(primary_rgw_node, secondary_rgw_node, user_name)
+
+                if pri_size == sec_size and pri_objects == sec_objects:
+                    log.info(
+                        "user stats for {user_name} are consistent after sync-stats."
+                    )
+
+                else:
+                    raise Exception(
+                        "User {user_name} not synced across sites even after sync-stats, test failure."
+                    )
+    else:
+        raise Exception("Users not synced across sites, test failure.")
+
+
+def test_tenancy(primary_rgw_node, secondary_rgw_node, user_name):
+    at_index = user_name.find("$")
+    if at_index != -1:
+        log.info("It is a tenanted user, find uid and tenant.")
+        tenancy = "true"
+        len_str = len(user_name)
+        tenant = user_name[0:at_index]
+        uid = user_name[at_index + 1 : len_str]
+        cmd = f"sudo radosgw-admin user stats --uid {uid}"
+        user_stat_pri_doc = json.loads(
+            primary_rgw_node.exec_command(cmd=f"{cmd} --tenant {tenant}")[0]
+        )
+        user_stat_sec_doc = json.loads(
+            secondary_rgw_node.exec_command(cmd=f"{cmd} --tenant {tenant}")[0]
+        )
+
+    else:
+        log.info("It is a non-tenanted user.")
+        tenancy = "false"
+        uid = user_name
+        tenant = "default"
+        cmd = f"sudo radosgw-admin user stats --uid {uid}"
+
+        user_stat_pri_doc = json.loads(primary_rgw_node.exec_command(cmd=f"{cmd}")[0])
+        user_stat_sec_doc = json.loads(secondary_rgw_node.exec_command(cmd=f"{cmd}")[0])
+
+    primary_size = user_stat_pri_doc["stats"]["size"]
+    secondary_size = user_stat_sec_doc["stats"]["size"]
+    primary_objects = user_stat_pri_doc["stats"]["num_objects"]
+    secondary_objects = user_stat_sec_doc["stats"]["num_objects"]
+
+    return (
+        tenancy,
+        uid,
+        tenant,
+        primary_size,
+        secondary_size,
+        primary_objects,
+        secondary_objects,
+    )
+
+
 def test_sync_via_bucket_stats(primary_rgw_node, secondary_rgw_node):
     """
     verify and monitor sync consistency via bucket stats across sites.
@@ -268,6 +372,53 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
         log.info("data from archive zone does not sync to source zone as per design")
     else:
         raise Exception("sync is either in progress or stuck")
+
+    # check for large omap in cluster status
+    check_ceph_status(verify_io_on_site_node)
+
+
+def check_ceph_status(site):
+    """
+    get the ceph cluster status and health
+    """
+    log.info("get ceph status")
+    ceph_status = site.exec_command(cmd="sudo ceph status")
+    if "HEALTH_ERR" in ceph_status or "large omap objects" in ceph_status:
+        raise Exception(
+            "ceph status is either in HEALTH_ERR or we have large omap objects."
+        )
+
+
+def set_config_param(node):
+    """
+    To set configuration parameters across sites
+    :param node: exec_node from site
+    """
+    # select the rgw daemon name to set the configuration parameter/s
+    rgw_process = node.exec_command(cmd="ceph orch ps | grep rgw")
+    rgw_process_name = rgw_process[0].split()[0]
+
+    # add the configuration/s to be set on service
+    configs = ["rgw_max_objs_per_shard 5", "rgw_lc_debug_interval 30"]
+    for config_cmd in configs:
+        node.exec_command(cmd=f"ceph config set client.{rgw_process_name} {config_cmd}")
+
+    # restart rgw service for changes to take effect
+    rgw_service = node.exec_command(cmd="ceph orch ls | grep rgw")
+    rgw_service_name = rgw_service[0].split()[0]
+    node.exec_command(cmd=f"ceph orch restart {rgw_service_name}")
+
+    # select osd service name to set configuration parameter/s
+    osd_process = node.exec_command(cmd="ceph orch ls | grep osd")
+    osd_process_name = osd_process[0].split()[0]
+
+    # add the configuration/s to be set on service
+    configs = ["osd_deep_scrub_large_omap_object_key_threshold 200"]
+    for config_cmd in configs:
+        node.exec_command(cmd=f"ceph config set osd {config_cmd}")
+    # restart osd service
+    node.exec_command(cmd=f"ceph orch restart {osd_process_name}")
+    node.exec_command(cmd="ceph config dump")
 
 
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):

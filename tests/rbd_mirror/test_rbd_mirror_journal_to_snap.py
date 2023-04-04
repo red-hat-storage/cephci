@@ -1,5 +1,5 @@
 from ceph.parallel import parallel
-from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
+from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
 
 log = Log(__name__)
@@ -15,16 +15,18 @@ def test_write_from_secondary(self, mirrormode, imagespec):
         imagespec: poolname + "/" + imagename
     Returns:
         0 - if test case pass
-        1 - it test case fails
+        1 - if test case fails
     """
-    out, err = self.exec_cmd(
-        cmd=(
-            "rbd bench --io-type write --io-threads 16 "
-            f"--io-total '500M' {imagespec}"
-        ),
-        all=True,
-        check_ec=False,
-    )
+    import pdb;pdb.set_trace()
+    out, err = self.benchwrite(imagespec=imagespec, long_running = False, all = True)
+    # out, err = self.exec_cmd(
+    #     cmd=(
+    #         "rbd bench --io-type write --io-threads 16 "
+    #         f"--io-total '500M' {imagespec}"
+    #     ),
+    #     all=True,
+    #     check_ec=False,
+    # )
     log.debug(err)
 
     if "Read-only file system" in err:
@@ -41,14 +43,14 @@ def test_write_from_secondary(self, mirrormode, imagespec):
     return 1
 
 
-def run(**kw):
+def test_journal_to_snapshot(rbd_mirror, pool_type, **kw):
     """verification Snap mirroring on journaling based image after disable journaling on image.
 
     Args:
         **kw:
     Returns:
         0 - if test case pass
-        1 - it test case fails
+        1 - if test case fails
 
     Test case flow:
     1. Create image on cluster-1.
@@ -62,10 +64,8 @@ def run(**kw):
     try:
         log.info("Starting RBD mirroring test case")
         config = kw.get("config")
-        mirror1, mirror2 = [
-            rbdmirror.RbdMirror(cluster, config)
-            for cluster in kw["ceph_cluster_dict"].values()
-        ]
+        mirror1 = rbd_mirror.get("mirror1")
+        mirror2 = rbd_mirror.get("mirror2")
         poolname = mirror1.random_string() + "_tier_2_rbd_mirror_pool"
         imagename = mirror1.random_string() + "_tier_2_rbd_mirror_image"
         imagespec = poolname + "/" + imagename
@@ -120,3 +120,45 @@ def run(**kw):
     # Cleans up the configuration
     finally:
         mirror1.clean_up(peercluster=mirror2, pools=[poolname])
+
+def run(**kw):
+    """
+    Journal based mirroring to snapshot based mirroring conversion.
+
+    Args:
+        **kw: test data
+            Example::
+            config:
+                ec_pool_config:
+                  mirrormode: snapshot
+                  mode: image
+                rep_pool_config:
+                  mirrormode: snapshot
+                  mode: image
+                snapshot_schedule_level: "cluster"
+                imagesize: 2G
+
+    Returns:
+        int: The return value - 0 for success, 1 for failure
+    """
+    log.info(
+        "Starting CEPH-83573618, "
+        "Test to verify snapshot based mirroring on journaling based mirrored images."
+    )
+
+    mirror_obj = rbd_mirror_config(**kw)
+
+    if mirror_obj:
+        log.info("Executing test on replicated pool")
+        if test_journal_to_snapshot(
+            mirror_obj.get("rep_rbdmirror"), "rep_pool_config", **kw
+        ):
+            return 1
+
+        log.info("Executing test on ec pool")
+        if test_journal_to_snapshot(
+            mirror_obj.get("ec_rbdmirror"), "ec_pool_config", **kw
+        ):
+            return 1
+
+    return 0

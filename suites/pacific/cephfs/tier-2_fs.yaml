@@ -121,3 +121,15 @@ tests:
       polarion-id: CEPH-83573269
       desc: Stanby-replay mds testt
       abort-on-fail: false
+  - test:
+      name: mds service add removal test
+      module: mds_rm_add.py
+      polarion-id: CEPH-11259
+      desc: mds service add removal test
+      abort-on-fail: false
+  - test:
+      name: mon service add removal test
+      module: mon_rm_add.py
+      polarion-id: CEPH-11345
+      desc: mon service add removal test
+      abort-on-fail: false

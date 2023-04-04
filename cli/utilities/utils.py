@@ -1,5 +1,6 @@
 import os
 import re
+from json import loads
 from subprocess import PIPE, Popen
 from threading import Thread
 from time import sleep
@@ -437,3 +438,17 @@ def is_node_online(node):
         return True
     log.error(f"{node.hostname} is DOWN, Ping failed")
     return False
+
+
+def get_lvm_on_osd_container(container_id, node, format="json"):
+    """
+    Returns the lvm list for the given container id
+    Args:
+        container_id (str): ID of the container
+        node (ceph): Node to execute the cmd
+
+    Returns (str): output of the command
+    """
+    cmd = f"ceph-volume lvm list --format {format}"
+    out, _ = exec_command_on_container(node=node, ctr=container_id, cmd=cmd, sudo=True)
+    return loads(out)

@@ -58,7 +58,7 @@ tests:
       destroy-clster: false
       module: test_cephadm.py
       name: deploy cluster
- # Test cases to be executed
+# # Test cases to be executed
   - test:
       abort-on-fail: true
       config:
@@ -168,12 +168,6 @@ tests:
       polarion-id: CEPH-83573322
 
   - test:
-      desc: Image migration from replication pools to replication pool
-      module: rbd_image_Live_migration_rep2Rep.py
-      name: Test image migration on replication pool
-      polarion-id: CEPH-83573293
-
-  - test:
       desc: Trying to delete a protected snapshot should fail - negative
       config:
         do_not_create_image: True
@@ -184,3 +178,57 @@ tests:
       module: rbd_delete_protected_snapshot_krbd.py
       name: krbd client - Test to Perform Deletion of protected snapshot
       polarion-id: CEPH-9224
+
+  - test:
+      desc: Image migration from replication pools to replication pool
+      module: rbd_image_migration.py
+      config:
+        source:
+          rep-pool-only: True
+          rep_pool_config:
+            pool: rbd_RepPool1
+            image: rbd_image
+            size: 10G
+        destination:
+          rep-pool-only: True
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool2
+      name: Test image migration on replication pool
+      polarion-id: CEPH-83573293
+
+  - test:
+      desc: Image migration from EC pool to EC pool with default K_m value
+      module: rbd_image_migration.py
+      config:
+        source:
+          ec-pool-only: True
+          ec-pool-k-m: "2,2"
+          crush-failure-domain: osd
+          ec_pool_config:
+            pool: rbd_ECpool1
+            image: rbd_image_ec1
+            data_pool: data_pool_ec1
+            size: 10G
+        destination:
+          ec-pool-only: True
+          ec-pool-k-m: "2,2"
+          do_not_create_image: True
+          crush-failure-domain: osd
+          ec_pool_config:
+            pool: rbd_ECpool2
+            data_pool: data_pool_ec2
+      name: Test image migration on EC pool with default k_m value
+      polarion-id: CEPH-83573327
+
+  - test:
+      desc: Disable the image features on image when image is moved to trash and verify
+      module: rbd_features_disable.py
+      name: Test to disable the image features on image when image is moved to trash
+      polarion-id: CEPH-11415
+
+  - test:
+      desc: Perform flatten operations while changing the image feature
+      module: rbd_flatten_image_feature_disable.py
+      name: Test to disable image feature when flatten operation is performed
+      polarion-id: CEPH-9862

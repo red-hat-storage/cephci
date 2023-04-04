@@ -62,7 +62,7 @@ tests:
       polarion-id: CEPH-11177
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_bucket_lc_multiple_bucket.yaml
         timeout: 300
 

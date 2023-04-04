@@ -117,7 +117,7 @@ tests:
       polarion-id: CEPH-11179 # also applies to CEPH-11180
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_prefix_and_tag.yaml
         timeout: 300
   - test:
@@ -126,7 +126,7 @@ tests:
       polarion-id: CEPH-11190
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_prefix_non_current_days.yaml
         timeout: 300
   - test:
@@ -135,7 +135,7 @@ tests:
       polarion-id: CEPH-83574050 # also applies to CEPH-83574049, CEPH-83574053
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration.py
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_with_prefix_rule.yaml
         timeout: 300
   - test:

@@ -174,14 +174,17 @@ def set_osd_in(
     log.info(f"Executing OSD {config.pop('command')} service")
     osd = OSD(cluster=ceph_cluster, **config)
     out, err = osd.osd_in(config)
-    if all and "marked in osd" in err:
+    if all and ("marked in osd" in err or "" in err):
         return True
-    if osd_id and f"marked in osd.{osd_id}" in err:
+    if osd_id and (
+        f"marked in osd.{osd_id}" in err or f"osd.{osd_id} is already in" in err
+    ):
         return True
     ret_val = True
-    for o_id in osd_ids:
-        if f"marked in osd.{o_id}" not in err:
-            ret_val = False
+    if osd_ids:
+        for o_id in osd_ids:
+            if f"marked in osd.{o_id}" not in err:
+                ret_val = False
     return ret_val
 
 
@@ -235,7 +238,10 @@ def add_osd(ceph_cluster, host, device_path, osd_id):
     config = {"command": "add", "service": "osd", "pos_args": [host, device_path]}
     log.info(f"Executing daemon {config.pop('command')} service")
     daemon = Daemon(cluster=ceph_cluster, **config)
-    daemon.add(config)
+    out, err = daemon.add(config)
+    if "Created osd" in out:
+        return True
+    return False
 
 
 def configure_osd_flag(ceph_cluster, action, flag):

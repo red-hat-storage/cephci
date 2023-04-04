@@ -293,6 +293,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
+        - name: "Deploy cluster using cephadm and configure RGW in warn state"
+          execution_time: "26m 21s"
+          suite: "suites/quincy/cephadm/tier-2-rgw-with-warn-state.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
       stage-3:
         - name: "Tier-2 RGW cloud transitions"
           execution_time: "47m 35s"
@@ -443,6 +453,16 @@ pipelines:
           execution_time: "2h 18m 51s"
           suite: "suites/pacific/rgw/tier-1_rgw_ms-bilog-crash-on-primary.yaml"
           global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "tier-1_rgw_ms_archive_test-upgrade-5-to-latest"
+          execution_time: "3h 19m 29s"
+          suite: "suites/quincy/rgw/tier-1_rgw_ms_archive_test-upgrade-5-to-latest.yaml"
+          global-conf: "conf/pacific/rgw/rgw_ms_archive.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"

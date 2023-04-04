@@ -1,4 +1,4 @@
-from tests.rbd.exceptions import RbdBaseException
+from tests.rbd.exceptions import ProtectSnapError, RbdBaseException
 from tests.rbd.krbd_io_handler import krbd_io_handler
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -14,6 +14,7 @@ def rbd_delete_protect_snap(rbd, pool_type, **kw):
         pool_type: pool type (ec_pool_config or rep_pool_config)
         **kw: test data
     """
+
     try:
         pool = kw["config"][pool_type]["pool"]
         image = kw["config"][pool_type]["image"]
@@ -46,16 +47,22 @@ def rbd_delete_protect_snap(rbd, pool_type, **kw):
             else:
                 log.debug(f"Clone {clone_name} created successfully")
 
-        if rbd.snap_remove(pool, image, snap):
-            return 0
+        out, err = rbd.snap_remove(pool, image, snap, all=True, check_ec=False)
+        if "Removing snap: 0% complete...failed" not in err:
+            log.error(f"{out}")
+            raise ProtectSnapError(f" Removal of protected Snap failed: {out}")
+        log.debug(
+            f"Snapshot '{snap_name}' for image '{image}' in pool '{pool}' failed to remove as it is protected: {out}"
+        )
+        log.info(f"{err}")
+        return 0
 
     except RbdBaseException as error:
         log.error(error.message)
         return 1
 
     finally:
-        if not kw.get("config").get("do_not_cleanup_pool"):
-            rbd.clean_up(pools=[pool])
+        rbd.clean_up(pools=[kw["config"][pool_type]["pool"]])
 
 
 def run(**kw):

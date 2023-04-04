@@ -6,6 +6,7 @@ from .daemon import Daemon
 from .device import Device
 from .host import Host
 from .label import Label
+from .osd import Osd
 from .tuned_profile import TunedProfile
 
 log = Log(__name__)
@@ -24,6 +25,7 @@ class Orch(Cli):
         self.host = Host(nodes, self.base_cmd)
         self.daemon = Daemon(nodes, self.base_cmd)
         self.device = Device(nodes, self.base_cmd)
+        self.osd = Osd(nodes, self.base_cmd)
 
     def ls(self, **kw):
         """
@@ -98,6 +100,18 @@ class Orch(Cli):
                 refresh (bool): whether to refresh or not.
         """
         cmd = f"{self.base_cmd} ps {build_cmd_from_args(**kw)}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
+
+    def stop(self, service):
+        """
+        stop a service.
+        Args:
+          service (str): name of the service to be stopped
+        """
+        cmd = f"{self.base_cmd} stop {service}"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()

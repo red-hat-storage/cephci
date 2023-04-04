@@ -4,6 +4,7 @@ import json
 import random
 import string
 import time
+from importlib import import_module
 from typing import List
 
 from ceph.ceph import CommandFailed
@@ -336,8 +337,8 @@ class RbdMirror:
             self.config_mirror(mirror2, poolname=poolname, **kw)
 
         # Enable image level mirroring only when mode is image type
-        if kw.get("mirrormode") and kw.get("mode") == "image":
-            mirrormode = kw.get("mirrormode")
+        if kw.get("mode") == "image":
+            mirrormode = kw.get("mirrormode", "")
             self.enable_mirror_image(poolname, imagename, mirrormode)
             self.wait_for_status(poolname=poolname, health_pattern="OK")
             mirror2.wait_for_status(poolname=poolname, health_pattern="OK")
@@ -474,6 +475,26 @@ class RbdMirror:
             else:
                 if int(out.split("=")[-1]) == 0:
                     return 0
+
+    def wait_for_snapshot_complete(self, imagespec):
+        """verify for snapshot completion
+        Args:
+            imagespec: Image specification.
+        """
+        timeout = 600
+        while timeout:
+            log.info(f"verifying for snapshot completion for {imagespec}")
+            data = self.mirror_status("image", imagespec, "description").split(", ")[1:]
+            for value in data:
+                out = eval(value)
+                if out["local_snapshot_timestamp"] == out["remote_snapshot_timestamp"]:
+                    log.info("Snapshot is successfully completed")
+                    return 0
+                else:
+                    log.debug(
+                        f"remote_snapshot_timestamp : {data['remote_snapshot_timestamp']}"
+                    )
+            timeout = timeout - 1
 
     # Get Position
     def get_position(self, imagespec, pattern=None):
@@ -663,19 +684,19 @@ class RbdMirror:
             imagespec: image specification
         """
         if self.ceph_version < 3:
-            self.exec_cmd(
+            return self.exec_cmd(
                 cmd="rbd bench-write --io-total {} {}".format(
                     kw.get("io", "500M"), kw.get("imagespec")
                 ),
-                long_running=True,
+                long_running = kw.get("long_running", True),
             )
         else:
-            self.exec_cmd(
+            return self.exec_cmd(
                 cmd=(
                     "rbd bench --io-type write --io-threads 16 "
                     f"--io-total {kw.get('io', '500M')} {kw.get('imagespec')}"
                 ),
-                long_running=True,
+                long_running = kw.get("long_running", True),
             )
 
     def create_pool(self, **kw):
@@ -912,10 +933,20 @@ class RbdMirror:
         if kw.get("dir_name"):
             self.exec_cmd(cmd="rm -rf {}".format(kw.get("dir_name")))
             peercluster.exec_cmd(cmd="rm -rf {}".format(kw.get("dir_name")))
+
         if kw.get("pools"):
             pool_list = kw.get("pools")
             if self.datapool:
                 pool_list.append(self.datapool)
+
+            # mon_allow_pool_delete must be True for removing pool
+            if self.ceph_version >= 5:
+                self.exec_cmd(cmd="ceph config set mon mon_allow_pool_delete true")
+                peercluster.exec_cmd(
+                    cmd="ceph config set mon mon_allow_pool_delete true"
+                )
+                time.sleep(20)
+
             for pool in pool_list:
                 self.delete_pool(poolname=pool)
                 peercluster.delete_pool(poolname=pool)
@@ -1079,6 +1110,33 @@ class RbdMirror:
                     self.ceph_nodes, each_daemon["hostname"].split("-")[-1]
                 )
                 break
+
+
+def execute_dynamic(obj, test, results: dict, **kwargs):
+    """
+    Executes the test specified in test parameter with inputs args and returns results
+    Args:
+        obj: rbd mirror object, or a string to a module in which the test method exists
+        test: test to be executed
+        results: test results
+        **kwargs: input args required for the test
+
+    Returns:
+        test results updated to results dict
+    """
+    if isinstance(obj, str):
+        obj = import_module(obj)
+    method = getattr(obj, test)  # if obj else globals()[test]
+    try:
+        rc = method(**kwargs)
+        log.info(f"Return value for execution of method: {test} is {rc}")
+        if rc:
+            results.update({test: 1})
+        else:
+            results.update({test: 0})
+    except BaseException as e:
+        log.error(f"Error while running method {method}: {e}")
+        results.update({test: 1})
 
 
 def rbd_mirror_config(**kw):

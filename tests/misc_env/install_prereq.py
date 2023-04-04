@@ -249,28 +249,17 @@ def setup_subscription_manager(
             config_ = get_cephci_config()
             command = "sudo subscription-manager register --force "
 
-            if is_production or cloud_type.startswith("ibmc"):
-                command += (
-                    "--serverurl=subscription.rhsm.redhat.com:443/subscription"
-                    " --baseurl=https://cdn.redhat.com "
-                )
-                username_ = config_["cdn_credentials"]["username"]
-                password_ = config_["cdn_credentials"]["password"]
-            else:
-                command += (
-                    "--serverurl=subscription.rhsm.stage.redhat.com:443/subscription"
-                    " --baseurl=https://cdn.stage.redhat.com "
-                )
-                username_ = config_["stage_credentials"]["username"]
-                password_ = config_["stage_credentials"]["password"]
+            command += (
+                "--serverurl=subscription.rhsm.redhat.com:443/subscription"
+                " --baseurl=https://cdn.redhat.com "
+            )
+            username_ = config_["cdn_credentials"]["username"]
+            password_ = config_["cdn_credentials"]["password"]
             command += f"--username={username_} --password={password_}"
             ceph.exec_command(cmd=command, timeout=720)
             break
         except (KeyError, AttributeError):
-            required_key = "stage_credentials"
-            if is_production or cloud_type.startswith("ibmc"):
-                required_key = "cdn_credentials"
-
+            required_key = "cdn_credentials"
             raise RuntimeError(
                 f"Require the {required_key} to be set in ~/.cephci.yaml, "
                 "Please refer cephci.yaml.template"

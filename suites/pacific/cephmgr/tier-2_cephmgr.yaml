@@ -124,3 +124,35 @@ tests:
         module: balancer
         key: target_max_misplaced_ratio
         value: .07
+
+  - test:
+      name: Verify ceph-mgr systemctl ops
+      desc: Verify the start, stop and restart operations of
+      polarion-id: CEPH-11384
+      module: test_cephmgr_validate_mgr_status.py
+      config:
+        operation: systemctl-ops
+
+  - test:
+      name: Verify ceph-mgr after reboot
+      desc: Verify the status of mgr after reboot
+      polarion-id: CEPH-11388
+      module: test_cephmgr_validate_mgr_status.py
+      config:
+        operation: reboot
+
+  - test:
+      name: Verify pre-empt ceph-mgr
+      desc: Verify user can pre-empt ceph-mgr using "ceph mgr fail" cmd
+      polarion-id: CEPH-11383
+      module: test_cephmgr_validate_mgr_status.py
+      config:
+        operation: fail-mgr
+
+  - test:
+      name: Verify standby mgr up when active is down
+      desc: Verify when active mgr fails, the standby comes up and cluster health has no warn
+      polarion-id: CEPH-11382
+      module: test_cephmgr_validate_mgr_status.py
+      config:
+        operation: kill-mgr
