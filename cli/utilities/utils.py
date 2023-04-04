@@ -92,7 +92,8 @@ def os_major_version(node, **kw):
         node (ceph): Ceph node object
     """
     cmd = r"cat /etc/os-release | tr -dc '0-9.'| cut -d \. -f1"
-    return node.exec_command(cmd=cmd, **kw)
+    version, _ = node.exec_command(cmd=cmd, **kw)
+    return version.strip()
 
 
 def get_release_info(node, **kw):

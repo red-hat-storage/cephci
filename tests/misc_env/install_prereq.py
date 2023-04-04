@@ -1,17 +1,27 @@
 import base64
-import datetime
-import itertools
 import json
+import re
 import time
-import traceback
 
 from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
+from ceph.waiter import WaitUntil
+from cli.utilities.packages import Package
+from cli.utilities.packages import SubscriptionManager as sm
+from cli.utilities.packages import SubscriptionManagerError
+from cli.utilities.utils import os_major_version
 from utility.log import Log
-from utility.retry import retry
 from utility.utils import get_cephci_config
 
 log = Log(__name__)
+
+
+class ConfigNotFoundError(Exception):
+    pass
+
+
+class RepoConfigError(Exception):
+    pass
 
 
 rpm_packages = {
@@ -52,14 +62,7 @@ def run(**kw):
     skip_subscription = config.get("skip_subscription", False)
     enable_eus = config.get("enable_eus", False)
     repo = config.get("add-repo", False)
-    rhbuild = config.get("rhbuild")
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
-    is_production = config.get("is_production", False)
-    build_type = config.get("build_type", None)
-
-    # when build set to released subscribing nodes with CDN credentials
-    if build_type == "released":
-        is_production = True
 
     cloud_type = config.get("cloud-type", "openstack")
     with parallel() as p:
@@ -67,13 +70,10 @@ def run(**kw):
             p.spawn(
                 install_prereq,
                 ceph,
-                1800,
                 skip_subscription,
                 repo,
-                rhbuild,
                 enable_eus,
                 skip_enabling_rhel_rpms,
-                is_production,
                 cloud_type,
             )
             time.sleep(20)
@@ -83,13 +83,10 @@ def run(**kw):
 
 def install_prereq(
     ceph,
-    timeout=1800,
     skip_subscription=False,
     repo=False,
-    rhbuild=None,
     enable_eus=False,
     skip_enabling_rhel_rpms=False,
-    is_production=False,
     cloud_type="openstack",
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
@@ -133,15 +130,21 @@ def install_prereq(
             ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
 
         if not skip_subscription:
-            setup_subscription_manager(ceph, is_production, cloud_type)
+            if not setup_subscription_manager(ceph, "cdn"):
+                log.info("Trying to subscribe to stage server")
+                setup_subscription_manager(ceph, "stage")
 
-            if not skip_enabling_rhel_rpms:
-                if enable_eus:
-                    enable_rhel_eus_rpms(ceph, distro_ver, cloud_type)
-                else:
-                    enable_rhel_rpms(ceph, distro_ver)
+            status = subscription_manager_status(ceph)
+            if status == "Unknown" or skip_enabling_rhel_rpms:
+                log.info("Enabling local RHEL repositories")
+                if not setup_local_repos(ceph):
+                    raise RepoConfigError("Failed to enable local RHEL repositories")
+
+            elif enable_eus:
+                enable_rhel_eus_rpms(ceph, distro_ver)
+
             else:
-                log.info("Skipped enabling the RHEL RPM's provided by Subscription")
+                enable_rhel_rpms(ceph, distro_ver)
 
         if repo:
             setup_addition_repo(ceph, repo)
@@ -211,81 +214,70 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
-@retry(RuntimeError, tries=3, delay=30)
-def setup_subscription_manager(
-    ceph, is_production=False, cloud_type="openstack", timeout=1800
-):
-    timeout = datetime.timedelta(seconds=timeout)
-    starttime = datetime.datetime.now()
-    log.info(
-        "Subscribing {ip} host with {timeout} timeout".format(
-            ip=ceph.ip_address, timeout=timeout
-        )
-    )
-    cmd = "sudo subscription-manager status | grep 'Overall Status' | cut -d ':' -f 2 | cut -d ' ' -f 2"
-    out, _ = ceph.exec_command(cmd=cmd, timeout=300, long_running=False)
-    submgr_status = out.split("\n")[0]
-    log.info(f"subscription manager status {submgr_status}")
-    if submgr_status != "Unknown":
-        log.info("subscription manager is already registered!!")
-        return
+def setup_subscription_manager(ceph, server, timeout=300, interval=60):
+    # Get configuration details from `~/.cephci.yaml`
+    configs = get_cephci_config()
 
-    while True:
+    # Get credentials and validate
+    creds = configs.get(f"{server}_credentials")
+    if not creds:
+        raise ConfigNotFoundError(f"{server} credentials are not provided")
+
+    # Subscribe to server
+    for w in WaitUntil(timeout=timeout, interval=interval):
         try:
-            # subscription-manager tips:
-            #
-            # "--serverurl" (optional) is the entitlement service. The default
-            # server (production) has customer-facing entitlement and SKU
-            # information. The "stage" server has QE-only entitlement data.
-            # We use Red Hat's internal "Ethel" tool to add SKUs to the
-            # "rhcsuser" account that only exists in stage.
-            #
-            # "--baseurl" (optional) is the RPM content host. The default
-            # value is the production CDN (cdn.redhat.com), and this hosts the
-            # RPM contents to which all customers have access. Alternatively
-            # you can push content to the staging CDN through the Errata Tool,
-            # and then test it with --baseurl=cdn.stage.redhat.com.
-            config_ = get_cephci_config()
-            command = "sudo subscription-manager register --force "
+            sm(ceph).register(
+                username=creds.get("username"),
+                password=creds.get("password"),
+                serverurl=creds.get("serverurl"),
+                baseurl=creds.get("baseurl"),
+                force=True,
+            )
+            log.info(f"Subscribed to {server} server successfully")
+            return True
+        except SubscriptionManagerError:
+            log.info(f"Failed to subscribe to {server} server. Retrying")
 
-            command += (
-                "--serverurl=subscription.rhsm.redhat.com:443/subscription"
-                " --baseurl=https://cdn.redhat.com "
-            )
-            username_ = config_["cdn_credentials"]["username"]
-            password_ = config_["cdn_credentials"]["password"]
-            command += f"--username={username_} --password={password_}"
-            ceph.exec_command(cmd=command, timeout=720)
-            break
-        except (KeyError, AttributeError):
-            required_key = "cdn_credentials"
-            raise RuntimeError(
-                f"Require the {required_key} to be set in ~/.cephci.yaml, "
-                "Please refer cephci.yaml.template"
-            )
-        except BaseException:  # noqa
-            if datetime.datetime.now() - starttime > timeout:
-                try:
-                    rhsm_log, err = ceph.exec_command(
-                        cmd="cat /var/log/rhsm/rhsm.log", timeout=120
-                    )
-                except BaseException:  # noqa
-                    rhsm_log = "No Log Available"
-                raise RuntimeError(
-                    "Failed to subscribe {ip} with {timeout} timeout:"
-                    "\n {stack_trace}\n\n rhsm.log:\n{log}".format(
-                        ip=ceph.ip_address,
-                        timeout=timeout,
-                        stack_trace=traceback.format_exc(),
-                        log=rhsm_log,
-                    )
-                )
-            else:
-                wait = iter(x for x in itertools.count(1, 10))
-                time.sleep(next(wait))
-    ceph.exec_command(
-        cmd="sudo subscription-manager repos --disable=*", long_running=True
-    )
+    if w.expired:
+        log.info(f"Failed to subscribe to {server} server.")
+
+    return False
+
+
+def subscription_manager_status(ceph):
+    expr = ".*Overall Status:(.*).*"
+    status = sm(ceph).status()
+
+    match = re.search(expr, status)
+    if not match:
+        raise SubscriptionManagerError("Unexpected subscription manager status")
+
+    return match.group(0)
+
+
+def setup_local_repos(ceph):
+    # Get configuration details from `~/.cephci.yaml`
+    configs = get_cephci_config()
+
+    # Get distro version
+    os_version = os_major_version(ceph)
+
+    # Get local repositories
+    repos = configs.get("repo")
+    if not repos:
+        raise ConfigNotFoundError("Repos are not provided")
+
+    # Get local repositories
+    local_repos = repos.get("local", {}).get(f"rhel-{os_version}")
+    if not local_repos:
+        raise ConfigNotFoundError("local repositories are not provided")
+
+    # Add local repositories
+    for repo in local_repos:
+        Package(ceph).add_repo(repo=repo)
+
+    log.info("Added local RHEL repos successfully")
+    return True
 
 
 def enable_rhel_rpms(ceph, distro_ver):
@@ -312,14 +304,13 @@ def enable_rhel_rpms(ceph, distro_ver):
         )
 
 
-def enable_rhel_eus_rpms(ceph, distro_ver, cloud_type="openstack"):
+def enable_rhel_eus_rpms(ceph, distro_ver):
     """
     Setup cdn repositories for rhel systems
     reference: http://wiki.test.redhat.com/CEPH/SubscriptionManager
     Args:
         distro_ver:     distro version - example: 7.7
         ceph:           ceph object
-        cloud_type:     System deployment environment
     """
 
     eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
