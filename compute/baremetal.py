@@ -95,6 +95,7 @@ class CephBaremetalNode:
         create_dir = f"install -d -m 700  -o {name} -g {name} /home/{name}/.ssh"
         copy_file = f"install -m 600 -o {name} -g {name} {key_file} /home/{name}/.ssh/"
         bash_script = f"if [ -f {key_file} ] ; then {create_dir}; {copy_file} ; fi"
+        self.rssh().exec_command(command=f"chown {name}:{name} /home/{name}")
         self.rssh().exec_command(command=bash_script)
 
     @property
