@@ -969,6 +969,25 @@ pipelines:
             openstack: "conf/inventory/rhel-8-latest.yaml"
           metadata:
             - rgw
+      stage-2:
+        - name: "RADOS test scenarios for PG split and merge"
+          execution_time: "1h 35m"
+          suite: "suites/pacific/rados/tier-2_rados_test-pg-split-merge.yaml"
+          global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+          metadata:
+            - rados
+        - name: "RADOS testing snaps during rebalance"
+          execution_time: "55ms"
+          suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance-snap.yaml"
+          global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+          metadata:
+            - rados
   rc:
     tier-0:
       stage-1:
