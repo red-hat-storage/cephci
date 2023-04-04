@@ -11,7 +11,6 @@ Tests Performed:
 7. Perform Repair on the PGs on Clay pool
 8. Recovery with only K shards of EC Pool
 """
-import datetime
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -66,7 +65,7 @@ def run(ceph_cluster, **kw) -> int:
             # Sleeping for 1 min for new configs to be applied by the cluster
             time.sleep(60)
             # error checks
-            if not run_pool_sanity_check(rados_obj):
+            if not rados_obj.run_pool_sanity_check():
                 log.error("Checks failed post config update")
                 raise Exception("Pool Sanity checks failed")
 
@@ -95,7 +94,7 @@ def run(ceph_cluster, **kw) -> int:
             time.sleep(60)
             method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         # error checks
-        if not run_pool_sanity_check(rados_obj):
+        if not rados_obj.run_pool_sanity_check():
             log.error("Checks failed post config update")
             raise Exception("Pool Sanity checks failed")
         log.info(
@@ -120,7 +119,7 @@ def run(ceph_cluster, **kw) -> int:
 
                 clay_rbd_write(cephadm=cephadm, **ec_config)
                 # error checks
-                if not run_pool_sanity_check(rados_obj):
+                if not rados_obj.run_pool_sanity_check():
                     log.error("Checks failed post config update")
                     raise Exception("Pool Sanity checks failed")
             log.info("Completed compression tests")
@@ -141,7 +140,7 @@ def run(ceph_cluster, **kw) -> int:
 
         # Performing writes and then pool sanity checks
         clay_rbd_write(cephadm=cephadm, **ec_config)
-        if not run_pool_sanity_check(rados_obj):
+        if not rados_obj.run_pool_sanity_check():
             log.error("Checks failed post config update")
             raise Exception("Pool Sanity checks failed")
         log.info("Completed pool repairs successfully")
@@ -204,67 +203,6 @@ def run(ceph_cluster, **kw) -> int:
 
     log.info("Completed testing Clay profile based EC pools!!")
     return 0
-
-
-def run_pool_sanity_check(rados_obj):
-    """
-    Runs sanity on the pools after triggering scrub and deep-scrub on pools, waiting 600 Secs
-
-    This method is used to assess the health of Pools after any operation, where in a scrub and deep scrub is
-    triggered, and the method scans the cluster for few health warnings, if generated
-    Args:
-        rados_obj: Cluster object to connect and execute commands on the cluster
-    Returns: True/Pass for Pass/Fail
-    """
-    rados_obj.run_scrub()
-    rados_obj.run_deep_scrub()
-    time.sleep(10)
-
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-    flag = False
-    while end_time > datetime.datetime.now():
-        status_report = rados_obj.run_ceph_command(cmd="ceph report")
-        ceph_health_status = status_report["health"]
-        health_warns = (
-            "PG_AVAILABILITY",
-            "PG_DEGRADED",
-            "PG_RECOVERY_FULL",
-            "TOO_FEW_OSDS",
-            "PG_BACKFILL_FULL",
-            "PG_DAMAGED",
-            "OSD_SCRUB_ERRORS",
-            "OSD_TOO_MANY_REPAIRS",
-            "CACHE_POOL_NEAR_FULL",
-            "SMALLER_PGP_NUM",
-            "MANY_OBJECTS_PER_PG",
-            "OBJECT_MISPLACED",
-            "OBJECT_UNFOUND",
-            "SLOW_OPS",
-            "RECENT_CRASH",
-        )
-
-        flag = (
-            False
-            if any(key in health_warns for key in ceph_health_status["checks"].keys())
-            else True
-        )
-        if flag:
-            log.info("No warnings on the cluster")
-            break
-
-        log.info(
-            f"Observing a health warning on cluster {ceph_health_status['checks'].keys()}"
-        )
-        time.sleep(10)
-
-    if not flag:
-        log.error(
-            "Health warning generated on cluster and not cleared post waiting of 500 seconds"
-        )
-        return False
-
-    log.info("Completed check on the cluster. Pass!")
-    return True
 
 
 def clay_rbd_write(cephadm, **kwargs):
