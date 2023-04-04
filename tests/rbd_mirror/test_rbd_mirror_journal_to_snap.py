@@ -17,16 +17,9 @@ def test_write_from_secondary(self, mirrormode, imagespec):
         0 - if test case pass
         1 - if test case fails
     """
-    import pdb;pdb.set_trace()
-    out, err = self.benchwrite(imagespec=imagespec, long_running = False, all = True)
-    # out, err = self.exec_cmd(
-    #     cmd=(
-    #         "rbd bench --io-type write --io-threads 16 "
-    #         f"--io-total '500M' {imagespec}"
-    #     ),
-    #     all=True,
-    #     check_ec=False,
-    # )
+    out, err = self.benchwrite(
+        imagespec=imagespec, long_running=False, all=True, check_ec=False
+    )
     log.debug(err)
 
     if "Read-only file system" in err:
@@ -121,6 +114,7 @@ def test_journal_to_snapshot(rbd_mirror, pool_type, **kw):
     finally:
         mirror1.clean_up(peercluster=mirror2, pools=[poolname])
 
+
 def run(**kw):
     """
     Journal based mirroring to snapshot based mirroring conversion.
@@ -160,5 +154,4 @@ def run(**kw):
             mirror_obj.get("ec_rbdmirror"), "ec_pool_config", **kw
         ):
             return 1
-
     return 0
