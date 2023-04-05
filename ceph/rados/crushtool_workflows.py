@@ -74,7 +74,7 @@ class CrushToolWorkflows:
         cmd = f"ceph osd getcrushmap > {loc}/crush.map.bin"
         self.client.exec_command(cmd=cmd, sudo=True)
         return (
-            self.check_file_exists_on_client(loc=f"{loc}/crush.map.bin"),
+            self.rados_obj.check_file_exists_on_client(loc=f"{loc}/crush.map.bin"),
             f"{loc}/crush.map.bin",
         )
 
@@ -97,7 +97,7 @@ class CrushToolWorkflows:
         """
         source_loc = kwargs.get("source_loc", "/tmp/crush.map.bin")
         target_loc = kwargs.get("target_loc", "/tmp")
-        if not self.check_file_exists_on_client(loc=source_loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=source_loc):
             log.error(f"file : {source_loc} not present on the Client")
             return False, ""
 
@@ -105,7 +105,9 @@ class CrushToolWorkflows:
         cmd = f"crushtool -d {source_loc} -o {target_loc}/crush.map.txt"
         self.client.exec_command(cmd=cmd, sudo=True)
         return (
-            self.check_file_exists_on_client(loc=f"{target_loc}/crush.map.txt"),
+            self.rados_obj.check_file_exists_on_client(
+                loc=f"{target_loc}/crush.map.txt"
+            ),
             f"{target_loc}/crush.map.txt",
         )
 
@@ -128,7 +130,7 @@ class CrushToolWorkflows:
         """
         source_loc = kwargs.get("source_loc", "/tmp/crush.map.txt")
         target_loc = kwargs.get("target_loc", "/tmp")
-        if not self.check_file_exists_on_client(loc=source_loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=source_loc):
             log.error(f"file : {source_loc} not present on the Client")
             return False
 
@@ -140,7 +142,7 @@ class CrushToolWorkflows:
             log.error(f"Failed the compile the text file into bin file. error: {error}")
             return False
         return (
-            self.check_file_exists_on_client(
+            self.rados_obj.check_file_exists_on_client(
                 loc=f"{target_loc}/crush_modified.map.bin"
             ),
             f"{target_loc}/crush_modified.map.bin",
@@ -158,7 +160,7 @@ class CrushToolWorkflows:
             Returns a tuple consisting of the execution status and the bin file location
             (True, /tmp/crush.map.bin)
         """
-        if not self.check_file_exists_on_client(loc=loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=loc):
             log.error(f"Bin file : {loc} not present on the Client")
             return False
 
@@ -209,7 +211,7 @@ class CrushToolWorkflows:
         bucket_name = kwargs.get("bucket_name")
         bucket_type = kwargs.get("bucket_type")
 
-        if not self.check_file_exists_on_client(loc=source_loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=source_loc):
             log.error(f"file : {source_loc} not present on the Client")
             return False, target_loc
 
@@ -227,7 +229,7 @@ class CrushToolWorkflows:
             return False, target_loc
 
         log.debug(f"Successfully modified the bin file : {target_loc}")
-        return self.check_file_exists_on_client(loc=target_loc), target_loc
+        return self.rados_obj.check_file_exists_on_client(loc=target_loc), target_loc
 
     def verify_add_new_bucket_into_bin(self, **kwargs) -> bool:
         """Method to Verify addition of new crush buckets into the crush map
@@ -254,7 +256,7 @@ class CrushToolWorkflows:
         bucket_name = kwargs.get("bucket_name")
         bucket_type = kwargs.get("bucket_type")
 
-        if not self.check_file_exists_on_client(loc=loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=loc):
             log.error(f"file : {loc} not present on the Client")
             return False
 
@@ -312,7 +314,7 @@ class CrushToolWorkflows:
         bucket_name = kwargs.get("bucket_name")
         reweight_val = kwargs.get("reweight_val")
 
-        if not self.check_file_exists_on_client(loc=source_loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=source_loc):
             log.error(f"file : {source_loc} not present on the Client")
             return False, target_loc
 
@@ -330,7 +332,7 @@ class CrushToolWorkflows:
             return False, target_loc
 
         log.debug(f"Successfully modified the bin file : {target_loc}")
-        return self.check_file_exists_on_client(loc=target_loc), target_loc
+        return self.rados_obj.check_file_exists_on_client(loc=target_loc), target_loc
 
     def verify_reweight_buckets_in_bin(self, **kwargs) -> bool:
         """Method to Verify modification of weights of buckets into the crush map
@@ -355,9 +357,11 @@ class CrushToolWorkflows:
         loc = kwargs.get("loc", "/tmp/crush_modified.map.bin")
         bucket_name = kwargs.get("bucket_name")
         reweight_val = float(kwargs.get("reweight_val"))
+
+        # todo: Need to get a way to reliably get the value set vs values dumped from bin file
         value_to_weight_ratio = 0.024 / 1599
 
-        if not self.check_file_exists_on_client(loc=loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=loc):
             log.error(f"file : {loc} not present on the Client")
             return False
 
@@ -432,7 +436,7 @@ class CrushToolWorkflows:
         target_bucket_name = kwargs.get("target_bucket_name")
         target_bucket_type = kwargs.get("target_bucket_type")
 
-        if not self.check_file_exists_on_client(loc=source_loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=source_loc):
             log.error(f"file : {source_loc} not present on the Client")
             return False, target_loc
 
@@ -455,7 +459,7 @@ class CrushToolWorkflows:
             return False, target_loc
 
         log.debug(f"Successfully modified the bin file : {target_loc}")
-        return self.check_file_exists_on_client(loc=target_loc), target_loc
+        return self.rados_obj.check_file_exists_on_client(loc=target_loc), target_loc
 
     def verify_move_bucket_in_bin(self, **kwargs) -> bool:
         """Method to add move an existing crush bucket into another bucket in the crush map
@@ -480,7 +484,7 @@ class CrushToolWorkflows:
         source_bucket = kwargs.get("source_bucket")
         target_bucket = kwargs.get("target_bucket")
 
-        if not self.check_file_exists_on_client(loc=loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=loc):
             log.error(f"file : {loc} not present on the Client")
             return False
 
@@ -534,7 +538,7 @@ class CrushToolWorkflows:
         loc = kwargs.get("loc", "/tmp/crush_modified.map.bin")
         bucket_name = kwargs.get("bucket_name")
 
-        if not self.check_file_exists_on_client(loc=loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=loc):
             log.error(f"file : {loc} not present on the Client")
             return False, 0
 
@@ -568,7 +572,7 @@ class CrushToolWorkflows:
             Returns a tuple consisting of the execution status and the bin file location
             (True, {})
         """
-        if not self.check_file_exists_on_client(loc=loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=loc):
             log.error(f"Bin file : {loc} not present on the Client")
             return False, ""
 
@@ -612,7 +616,7 @@ class CrushToolWorkflows:
         Tuple containing the execution status and the output of the test executed
         (True, "bad mapping rule 1 x 781 num_rep 7 result [8,10,2,11,6,9]")
         """
-        if not self.check_file_exists_on_client(loc=loc):
+        if not self.rados_obj.check_file_exists_on_client(loc=loc):
             log.error(f"Bin file : {loc} not present on the Client")
             return False, " "
 
@@ -625,25 +629,3 @@ class CrushToolWorkflows:
             return False, " "
         log.debug(f"Successfully tested the bin file for {test} and output : {out}")
         return True, out
-
-    def check_file_exists_on_client(self, loc) -> bool:
-        """Method to check if a particular file/ directory exists on the ceph client node
-
-         Args::
-            loc: Location from where the file needs to be checked
-        Examples::
-            status = obj.check_file_exists_on_client(loc="/tmp/crush.map.bin")
-        Returns::
-            True -> File exists
-            False -> FIle does not exist
-        """
-        try:
-            out, err = self.client.exec_command(cmd=f"ls {loc}", sudo=True)
-            if not out:
-                log.error(f"file : {loc} not present on the Client")
-                return False
-            log.debug(f"file : {loc} present on the Client")
-            return True
-        except Exception:
-            log.error(f"Unable to fetch details for {log}")
-            return False

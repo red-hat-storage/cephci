@@ -191,6 +191,23 @@ tests:
       abort-on-fail: false
 
   - test:
+      name: Crushtool to change crush maps
+      module: test_crushtool_workflows.py
+      polarion-id: CEPH-83572695
+      config:
+        add_buckets:
+          DC1: datacenter
+          DC2: datacenter
+          Arbiter: datacenter
+          test-host-1: host
+          test-host-2: host
+        bin_tests:
+          - show-statistics
+          - show-mappings
+          - show-utilization-all
+      desc: Verify Crushtool to change crush maps ( -ve Tests )
+
+  - test:
       name: Failure recovery on Replicated & EC
       module: test_pool_osd_recovery.py
       polarion-id: CEPH-11032
@@ -205,5 +222,5 @@ tests:
           - type: erasure
             conf: sample-pool-1
         pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
-        remove_host : node13
+        remove_host: node13
       desc: Failure recovery on Replicated & EC pools upon OSD changes
