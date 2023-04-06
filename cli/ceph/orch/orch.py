@@ -48,7 +48,7 @@ class Orch(Cli):
             return out[0].strip()
         return out
 
-    def apply(self, service_name, check_ec=False, **kw):
+    def apply(self, service_name=None, check_ec=False, **kw):
         """
         Applies the configuration to hosts.
 
@@ -62,7 +62,9 @@ class Orch(Cli):
               placement (dict): placement on hosts.
               count (int): number of hosts to be applied
         """
-        cmd = f"{self.base_cmd} apply {service_name}"
+        cmd = f"{self.base_cmd} apply"
+        if service_name:
+            cmd += " {service_name}"
         for arg in kw.pop("pos_args"):
             cmd += f" {arg}"
         cmd += build_cmd_from_args(**kw)

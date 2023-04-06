@@ -452,3 +452,26 @@ def get_lvm_on_osd_container(container_id, node, format="json"):
     cmd = f"ceph-volume lvm list --format {format}"
     out, _ = exec_command_on_container(node=node, ctr=container_id, cmd=cmd, sudo=True)
     return loads(out)
+
+
+def get_disk_devlinks(node, disk):
+    """
+    Parses the devlink data to identify the by-id and by-path values
+    Args:
+        node (ceph): Node to execute cmd
+        disk (str): disk nam. e.g: /dev/vdb
+
+    Returns (list, list): by-id and by-path values
+    """
+
+    cmd = f"udevadm info --query=property {disk} | grep DEVLINKS"
+    out, _ = node.exec_command(cmd=cmd)
+    by_id = []
+    by_path = []
+    for entry in out.split(" "):
+        path = entry.split("=")[-1]
+        if "by-id" in path:
+            by_id.append(path)
+        elif "by-path" in path:
+            by_path.append(path)
+    return by_id, by_path
