@@ -121,3 +121,17 @@ tests:
         pool_name: test-osd-df
         write_iteration: 4
         delete_pool: true
+
+  - test:
+      name: Cluster behaviour when OSDs are full
+      desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full
+      module: test_osd_full.py
+      polarion-id: CEPH-83571715
+      config:
+        pool_config:
+          pool-1:
+            pool_type: replicated
+            pool_name: re_pool_3
+            pg_num: 1
+            disable_pg_autoscale: true
+          # EC pool will be added later

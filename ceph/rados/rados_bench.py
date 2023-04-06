@@ -152,11 +152,11 @@ class RadosBench:
                 no-hints (Bool) :  no-hint option (Default: false(hints))
                 concurrent-ios (Str) : integer (String value)
                 reuse-bench (Str) : bench name (String value)
+                max-objects(Str) : max number of objects to be written
 
         """
         base_cmd = ["rados", "bench"]
-
-        seconds = config.pop("seconds")
+        seconds = str(config.pop("seconds"))
         base_cmd.extend(["-p", pool_name, seconds, "write"])
 
         run_name = config.pop("run-name", False)
@@ -165,7 +165,6 @@ class RadosBench:
             base_cmd.append(f"--run-name {run_name}")
 
         base_cmd.append(config_dict_to_string(config))
-
         base_cmd = " ".join(base_cmd)
 
         client.exec_command(cmd=base_cmd, sudo=True)
@@ -203,7 +202,7 @@ class RadosBench:
 
         run_name = config.get("run-name")
 
-        seconds = config.pop("seconds")
+        seconds = str(config.pop("seconds"))
         base_cmd.extend(["-p", pool_name, seconds, "seq"])
 
         base_cmd.append(config_dict_to_string(config))
