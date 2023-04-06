@@ -468,6 +468,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
+        - name: "tier-2_rgw_test-s3cmd-malformed-url-with-different-commands"
+          execution_time: "2h 30m 16s"
+          suite: "suites/pacific/rgw/tier-2_rgw_test-s3cmd-malformed-url.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rgw
   schedule:
     tier-1:
       stage-1:

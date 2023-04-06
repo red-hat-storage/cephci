@@ -1,0 +1,141 @@
+#
+# Objective: Test s3cmd malformed bucket url with operations like put, get, cp etc..
+#
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  # Testing stage
+
+  - test:
+      name: test s3cmd put operation with malformed bucket url
+      desc: test s3cmd put operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_put.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd cp operation with malformed bucket url
+      desc: test s3cmd cp operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_cp.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd del operation with malformed bucket url
+      desc: test s3cmd del operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_del.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd get operation with malformed bucket url
+      desc: test s3cmd get operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_get.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd ls operation with malformed bucket url
+      desc: test s3cmd ls operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_ls.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd multipart operation with malformed bucket url
+      desc: test s3cmd multipart operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_multipart.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd mv operation with malformed bucket url
+      desc: test s3cmd mv operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_mv.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd sync operation with malformed bucket url
+      desc: test s3cmd sync operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_sync.yaml
+        timeout: 300
