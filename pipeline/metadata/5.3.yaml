@@ -982,6 +982,49 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - dmfg
+        - name: "Smoke test of RH Ceph build"
+          execution_time: "28m 21s"
+          suite: "suites/pacific/cephadm/tier-0.yaml"
+          global-conf: "conf/pacific/cephadm/tier-0.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Upgrade ceph cluster from build to build"
+          execution_time: "33m 38s"
+          suite: "suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+          global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - upgrades
+            - dmfg
+        - name: "containerised upgrade from RHCS4 to RHCS5"
+          execution_time: "57m 42s"
+          suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-container.yaml"
+          global-conf: "conf/pacific/upgrades/upgrades.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - upgrades
+            - dmfg
+        - name: "RPM upgrade from RHCS4 to RHCS5"
+          execution_time: "75m 55s"
+          suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-rpm.yaml"
+          global-conf: "conf/pacific/upgrades/upgrades.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - upgrades
+            - dmfg
     tier-1:
       stage-1:
         - name: "Tier-1 Cephfs Mirror"
@@ -994,17 +1037,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - cephfs
-        - name: "Upgrade cluster from 5x GA to 5x latest"
-          execution_time: "55m 54s"
-          suite: "suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
-          global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - upgrades
-            - dmfg
         - name: "Tier-1 test suite for 5x for RBD functionality"
           execution_time: "43m 47s"
           suite: "suites/pacific/rbd/tier-1_rbd.yaml"
@@ -1025,6 +1057,26 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - cephfs
+        - name: "Deploy all services using a spec file option"
+          execution_time: "24m 32s"
+          suite: "suites/pacific/cephadm/tier-1_service_apply_spec.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Deploy all services using a spec file option"
+          execution_time: "24m 32s"
+          suite: "suites/pacific/cephadm/tier-1_service_apply_spec.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
       stage-2:
         - name: "Tier-0 test suite for 5x for RGW sanity"
           execution_time: "1h 16m 25s"
@@ -1036,26 +1088,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
-        - name: "Deploy all services at 5x using a spec file"
-          execution_time: "1h 18m 12s"
-          suite: "suites/pacific/cephadm/tier-1-container-cli-args.yaml"
-          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Deploy 5x cluster and apply services through cli"
-          execution_time: "1h 9m 19s"
-          suite: "suites/pacific/cephadm/tier-0_5-1_cephadm.yaml"
-          global-conf: "conf/pacific/cephadm/sanity-cephadm.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - dmfg
         - name: "Tier-1 test suite for 5x for RBD-mirror functionality"
           execution_time: "1h 9m 55s"
           suite: "suites/pacific/rbd/tier-1_rbd_mirror.yaml"
@@ -1066,6 +1098,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rbd
+        - name: "Execute cephadm client playbook"
+          execution_time: "24m 34s"
+          suite: "suites/pacific/cephadm/tier-1_cephadm-clients.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - dmfg
       stage-3:
         - name: "Tier-1 Fs"
           execution_time: "2h 22m 34s"
@@ -1087,18 +1129,56 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
-    tier-2:
-      stage-1:
-        - name: "Upgrade cluster from 4x RPM to 5x containerised"
-          execution_time: "1h 35m 17s"
-          suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-rpm.yaml"
-          global-conf: "conf/pacific/upgrades/upgrades.yaml"
+        - name: "Purge cluster"
+          execution_time: "22m 12s"
+          suite: "suites/pacific/cephadm/tier-1_remove_cluster.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-8"
           inventory:
             openstack: "conf/inventory/rhel-8-latest.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
-            - upgrades
+            - dmfg
+        - name: "Bootstrap cluster with custom ssl-dashboard-port"
+          execution_time: "34m 9s"
+          suite: "suites/pacific/cephadm/tier-1_ssl_dashboard_port.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Bootstrap cluster with custom ssl-dashboard-port"
+          execution_time: "34m 9s"
+          suite: "suites/pacific/cephadm/tier-1_ssl_dashboard_port.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
+      stage-4:
+        - name: "Perform cephadm operations using cephadm ansible modules"
+          execution_time: ""
+          suite: "suites/pacific/cephadm/tier-1-cephadm-ansible-wrapper-bootstrap-module.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Perform cephadm operations using cephadm ansible modules"
+          execution_time: ""
+          suite: "suites/pacific/cephadm/tier-1-cephadm-ansible-wrapper-bootstrap-module.yaml"
+          global-conf: "conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
             - dmfg
   live:
     tier-0:
@@ -1113,10 +1193,20 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - dmfg
+        - name: "Smoke test of RH Ceph build"
+          execution_time: "28m 21s"
+          suite: "suites/pacific/cephadm/tier-0.yaml"
+          global-conf: "conf/pacific/cephadm/tier-0.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
     tier-1:
       stage-1:
-        - name: "Upgrade cluster from 5x GA to 5x latest"
-          execution_time: "55m 54s"
+        - name: "Upgrade ceph cluster from build to build"
+          execution_time: "33m 38s"
           suite: "suites/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
           global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
           platform: "rhel-8"
@@ -1126,10 +1216,19 @@ pipelines:
           metadata:
             - upgrades
             - dmfg
-    tier-2:
-      stage-1:
-        - name: "Upgrade cluster from 4x RPM to 5x containerised"
-          execution_time: "1h 35m 17s"
+        - name: "containerised upgrade from RHCS4 to RHCS5"
+          execution_time: "57m 42s"
+          suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-container.yaml"
+          global-conf: "conf/pacific/upgrades/upgrades.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - upgrades
+            - dmfg
+        - name: "RPM upgrade from RHCS4 to RHCS5"
+          execution_time: "75m 55s"
           suite: "suites/pacific/upgrades/tier-1_upgrade_test-4x-to-5x-rpm.yaml"
           global-conf: "conf/pacific/upgrades/upgrades.yaml"
           platform: "rhel-8"
@@ -1152,4 +1251,3 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - dmfg
-
