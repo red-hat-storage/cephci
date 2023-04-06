@@ -78,7 +78,7 @@ def run(ceph_cluster, **kw):
             ):
                 log.error("Failed to delete objects from pool.")
                 raise Exception("Failed to delete objects from pool.")
-        time.sleep(20)
+        time.sleep(40)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         new_prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
         if not new_prop["pg_num"] > prop["pg_num"]:
@@ -89,14 +89,14 @@ def run(ceph_cluster, **kw):
                 f"Actual pg_num {new_prop['pg_num']} is expected to be greater than {prop['pg_num']}"
             )
         pool_obj.rm_bulk_flag(pool["pool_name"])
-        time.sleep(3)
+        time.sleep(10)
         rm_bulk = pool_obj.get_bulk_details(pool["pool_name"])
         if rm_bulk:
             log.error("Expected bulk flag should be False.")
             raise Exception("Expected bulk flag should be False.")
-        time.sleep(10)
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         time.sleep(20)
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+        time.sleep(40)
         new_prop1 = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
         if not new_prop1["pg_num"] < new_prop["pg_num"]:
             log.error(
