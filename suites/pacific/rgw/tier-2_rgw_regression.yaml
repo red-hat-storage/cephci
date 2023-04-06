@@ -355,8 +355,18 @@ tests:
       polarion-id: CEPH-11574
       module: sanity_rgw.py
       config:
-        script-name: test_list_all_multipart_uploads.py
+        script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_listbucketversion_with_bucketpolicy_for_tenant_user.yaml
+        timeout: 300
+
+  - test:
+      name: GetBucketLocation with bucket policy for users in same tenant
+      desc: Test GetBucketLocation bucket policy for users in same tenant
+      polarion-id: CEPH-11623
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_bucketlocation_using_bucketpolicy_with_tenantuser.yaml
         timeout: 300
 
   # Bucket Lifecycle Tests
