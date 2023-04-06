@@ -34,6 +34,7 @@ class RadosOrchestrator:
         """
         self.node = node
         self.ceph_cluster = node.cluster
+        self.client = node.cluster.get_nodes(role="client")[0]
 
     def change_recovery_flags(self, action):
         """Sets and unsets the recovery flags on the cluster
@@ -573,6 +574,28 @@ class RadosOrchestrator:
             return False
         log.info(f"the balancer status is \n {out}")
         return True
+
+    def check_file_exists_on_client(self, loc) -> bool:
+        """Method to check if a particular file/ directory exists on the ceph client node
+
+         Args::
+            loc: Location from where the file needs to be checked
+        Examples::
+            status = obj.check_file_exists_on_client(loc="/tmp/crush.map.bin")
+        Returns::
+            True -> File exists
+            False -> FIle does not exist
+        """
+        try:
+            out, err = self.client.exec_command(cmd=f"ls {loc}", sudo=True)
+            if not out:
+                log.error(f"file : {loc} not present on the Client")
+                return False
+            log.debug(f"file : {loc} present on the Client")
+            return True
+        except Exception:
+            log.error(f"Unable to fetch details for {log}")
+            return False
 
     def configure_pg_autoscaler(self, **kwargs) -> bool:
         """
@@ -1314,3 +1337,73 @@ class RadosOrchestrator:
             pgid_list.append(pg_stats["pgid"])
 
         return pgid_list
+
+    def run_pool_sanity_check(self):
+        """
+        Runs sanity on the pools after triggering scrub and deep-scrub on pools, waiting 600 Secs
+
+        This method is used to assess the health of Pools after any operation, where in a scrub and deep scrub is
+        triggered, and the method scans the cluster for few health warnings, if generated
+
+        Returns: True-> Pass,  false -> Fail
+        """
+        self.run_scrub()
+        self.run_deep_scrub()
+        time.sleep(10)
+
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+        flag = False
+        while end_time > datetime.datetime.now():
+            status_report = self.run_ceph_command(cmd="ceph report")
+            ceph_health_status = status_report["health"]
+            health_warns = (
+                "PG_AVAILABILITY",
+                "PG_DEGRADED",
+                "PG_RECOVERY_FULL",
+                "TOO_FEW_OSDS",
+                "PG_BACKFILL_FULL",
+                "PG_DAMAGED",
+                "OSD_SCRUB_ERRORS",
+                "OSD_TOO_MANY_REPAIRS",
+                "CACHE_POOL_NEAR_FULL",
+                "SMALLER_PGP_NUM",
+                "MANY_OBJECTS_PER_PG",
+                "OBJECT_MISPLACED",
+                "OBJECT_UNFOUND",
+                "SLOW_OPS",
+            )
+
+            flag = (
+                False
+                if any(
+                    key in health_warns for key in ceph_health_status["checks"].keys()
+                )
+                else True
+            )
+            if flag:
+                log.info("No warnings on the cluster")
+                break
+
+            log.info(
+                f"Observing a health warning on cluster {ceph_health_status['checks'].keys()}"
+            )
+            time.sleep(10)
+
+        if not flag:
+            log.error(
+                "Health warning generated on cluster and not cleared post waiting of 600 seconds"
+            )
+            return False
+
+        log.info("Completed check on the cluster. Pass!")
+        return True
+
+    def get_osd_hosts(self):
+        """
+        lists the names of the OSD hosts in the cluster
+        Returns: list of osd host names as used in the crush map
+
+        """
+        cmd = "ceph osd tree"
+        osds = self.run_ceph_command(cmd)
+        return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]
