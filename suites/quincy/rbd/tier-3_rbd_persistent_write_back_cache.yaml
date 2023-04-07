@@ -287,3 +287,28 @@ tests:
           desc: RBD Persistent Cache cache path validation image level
           module: test_rbd_persistent_write_back_cache.py
           name: PWL cache path validation at image level
+
+  - test:
+      abort-on-fail: true
+      config:
+        level: client                        # PWL at client
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node6
+        drive: /dev/sdb
+        cleanup: true
+        validate_exclusive_lock: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: Validate PWL cache non-working without exclusive lock feature
+      destroy-cluster: false
+      module: test_rbd_persistent_write_back_cache.py
+      name: PWL cache creation with exclusive lock
+      polarion-id: CEPH-83574719

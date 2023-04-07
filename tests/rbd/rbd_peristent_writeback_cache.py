@@ -187,3 +187,28 @@ class PersistentWriteAheadLog:
 
     def invalidate(self, image):
         pass
+
+
+# utils
+def get_entity_level(config):
+    """Method to get config level and entity."""
+    config_level = config["level"]
+    entity = "client"
+    pool = config["rep_pool_config"]["pool"]
+    image = f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"
+    if config_level == "client":
+        config_level = "global"
+    elif config_level == "pool":
+        entity = pool
+    elif config_level == "image":
+        entity = image
+
+    return config_level, entity
+
+
+def fio_ready(config, client):
+    """Method to prepare FIO config args."""
+    fio_args = config["fio"]
+    fio_args["client_node"] = client
+    fio_args["long_running"] = True
+    return fio_args
