@@ -550,9 +550,10 @@ class Rbd:
         image_info = json.loads(out)
         for value in image_info:
             if value["name"] == image_name:
+                log.debug(f"Image id for {image_name} is {value['id']}")
                 return value["id"]
 
-    def trash_restore(self, pool_name, image_id):
+    def trash_restore(self, pool_name, image_id, **kw):
         """
          Move images to trash, restore them
         Args:
@@ -560,7 +561,7 @@ class Rbd:
              image_id: image id of the image
          Returns:
         """
-        return self.exec_cmd(cmd=f"rbd trash restore {pool_name}/{image_id}")
+        return self.exec_cmd(cmd=f"rbd trash restore {pool_name}/{image_id}", **kw)
 
     def image_meta(self, **kw):
         """Manage image-meta.
