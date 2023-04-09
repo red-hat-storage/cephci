@@ -60,7 +60,9 @@ class OSD(ApplyMixin, Orch):
             devices = {"available": [], "unavailable": []}
             for device in node.get("devices"):
                 # avoid considering devices which is less than 5GB
-                if "Insufficient space (<5GB)" not in device.get(
+                if not device.get(
+                    "rejected_reasons"
+                ) or "Insufficient space (<5GB)" not in device.get(
                     "rejected_reasons", []
                 ):
                     if device["available"]:
@@ -167,17 +169,16 @@ class OSD(ApplyMixin, Orch):
             config:
                 command: rm
                 base_cmd_args:
-                    verbose: true
+                    zap: true
                 pos_args:
                     - 1
         """
-
         base_cmd = ["ceph", "orch", "osd"]
-        if config.get("base_cmd_args"):
-            base_cmd.append(config_dict_to_string(config["base_cmd_args"]))
         base_cmd.append("rm")
         osd_id = config["pos_args"][0]
         base_cmd.append(str(osd_id))
+        if config.get("base_cmd_args"):
+            base_cmd.append(config_dict_to_string(config["base_cmd_args"]))
         self.shell(args=base_cmd)
 
         check_osd_id_dict = {
@@ -194,12 +195,12 @@ class OSD(ApplyMixin, Orch):
             try:
                 status = json.loads(out)
                 for osd_id_ in status:
-                    if osd_id_["osd_id"] == osd_id:
+                    if int(osd_id_["osd_id"]) == int(osd_id):
                         LOG.info(f"OSDs removal in progress: {osd_id_}")
+                        sleep(2)
+                        continue
+                    else:
                         break
-                else:
-                    break
-                sleep(2)
 
             except json.decoder.JSONDecodeError:
                 break
@@ -213,7 +214,7 @@ class OSD(ApplyMixin, Orch):
             if id_["id"] == osd_id:
                 LOG.error("OSD Removed ID found")
                 raise AssertionError("fail, OSD is present still after removing")
-        LOG.info(f" OSD {osd_id} Removal is successfully")
+        LOG.info(f" OSD {osd_id} Removal is successful")
 
     def out(self, config: Dict):
         """

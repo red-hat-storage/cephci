@@ -34,6 +34,7 @@ class RadosOrchestrator:
         """
         self.node = node
         self.ceph_cluster = node.cluster
+        self.client = node.cluster.get_nodes(role="client")[0]
 
     def change_recovery_flags(self, action):
         """Sets and unsets the recovery flags on the cluster
@@ -468,15 +469,19 @@ class RadosOrchestrator:
          Args:
             kwargs:
             1. osd : if an OSD id is passed , scrub to be triggered on that osd
-                    eg: obj.run_scrub(osd=3)
+                    eg- obj.run_scrub(osd=3)
             2. pgid: if a PGID is passed, scrubs are run on that PG
-                    eg: obj.run_scrub(pgid=1.0)
+                    eg- obj.run_scrub(pgid=1.0)
+            3. pool: if pool name is passed, scrubs are run on that pool
+                    eg- obj.run_scrub(pool="test-pool")
          Returns: None
         """
         if kwargs.get("osd"):
             cmd = f"ceph osd scrub {kwargs.get('osd')}"
         elif kwargs.get("pgid"):
             cmd = f"ceph pg scrub {kwargs.get('pgid')}"
+        elif kwargs.get("pool"):
+            cmd = f"ceph osd pool scrub {kwargs.get('pool')}"
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd scrub all"
@@ -486,17 +491,21 @@ class RadosOrchestrator:
         """
         Run scrub on the given OSD or on all OSD's
             Args:
-            kwargs:
-            1. osd : if a OSD id is passed , deep-scrub to be triggered on that osd
-                    eg: obj.run_deep_scrub(osd=3)
-            2. pgid: if a PGID is passed, deep-scrubs are run on that PG
-                    eg: obj.run_deep_scrub(pgid=1.0)
+                kwargs:
+                1. osd : if an OSD id is passed , deep-scrub to be triggered on that osd
+                        eg- obj.run_deep_scrub(osd=3)
+                2. pgid: if a PGID is passed, deep-scrubs are run on that PG
+                        eg- obj.run_deep_scrub(pgid=1.0)
+                3. pool: if pool name is passed, deep-scrubs are run on that pool
+                        eg- obj.run_deep_scrub(pool="test-pool")
             Returns: None
         """
         if kwargs.get("osd"):
             cmd = f"ceph osd deep-scrub {kwargs.get('osd')}"
         elif kwargs.get("pgid"):
             cmd = f"ceph pg deep-scrub {kwargs.get('pgid')}"
+        elif kwargs.get("pool"):
+            cmd = f"ceph osd pool deep-scrub {kwargs.get('pool')}"
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd deep-scrub all"
@@ -565,6 +574,28 @@ class RadosOrchestrator:
             return False
         log.info(f"the balancer status is \n {out}")
         return True
+
+    def check_file_exists_on_client(self, loc) -> bool:
+        """Method to check if a particular file/ directory exists on the ceph client node
+
+         Args::
+            loc: Location from where the file needs to be checked
+        Examples::
+            status = obj.check_file_exists_on_client(loc="/tmp/crush.map.bin")
+        Returns::
+            True -> File exists
+            False -> FIle does not exist
+        """
+        try:
+            out, err = self.client.exec_command(cmd=f"ls {loc}", sudo=True)
+            if not out:
+                log.error(f"file : {loc} not present on the Client")
+                return False
+            log.debug(f"file : {loc} present on the Client")
+            return True
+        except Exception:
+            log.error(f"Unable to fetch details for {log}")
+            return False
 
     def configure_pg_autoscaler(self, **kwargs) -> bool:
         """
@@ -936,10 +967,10 @@ class RadosOrchestrator:
         """
         Changes the state of the OSD daemons wrt the action provided
         Args:
-            action: operation to be performed on the service, i.e
+            action: operation to be performed on the service, i.e.
             start, stop, restart, disable, enable
             target: ID osd the target OSD
-            timeout: timeout in seconds, (default = 10s)
+            timeout: timeout in seconds, (default = 15s)
         Returns: Pass -> True, Fail -> False
         """
         cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
@@ -979,7 +1010,7 @@ class RadosOrchestrator:
                 )
                 return False
         else:
-            time.sleep(5)
+            time.sleep(7)
         return True
 
     def fetch_host_node(self, daemon_type: str, daemon_id: str = None):
@@ -1250,3 +1281,129 @@ class RadosOrchestrator:
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
         return orch_ps_out["status"], orch_ps_out["status_desc"]
+
+    def get_osd_stat(self):
+        """
+        This Function is to get the OSD stats.
+           Example:
+               get_osd_stat()
+           Args:
+           Returns:  OSD Statistics
+        """
+
+        cmd = "ceph osd stat"
+        osd_stats = self.run_ceph_command(cmd=cmd)
+        log.debug(f" The OSD Statistics are : {osd_stats}")
+        return osd_stats
+
+    def get_pgid(
+        self,
+        pool_name: str = None,
+        pool_id: int = None,
+        osd: int = None,
+        osd_primary: int = None,
+    ) -> list:
+        """
+        Retrieves all the PG IDs for a pool or PG IDs where a
+        certain osd is primary in the acting set or PG IDs which are
+        utilizing the concerned osd
+        Ideally, only one argument should be provided
+        Args:
+            pool_name: name of the pool
+            pool_id: pool id
+            osd: osd id whose pgs are to be retrieved
+            osd_primary: primary osd id whose pgs are to be retrieved
+        Returns:
+            list having pgids in string format
+        """
+
+        pgid_list = []
+        cmd = "ceph pg "
+        if pool_name:
+            cmd += f"ls-by-pool {pool_name}"
+        elif pool_id:
+            cmd += f"ls {pool_id}"
+        elif osd:
+            cmd += f"ls-by-osd {osd}"
+        elif osd_primary:
+            cmd += f"ls-by-primary {osd_primary}"
+        else:
+            log.info("No argument was provided.")
+            return pgid_list
+
+        pgid_dict = self.run_ceph_command(cmd=cmd)
+
+        for pg_stats in pgid_dict["pg_stats"]:
+            pgid_list.append(pg_stats["pgid"])
+
+        return pgid_list
+
+    def run_pool_sanity_check(self):
+        """
+        Runs sanity on the pools after triggering scrub and deep-scrub on pools, waiting 600 Secs
+
+        This method is used to assess the health of Pools after any operation, where in a scrub and deep scrub is
+        triggered, and the method scans the cluster for few health warnings, if generated
+
+        Returns: True-> Pass,  false -> Fail
+        """
+        self.run_scrub()
+        self.run_deep_scrub()
+        time.sleep(10)
+
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+        flag = False
+        while end_time > datetime.datetime.now():
+            status_report = self.run_ceph_command(cmd="ceph report")
+            ceph_health_status = status_report["health"]
+            health_warns = (
+                "PG_AVAILABILITY",
+                "PG_DEGRADED",
+                "PG_RECOVERY_FULL",
+                "TOO_FEW_OSDS",
+                "PG_BACKFILL_FULL",
+                "PG_DAMAGED",
+                "OSD_SCRUB_ERRORS",
+                "OSD_TOO_MANY_REPAIRS",
+                "CACHE_POOL_NEAR_FULL",
+                "SMALLER_PGP_NUM",
+                "MANY_OBJECTS_PER_PG",
+                "OBJECT_MISPLACED",
+                "OBJECT_UNFOUND",
+                "SLOW_OPS",
+            )
+
+            flag = (
+                False
+                if any(
+                    key in health_warns for key in ceph_health_status["checks"].keys()
+                )
+                else True
+            )
+            if flag:
+                log.info("No warnings on the cluster")
+                break
+
+            log.info(
+                f"Observing a health warning on cluster {ceph_health_status['checks'].keys()}"
+            )
+            time.sleep(10)
+
+        if not flag:
+            log.error(
+                "Health warning generated on cluster and not cleared post waiting of 600 seconds"
+            )
+            return False
+
+        log.info("Completed check on the cluster. Pass!")
+        return True
+
+    def get_osd_hosts(self):
+        """
+        lists the names of the OSD hosts in the cluster
+        Returns: list of osd host names as used in the crush map
+
+        """
+        cmd = "ceph osd tree"
+        osds = self.run_ceph_command(cmd)
+        return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]

@@ -155,7 +155,7 @@ node(nodeName) {
             }
         }
 
-        if("ibmc" in tags_list) {
+        if("ibmc" in tags_list || "sanity" in tags_list || "schedule" in tags_list) {
             def workspace = "${env.WORKSPACE}"
             def build_number = "${currentBuild.number}"
             overrides.put("workspace", workspace.toString())
@@ -164,8 +164,8 @@ node(nodeName) {
         print(overrides)
         // Till the pipeline matures, using the build that has passed tier-0 suite.
 
-        if (tags_list.containsAll(["ibmc","sanity"]) && (tierLevel != "tier-0")){
-            def recipeFileContent = sharedLib.readFromRecipeFile(rhcephVersion)
+         if (tags_list.containsAll(["sanity"]) && (tierLevel != "tier-0")){
+            def recipeFileContent = sharedLib.readFromReleaseFile(majorVersion, minorVersion, lockFlag=false)
             def content = recipeFileContent['latest']
             println "recipeFile ceph-version : ${content['ceph-version']}"
             println "buildArtifacts ceph-version : ${buildArtifacts['ceph-version']}"
@@ -344,7 +344,7 @@ node(nodeName) {
                     "result": testStatus,
                     "object-prefix": dirName,
                 ],
-                "recipe": buildArtifacts['recipe'],
+                "recipe": buildArtifacts,
                 "generated_at": env.BUILD_ID,
                 "version": "3.0.0",
             ]

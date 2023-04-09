@@ -1,0 +1,130 @@
+# ==================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2-ceph-volume-upgrade-4x-to-5x.yaml
+# Cluster Configuration: conf/pacific/cephmgr/tier-2-cephmgr-4node.yaml
+# Test Scenarios:
+#   Install RHCS 4.x cluster ith lvm
+#   Upgrade cluster from 4.x to 5.x
+#   Run ceph_adoption playbook
+#   Remove and add osd
+# ==================================================================================
+tests:
+  - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: True
+
+  - test:
+      name: Install RHCS 4.x with lvm configuration.
+      desc: Install RHCS 4.x with lvm configuration.
+      polarion-id: CEPH-83575418
+      module: test_ansible.py
+      config:
+        use_cdn: True
+        build: '4.x'
+        ansi_config:
+          ceph_origin: repository
+          ceph_repository: rhcs
+          ceph_repository_type: cdn
+          ceph_rhcs_version: 4
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          ceph_stable_rh_storage: True
+          containerized_deployment: True
+          ceph_docker_image: "rhceph/rhceph-4-rhel8"
+          ceph_docker_image_tag: "latest"
+          ceph_docker_registry: "registry.redhat.io"
+          copy_admin_key: True
+          dashboard_enabled: True
+          dashboard_admin_user: admin
+          dashboard_admin_password: p@ssw0rd
+          grafana_admin_user: admin
+          grafana_admin_password: p@ssw0rd
+          node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+          grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+          prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+          alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+        create_pools:
+          - create_pool:
+              create: True
+              pool_name: ecpool_1
+              pool_type: erasure
+              pg_num: 32
+              k: 4
+              m: 2
+              plugin: jerasure
+              rados_write_duration: 50
+              rados_read_duration: 30
+          - create_pool:
+              create: True
+              pool_name: ecpool_2
+              pool_type: erasure
+              pg_num: 32
+              k: 4
+              m: 2
+              l: 3
+              plugin: lrc
+              rados_write_duration: 50
+              rados_read_duration: 30
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Upgrade from ceph 4.x to ceph 5.x
+      desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
+      polarion-id: CEPH-83575418
+      module: test_ansible_upgrade.py
+      config:
+        build: '5.x'
+        ansi_config:
+          ceph_origin: distro
+          ceph_stable_release: pacific
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          ceph_stable: True
+          fetch_directory: ~/fetch
+          copy_admin_key: True
+          containerized_deployment: True
+          upgrade_ceph_packages: True
+          dashboard_enabled: True
+          dashboard_admin_user: admin
+          dashboard_admin_password: p@ssw0rd
+          grafana_admin_user: admin
+          grafana_admin_password: p@ssw0rd
+          node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.10
+          grafana_container_image: registry.redhat.io/rhceph/rhceph-5-dashboard-rhel8:5
+          prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.10
+          alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.10
+      destroy-cluster: False
+      abort-on-fail: True
+
+  - test:
+      name: Remove osd
+      desc: Remove osd
+      polarion-id: CEPH-83575121
+      module: test_ceph_volume_lvm_tags_after_osd_rm.py
+      config:
+        operation: lvm-zap
+
+  - test:
+      name: Add osd
+      desc: Add osd
+      polarion-id: CEPH-83575418
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  encrypted: "true"
+                  placement:
+                    nodes:
+                      - node1
+                  spec:
+                    data_devices:
+                      all: "true"
+                    encrypted: "true"

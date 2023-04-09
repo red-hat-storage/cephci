@@ -238,7 +238,7 @@ node("rhel-9-medium") {
                     )
 
                     emailLib.sendGChatNotification(
-                        run_type, metaData["results"], tierLevel, stageLevel, build_url
+                        sharedLib, run_type, metaData["results"], tierLevel, stageLevel, build_url
                     )
                 }
             }
@@ -246,7 +246,7 @@ node("rhel-9-medium") {
             stage('updateRecipeFile'){
                 println("Stage updateRecipeFile")
                 if ( composeInfo != null ) {
-                    if ( run_type == "Sanity Run") {
+                    if (run_type.contains("Sanity Run")) {
                         if ( tierLevel == null ) {
                             tierLevel = msgMap["pipeline"]["name"]
                         }

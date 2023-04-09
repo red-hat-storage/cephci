@@ -32,7 +32,7 @@ setup(
         "junitparser",
         "paramiko",
         "pyyaml",
-        "reportportal-client",
+        "reportportal-client==5.2.5",
         "requests",
         "softlayer",
     ],

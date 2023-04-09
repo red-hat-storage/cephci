@@ -8,7 +8,7 @@ tests:
         branch: ceph-quincy
         kms_keyid: testKey01
         ssl: false
-        host: cali019
+        host: argo024
         port: 5000
       desc: "Executing s3-tests against load balanced RadosGW"
       destroy-cluster: false

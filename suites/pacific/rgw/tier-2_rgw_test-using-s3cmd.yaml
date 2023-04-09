@@ -192,6 +192,16 @@ tests:
         timeout: 300
 
   - test:
+      name: Test Ratelimit at global scope
+      desc: Test Ratelimit at global scope
+      polarion-id: CEPH-83574915 # also CEPH-83574916
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_ratelimit_global.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
+        timeout: 300
+
+  - test:
       name: Test Ratelimit for regular buckets
       desc: Test Ratelimit for regular buckets
       polarion-id: CEPH-83574910
@@ -216,7 +226,6 @@ tests:
       desc: Test Ratelimit for tenanted users
       polarion-id: CEPH-83574914
       module: sanity_rgw.py
-      comments: known issue (bz-2179360)
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml

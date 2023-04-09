@@ -55,8 +55,10 @@ from utility.log import Log
 from utility.utils import (
     configure_kafka_security,
     install_start_kafka,
+    set_config_param,
     setup_cluster_access,
     test_sync_via_bucket_stats,
+    test_user_stats_consistency,
     verify_sync_status,
 )
 
@@ -142,6 +144,10 @@ def run(**kw):
             if archive_cluster_exists:
                 setup_cluster_access(archive_cluster, archive_rgw_node)
                 setup_cluster_access(archive_cluster, archive_client_node)
+                set_config_param(archive_client_node)
+            ms_clusters = [primary_client_node, secondary_client_node]
+            for cluster_node in ms_clusters:
+                set_config_param(cluster_node)
     # run the test
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
@@ -211,6 +217,12 @@ def run(**kw):
                     user_details_file,
                 )
             verify_sync_status(copy_user_to_site.get_ceph_object("rgw").node)
+
+        monitor_user_stats = config.get("monitor-user-stats")
+        if monitor_user_stats:
+            log.info("Test user stats consistency on multisite.")
+            test_user_stats_consistency(primary_rgw_node, secondary_rgw_node)
+
         monitor_consistency_via_bucket_stats = config.get(
             "monitor-consistency-bucket-stats"
         )

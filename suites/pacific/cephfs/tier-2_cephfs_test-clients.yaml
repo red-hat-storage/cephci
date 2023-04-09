@@ -267,5 +267,18 @@ tests:
       polarion-id: CEPH-11313
       desc: Test File locking on mounts
       abort-on-fail: false
+  - test:
+      name: cross delete operations
+      module: clients.cross_delete_ops_bw_fuse_and_kernel_clients.py
+      polarion-id: CEPH-83573532
+      desc: Cross Delete Ops b/w Fuse and Kernel mounts
+      abort-on-fail: false
+  - test:
+      name: multi client file and dir ops
+      module: clients.multiclient_file_dir_ops.py
+      polarion-id: CEPH-83573529
+      desc: multi client file and dir ops
+      abort-on-fail: false
+
 
 
