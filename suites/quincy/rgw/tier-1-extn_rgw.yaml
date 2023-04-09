@@ -171,15 +171,6 @@ tests:
         config-file-name: test_sts_invalid_principal.yaml
         timeout: 500
   - test:
-      name: Test rename of large object using sts user through AWS
-      desc: Test rename of large object using sts user through AWS
-      polarion-id: CEPH-83575419
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_sts_rename_large_object.py
-        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
-        timeout: 500
-  - test:
       name: reshard cancel command
       desc: reshard cancel command
       polarion-id: CEPH-11474

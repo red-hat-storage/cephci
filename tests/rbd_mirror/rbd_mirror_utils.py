@@ -60,7 +60,7 @@ class RbdMirror:
             if kw.get("ceph_args", True):
                 cmd = cmd + self.ceph_args
 
-            if kw.get("long_running"):
+            if kw.get("long_running", True):
                 out = node.exec_command(
                     sudo=True,
                     cmd=cmd,
@@ -688,7 +688,7 @@ class RbdMirror:
                 cmd="rbd bench-write --io-total {} {}".format(
                     kw.get("io", "500M"), kw.get("imagespec")
                 ),
-                long_running=True,
+                **kw,
             )
         else:
             return self.exec_cmd(
@@ -696,7 +696,7 @@ class RbdMirror:
                     "rbd bench --io-type write --io-threads 16 "
                     f"--io-total {kw.get('io', '500M')} {kw.get('imagespec')}"
                 ),
-                long_running=True,
+                **kw,
             )
 
     def create_pool(self, **kw):

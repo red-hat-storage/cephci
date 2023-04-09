@@ -163,21 +163,39 @@ class PoolFunctions:
         return tmp_file
 
     def do_rados_put(
-        self, client, pool: str, obj_name: str = None, nobj: int = 1, offset: int = 0
+        self,
+        client,
+        pool: str,
+        obj_name: str = None,
+        nobj: int = 1,
+        offset: int = 0,
+        timeout: int = 600,
     ):
         """
         write static data to one object or nobjs in an app pool
         Args:
-            client: client node
-            pool: pool name to which data needs to added
-            obj_name (optional): Name of the existing object or
-            new object to be created in the pool
-            nobj: Number of times data will be put to object 'obj_name'
-            with incremental offset if 'obj_name' is specified, else
-            data will be put once to nobj number of objects -
-            obj0, obj1, obj2 and so on...
-            offset: write object with start offset, default - 0
-        Returns: 0 -> pass, 1 -> fail
+            client:                 client node
+            pool (str):             pool name to which data needs to added
+            optional args -
+            obj_name (str):         Name of the existing object or
+                                    new object to be created in the pool
+            nobj (int):             Number of times data will be put to object 'obj_name'
+                                    with incremental offset if 'obj_name' is specified, else
+                                    data will be put once to nobj number of objects -
+                                    obj0, obj1, obj2 and so on...
+            offset (int):           write object with start offset, default - 0
+            timeout (int):          timeout for rados put execution [defaults to 600 secs]
+
+        E.g. -
+            obj.do_rados_put(client=client_node, pool="pool_name")
+            obj.do_rados_put(client=client_node, pool="pool_name", obj_name="test-obj)
+            obj.do_rados_put(client=client_node, pool="pool_name", nobj=5)
+            obj.do_rados_put(client=client_node, pool="pool_name", nobj=5, offset=512, timeout=300)
+            obj.do_rados_put(client=client_node, pool="pool_name", obj_name="obj-test",
+                             nobj=5, offset=512, timeout=300)
+
+        Returns:
+            0 -> pass, 1 -> fail
         """
         infile = self.prepare_static_data(client)
         log.debug(f"Input file is {infile}")
@@ -192,7 +210,7 @@ class PoolFunctions:
             if offset:
                 put_cmd = f"{put_cmd} --offset {offset}"
             try:
-                out, _ = client.exec_command(sudo=True, cmd=put_cmd)
+                out, _ = client.exec_command(sudo=True, cmd=put_cmd, timeout=timeout)
                 if obj_name is not None and offset:
                     offset += offset
             except Exception:

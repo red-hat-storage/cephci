@@ -440,6 +440,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
+        - name: "tier-2_rgw_test-s3cmd-malformed-url-with-different-commands"
+          execution_time: "2h 49m 32s"
+          suite: "suites/pacific/rgw/tier-2_rgw_test-s3cmd-malformed-url.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
   schedule:
     tier-1:
       stage-1:
@@ -875,6 +885,34 @@ pipelines:
           metadata:
             - cephfs
             - upgrades
+      stage-2:
+        - name: "Testing RADOS regression for slow op requests"
+          execution_time: "1h 40m 1s"
+          suite: "suites/quincy/rados/tier-2_rados_test-slow-op-requests.yaml"
+          global-conf: "conf/quincy/rados/11-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+          metadata:
+            - rados
+        - name: "RADOS test scenarios for PG split and merge"
+          execution_time: "1h 40m"
+          suite: "suites/quincy/rados/tier-2_rados_test-pg-split-merge.yaml"
+          global-conf: "conf/quincy/rados/7-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+          metadata:
+            - rados
+        - name: "RADOS testing snaps during rebalance"
+          execution_time: "55m"
+          suite: "suites/quincy/rados/tier-2_rados_test-osd-rebalance-snap.yaml"
+          global-conf: "conf/quincy/rados/7-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+          metadata:
+            - rados
   rc:
     tier-0:
       stage-1:
@@ -887,6 +925,17 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
+            - dmfg
+        - name: "Upgrade from RHCS5 to RHCS6 in RHEL9"
+          execution_time: "32m 13s"
+          suite: "suites/quincy/upgrades/tier-1_upgrade_5x-to-6x.yaml"
+          global-conf: "conf/quincy/upgrades/upgrade_4-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - upgrades
             - dmfg
     tier-1:
       stage-1:
@@ -920,9 +969,9 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - cephfs
-        - name: "Execute cephadm-clients playbook to copy keyring with the same name as specified by the keyring parameter"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_cephadm-clients.yaml"
+        - name: "Deploy all services using a spec file option"
+          execution_time: "24m 32s"
+          suite: "suites/quincy/cephadm/tier-1_service_apply_spec.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-9"
           inventory:
@@ -930,10 +979,10 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Upgrade from RHCS 5.x to RHCS 6.x"
-          execution_time: ""
-          suite: "suites/quincy/upgrades/tier-1_upgrade_5x-to-6x.yaml"
-          global-conf: "conf/quincy/upgrades/upgrade_4-node-cluster.yaml"
+        - name: "Execute cephadm client playbook"
+          execution_time: "24m 34s"
+          suite: "suites/quincy/cephadm/tier-1_cephadm-clients.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
@@ -981,29 +1030,8 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "Deploy all services using a spec file option"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_service_apply_spec.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-      stage-3:
-        - name: "Execute os tuning profiles test cases"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_os_tuning_profiles.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Execute purge cluster using rm-cluster commands"
-          execution_time: ""
+        - name: "Purge cluster"
+          execution_time: "22m 12s"
           suite: "suites/quincy/cephadm/tier-1_remove_cluster.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-9"
@@ -1012,29 +1040,30 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
-        - name: "Deploy all services using a spec file option"
-          execution_time: "44m 45s"
-          suite: "suites/quincy/cephadm/tier-1-container-cli-args.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Bootstrap cluster with skip-dashboard output configuration directories or files."
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_skip_dashboard.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Bootstrap cluster with custom ssl-dashboard-port ssh-user ssh-public-key ssh-private-key and apply-spec options"
-          execution_time: ""
+        - name: "Bootstrap cluster with custom ssl-dashboard-port"
+          execution_time: "34m 9s"
           suite: "suites/quincy/cephadm/tier-1_ssl_dashboard_port.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
+      stage-3:
+        - name: "Perform cephadm operations using cephadm ansible modules"
+          execution_time: ""
+          suite: "suites/quincy/cephadm/tier-1-cephadm-ansible-wrapper-bootstrap-module.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
+        - name: "Perform cephadm operations using cephadm ansible modules"
+          execution_time: ""
+          suite: "suites/quincy/cephadm/tier-1-cephadm-ansible-wrapper-bootstrap-module.yaml"
           global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
           platform: "rhel-9"
           inventory:
@@ -1067,6 +1096,17 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+        - name: "Upgrade from RHCS5 to RHCS6 in RHEL9"
+          execution_time: "32m 13s"
+          suite: "suites/quincy/upgrades/tier-1_upgrade_5x-to-6x.yaml"
+          global-conf: "conf/quincy/upgrades/upgrade_4-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - upgrades
+            - dmfg
     tier-1:
       stage-1:
         - name: "Basic operation test suite for 6x for RGW sanity"
@@ -1099,16 +1139,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - cephfs
-        - name: "Execute cephadm-clients playbook to copy keyring with the same name as specified by the keyring parameter"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_cephadm-clients.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
       stage-2:
         - name: "Testing RBD-mirror tier-1 regression scenarios"
           execution_time: "1h 6m 0s"
@@ -1150,67 +1180,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "Deploy all services using a spec file option"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_service_apply_spec.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-      stage-3:
-        - name: "Execute os tuning profiles test cases"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_os_tuning_profiles.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Execute purge cluster using rm-cluster commands"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_remove_cluster.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Deploy all services using a spec file option"
-          execution_time: "44m 45s"
-          suite: "suites/quincy/cephadm/tier-1-container-cli-args.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Bootstrap cluster with skip-dashboard output configuration directories or files."
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_skip_dashboard.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
-        - name: "Bootstrap cluster with custom ssl-dashboard-port ssh-user ssh-public-key ssh-private-key and apply-spec options"
-          execution_time: ""
-          suite: "suites/quincy/cephadm/tier-1_ssl_dashboard_port.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
     tier-2:
       stage-1:
         - name: "test-rgw-sse-s3-encryption-GA"
