@@ -402,7 +402,7 @@ pipelines:
         - name: "Tier-2 Cephfs test mds pinning"
           execution_time: ""
           suite: "suites/pacific/cephfs/tier-2_cephfs_test_mds_pinning.yaml"
-          global-conf: "conf/pacific/cephfs/tier-2_cephfs_mds_pinning.yaml"
+          global-conf: "conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
