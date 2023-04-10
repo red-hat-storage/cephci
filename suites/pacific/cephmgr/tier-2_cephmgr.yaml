@@ -156,3 +156,17 @@ tests:
       module: test_cephmgr_validate_mgr_status.py
       config:
         operation: kill-mgr
+
+  - test:
+      name: Verify dashboard cannot start on non-active ceph-mgrs
+      desc: Verify dashboard cannot start on non-active ceph-mgrs
+      polarion-id: CEPH-11386
+      module: test_cephmgr_dashboard_plugin.py
+      config:
+        error: RADOS permission denied
+
+  - test:
+      name: Verify dashboard plugin works fine with ceph-mgr
+      desc: Verify dashboard plugin works fine with ceph-mgr
+      polarion-id: CEPH-11385
+      module: test_dashboard_plugin_with_ceph_mgr.py
