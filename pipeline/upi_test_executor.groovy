@@ -7,6 +7,7 @@ def phase = "${params.Build}"
 def group = "${params.Group}-"
 def suite = "${params.Suite}"
 def os_version = "${params.os_version}"
+def skip_reimage = "${params.skip_reimage}"
 def buildUserId
 def buildUserEmail
 def buildUserName
@@ -112,12 +113,15 @@ node("magna006"){
         buildUserName = buildUser["buildUserName"]
         currentBuild.description = "Triggered by : ${buildUserName}"
     }
+    println(skip_reimage)
+    if (skip_reimage){
     stage("reimageTestEnv") {
         cephVersion = sharedLib.get_ceph_version(rhcephVersion)
         nodeList = sharedLib.getNodeList("conf/${cephVersion}/${params.Group}/${params.Conf}.yaml")
         println(nodeList)
         def nodesWithSpace = nodeList.join(",")
         sharedLib.reimageNodes(os_version, nodesWithSpace)
+    }
     }
 
     stage('Execute groovy script'){
