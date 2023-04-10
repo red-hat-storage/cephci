@@ -60,7 +60,7 @@ class RbdMirror:
             if kw.get("ceph_args", True):
                 cmd = cmd + self.ceph_args
 
-            if kw.get("long_running", True):
+            if kw.get("long_running", False):
                 out = node.exec_command(
                     sudo=True,
                     cmd=cmd,
