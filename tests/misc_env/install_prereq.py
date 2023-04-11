@@ -143,8 +143,7 @@ def install_prereq(
             else:
                 log.info("Skipped enabling the RHEL RPM's provided by Subscription")
 
-        # todo: check if thge additional repos are needed for client setup
-        if repo and not _is_client:
+        if repo:
             setup_addition_repo(ceph, repo)
 
         ceph.exec_command(cmd="sudo yum -y upgrade", check_ec=False)
