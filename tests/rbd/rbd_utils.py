@@ -67,8 +67,11 @@ class Rbd:
         Args:
             pool_name: configs along with `cmd` - command
             output: True if command output needs to be returned
-
-        Returns:  0 -> pass, 1 -> fail
+            all: Both out and err outputs returned if this is set to True
+                 In case command execution gives an exception, then
+                 out,err will be 1,<exception message>
+        Returns:  0 -> pass, 1 -> fail, by default and output if output arg is set to true
+                  out,err if all arg is set to true
         """
         try:
             cmd = kw.get("cmd", "")
@@ -102,7 +105,9 @@ class Rbd:
             return 0
 
         except CommandFailed as e:
-            log.error(f"Command {cmd} execution failed with error:\n{e}")
+            log.error(f"Command {cmd} execution failed")
+            if kw.get("all", False):
+                return 1, e
             self.flag = 1
             return 1
 
@@ -724,6 +729,20 @@ class Rbd:
             exec_cmd response
         """
         return self.exec_cmd(cmd=f"rbd config {level} set {entity} {key} {value}", **kw)
+
+    def trash_purge(self, pool_name, **kw):
+        """
+        Purge/Remove all expired images in trash from the pool
+        Args:
+            pool_name: name of the pool
+            kw: any other optional arguments
+         Returns:
+        """
+        cmd = f"rbd trash purge --pool {pool_name}"
+        if kw:
+            for key, val in kw.items:
+                cmd += f" --{key} {val}"
+        return self.exec_cmd(cmd=cmd, all=True)
 
     def get_disk_usage_for_pool(self, pool, **kw):
         """
