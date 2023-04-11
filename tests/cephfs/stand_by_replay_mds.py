@@ -37,20 +37,14 @@ def wait_for_stable_fs(client, standby_replay, timeout=180, interval=5):
 def run(ceph_cluster, **kw):
     try:
         """
-        CEPH-11258 - OSD node/service add and removal test, with client IO
+        CEPH-83573269 - [Cephfs] configure standby-replay daemon
         Pre-requisites :
         1. Create cephfs volume
 
         Test Case Flow:
-        1. Start IOs
-        2. Start removing osd from each osd node
-        3. IO's shouldn't fail
-        4. Start adding back osd to each osd node
-        5. IO's shouldn't fail
-
-        Cleanup:
-        1. Remove all the data in cephfs
-        2. Remove all the mounts
+        1. Set max_mds to 1
+        2. Set allow_standby_replay to true & verify it
+        3. Set allow_standby_replay to false & verify it
         """
         tc = "CEPH-83573269"
         log.info("Running cephfs %s test case" % (tc))

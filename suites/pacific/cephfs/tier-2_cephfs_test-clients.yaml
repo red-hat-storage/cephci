@@ -273,7 +273,12 @@ tests:
       polarion-id: CEPH-83573532
       desc: Cross Delete Ops b/w Fuse and Kernel mounts
       abort-on-fail: false
-
+  - test:
+      name: multi client file and dir ops
+      module: clients.multiclient_file_dir_ops.py
+      polarion-id: CEPH-83573529
+      desc: multi client file and dir ops
+      abort-on-fail: false
 
 
 

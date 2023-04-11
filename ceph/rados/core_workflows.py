@@ -34,6 +34,7 @@ class RadosOrchestrator:
         """
         self.node = node
         self.ceph_cluster = node.cluster
+        self.client = node.cluster.get_nodes(role="client")[0]
 
     def change_recovery_flags(self, action):
         """Sets and unsets the recovery flags on the cluster
@@ -573,6 +574,28 @@ class RadosOrchestrator:
             return False
         log.info(f"the balancer status is \n {out}")
         return True
+
+    def check_file_exists_on_client(self, loc) -> bool:
+        """Method to check if a particular file/ directory exists on the ceph client node
+
+         Args::
+            loc: Location from where the file needs to be checked
+        Examples::
+            status = obj.check_file_exists_on_client(loc="/tmp/crush.map.bin")
+        Returns::
+            True -> File exists
+            False -> FIle does not exist
+        """
+        try:
+            out, err = self.client.exec_command(cmd=f"ls {loc}", sudo=True)
+            if not out:
+                log.error(f"file : {loc} not present on the Client")
+                return False
+            log.debug(f"file : {loc} present on the Client")
+            return True
+        except Exception:
+            log.error(f"Unable to fetch details for {log}")
+            return False
 
     def configure_pg_autoscaler(self, **kwargs) -> bool:
         """

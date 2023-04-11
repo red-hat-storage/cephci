@@ -60,7 +60,9 @@ class OSD(ApplyMixin, Orch):
             devices = {"available": [], "unavailable": []}
             for device in node.get("devices"):
                 # avoid considering devices which is less than 5GB
-                if "Insufficient space (<5GB)" not in device.get(
+                if not device.get(
+                    "rejected_reasons"
+                ) or "Insufficient space (<5GB)" not in device.get(
                     "rejected_reasons", []
                 ):
                     if device["available"]:
