@@ -1812,11 +1812,21 @@ def run_fio(**fio_args):
     if fio_args.get("size"):
         opt_args += f" --size={fio_args.get('size', '100M')}"
 
+    run_time = fio_args.get("run_time")
+
+    # Take default runtime only when size is not specified
+    # if size is mentioned then IOs should run till required size is filled
+    if not run_time and not fio_args.get("size"):
+        run_time = 120
+
+    if run_time:
+        opt_args += f" --runtime={run_time} --time_based"
+
     long_running = fio_args.get("long_running", False)
     cmd = (
         "fio --name=test-1  --numjobs=1 --rw=write"
-        " --iodepth=8 --fsync=32  --time_based"
-        f" --group_reporting --runtime={fio_args.get('runtime', 120)} {opt_args}"
+        " --iodepth=8 --fsync=32 "
+        f" --group_reporting {opt_args}"
     )
 
     return fio_args["client_node"].exec_command(

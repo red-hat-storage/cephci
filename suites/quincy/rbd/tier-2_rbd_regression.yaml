@@ -144,6 +144,12 @@ tests:
       polarion-id: CEPH-11413
 
   - test:
+      desc: Verify parent-clone relationship and clone IOs are not affected when parent moved to trash
+      module: rbd_trash_restore_image_having_clone.py
+      name: Test parent trash restore with clone IOs
+      polarion-id: CEPH-11414
+
+  - test:
       desc: Rename image snapshots on an image on replicated and ecpools and its clones
       module: rbd_snapshot_rename.py
       name: Test Snapshot Rename functionality
