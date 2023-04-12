@@ -291,6 +291,8 @@ node(nodeName) {
             if (is_openstack_run){
                 if ("schedule_openstack_only" in tags_list){
                     run_type = "PSI-Only Schedule Run"
+                } else if ("rc" in tags_list){
+                    run_type = "PSI-Only RC Sanity Run"
                 } else {
                     run_type = "PSI-Only Sanity Run"
                 }
