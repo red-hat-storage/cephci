@@ -261,3 +261,9 @@ tests:
       module: rbd_flatten_image_feature_disable.py
       name: Test to disable image feature when flatten operation is performed
       polarion-id: CEPH-9862
+
+  - test:
+      desc: Verify image trash restore when same name image is already present
+      module: trash_restore_same_name_image.py
+      name: Test to verify image restore with same name
+      polarion-id: CEPH-11393
