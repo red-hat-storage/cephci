@@ -8,6 +8,7 @@ from ceph.ceph_admin.common import config_dict_to_string
 from ceph.waiter import WaitUntil
 from tests.rbd.exceptions import (
     CreateFileError,
+    ImageFoundError,
     ImageIsDeletedError,
     ImageNotFoundError,
     ImportFileError,
@@ -919,3 +920,24 @@ def verify_migration_commit(rbd, pool, image):
     else:
         log.error((f"Image {image} is not found in pool {pool}"))
         raise ImageNotFoundError("Image Not found.")
+
+
+def verify_migration_abort(rbd, pool, image):
+    """Verify migration abort.
+
+    This method will verify for the abort migration is success or not.
+
+    Args:
+        rbd: rbd object
+        pool_name: pool name
+        image_name: image name
+    """
+    if rbd.image_exists(pool, image):
+        log.error(
+            f"Image still exist after aborting the image migration in pool {pool}"
+        )
+        raise ImageFoundError("Image is found")
+    log.info(
+        f"Image {image} is not found in pool {pool}, abort image migration is successful"
+    )
+    return 0

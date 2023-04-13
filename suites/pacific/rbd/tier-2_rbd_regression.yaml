@@ -223,6 +223,34 @@ tests:
       polarion-id: CEPH-83573327
 
   - test:
+      desc: Abort image migration from source to destination pool
+      module: rbd_abort_image_migration.py
+      config:
+        source:
+          ec-pool-k-m: "2,2"
+          crush-failure-domain: osd
+          rep_pool_config:
+            pool: rbd_RepPool1
+            image: rbd_image
+            size: 10G
+          ec_pool_config:
+            pool: rbd_ECpool1
+            image: rbd_image_ec1
+            data_pool: data_pool_ec1
+            size: 10G
+        destination:
+          ec-pool-k-m: "2,2"
+          do_not_create_image: True
+          crush-failure-domain: osd
+          rep_pool_config:
+            pool: rbd_RepPool2
+          ec_pool_config:
+            pool: rbd_ECpool2
+            data_pool: data_pool_ec2
+      name: Test abort image migration from source to destination pool
+      polarion-id: CEPH-83573324
+
+  - test:
       desc: Disable the image features on image when image is moved to trash and verify
       module: rbd_features_disable.py
       name: Test to disable the image features on image when image is moved to trash
