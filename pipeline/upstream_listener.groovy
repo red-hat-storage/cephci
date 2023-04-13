@@ -4,6 +4,9 @@
 // Global variables section
 def sharedLib
 def upstreamVersion = "${params.releaseName}" ?: "" // Gets the upstream version to be executed from params
+def osType = "centos" // OS type
+def osVersion = "8"   // OS Version
+currentBuild.description = "Upstream-branch: ${upstreamVersion}  Distro: ${osType}-${osVersion}"
 
 // Pipeline script entry point
 node("rhel-9-medium") {
@@ -40,11 +43,6 @@ node("rhel-9-medium") {
             }
 
             stage('updateRecipeFile') {
-                echo "${params.releaseName}"
-
-                osType = "${params.osType}" ?: "centos" // Get OS type
-                osVersion = "${params.osVersion}" ?: "8"  // Get OS Version
-
                 try{
                     sharedLib.updateUpstreamFile(upstreamVersion, osType, osVersion) //Updates upstream.yaml
                 } catch(Exception err) {
@@ -79,12 +77,13 @@ node("rhel-9-medium") {
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
             googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
         }
+    } finally {
         if ( upstreamVersion == "main" ) {
-                build ([
-                    wait: false,
-                    job: "rhceph-upstream-listener",
-                    parameters: [string(name: 'releaseName', value: "quincy")]
-                ])
-            }
+            build ([
+                wait: false,
+                job: "rhceph-upstream-listener",
+                parameters: [string(name: 'releaseName', value: "quincy")]
+            ])
+        }
     }
 }
