@@ -67,7 +67,9 @@ def image_metadata_feature_disable(rbd, pool_type, **kw):
             p.spawn(
                 run_fio, image_name=image, pool_name=pool, client_node=rbd.ceph_client
             )
-            p.spawn(rbd.disable_rbd_feature, pool, image, feature_name)
+            p.spawn(
+                rbd.toggle_image_feature, pool, image, feature_name, action="disable"
+            )
 
         # Verify the feature is disabled
         image_load = rbd.image_info(pool, image)

@@ -291,3 +291,17 @@ tests:
       module: image_with_metadata_feature_disable.py
       name: Test to verify image feature disable with image meta on it
       polarion-id: CEPH-9864
+
+  - test:
+      desc: Verify image resize while changing image feature
+      config:
+        image_feature: fast-diff
+        size_increase: 11G
+        size_decrease: 5G
+        rep_pool_config:
+          size: 10G
+        ec_pool_config:
+          size: 10G
+      module: rbd_resize_image_with_image_feature.py
+      name: Test to verify image resize operation while changing image feature
+      polarion-id: CEPH-9861
