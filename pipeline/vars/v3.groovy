@@ -925,7 +925,7 @@ def SendUMBMessage(def msgMap, def overrideTopic, def msgType) {
 
 }
 
-def updateUpstreamFile(def version) {
+def updateUpstreamFile(def version, def osType, def osVersion) {
     /*
         Updates upstream yaml file for the version passed as argument
 
@@ -939,7 +939,7 @@ def updateUpstreamFile(def version) {
         sh ".venv/bin/python3 -m pip install packaging"
         sh "sudo yum install podman -y"
         def scriptFile = "pipeline/scripts/ci/upstream_cli.py"
-        def args = "build ${version}"
+        def args = "build ${version} --os-type ${osType} --os-version ${osVersion}"
         sh script: "${cmd} ${scriptFile} ${args}"
     } catch(Exception exc) {
         error "${exc}"
