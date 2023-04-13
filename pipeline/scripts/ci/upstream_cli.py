@@ -1,6 +1,6 @@
 """
 This script provides the upstream latest rpm repo path and container image.
-Please note that this script should be run under root privilages
+Please note that this script should be run under root privileges
 inorder to pull the image and podman should be installed on that host.
 """
 import logging
@@ -130,31 +130,36 @@ usage = """
 This script helps to provide needed info for upstream specific.
 
 Usage:
-  upstream_cli.py build <branch_name>
+  upstream_cli.py build <branch_name> [--os-type <os-type>] [--os-version <os-version>]
 
 
 Example:
     python upstream_cli.py build quincy
 
 Options:
-    -h --help                       Show this screen
+    -h --help                           Show this screen
+    --os-type <os-type>                 OS distro type [default: centos]
+    --os-version <os-version>           OS major version [default: 9]
 """
 
 
-def fetch_upstream_build(branch: str, centos_version: str = "9", arch: str = "x86_64"):
+def fetch_upstream_build(
+    branch: str, os_type: str = "centos", os_version: str = "9", arch: str = "x86_64"
+):
     """
     Method to get rpm repo path,container image and ceph version of given branch.
 
     Args:
         branch: str         Upstream branch name
-        centos_version: str Centos Version (default: 9)
+        os_type: str        OS name ( default: centos )
+        os_version: str     Centos Version (default: 9)
         arch: str           CPU Architecture (default: x86_64)
     """
     url = "https://shaman.ceph.com/api/repos/ceph/"
-    url += f"{branch.lower()}/latest/centos/{centos_version}"
+    url += f"{branch.lower()}/latest/{os_type}/{os_version}"
 
     def check_status(resp):
-        if resp.ok:
+        if not resp.ok:
             resp.raise_for_status()
 
     # if any connection issue to URL it will wait for 30 seconds to establish connection.
@@ -170,7 +175,7 @@ def fetch_upstream_build(branch: str, centos_version: str = "9", arch: str = "x8
             break
     else:
         raise Exception(
-            f"Could not find build source for {branch}-centos-{centos_version}-{arch}"
+            f"Could not find build source for {branch}-{os_type}-{os_version}-{arch}"
         )
 
     LOG.info(f"Upstream repo for the given branch is {_repo}")
@@ -187,10 +192,10 @@ def fetch_upstream_build(branch: str, centos_version: str = "9", arch: str = "x8
     cmd = f"sudo podman pull {image}"
     exit_status = os.system(cmd)
     if exit_status:
-        raise Exception(f"{image} is unable to pull")
+        raise Exception(f"Failed to pull {image} using podman.")
 
     LOG.info(f"Upstream version for the given branch is {_version}")
-    store_in_upstream(branch_name, _repo, image, _version)
+    store_in_upstream(branch, _repo, image, _version)
 
 
 OPS = {
@@ -204,7 +209,6 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
     )
-
     try:
         method = None
         for key, value in OPS.items():
@@ -214,9 +218,16 @@ if __name__ == "__main__":
         else:
             raise Exception("please provide right action")
 
-        branch_name = _args["<branch_name>"]
-        args = [branch_name]
+        upstream_branch = _args["<branch_name>"]
+        os_type = _args.get("--os-type")
+        os_version = _args.get("--os-version")
 
-        method(*args)
+        args = {
+            "branch": upstream_branch,
+            "os_type": os_type,
+            "os_version": os_version,
+        }
+
+        method(**args)
     except BaseException as be:
         raise Exception(be)
