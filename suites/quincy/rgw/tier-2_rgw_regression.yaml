@@ -601,3 +601,13 @@ tests:
         script-name: test_indexless_buckets.py
         config-file-name: test_indexless_buckets_s3.yaml
         timeout: 500
+
+  - test:
+      name: NFS export delete
+      desc: NFS cluster and exports delete
+      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      module: sanity_rgw.py
+      config:
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
+        timeout: 500
