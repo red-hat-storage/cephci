@@ -226,6 +226,16 @@ tests:
         config-file-name: test_swift_large_download.yaml
         timeout: 300
 
+  - test:
+      name: Get object with different tenant swift user with same name
+      desc: test get object with different tenant swift user with same name
+      polarion-id: CEPH-9744
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_get_objects_from_tenant_swift_user.yaml
+        timeout: 300
+
   # Versioning Tests
 
   - test:
