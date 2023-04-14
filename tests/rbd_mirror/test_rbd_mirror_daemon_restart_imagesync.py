@@ -129,7 +129,9 @@ def run(**kw):
     def generate_background_ios():
         for i in range(1, 3):
             for i in range(1, 10):
-                mirror1.benchwrite(imagespec=decoy_imagespec + f"{i}", io="10M")
+                # Since images are being created at mirror2 in decoy_setup()
+                # IOs can run only from mirror2
+                mirror2.benchwrite(imagespec=decoy_imagespec + f"{i}", io="10M")
             time.sleep(5)
         return 0
 
@@ -140,7 +142,7 @@ def run(**kw):
 
     with parallel() as p:
         for img_spec in [rep_image_spec, ec_image_spec]:
-            p.spawn(mirror1.benchwrite, image_spec=img_spec, io="100M")
+            p.spawn(mirror1.benchwrite, imagespec=img_spec, io="100M")
             p.spawn(initiate_resync_and_wait_sync_to_start, img_spec)
 
         for each_rc in p:
