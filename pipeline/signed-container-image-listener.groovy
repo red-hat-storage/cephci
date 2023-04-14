@@ -124,6 +124,33 @@ node("rhel-9-medium || ceph-qe-ci") {
             println "Updated UMB Message Successfully"
             currentBuild.result = "SUCCESS"
         }
+
+        stage("Trigger pipeline tier executor") {
+            def buildType = "rc"
+            def tags = "sanity,tier-0,stage-1,openstack"
+            def overrides = [:]
+            def overridesStr = writeJSON returnText: true, json: overrides
+
+            rhcephVersion = "RHCEPH-${versions.major_version}.${versions.minor_version}"
+            def recipeFileContent = sharedLib.yamlToMap("${rhcephVersion}.yaml")
+            def content = recipeFileContent['rc']
+            def buildArtifacts = writeJSON returnText: true, json: content
+            println "recipeFile ceph-version : ${content['ceph-version']}"
+            println "Starting test execution with parameters:"
+            println "\trhcephVersion: ${rhcephVersion}\n\tbuildType: ${buildType}\n\tbuildArtifacts: ${buildArtifacts}\n\toverrides: ${overrides}\n\ttags: ${tags}"
+
+             build ([
+                wait: false,
+                job: "rhceph-test-execution-pipeline",
+                parameters: [
+                    string(name: 'rhcephVersion', value: rhcephVersion.toString()),
+                    string(name: 'tags', value: tags),
+                    string(name: 'buildType', value: buildType),
+                    string(name: 'overrides', value: overridesStr),
+                    string(name: 'buildArtifacts', value: buildArtifacts.toString())]
+            ])
+        }
+
     } catch(Exception err) {
         failureReason = err.getMessage()
         if (currentBuild.result != "ABORTED") {
