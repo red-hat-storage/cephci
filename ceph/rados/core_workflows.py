@@ -1437,7 +1437,7 @@ class RadosOrchestrator:
         Args:
             osd_list: The list with the osd IDs
         Return :
-            A dictionary output with the key as OSD isd and values are the
+            A dictionary output with the key as OSD id and values are the
             heap dump of the OSD.
         """
         if not osd_list:
