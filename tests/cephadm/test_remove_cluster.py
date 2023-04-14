@@ -105,9 +105,11 @@ def run(ceph_cluster, **kw):
             )
 
     # Validate ceph config director, disks and containers
-    validate_ceph_config_dir(
-        nodes=nodes, dir_path=CEPH_CONFIG_DIR, roles=["mon", "osd"]
-    )
+
+    # Note (vamahaja): Skipping `/etc/ceph` dir due to bz #2129252
+    # validate_ceph_config_dir(
+    #     nodes=nodes, dir_path=CEPH_CONFIG_DIR, roles=["mon", "osd"]
+    # )
     validate_ceph_config_dir(nodes=nodes, dir_path=CEPH_LIB_DIR, roles=["mon", "osd"])
     validate_ceph_config_dir(nodes=nodes, dir_path=CEPHADM_LIB_DIR, ignore=[".ssh"])
 
