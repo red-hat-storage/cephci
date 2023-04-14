@@ -1411,6 +1411,8 @@ class RadosOrchestrator:
     def change_heap_profiler_state(self, osd_list, action):
         """
         Start/stops the OSD heap profile
+        Usage: ceph tell osd.<osd.ID> heap start_profiler
+               ceph tell osd.<osd.ID> heap stop_profiler
         Args:
              osd_list: The list with the osd IDs
              action : start  or stop actions for heap profiler
@@ -1427,10 +1429,16 @@ class RadosOrchestrator:
 
     def get_heap_dump(self, osd_list):
         """
-        Returns the heap dump of the OSD
+        Returns the heap dump of the all OSDs in the osd_list
+        Usage: ceph tell osd.<osd.ID> heap dump
+        Example:
+             get_heap_dump(osd_list)
+             where osd_list is the list of OSD ids like[1,2,4]
         Args:
             osd_list: The list with the osd IDs
-        Return : string
+        Return :
+            A dictionary output with the key as OSD isd and values are the
+            heap dump of the OSD.
         """
         if not osd_list:
             log.error("OSD list is empty")

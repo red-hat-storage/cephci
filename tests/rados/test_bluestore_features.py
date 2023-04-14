@@ -150,11 +150,24 @@ def get_bytes_used_by_app(osds_heap_dump):
 # Merge dictionaries
 def mergeDictionary(dict_1, dict_2):
     """
-    Merge two dictionaries
+    Merge two dictionaries by appending the first second dictionary values in to the first dictionary.
+        Example1:
+            dict_1 ={0:123,1:12,3:56}
+            dict_2 ={0:9,1:45,3:77,4:78}
+            Method returns dict_1 = {0:[123,9],1:[12,45],3:[56,77],4:78}
+        Example2:
+            dict_1 = {0:[123,9],1:[12,45],3:[56,77],4:78}
+            dict_2 ={1:90,4:8,5:0}
+            Method returns dict_1 = {0:[123,9],1:[12,45,90],3:[56,77],4:[78,8],5:0}
     Args:
-        dict_1 & dict_2 : are two dictionaries
+        dict_1 & dict_2 : Two dictionaries
+        Example:
+            dict_1 ={0:123,1:12,3:56}
+            dict_2 ={0:9,1:45,3:77,4:78}
     Return:
         dict_1 : Returns a dictionary after merging two dictionaries.
+        Example:
+            dict_1 = {0:[123,9],1:[12,45,90],3:[56,77],4:[78,8],5:0}
     """
     for key, value in dict_2.items():
         if key in dict_1:
