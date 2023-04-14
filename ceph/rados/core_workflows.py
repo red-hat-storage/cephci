@@ -1407,3 +1407,45 @@ class RadosOrchestrator:
         cmd = "ceph osd tree"
         osds = self.run_ceph_command(cmd)
         return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]
+
+    def change_heap_profiler_state(self, osd_list, action):
+        """
+        Start/stops the OSD heap profile
+        Usage: ceph tell osd.<osd.ID> heap start_profiler
+               ceph tell osd.<osd.ID> heap stop_profiler
+        Args:
+             osd_list: The list with the osd IDs
+             action : start  or stop actions for heap profiler
+        Return: 0 for Pass , 1 for fail
+        """
+        if not osd_list:
+            log.error("OSD list is empty")
+            return 1
+        for osd_id in osd_list:
+            cmd = f"ceph tell osd.{osd_id} heap {action}_profiler"
+            self.node.shell([cmd])
+        log.info(f"The OSD {osd_list} heap profile is in {action} state")
+        return 0
+
+    def get_heap_dump(self, osd_list):
+        """
+        Returns the heap dump of the all OSDs in the osd_list
+        Usage: ceph tell osd.<osd.ID> heap dump
+        Example:
+             get_heap_dump(osd_list)
+             where osd_list is the list of OSD ids like[1,2,4]
+        Args:
+            osd_list: The list with the osd IDs
+        Return :
+            A dictionary output with the key as OSD id and values are the
+            heap dump of the OSD.
+        """
+        if not osd_list:
+            log.error("OSD list is empty")
+            return 1
+        heap_dump = {}
+        for osd_id in osd_list:
+            cmd = f"ceph tell osd.{osd_id} heap dump"
+            out, err = self.node.shell([cmd])
+            heap_dump[osd_id] = out.strip()
+        return heap_dump
