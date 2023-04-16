@@ -43,9 +43,18 @@ class Ceph(Cli):
             return out[0].strip()
         return out
 
-    def insights(self):
-        """Returns ceph insights"""
+    def insights(self, prune=False, hours=None):
+        """
+        Performs ceph insights related operations
+        Args:
+            prune (bool): To delete the existing insights reports
+            hours (str): Delete logs from given hours, 0 to delete all
+        """
         cmd = f"{self.base_cmd} insights"
+        if prune:
+            # Remove historical health data older than <hours>.
+            # Passing 0 for <hours> will clear all health data.
+            cmd += f"prune-health {hours}"
         out = self.execute(sudo=True, check_ec=False, long_running=False, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()

@@ -63,7 +63,7 @@ def run(ceph_cluster, **kw):
             )
 
     elif step_to_validate == "fail-mgr":
-        if CephAdm(node).ceph.mgr.fail(mgr_name=mgr_service):
+        if CephAdm(node).ceph.mgr.fail(mgr=mgr_service):
             raise CephMgrServiceFailError("Failed to execute `ceph mgr fail` command")
 
         # The standby mgr should be up and cluster should not throw health warning

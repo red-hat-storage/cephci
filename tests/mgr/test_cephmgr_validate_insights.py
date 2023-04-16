@@ -1,9 +1,12 @@
 import json
+import tempfile
 
 from cli.cephadm.cephadm import CephAdm
 from utility.log import Log
 
 log = Log(__name__)
+
+AUDIT_LOG_PATH = "/var/log/ceph/cephadm.log"
 
 
 class CephInsightOpsFailure(Exception):
@@ -28,13 +31,17 @@ def _ceph_run_insight(node, step_to_validate):
         CephInsightOpsFailure("Failed to get ceph insights")
 
     # Check 2: Check whether the report generation was successful
-    if step_to_validate in ["verify-report", "verify-report-sections"]:
+    if step_to_validate in [
+        "verify-report",
+        "verify-report-sections",
+        "verify-prune-health",
+    ]:
         insight_data = json.loads(out)
         if not insight_data:
             CephInsightOpsFailure("Ceph insights command failed to return json output")
 
     # Check 3: Check whether the report has all the required sections
-    if step_to_validate == "verify-report-sections":
+    if step_to_validate in ["verify-report-sections", "verify-prune-health"]:
         expected_sections = [
             "health",
             "crashes",
@@ -54,6 +61,44 @@ def _ceph_run_insight(node, step_to_validate):
                 raise CephInsightOpsFailure(
                     f"Insights data doesn't have {section} section"
                 )
+    if step_to_validate == "verify-prune-health":
+        # Verify whether the prune-health command deletes the report generated
+        prune_timeout = 0  # Delete all logs
+        out = CephAdm(node).ceph.insights(prune=True, hours=prune_timeout)
+        if out:
+            CephInsightOpsFailure("Failed to prune ceph insights report")
+
+        # Generate report and validate it's not same as earlier
+        out = CephAdm(node).ceph.insights()
+        if out:
+            CephInsightOpsFailure("Failed to get ceph insights report after prune")
+        new_insights_data = json.loads(out)
+        if new_insights_data == insight_data:
+            CephInsightOpsFailure("The insights report has not been cleared")
+
+    if step_to_validate == "verify-log":
+        # Verify the ceph.audit.log has health history recorded and is not consuming more space
+        # and Excessive logging is not found
+        temp_file = tempfile.NamedTemporaryFile(suffix=".log")
+
+        node.download_file(src=AUDIT_LOG_PATH, dst=temp_file.name, sudo=True)
+        with open(temp_file.name, "r") as f:
+            logs = f.read()
+
+        if "health" not in logs:
+            raise CephInsightOpsFailure("No ceph health history updated in audit log")
+        unexpected_entries = [
+            "Received MSG_CHANNEL_OPEN_CONFIRMATION",
+            "Initial send window",
+            "Sent MSG_IGNORE",
+            "Sent MSG_CHANNEL_CLOSE",
+            "Received channel close",
+            "Received MSG_CHANNEL_REQUEST",
+            "Received MSG_CHANNEL_EOF",
+        ]
+        for item in unexpected_entries:
+            if item in logs:
+                raise CephInsightOpsFailure("Unexpected data dump found in audit log")
 
 
 def run(ceph_cluster, **kw):
