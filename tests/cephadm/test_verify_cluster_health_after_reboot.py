@@ -17,7 +17,7 @@ class SystemctlFailed(Exception):
 
 def _is_cluster_healthy(node):
     # Verify if the cluster is in healthy state
-    timeout, interval = 100, 10
+    timeout, interval = 300, 10
     for w in WaitUntil(timeout=timeout, interval=interval):
         if CephAdm(node).ceph.health() == "HEALTH_OK":
             return True
