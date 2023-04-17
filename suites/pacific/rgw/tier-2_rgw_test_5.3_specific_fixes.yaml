@@ -131,3 +131,12 @@ tests:
         script-name: ../aws/test_sts_rename_large_object.py
         config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
         timeout: 500
+  - test:
+      name: Test s3_copy_obj on user with admin flag through AWS
+      desc: TESCO-Segfault with s3CopyObj with admin user
+      polarion-id: CEPH-83575562
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_s3copyObj_admin_user.yaml
+        timeout: 500
