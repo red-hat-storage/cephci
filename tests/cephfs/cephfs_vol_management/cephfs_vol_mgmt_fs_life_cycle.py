@@ -6,6 +6,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 """
@@ -87,7 +88,8 @@ def run(ceph_cluster, **kw):
         create_cmd = f"ceph fs new {fs_name} {pool_meta}_1 {pool_data}_1"
 
         client1.exec_command(sudo=True, cmd=create_cmd)
-        fs_util.kernel_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
+        retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.kernel_mount)
+        retry_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
 
         out7, ec7 = client1.exec_command(sudo=True, cmd=f"ceph fs get {fs_name}")
         log.info(print(out7))
