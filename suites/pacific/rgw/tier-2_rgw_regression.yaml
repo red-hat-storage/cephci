@@ -219,7 +219,7 @@ tests:
   - test:
       name: swift download large object tests
       desc: download large object in swift
-      polarion-id: CEPH-9809
+      polarion-id: CEPH-9809 #CEPH-9816
       module: sanity_rgw.py
       config:
         script-name: test_swift_basic_ops.py
