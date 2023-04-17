@@ -273,3 +273,11 @@ tests:
       module: trash_restore_same_name_image.py
       name: Test to verify image restore with same name
       polarion-id: CEPH-11393
+
+  - test:
+      desc: Verify image feature disable on image having image meta set on it
+      config:
+        image_feature : deep-flatten
+      module: image_with_metadata_feature_disable.py
+      name: Test to verify image feature disable with image meta on it
+      polarion-id: CEPH-9864
