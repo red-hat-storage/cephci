@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import random
 import string
@@ -8,6 +9,15 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def get_clone_status(client, fs_util, clone):
+    cmd_out, cmd_rc = fs_util.get_clone_status(
+        client, clone["vol_name"], clone["target_subvol_name"]
+    )
+    status = json.loads(cmd_out)
+    log.info(f"{clone['target_subvol_name']} status is {status['status']['state']}")
+    return status["status"]["state"]
 
 
 def run(ceph_cluster, **kw):
@@ -140,15 +150,13 @@ def run(ceph_cluster, **kw):
         while status_list.count("complete") < len(clone_list):
             status_list.clear()
             iteration += 1
-            for clone in clone_list:
-                cmd_out, cmd_rc = fs_util.get_clone_status(
-                    client1, clone["vol_name"], clone["target_subvol_name"]
-                )
-                status = json.loads(cmd_out)
-                status_list.append(status["status"]["state"])
-                log.info(
-                    f"{clone['target_subvol_name']} status is {status['status']['state']}"
-                )
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [
+                    executor.submit(get_clone_status, client1, fs_util, clone)
+                    for clone in clone_list
+                ]
+            status_list = [f.result() for f in futures]
+            print(status_list)
             if status_list.count("in-progress") > 4:
                 return 1
             else:
@@ -176,15 +184,13 @@ def run(ceph_cluster, **kw):
         while status_list.count("complete") < len(clone_list):
             iteration += 1
             status_list.clear()
-            for clone in clone_list:
-                cmd_out, cmd_rc = fs_util.get_clone_status(
-                    client1, clone["vol_name"], clone["target_subvol_name"]
-                )
-                status = json.loads(cmd_out)
-                status_list.append(status["status"]["state"])
-                log.info(
-                    f"{clone['target_subvol_name']} status is {status['status']['state']}"
-                )
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                futures = [
+                    executor.submit(get_clone_status, client1, fs_util, clone)
+                    for clone in clone_list
+                ]
+            status_list = [f.result() for f in futures]
+            print(status_list)
             if status_list.count("in-progress") > 2:
                 return 1
             else:
