@@ -1,6 +1,7 @@
 import json
 import random
 import string
+from importlib import import_module
 from time import sleep
 
 from ceph.ceph import CommandFailed
@@ -724,6 +725,23 @@ class Rbd:
         """
         return self.exec_cmd(cmd=f"rbd config {level} set {entity} {key} {value}", **kw)
 
+    def get_disk_usage_for_pool(self, pool, **kw):
+        """
+        Fetch disk usage using rbd du command
+
+        Args:
+            pool: pool for which usage to be fetched
+            **kw: Any other optional arguments
+
+        Returns:
+            disk usage in json format
+        """
+        cmd = f"rbd du -p {pool} --format json"
+        for key, val in kw.items():
+            cmd += f" --{key} {val}"
+
+        return json.loads(self.exec_cmd(cmd=cmd, output=True))
+
 
 def initial_rbd_config(**kw):
     """
@@ -843,11 +861,11 @@ def initial_rbd_config(**kw):
     return rbd_obj
 
 
-def execute_dynamic(rbd, test, results: dict, **kwargs):
+def execute_dynamic(obj, test, results: dict, **kwargs):
     """
     Executes the test specified in test parameter with inputs args and returns results
     Args:
-        rbd: rbd object
+        obj: rbd object or module to be imported
         test: test to be executed
         results: test result
         **kwargs: input args required for the test
@@ -855,7 +873,9 @@ def execute_dynamic(rbd, test, results: dict, **kwargs):
     Returns:
         results updated to results dict
     """
-    method = getattr(rbd, test)
+    if isinstance(obj, str):
+        obj = import_module(obj)
+    method = getattr(obj, test)
     rc = method(**kwargs)
     log.info(f"Return value for execution of method: {test} is {rc}")
     if rc:
