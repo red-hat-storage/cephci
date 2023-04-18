@@ -2096,6 +2096,17 @@ class CephNode(object):
         client = self.rssh if sudo else self.ssh
         client().open_sftp().put(src, dst)
 
+    def download_file(self, src, dst, sudo=False):
+        """Get file from remote location
+
+        Args:
+            src (str): Source file remote location
+            dst (str): File destination location
+            sudo (bool): Use root access
+        """
+        client = self.rssh if sudo else self.ssh
+        client().open_sftp().get(src, dst)
+
 
 class CephObject(object):
     def __init__(self, role, node):
@@ -2160,6 +2171,17 @@ class CephObject(object):
             sudo (bool): Use root access
         """
         self.node.upload_file(src=src, dst=dst, sudo=sudo)
+
+    def download_file(self, src, dst, sudo=False):
+        """
+        Proxy to download file from remote location
+
+        Args:
+            src (str): Source file location
+            dst (str): File destination location
+            sudo (bool): Use root access
+        """
+        self.node.download_file(src=src, dst=dst, sudo=sudo)
 
 
 class CephDemon(CephObject):

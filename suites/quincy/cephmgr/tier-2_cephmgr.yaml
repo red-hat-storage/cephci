@@ -107,6 +107,14 @@ tests:
         operation: verify-report-sections
 
   - test:
+      name: Ceph Insights - Delete insights report within an interval
+      desc: Verify report deleted after prune-health option with duration
+      polarion-id: CEPH-83573688
+      module: test_cephmgr_validate_insights.py
+      config:
+        operation: verify-prune-health
+
+  - test:
       name: Verify disable insights functionality
       desc: Verify ceph insight disable
       polarion-id: CEPH-83573811
@@ -156,3 +164,25 @@ tests:
       module: test_cephmgr_validate_mgr_status.py
       config:
         operation: kill-mgr
+
+  - test:
+      name: Verify dashboard cannot start on non-active ceph-mgrs
+      desc: Verify dashboard cannot start on non-active ceph-mgrs
+      polarion-id: CEPH-11386
+      module: test_cephmgr_dashboard_plugin.py
+      config:
+        error: RADOS permission denied
+
+  - test:
+      name: Verify dashboard plugin works fine with ceph-mgr
+      desc: Verify dashboard plugin works fine with ceph-mgr
+      polarion-id: CEPH-11385
+      module: test_dashboard_plugin_with_ceph_mgr.py
+
+  - test:
+      name: Ceph Insights - Monitor log growth on ceph audit log
+      desc: Verify log growth to ceph.audit.log during a failure scenario
+      polarion-id: CEPH-83573810
+      module: test_cephmgr_validate_insights.py
+      config:
+        operation: verify-log
