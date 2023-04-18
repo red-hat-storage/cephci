@@ -268,6 +268,16 @@ tests:
       polarion-id: CEPH-9862
 
   - test:
+      desc: Perform trash purge on images with clone and images without clone
+      module: rbd_trash_purge.py
+      config:
+        do_not_create_image: True # to prevent initial_rbd_config from creating an image
+        no_of_images: 10 # number of images to create for testing
+        no_of_clones: 4 # number of images for which clones to be created
+      name: Test to perform trash purge on images with and without clone
+      polarion-id: CEPH-83574482
+
+  - test:
       desc: Verify image trash restore when same name image is already present
       module: trash_restore_same_name_image.py
       name: Test to verify image restore with same name
