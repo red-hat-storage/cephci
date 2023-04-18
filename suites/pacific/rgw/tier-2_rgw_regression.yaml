@@ -246,6 +246,16 @@ tests:
         config-file-name: test_delete_container_from_user_of_diff_tenant.yaml
         timeout: 300
 
+  - test:
+      name: upload large object with same name using tenant swift user
+      desc: test upload large object with same name using tenant swift user
+      polarion-id: CEPH-9814
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_upload_large_obj_with_same_obj_name.yaml
+        timeout: 300
+
   # Versioning Tests
 
   - test:
