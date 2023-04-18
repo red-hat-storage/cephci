@@ -186,3 +186,9 @@ tests:
       module: test_cephmgr_validate_insights.py
       config:
         operation: verify-log
+
+  - test:
+      name: Verify supervised optimisation
+      desc: Verify create evaluate execute a plan with supervised optimisation
+      polarion-id: CEPH-83573250
+      module: test_cephmgr_validate_supervised_optimisation.py
