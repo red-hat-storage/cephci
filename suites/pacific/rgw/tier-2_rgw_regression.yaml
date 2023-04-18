@@ -236,6 +236,16 @@ tests:
         config-file-name: test_get_objects_from_tenant_swift_user.yaml
         timeout: 300
 
+  - test:
+      name: delete container with different tenant swift user with same name
+      desc: test delete container with different tenant swift user with same name
+      polarion-id: CEPH-9749
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_delete_container_from_user_of_diff_tenant.yaml
+        timeout: 300
+
   # Versioning Tests
 
   - test:
