@@ -123,8 +123,6 @@ def get_launch_details(config_file, launch_id):
     Get launcher details for specific launch id
     """
     args = {"config_file": config_file}
-    rp_host_url = os.environ.get("RP_HOST_URL", None)
-    url = "{}/ui/#cephci/launches/all/{}/{}"
     try:
         rportal = ReportPortalV1(PreProcClient((args)).configs.rp_config)
         api = "item/v2?filter.level.path=1&page.page=1&page.size=50"
@@ -150,10 +148,6 @@ def get_launch_details(config_file, launch_id):
             if "endTime" in ts.keys() and "startTime" in ts.keys():
                 testsuite.update(
                     {"executionTime": int(ts.get("endTime")) - int(ts.get("startTime"))}
-                )
-            if rp_host_url:
-                testsuite.update(
-                    {"url": url.format(rp_host_url, launch_id, ts.get("id"))}
                 )
 
             testsuites.append(testsuite)

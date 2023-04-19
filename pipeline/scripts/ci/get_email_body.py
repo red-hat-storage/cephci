@@ -26,7 +26,7 @@ Options:
 """
 
 
-def get_html_rows(spec):
+def get_html_rows(spec, rp_link):
     """
     Formats the given email body, by sorting it in the incremental order of tiers and stages
     Returns the html string for the formatted email body for all the rows
@@ -58,7 +58,7 @@ def get_html_rows(spec):
             build_url = spec[tier][stage]["build_url"]
             build_url_text = [s for s in build_url.split("/") if s.isdigit()][-1]
             html_body += f"<td><a href={ build_url }>{ build_url_text }</a></td>"
-            report_portal_url = spec[tier][stage]["report_portal"]
+            report_portal_url = rp_link
             report_portal_text = report_portal_url.split("/")[-1]
             html_body += (
                 f"<td><a href={ report_portal_url }>{ report_portal_text }</a></td>"
@@ -73,9 +73,8 @@ def get_html_rows(spec):
                 suite_table += f"<tr><td>{results['name']}</td></tr>"
                 bg_color = "F1948A" if results["status"] == "FAILED" else "82E0AA"
                 result_table += f"<tr><td bgcolor={bg_color}>"
-                result_table += (
-                    f"<a href={results['url']}>{results['status']}</a></td></tr>"
-                )
+                url = f"{rp_link}/{results['id']}"
+                result_table += f"<a href={url}>{results['status']}</a></td></tr>"
                 total_tcs += int(results.get("total", "0"))
                 pass_tcs += int(results.get("passed", "0"))
                 fail_tcs += int(results.get("failed", "0"))
@@ -211,7 +210,8 @@ if __name__ == "__main__":
                 testResultsFile = cli_args.get("--testResultsFile")
                 run_type = cli_args.get("--runType")
                 content = read_test_results(testResultsFile, run_type)
-                testResults = get_html_rows(content)
+                rp_link = content.pop("rp_link")
+                testResults = get_html_rows(content, rp_link)
                 html = cls.get_consolidate_email(
                     template=template,
                     testResults=testResults,
