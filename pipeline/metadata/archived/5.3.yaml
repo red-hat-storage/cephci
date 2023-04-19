@@ -170,16 +170,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
-        - name: "Tier-0 test suite for 5x for RBD sanity"
-          execution_time: "36m 53s"
-          suite: "suites/pacific/rbd/tier-0_rbd.yaml"
-          global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - rbd
     tier-2:
       stage-1:
         - name: "Tier-2 Cephfs test clients"
@@ -488,45 +478,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
-      stage-7:
-        - name: "RGW testing using S3CMD CLI commands"
-          execution_time: "45m 21s"
-          suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
-          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - rgw
-        - name: "Tier-2 Cephfs test Snapshot Clone"
-          execution_time: "1h 18m 39s"
-          suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
-          global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - cephfs
-        - name: "S3Tests against Red Hat RGW with SSL"
-          execution_time: "1h 46m 37s"
-          suite: "suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
-          global-conf: "conf/pacific/rgw/ec-profile-4+2-cluster.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-          metadata:
-            - rgw
-        - name: "RADOS regression testing for Mon DB trimming"
-          execution_time: "2h 6m 51s"
-          suite: "suites/pacific/rados/tier-2_rados_test-mon-db-trimming.yaml"
-          global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-          metadata:
-            - rados
   schedule:
     tier-1:
       stage-1:
@@ -925,7 +876,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
-      stage-6:
         - name: "Tier-2 Testing bluestore  memory usage"
           execution_time: "1h 40m 42s"
           suite: "suites/pacific/rados/tier-2_rados_test_bluestore.yaml"
@@ -966,7 +916,62 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rados
-      stage-7:
+  sanity_openstack_only:
+    tier-1:
+      stage-1:
+        - name: "Tier-0 test suite for 5x for RBD sanity"
+          execution_time: "36m 53s"
+          suite: "suites/pacific/rbd/tier-0_rbd.yaml"
+          global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rbd
+    tier-2:
+      stage-1:
+        - name: "RGW testing using S3CMD CLI commands"
+          execution_time: "45m 21s"
+          suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rgw
+        - name: "Tier-2 Cephfs test Snapshot Clone"
+          execution_time: "1h 18m 39s"
+          suite: "suites/pacific/cephfs/tier-2_cephfs_test-snapshot-clone.yaml"
+          global-conf: "conf/pacific/cephfs/tier-0_fs.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - cephfs
+        - name: "S3Tests against Red Hat RGW with SSL"
+          execution_time: "1h 46m 37s"
+          suite: "suites/pacific/rgw/tier-2_rgw_ssl_s3tests.yaml"
+          global-conf: "conf/pacific/rgw/ec-profile-4+2-cluster.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+          metadata:
+            - rgw
+        - name: "RADOS regression testing for Mon DB trimming"
+          execution_time: "2h 6m 51s"
+          suite: "suites/pacific/rados/tier-2_rados_test-mon-db-trimming.yaml"
+          global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+          metadata:
+            - rados
+  schedule_openstack_only:
+    tier-2:
+      stage-1:
         - name: "Test multiple path upgrade to 5x latest"
           execution_time: ""
           suite: "suites/pacific/upgrades/tier-2_upgrade_test-multi-path-upgrade-to-5.2-latest.yaml"
@@ -1014,7 +1019,7 @@ pipelines:
             openstack: "conf/inventory/rhel-8-latest.yaml"
           metadata:
             - rgw
-      stage-8:
+      stage-2:
         - name: "RADOS test scenarios for PG split and merge"
           execution_time: "1h 35m"
           suite: "suites/pacific/rados/tier-2_rados_test-pg-split-merge.yaml"
