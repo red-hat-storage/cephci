@@ -2202,7 +2202,7 @@ os.system('sudo systemctl start  network')
         f()
         return f
 
-    def cephfs_nfs_mount(self, client, nfs_server, nfs_export, nfs_mount_dir):
+    def cephfs_nfs_mount(self, client, nfs_server, nfs_export, nfs_mount_dir, **kwargs):
         """
         Mount cephfs nfs export
         :param client:
@@ -2211,7 +2211,28 @@ os.system('sudo systemctl start  network')
         :param nfs_mount_dir:
         """
         client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mount_dir}")
-        command = f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export} {nfs_mount_dir}"
+        command = f"mount -t nfs -o port={kwargs.get('port','2049')} {nfs_server}:{nfs_export} {nfs_mount_dir}"
+        if kwargs.get("fstab"):
+            try:
+                client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
+            except CommandFailed:
+                client.exec_command(sudo=True, cmd="cp /etc/fstab /etc/fstab.backup")
+            fstab = client.remote_file(
+                sudo=True, file_name="/etc/fstab", file_mode="a+"
+            )
+            fstab_entry = (
+                f"{nfs_server}:{nfs_export}    {nfs_mount_dir}    nfs4    "
+                f"port={kwargs.get('port','2049')},"
+                f"defaults,seclabel,vers=4.2,proto=tcp"
+            )
+            if kwargs.get("extra_params"):
+                fstab_entry += f"{kwargs.get('extra_params')}"
+            fstab_entry += "      0       0"
+            print(dir(fstab))
+            fstab.write(fstab_entry + "\n")
+            fstab.flush()
+            fstab.close()
+
         client.exec_command(sudo=True, cmd=command)
         rc = self.wait_until_mount_succeeds(client, nfs_mount_dir)
         return rc

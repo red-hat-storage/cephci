@@ -275,4 +275,15 @@ tests:
       module: nfs.nfs_update_cluster_node_changes.py
       name: "nfs cluster host changes and verification"
       polarion-id: "CEPH-83574013"
-
+  - test:
+      abort-on-fail: true
+      desc: "test cephfs nfs with io and network failures"
+      module: nfs.nfs_io_network_failures.py
+      name: "cephfs nfs with io and network failures"
+      polarion-id: "CEPH-83574020"
+  - test:
+      abort-on-fail: true
+      desc: "test cephfs nfs mount with fstab entry"
+      module: nfs.nfs_mount_with_fstab.py
+      name: "cephfs nfs mount with fstab entry"
+      polarion-id: "CEPH-83574025"
