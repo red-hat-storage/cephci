@@ -101,9 +101,20 @@ def run(**kw):
         if primary_cluster.rhcs_version.version[0] == 4
         else config.get("run-on-rgw", False)
     )
+    run_on_haproxy = (
+        True
+        if primary_cluster.rhcs_version.version[0] == 4
+        else config.get("run-on-haproxy", False)
+    )
+
     if run_on_rgw:
         exec_from = test_site_node
         append_param = ""
+
+    elif run_on_haproxy:
+        exec_from = test_client_node
+        append_param = ""
+
     else:
         exec_from = test_client_node
         append_param = " --rgw-node " + str(test_site_node.ip_address)

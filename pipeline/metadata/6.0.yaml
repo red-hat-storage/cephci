@@ -698,6 +698,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
+        - name: "test-rgw-ms-deployment-via-Haproxy-with-archive"
+          execution_time: "2h 29m 53s"
+          suite: "suites/pacific/rgw/tier-3_rgw_multisite_archive_with_haproxy.yaml"
+          global-conf: "conf/pacific/rgw/tier-3_rgw_multisite_archive_with_haproxy_conf.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
         - name: "test-rgw-lc-expiration-with-prefix-as-special-character"
           execution_time: "2h 14m 3s"
           suite: "suites/pacific/rgw/tier-2_rgw_test-lc-prefix.yaml"
