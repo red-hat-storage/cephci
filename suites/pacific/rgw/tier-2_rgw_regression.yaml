@@ -197,6 +197,16 @@ tests:
   # Swift basic operation
 
   - test:
+      name: Modify tenant swift user
+      desc: test modify tenant swift user
+      polarion-id: CEPH-9750
+      module: sanity_rgw.py
+      config:
+        script-name: user_create.py
+        config-file-name: test_modify_tenanted_subuser.yaml
+        timeout: 300
+
+  - test:
        name: Swift bulk delete operation
        desc: Swift bulk delete operation
        polarion-id: CEPH-9753
