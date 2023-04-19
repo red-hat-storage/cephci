@@ -201,7 +201,6 @@ def writeToResultsFile(
 
     def stageResults = [
         "build_url": "${jenkinsBuildUrl}",
-        "report_portal": "${reportPortalUrl}",
         "test_results": rp_launch_details
     ]
     println("stageResults: ${stageResults}")

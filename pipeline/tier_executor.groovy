@@ -149,8 +149,68 @@ node(nodeName) {
             println "recipeFile ceph-version : ${content['ceph-version']}"
             def currentCephVersion = buildArtifacts['ceph-version'] ?: buildArtifacts['recipe']['ceph-version']
             println "buildArtifacts ceph-version : ${currentCephVersion}"
+            if ("schedule_openstack_only" in tags_list){
+                run_type = "PSI-Only Schedule Run"
+            } else if ("rc" in tags_list){
+                run_type = "PSI-Only RC Sanity Run"
+            } else {
+                run_type = "PSI-Only Sanity Run"
+            }
             if ( currentCephVersion != content['ceph-version']) {
                 currentBuild.result = "ABORTED"
+                def msgMap = [
+                    "artifact": [
+                        "type": "product-build",
+                        "name": "Red Hat Ceph Storage",
+                        "version": buildArtifacts["ceph-version"],
+                        "nvr": rhcephVersion,
+                        "phase": "testing",
+                        "build": "tier-0",
+                    ],
+                    "contact": [
+                        "name": "Downstream Ceph QE",
+                        "email": "cephci@redhat.com",
+                    ],
+                    "system": [
+                        "os": "centos-7",
+                        "label": "agent-01",
+                        "provider": "IBM-Cloud",
+                    ],
+                    "pipeline": [
+                        "name": tierLevel,
+                        "id": currentBuild.number,
+                        "tags": tags,
+                        "overrides": overrides,
+                        "run_type": run_type,
+                        "final_stage": true,
+                    ],
+                    "run": [
+                        "url": env.RUN_DISPLAY_URL,
+                        "additional_urls": [
+                            "doc": "https://docs.engineering.redhat.com/display/rhcsqe/RHCS+QE+Pipeline",
+                            "repo": "https://github.com/red-hat-storage/cephci",
+                            "report": "https://reportportal-rhcephqe.apps.ocp4.prod.psi.redhat.com/",
+                            "tcms": "https://polarion.engineering.redhat.com/polarion/",
+                        ],
+                    ],
+                    "test": [
+                        "type": buildType,
+                        "category": "functional",
+                        "result": "ABORTED",
+                        "object-prefix": null,
+                    ],
+                    "recipe": buildArtifacts,
+                    "generated_at": env.BUILD_ID,
+                    "version": "3.0.0",
+                ]
+
+                def msgType = "Custom"
+
+                sharedLib.SendUMBMessage(
+                    msgMap,
+                    "VirtualTopic.qe.ci.rhcephqe.product-build.test.complete",
+                    msgType,
+                )
                 error "Aborting the execution as new builds are available.."
             }
         }
