@@ -54,3 +54,29 @@
 
 # Web based location to retrieve root CA key and cert
 root-ca-location: <URL to base location of rootCA cert>
+
+# Provide upstream and downstream RHEL or other repositories to be enabled
+# repos:
+#     local:
+#         rhel-9
+#         - <appstream>
+#         - <base-os>
+#         rhel-8
+#         - <appstream>
+#         - <base-os>
+#
+#     cdn:
+#         rhel-9
+#         - <appstream>
+#         - <base-os>
+#         rhel-8
+#         - <appstream>
+#         - <base-os>
+#
+#     stage:
+#         rhel-9
+#         - <appstream>
+#         - <base-os>
+#         rhel-8
+#         - <appstream>
+#         - <base-os>

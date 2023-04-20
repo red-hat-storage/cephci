@@ -162,6 +162,14 @@ class SubscriptionManager(Cli):
                 "Failed to unregister node(s) to subscription manager"
             )
 
+    def status(self):
+        cmd = f"{self.base_cmd} status"
+
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
+
 
 class Repos(Cli):
     """This module provides CLI interface to perform subscription manager repo operations."""
