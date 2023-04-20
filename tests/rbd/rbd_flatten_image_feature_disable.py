@@ -40,7 +40,9 @@ def flatten_image_feature_disable(rbd, pool_type, **kw):
             return 1
 
         with parallel() as p:
-            p.spawn(rbd.disable_rbd_feature, pool, clone, feature_name)
+            p.spawn(
+                rbd.toggle_image_feature, pool, clone, feature_name, action="disable"
+            )
             p.spawn(rbd.flatten_clone, pool, clone)
 
         # Verify the feature is disabled and not present in the image info

@@ -40,7 +40,9 @@ def validate_pwl_without_exclusive_lock(cache, cfg, client):
     """
     config_level, entity = get_entity_level(cfg)
     pool, image = cfg["image_spec"].split("/")
-    cache.rbd.disable_rbd_feature(pool, image, "object-map,exclusive-lock")
+    cache.rbd.toggle_image_feature(
+        pool, image, feature_name="object-map,exclusive-lock", action="disable"
+    )
     cache.configure_pwl_cache(
         cfg["rbd_persistent_cache_mode"],
         config_level,

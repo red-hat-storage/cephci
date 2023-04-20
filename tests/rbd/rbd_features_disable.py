@@ -27,8 +27,8 @@ def disable_image_feature(rbd, pool_type, **kw):
             log.error("Moving Image to Trash is Failed")
             return 1
 
-        out, err = rbd.disable_rbd_feature(
-            pool, image, feature_name, all=True, check_ec=False
+        out, err = rbd.toggle_image_feature(
+            pool, image, feature_name, action="disable", all=True, check_ec=False
         )
         if "rbd: error opening image" not in err:
             log.error(f"{out}")
@@ -41,7 +41,7 @@ def disable_image_feature(rbd, pool_type, **kw):
         image_id = rbd.get_image_id(pool, image)
         rbd.trash_restore(pool, image_id)
         log.info("Image restored successfully from trash.")
-        if rbd.disable_rbd_feature(pool, image, feature_name):
+        if rbd.toggle_image_feature(pool, image, feature_name, action="disable"):
             log.error("RBD feature was not disabled successfully")
             return 1
         else:

@@ -448,21 +448,20 @@ class Rbd:
             return 1
         return image_info
 
-    def disable_rbd_feature(self, pool_name, image_name, feature_name, **kwargs):
+    def toggle_image_feature(self, pool_name, image_name, feature_name, action):
         """
-        Disable the given feature on the given RBD image.
+        Enable/disable the provided feature on the given RBD image.
 
         Args:
-            kwargs: input args required for the test
             pool_name (str): Name of the pool containing the image.
             image_name (str): Name of the image.
-            feature_name (str): Name of the feature to disable.
-
+            feature_name (str): Name of the feature to enable.
+            action (str): any action which need to preform enable/disable
         Returns:
-
+            exec_cmd response
         """
-        cmd = f"rbd feature disable {pool_name}/{image_name} {feature_name}"
-        return self.exec_cmd(cmd=cmd, **kwargs)
+        cmd = f"rbd feature {action} {pool_name}/{image_name} {feature_name}"
+        return self.exec_cmd(cmd=cmd)
 
     def image_resize(self, pool_name, image_name, size, **kw):
         """
@@ -481,6 +480,9 @@ class Rbd:
                 for key, value in passphrase.items():
                     cmd += f" --{key} {value}"
             return self.exec_cmd(cmd=cmd, all=kw.get("all", False))
+
+        if kw.get("flag") == "increase":
+            return self.exec_cmd(cmd=cmd)
 
         return self.exec_cmd(cmd=f"{cmd} --allow-shrink")
 
@@ -1082,3 +1084,40 @@ def device_cleanup(rbd, file_name, **kw):
             flag = 1
 
     return flag
+
+
+def verify_image_feature_exist(rbd, pool, image, feature_name):
+    """Verify image feature exist.
+    This method will verify for the image feature is exist on an image.
+
+    Args:
+        rbd: rbd object
+        pool: name of the pool
+        image: name of the image
+        feature_name: image feature which need to be verify
+
+    return :
+        int: The return value. 0 if enabled, 1 if disabled
+    """
+    image_load = rbd.image_info(pool, image)
+    if feature_name in image_load.get("features", {}):
+        log.info(f"Image feature {feature_name} is enabled on {image}")
+        return 0
+    log.info(f"Image feature {feature_name} is disabled on {image}")
+    return 1
+
+
+def verify_image_size(rbd, pool, image, size):
+    """Verify if image size is equal to expected size
+    Args:
+        rbd: rbd object
+        pool: name of pool
+        image: name of image
+    """
+    image_load = rbd.image_info(pool, image)
+    image_size = int((image_load["size"]) / 1073741824)  # 1GB = 1073741824 bytes
+    if size == f"{image_size}G":
+        log.info(f"{image} size is equal to expected size as {size}")
+        return 0
+    log.error(f"{image} size is not equal to expected size as {size}")
+    return 1
