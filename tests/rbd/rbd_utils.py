@@ -544,6 +544,19 @@ class Rbd:
         log.info("Moving image to trash is successful")
         return rc
 
+    def trash_list(self, pool_name: str) -> str:
+        """Obtain trash list for a particular pool.
+
+        Args:
+            pool_name(str): Name of the pool of which trash list is required.
+
+        Returns:
+            trash list in json format.
+        """
+        return self.exec_cmd(
+            cmd=f"rbd trash list {pool_name} --format json", output=True
+        )
+
     def remove_image_trash(self, pool_name, image_id):
         """
         Remove images from trash using image unique ID
@@ -566,9 +579,7 @@ class Rbd:
             image_id of the image
 
         """
-        out = self.exec_cmd(
-            cmd=f"rbd trash list {pool_name} --format json ", output=True
-        )
+        out = self.trash_list(pool_name)
         image_info = json.loads(out)
         for value in image_info:
             if value["name"] == image_name:
@@ -603,9 +614,7 @@ class Rbd:
         return self.exec_cmd(cmd=cmd, output=True)
 
     def trash_exist(self, pool_name, image_name):
-        out = self.exec_cmd(
-            cmd=f"rbd trash list {pool_name} --format json ", output=True
-        )
+        out = self.trash_list(pool_name)
         image_info = json.loads(out)
         return any(image["name"] == image_name for image in image_info)
 
@@ -795,6 +804,25 @@ class Rbd:
             for key, val in kw.items:
                 cmd += f" --{key} {val}"
         return self.exec_cmd(cmd=cmd, all=True)
+
+    def trash_purge_schedule(self, pool_name: str, operation: str, interval=0, **kw):
+        """
+        Perform trash purge schedule operations.
+        Args:
+            pool_name(str): name of the pool
+            operation(str): type of trash purge schedule operation
+            interval(int): interval in minutes to schedule
+         Returns:
+            0 if success, 1 if failure
+        """
+        cmd = f"rbd trash purge schedule {operation} {interval} --pool {pool_name}"
+        # TBD: Can be extended to other schedule operations based on the need
+        result = self.exec_cmd(cmd=cmd)
+        if result:
+            log.error(
+                f"Failed to perform trash purge schedule {operation} for an interval of {interval} on pool {pool_name}"
+            )
+        return result
 
     def get_disk_usage_for_pool(self, pool, **kw):
         """
