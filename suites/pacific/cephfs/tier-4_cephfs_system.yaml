@@ -166,4 +166,17 @@ tests:
       module: cephfs_system.mds_node_remove_with_IO.py
       polarion-id: CEPH-11266
       name: "mds_node_remove_with_IO"
-
+  - test:
+      abort-on-fail: false
+      desc: "Fill the cluster with 95 percentage and delete the contents"
+      module: cephfs_system.fill_cluster_full_del.py
+      polarion-id: CEPH-11328
+      name: "Fill the cluster with 95 percentage and delete the contents"
+      config:
+        wait_for_io: True
+        cephfs:
+          "fill_data": 95
+          "io_tool": "smallfile"
+          "mount": "fuse"
+          "filesystem": "cephfs_io"
+          "mount_dir": ""
