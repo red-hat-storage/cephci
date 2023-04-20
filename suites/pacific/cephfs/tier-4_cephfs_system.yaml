@@ -160,3 +160,10 @@ tests:
       name: "OSD node power failure with client IO"
       config:
         num_of_osds: 12
+  - test:
+      abort-on-fail: false
+      desc: "mds_node_remove_with_IO"
+      module: cephfs_system.mds_node_remove_with_IO.py
+      polarion-id: CEPH-11266
+      name: "mds_node_remove_with_IO"
+
