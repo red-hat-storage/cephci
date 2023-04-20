@@ -242,16 +242,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rados
-        - name: "Permissive Mode Scenarios"
-          execution_time: "16m 25s"
-          suite: "suites/quincy/cephadm/tier-2-permissive-mode-scenarios.yaml"
-          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - dmfg
       stage-2:
         - name: "Testing RBD tier-2 regression scenarios"
           execution_time: "37m 6s"
@@ -903,6 +893,16 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
           metadata:
             - rados
+        - name: "Permissive Mode Scenarios"
+          execution_time: "16m 25s"
+          suite: "suites/quincy/cephadm/tier-2-permissive-mode-scenarios.yaml"
+          global-conf: "conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - dmfg
   rc:
     tier-0:
       stage-1:
