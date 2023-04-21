@@ -520,7 +520,8 @@ class Rbd:
             image_name: name of the image
 
         Returns:
-
+            True: if image exists in pool
+            False: if image doesn't exist in pool
         """
         out = self.exec_cmd(cmd=f"rbd ls {pool_name} --format json", output=True)
         images = json.loads(out)
@@ -668,10 +669,16 @@ class Rbd:
 
         Args:
             src_spec : source image spec SOURCE_POOL_NAME/SOURCE_IMAGE_NAME
+                    or json formatted string for streamed imports
             dest_spec: Target image spec TARGET_POOL_NAME/SOURCE_IMAGE_NAME
         """
-        log.info("Starting prepare Live migration of image ")
-        return self.exec_cmd(cmd=f"rbd migration prepare {src_spec} {dest_spec}")
+        log.info("Starting prepare Live migration of image")
+        command = "rbd migration prepare "
+        if "{" not in src_spec:
+            command += f"{src_spec} {dest_spec}"
+        else:
+            command += f"{dest_spec} --import-only --source-spec {src_spec}"
+        return self.exec_cmd(cmd=command)
 
     def migration_action(self, action, dest_spec):
         """Migration action

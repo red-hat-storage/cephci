@@ -33,6 +33,7 @@ globals:
           - osd
           - node-exporter
           - crash
+          - rgw
         no-of-volumes: 3
         disk-size: 15
       node4:
