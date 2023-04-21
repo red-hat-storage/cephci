@@ -96,10 +96,19 @@ def run(ceph_cluster, **kw):
         if ceph_cluster.rhcs_version.version[0] == 4
         else config.get("run-on-rgw", False)
     )
+    run_on_haproxy = (
+        True
+        if ceph_cluster.rhcs_version.version[0] == 4
+        else config.get("run-on-haproxy", False)
+    )
+
     distro_version_id = rgw_node.distro_info["VERSION_ID"]
 
     if run_on_rgw:
         exec_from = rgw_node
+        append_param = ""
+    elif run_on_haproxy:
+        exec_from = client_node
         append_param = ""
     else:
         exec_from = client_node
