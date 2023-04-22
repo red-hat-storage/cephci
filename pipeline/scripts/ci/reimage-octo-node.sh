@@ -18,6 +18,8 @@
 #
 set -eux -o pipefail
 
+source pipeline/scripts/ci/server_setup_utils.sh
+
 # Define the variables used in the script here.
 OS_VER=""
 NODES=""
@@ -48,36 +50,7 @@ echo "Initiating reimage of nodes"
 ${REIMAGE_CMD} --os-type rhel --os-version ${OS_VER} ${NODES}
 
 for node in ${NODES} ; do
-    ssh ${node} 'echo "passwd" | sudo passwd --stdin root; \
-    grep -qxF "PermitRootLogin yes" /etc/ssh/sshd_config || \
-    echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config'
-    ssh ${node} 'sudo systemctl restart sshd &'
-    sleep 2
-
-    echo "Wipe all data disks clean."
-    disks=$(ssh ${node} 'lsblk -o NAME -d | tail -n +2')
-    root_disk=$(ssh ${node} 'eval $(lsblk -o PKNAME,MOUNTPOINT -P | grep "MOUNTPOINT=\"/\""); echo $PKNAME')
-
-    if [ -z "${root_disk}" ]; then
-        echo "ERR: Unable to find root disk on ${node}"
-        exit 2
-    fi
-
-    if [ "$(echo ${root_disk} | wc -l)" != "1" ]; then
-        echo "ERR: More than one root disk found on ${node}"
-        exit 2
-    fi
-
-    for disk in ${disks} ; do
-        if [ "${disk}" != "${root_disk}" ] ; then
-            ssh ${node} "wipefs -a --force /dev/${disk}"
-        fi
-    done
-
-    echo 'Setting the systems to use shortnames'
-    ssh ${node} 'sudo hostnamectl set-hostname $(hostname -s)'
-    ssh ${node} 'sudo sed -i "s/$(hostname)/$(hostname -s)/g" /etc/hosts'
-
-    echo 'Cleaning default repo files to avoid conflicts'
-    ssh ${node} 'sudo rm -f /etc/yum.repos.d/*; sudo yum clean all'
+    initial_setup "${node}"
+    wipe_drives "${node}"
+    set_hostnames_repos "${node}"
 done
