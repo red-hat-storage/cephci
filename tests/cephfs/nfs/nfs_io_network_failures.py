@@ -7,6 +7,7 @@ from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -89,9 +90,8 @@ def run(ceph_cluster, **kw):
                 cmd=f"ceph nfs export create cephfs {nfs_name} "
                 f"{nfs_export_name} {fs_name} path={export_path}",
             )
-        rc = fs_util.cephfs_nfs_mount(
-            client1, nfs_server, nfs_export_name, nfs_mounting_dir
-        )
+        retry_mount = retry(CommandFailed, tries=3, delay=60)(fs_util.cephfs_nfs_mount)
+        rc = retry_mount(client1, nfs_server, nfs_export_name, nfs_mounting_dir)
         if not rc:
             log.error("cephfs nfs export mount failed")
             return 1
