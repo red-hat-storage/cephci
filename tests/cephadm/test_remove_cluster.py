@@ -9,6 +9,7 @@ log = Log(__name__)
 CEPH_CONFIG_DIR = "/etc/ceph"
 CEPH_LIB_DIR = "/var/lib/ceph"
 CEPHADM_LIB_DIR = "/var/lib/cephadm"
+CEPH_LOG_DIR = "/var/log/ceph"
 
 
 def validate_ceph_config_dir(nodes, dir_path, roles=[], ignore=[]):
@@ -104,14 +105,14 @@ def run(ceph_cluster, **kw):
                 f"Failed to execute rm-cluster on node '{node.ip_address}'"
             )
 
-    # Validate ceph config director, disks and containers
-
-    # Note (vamahaja): Skipping `/etc/ceph` dir due to bz #2129252
-    # validate_ceph_config_dir(
-    #     nodes=nodes, dir_path=CEPH_CONFIG_DIR, roles=["mon", "osd"]
-    # )
+    # Validate ceph config directory, disks and containers
+    validate_ceph_config_dir(
+        nodes=nodes, dir_path=CEPH_CONFIG_DIR, roles=["mon", "osd"]
+    )
     validate_ceph_config_dir(nodes=nodes, dir_path=CEPH_LIB_DIR, roles=["mon", "osd"])
     validate_ceph_config_dir(nodes=nodes, dir_path=CEPHADM_LIB_DIR, ignore=[".ssh"])
+
+    validate_ceph_config_dir(nodes=nodes, dir_path=CEPH_LOG_DIR, roles=["mon", "osd"])
 
     validate_running_ceph_containers(nodes=nodes, roles=["mon", "osd"])
 
