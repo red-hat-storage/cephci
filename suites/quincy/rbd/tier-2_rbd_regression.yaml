@@ -114,6 +114,13 @@ tests:
       polarion-id: CEPH-83573309
 
   - test:
+      desc: Verify parent snapshot deletion after flattening the clone
+      destroy-cluster: false
+      module: rbd_clone_delete_parent_snapshot.py
+      name: parent snap deletion after clone flattening
+      polarion-id: CEPH-83573650
+
+  - test:
       desc: Enable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are moved to trash automatically
       destroy-cluster: false
       config:
