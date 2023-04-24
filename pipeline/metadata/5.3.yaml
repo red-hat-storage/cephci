@@ -325,6 +325,16 @@ pipelines:
           metadata:
             - rados
       stage-4:
+        - name: "RBD test luks encryption"
+          execution_time: "53m 41s"
+          suite: "suites/pacific/rbd/tier-2_rbd_encryption.yaml"
+          global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rbd
         - name: "Testing RADOS basic regression scenarios"
           execution_time: "1h 13m 5s"
           suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
