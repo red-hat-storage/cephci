@@ -276,7 +276,10 @@ def build_cmd_from_args(seperator="=", **kw):
     cmd = ""
     for k, v in kw.items():
         if v is True:
-            cmd += f" {k}"
+            cmd += f" --{k}"
+        elif isinstance(v, list):
+            for val in v:
+                cmd += build_cmd_from_args(**val)
         else:
             if seperator and seperator in k:
                 cmd += f" --{k}{v}"
