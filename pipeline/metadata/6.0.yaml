@@ -738,7 +738,7 @@ pipelines:
           metadata:
             - rgw
         - name: "test-rgw-ms-deployment-via-Haproxy-with-archive"
-          execution_time: "2h 29m 53s"
+          execution_time: "2h 44m 53s"
           suite: "suites/pacific/rgw/tier-3_rgw_multisite_archive_with_haproxy.yaml"
           global-conf: "conf/pacific/rgw/tier-3_rgw_multisite_archive_with_haproxy_conf.yaml"
           platform: "rhel-9"
