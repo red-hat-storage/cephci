@@ -448,7 +448,9 @@ class Rbd:
             return 1
         return image_info
 
-    def toggle_image_feature(self, pool_name, image_name, feature_name, action):
+    def toggle_image_feature(
+        self, pool_name, image_name, feature_name, action, **kwargs
+    ):
         """
         Enable/disable the provided feature on the given RBD image.
 
@@ -461,7 +463,7 @@ class Rbd:
             exec_cmd response
         """
         cmd = f"rbd feature {action} {pool_name}/{image_name} {feature_name}"
-        return self.exec_cmd(cmd=cmd)
+        return self.exec_cmd(cmd=cmd, **kwargs)
 
     def image_resize(self, pool_name, image_name, size, **kw):
         """
