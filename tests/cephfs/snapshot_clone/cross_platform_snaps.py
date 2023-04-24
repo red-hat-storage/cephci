@@ -2,8 +2,10 @@ import random
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -121,7 +123,8 @@ def run(ceph_cluster, **kw):
         kernel_files_checksum = fs_util.get_files_and_checksum(
             client1, kernel_mounting_dir_1
         )
-        client1.exec_command(
+        retry_revert = retry(CommandFailed, tries=3, delay=60)(client1.exec_command)
+        retry_revert(
             sudo=True,
             cmd=f"cd {kernel_mounting_dir_1};yes | cp -rf .snap/_snap_1_*/* .",
         )
@@ -134,7 +137,7 @@ def run(ceph_cluster, **kw):
             )
             return 1
 
-        client1.exec_command(
+        retry_revert(
             sudo=True, cmd=f"cd {fuse_mounting_dir_1};yes | cp -rf .snap/_snap_2_*/* ."
         )
         fuse_mount_revert_snap_kernel = fs_util.get_files_and_checksum(
