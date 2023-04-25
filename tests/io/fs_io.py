@@ -29,6 +29,12 @@ class fs_io:
         self.timeout = fs_config.get("timeout", -1)
         self.io_tool = fs_config.get("io_tool")
         self.pool = ""
+        self.mounting_dir = fs_config.get("mounting_dir", None)
+        if not self.mounting_dir:
+            self.mounting_dir = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(10))
+            )
         fs_details = FsUtils.get_fs_info(client, self.file_system)
         if not fs_details:
             self.fsutils.create_fs(client=client, vol_name=self.file_system)
@@ -47,11 +53,7 @@ class fs_io:
         Returns:
         Mounting Directory
         """
-        mounting_dir = "".join(
-            random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(10))
-        )
-        mounting_dir_1 = f"/mnt/cephfs_io_{mounting_dir}_1/"
+        mounting_dir_1 = f"/mnt/cephfs_io_{self.mounting_dir}_1/"
         if self.mount == "fuse":
             self.fsutils.fuse_mount(
                 fuse_clients=[self.client],
@@ -73,7 +75,7 @@ class fs_io:
 
         return mounting_dir_1
 
-    def run_fs_io(self):
+    def run_fs_io(self, **kwargs):
         """
         Triggers IO n the filesystem mounted
         """
