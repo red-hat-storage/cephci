@@ -74,6 +74,30 @@ def get_running_containers(node, expr=None, format=None, **kw):
     return node.exec_command(cmd=cmd, **kw)
 
 
+def stop_container(node, container_id):
+    """
+    Stops a given container
+    Args:
+        node (ceph): ceph node object
+        container_id: id/name of the container
+    """
+    cmd = f"podman stop {container_id}"
+
+    return node.exec_command(cmd=cmd, sudo=True)
+
+
+def start_container(node, container_id):
+    """
+    Starts a given container
+    Args:
+        node (ceph): ceph node object
+        container_id: id/name of the container
+    """
+    cmd = f"podman start {container_id}"
+
+    return node.exec_command(cmd=cmd, sudo=True)
+
+
 def exec_command_on_container(node, ctr, cmd, **kw):
     """Execute command on container
 
