@@ -57,6 +57,11 @@ node("rhel-9-medium || ceph-qe-ci") {
 
         for (validRecipeFile in validRecipeFiles) {
             def rhcephVersion = validRecipeFile.split("/").last().replace(".yaml", "")
+            def ver = rhcephVersion.split("-")[1]
+            if (ver < "4"){
+                println("Skipping execution for RHCEPH-${ver} build")
+                continue
+            }
             def recipeContent = readYaml file: "${validRecipeFile}"
             recipeContent = recipeContent["tier-0"]
             recipeContent = writeJSON returnText: true, json:  recipeContent
