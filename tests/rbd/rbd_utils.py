@@ -473,6 +473,14 @@ class Rbd:
             image_name: image of the pool
             size: new size for the image
             kw: any other extra arguments including but not limited to encryption-passphrase-file
+                To perform resize on encrypted images pass the encryption-passphrase-file info as given below
+                kw = {
+                    "passphrase":[
+                        "encryption-passphrase-file": <path to the file where clone passphrase is
+                                                        stored if image is clone>,
+                        "encryption-passphrase-file": <path to the file where parent passphrase is stored>
+                    ]
+                }
         Returns:
 
         """
@@ -481,6 +489,8 @@ class Rbd:
             for passphrase in kw.get("passphrase"):
                 for key, value in passphrase.items():
                     cmd += f" --{key} {value}"
+            if kw.get("allow_shrink"):
+                cmd += " --allow-shrink"
             return self.exec_cmd(cmd=cmd, all=kw.get("all", False))
 
         if kw.get("flag") == "increase":
@@ -1158,3 +1168,156 @@ def verify_image_size(rbd, pool, image, size):
         return 0
     log.error(f"{image} size is not equal to expected size as {size}")
     return 1
+
+
+def resize_parent_and_clone(rbd, resize_sequence, parent_clone_spec):
+    """
+    Resize parent and clone images to compensate overhead due to the header size.
+    Headers required for luks encryption take up some space in the image, so we perform
+    resize to compensate for the same.
+    Note: Please refer official documentation for more info.
+
+    Scenarios and corresponding steps
+    1) Parent and clone are luks1 encrypted
+        Resize parent at beginning to compensate for header size,
+        clone resize not required
+    2) Parent luks1/luks2 and clone is not encrypted
+        Resize parent at beginning to compensate for header size,
+        clone resize not required since it has no header
+    3) Parent luks2 and clone luks1
+        Resize parent at beginning to compensate for header size,
+        resize clone with --allow-shrink since luks2 header is bigger than luks1
+    4) Parent not encrypted and clone is luks1/luks2
+        Resize not required before clone since parent is not encrypted, resize
+        clone with --allow-shrink post cloning to compensate for header
+    5) Parent luks1 and clone luks2
+        Resize parent before clone, resize both parent and
+        clone with --allow-shrink post cloning
+
+    Justification:
+    Since LUKS2 header is usually bigger than LUKS1 header, the rbd resize command at
+    the beginning temporarily grows the parent image to reserve some extra space in the
+    parent snapshot and consequently the cloned image. This is necessary to make all parent
+    data accessible in the cloned image. The rbd resize command at the end shrinks the
+    parent image back to its original size and does not impact the parent snapshot and
+    the cloned image to get rid of the unused reserved space
+
+    The same applies to creating a formatted clone of an unformatted image,
+    since an unformatted image does not have a header at all.
+    Args:
+        rbd: rbd object
+        resize_sequence: before_clone if resize is being performed before cloning, else after_clone
+        parent_clone_spec:
+            Example: {
+                "parent_encryption_type": "luks1",
+                "parent_spec": "pool/image",
+                "parent_passphrase": "passphrase.bin",
+                "clone_encryption_type": "luks2",
+                "clone_spec": "pool/clone",
+                "clone_passphrase": "clone_passphrase.bin",
+                "size": <image_size>
+            }
+    """
+    log.info(
+        "Performing resize operation on encrypted image to "
+        f"compensate for the overhead of luks header: {resize_sequence}"
+    )
+
+    parent_encryption_type = parent_clone_spec.get("parent_encryption_type", "NA")
+    clone_encryption_type = parent_clone_spec.get("clone_encryption_type", "NA")
+    parent_spec = parent_clone_spec.get("parent_spec")
+    [pool, image] = parent_spec.split("/")
+    clone_spec = parent_clone_spec.get("clone_spec")
+    if clone_spec:
+        clone = clone_spec.split("/")[1]
+    size = parent_clone_spec.get("size")
+
+    if resize_sequence == "before_clone":
+        if parent_encryption_type.startswith("luks"):
+            parent_encryption_passphrase = {
+                "passphrase": [
+                    {
+                        "encryption-passphrase-file": parent_clone_spec.get(
+                            "parent_passphrase"
+                        )
+                    }
+                ]
+            }
+            if rbd.image_resize(pool, image, size, **parent_encryption_passphrase):
+                log.error(
+                    "Image resize to compensate overhead due to "
+                    f"{parent_encryption_type} header failed for {parent_spec}"
+                )
+                return 1
+        else:
+            log.info("Parent image resize not required since it is not encrypted")
+        return 0
+
+    if resize_sequence == "after_clone":
+        if parent_encryption_type == "luks1" and clone_encryption_type == "luks2":
+            parent_encryption_passphrase = {
+                "passphrase": [
+                    {
+                        "encryption-passphrase-file": parent_clone_spec.get(
+                            "parent_passphrase"
+                        )
+                    }
+                ]
+            }
+            out = rbd.image_resize(
+                pool,
+                image,
+                size,
+                **parent_encryption_passphrase,
+                allow_shrink=True,
+                all=True,
+            )
+            if "new size is equal to original size" not in str(out[1]):
+                log.error(
+                    "Image resize to compensate overhead due to "
+                    f"{parent_encryption_type} header failed for {parent_spec}"
+                )
+                return 1
+
+        if (
+            clone_encryption_type.startswith("luks")
+            and parent_encryption_type != clone_encryption_type
+        ):
+            if parent_encryption_type.startswith("luks"):
+                clone_encryption_passphrase = {
+                    "passphrase": [
+                        {
+                            "encryption-passphrase-file": parent_clone_spec.get(
+                                "clone_passphrase"
+                            )
+                        },
+                        {
+                            "encryption-passphrase-file": parent_clone_spec.get(
+                                "parent_passphrase"
+                            )
+                        },
+                    ]
+                }
+            else:
+                clone_encryption_passphrase = {
+                    "passphrase": [
+                        {
+                            "encryption-passphrase-file": parent_clone_spec.get(
+                                "clone_passphrase"
+                            )
+                        }
+                    ]
+                }
+            if rbd.image_resize(
+                pool, clone, size, **clone_encryption_passphrase, allow_shrink=True
+            ):
+                log.error(
+                    "Clone resize to compensate overhead due to "
+                    f"{clone_encryption_type} header failed for {clone_spec}"
+                )
+                return 1
+        else:
+            log.info(
+                "Clone resize not required since clone is either not encrypted or encrypted with same format as parent"
+            )
+        return 0

@@ -61,7 +61,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node6
+        node: node4
         install_packages:
           - ceph-common
           - fio
@@ -91,9 +91,9 @@ tests:
            - luks2,luks1
            - luks2,luks2
            - luks2,NA
-           - NA,luks1 # scenario gives error while mounting existing filesystem in clone
-           - NA,luks2 # scenario gives error while mounting existing filesystem in clone
-           - luks1,luks2 # scenario gives error while mounting existing filesystem in clone
+           - NA,luks1
+           - NA,luks2
+           - luks1,luks2
       destroy-cluster: false
       module: test_rbd_encryption.py
       name: Encrypt image and clone using combinations of encryption type
