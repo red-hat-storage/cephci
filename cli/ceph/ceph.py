@@ -4,6 +4,7 @@ from cli.utilities.utils import build_cmd_from_args
 from .balancer import Balancer
 from .config import Config
 from .config_key import ConfigKey
+from .crash import Crash
 from .mgr import Mgr
 from .orch.orch import Orch
 
@@ -20,6 +21,7 @@ class Ceph(Cli):
         self.balancer = Balancer(nodes, self.base_cmd)
         self.config_key = ConfigKey(nodes, self.base_cmd)
         self.config = Config(nodes, self.base_cmd)
+        self.crash = Crash(nodes, self.base_cmd)
 
     def version(self):
         """Get ceph version."""
