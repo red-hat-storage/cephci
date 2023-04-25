@@ -443,3 +443,17 @@ tests:
       module: sanity_rgw_multisite.py
       name: test M buckets on haproxy node
       polarion-id: CEPH-9789
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_rule_prefix_non_current_days.yaml
+            timeout: 300
+      desc: test LC from primary to secondary
+      module: sanity_rgw_multisite.py
+      name: test LC from primary to secondary
+      polarion-id: CEPH-10737
+      comments: bug-1991808, test LC rules from primary to secondary
