@@ -62,7 +62,7 @@ def run(ceph_cluster, **kw):
     )
     log.info("Cluster health {}".format(health))
     ceph_dir = "/etc/ceph"
-    out, _ = instance.installer.exec_command(cmd="ls {ceph_dir}", sudo=True)
+    out, _ = instance.installer.exec_command(cmd=f"ls {ceph_dir}", sudo=True)
     files_after = out.split("\n")
     log.info(
         f"File exist in path '{ceph_dir}' after adding multiple lables '{files_after}'"
