@@ -192,3 +192,13 @@ tests:
       desc: Verify create evaluate execute a plan with supervised optimisation
       polarion-id: CEPH-83573250
       module: test_cephmgr_validate_supervised_optimisation.py
+      config:
+        mode: upmap
+
+  - test:
+      name: Verify supervised optimisation
+      desc: Verify create evaluate execute a plan with supervised optimisation
+      polarion-id: CEPH-83573249
+      module: test_cephmgr_validate_supervised_optimisation.py
+      config:
+        mode: crush-compat

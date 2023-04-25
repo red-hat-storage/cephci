@@ -11,13 +11,13 @@ def run(ceph_cluster, **kw):
         **kw: Key/value pairs of configuration information to be used in the test.
     """
     node = ceph_cluster.get_nodes(role="mgr")[0]
-
+    mode = kw.get("config").get("mode")
     # Turn off automatic balancing
     if CephAdm(node).ceph.balancer.set_state(state="off"):
         raise CephMgrBalancerFailError("Failed to turn off automatic balancing")
 
     # Set the balancer mode to crush-compat
-    if CephAdm(node).ceph.balancer.mode(mode="crush-compat"):
+    if CephAdm(node).ceph.balancer.mode(mode=mode):
         raise CephMgrBalancerFailError(
             "Failed to change the balance mode to crush-compat"
         )
