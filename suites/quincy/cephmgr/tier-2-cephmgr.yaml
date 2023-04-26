@@ -202,3 +202,9 @@ tests:
       module: test_cephmgr_validate_supervised_optimisation.py
       config:
         mode: crush-compat
+
+  - test:
+      name: Verify pg autoscaler on with crush rule
+      desc: Verify  Module 'pg_autoscaler' has failed 'op' error with crush rule set
+      polarion-id: 83575456
+      module: test_cephmgr_validate_crush_rule.py
