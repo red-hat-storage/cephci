@@ -94,6 +94,7 @@ tests:
             daemon_id: "1"
             daemon_type: "osd"
             state: "restarted"
+          daemon_state: "up"
 
   - test:
       name: Stop 'osd' service using cephadm-ansible module 'ceph_orch_daemon'

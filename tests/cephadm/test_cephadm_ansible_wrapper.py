@@ -1,5 +1,8 @@
+import json
 import os
 
+from ceph.waiter import WaitUntil
+from cli.ceph.ceph import Ceph
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.exceptions import ConfigNotFoundError
 from cli.utilities.packages import Package, Rpm
@@ -15,10 +18,17 @@ from utility.install_prereq import (
     ExecutePreflightPlaybook,
     SetUpSSHKeys,
 )
+from utility.log import Log
 from utility.utils import get_cephci_config
+
+log = Log()
 
 
 class ClusterConfigurationFailure(Exception):
+    pass
+
+
+class UnsupportedOperation(Exception):
     pass
 
 
@@ -89,6 +99,30 @@ def validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
         extra_vars=extra_vars,
         extra_args=extra_args,
     )
+
+
+def wait_for_daemon_state(client, type, id, state):
+    if not type == "osd":
+        raise UnsupportedOperation("Unsupported daemon")
+
+    timeout, interval = 300, 20
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        # Get osd tree and check whether the deleted osd is present or not
+        tree, _ = Ceph(client).osd(command=f"tree {state}", format="json")
+        for daemon in json.loads(tree).get("nodes"):
+            _type = daemon.get("type")
+            _id = daemon.get("id")
+            _state = daemon.get("status")
+            if _type == type and str(_id) == id and _state == state:
+                log.info(f"OSD '{_type}.{_id}' is in '{_state}' state")
+                return True
+
+        log.info(f"OSD '{type}.{id}' is not in '{state}' state. Retrying")
+
+    if w.expired:
+        raise ClusterConfigurationFailure(
+            f"Failed to get OSD '{type}.{id}' in '{state}' state within {interval} sec"
+        )
 
 
 def run(ceph_cluster, **kwargs):
@@ -167,6 +201,15 @@ def run(ceph_cluster, **kwargs):
         extra_vars["daemon_id"] = module_args.get("daemon_id")
         extra_vars["daemon_type"] = module_args.get("daemon_type")
         extra_vars["daemon_state"] = module_args.get("state")
+
+        daemon_state = aw.get("daemon_state")
+        if daemon_state:
+            wait_for_daemon_state(
+                installer,
+                extra_vars.get("daemon_type"),
+                extra_vars.get("daemon_id"),
+                daemon_state,
+            )
 
     elif module == "cephadm_registry_login":
         extra_vars["registry_url"] = module_args.get("registry-url")
