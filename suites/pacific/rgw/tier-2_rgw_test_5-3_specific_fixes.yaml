@@ -94,6 +94,24 @@ tests:
                   placement:
                     host_pattern: "*"
 
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+
       # kafka broker type with empty bucket notifcation
   - test:
       name: Parallel run test for empty bucket notification and bi purge
@@ -106,6 +124,7 @@ tests:
             polarion-id: CEPH-83575035
             config:
               run-on-rgw: true
+              install_common: false
               extra-pkgs:
                 - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
               install_start_kafka: true
@@ -118,6 +137,7 @@ tests:
             module: sanity_rgw.py
             polarion-id: CEPH-83575234
             config:
+              install_common: false
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_bi_purge.yaml
               timeout: 300

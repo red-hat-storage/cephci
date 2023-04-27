@@ -265,7 +265,7 @@ pipelines:
             - cephfs
         - name: "test-53-specific-fixes"
           execution_time: "41m 40s"
-          suite: "suites/pacific/rgw/tier-2_rgw_test_5.3_specific_fixes.yaml"
+          suite: "suites/pacific/rgw/tier-2_rgw_test_5-3_specific_fixes.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-8"
           inventory:

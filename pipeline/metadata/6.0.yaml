@@ -289,7 +289,7 @@ pipelines:
             - cephfs
         - name: "tier-2-rgw-test-fixes"
           execution_time: "38m 22s"
-          suite: "suites/pacific/rgw/tier-2_rgw_test_5.3_specific_fixes.yaml"
+          suite: "suites/pacific/rgw/tier-2_rgw_test_5-3_specific_fixes.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-9"
           inventory:
