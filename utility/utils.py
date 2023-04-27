@@ -1470,6 +1470,7 @@ def tfacon(launch_id):
     auth_token = tfacon_cfg.get("auth_token")
     platform_url = tfacon_cfg.get("platform_url")
     tfa_url = tfacon_cfg.get("tfa_url")
+    re_url = tfacon_cfg.get("re_url")
     connector_type = tfacon_cfg.get("connector_type")
     cmd = (
         f"~/.local/bin/tfacon run --auth-token {auth_token} "
@@ -1477,6 +1478,7 @@ def tfacon(launch_id):
         f"--platform-url {platform_url} "
         f"--project-name {project_name} "
         f"--tfa-url {tfa_url} "
+        f"--re-url {re_url} -r "
         f"--launch-id {launch_id}"
     )
     log.info(cmd)
