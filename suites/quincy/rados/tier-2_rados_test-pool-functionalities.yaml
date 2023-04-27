@@ -312,3 +312,25 @@ tests:
         Verify_osd_alloc_size:
           allocation_size: 4096
       desc: Verify the minimum allocation size for OSDs along with fragmentation scores.
+
+  - test:
+      name: Compression test - replicated pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571673
+      config:
+        Compression_tests:
+          verify_compression_ratio_set: true          # TC : CEPH-83571672
+          pool_type: replicated
+          pool_config:
+            pool-1: test_compression_repool-1
+            pool-2: test_compression_repool-2
+            rados_write_duration: 200
+            byte_size: 400KB
+            pg_num: 32
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.3
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on replicated pools
