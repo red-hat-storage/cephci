@@ -279,6 +279,9 @@ tests:
       polarion-id: CEPH-83573529
       desc: multi client file and dir ops
       abort-on-fail: false
-
-
-
+  - test:
+      name: ceph auth caps change permission and check
+      module: clients.ceph_auth_caps_modifying_permissions.py
+      polarion-id: CEPH-83574328
+      desc: generate all the possible permissions and verify the permissions
+      abort-on-fail: false
