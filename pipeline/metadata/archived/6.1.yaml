@@ -812,8 +812,8 @@ pipelines:
       stage-1:
         - name: "RGW testing using S3CMD CLI commands"
           execution_time: "41m 19s"
-          suite: "suites/pacific/rgw/tier-2_rgw_test-using-s3cmd.yaml"
-          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          suite: "suites/quincy/rgw/tier-2_rgw_test-using-s3cmd.yaml"
+          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
