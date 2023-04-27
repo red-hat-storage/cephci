@@ -190,15 +190,19 @@ tests:
       desc: verify that image removal from secondary after disabling journaling feature
 
   - test:
-      name: Attempt shrinking secondary image
-      module: test_9500_shrink_img_at_secondary.py
+      name: Attempt expanding or shrinking secondary image
+      module: test_expand_or_shrink_img_at_secondary.py
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 2G
-            io-total: 200M
+            ec_pool_config:
+              imagesize: 2G
+              io-total: 200M
+            rep_pool_config:
+              imagesize: 2G
+              io-total: 200M
       polarion-id: CEPH-9500
-      desc: Verify that deleting secondary image fails
+      desc: Verify that resizing secondary image fails
 
   - test:
       name: Attempt moving secondary image to trash

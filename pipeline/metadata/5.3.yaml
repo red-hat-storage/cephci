@@ -1043,6 +1043,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - dmfg
+        - name: "Tier-2 test suite for 5x - RBD mirroring functionality"
+          execution_time: "2h 9m 13s"
+          suite: "suites/pacific/rbd/tier-2_rbd_mirror_regression.yaml"
+          global-conf: "conf/pacific/rbd/tier-2_rbd_mirror.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rbd
         - name: "RBD Mirror failback to new cluster scenarios"
           execution_time: "3h"
           suite: "suites/pacific/rbd/tier-2_rbd_mirror_failback.yaml"
