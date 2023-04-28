@@ -198,14 +198,24 @@ class RbdMirror:
                 way: one-way or two-way mirroring
         """
         poolname = kw.get("poolname")
-        primary_cluster = kw.get("ceph_cluster")
-        primary_cluster_name = primary_cluster.name
-        secondary_cluster_name = [
-            cluster_name
-            for cluster_name in kw.get("ceph_cluster_dict").keys()
-            if cluster_name != primary_cluster_name
-        ][0]
-        secondary_cluster = kw.get("ceph_cluster_dict")[secondary_cluster_name]
+
+        # For failback to new cluster scenario,
+        # primary cluster will be newly added cluster
+        cluster_order = kw.get("custom_cluster_order", False)
+        if cluster_order:
+            clusters = kw["ceph_cluster_dict"].keys()
+            primary_cluster_name = list(clusters)[int(cluster_order.split(",")[0])]
+            secondary_cluster_name = list(clusters)[int(cluster_order.split(",")[1])]
+        else:
+            primary_cluster = kw.get("ceph_cluster")
+            primary_cluster_name = primary_cluster.name
+            secondary_cluster_name = [
+                cluster_name
+                for cluster_name in kw.get("ceph_cluster_dict").keys()
+                if cluster_name != primary_cluster_name
+            ][0]
+            secondary_cluster = kw.get("ceph_cluster_dict")[secondary_cluster_name]
+
         mode = kw.get("mode")
         peer_mode = kw.get("peer_mode")
         rbd_client = kw.get("rbd_client")
@@ -1377,3 +1387,51 @@ def fail_back(
         )
 
     return 0
+
+
+def create_mirrored_images_with_user_specified(**kw):
+    """Method to create user specified mirrored images.
+
+    Args:
+        **kw: test data
+
+    returns:
+        None
+    """
+    try:
+        config = kw.get("config")
+
+        mirror1 = RbdMirror(kw.get("ceph_cluster_dict").get("ceph-rbd1"), config)
+        mirror2 = RbdMirror(kw.get("ceph_cluster_dict").get("ceph-rbd2"), config)
+
+        poolname = config.get("poolname")
+        imagesize = config.get("imagesize")
+        mirrormode = config.get("mirrormode")
+        number_of_images = config.get("image-count")
+
+        for i in range(0, number_of_images):
+            imagename = "test_mirror_image" + mirror1.random_string()
+            imagespec = poolname + "/" + imagename
+
+            mirror1.create_image(imagespec=imagespec, size=imagesize)
+            mirror1.enable_mirror_image(poolname, imagename, mirrormode)
+            mirror1.mirror_snapshot_schedule_add(poolname=poolname, imagename=imagename)
+
+            with parallel() as p:
+                p.spawn(
+                    mirror1.wait_for_status,
+                    imagespec=imagespec,
+                    state_pattern="up+stopped",
+                )
+                p.spawn(
+                    mirror2.wait_for_status,
+                    imagespec=imagespec,
+                    state_pattern="up+replaying",
+                )
+
+        log.info(f"Created {number_of_images} images with {mirrormode} based mirroring")
+        return 0
+
+    except Exception as e:
+        log.exception(e)
+        return 1
