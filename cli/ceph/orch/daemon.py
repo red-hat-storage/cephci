@@ -1,14 +1,14 @@
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
-from utility.log import Log
 
-log = Log(__name__)
+from .daemons.add import Add
 
 
 class Daemon(Cli):
     def __init__(self, nodes, base_cmd):
         super(Daemon, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} daemon"
+        self.add = Add(nodes, self.base_cmd)
 
     def redeploy(self, daemon_name, **kw):
         """
