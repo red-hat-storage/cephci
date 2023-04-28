@@ -389,14 +389,20 @@ def get_service_id(node, service_name):
     Returns the service id of a given service
     Args:
         node (ceph): Node to execute the cmd
-        service_name: Service name
+        service_name: Service name (mon/osd/mgr etc)
 
-    Returns (str): Service ID
+    Returns (str/list): Service ID /ID's
     """
-    out, err = node.exec_command(cmd=f"systemctl --type=service | grep {service_name}")
+    out, err = node.exec_command(
+        cmd=f"systemctl --type=service | grep ceph-{service_name}"
+    )
     if err:
         return None
-    return out.split(" ")[0]
+
+    service_ids = []
+    for item in out.strip().split("\n"):
+        service_ids.append(item.split(" ")[0])
+    return service_ids
 
 
 def set_service_state(node, service_id, state):
@@ -413,6 +419,22 @@ def set_service_state(node, service_id, state):
     if err:
         return False
     return True
+
+
+def get_service_state(node, service):
+    """
+    Returns the state of a given service
+    Args:
+        node (ceph): Node to execute the cmd
+        service: Service id / name
+
+    Returns (str): Status of service (active/inactive)
+    """
+    try:
+        res, _ = node.exec_command(cmd=f"systemctl is-active {service}", sudo=True)
+    except Exception:
+        return "inactive"
+    return res
 
 
 def bring_node_offline(node, interface="eth0", timeout=120):
