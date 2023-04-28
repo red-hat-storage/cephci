@@ -651,3 +651,24 @@ tests:
         script-name: ../nfs_ganesha/nfs_cluster.py
         config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
         timeout: 500
+
+  # Object level locking
+  - test:
+      name: object level retention test Compliance
+      desc: object level retention test Compliance
+      polarion-id: CEPH-83574058
+      module: sanity_rgw.py
+      config:
+        script-name: test_object_level_retention.py
+        config-file-name: test_object_level_compliance.yaml
+        timeout: 500
+
+  - test:
+      name: object level retention test Governance mode
+      desc: object level retention test Governance mode
+      polarion-id: CEPH-83574058
+      module: sanity_rgw.py
+      config:
+        script-name: test_object_level_retention.py
+        config-file-name: test_object_level_governance.yaml
+        timeout: 500
