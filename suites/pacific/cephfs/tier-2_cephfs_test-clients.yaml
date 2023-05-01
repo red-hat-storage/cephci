@@ -279,6 +279,12 @@ tests:
       polarion-id: CEPH-83573529
       desc: multi client file and dir ops
       abort-on-fail: false
+  - test:
+      name: Create users with permissions
+      module: clients.create_user_with_permissions.py
+      polarion-id: CEPH-83574327
+      desc: Create users with permissions and verify the permissions
+      abort-on-fail: false
 
 
 
