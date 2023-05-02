@@ -1,0 +1,18 @@
+---
+-
+  cluster_conf: conf/quincy/upi/octo_11_node_env.yaml
+  name: "Tier-1: End to End scenarios executed on greenfield deployment"
+  os_version: 9.1
+  platform: rhel-9
+  rhbuild: "6.1"
+  scenario: 1
+  stages:
+    deploy:
+      abort_on_failure: true
+      suites:
+        - suites/quincy/e2e/poc/test_cluster_deployment.yaml
+    baseline:
+      suites:
+        - suites/quincy/e2e/poc/test-cephfs-core-features.yaml
+        - suites/quincy/e2e/poc/test-rbd-core-features.yaml
+        - suites/quincy/e2e/poc/test-object-core-features.yaml
