@@ -180,3 +180,10 @@ tests:
           "mount": "fuse"
           "filesystem": "cephfs_io"
           "mount_dir": ""
+  - test:
+      abort-on-fail: false
+      desc: "mds_nfs_node_failure_ops"
+      module: cephfs_system.mds_nfs_node_failure_ops.py
+      polarion-id: CEPH-11311
+      name: "mds_nfs_node_failure_ops.py"
+
