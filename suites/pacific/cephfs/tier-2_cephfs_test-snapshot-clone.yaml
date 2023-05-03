@@ -222,3 +222,9 @@ tests:
       polarion-id: CEPH-83574681
       desc: Try to cancel the snapshot while clonning is operating
       abort-on-fail: false
+  - test:
+      name: snap_schedule_test
+      module: snapshot_clone.snap_schedule.py
+      polarion-id: CEPH-83575569
+      desc: snap_schedule_test
+      abort-on-fail: false
