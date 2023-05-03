@@ -175,7 +175,7 @@ tests:
       config:
         wait_for_io: True
         cephfs:
-          "fill_data": 95
+          "fill_data": 65
           "io_tool": "smallfile"
           "mount": "fuse"
           "filesystem": "cephfs_io"
@@ -186,4 +186,10 @@ tests:
       module: cephfs_system.mds_nfs_node_failure_ops.py
       polarion-id: CEPH-11311
       name: "mds_nfs_node_failure_ops.py"
+  - test:
+      abort-on-fail: false
+      desc: "snap_rollback_with_node_reboots.py"
+      module: cephfs_system.snap_rollback_with_node_reboots.py
+      polarion-id: CEPH-11320
+      name: "snap_rollback_with_node_reboots.py"
 
