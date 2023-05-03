@@ -49,7 +49,7 @@ def run(ceph_cluster, **kw):
 
     elif action == "service-state":
         # Get the SERVICE_ID of the mon service
-        mon_service = get_service_id(mon_node, "mon")
+        mon_service = get_service_id(mon_node, "mon")[0]
 
         for state in ["start", "stop", "restart"]:
             # Set the service to each state

@@ -33,7 +33,7 @@ def run(ceph_cluster, **kw):
     node = ceph_cluster.get_nodes(role="mgr")[0]
     step_to_validate = kw.get("config").get("operation")
 
-    mgr_service = get_service_id(node, "mgr")
+    mgr_service = get_service_id(node, "mgr")[0]
     if step_to_validate in ["systemctl-ops", "kill-mgr"]:
         for state in ["start", "stop", "restart"]:
             # Set the service to each state
