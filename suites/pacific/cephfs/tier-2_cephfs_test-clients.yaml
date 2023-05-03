@@ -279,6 +279,11 @@ tests:
       polarion-id: CEPH-83573529
       desc: multi client file and dir ops
       abort-on-fail: false
-
+  - test:
+      name: multi client unlink file
+      module: clients.file_unlink_on_clients.py
+      polarion-id: CEPH-83575042
+      desc: multi client unlink file
+      abort-on-fail: false
 
 
