@@ -326,7 +326,7 @@ pipelines:
             - rgw
         - name: "Testing RADOS basic regression scenarios"
           execution_time: "1h 15m 45s"
-          suite: "suites/quincy/rados/tier-2_rados_basic_regression.yaml"
+          suite: "suites/quincy/rados/tier-2-rados-basic-regression.yaml"
           global-conf: "conf/quincy/rados/7-node-cluster.yaml"
           platform: "rhel-9"
           inventory:
