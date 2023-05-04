@@ -118,7 +118,7 @@ suites:
     - rbd
     - stage-2
 - name: "Upstream Testing For Rados Regression"
-  suite: "suites/quincy/upstream/tier-2_rados_basic_regression.yaml"
+  suite: "suites/quincy/upstream/tier-2-rados-basic-regression.yaml"
   global-conf: "conf/quincy/rados/7-node-cluster.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"

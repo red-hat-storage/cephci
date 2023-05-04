@@ -260,7 +260,7 @@ suites:
       - stage-2
 
   - name: "Testing RADOS basic regression scenarios"
-    suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
+    suite: "suites/pacific/rados/tier-2-rados-basic-regression.yaml"
     global-conf: "conf/pacific/rados/7-node-cluster.yaml"
     platform: "rhel-9"
     rhbuild: "5.2"

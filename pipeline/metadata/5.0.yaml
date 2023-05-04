@@ -311,7 +311,7 @@ suites:
       - rados
       - stage-2
   - name: "test-rados-basic-regression"
-    suite: "suites/pacific/rados/tier-2_rados_basic_regression.yaml"
+    suite: "suites/pacific/rados/tier-2-rados-basic-regression.yaml"
     global-conf: "conf/pacific/rados/7-node-cluster.yaml"
     platform: "rhel-8"
     rhbuild: "5.0"
