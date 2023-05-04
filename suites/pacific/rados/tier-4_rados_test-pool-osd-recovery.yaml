@@ -224,3 +224,18 @@ tests:
         pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
         remove_host: node13
       desc: Failure recovery on Replicated & EC pools upon OSD changes
+
+  - test:
+      name: pg rebalancing upon addition of new OSD
+      desc: Test PG rebalancing upon addition of new OSDs when Cluster is in full state
+      module: test_osd_full.py
+      polarion-id: CEPH-9232
+      config:
+        osd_addition:
+          pool_config:
+            pool-1:
+              pool_type: replicated
+              pool_name: re_pool
+              pg_num: 1
+              disable_pg_autoscale: true
+            # EC pool will be added later
