@@ -23,9 +23,12 @@ def flatten_image_feature_disable(rbd, pool_type, **kw):
         clone = kw["config"][pool_type].get("clone", f"{pool}_{image}_clone")
         snap_name = f"{pool}/{image}@{snap}"
         feature_name = "fast-diff"
+        if kw.get("config").get("rbd_op_thread_timeout"):
+            key = "rbd_op_thread_timeout"
+            value = kw["config"]["rbd_op_thread_timeout"]
+        image_spec = pool + "/" + clone
 
-        client = kw["ceph_cluster"].get_nodes(role="client")[0]
-        run_fio(image_name=image, pool_name=pool, client_node=client)
+        run_fio(image_name=image, pool_name=pool, client_node=rbd.ceph_client)
 
         if rbd.snap_create(pool, image, snap):
             log.error(f"Creation of snapshot {snap} failed")
@@ -37,6 +40,21 @@ def flatten_image_feature_disable(rbd, pool_type, **kw):
 
         if rbd.create_clone(snap_name, pool, clone):
             log.error(f"Creation of clone {clone} failed")
+            return 1
+
+        # set meta data value on clone
+        rbd.image_meta(
+            action="set",
+            image_spec=image_spec,
+            key=key,
+            value=value,
+        )
+
+        # verify meta data value is set on clone image
+        if value != int(
+            rbd.image_meta(action="get", image_spec=image_spec, key=key)[:-1]
+        ):
+            log.error(f"Expected Meta value did not set on {image_spec}")
             return 1
 
         with parallel() as p:
@@ -85,9 +103,10 @@ def run(**kw):
     4. Take a snapshot
     5. Protect a snapshot
     6. clone a snapshot
-    7. While changing the image features, perform flatten operations
+    7. Set the image meta-data value on clone image and verify the meta-data value set properly.
+    8. While changing the image features, perform flatten operations
         Image features should be changed and flatten operation should succeed
-    8. Repeat steps 1 to 7 for ecpool
+    9. Repeat steps 1 to 8 for ecpool
     """
     log.info("Test to disable image feature when flatten operation is performed")
     rbd_obj = initial_rbd_config(**kw)

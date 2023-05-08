@@ -302,6 +302,8 @@ tests:
 
   - test:
       desc: Perform flatten operations while changing the image feature
+      config:
+        rbd_op_thread_timeout: 120
       module: rbd_flatten_image_feature_disable.py
       name: Test to disable image feature when flatten operation is performed
       polarion-id: CEPH-9862
