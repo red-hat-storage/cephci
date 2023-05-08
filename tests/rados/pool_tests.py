@@ -565,6 +565,178 @@ def run(ceph_cluster, **kw):
         rados_obj.detete_pool(pool=pool_name)
         return 0
 
+    if config.get("Verify_degraded_pool_min_size_behaviour"):
+        log.info(
+            "Test to verify that degraded Pools are not able to serve clients below min_size"
+        )
+        pool_target_configs = config["Verify_degraded_pool_min_size_behaviour"][
+            "pool_config"
+        ]
+        pool_name = ""
+        pgid = ""
+        osd_pick = ""
+        second_osd_pick = ""
+        for entry in pool_target_configs.values():
+            pool_name = entry["pool_name"]
+            try:
+                method_should_succeed(rados_obj.create_pool, **entry)
+                # Write IO to pool
+                rados_obj.bench_write(pool_name=pool_name)
+
+                log.info("Getting a sample PG from the pool")
+                pool_id = pool_obj.get_pool_id(pool_name=pool_name)
+                pgid = f"{pool_id}.0"
+                pg_set = rados_obj.get_pg_acting_set(pg_num=pgid)
+                log.info(
+                    f"Pg set fetched from pool id {pool_id} for pg id {pgid} is {pg_set}"
+                )
+                osd_tree_op = rados_obj.run_ceph_command(cmd="ceph osd tree")
+                log.info(
+                    f"Before bringing down osds, output from ceph osd tree : {osd_tree_op}"
+                )
+
+                osd_pick = pg_set.pop()
+                second_osd_pick = pg_set.pop()
+                log.info(
+                    f"Bringing down two OSDs from the acting set : {osd_pick} and {second_osd_pick}"
+                )
+                log.info(f"The OSD that will be remaining in the pg_set is : {pg_set}")
+                if not rados_obj.change_osd_state(
+                    action="stop", target=osd_pick, timeout=20
+                ):
+                    log.error(f"Failed to stop OSD : {osd_pick}")
+                    raise Exception("test-bed set-up failure")
+
+                if not rados_obj.change_osd_state(
+                    action="stop", target=second_osd_pick, timeout=20
+                ):
+                    log.error(f"Failed to stop OSD : {second_osd_pick}")
+                    raise Exception("test-bed set-up failure")
+                time.sleep(10)
+
+                # Get the min_size property of the pool
+                min_size_val = 0
+                min_size_val = rados_obj.get_pool_property(
+                    pool=pool_name, props="min_size"
+                )
+                log.info(f"Current min_size of the pool - {min_size_val}")
+                post_pg_set = rados_obj.get_pg_acting_set(pg_num=pgid)
+                log.info(
+                    f"Acting set post OSDs are down and before rados put op : {post_pg_set}"
+                )
+                log.info(f"Current OSDs in acting set {post_pg_set}")
+                log.info(
+                    f"Initial pg set fetched from pool id {pool_id} for pg id {pgid} is {pg_set}"
+                )
+                if len(post_pg_set) == 1 and post_pg_set[0] == pg_set[0]:
+                    log.info(f"No change in acting set for pg {pgid}")
+                else:
+                    log.error("Acting set has changed, no need to continue the test")
+                    raise Exception("Aborting the test as acting set has changed")
+
+                log.info("Performing rados put op")
+                client_node = ceph_cluster.get_nodes(role="client")[0]
+                pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                log.debug(pool_stat)
+                total_objs = pool_stat["stats"]["objects"]
+                pool_obj.do_rados_put(
+                    client=client_node, pool=pool_name, nobj=10, timeout=10
+                )
+                pool_stat_post = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                log.debug(pool_stat_post)
+                if pool_stat_post["stats"]["objects"] != total_objs:
+                    log.error(
+                        "Write ops should not have been possible, number of objects in the pool have changed"
+                    )
+                    raise Exception(
+                        f"Pool {pool_name} has {pool_stat_post['stats']['objects']} objs | Expected {total_objs} objs"
+                    )
+                else:
+                    ceph_health = rados_obj.run_ceph_command(cmd="ceph health detail")
+                    log.info(
+                        f"ceph health details at the time of IO not being served - {ceph_health}"
+                    )
+                    log.info(
+                        "RADOS PUT op failed as expected since cluster is in degraded state!! "
+                    )
+
+                # Setting the min-size as 1. The IOs must be resumed and the PGs should become active+clean state.
+                if not rados_obj.set_pool_property(
+                    pool=pool_name, props="min_size", value=1
+                ):
+                    log.error(f"failed to set min_size 1 on pool {pool_name}")
+                    raise Exception("Config set failed on pool")
+
+                min_size_val = rados_obj.get_pool_property(
+                    pool=pool_name, props="min_size"
+                )
+                log.info(f"min_size of the pool after modification - {min_size_val}")
+
+                new_pg_set = rados_obj.get_pg_acting_set(pg_num=pgid)
+                log.info(
+                    f"Post modification, Pg set fetched from pool id {pool_id} for pg id {pgid} is {new_pg_set}"
+                )
+                log.info(f"Current OSDs in acting set {new_pg_set}")
+                log.info(
+                    f"Initial pg set fetched from pool id {pool_id} for pg id {pgid} is {pg_set}"
+                )
+                if len(new_pg_set) == 1 and new_pg_set[0] == pg_set[0]:
+                    log.info(f"No change in acting set for pg {pgid}")
+                else:
+                    log.error("Acting set has changed, no need to continue the test")
+                    raise Exception("Aborting the test as acting set has changed")
+
+                osd_tree_op = rados_obj.run_ceph_command(cmd="ceph osd tree")
+                log.info(
+                    f"After bringing down osds, output from ceph osd tree : {osd_tree_op}"
+                )
+                time.sleep(10)
+
+                # verify IOs are resumed after sometime post setting min_size to 1
+                pool_obj.do_rados_put(
+                    client=client_node, pool=pool_name, nobj=10, timeout=10
+                )
+                pool_stat_post = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                log.debug(pool_stat_post)
+                if pool_stat_post["stats"]["objects"] <= total_objs:
+                    log.error(
+                        "Write ops should have been possible, number of objects in the pool have NOT changed"
+                    )
+                    raise Exception(
+                        f"Pool {pool_name} has {pool_stat_post['stats']['objects']} objs"
+                    )
+                else:
+                    log.info("RADOS PUT op is successful as expected!! ")
+
+                log.info(
+                    "With cluster in degraded state and OSDs in acting set equal to min_size, IOs are served"
+                )
+
+                log.info(
+                    "Tested the behaviour of cluster in degraded state and impact of reducing min-size"
+                )
+            except Exception as e:
+                log.error(f"Exception hit in test flow: {e}")
+            finally:
+                # Starting the OSD back
+                if not rados_obj.change_osd_state(action="restart", target=osd_pick):
+                    log.error(f"Failed to start OSD : {osd_pick}")
+                if not rados_obj.change_osd_state(
+                    action="restart", target=second_osd_pick
+                ):
+                    log.error(f"Failed to start OSD : {second_osd_pick}")
+
+                # Checking the PG state. There Should not be inactive state
+                pg_state = rados_obj.get_pg_state(pg_id=pgid)
+                if any("inactive" in key for key in pg_state.split("+")):
+                    log.error(
+                        f"PG: {pgid} in inactive state after OSD down and min_size set to 1)"
+                    )
+                    return 1
+
+                rados_obj.detete_pool(pool=pool_name)
+        return 0
+
 
 def stop_osd_check_warn(rados_obj, osd_pick, pool_name, pgid):
     """Method to check health warning upon OSD failure

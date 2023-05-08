@@ -334,3 +334,18 @@ tests:
             compression_min_blob_size: 1B
             byte_size: 10KB
       desc: Verification of the effect of compression on replicated pools
+
+  - test:
+      name: Verify degraded pool behaviour at min_size
+      module: pool_tests.py
+      polarion-id: CEPH-9185
+      config:
+        Verify_degraded_pool_min_size_behaviour:
+          pool_config:
+            pool-1:
+              pool_type: replicated
+              pool_name: pool_degraded_test
+              pg_num: 1
+              disable_pg_autoscale: true
+      desc: On a degraded cluster verify that clients can read and write data into pools with min_size OSDs
+      abort-on-fail: false
