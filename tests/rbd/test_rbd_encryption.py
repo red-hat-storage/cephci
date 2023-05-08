@@ -6,6 +6,7 @@ from tests.rbd.rbd_utils import (
     create_passphrase_file,
     device_cleanup,
     initial_rbd_config,
+    resize_parent_and_clone,
 )
 from utility.log import Log
 
@@ -34,6 +35,8 @@ def test_rbd_encryption(rbd, pool_type, format, **kw):
     encryption_config = list()
     parent_file_path = f"/tmp/{image}_dir/{image}_file"
     clone_file_path = f"/tmp/{clone}_dir/{image}_file"
+    passphrase = f"{parent_encryption_type}_passphrase.bin"
+    clone_passphrase = f"clone_{clone_encryption_type}_passphrase.bin"
 
     try:
         io_config = {
@@ -55,23 +58,25 @@ def test_rbd_encryption(rbd, pool_type, format, **kw):
             log.info(
                 f"Applying luks encryption of type {parent_encryption_type} on {image_spec}"
             )
-            passphrase = f"{parent_encryption_type}_passphrase.bin"
+
             create_passphrase_file(rbd, passphrase)
             if rbd.encrypt(image_spec, parent_encryption_type, passphrase):
                 log.error(
                     f"Apply RBD encryption {parent_encryption_type} failed on {image_spec}"
                 )
 
-            encryption_passphrase = {
-                "passphrase": [{"encryption-passphrase-file": passphrase}]
+            parent_clone_spec = {
+                "parent_encryption_type": parent_encryption_type,
+                "parent_spec": image_spec,
+                "parent_passphrase": passphrase,
+                "size": size,
             }
 
-            if rbd.image_resize(pool, image, size, **encryption_passphrase):
-                log.error(
-                    "Image resize to compensate overhead due to "
-                    f"{parent_encryption_type} header failed for {image_spec}"
-                )
-                return 1
+            resize_parent_and_clone(
+                rbd=rbd,
+                resize_sequence="before_clone",
+                parent_clone_spec=parent_clone_spec,
+            )
 
             encryption_config.append({parent_encryption_type: passphrase})
         else:
@@ -110,13 +115,29 @@ def test_rbd_encryption(rbd, pool_type, format, **kw):
             log.info(
                 f"Applying encryption of type {clone_encryption_type} on the clone {clone_spec}"
             )
-            clone_passphrase = f"clone_{clone_encryption_type}_passphrase.bin"
+
             create_passphrase_file(rbd, clone_passphrase)
             if rbd.encrypt(clone_spec, clone_encryption_type, clone_passphrase):
                 log.error(
                     f"Apply RBD encryption {clone_encryption_type} failed on {image_spec}"
                 )
                 return 1
+
+            parent_clone_spec = {
+                "parent_encryption_type": parent_encryption_type,
+                "parent_spec": image_spec,
+                "parent_passphrase": passphrase,
+                "clone_encryption_type": clone_encryption_type,
+                "clone_spec": clone_spec,
+                "clone_passphrase": clone_passphrase,
+                "size": size,
+            }
+
+            resize_parent_and_clone(
+                rbd=rbd,
+                resize_sequence="after_clone",
+                parent_clone_spec=parent_clone_spec,
+            )
 
             encryption_config.append({clone_encryption_type: clone_passphrase})
         else:
@@ -225,8 +246,8 @@ def run(**kw):
     8. Apply encryption with different passphrase key other than parent image
     9. Load the encryption using rbd device map on cloned image
     10. Mount the clone and run Ios
-    11. Flatten the clone
-    12. Verify data integrity between clone image and the original image
+    11. Verify data integrity between clone image and the original image
+    12. Flatten the clone
 
     2) CEPH-83575251 - Apply different combinations of luks encryption on an RBD image
     and its clone and verify data integrity between parent and clone
