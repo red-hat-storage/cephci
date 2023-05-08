@@ -62,11 +62,6 @@ def add(cls, config: Dict) -> None:
                 rhcs_version = _build["release"]
                 if not isinstance(rhcs_version, str):
                     rhcs_version = str(rhcs_version)
-
-                # Todo: Pointing to RHCS 5 CDN repo rpms, Since 6x not yet GAed
-                #       Revert this commit/code changes once 6x is GAed.
-                if rhcs_version > "5":
-                    rhcs_version = "5"
             elif use_cdn:
                 rhcs_version = default_version
             else:
@@ -89,7 +84,10 @@ def add(cls, config: Dict) -> None:
                     "4": ["rhceph-4-tools-for-rhel-8-x86_64-rpms"],
                     "5": ["rhceph-5-tools-for-rhel-8-x86_64-rpms"],
                 },
-                "9": {"5": ["rhceph-5-tools-for-rhel-9-x86_64-rpms"]},
+                "9": {
+                    "5": ["rhceph-5-tools-for-rhel-9-x86_64-rpms"],
+                    "6": ["rhceph-6-tools-for-rhel-9-x86_64-rpms"],
+                },
             }
 
             rhel_repos = {

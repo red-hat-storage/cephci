@@ -462,6 +462,9 @@ def run(args):
             base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
                 build, rhbuild, platform, upstream_build
             )
+    else:
+        build = None
+
     store = args.get("--store") or False
 
     docker_insecure_registry = args.get("--insecure-registry")
