@@ -760,6 +760,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/parallel"))
     sys.path.append(os.path.abspath("tests/upgrades"))
     sys.path.append(os.path.abspath("tests/ceph_volume"))
+    sys.path.append(os.path.abspath("tests/nvmeof"))
 
     tests = suite.get("tests")
     tcs = []
