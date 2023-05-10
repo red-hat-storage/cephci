@@ -106,6 +106,28 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: BlueStore Checksum algorithms
+      module: test_bluestore_configs.py
+      polarion-id: CEPH-83571646
+      config:
+        checksums:
+          - none
+          - crc32c
+          - crc32c_16
+          - crc32c_8
+          - xxhash32
+          - xxhash64
+      desc: Verify the different applicable BlueStore Checksum algorithms
+
+  - test:
+      name: BlueStore cache size tuning
+      module: test_bluestore_configs.py
+      polarion-id: CEPH-83571675
+      config:
+        bluestore_cache: true
+      desc: Verify tuning of BlueStore cache size for HDDs and SSDs
+
+  - test:
       name:  Testing bluestore
       desc: Testing bluestore pinned
       module: test_bluestore_features.py
@@ -131,17 +153,3 @@ tests:
                  rados_write_duration: 50
                  rados_read_duration: 50
           desc: Verification of the bluestore pinned tests
-
-  - test:
-      name: BlueStore Checksum algorithms
-      module: test_bluestore_configs.py
-      polarion-id: CEPH-83571646
-      config:
-        checksums:
-          - none
-          - crc32c
-          - crc32c_16
-          - crc32c_8
-          - xxhash32
-          - xxhash64
-      desc: Verify the different applicable BlueStore Checksum algorithms
