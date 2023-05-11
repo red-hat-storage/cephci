@@ -308,13 +308,32 @@ class RadosOrchestrator:
             1. rados_write_duration -> duration of write operation (int)
             2. byte_size -> size of objects to be written (str)
                 eg : 10KB, 4096
+            3. max_objs -> max number of objects to be written (int)
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
         byte_size = kwargs.get("byte_size", 4096)
+        max_objs = kwargs.get("max_objs")
         cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write --no-cleanup"
+        if max_objs:
+            cmd = f"{cmd} --max-objects {max_objs}"
+            org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
+
         try:
             self.node.shell([cmd])
+            if max_objs:
+                time.sleep(10)
+                new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
+                    "objects"
+                ]
+                log.info(
+                    f"Objs in the {pool_name} before IOPS: {org_objs} "
+                    f"| Objs in the pool post IOPS: {new_objs} "
+                    f"| Expected {org_objs + max_objs} or {org_objs + max_objs + 1}"
+                )
+                assert (new_objs == org_objs + max_objs) or (
+                    new_objs == org_objs + max_objs + 1
+                )
             return True
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")
@@ -1449,3 +1468,22 @@ class RadosOrchestrator:
             out, err = self.node.shell([cmd])
             heap_dump[osd_id] = out.strip()
         return heap_dump
+
+    def list_orch_services(self, service_type=None):
+        """
+        Retrieves the list of orch services
+        Args:
+            service_type(optional): service name | e.g. mon, mgr, osd, etc
+
+        Returns:
+            list of service names using ceph orch ls [<service>]
+        """
+        service_name_ls = []
+        base_cmd = "ceph orch ls"
+
+        cmd = f"{base_cmd} {service_type}" if service_type else base_cmd
+        orch_ls_op = self.run_ceph_command(cmd=cmd)
+
+        for service in orch_ls_op:
+            service_name_ls.append(service["service_name"])
+        return service_name_ls

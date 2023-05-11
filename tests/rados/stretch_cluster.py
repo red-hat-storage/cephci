@@ -294,13 +294,16 @@ def run(ceph_cluster, **kw):
     return 0
 
 
-def wait_for_clean_pg_sets(rados_obj: RadosOrchestrator, timeout: Any = 9000) -> bool:
+def wait_for_clean_pg_sets(
+    rados_obj: RadosOrchestrator, timeout: Any = 9000, _sleep: Any = 120
+) -> bool:
     """
     Waiting for up to 2.5 hours for the PG's to enter active + Clean state after stretch changes
     Automation for bug : [1] & [2]
     Args:
         rados_obj: RadosOrchestrator object to run commands
         timeout: timeout in seconds or "unlimited"
+        _sleep: sleep timeout in seconds (default: 120)
 
     Returns:  True -> pass, False -> fail
 
@@ -338,9 +341,9 @@ def wait_for_clean_pg_sets(rados_obj: RadosOrchestrator, timeout: Any = 9000) ->
         log.info(
             f"Waiting for active + clean. Active aletrs: {status_report['health']['checks'].keys()},"
             f"PG States : {status_report['num_pg_by_state']}"
-            f" checking status again in 2 minutes"
+            f" checking status again in {_sleep} seconds"
         )
-        time.sleep(120)
+        time.sleep(_sleep)
 
     log.error("The cluster did not reach active + Clean state")
     return False

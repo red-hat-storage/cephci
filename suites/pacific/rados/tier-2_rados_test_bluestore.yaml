@@ -132,4 +132,16 @@ tests:
                  rados_read_duration: 50
           desc: Verification of the bluestore pinned tests
 
-
+  - test:
+      name: BlueStore Checksum algorithms
+      module: test_bluestore_configs.py
+      polarion-id: CEPH-83571646
+      config:
+        checksums:
+          - none
+          - crc32c
+          - crc32c_16
+          - crc32c_8
+          - xxhash32
+          - xxhash64
+      desc: Verify the different applicable BlueStore Checksum algorithms
