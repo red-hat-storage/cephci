@@ -517,6 +517,16 @@ pipelines:
             openstack: "conf/inventory/rhel-8-latest.yaml"
           metadata:
             - rados
+        - name: "RGW bucket notifications testing on Multisite"
+          execution_time: "2h 8m 36s"
+          suite: "suites/pacific/rgw/tier-2_rgw_ms_test-bucket-notifications.yaml"
+          global-conf: "conf/pacific/rgw/rgw_multisite"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rgw
   schedule:
     tier-1:
       stage-1:

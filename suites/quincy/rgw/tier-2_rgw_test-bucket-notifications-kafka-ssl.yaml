@@ -66,7 +66,7 @@ tests:
       name: notify put,copy,delete events with kafka_broker and SSL security
       desc: notify put,copy,delete events with kafka_broker and SSL security
       module: sanity_rgw.py
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       config:
         run-on-rgw: true
         extra-pkgs:
@@ -80,7 +80,7 @@ tests:
   - test:
       name: notify on multipart upload events with kafka_broker and SSL security
       desc: notify on multipart upload events with kafka_broker and SSL security
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
@@ -92,7 +92,7 @@ tests:
   - test:
       name: notify put,copy,delete events with kafka_broker_persistent and SSL security
       desc: notify put,copy,delete events with kafka_broker_persistent and SSL security
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -104,7 +104,7 @@ tests:
       name: notify on multipart upload events with kafka_broker_persistent and SSL security
       desc: notify on multipart upload events with kafka_broker_persistent and SSL security
       module: sanity_rgw.py
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       comments: known issue (bz-2149259)
       config:
         run-on-rgw: true
@@ -117,7 +117,7 @@ tests:
   - test:
       name: notify put,copy,delete events with kafka_none and SSL security
       desc: notify put,copy,delete events with kafka_none and SSL security
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -128,7 +128,7 @@ tests:
   - test:
       name: notify on multipart upload events with kafka_none and SSL security
       desc: notify on multipart upload events with kafka_none and SSL security
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
@@ -141,7 +141,7 @@ tests:
       name: notify put,copy,delete events with kafka_none_persistent and SSL security
       desc: notify put,copy,delete events with kafka_none_persistent and SSL security
       module: sanity_rgw.py
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       config:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
@@ -151,7 +151,7 @@ tests:
   - test:
       name: notify on multipart upload events with kafka_none_persistent and SSL security
       desc: notify on multipart upload events with kafka_none_persistent and SSL security
-      polarion-id: CEPH-83575407
+      polarion-id: CEPH-83575471
       comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
