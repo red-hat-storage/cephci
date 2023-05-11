@@ -326,3 +326,14 @@ tests:
       module: sanity_rgw_multisite.py
       name: Perform zone deletion in master
       polarion-id: CEPH-10753
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_realm_rename.yaml
+            timeout: 300
+      desc: Test realm rename in master
+      module: sanity_rgw_multisite.py
+      name: Perform realm rename in master
+      polarion-id: CEPH-10739
