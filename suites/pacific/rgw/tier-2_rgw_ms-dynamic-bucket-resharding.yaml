@@ -315,3 +315,14 @@ tests:
       module: sanity_rgw_multisite.py
       name: Manual Resharding tests on Primary cluster
       polarion-id: CEPH-83574434
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_zone_deletion.yaml
+            timeout: 300
+      desc: Test zone deletion in master
+      module: sanity_rgw_multisite.py
+      name: Perform zone deletion in master
+      polarion-id: CEPH-10753
