@@ -1196,6 +1196,37 @@ def verify_image_size(rbd, pool, image, size):
     return 1
 
 
+def set_ceph_config(rbd, entity, key, value, **kw):
+    """Override ceph config settings.
+
+    ceph config set <entity> <key> <value>
+
+    Args:
+        entity: config entity (mon, osd)
+        key: config option key (ex., rbd_move_to_trash_on_remove)
+        value: config option value to be set
+        kw: other ceph arguments like config options
+    Returns:
+        exec_cmd response
+    """
+    return rbd.exec_cmd(cmd=f"ceph config set {entity} {key} {value}", **kw)
+
+
+def get_ceph_config(rbd, entity, key, **kw):
+    """Get ceph config settings.
+
+    ceph config get <entity> <key>
+
+    Args:
+        entity: config entity (mon, osd)
+        key: config option key (ex., rbd_move_to_trash_on_remove)
+        kw: other ceph arguments like config options
+    Returns:
+        exec_cmd response
+    """
+    return rbd.exec_cmd(cmd=f"ceph config get {entity} {key}", **kw)
+
+
 def resize_parent_and_clone(rbd, resize_sequence, parent_clone_spec):
     """
     Resize parent and clone images to compensate overhead due to the header size.
