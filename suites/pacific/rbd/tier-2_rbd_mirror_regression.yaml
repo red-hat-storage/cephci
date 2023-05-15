@@ -362,3 +362,18 @@ tests:
                 io_total: 10
       name: Testing change of image feature reflection from primary to secondary
       polarion-id: CEPH-9520
+
+  - test:
+      name: Delete parent snap for mirrored image
+      module: test_rbd_mirror_delete_parent_snap.py
+      clusters:
+        ceph-rbd1:
+          config:
+            ec_pool_config:
+              imagesize: 2G
+              io_total: 200M
+            rep_pool_config:
+              imagesize: 2G
+              io_total: 200M
+      polarion-id: CEPH-9515
+      desc: Testing parent snapshot deletion for mirrored image
