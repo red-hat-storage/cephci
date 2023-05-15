@@ -13,11 +13,11 @@
 tests:
 
   # Setup the cluster
-
   - test:
       abort-on-fail: true
       module: install_prereq.py
       name: install ceph pre-requisites
+
   - test:
       abort-on-fail: true
       config:
@@ -374,3 +374,15 @@ tests:
             data_pool: data_pool_ec2
       name: Test image migration from namespace for read-only client
       polarion-id: CEPH-83573341
+
+  - test:
+      desc: Verify rbd_compression_hint config settings
+      config:
+        compression_algorithm: snappy
+        compression_mode: passive
+        compression_ratio: 0.7
+        io_total: 1G
+      module: test_rbd_compression.py
+      name: Test to verify data compression on global, pool and image level
+      polarion-id: CEPH-83574644
+
