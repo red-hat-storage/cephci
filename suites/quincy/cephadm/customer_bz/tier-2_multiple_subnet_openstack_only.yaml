@@ -9,7 +9,7 @@
 # Test-Suite:
 #   tier-2_multiple_subnet_openstack_only.yaml
 # Cluster Configuration:
-#   cephci/conf/pacific/cephadm/5-node-cluster-multiple-subnet-openstack-only.yaml
+#   cephci/conf/quincy/cephadm/tier-2_multiple_subnet_openstack_only.yaml
 #
 # Node1 - admin, Mon, Mgr, Installer, alertmanager, grafana,
 #         prometheus, node-exporter , crash
