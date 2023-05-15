@@ -13,12 +13,10 @@ import os
 import pickle
 import re
 import sys
-import textwrap
 import time
 import traceback
 from copy import deepcopy
 from getpass import getuser
-from typing import Optional
 
 import requests
 import yaml
@@ -36,12 +34,10 @@ from ceph.utils import (
     create_ibmc_ceph_nodes,
 )
 from utility import sosreport
-from utility.config import TestMetaData
 from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
-from utility.utils import (
-    ReportPortal,
+from utility.utils import (  # ReportPortal,
     check_build_overrides,
     create_run_dir,
     create_unique_test_name,
@@ -78,7 +74,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--docker-tag <tag>]
         [--insecure-registry]
         [--post-results]
-        [--report-portal]
         [--upstream-build <upstream-build>]
         [--log-level <LEVEL>]
         [--log-dir  <directory-name>]
@@ -134,8 +129,6 @@ Options:
   --post-results                    Post results to polarion, needs Polarion IDs
                                     in test suite yamls. Requires config file, see
                                     README.
-  --report-portal                   Post results to report portal. Requires config file,
-                                    see README.
   --log-level <LEVEL>               Set logging level
   --log-dir <LEVEL>                 Set log directory
   --instances-name <name>           Name that will be used for instances creation
@@ -169,17 +162,10 @@ def create_nodes(
     osp_cred,
     run_id,
     cloud_type="openstack",
-    report_portal_session=None,
     instances_name=None,
     enable_eus=False,
-    rp_logger: Optional[ReportPortal] = None,
 ):
     """Creates the system under test environment."""
-    if rp_logger:
-        name = create_unique_test_name("ceph node creation", test_names)
-        test_names.append(name)
-        desc = "Ceph cluster preparation"
-        rp_logger.start_test_item(name=name, description=desc, item_type="STEP")
 
     validate_conf(conf)
     validate_image(conf, cloud_type)
@@ -274,12 +260,7 @@ def create_nodes(
             try:
                 instance.connect()
             except BaseException:
-                if rp_logger:
-                    rp_logger.finish_test_item(status="FAILED")
                 raise
-
-    if rp_logger:
-        rp_logger.finish_test_item(status="PASSED")
 
     return ceph_cluster_dict, clients
 
@@ -396,11 +377,7 @@ def run(args):
     jenkin_job_url = os.environ.get("BUILD_URL")
 
     run_id = generate_unique_id(length=6)
-    rp_logger = None
-    if post_to_report_portal:
-        rp_logger = ReportPortal()
 
-    TestMetaData(run_id=run_id, rhbuild=rhbuild, rhcs="rhcs", rp_logger=rp_logger)
     run_dir = create_run_dir(run_id, log_directory)
     startup_log = os.path.join(run_dir, "startup.log")
 
@@ -568,87 +545,6 @@ def run(args):
 
     service = None
     suite_name = "::".join(suite_files)
-    if post_to_report_portal:
-        log.info("Creating report portal session")
-
-        # Only the first file is considered for launch description.
-        suite_file_name = suite_name.split("::")[0].split("/")[-1]
-        suite_file_name = suite_file_name.strip(".yaml")
-        suite_file_name = " ".join(suite_file_name.split("_"))
-        _log = run_dir.replace("/ceph/", "http://magna002.ceph.redhat.com/")
-
-        launch_name = (
-            f"Upstream {upstream_build} - {suite_file_name}"
-            if build == "upstream"
-            else f"RHCS {rhbuild} - {suite_file_name}"
-        )
-        launch_desc = textwrap.dedent(
-            """
-            "jenkin-url": {jenkin_job_url},
-            "build": {rhbuild},
-            "ceph-version": {ceph_version},
-            "ceph-ansible-version": {ceph_ansible_version},
-            "base_url": {base_url},
-            "suite-name": {suite_name},
-            "conf-file": {glb_file},
-            "polarion-project-id": "CEPH",
-            "distro": {distro},
-            "container-registry": {docker_registry},
-            "container-image": {docker_image},
-            "container-tag": {docker_tag},
-            "compose-id": {compose_id},
-            "log-dir": {_log},
-            "run-id": {run_id},
-            "cloud-type": {cloud_type},
-            "instance-name": {instances_name},
-            """.format(
-                jenkin_job_url=jenkin_job_url,
-                rhbuild=rhbuild,
-                ceph_version=ceph_version,
-                ceph_ansible_version=ceph_ansible_version,
-                base_url=base_url,
-                suite_name=suite_name,
-                glb_file=glb_file,
-                distro=distro,
-                docker_registry=docker_registry,
-                docker_image=docker_image,
-                docker_tag=docker_tag,
-                compose_id=compose_id,
-                _log=_log,
-                run_id=run_id,
-                cloud_type=cloud_type,
-                instances_name=instances_name,
-            )
-        )
-        if docker_image and docker_registry and docker_tag:
-            launch_desc = launch_desc + textwrap.dedent(
-                """
-                "docker-registry": {docker_registry}
-                "docker-image": {docker_image}
-                "docker-tag": {docker_tag}
-                "invoked-by": {user}
-                """.format(
-                    docker_registry=docker_registry,
-                    docker_image=docker_image,
-                    user=getuser(),
-                    docker_tag=docker_tag,
-                )
-            )
-
-        qe_tier = get_tier_level(suite_name)
-        attributes = dict(
-            {
-                "rhcs": rhbuild,
-                "tier": qe_tier,
-                "ceph_version": ceph_version,
-                "os": platform if platform else "-".join(rhbuild.split("-")[1:]),
-                "job_url": jenkin_job_url,
-            }
-        )
-
-        rp_logger.start_launch(
-            name=launch_name, description=launch_desc, attributes=attributes
-        )
 
     def fetch_test_details(var) -> dict:
         """
@@ -695,10 +591,8 @@ def run(args):
                 osp_cred,
                 run_id,
                 cloud_type,
-                service,
                 instances_name,
                 enable_eus=enable_eus,
-                rp_logger=rp_logger,
             )
         except Exception as err:
             log.error(err)
@@ -778,7 +672,6 @@ def run(args):
         test = test.get("test")
         tc = fetch_test_details(test)
         test_file = tc["file"]
-        report_portal_description = tc["desc"] or ""
         unique_test_name = create_unique_test_name(tc["name"], test_names)
         test_names.append(unique_test_name)
 
@@ -841,11 +734,8 @@ def run(args):
                     config["ibm_build"] = bool(ibm_build[0].split("=")[1])
 
             config["ceph_docker_registry"] = docker_registry
-            report_portal_description += f"docker registry: {docker_registry}"
             config["ceph_docker_image"] = docker_image
-            report_portal_description += f"docker image: {docker_image}"
             config["ceph_docker_image_tag"] = docker_tag
-            report_portal_description += f"docker registry: {docker_registry}"
 
             if filestore:
                 config["filestore"] = filestore
@@ -869,15 +759,6 @@ def run(args):
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
 
             try:
-                if post_to_report_portal:
-                    rp_logger.start_test_item(
-                        name=unique_test_name,
-                        description=report_portal_description,
-                        item_type="STEP",
-                    )
-                    rp_logger.log(message=f"Logfile location - {tc['log-link']}")
-                    rp_logger.log(message=f"Polarion ID: {tc['polarion-id']}")
-
                 if "build" in config.keys():
                     _rhcs_version = config["build"]
                 # Initialize the cluster with the expected rhcs_version
@@ -905,10 +786,6 @@ def run(args):
 
         elapsed = datetime.datetime.now() - start
         tc["duration"] = elapsed
-
-        # Write to report portal
-        if post_to_report_portal:
-            rp_logger.finish_test_item(status="PASSED" if rc == 0 else "FAILED")
 
         if rc == 0:
             tc["status"] = "Pass"
@@ -982,16 +859,12 @@ def run(args):
         "invoked-by": trigger_user,
     }
 
-    if post_to_report_portal:
-        rp_logger.finish_launch()
-        run_summary["rp_link"] = rp_logger.client.get_launch_ui_url()
-
     if xunit_results:
         create_xunit_results(suite_name, tcs, test_run_metadata)
 
     print("\nAll test logs located here: {base}".format(base=url_base))
     print_results(tcs)
-    send_to_cephci = post_results or post_to_report_portal
+    send_to_cephci = post_results  # or post_to_report_portal
     run_end_time = datetime.datetime.now()
     duration = divmod((run_end_time - run_start_time).total_seconds(), 60)
     total_time = {
