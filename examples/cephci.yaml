@@ -1,0 +1,116 @@
+
+credentials:
+  subscription:
+    cdn:
+      serverurl: <fake-serverurl>
+      baseurl: <fake-baseurl>
+      username: <fake-username>
+      password: <fake-password>
+      timeout: 60
+      retry: 6
+
+    stage:
+      serverurl: <fake-serverurl>
+      baseurl: <fake-baseurl>
+      username: <fake-username>
+      password: <fake-password>
+      timeout: 60
+      retry: 6
+
+  registry:
+    ibm:
+      cp:
+        registry: <fake-registry>
+        username: <fake-username>
+        password: <fake-password>
+
+      stage:
+        registry: <fake-registry>
+        username: <fake-username>
+        password: <fake-password>
+
+    rh:
+      cdn:
+        registry: <fake-registry>
+        username: <fake-username>
+        password: <fake-password>
+
+      stage:
+        registry: <fake-registry>
+        username: <fake-username>
+        password: <fake-password>
+
+  cloud:
+    openstack:
+      username: <fake-username>
+      password: <fake-password>
+      auth-url: <fake-authurl>
+      auth-version: <fake-auth-version>
+      tenant-name: <fake-tenant>
+      service-region: <fake-service-region>
+      domain: <fake-domain>
+      tenant-domain-id: <fake-demain-id>
+      timeout: 180
+      retry: 18
+
+repos:
+  local:
+    rhel-9:
+      - <fake-rhel9-local-appstreap-repo>
+      - <fake-rhel9-local-appstreap-repo>
+
+    rhel-8:
+      - <fake-rhel8-local-appstreap-repo>
+      - <fake-rhel8-local-appstreap-repo>
+
+  stage:
+    rhel-9:
+      - rhel-9-for-x86_64-appstream-rpms
+      - rhel-9-for-x86_64-baseos-rpms
+
+    rhel-8:
+      - rhel-8-for-x86_64-appstream-rpms
+      - rhel-8-for-x86_64-baseos-rpms
+
+    rhel-7:
+      - rhel-7-server-rpms
+      - rhel-7-server-extras-rpms
+
+  cdn:
+    rhel-9:
+      - rhel-9-for-x86_64-appstream-rpms
+      - rhel-9-for-x86_64-baseos-rpms
+
+    rhel-8:
+      - rhel-8-for-x86_64-appstream-rpms
+      - rhel-8-for-x86_64-baseos-rpms
+
+    rhel-7:
+      - rhel-7-server-rpms
+      - rhel-7-server-extras-rpms
+
+packages:
+  all:
+    - wget
+    - git-core
+    - python3-devel
+    - chrony
+    - yum-utils
+    - net-tools
+    - lvm2
+    - podman
+    - net-snmp-utils
+    - net-snmp
+    - kernel-modules-extra
+    - iproute-tc
+
+  rhel-7:
+    - python-virtualenv
+    - python-nose
+    - ntp
+    - python2-pip
+
+  deb:
+    - python-virtualenv
+    - lsb-release
+    - ntp
