@@ -194,6 +194,8 @@ class Rbd:
         self.exec_cmd(
             cmd="ceph osd pool set {} allow_ec_overwrites true".format(poolname)
         )
+        if self.ceph_version >= 3:
+            self.exec_cmd(cmd="rbd pool init {}".format(poolname))
         return True
 
     def check_pool_exists(self, pool_name: str) -> bool:
