@@ -7,6 +7,7 @@ from .config_key import ConfigKey
 from .crash import Crash
 from .mgr import Mgr
 from .orch.orch import Orch
+from .osd.osd import Osd
 
 
 class Ceph(Cli):
@@ -22,6 +23,8 @@ class Ceph(Cli):
         self.config_key = ConfigKey(nodes, self.base_cmd)
         self.config = Config(nodes, self.base_cmd)
         self.crash = Crash(nodes, self.base_cmd)
+        # ToDo: Renaming as _osd due to conflicting method name. Fix in progress
+        self._osd = Osd(nodes, self.base_cmd)
 
     def version(self):
         """Get ceph version."""
