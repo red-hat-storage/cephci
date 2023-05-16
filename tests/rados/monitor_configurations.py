@@ -284,9 +284,11 @@ class MonConfigMethods:
                 entry["name"] == kwargs["name"]
                 and entry["section"] == kwargs["section"]
             ):
+                entry["value"] = str(entry["value"]).strip("\n").strip()
+                kwargs["value"] = str(kwargs["value"]).strip("\n").strip()
                 if not entry["value"] == kwargs["value"]:
                     log.error(
-                        f"Value for config: {entry['name']} does not match in the ceph config"
+                        f"Value for config: {entry['name']} does not match in the ceph config\n"
                         f"sent value : {kwargs['value']}, Set value : {entry['value']}"
                     )
                     return False

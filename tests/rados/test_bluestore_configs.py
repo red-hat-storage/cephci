@@ -15,13 +15,15 @@ def run(ceph_cluster, **kw):
     Common test module to verify BlueStore config changes
     and functionalities.
     Currently, covers the following tests:
-     - CEPH-83571646: Checksum Algorithms
+     - CEPH-83571646: BlueStore Checksum Algorithms
+     - CEPH-83571675: BlueStore cache size tuning
     """
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
+    checksum = "crc32c"
 
     def restart_osd_service():
         osd_services = rados_obj.list_orch_services(service_type="osd")
@@ -45,6 +47,33 @@ def run(ceph_cluster, **kw):
         # rados bench will perform IOPs and also verify the num of objs written
         assert rados_obj.bench_write(pool_name=pool_name, **{"max_objs": 500})
         assert rados_obj.detete_pool(pool=pool_name)
+
+    def modify_cache_size(factor):
+        cache_value = int(1073741824 * factor)
+        cache_cfg = {
+            "section": "osd",
+            "name": "bluestore_cache_size_hdd",
+            "value": cache_value,
+        }
+        assert mon_obj.set_config(**cache_cfg)
+        out = mon_obj.get_config(section="osd", param="bluestore_cache_size_hdd")
+        log.info(
+            f"bluestore_cache_size_hdd modified value - {out} | Expected {cache_value}"
+        )
+        assert int(out.strip("\n")) == cache_value
+
+        cache_value = int(3221225472 * factor)
+        cache_cfg = {
+            "section": "osd",
+            "name": "bluestore_cache_size_ssd",
+            "value": cache_value,
+        }
+        assert mon_obj.set_config(**cache_cfg)
+        out = mon_obj.get_config(section="osd", param="bluestore_cache_size_ssd")
+        log.info(
+            f"bluestore_cache_size_ssd modified value - {out} | Expected {cache_value}"
+        )
+        assert int(out.strip("\n")) == cache_value
 
     if config.get("checksums"):
         doc = (
@@ -108,4 +137,78 @@ def run(ceph_cluster, **kw):
             wait_for_clean_pg_sets(rados_obj, timeout=300, _sleep=10)
 
         log.info("BlueStore Checksum algorithm verification completed.")
+        return 0
+
+    if config.get("bluestore_cache"):
+        doc = (
+            "\n #CEPH-83571675"
+            "\n\t Verify BlueStore cache default values."
+            "\n\t Tune cache parameters and perform IOPS"
+            "\n\t 1. Verify the default value for - bluestore_cache_size(0)"
+            " | bluestore_cache_size_hdd (1GB) | bluestore_cache_size_ssd (3GB)"
+            "\n\t 2. Modify the value of bluestore_cache_size_ssd and bluestore_cache_size_hdd"
+            "\n\t 3. Verify the values being reflected in ceph config"
+            "\n\t 4. Create replicated and ec pool and perform IOPS"
+            "\n\t 5. cleanup - Remove all the pools created and reset configs modified"
+        )
+        log.info(doc)
+        log.info("Running test case to verify BlueStore Cache size tuning")
+
+        try:
+            # verify default value for bluestore cache
+            out = mon_obj.get_config(section="osd", param="bluestore_cache_size")
+            log.info(f"bluestore_cache_size default value - {out} | Expected 0")
+            assert int(out.strip("\n")) == 0
+
+            out = mon_obj.get_config(section="osd", param="bluestore_cache_size_hdd")
+            log.info(
+                f"bluestore_cache_size_hdd default value - {out} | Expected 1073741824"
+            )
+            assert int(out.strip("\n")) == 1073741824
+
+            out = mon_obj.get_config(section="osd", param="bluestore_cache_size_ssd")
+            log.info(
+                f"bluestore_cache_size_ssd default value - {out} | Expected 3221225472"
+            )
+            assert int(out.strip("\n")) == 3221225472
+
+            # modify ssd and hdd cache (increase)
+            modify_cache_size(factor=1.5)
+
+            # restart osd services
+            restart_osd_service()
+
+            # perform iops
+            create_pool_write_iops(param="cache_inc", pool_type="replicated")
+            create_pool_write_iops(param="cache_inc", pool_type="ec")
+
+            # modify ssd and hdd cache (decrease)
+            modify_cache_size(factor=0.7)
+
+            # restart osd services
+            restart_osd_service()
+
+            # perform iops
+            create_pool_write_iops(param="cache_dec", pool_type="replicated")
+            create_pool_write_iops(param="cache_dec", pool_type="ec")
+
+        except Exception as E:
+            log.error(f"Verification failed with exception: {E.__doc__}")
+            log.error(E)
+            log.exception(E)
+            return 1
+        finally:
+            # reset modified cache configs
+            mon_obj.remove_config(
+                **{"section": "osd", "name": "bluestore_cache_size_hdd"}
+            )
+            mon_obj.remove_config(
+                **{"section": "osd", "name": "bluestore_cache_size_ssd"}
+            )
+
+            # restart osd services
+            restart_osd_service()
+            wait_for_clean_pg_sets(rados_obj, timeout=300, _sleep=10)
+
+        log.info("BlueStore cache size tuning verification completed.")
         return 0
