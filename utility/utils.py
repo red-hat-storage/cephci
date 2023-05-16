@@ -1794,6 +1794,9 @@ def run_fio(**fio_args):
                   if only directory is given, then a file with name "file"
                   will be created and data written into it.
         rbdname: rbd image name
+        block_size: block size in bytes used for I/O units
+        io_type: I/O profile
+        io_depth: number of I/O units to keep in flight against the file
         pool: name of rbd image pool
         runtime: fio runtime
         long_running(bool): True for long running required
@@ -1819,6 +1822,16 @@ def run_fio(**fio_args):
     if fio_args.get("size"):
         opt_args += f" --size={fio_args.get('size', '100M')}"
 
+    block_size = fio_args.get("block_size")
+    if block_size:
+        opt_args += f" --bs={block_size}"
+
+    if fio_args.get("io_depth"):
+        opt_args += f" --iodepth={fio_args.get('io_depth', 8)}"
+
+    io_type = fio_args.get("io_type")
+    io_type = io_type if io_type else "write"
+
     run_time = fio_args.get("run_time")
 
     # Take default runtime only when size is not specified
@@ -1831,8 +1844,8 @@ def run_fio(**fio_args):
 
     long_running = fio_args.get("long_running", False)
     cmd = (
-        "fio --name=test-1  --numjobs=1 --rw=write"
-        " --iodepth=8 --fsync=32 "
+        f"fio --name=test-{io_type} --numjobs=4 --rw={io_type}"
+        " --fsync=32 "
         f" --group_reporting {opt_args}"
     )
 

@@ -4,6 +4,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 
 """
 import json
+from time import sleep
 
 from ceph.ceph import Ceph
 from ceph.nvmeof.gateway import Gateway, configure_spdk
@@ -65,6 +66,12 @@ def initiators(ceph_cluster, gateway, config):
             subnqn: nqn.2016-06.io.spdk:cnode2
             listener_port: 5002
             node: node7
+            io_type:
+              - randread
+              - randrw
+              - randwrite
+            block_size:
+              - 4k
     """
     client = get_node_by_id(ceph_cluster, config["node"])
     initiator = Initiator(client)
@@ -92,15 +99,22 @@ def initiators(ceph_cluster, gateway, config):
     targets, _ = initiator.list(**json_format)
     LOG.debug(targets)
 
-    with parallel() as p:
-        for target in json.loads(targets)["Devices"]:
-            io_args = {
-                "device_name": target["DevicePath"],
-                "size": "100%",
-                "client_node": client,
-                "long_running": True,
-            }
-            p.spawn(run_fio, **io_args)
+    # Run fio
+    io_type = config.get("io_type")
+    io_args = {
+        "client_node": client,
+        "long_running": True,
+        "block_size": config["block_size"],
+        "io_depth": config["io_depth"],
+    }
+
+    if io_type:
+        for io in io_type:
+            with parallel() as p:
+                for target in json.loads(targets)["Devices"]:
+                    io_args.update({"device_name": target["DevicePath"], "io_type": io})
+                    p.spawn(run_fio, **io_args)
+                    sleep(30)
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:

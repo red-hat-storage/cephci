@@ -89,6 +89,12 @@ tests:
           - subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
             node: node7
+            io_type:
+              - randwrite
+              - randread
+              - randrw
+            block_size: 4k
+            io_depth: 256
       desc: Setup NVMEoF Gateway and Run IOs on targets
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
