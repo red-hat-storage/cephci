@@ -33,3 +33,9 @@ class OperationFailedError(Exception):
     """
     Custom exception thrown when any operation fails.
     """
+
+
+class TestSetupFailure(Exception):
+    """
+    Custom exception thrown when test setup fails
+    """
