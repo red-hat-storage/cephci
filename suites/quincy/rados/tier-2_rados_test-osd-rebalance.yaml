@@ -123,6 +123,18 @@ tests:
         delete_pool: true
 
   - test:
+      name: ObjectStore block stats verification
+      module: test_objectstore_block.py
+      desc: Reduce data from an object and verify the decrease in blocks
+      polarion-id: CEPH-83571714
+      abort-on-fail: true
+      config:
+        create_pool: true
+        pool_name: test-objectstore
+        write_iteration: 3
+        delete_pool: true
+
+  - test:
       name: Cluster behaviour when OSDs are full
       desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full
       module: test_osd_full.py

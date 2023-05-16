@@ -96,6 +96,29 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
+      name: Verify scrub logs
+      module: test_scrub_log.py
+      polarion-id: CEPH-83575403
+      config:
+        pool_configs:
+            - type: replicated
+              conf: sample-pool-2
+            - type: erasure
+              conf: sample-pool-2
+        pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+      desc: Verify that scrub & deep-scrub logs are captured in OSD logs
+
+  - test:
+      name: Verify pool behaviour at min_size
+      module: pool_tests.py
+      polarion-id: CEPH-9167
+      config:
+        Verify_pool_min_size_behaviour:
+          pool_name: test-pool-3
+      desc: Verify that Clients can read and write data into pools with min_size OSDs
+      abort-on-fail: true
+
+  - test:
       name: Autoscaler test - pool target size ratio
       module: pool_tests.py
       polarion-id: CEPH-83573424
