@@ -37,6 +37,8 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
+        rhbuild = config.get("rhbuild")
+        os_ver = rhbuild.split("-")[-1]
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         if not build.startswith(("3", "4", "5")):
@@ -150,20 +152,22 @@ def run(ceph_cluster, **kw):
             cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/secret bs=10M count=10",
         )
         umount_fs(clients[0], kernel_mounting_dir)
-
-        log.info("mount with mon_address")
-        kernel_cmd = (
-            f"mount -t ceph {clients[0].node.hostname}@.cephfs=/ {kernel_mounting_dir} "
-            f"-o name={clients[0].node.hostname},"
-            f"secretfile=/etc/ceph/{clients[0].node.hostname}.secret,mon_addr={mon_node_ip.replace(',','/')}"
-        )
-        clients[0].exec_command(sudo=True, cmd=kernel_cmd)
-        fs_util.wait_until_mount_succeeds(clients[0], kernel_mounting_dir)
-        clients[0].exec_command(
-            sudo=True,
-            cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/mon_address bs=10M count=10",
-        )
-        umount_fs(clients[0], kernel_mounting_dir)
+        # https://bugzilla.redhat.com/show_bug.cgi?id=2165889
+        # Skipping the validation because of above issue for RHEL-8
+        if int(os_ver) > 8:
+            log.info("mount with mon_address")
+            kernel_cmd = (
+                f"mount -t ceph {clients[0].node.hostname}@.cephfs=/ {kernel_mounting_dir} "
+                f"-o name={clients[0].node.hostname},"
+                f"secretfile=/etc/ceph/{clients[0].node.hostname}.secret,mon_addr={mon_node_ip.replace(',','/')}"
+            )
+            clients[0].exec_command(sudo=True, cmd=kernel_cmd)
+            fs_util.wait_until_mount_succeeds(clients[0], kernel_mounting_dir)
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/mon_address bs=10M count=10",
+            )
+            umount_fs(clients[0], kernel_mounting_dir)
 
         log.info("mount with invalid fsid")
         rc = fs_util.kernel_mount(
