@@ -297,3 +297,9 @@ tests:
       polarion-id: CEPH-83574328
       desc: generate all the possible permissions and verify the permissions
       abort-on-fail: false
+  - test:
+      name: verify user read and write permissions
+      module: clients.verify_user_read_write_permissions.py
+      polarion-id: CEPH-83575574
+      desc: verify user read and write permissions
+      abort-on-fail: false
