@@ -65,7 +65,9 @@ def run(ceph_cluster, **kw):
         for daemon in daemon_list:
             for perm in permission_list:
                 if daemon == "mds" and "x" in perm:
-                    break
+                    continue
+                elif daemon == "mds" and "w" in perm:
+                    continue
                 else:
                     client1.exec_command(
                         sudo=True,
@@ -86,9 +88,13 @@ def run(ceph_cluster, **kw):
             combs_perm = list(itertools.combinations(permission_list, 2))
             for perm1, perm2 in combs_perm:
                 if daemon1 == "mds" and "x" in perm1:
-                    break
+                    continue
                 elif daemon2 == "mds" and "x" in perm2:
-                    break
+                    continue
+                elif daemon1 == "mds" and "w" in perm1:
+                    continue
+                elif daemon2 == "mds" and "w" in perm2:
+                    continue
                 else:
                     client1.exec_command(
                         sudo=True,
@@ -112,14 +118,18 @@ def run(ceph_cluster, **kw):
         for daemon1, daemon2, daemon3 in combs_daemon:
             combs_perm = list(itertools.combinations(permission_list, 3))
             for perm1, perm2, perm3 in combs_perm:
-                print(combs_daemon)
-                print(combs_perm)
                 if daemon1 == "mds" and "x" in perm1:
-                    break
+                    continue
                 elif daemon2 == "mds" and "x" in perm2:
-                    break
+                    continue
                 elif daemon3 == "mds" and "x" in perm3:
-                    break
+                    continue
+                elif daemon1 == "mds" and "w" in perm1:
+                    continue
+                elif daemon2 == "mds" and "w" in perm2:
+                    continue
+                elif daemon3 == "mds" and "w" in perm3:
+                    continue
                 else:
                     client1.exec_command(
                         sudo=True,

@@ -61,7 +61,9 @@ def run(ceph_cluster, **kw):
         for daemon in daemon_list:
             for perm in permission_list:
                 if daemon == "mds" and "x" in perm:
-                    break
+                    continue
+                elif daemon == "mds" and "w" in perm:
+                    continue
                 else:
                     rand_name = "".join(
                         random.choice(string.ascii_lowercase + string.digits)
@@ -92,9 +94,13 @@ def run(ceph_cluster, **kw):
             combs_perm = list(itertools.combinations(permission_list, 2))
             for perm1, perm2 in combs_perm:
                 if daemon1 == "mds" and "x" in perm1:
-                    break
+                    continue
                 elif daemon2 == "mds" and "x" in perm2:
-                    break
+                    continue
+                elif daemon1 == "mds" and "w" in perm1:
+                    continue
+                elif daemon2 == "mds" and "w" in perm2:
+                    continue
                 else:
                     rand_name = "".join(
                         random.choice(string.ascii_lowercase + string.digits)
@@ -126,14 +132,18 @@ def run(ceph_cluster, **kw):
         for daemon1, daemon2, daemon3 in combs_daemon:
             combs_perm = list(itertools.combinations(permission_list, 3))
             for perm1, perm2, perm3 in combs_perm:
-                print(combs_daemon)
-                print(combs_perm)
                 if daemon1 == "mds" and "x" in perm1:
-                    break
+                    continue
                 elif daemon2 == "mds" and "x" in perm2:
-                    break
+                    continue
                 elif daemon3 == "mds" and "x" in perm3:
-                    break
+                    continue
+                if daemon1 == "mds" and "w" in perm1:
+                    continue
+                elif daemon2 == "mds" and "w" in perm2:
+                    continue
+                elif daemon3 == "mds" and "w" in perm3:
+                    continue
                 else:
                     rand_name = "".join(
                         random.choice(string.ascii_lowercase + string.digits)
@@ -151,7 +161,6 @@ def run(ceph_cluster, **kw):
                     )
                     log.info(out3)
                     output3 = json.loads(out3)[0]
-                    print((daemon1, daemon2, daemon3), (perm1, perm2, perm3))
                     if output3["caps"][daemon1] != perm1.strip("'"):
                         raise CommandFailed(
                             f"Not Expected permission for {daemon1}, it should be {perm1}"
