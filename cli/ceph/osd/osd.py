@@ -22,3 +22,21 @@ class Osd(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def set(self, flag):
+        """Set osd flag
+
+        Args:
+            flag (str): osd flag
+        """
+        cmd = f"{self.base_cmd} set {flag}"
+        return self.execute(sudo=True, long_running=True, cmd=cmd)
+
+    def unset(self, flag):
+        """Set osd flag
+
+        Args:
+            flag (str): osd flag
+        """
+        cmd = f"{self.base_cmd} unset {flag}"
+        return self.execute(sudo=True, long_running=True, cmd=cmd)

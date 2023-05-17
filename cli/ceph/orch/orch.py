@@ -8,6 +8,7 @@ from .host import Host
 from .label import Label
 from .osd import Osd
 from .tuned_profile import TunedProfile
+from .upgrade import Upgrade
 
 log = Log(__name__)
 
@@ -26,6 +27,7 @@ class Orch(Cli):
         self.daemon = Daemon(nodes, self.base_cmd)
         self.device = Device(nodes, self.base_cmd)
         self.osd = Osd(nodes, self.base_cmd)
+        self.upgrade = Upgrade(nodes, self.base_cmd)
 
     def ls(self, **kw):
         """
