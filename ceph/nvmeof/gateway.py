@@ -92,6 +92,8 @@ def configure_spdk(node: CephNode):
     if not fetch_spdk_pid(node):
         raise Exception("Control and SPDK process is not running.")
 
+    node.exec_command(sudo=True, cmd="systemctl stop firewalld", check_ec=True)
+
 
 def run_control_cli(node: CephNode, action, **cmd_args):
     """Run CLI via control daemon."""
