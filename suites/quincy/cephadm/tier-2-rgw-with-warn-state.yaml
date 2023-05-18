@@ -136,3 +136,13 @@ tests:
         timeout: 300
       abort-on-fail: false
       destroy-cluster: false
+
+  - test:
+      name: Verify zone group rgw service with cephadm
+      desc: Defining a zone-group when deploying RGW service with cephadm
+      polarion-id: CEPH-83575108
+      module: test_verify_zone_group_rgw_with_cephadm.py
+      config:
+        realm-name: new_realm
+        zonegroup-name: us_1
+        zone-name: us-east_1

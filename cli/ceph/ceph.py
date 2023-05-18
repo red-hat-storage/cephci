@@ -8,6 +8,7 @@ from .crash import Crash
 from .mgr import Mgr
 from .orch.orch import Orch
 from .osd.osd import Osd
+from .rgw.rgw import Rgw
 
 
 class Ceph(Cli):
@@ -19,6 +20,7 @@ class Ceph(Cli):
         self.base_cmd = f"{base_cmd} ceph" if base_cmd else "ceph"
         self.mgr = Mgr(nodes, self.base_cmd)
         self.orch = Orch(nodes, self.base_cmd)
+        self.rgw = Rgw(nodes, self.base_cmd)
         self.balancer = Balancer(nodes, self.base_cmd)
         self.config_key = ConfigKey(nodes, self.base_cmd)
         self.config = Config(nodes, self.base_cmd)
