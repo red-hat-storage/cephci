@@ -2,23 +2,14 @@ import json
 import random
 import string
 import traceback
+from json import JSONDecodeError
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
-
-
-def validate_mds_placements(fs_name, daemon_ls_after, host_list, daemon_count):
-    i = 0
-    for daemon in daemon_ls_after:
-        if daemon.get("daemon_id").startswith(fs_name):
-            i += 1
-            if daemon.get("hostname") not in host_list:
-                return 1
-    if i != daemon_count:
-        return 1
-    return 0
 
 
 def run(ceph_cluster, **kw):
@@ -48,55 +39,44 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
+        fs_list = ["cephfs_df_fs_1", "cephfs_df_fs_2"]
         client1 = clients[0]
-        out, rc = client1.exec_command(
-            sudo=True, cmd="ceph orch ps --daemon_type mds -f json"
-        )
-        daemon_ls_before = json.loads(out)
-        daemon_count_before = len(daemon_ls_before)
         host_list = [
             client1.node.hostname.replace("node7", "node2"),
             client1.node.hostname.replace("node7", "node3"),
         ]
         hosts = " ".join(host_list)
+
+        host_list_1 = [
+            client1.node.hostname.replace("node7", "node2"),
+            client1.node.hostname.replace("node7", "node4"),
+        ]
+        hosts_1 = " ".join(host_list_1)
+        fs_host_list = [host_list, host_list_1]
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs volume create cephfs_df_fs --placement='2 {hosts}'",
+            cmd=f"ceph fs volume create {fs_list[0]} --placement='2 {hosts}'",
             check_ec=False,
         )
-        fs_util.wait_for_mds_process(client1, "cephfs_df_fs")
-        out, rc = client1.exec_command(
-            sudo=True, cmd="ceph orch ps --daemon_type mds -f json"
+        fs_util.wait_for_mds_process(client1, fs_list[0])
+        client1.exec_command(
+            sudo=True,
+            cmd=f"ceph fs volume create {fs_list[1]} --placement='2 {hosts_1}'",
+            check_ec=False,
         )
-        daemon_ls_after = json.loads(out)
-        daemon_count_after = len(daemon_ls_after)
-        assert daemon_count_after > daemon_count_before, (
-            f"daemon count is reduced after creating FS. "
-            f"Expectation is MDS daemons whould be more"
-            f"daemon count before: {daemon_count_before}"
-            f"daemon count after: {daemon_count_after}"
-        )
+        fs_util.wait_for_mds_process(client1, fs_list[1])
+        for fs, host_ls in zip(fs_list, fs_host_list):
+            validate_services_placements(client1, f"mds.{fs}", host_ls)
 
-        total_fs = fs_util.get_fs_details(client1)
-        if len(total_fs) < 2:
-            log.error(
-                "We can't proceed with the test case as we are not able to create 2 filesystems"
-            )
-        fs_names = [fs["name"] for fs in total_fs]
-        validate_mds_placements("cephfs_df_fs", daemon_ls_after, hosts, 2)
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
+        for fs, mount in zip(fs_list, [fuse_mounting_dir_1, fuse_mounting_dir_2]):
+            fs_util.fuse_mount([client1], mount, extra_params=f"--client_fs {fs}")
 
-        fs_util.fuse_mount(
-            [clients[0]], fuse_mounting_dir_1, extra_params=f"--client_fs {fs_names[0]}"
-        )
-        fs_util.fuse_mount(
-            [clients[0]], fuse_mounting_dir_2, extra_params=f"--client_fs {fs_names[1]}"
-        )
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
@@ -118,14 +98,34 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
+            "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_1
         )
         fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_2
+            "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_2
         )
         commands = [
             "ceph config set mon mon_allow_pool_delete true",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
-        fs_util.remove_fs(client1, "cephfs_df_fs")
+        for fs in fs_list:
+            fs_util.remove_fs(client1, fs)
+
+
+@retry(CommandFailed, tries=3, delay=60)
+def validate_services_placements(client, service_name, placement_list):
+    out, rc = client.exec_command(
+        sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
+    )
+    try:
+        service_ls = json.loads(out)
+    except JSONDecodeError:
+        raise CommandFailed("No services are UP")
+    log.info(service_ls)
+    if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
+        raise CommandFailed(f"All {service_name} are Not UP")
+    if service_ls[0]["placement"]["hosts"] != placement_list:
+        raise CommandFailed(
+            f"Services did not come up on the hosts: {placement_list} which "
+            f"has been specifed but came up on {service_ls[0]['placement']['hosts']}"
+        )
