@@ -33,3 +33,9 @@ class OperationFailedError(Exception):
     """
     Custom exception thrown when any operation fails.
     """
+
+
+class NodeConfigError(Exception):
+    """
+    Custom exception thrown when node configuration fails
+    """
