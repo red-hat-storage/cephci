@@ -1,0 +1,267 @@
+#################################################################################
+# Tier-level: 1
+# Test-Suite: tier-2_upgrade_staggered_5x-to-6x.yaml
+# Test-Case: Automation support for staggered upgrade from RHCS5 to RHCS6 in RHEL9
+#
+# Cluster Configuration:
+#     conf/quincy/upgrades/upgrade_4-node-cluster.yaml
+#
+# Test Steps:
+#     - Deploy RHCS 5 cluster in RHEL 9
+#     - Configure client
+#     - Staggered upgrade with daemon types mgr,mon
+#     - Staggered upgrade with daemon-types osd
+#     - Staggered upgrade with osd services
+#     - Staggered upgrade with hosts
+#     - Staggered upgrade with services
+#     - Staggered upgrade with all combinations
+#     - Run I/O's
+#################################################################################
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy RHCS 5 GA cluster using cephadm
+      desc: bootstrap and deployment services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 5.3
+                release: "ga"
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node3
+                  limit: 2
+                  sep: " "
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Staggered upgrade with daemon types mgr,mon
+      desc: Staggered upgrade with daemon types mgr,mon
+      module: test_cephadm_staggered_upgrade.py
+      polarion-id: CEPH-83575554
+      config:
+        action: "daemon_types"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: mgr,mon
+
+  - test:
+      name: Staggered upgrade with daemon-types osd
+      desc: Staggered upgrade with daemon-types osd
+      module: test_cephadm_staggered_upgrade.py
+      polarion-id: CEPH-83575557
+      config:
+        action: "daemon_types"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: osd
+        limit: 30
+
+  - test:
+      name: Staggered upgrade with osd services
+      desc: Staggered upgrade with osd services
+      module: test_cephadm_staggered_upgrade.py
+      polarion-id: CEPH-83575558
+      config:
+        action: "services"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        services: osd.all-available-devices
+        limit: 30
+
+  - test:
+      name: Staggered upgrade with hosts
+      desc: Staggered upgrade with hosts
+      module: test_cephadm_staggered_upgrade.py
+      polarion-id: CEPH-83575556
+      config:
+        action: "hosts"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        nodes:
+          - node0
+          - node1
+          - node2
+          - node3
+
+  - test:
+      name: Staggered upgrade with services
+      desc: Staggered upgrade with services
+      module: test_cephadm_staggered_upgrade.py
+      polarion-id: CEPH-83575555
+      config:
+        action: "services"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        services: mds.cephfs
+
+  - test:
+      name: Staggered upgrade with all combinations
+      desc: Staggered upgrade with all combinations
+      module: test_cephadm_staggered_upgrade.py
+      polarion-id: CEPH-83575559
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: osd
+        limit: 10
+        nodes:
+          - node0
+          - node1
+          - node2
+          - node3
+
+  - test:
+      name: Executes RGW, RBD and FS operations
+      desc: Run object, block and filesystem basic operations parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
+        - test:
+            config:
+              ec-pool-k-m: 2,1
+              ec-pool-only: False
+              ec_pool_config:
+                pool: rbd_pool
+                data_pool: rbd_ec_pool
+                ec_profile: rbd_ec_profile
+                image: rbd_image
+                image_thick_provision: rbd_thick_image
+                snap_thick_provision: rbd_thick_snap
+                clone_thick_provision: rbd_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_ec_pool_snap
+                clone: rbd_ec_pool_clone
+              rep_pool_config:
+                pool: rbd_rep_pool
+                image: rbd_rep_image
+                image_thick_provision: rbd_rep_thick_image
+                snap_thick_provision: rbd_rep_thick_snap
+                clone_thick_provision: rbd_rep_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_rep_pool_snap
+                clone: rbd_rep_pool_clone
+              operations:
+                map: true
+                io: true
+                nounmap: false
+            desc: Run RBD tier-0 operations
+            polarion-id: CEPH-83575401
+            destroy-cluster: false
+            module: rbd_tier0.py
+            name: Run RBD tier-0 operations
+        - test:
+            abort-on-fail: false
+            desc: "cephfs basic operations"
+            module: cephfs_basic_tests.py
+            name: cephfs-basics
+            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
