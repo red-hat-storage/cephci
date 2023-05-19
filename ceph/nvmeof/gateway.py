@@ -86,7 +86,7 @@ def configure_spdk(node: CephNode):
         raise Exception("SPDK pre-requisites installation failed...")
     node.exec_command(
         sudo=True,
-        cmd=f"cd {REPO_PATH}; make grpc; nohup {CTRL_DAEMON} > output.log 2>&1 &",
+        cmd=f"cd {REPO_PATH}; make grpc; nohup {CTRL_DAEMON} > output.log 2>&1 & sleep 20",
     )
 
     if not fetch_spdk_pid(node):
