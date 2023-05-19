@@ -8,7 +8,7 @@ def recipeFileDir = "/ceph/cephci-jenkins/latest-rhceph-container-info"
 // Default job parameters
 def buildType = "${params.buildType}" ? "tier-1" : "${params.buildType}"
 def overrides = "${params.overrides}" ? "{}" : "${params.overrides}"
-def tags = "${params.tags}" ? "schedule_openstack_only,tier-1,stage-1" : "${params.tags}"
+def tags = "${params.tags}" ? "schedule,tier-1,stage-1,openstack" : "${params.tags}"
 
 
 // Pipeline script entry point
@@ -69,18 +69,6 @@ node("rhel-9-medium || ceph-qe-ci") {
             println "Starting test execution with parameters:"
             println "\trhcephVersion: ${rhcephVersion}\n\tbuildType: ${buildType}\n\tbuildArtifacts: ${recipeContent}\n\toverrides: ${overrides}\n\ttags: ${tags}"
 
-            build ([
-                wait: false,
-                job: "rhceph-test-execution-pipeline",
-                parameters: [
-                    string(name: 'rhcephVersion', value: rhcephVersion),
-                    string(name: 'tags', value: tags),
-                    string(name: 'buildType', value: buildType.toString()),
-                    string(name: 'overrides', value: overrides.toString()),
-                    string(name: 'buildArtifacts', value: recipeContent.toString())]
-            ])
-
-            tags = "${params.tags}" ? "schedule,tier-1,stage-1" : "${params.tags}"
             build ([
                 wait: false,
                 job: "rhceph-test-execution-pipeline",
