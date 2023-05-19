@@ -61,6 +61,28 @@ class VolumeOpError(Exception):
 class CephVMNode(object):
     """OpenStack Instance object."""
 
+    default_rhosd_network_names = [
+        "provider_net_cci_12",
+        "provider_net_cci_11",
+        "provider_net_cci_9",
+        "provider_net_cci_8",
+        "provider_net_cci_7",
+        "provider_net_cci_6",
+        "provider_net_cci_5",
+        "provider_net_cci_4",
+    ]
+
+    default_rhos01_network_names = [
+        "shared_net_12",
+        "shared_net_11",
+        "shared_net_9",
+        "shared_net_8",
+        "shared_net_7",
+        "shared_net_6",
+        "shared_net_5",
+        "shared_net_4",
+    ]
+
     def __init__(self, **kw):
         self.image_name = kw["image-name"]
         self.node_name = kw["node-name"]
@@ -91,6 +113,14 @@ class CephVMNode(object):
         self.floating_ip = None
         self.volumes = list()
         self.driver = self.get_driver()
+
+        if "rhod-d" in self.auth_url:
+            self.default_network_names = self.default_rhosd_network_names
+        elif "rhos-01" in self.auth_url:
+            self.default_network_names = self.default_rhos01_network_names
+        else:
+            self.default_network_names = None
+            logger.info("No default config network set")
 
         self.create_node()
 
@@ -225,20 +255,7 @@ class CephVMNode(object):
         Raises:
             ResourceNotFound when there no suitable networks in the environment.
         """
-        network_names = (
-            [
-                "provider_net_cci_12",
-                "provider_net_cci_11",
-                "provider_net_cci_9",
-                "provider_net_cci_8",
-                "provider_net_cci_7",
-                "provider_net_cci_6",
-                "provider_net_cci_5",
-                "provider_net_cci_4",
-            ]
-            if name is None
-            else [name]
-        )
+        network_names = self.default_network_names if name is None else [name]
 
         for net in network_names:
             # Treating an exception as a soft error as it is possible to find another

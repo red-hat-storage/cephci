@@ -4,7 +4,7 @@ id: rhel
 instance:
   create:
     image-name: rhel-8.5.0-x86_64-released
-    vm-size: ci.m1.medium
+    vm-size: ci.standard.medium
 
   setup: |
     #cloud-config
