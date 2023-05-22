@@ -78,7 +78,8 @@ class Rbd:
             node = kw.get("node") if kw.get("node") else self.ceph_client
             if self.k_m and "rbd create" in cmd and "--data-pool" not in cmd:
                 cmd = cmd + " --data-pool {}".format(self.datapool)
-
+            if kw.get("client_id"):
+                cmd += f" -n {kw['client_id']}"
             if kw.get("long_running"):
                 out = node.exec_command(
                     sudo=True,
@@ -537,7 +538,7 @@ class Rbd:
             cmd = f"rbd snap unprotect {snap_name}"
         return self.exec_cmd(cmd=cmd)
 
-    def image_exists(self, pool_name, image_name):
+    def image_exists(self, pool_name, image_name, **kw):
         """
         Verify if image exists in the specified pool
         Args:
@@ -548,7 +549,10 @@ class Rbd:
             True: if image exists in pool
             False: if image doesn't exist in pool
         """
-        out = self.exec_cmd(cmd=f"rbd ls {pool_name} --format json", output=True)
+        cmd = f"rbd ls {pool_name} --format json"
+        if kw.get("namespace"):
+            cmd += f" --namespace {kw['namespace']}"
+        out = self.exec_cmd(cmd=cmd, output=True)
         images = json.loads(out)
         return True if any(image_name == image for image in images) else False
 
@@ -662,10 +666,7 @@ class Rbd:
         """
         cmd = f"rbd bench --io-type {kw.get('io_type', 'write')} --io-threads {kw.get('io_threads', 16)}"
         cmd += f" --io-total {kw.get('io', '500M')} {kw.get('imagespec')}"
-        return self.exec_cmd(
-            cmd=cmd,
-            long_running=True,
-        )
+        return self.exec_cmd(cmd=cmd, **kw)
 
     def export_image(self, imagespec, path):
         """Exports provided image as provided path.
@@ -696,7 +697,7 @@ class Rbd:
                     "--yes-i-really-really-mean-it".format(pool=pool)
                 )
 
-    def migration_prepare(self, src_spec, dest_spec):
+    def migration_prepare(self, src_spec, dest_spec, **kw):
         """Migration Prepare.
 
         This method prepare the live migration of image from source to destination
@@ -712,7 +713,7 @@ class Rbd:
             command += f"{src_spec} {dest_spec}"
         else:
             command += f"{dest_spec} --import-only --source-spec {src_spec}"
-        return self.exec_cmd(cmd=command)
+        return self.exec_cmd(cmd=command, **kw)
 
     def migration_action(self, action, dest_spec):
         """Migration action
@@ -1409,8 +1410,6 @@ def client_config_read_only(rbd, client_id, pool, **kw):
     osd_role = kw.get("osd_role", "allow *")
     cmd = f"ceph auth caps {client_id}"
     cmd += f" mon '{mon_role}' mds '{mds_role}'"
-    cmd += f" mgr '{mgr_role} pool={pool}"
-    if kw.get("namespace"):
-        cmd += f" namespace={kw['namespace']}"
-    cmd += f"' osd '{osd_role}'"
+    cmd += f" mgr '{mgr_role}'"
+    cmd += f" osd '{osd_role}'"
     return rbd.exec_cmd(cmd=cmd)
