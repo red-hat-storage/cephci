@@ -1487,3 +1487,17 @@ class RadosOrchestrator:
         for service in orch_ls_op:
             service_name_ls.append(service["service_name"])
         return service_name_ls
+
+    def check_host_status(self, hostname) -> bool:
+        """
+        Checks the status of host(offline or online) using
+        ceph orch host ls and return boolean
+        Args:
+            hostname: hostname of host to be checked
+        Returns:
+            (bool) True -> online | False -> offline
+        """
+        host_cmd = f"ceph orch host ls --host_pattern {hostname} -f json"
+        out, _ = self.client.exec_command(cmd=host_cmd, sudo=True)
+        host_status = json.loads(out)[0]["status"]
+        return False if "Offline" in host_status else True
