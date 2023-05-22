@@ -255,3 +255,17 @@ tests:
       destroy-cluster: false
       module: haproxy.py
       name: "Configure RGW HA Proxy"
+
+  - test:
+      abort-on-fail: false
+      desc: "Fill the cluster with specific percentage"
+      name: "Fill Cluster"
+      module: test_io.py
+      config:
+        wait_for_io: True
+        cephfs:
+          "fill_data": 20
+          "io_tool": "smallfile"
+          "mount": "fuse"
+          "filesystem": "cephfs_io"
+          "mount_dir": ""
