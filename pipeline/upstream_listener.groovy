@@ -5,7 +5,7 @@
 def sharedLib
 def upstreamVersion = "${params.releaseName}" ?: "" // Gets the upstream version to be executed from params
 def osType = "centos" // OS type
-def osVersion = "8"   // OS Version
+def osVersion = "9"   // OS Version
 currentBuild.description = "Upstream-branch: ${upstreamVersion}  Distro: ${osType}-${osVersion}"
 
 // Pipeline script entry point
