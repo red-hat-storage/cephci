@@ -362,37 +362,37 @@ tests:
           config:
             cephadm: true
             commands:
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/cephTransit "
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart {service_name:shared.sec}"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.sec"
             timeout: 120
         ceph-pri:
           config:
             cephadm: true
             commands:
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/cephTransit "
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart {service_name:shared.pri}"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.pri"
             timeout: 120
         ceph-arc:
           config:
             cephadm: true
             commands:
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_prefix /v1/cephTransit "
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart {service_name:shared.arc}"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.arc"
             timeout: 120
       desc: Setting vault configs for sse-s3 on multisite archive
       module: exec.py
