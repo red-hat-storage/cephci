@@ -34,6 +34,12 @@ tests:
               args:
                 all-available-devices: true
           - config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          - config:
               command: apply
               service: rgw
               pos_args:
