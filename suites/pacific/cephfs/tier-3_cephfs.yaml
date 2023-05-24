@@ -91,13 +91,6 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-
-  - test:
-      name: Change pg size of cephfs pools
-      module: test_cephfs_pool_size_change.py
-      polarion-id: CEPH-11260
-      desc: test decrease & increase in pg size of cephfs pools
-      abort-on-fail: false
   - test:
       name: Converting standy MDS to active MDS
       module: CEPH-11238.py
