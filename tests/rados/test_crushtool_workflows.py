@@ -8,6 +8,7 @@ test Module to :
 """
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.crushtool_workflows import CrushToolWorkflows
+from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
 log = Log(__name__)
@@ -23,10 +24,11 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     crush_obj = CrushToolWorkflows(node=cephadm)
+    rados_obj = RadosOrchestrator(node=cephadm)
     location = config.get("file_location", "/tmp/crushmaps")
 
     # Checking if location provided exists and proceeding to create folder
-    if not crush_obj.check_file_exists_on_client(loc=location):
+    if not rados_obj.check_file_exists_on_client(loc=location):
         log.debug(f"Creating folder {location} on the client")
         crush_obj.client.exec_command(cmd=f"mkdir -p {location}", sudo=True)
 
