@@ -131,5 +131,6 @@ tests:
         obj_sizes:
           - 45
           - 80
+          - 23
           - 107
       polarion-id: CEPH-83571710

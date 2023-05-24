@@ -1,3 +1,4 @@
+import datetime
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -37,6 +38,8 @@ def run(ceph_cluster, **kw):
 
     try:
         for pool_name in ["re_pool_concurrent_io", "re_pool_parallel_io"]:
+            o_stored = 1
+            d_stored = 0
             if "parallel" in pool_name:
                 log.info("----- Starting workflow for Parallel IOPS -----\n")
             else:
@@ -56,23 +59,40 @@ def run(ceph_cluster, **kw):
                 ) if "parallel" in pool_name else rados_obj.run_concurrent_io(
                     pool_name=pool_name, obj_name=object_name, obj_size=o_size
                 )
+                d_stored += o_size
 
-                time.sleep(15)  # blind sleep to let the stats get updated in ceph df
-                stats_post_iops = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                log.info(
-                    f"ceph df stats post parallel iops on object {object_name} in pool {pool_name} - "
-                    f"{stats_post_iops}"
-                )
+                timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=35)
+                while datetime.datetime.now() <= timeout_time:
+                    try:
+                        stats_post_iops = rados_obj.get_cephdf_stats(
+                            pool_name=pool_name
+                        )
+                        log.info(
+                            f"ceph df stats post iops on object {object_name} in pool {pool_name} - "
+                            f"{stats_post_iops}"
+                        )
 
-                # validation of object and data stored in the pool
-                objs_stored = int(stats_post_iops["stats"]["objects"])
-                data_stored = int(stats_post_iops["stats"]["stored"] / 1048576)
-                log.info(
-                    f"Objects in the pool: {objs_stored} | Data stored in the pool: {data_stored} MB"
-                )
+                        # validation of object and data stored in the pool
+                        objs_stored = int(stats_post_iops["stats"]["objects"])
+                        data_stored = int(stats_post_iops["stats"]["stored"] / 1048576)
+                        log.info(
+                            f"Objects in the pool: {objs_stored} | Data stored in the pool: {data_stored} MB"
+                        )
 
-                assert objs_stored == 1 and (o_size - 1) <= data_stored <= (o_size + 1)
-
+                        assert objs_stored == o_stored and (
+                            d_stored - 1
+                        ) <= data_stored <= (d_stored + 1)
+                        o_stored = objs_stored + 1
+                        log.info(
+                            f"----- Verification completed for object size {o_size}MB ------"
+                        )
+                        break
+                    except Exception:
+                        time.sleep(8)
+                        log.info("Sleeping for 8 seconds and checking pool stats again")
+                        if datetime.datetime.now() >= timeout_time:
+                            log.error("Pool stats are incorrect even after 35 seconds")
+                            raise
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)

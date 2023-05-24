@@ -1511,6 +1511,7 @@ class RadosOrchestrator:
             obj_name: name of the object
             obj_size: size of the object in MB
         """
+        obj_name = f"{obj_name}_{obj_size}"
         installer_node = self.ceph_cluster.get_nodes(role="installer")[0]
         put_cmd = f"rados put -p {pool_name} {obj_name} /mnt/sample_1M"
         out, _ = installer_node.exec_command(
@@ -1548,6 +1549,7 @@ class RadosOrchestrator:
             obj_name: name of the object
             obj_size: size of the object in MB
         """
+        obj_name = f"{obj_name}_{obj_size}"
         installer_node = self.ceph_cluster.get_nodes(role="installer")[0]
         try:
             out, rc = installer_node.exec_command(
