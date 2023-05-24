@@ -149,9 +149,9 @@ node(nodeName) {
             println "recipeFile ceph-version : ${content['ceph-version']}"
             def currentCephVersion = buildArtifacts['ceph-version'] ?: buildArtifacts['recipe']['ceph-version']
             println "buildArtifacts ceph-version : ${currentCephVersion}"
-            if ("schedule_openstack_only" in tags_list){
+            if ("schedule_openstack_only" in tags_list || "schedule" in tags_list){
                 run_type = "PSI-Only Schedule Run"
-            } else if ("rc" in tags_list){
+            } else if ("rc" in tags_list || buildType == "rc"){
                 run_type = "PSI-Only RC Sanity Run"
             } else {
                 run_type = "PSI-Only Sanity Run"
@@ -349,9 +349,9 @@ node(nodeName) {
 
             run_type = "Manual Run"
             if (is_openstack_run){
-                if ("schedule_openstack_only" in tags_list){
+                if ("schedule_openstack_only" in tags_list || "schedule" in tags_list){
                     run_type = "PSI-Only Schedule Run"
-                } else if ("rc" in tags_list){
+                } else if ("rc" in tags_list || buildType == "rc"){
                     run_type = "PSI-Only RC Sanity Run"
                 } else {
                     run_type = "PSI-Only Sanity Run"
