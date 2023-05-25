@@ -1,9 +1,12 @@
+from cephci.utils.configs import get_images
 from cli.cephadm.ansible import Ansible
 from cli.exceptions import AnsiblePlaybookExecutionError
+from cli.utilities.containers import Container
 from cli.utilities.packages import Package
 from utility.log import Log
 
 log = Log(__name__)
+
 
 CEPHADM_PREFLIGHT_PLAYBOOK = "cephadm-preflight.yml"
 ETC_HOSTS = "/etc/hosts"
@@ -19,6 +22,19 @@ SSH_KEYSCAN = "ssh-keyscan {}"
 
 CHMOD_CONFIG = f"chmod 600 {SSH_CONFIG}"
 SSHPASS = "sshpass -p {}"
+REGISTRY_PATH = "/opt/registry"
+REGISTRY_AUTH_PATH = f"{REGISTRY_PATH}/auth/htpasswd"
+DOMAIN_KEY_PATH = f"{REGISTRY_PATH}/certs/domain.key"
+DOMAIN_CERT_PATH = f"{REGISTRY_PATH}/certs/domain.crt"
+REGISTRY_CERT_PATH = f"{REGISTRY_PATH}/certs/registry.crt"
+CA_TRUST_ANCHORS_PATH = "/etc/pki/ca-trust/source/anchors/"
+SKOPEO_IMAGE = "registry.redhat.io/rhel8/skopeo:8.5-8"
+REGISTRY_DATA = f"{REGISTRY_PATH}/data"
+REGISTRY_AUTH = f"{REGISTRY_PATH}/auth"
+REGISTRY_CERTS = f"{REGISTRY_PATH}/certs"
+DOMAIN_CERT_PATH_CERT = f"{REGISTRY_PATH}/certs/domain.cert"
+PRIVATE_REGISTRY_NAME = "myprivateregistry"
+PRIVATE_REGISTRY_PORT = "5000:5000"
 
 
 def setup_ssh_keys(installer, nodes):
@@ -118,3 +134,187 @@ def exec_cephadm_preflight(installer, build_type, ceph_repo=None):
         raise AnsiblePlaybookExecutionError(
             f"Failed to execute cephadm preflight playbook:\n {e}"
         )
+
+
+def create_registry_directories(node):
+    """
+    Create private registry directories for disconnected install
+    """
+    path = "/opt/registry/{auth,certs,data}"
+    cmd = "mkdir -p {}".format(path)
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if out:
+        log.error("Failed to create directory for private registry")
+        return False
+    return True
+
+
+def set_registry_credentials(node, username, password):
+    """
+    Create credentials for accessing the private registry
+    Args:
+        node (ceph): Node to execute cmd
+        username (str): Username for the private registry
+        password (str): Password for the private registry
+    """
+    Package(node).install("httpd-tools")
+    cmd = f"htpasswd -bBc {REGISTRY_AUTH_PATH} {username} {password}"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if out:
+        log.error("Failed to create credentials for accessing the private registry")
+        return False
+    return True
+
+
+def create_self_signed_certificate(node):
+    """Creates self-signed certificate for private registry"""
+    Package(node).install("openssl")
+    cmd = (
+        f"openssl req -newkey rsa:4096 -nodes -sha256 -keyout {DOMAIN_KEY_PATH} -x509 -days 365 -out "
+        f'{DOMAIN_CERT_PATH} -addext "subjectAltName = DNS:{node.hostname}" '
+        f'-subj "/C=IN/ST=ST/L=XYZ/O=ORG/CN={node.hostname}"'
+    )
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if out:
+        log.error("Failed to create a self-signed certificate")
+        return False
+    return True
+
+
+def create_link_to_domain_cert(node):
+    """Creates a link to the domain certificate"""
+    cmd = f"ln -sf {DOMAIN_CERT_PATH} {REGISTRY_CERT_PATH}"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if out:
+        log.error("Failed to create a link to the domain certificate")
+        return False
+    return True
+
+
+def add_cert_to_trusted_list(node):
+    """Add the certificate to the trusted list on the private registry node"""
+    cmd = f"cp {DOMAIN_CERT_PATH} {CA_TRUST_ANCHORS_PATH}"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if out:
+        log.error("Failed to update-ca-trust")
+        return False
+
+    # Update the ca-trust
+    if not update_ca_trust(node):
+        return False
+    return True
+
+
+def update_ca_trust(node):
+    """Update the ca trust"""
+    cmd = "update-ca-trust"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if out:
+        log.error("Failed to update-ca-trust")
+        return False
+    return True
+
+
+def validate_trusted_list(node):
+    """Verify trust list is updated with hostname"""
+    cmd = f"trust list | grep -i {node.hostname}"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if node.hostname not in out:
+        log.error("Trust list not updated")
+        return False
+    return True
+
+
+def copy_cert_to_secondary_node(node, secondary_node):
+    """Copy the certificate to anotheer node in the cluster"""
+    cmd = (
+        f"scp {DOMAIN_CERT_PATH} root@{secondary_node.hostname}:{CA_TRUST_ANCHORS_PATH}"
+    )
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    if out:
+        log.error("Failed to copy the certificate to another node")
+        return False
+    return True
+
+
+def start_local_private_registry(node):
+    """Start local private registry"""
+
+    volumes = [
+        f"{REGISTRY_DATA}:/var/lib/registry:z",
+        f"{REGISTRY_AUTH}:/auth:z",
+        f"{REGISTRY_CERTS}:/certs:z",
+    ]
+    env = [
+        "REGISTRY_AUTH=htpasswd",
+        "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm",
+        "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd",
+        "REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt",
+        "REGISTRY_HTTP_TLS_KEY=/certs/domain.key",
+        "REGISTRY_COMPATIBILITY_SCHEMA1_ENABLED=true",
+    ]
+    detach = ["registry:2"]
+
+    if not Container(node).run(
+        image=PRIVATE_REGISTRY_NAME,
+        volume=volumes,
+        env=env,
+        ports=PRIVATE_REGISTRY_PORT,
+        restart="always",
+        detach_key=detach,
+    ):
+        log.error("Failed to start local secure private registry")
+        return False
+    return True
+
+
+def add_images_to_private_registry(node, username, password, registry, build_type):
+    """Red Hat Ceph Storage 5 image, Prometheus images, and Dashboard image from the Red Hat Customer Portal
+    to the private registry:"""
+
+    volumes = [
+        f"{REGISTRY_CERTS}:/certs:Z",
+        f"{DOMAIN_CERT_PATH_CERT}:/certs/domain.cert:Z",
+    ]
+
+    src_creds = f"{username}:{password}"
+    dest_creds = f"{username}:{password}"
+    dst_creds_dir = "./certs/"
+
+    # Get the required images here
+    images = get_images(build_type)
+    for image in images:
+        src_image = f"docker://{registry}/{image}"
+        dst_image = f"docker://{node.hostname}:5000/{image}"
+        skopeo_cmd = generate_skopeo_copy_cmd(
+            src_image,
+            dst_image,
+            src_creds,
+            dst_creds_dir,
+            dest_creds,
+            remove_signature=True,
+        )
+        Container(node).run(volume=volumes, rm=SKOPEO_IMAGE, cmds=skopeo_cmd)
+    return True
+
+
+def generate_skopeo_copy_cmd(
+    src_image,
+    dst_image,
+    src_creds=None,
+    dst_cert_dir=None,
+    dest_creds=None,
+    remove_signature=False,
+):
+    """Copy an image from one registry to another using skopeo"""
+    cmd = "skopeo copy"
+    if remove_signature:
+        cmd += " --remove-signatures"
+    if src_creds:
+        cmd += f" --src-creds {src_creds}"
+    if dest_creds:
+        cmd += f" --dest-creds {dest_creds}"
+    if dst_cert_dir:
+        cmd += f" --dest-cert-dir={dst_cert_dir}"
+    cmd += f" docker://{src_image} docker://{dst_image}"
+    return cmd
