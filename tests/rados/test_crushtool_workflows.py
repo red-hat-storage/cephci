@@ -7,8 +7,8 @@ test Module to :
 5. Print the output of bin tests
 """
 from ceph.ceph_admin import CephAdmin
-from ceph.rados.crushtool_workflows import CrushToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.crushtool_workflows import CrushToolWorkflows
 from utility.log import Log
 
 log = Log(__name__)

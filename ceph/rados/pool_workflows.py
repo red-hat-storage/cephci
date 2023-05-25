@@ -9,6 +9,7 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.rados_scrub import RadosScrubber
 from utility.log import Log
 
 log = Log(__name__)
@@ -26,6 +27,7 @@ class PoolFunctions:
             node: CephAdmin object
         """
         self.rados_obj = RadosOrchestrator(node=node)
+        self.scrub_obj = RadosScrubber(node=node)
         self.node = node
 
     def verify_target_ratio_set(self, pool_name, ratio):
@@ -115,13 +117,63 @@ class PoolFunctions:
         # removing the py file copied
         client_node.exec_command(sudo=True, cmd="rm -rf generate_omap_entries.py")
 
-        # restarting primary osd as metadata does not get updated automatically
-        # when number of object containing omap entries is below ~40
-        # this a workaround and will be addressed when RCA is complete
-        primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[0]
-        self.rados_obj.change_osd_state(action="restart", target=primary_osd)
+        # Storing the pg dump log before setting the deep-scrub parameters
+        before_deep_scrub_log = self.scrub_obj.get_pg_dump(
+            "pgid", "last_deep_scrub_stamp"
+        )
 
-        time.sleep(5)  # blind sleep to let omap metadata get updated
+        # Triggering deep scrub on the pool
+        self.rados_obj.run_deep_scrub(pool=pool_name)
+
+        flag = 1
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=6000)
+        while end_time > datetime.datetime.now():
+            after_deep_scrub_log = self.scrub_obj.get_pg_dump(
+                "pgid", "last_deep_scrub_stamp"
+            )
+            deep_scrub_status = self.scrub_obj.verify_scrub_deepscrub(
+                before_deep_scrub_log, after_deep_scrub_log, "deepscrub"
+            )
+            if deep_scrub_status:
+                log.debug(
+                    "deep scrubbing has not been completed on the pool"
+                    "Sleeping for 10 seconds and checking again"
+                )
+                time.sleep(10)
+                flag = 1
+                continue
+            flag = 0
+            log.info("Completed deep-scrub on the cluster")
+            break
+
+        if not flag:
+            log.error(
+                f"Could not complete deep-scrub on the pool : {pool_name} even with 6000 sec wait"
+            )
+            return False
+
+        pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
+        for detail in pool_stats:
+            if detail["name"] == pool_name:
+                pool_1_stats = detail["stats"]
+                if pool_1_stats["stored_omap"] <= 0:
+                    log.error(
+                        "No omap entries written into pool, Performing the workaround of restarting primary OSD"
+                    )
+                    # restarting primary osd as metadata does not get updated automatically.
+                    # TBD: bug raised for the issue:
+                    primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[
+                        0
+                    ]
+                    self.rados_obj.change_osd_state(
+                        action="restart", target=primary_osd
+                    )
+                else:
+                    log.info(
+                        f"Wrote {pool_1_stats['stored_omap']} bytes of omap data on the pool."
+                    )
+                    return True
+        time.sleep(10)  # blind sleep to let omap metadata get updated
         log.debug("Checking the amount of omap entries created on the pool")
         pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
         for detail in pool_stats:

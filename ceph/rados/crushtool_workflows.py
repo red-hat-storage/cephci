@@ -56,7 +56,9 @@ class CrushToolWorkflows:
 
         # Checking and installing ceph-base package on Client
         try:
-            out, rc = self.client.exec_command(sudo=True, cmd="rpm -qa | grep ceph-base")
+            out, rc = self.client.exec_command(
+                sudo=True, cmd="rpm -qa | grep ceph-base"
+            )
         except Exception:
             self.client.exec_command(sudo=True, cmd="yum install -y ceph-base")
 
@@ -625,9 +627,9 @@ class CrushToolWorkflows:
         # Setting the contents of the bin file in json
         cmd = f"crushtool -i {loc} --test --{test}"
         regex = r"\s*(\d.\d)-rhel-\d"
-        build = (re.search(regex, self.config.get("build", self.config.get("rhbuild")))).groups()[
-            0
-        ]
+        build = (
+            re.search(regex, self.config.get("build", self.config.get("rhbuild")))
+        ).groups()[0]
         if float(build) >= 6.0:
             cmd = cmd + " --num-rep 100"
 
