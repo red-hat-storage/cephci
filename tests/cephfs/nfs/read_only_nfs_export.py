@@ -5,6 +5,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -73,9 +74,9 @@ def run(ceph_cluster, **kw):
                 cmd=f"ceph nfs export create cephfs {nfs_name} "
                 f"{nfs_export_1} {fs_name} {export_path} --readonly",
             )
-        rc = fs_util.cephfs_nfs_mount(
-            client1, nfs_server, nfs_export_1, nfs_mounting_dir_1
-        )
+
+        retry_mount = retry(CommandFailed, tries=3, delay=60)(fs_util.cephfs_nfs_mount)
+        rc = retry_mount(client1, nfs_server, nfs_export_1, nfs_export_1)
         if not rc:
             log.error("cephfs nfs export mount failed")
             return 1
