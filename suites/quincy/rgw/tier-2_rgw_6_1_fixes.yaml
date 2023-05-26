@@ -1,0 +1,118 @@
+#
+# Objective: Test rgw features fixed or added in rhcs6.1
+#
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  # test persistent bucket notifications when kafka server is unreachable
+
+  - test:
+      name: test kafka_broker_persistent notifications for copy, delete events when kafka server is down
+      desc: test kafka_broker_persistent notifications for copy, delete events when kafka server is down
+      polarion-id: CEPH-83574417
+      module: sanity_rgw.py
+      config:
+        extra-pkgs:
+          - java
+        install_start_kafka: true
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_down_broker_persistent.yaml
+        timeout: 300
+
+  - test:
+      name: test kafka_broker_persistent notifications for multipart upload events when kafka server is down
+      desc: test kafka_broker_persistent notifications for multipart upload events when kafka server is down
+      polarion-id: CEPH-83574078
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_down_broker_persistent_multipart.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with kafka_broker_persistent
+      desc: notify on multipart upload events with kafka_broker_persistent
+      polarion-id: CEPH-83574066
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_multipart.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with kafka_broker
+      desc: notify on multipart upload events with kafka_broker
+      polarion-id: CEPH-83574069
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_multipart.yaml
+        timeout: 300
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cephadm: true
+        commands:
+          - "ceph -s"
+      desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200

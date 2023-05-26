@@ -916,7 +916,7 @@ pipelines:
             - rados
             - again
         - name: "Tier-2 RGW bucket notification"
-          execution_time: "1h 39m 47s"
+          execution_time: "2h 38m 12s"
           suite: "suites/pacific/rgw/tier-2_rgw_test-bucket-notifications.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-8"

@@ -697,7 +697,7 @@ pipelines:
           metadata:
             - rados
         - name: "Tier-2 RGW bucket notification on the latest development build"
-          execution_time: "52m 12s"
+          execution_time: "1h 30m 38s"
           suite: "suites/quincy/rgw/tier-2_rgw_test_bucket_notifications.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-9"
