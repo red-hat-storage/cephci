@@ -1718,6 +1718,48 @@ os.system('sudo systemctl start  network')
             pass
         return 0
 
+    def get_floating_ip(self, node, **kwargs):
+        user = os.getlogin()
+        log.info(f"{user} logged in")
+        new_kwargs = kwargs.copy()
+        if kwargs.get("cloud_type") == "openstack":
+            new_kwargs.pop("cloud_type")
+            driver = get_openstack_driver(**new_kwargs)
+            node_obj = self.get_node_obj(node, **kwargs)
+            network_pool = list(node_obj.extra.get("addresses").keys())
+            floating_ip = driver.ex_create_floating_ip(network_pool[0])
+            return floating_ip
+        elif kwargs.get("cloud_type") == "ibmc":
+            # To DO for IBM
+            pass
+        else:
+            pass
+
+    def get_node_obj(self, node, **kwargs):
+        user = os.getlogin()
+        log.info(f"{user} logged in")
+        new_kwargs = kwargs.copy()
+        if kwargs.get("cloud_type") == "openstack":
+            new_kwargs.pop("cloud_type")
+            driver = get_openstack_driver(**new_kwargs)
+            for node_obj in driver.list_nodes():
+                if node.private_ip in node_obj.private_ips:
+                    return node_obj
+
+    def remove_floating_ip(self, floating_ip, **kwargs):
+        user = os.getlogin()
+        log.info(f"{user} logged in")
+        new_kwargs = kwargs.copy()
+        if kwargs.get("cloud_type") == "openstack":
+            new_kwargs.pop("cloud_type")
+            driver = get_openstack_driver(**new_kwargs)
+            driver.ex_delete_floating_ip(floating_ip)
+        elif kwargs.get("cloud_type") == "ibmc":
+            # To DO for IBM
+            pass
+        else:
+            pass
+
     def create_file_data(self, client, directory, no_of_files, file_name, data):
         """
         This function will write files to the directory with the data given

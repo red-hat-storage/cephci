@@ -24,11 +24,26 @@ def run(ceph_cluster, **kw):
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
-        virtual_ip = config.get("virtual_ip", "10.0.209.126/30")
+        installer_node = ceph_cluster.get_ceph_objects("installer")
+        # virtual_ip = config.get("virtual_ip", "10.0.209.126/30")
         build = config.get("build", config.get("rhbuild"))
-
+        osp_cred = config.get("osp_cred")
+        if config.get("cloud-type") == "openstack":
+            os_cred = osp_cred.get("globals").get("openstack-credentials")
+            params = {}
+            params["username"] = os_cred["username"]
+            params["password"] = os_cred["password"]
+            params["auth_url"] = os_cred["auth-url"]
+            params["auth_version"] = os_cred["auth-version"]
+            params["tenant_name"] = os_cred["tenant-name"]
+            params["service_region"] = os_cred["service-region"]
+            params["domain_name"] = os_cred["domain"]
+            params["tenant_domain_id"] = os_cred["tenant-domain-id"]
+            params["cloud_type"] = "openstack"
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        floating_ip = fs_util.get_floating_ip(installer_node[0].node, **params)
+        # virtual_ip = config.get("virtual_ip", "10.0.209.126/30")
         log.info("checking Pre-requisites")
         if not clients:
             log.info(
@@ -42,7 +57,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f'ceph nfs cluster create {nfs_name} "1 {nfs_servers[0].node.hostname} {nfs_servers[1].node.hostname}" '
-            f"--ingress --virtual-ip {virtual_ip}",
+            f"--ingress --virtual-ip {floating_ip.ip_address}/30",
         )
 
         log.info("validate the services hace started on nfs")
@@ -59,6 +74,7 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
+        fs_util.remove_floating_ip(floating_ip, **params)
 
 
 @retry(CommandFailed, tries=3, delay=60)
