@@ -20,12 +20,12 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-    utilities/gather_info.py --reuse FILE
-    utilities/gather_info.py --reuse FILE --output YAML
+    cephci/gather_info.py (--reuse <FILE>)
+        [--output <YAML>]
 
  Options:
-    --reuse <FILE>                    Use the stored vm state for rerun
-    -o --output <YAML>                Create file with cluster info collected
+    --reuse <FILE>      Use the stored vm state for rerun
+    -o --output <YAML>  Create file with cluster info collected
 """
 
 
