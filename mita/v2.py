@@ -94,6 +94,28 @@ class NodeDeleteFailure(Exception):
 class CephVMNodeV2:
     """Represent the VMNode required for cephci."""
 
+    default_rhosd_network_names = [
+        "provider_net_cci_12",
+        "provider_net_cci_11",
+        "provider_net_cci_9",
+        "provider_net_cci_8",
+        "provider_net_cci_7",
+        "provider_net_cci_6",
+        "provider_net_cci_5",
+        "provider_net_cci_4",
+    ]
+
+    default_rhos01_network_names = [
+        "shared_net_12",
+        "shared_net_11",
+        "shared_net_9",
+        "shared_net_8",
+        "shared_net_7",
+        "shared_net_6",
+        "shared_net_5",
+        "shared_net_4",
+    ]
+
     def __init__(
         self,
         username: str,
@@ -145,6 +167,15 @@ class CephVMNodeV2:
 
         if node_name:
             self.node = self._get_node(name=node_name)
+
+        if "rhos-d" in auth_url:
+            self.default_network_names = self.default_rhosd_network_names
+        elif "rhos-01" in auth_url:
+            self.default_network_names = self.default_rhos01_network_names
+        else:
+            self.default_network_names = None
+
+        LOG.info(f"OSP Config network set used are - {self.default_network_names}")
 
     def create(
         self,
@@ -383,23 +414,13 @@ class CephVMNodeV2:
         Raises:
             ResourceNotFound when there no suitable networks in the environment.
         """
-        default_network_names = [
-            "provider_net_cci_12",
-            "provider_net_cci_11",
-            "provider_net_cci_9",
-            "provider_net_cci_8",
-            "provider_net_cci_7",
-            "provider_net_cci_6",
-            "provider_net_cci_5",
-            "provider_net_cci_4",
-        ]
         default_network_count = 1
 
         if name:
             network_names = name if isinstance(name, list) else [name]
             default_network_count = len(network_names)
         else:
-            network_names = default_network_names
+            network_names = self.default_network_names
 
         rtn_nets = list()
         for net in network_names:
