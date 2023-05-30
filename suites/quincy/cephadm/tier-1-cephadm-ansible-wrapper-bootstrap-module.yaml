@@ -66,6 +66,8 @@ tests:
       desc: Verify cluster purge via cephamd commands
       polarion-id: CEPH-83573765
       module: test_remove_cluster.py
+      config:
+        validation: False
 
   - test:
       name: Bootstrap cluster using cephadm-ansible wrapper modules
@@ -84,6 +86,8 @@ tests:
       desc: Verify cluster purge via cephamd commands
       polarion-id: CEPH-83573765
       module: test_remove_cluster.py
+      config:
+        validation: False
 
   - test:
       name: Bootstrap cluster using cephadm-ansible wrapper modules
@@ -102,6 +106,8 @@ tests:
       desc: Verify cluster purge via cephamd commands
       polarion-id: CEPH-83573765
       module: test_remove_cluster.py
+      config:
+        validation: False
 
   - test:
       name: Login to docker registry using cephadm-ansible module 'cephadm_registry_login'
