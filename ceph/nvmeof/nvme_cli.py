@@ -59,3 +59,19 @@ class NVMeCLI(Cli):
                 output-format: json             # output format
         """
         return self.execute(cmd=f"nvme list {config_dict_to_string(kwargs)}", sudo=True)
+
+    def disconnect(self, **kwargs):
+        """Disconnect controller connected to the subsystem.
+
+        Example::
+
+            kwargs:
+                nqn: Subsystem NQN id           # Subsystem NQN
+        """
+        return self.execute(
+            cmd=f"nvme disconnect {config_dict_to_string(kwargs)}", sudo=True
+        )
+
+    def disconnect_all(self):
+        """Disconnects all controllers connected to subsystems."""
+        return self.execute(cmd="nvme disconnect-all", sudo=True)

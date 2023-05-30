@@ -77,6 +77,11 @@ tests:
         rep_pool_config:
           pool: rbd
         install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - pool
+          - subsystems
+          - initiators
+          - gateway
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1

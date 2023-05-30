@@ -6,7 +6,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 import json
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.gateway import Gateway, configure_spdk
+from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
@@ -103,6 +103,33 @@ def initiators(ceph_cluster, gateway, config):
             p.spawn(run_fio, **io_args)
 
 
+def cleanup(ceph_cluster, rbd_obj, config):
+    """Cleanup the ceph-nvme gw entities.
+
+    Args:
+        ceph_cluster: Ceph Cluster
+        rbd_obj: RBD object
+        config: test config
+    """
+    if "initiators" in config["cleanup"]:
+        for initiator_cfg in config["initiators"]:
+            node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
+            initiator = Initiator(node)
+            initiator.disconnect(**{"nqn": initiator_cfg["subnqn"]})
+
+    if "subsystems" in config["cleanup"]:
+        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+        gateway = Gateway(gw_node)
+        for sub_cfg in config["subsystems"]:
+            gateway.delete_subsystem(**{"subnqn": sub_cfg["nqn"]})
+
+        if "gateway" in config["cleanup"]:
+            delete_gateway(gw_node)
+
+    if "pool" in config["cleanup"]:
+        rbd_obj.clean_up(pools=[config["rbd_pool"]])
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
     Return the status of the Ceph NVMEof test execution.
@@ -170,6 +197,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.error(err)
     finally:
         if config.get("cleanup"):
-            rbd_obj.clean_up(pools=[rbd_pool])
+            cleanup(ceph_cluster, rbd_obj, config)
 
     return 1
