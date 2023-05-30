@@ -26,6 +26,7 @@ from tests.rbd.rbd_utils import (
     verify_namespace_exist,
 )
 from utility.log import Log
+from utility.utils import save_client_config_keyring
 
 log = Log(__name__)
 
@@ -36,6 +37,7 @@ def image_migrate_and_verify(
     dest_pool,
     namespace,
     image,
+    client_node,
 ):
     """Migrate the image from source to destination and verify migration
 
@@ -47,7 +49,7 @@ def image_migrate_and_verify(
     src_spec1 = src_pool + "/" + namespace + "/" + image
     dest_spec1 = dest_pool + "/" + image
     client_id = "client.1"
-    mgr_role = "profile rbd-read-only"
+    mgr_role = f"profile rbd-read-only pool={src_pool} namespace={namespace}"
     osd_role = "profile rbd-read-only"
     if client_config_read_only(
         rbd,
@@ -59,6 +61,7 @@ def image_migrate_and_verify(
     ):
         log.error("verify for command syntax")
         return 1
+    save_client_config_keyring(client_node=client_node, client_id=client_id)
     rbd.create_image(
         pool_name=src_pool,
         image_name=image,
@@ -70,9 +73,21 @@ def image_migrate_and_verify(
         image_name=image,
         namespace=namespace,
     )
-    out, err = rbd.migration_prepare(src_spec1, dest_spec1, client_id=client_id)
-    if "Migration: prepare: failed to open image" in err:
+
+    out, err = rbd.rbd_bench(
+        imagespec=src_spec1, client_id=client_id, all=True, check_ec=False
+    )
+    if "Operation not permitted" in err:
         log.error(f"{err}")
+        log.info("IOs failed as expected as client has read-only permission to images")
+    else:
+        log.error("IOs are allowed for client having read-only permission to images")
+        return 1
+
+    out, err = rbd.migration_prepare(
+        src_spec1, dest_spec1, client_id=client_id, all=True, check_ec=False
+    )
+    if "Migration: prepare: failed to open image" in err:
         log.info(
             "Image migration for client-x having read-only permission to images "
             "from namespace is successfully blocked"
@@ -121,6 +136,7 @@ def run(**kw):
     dest_pool2 = kw["config"]["destination"]["ec_pool_config"]["pool"]
     namespace = kw["config"].get("namespace", "testnamespace")
     flag = 0
+    client_node = rbd.ceph_client
     try:
         # create namesapce for rep_pool and ec_pool
         for pool in src_pools:
@@ -140,6 +156,7 @@ def run(**kw):
             dest_pool=dest_pool1,
             namespace=namespace,
             image="rbd_rep_image",
+            client_node=client_node,
         ):
             flag = 1
 
@@ -150,6 +167,7 @@ def run(**kw):
             dest_pool=dest_pool2,
             namespace=namespace,
             image="rbd_ec_image",
+            client_node=client_node,
         ):
             flag = 1
 
