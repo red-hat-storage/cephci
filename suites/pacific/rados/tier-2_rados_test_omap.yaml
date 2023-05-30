@@ -123,3 +123,13 @@ tests:
             num_keys_obj: 300000
         verify_cluster_health: true
 
+  - test:
+      name: concurrent and parallel IOPS on an object
+      desc: Perform concurrent and parallel IOPs on one object
+      module: test_object_ops.py
+      config:
+        obj_sizes:
+          - 45
+          - 80
+          - 107
+      polarion-id: CEPH-83571710

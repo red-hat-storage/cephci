@@ -15,6 +15,7 @@ import re
 import time
 
 from ceph.ceph_admin import CephAdmin
+from ceph.parallel import parallel
 from utility.log import Log
 
 log = Log(__name__)
@@ -1501,3 +1502,79 @@ class RadosOrchestrator:
         out, _ = self.client.exec_command(cmd=host_cmd, sudo=True)
         host_status = json.loads(out)[0]["status"]
         return False if "Offline" in host_status else True
+
+    def run_concurrent_io(self, pool_name: str, obj_name: str, obj_size: int):
+        """
+        Use rados put to perform concurrent IOPS on a particular object in a pool.
+        Args:
+            pool_name: name of the pool
+            obj_name: name of the object
+            obj_size: size of the object in MB
+        """
+        installer_node = self.ceph_cluster.get_nodes(role="installer")[0]
+        put_cmd = f"rados put -p {pool_name} {obj_name} /mnt/sample_1M"
+        out, _ = installer_node.exec_command(
+            sudo=True, cmd="truncate -s 1M ~/sample_1M"
+        )
+        out, _ = self.client.exec_command(
+            sudo=True, cmd="truncate -s 1M /mnt/sample_1M"
+        )
+
+        def rados_put_installer(installer_offset=1048576):
+            for i in range(int(obj_size / 2)):
+                inst_put_cmd = f"{put_cmd} --offset {installer_offset}"
+                self.node.shell(
+                    args=[inst_put_cmd],
+                    base_cmd_args={"mount": "~/sample_1M"},
+                    check_status=False,
+                )
+                installer_offset = installer_offset + 2097152
+
+        def rados_put_client(client_offset=0):
+            for i in range(int(obj_size / 2)):
+                client_put_cmd = f"{put_cmd} --offset {client_offset}"
+                self.client.exec_command(sudo=True, cmd=client_put_cmd, check_ec=False)
+                client_offset = client_offset + 2097152
+
+        with parallel() as p:
+            p.spawn(rados_put_client)
+            p.spawn(rados_put_installer)
+
+    def run_parallel_io(self, pool_name: str, obj_name: str, obj_size: int):
+        """
+        Use rados put to perform parallel IOPS on a particular object in a pool.
+        Args:
+            pool_name: name of the pool
+            obj_name: name of the object
+            obj_size: size of the object in MB
+        """
+        installer_node = self.ceph_cluster.get_nodes(role="installer")[0]
+        try:
+            out, rc = installer_node.exec_command(
+                sudo=True, cmd="rpm -qa | grep ceph-base"
+            )
+        except Exception:
+            installer_node.exec_command(sudo=True, cmd="yum install -y ceph-base")
+
+        put_cmd = "rados put -p $pool_name $obj_name ~/sample_1M --offset $offset"
+        loop_cmd = (
+            f"for ((i=1 ; i<=$END ; i++));"
+            f"do {put_cmd}; export offset=$(($offset + 2097152));"
+            f"done"
+        )
+
+        export_cmd = (
+            f"export pool_name={pool_name} obj_name={obj_name} END={int(obj_size/2)}"
+        )
+        inst_run_cmd = f"{export_cmd}; export offset=1048576; {loop_cmd}"
+        client_run_cmd = f"{export_cmd}; export offset=0; {loop_cmd}"
+
+        out, _ = installer_node.exec_command(
+            sudo=True, cmd="truncate -s 1M ~/sample_1M"
+        )
+        out, _ = self.client.exec_command(sudo=True, cmd="truncate -s 1M ~/sample_1M")
+
+        log.info(f"Running cmd: {client_run_cmd} on {self.client.hostname}")
+        self.client.exec_command(sudo=True, cmd=client_run_cmd, check_ec=False)
+        log.info(f"Running cmd: {inst_run_cmd} on {installer_node.hostname}")
+        installer_node.exec_command(sudo=True, cmd=inst_run_cmd)
