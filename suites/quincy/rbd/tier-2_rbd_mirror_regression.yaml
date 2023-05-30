@@ -370,3 +370,60 @@ tests:
               io_total: 200M
       polarion-id: CEPH-9515
       desc: Testing parent snapshot deletion for mirrored image
+
+  - test:
+      desc: Image migration of mirrored image
+      module: test_rbd_mirror_image_migration.py
+      clusters:
+        ceph-rbd1:
+          config:
+            journal:
+              source:
+                ec_pool_config:
+                  pool: rbd_ECpool1
+                  data_pool: data_pool_ec1
+                  image: rbd_ec_image
+                  size: 2G
+                  io_total: 200M
+                rep_pool_config:
+                  pool: rbd_RepPool1
+                  image: rbd_rep_image
+                  size: 2G
+                  io_total: 200M
+              destination:
+                do_not_create_image: True
+                ec_pool_config:
+                  pool: rbd_ECpool2
+                  data_pool: data_pool_ec2
+                rep_pool_config:
+                  pool: rbd_RepPool2
+            snapshot:
+              source:
+                ec_pool_config:
+                  mode: image
+                  mirrormode: snapshot
+                  pool: rbd_ECpool1
+                  data_pool: data_pool_ec1
+                  image: rbd_ec_image
+                  size: 2G
+                  io_total: 200M
+                rep_pool_config:
+                  mode: image
+                  mirrormode: snapshot
+                  pool: rbd_RepPool1
+                  image: rbd_rep_image
+                  size: 2G
+                  io_total: 200M
+              destination:
+                do_not_create_image: True
+                ec_pool_config:
+                  mode: image
+                  mirrormode: snapshot
+                  pool: rbd_ECpool2
+                  data_pool: data_pool_ec2
+                rep_pool_config:
+                  mode: image
+                  mirrormode: snapshot
+                  pool: rbd_RepPool2
+      name: Testing image live migration of mirrored image
+      polarion-id: CEPH-83573320
