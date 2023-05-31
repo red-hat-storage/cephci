@@ -39,3 +39,15 @@ class NodeConfigError(Exception):
     """
     Custom exception thrown when node configuration fails
     """
+
+
+class CephadmOpsExecutionError(Exception):
+    """
+    Custom exception thrown when any cephadm operation fails
+    """
+
+
+class MonDaemonError(Exception):
+    """
+    Custom exception thrown when Mon daemon is not in expected state.
+    """
