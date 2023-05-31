@@ -23,6 +23,10 @@ class Node:
         self._id = self._node.id
         self._name = name
 
+    def _create(self, **config):
+        """Create node"""
+        self._cloud.create_ceph_nodes(**config)
+
     @staticmethod
     def _get_cloud(cloud, **config):
         """Get cloud object"""

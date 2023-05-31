@@ -1,17 +1,30 @@
+import os
 import socket
+from time import sleep
 
+import yaml
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
+from ceph.ceph import RolesContainer, parallel
+from ceph.utils import setup_vm_node
 from cli.exceptions import (
     CloudProviderError,
     ConfigError,
     ResourceNotFoundError,
     UnexpectedStateError,
 )
+from utility.log import Log
+from utility.utils import generate_node_name
+
+log = Log(__name__)
 
 TIMEOUT = 280
 API_VERSION = "2.2"
+
+
+class NodeCreationError(Exception):
+    pass
 
 
 class Openstack:
@@ -220,3 +233,94 @@ class Openstack:
             return
 
         self._driver.destroy_volume(volume)
+
+    def create_ceph_nodes(
+        self, cluster_conf, inventory, osp_cred, run_id, instances_name
+    ):
+        osp_glbs = osp_cred.get("globals")
+        os_cred = osp_glbs.get("openstack-credentials")
+        params = dict()
+        ceph_cluster = cluster_conf.get("ceph-cluster")
+
+        if ceph_cluster.get("inventory"):
+            inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
+            with open(inventory_path, "r") as inventory_stream:
+                inventory = yaml.safe_load(inventory_stream)
+        node_count = 0
+        params["cloud-data"] = inventory.get("instance").get("setup")
+        params["username"] = os_cred["username"]
+        params["password"] = os_cred["password"]
+        params["auth-url"] = os_cred["auth-url"]
+        params["auth-version"] = os_cred["auth-version"]
+        params["tenant-name"] = os_cred["tenant-name"]
+        params["service-region"] = os_cred["service-region"]
+        params["domain"] = os_cred["domain"]
+        params["tenant-domain-id"] = os_cred["tenant-domain-id"]
+        params["keypair"] = os_cred.get("keypair", None)
+        ceph_nodes = dict()
+
+        if inventory.get("instance").get("create"):
+            if ceph_cluster.get("image-name"):
+                params["image-name"] = ceph_cluster.get("image-name")
+            else:
+                params["image-name"] = (
+                    inventory.get("instance").get("create").get("image-name")
+                )
+
+            params["cluster-name"] = ceph_cluster.get("name")
+            params["vm-size"] = inventory.get("instance").get("create").get("vm-size")
+            params["vm-network"] = (
+                inventory.get("instance").get("create").get("vm-network")
+            )
+
+            if params.get("root-login") is False:
+                params["root-login"] = False
+            else:
+                params["root-login"] = True
+
+            # replace with thread calls?
+
+            with parallel() as p:
+                for node in range(1, 100):
+                    sleep(10 * node)
+                    node = "node" + str(node)
+                    if not ceph_cluster.get(node):
+                        break
+
+                    node_dict = ceph_cluster.get(node)
+                    node_params = params.copy()
+                    node_params["role"] = RolesContainer(node_dict.get("role"))
+                    user = os.getlogin()
+                    node_params["id"] = node_dict.get("id") or node
+                    node_params["location"] = node_dict.get("location")
+                    node_params["node-name"] = generate_node_name(
+                        node_params.get("cluster-name", "ceph"),
+                        instances_name or user,
+                        run_id,
+                        node,
+                        node_params["role"],
+                    )
+
+                    node_params["networks"] = node_dict.get("networks", [])
+                    if node_dict.get("no-of-volumes"):
+                        node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
+                        node_params["size-of-disks"] = node_dict.get("disk-size")
+                        # osd-scenario option is not mandatory and,
+                        # can be used only for specific OSD_SCENARIO
+                        node_params["osd-scenario"] = node_dict.get("osd-scenario")
+
+                    if node_dict.get("image-name"):
+                        node_params["image-name"] = node_dict["image-name"]["openstack"]
+
+                    if node_dict.get("cloud-data"):
+                        node_params["cloud-data"] = node_dict.get("cloud-data")
+                    node_count += 1
+                    p.spawn(setup_vm_node, node, ceph_nodes, **node_params)
+
+        if len(ceph_nodes) != node_count:
+            log.error(
+                f"Mismatch error in number of VMs creation. "
+                f"Initiated: {node_count}  \tSpawned: {len(ceph_nodes)}"
+            )
+            raise NodeCreationError("Required number of nodes not created")
+        return ceph_nodes

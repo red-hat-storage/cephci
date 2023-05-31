@@ -39,3 +39,9 @@ class NodeConfigError(Exception):
     """
     Custom exception thrown when node configuration fails
     """
+
+
+class TestSetupFailure(Exception):
+    """
+    Custom exception thrown when test setup fails
+    """
