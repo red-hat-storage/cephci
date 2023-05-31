@@ -82,6 +82,7 @@ def validate_ceph_disks(nodes):
 
 def run(ceph_cluster, **kw):
     """Cephadm remove cluster"""
+    validation = bool(kw.get("config", {}).get("validation", True))
     nodes = ceph_cluster.get_nodes()
     installer = ceph_cluster.get_ceph_object("installer")
 
@@ -91,7 +92,8 @@ def run(ceph_cluster, **kw):
         raise CephadmOpsExecutionError("Failed to get cluster FSID")
 
     # Disable cephadm module
-    if CephAdm(installer).ceph.mgr.module(action="disable", module="cephadm"):
+    error, _ = CephAdm(installer).ceph.mgr.module(action="disable", module="cephadm")
+    if error:
         raise CephadmOpsExecutionError("Failed to disable cephadm module")
 
     # Execute rm-cluster on all nodes
@@ -104,6 +106,11 @@ def run(ceph_cluster, **kw):
             raise CephadmOpsExecutionError(
                 f"Failed to execute rm-cluster on node '{node.ip_address}'"
             )
+
+    # Check if validation set to `False`
+    if not validation:
+        log.info("Skipping validation ...")
+        return 0
 
     # Validate ceph config directory, disks and containers
     validate_ceph_config_dir(
