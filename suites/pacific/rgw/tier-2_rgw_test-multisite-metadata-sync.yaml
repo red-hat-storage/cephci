@@ -337,3 +337,17 @@ tests:
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
       name: user operations using REST
+
+# please include test cases before below rename testcase as the process is disruptive currently
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_zone_rename.yaml
+            timeout: 300
+      desc: Test zone rename in non master that is secondary
+      module: sanity_rgw_multisite.py
+      name: Perform zone rename in non master that is secondary
+      polarion-id: CEPH-10740
+      comments: known issue (BZ2210757)
