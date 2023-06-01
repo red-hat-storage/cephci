@@ -1995,3 +1995,20 @@ def validate_image(conf, cloud_type):
                             f"Node {node} has image-name provided , but no corresponding image given for {cloud_type} "
                             f"Please set the {cloud_type}:image in global conf {validate_image.__doc__}"
                         )
+
+
+def save_client_config_keyring(**kw):
+    """
+    retrieve a user, key, and capabilities and then save the user to a client keyring file
+
+    Args:
+        client_node: node where command needs to be run
+        client_id: id of client which configuration need to save
+        **kw: Any other optional arguement
+
+    Returns:
+        exec_cmd response
+    """
+    return kw["client_node"].exec_command(
+        cmd=f"sudo ceph auth get {kw['client_id']} -o /etc/ceph/ceph.{kw['client_id']}.keyring"
+    )

@@ -379,6 +379,17 @@ tests:
       desc: Testing parent snapshot deletion for mirrored image
 
   - test:
+      name: Test to change of mirror pool replica size
+      module: test_rbd_mirror_replica_count.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io_total: 200M
+      polarion-id: CEPH-9518
+      desc: Verify changing mirror pool replica size shouldn't affect mirroring with IO
+
+  - test:
       desc: Image migration of mirrored image
       module: test_rbd_mirror_image_migration.py
       clusters:
@@ -434,3 +445,4 @@ tests:
                   pool: rbd_RepPool2
       name: Testing image live migration of mirrored image
       polarion-id: CEPH-83573320
+

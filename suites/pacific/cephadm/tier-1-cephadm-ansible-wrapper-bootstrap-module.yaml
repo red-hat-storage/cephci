@@ -66,6 +66,8 @@ tests:
       desc: Verify cluster purge via cephamd commands
       polarion-id: CEPH-83573765
       module: test_remove_cluster.py
+      config:
+        validation: False
 
   - test:
       name: Bootstrap cluster using cephadm-ansible wrapper modules
@@ -84,6 +86,8 @@ tests:
       desc: Verify cluster purge via cephamd commands
       polarion-id: CEPH-83573765
       module: test_remove_cluster.py
+      config:
+        validation: False
 
   - test:
       name: Bootstrap cluster using cephadm-ansible wrapper modules
@@ -102,29 +106,34 @@ tests:
       desc: Verify cluster purge via cephamd commands
       polarion-id: CEPH-83573765
       module: test_remove_cluster.py
-
-  - test:
-      name: Login to docker registry using cephadm-ansible module 'cephadm_registry_login'
-      desc: Execute 'playbooks/login-to-registry.yaml' playbook
-      polarion-id: CEPH-83575217
-      module: test_cephadm_ansible_wrapper.py
       config:
-        ansible_wrapper:
-          module: "cephadm_registry_login"
-          playbook: playbooks/login-to-registry.yaml
-          module_args:
-            registry-url: registry.redhat.io
-            docker: true
+        validation: False
 
-  - test:
-      name: Bootstrap a cluster using cephadm-ansible module 'cephadm_bootstrap' with docker
-      desc: Execute 'playbooks/bootstrap-cluster.yaml' playbook
-      polarion-id: CEPH-83575202
-      module: test_cephadm_ansible_wrapper.py
-      config:
-        ansible_wrapper:
-          module: "cephadm_bootstrap"
-          playbook: playbooks/bootstrap-cluster.yml
-          module_args:
-            mon_node: node1
-            docker: true
+  #
+  # Note (vamahaja): Skipping these TCs due to bz #2184673
+  #
+  #- test:
+  #    name: Login to docker registry using cephadm-ansible module 'cephadm_registry_login'
+  #    desc: Execute 'playbooks/login-to-registry.yaml' playbook
+  #    polarion-id: CEPH-83575217
+  #    module: test_cephadm_ansible_wrapper.py
+  #    config:
+  #      ansible_wrapper:
+  #        module: "cephadm_registry_login"
+  #        playbook: playbooks/login-to-registry.yaml
+  #        module_args:
+  #          registry-url: registry.redhat.io
+  #          docker: true
+
+  #- test:
+  #    name: Bootstrap a cluster using cephadm-ansible module 'cephadm_bootstrap' with docker
+  #    desc: Execute 'playbooks/bootstrap-cluster.yaml' playbook
+  #    polarion-id: CEPH-83575202
+  #    module: test_cephadm_ansible_wrapper.py
+  #    config:
+  #      ansible_wrapper:
+  #        module: "cephadm_bootstrap"
+  #        playbook: playbooks/bootstrap-cluster.yml
+  #        module_args:
+  #          mon_node: node1
+  #          docker: true

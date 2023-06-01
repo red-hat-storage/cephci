@@ -1,5 +1,6 @@
 import traceback
 from datetime import datetime, timedelta
+from time import sleep
 
 from yaml import safe_dump
 
@@ -39,10 +40,51 @@ def smallfile_io(client, **kwargs):
         compose_dir = generate_compose(
             client, service_list, compose_file=kwargs.get("compose_file")
         )
-        client.exec_command(
+        out, rc = client.exec_command(
             sudo=True,
-            cmd=f"cd {compose_dir};podman-compose -f {kwargs.get('compose_file')} up -d",
+            cmd=f"cd {compose_dir} ; podman-compose -f {kwargs.get('compose_file')} config --services",
         )
+        services = out.strip().split("\n")
+        total_services = len(services) - 1
+        BATCH_SIZE = 10
+        service_prefix = "fs_compose.yaml_smallfile_"
+        failed_containers = []
+        for i in range(0, total_services, BATCH_SIZE):
+            # Construct the docker-compose command for this batch
+            services = " ".join(
+                [
+                    service_prefix + str(j)
+                    for j in range(i, min(i + BATCH_SIZE, total_services))
+                ]
+            )
+            log.info(f"Starting services for batch {i + 1}...")
+            log.info(
+                f"cd {compose_dir};podman-compose -f {kwargs.get('compose_file')} up -d {services}"
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=f"cd {compose_dir};podman-compose -f {kwargs.get('compose_file')} up -d {services}",
+                long_running=True,
+            )
+            while True:
+                # Check container status
+                sleep(120)
+                out, rc = client.exec_command(
+                    sudo=True, cmd="podman ps -q --format '{{.Names}} {{.Status}}'"
+                )
+                log.info(out)
+                if not out:
+                    log.info("All the Containers have been Exited")
+                    break
+                sleep(30)
+        check_command = (
+            "podman ps -a --format '{{.Names}} {{.Status}}' | grep 'Exited (1)'"
+        )
+        out, rc = client.exec_command(sudo=True, cmd=check_command, check_ec=False)
+        failed_containers += out.strip().split("\n")
+        if failed_containers:
+            for service in failed_containers:
+                log.info(f"Failed Service : {service}")
     else:
         for op in ops:
             for i in range(0, iter):

@@ -43,7 +43,14 @@ def run(ceph_cluster, **kw):
 
         if param == checksum:
             # set checksum value for the pool
-            cephadm.shell([f"ceph osd pool set {pool_name} csum_type {param}"])
+            rados_obj.set_pool_property(pool=pool_name, props="csum_type", value=param)
+            # verify checksum value for the pool
+            assert (
+                param
+                == rados_obj.get_pool_property(pool=pool_name, props="csum_type")[
+                    "csum_type"
+                ]
+            )
         # rados bench will perform IOPs and also verify the num of objs written
         assert rados_obj.bench_write(pool_name=pool_name, **{"max_objs": 500})
         assert rados_obj.detete_pool(pool=pool_name)
@@ -98,6 +105,14 @@ def run(ceph_cluster, **kw):
             assert "crc32c" in out
 
             for checksum in checksum_list:
+                # create pools with given config when OSD csum_type is default crc32c
+                create_pool_write_iops(
+                    param=checksum, pool_type="replicated"
+                ) if "crc" in checksum else create_pool_write_iops(
+                    param=checksum, pool_type="ec"
+                )
+
+            for checksum in checksum_list:
                 # set the global checksum value
                 cfg = {
                     "section": "osd",
@@ -111,10 +126,7 @@ def run(ceph_cluster, **kw):
                 assert checksum in out
                 log.info(f"global checksum set verified - {out}")
 
-                # restart osd services
-                restart_osd_service()
-
-                # create pools with given config
+                # create pools with given config when OSD csum_type is varied
                 create_pool_write_iops(
                     param=checksum, pool_type="replicated"
                 ) if "crc" in checksum else create_pool_write_iops(

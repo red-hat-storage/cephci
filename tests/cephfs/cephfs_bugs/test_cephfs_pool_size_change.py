@@ -138,7 +138,7 @@ def run(ceph_cluster, **kw):
         )
         no_of_files = "{1..1000}"
         data_pool_pg_num = str(int(data_pool_pg_num) - 1)
-        metadata_pool_pg_num = str(int(metadata_pool_pg_num) - 1)
+        metadata_pool_pg_num = str(int(metadata_pool_pg_num) + 1)
         commands = [
             f'for n in {no_of_files}; do dd if=/dev/urandom of={kernel_mount_dir}/dir3/file$( printf %03d "$n" )'
             f" bs=1M count=10; done",
@@ -161,7 +161,7 @@ def run(ceph_cluster, **kw):
             "Change cephfs data and metadata pool pg_num and pgp_num to existing size '+1' with client IO running"
         )
         data_pool_pg_num = str(int(data_pool_pg_num) + 1)
-        metadata_pool_pg_num = str(int(metadata_pool_pg_num) + 1)
+        metadata_pool_pg_num = str(int(metadata_pool_pg_num) - 1)
         commands = [
             f'for n in {no_of_files}; do     dd if=/dev/urandom of={kernel_mount_dir}/dir5/file$( printf %03d "$n" )'
             f" bs=1M count=10; done",

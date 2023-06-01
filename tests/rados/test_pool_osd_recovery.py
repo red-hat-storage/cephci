@@ -99,6 +99,20 @@ def run(ceph_cluster, **kw) -> int:
     log.info("Completed reboot of all the OSD hosts, Checking cluster health status")
     # Checking cluster health after the test
     method_should_succeed(rados_obj.run_pool_sanity_check)
+
+    log.info("Wait for rebooted hosts to come online")
+    timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+    while datetime.datetime.now() < timeout_time:
+        try:
+            for node in osd_nodes:
+                assert rados_obj.check_host_status(hostname=node.hostname)
+            log.info("Rebooted hosts are up")
+            break
+        except AssertionError:
+            time.sleep(25)
+            if datetime.datetime.now() >= timeout_time:
+                log.error(f"{node.hostname} status is still offline after 5 mins")
+                return 1
     log.info(
         "---- Completed workflows 2. Rolling Reboot OSD hosts and health check ----"
     )
