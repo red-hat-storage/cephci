@@ -17,6 +17,7 @@ Test Case Flow -
 6. Execute migration
 7. Commit migration.
 8. repeate above steps(1-7) for Replication pool
+9. Cover test case for both pool based and image based journal mirroring
 """
 
 from tests.rbd.exceptions import RbdBaseException
@@ -29,7 +30,7 @@ log = Log(__name__)
 
 
 def run_fio_and_migrate_image(
-    rbd1, mirror1, image, src_spec, dest_pool, dest_spec, io
+    rbd1, mirror1, mirror2, image, src_spec, dest_pool, dest_spec, io
 ):
     # run io's on the source image
     mirror1.benchwrite(imagespec=src_spec, io=io)
@@ -54,6 +55,21 @@ def run_fio_and_migrate_image(
 
     # verify commit migration
     verify_migration_commit(rbd1, dest_pool, image)
+
+    if mirror1.image_exists(dest_spec):
+        log.error(f"migrated image is not found in {dest_pool} in primary cluster")
+        return 1
+    log.info(
+        f"image {image} is successfully migrated in {dest_pool} in primary cluster"
+    )
+
+    mirror2.wait_for_replay_complete(dest_spec)
+    if mirror2.image_exists(dest_spec):
+        log.error(f"Migrated image not found in {dest_pool} in secondary cluster")
+        return 1
+    log.info(
+        f"Image {image} is successfully migrated in {dest_pool} in secondary cluster"
+    )
 
 
 def run(**kw):
@@ -80,179 +96,100 @@ def run(**kw):
     )
     config = kw.get("config")
     mirror1, mirror2 = [
-    rbdmirror.RbdMirror(cluster, config)
-    for cluster in kw.get("ceph_cluster_dict").values()
+        rbdmirror.RbdMirror(cluster, config)
+        for cluster in kw.get("ceph_cluster_dict").values()
     ]
 
     rbd1, rbd2 = [
         Rbd(**kw, req_cname=cluster_name)
         for cluster_name in kw.get("ceph_cluster_dict").keys()
     ]
-    for key, value in kw["config"].items():
-        if key == "journal":
-            for key, value in kw["config"]["journal"].items():
-                if key == "source":
-                    kw["config"].update(value)
-                    rbd_mirror_config(**kw)
-                    for key in kw["config"]["journal"]["source"]:
-                        kw["config"].pop(key)
-                    log.info(kw["config"])
-                    kw["config"].pop("ec-pool-k-m")
-                elif key == "destination":
-                    kw["config"].update(value)
-                    rbd_mirror_config(**kw)
-                    for key in kw["config"]["journal"]["destination"]:
-                        kw["config"].pop(key)
-                    log.info(kw["config"])
-                    kw["config"].pop("ec-pool-k-m")
-            src_rep_pool = kw["config"]["journal"]["source"]["rep_pool_config"]["pool"]
-            rep_image = kw["config"]["journal"]["source"]["rep_pool_config"]["image"]
-            src_rep_spec = src_rep_pool + "/" + rep_image
-            dest_rep_pool = kw["config"]["journal"]["destination"]["rep_pool_config"][
-                "pool"
-            ]
-            dest_rep_spec = dest_rep_pool + "/" + rep_image
-            src_ec_pool = kw["config"]["journal"]["source"]["ec_pool_config"]["pool"]
-            src_data_pool = kw["config"]["journal"]["source"]["ec_pool_config"][
-                "data_pool"
-            ]
-            ec_image = kw["config"]["journal"]["source"]["ec_pool_config"]["image"]
-            src_ec_spec = src_ec_pool + "/" + ec_image
-            dest_ec_pool = kw["config"]["journal"]["destination"]["ec_pool_config"][
-                "pool"
-            ]
-            dest_data_pool = kw["config"]["journal"]["destination"]["ec_pool_config"][
-                "data_pool"
-            ]
-            dest_ec_spec = dest_ec_pool + "/" + ec_image
-            io_total = kw["config"]["journal"]["source"]["rep_pool_config"]["io_total"]
-            mode_type = "journal"
-            log.info("running test for Journal Pool based mirroring")
-        elif key == "snapshot":
-            log.info(kw["config"])
-            for key, value in kw["config"]["snapshot"].items():
-                if key == "source":
-                    kw["config"].update(value)
-                    rbd_mirror_config(**kw)
-                    for key in kw["config"]["snapshot"]["source"]:
-                        kw["config"].pop(key)
-                    log.info(kw["config"])
-                    kw["config"].pop("ec-pool-k-m")
-                elif key == "destination":
-                    kw["config"].update(value)
-                    rbd_mirror_config(**kw)
-                    for key in kw["config"]["snapshot"]["destination"]:
-                        kw["config"].pop(key)
-                    log.info(kw["config"])
-                    kw["config"].pop("ec-pool-k-m")
-            src_rep_pool = kw["config"]["snapshot"]["source"]["rep_pool_config"]["pool"]
-            rep_image = kw["config"]["snapshot"]["source"]["rep_pool_config"]["image"]
-            src_rep_spec = src_rep_pool + "/" + rep_image
-            dest_rep_pool = kw["config"]["snapshot"]["destination"]["rep_pool_config"][
-                "pool"
-            ]
-            dest_rep_spec = dest_rep_pool + "/" + rep_image
-            src_ec_pool = kw["config"]["snapshot"]["source"]["ec_pool_config"]["pool"]
-            src_data_pool = kw["config"]["snapshot"]["source"]["ec_pool_config"][
-                "data_pool"
-            ]
-            ec_image = kw["config"]["snapshot"]["source"]["ec_pool_config"]["image"]
-            src_ec_spec = src_ec_pool + "/" + ec_image
-            dest_ec_pool = kw["config"]["snapshot"]["destination"]["ec_pool_config"][
-                "pool"
-            ]
-            dest_data_pool = kw["config"]["snapshot"]["source"]["ec_pool_config"][
-                "data_pool"
-            ]
-            dest_ec_spec = dest_ec_pool + "/" + ec_image
-            io_total = kw["config"]["snapshot"]["source"]["rep_pool_config"]["io_total"]
-            mode_type = "snapshot"
-            log.info("running test for snapshot image based mirroring")
+    mirror_modes = ["pool_based", "image_based"]
+    for mode in mirror_modes:
+        for key, value in kw["config"].items():
+            if key == mode:
+                for key, value in kw["config"][mode].items():
+                    if key == "source":
+                        kw["config"].update(value)
+                        rbd_mirror_config(**kw)
+                        for key in kw["config"][mode]["source"]:
+                            kw["config"].pop(key)
+                        log.info(kw["config"])
+                        kw["config"].pop("ec-pool-k-m")
+                    elif key == "destination":
+                        kw["config"].update(value)
+                        rbd_mirror_config(**kw)
+                        for key in kw["config"][mode]["destination"]:
+                            kw["config"].pop(key)
+                        log.info(kw["config"])
+                        kw["config"].pop("ec-pool-k-m")
+                source_config = kw["config"][mode]["source"]
+                destination_config = kw["config"][mode]["destination"]
 
-        try:
-            log.info("Running test on Replication pool")
-            if mode_type == "snapshot":
-                mirror2.wait_for_snapshot_complete(src_rep_spec)
-            else:
-                 mirror2.wait_for_replay_complete(src_rep_spec)
+                # retrive source Rep pool and image config
+                src_rep_pool = source_config["rep_pool_config"]["pool"]
+                rep_image = source_config["rep_pool_config"]["image"]
+                src_rep_spec = src_rep_pool + "/" + rep_image
+                # retrive destination Rep pool config
+                dest_rep_pool = destination_config["rep_pool_config"]["pool"]
+                dest_rep_spec = dest_rep_pool + "/" + rep_image
+                # retrive source EC pool and image config
+                src_ec_pool = source_config["ec_pool_config"]["pool"]
+                src_data_pool = source_config["ec_pool_config"]["data_pool"]
+                ec_image = source_config["ec_pool_config"]["image"]
+                src_ec_spec = src_ec_pool + "/" + ec_image
+                # retrive destination EC pool config
+                dest_ec_pool = destination_config["ec_pool_config"]["pool"]
+                dest_data_pool = destination_config["ec_pool_config"]["data_pool"]
+                dest_ec_spec = dest_ec_pool + "/" + ec_image
 
-            run_fio_and_migrate_image(
-                rbd1,
-                mirror1,
-                rep_image,
-                src_rep_spec,
-                dest_rep_pool,
-                dest_rep_spec,
-                io_total,
-            )
-            if mirror1.image_exists(dest_rep_spec):
-                log.error(
-                    f"migrated image is not found in {dest_rep_pool} in primary cluster"
-                )
-                return 1
-            log.info(
-                f"image {rep_image} is successfully migrated in {dest_rep_pool} in primary cluster"
-            )
-            if mode_type == "snapshot":
-                mirror2.wait_for_snapshot_complete(dest_rep_spec)
-            else:
-                 mirror2.wait_for_replay_complete(dest_rep_spec)
-            if mirror2.image_exists(dest_rep_spec):
-                log.error(
-                    f"Migrated image not found in {dest_rep_pool} in secondary cluster"
-                )
-                return 1
-            log.info(
-                f"Image {rep_image} is successfully migrated in {dest_rep_pool} in secondary cluster"
-            )
+                io_total = source_config["rep_pool_config"]["io_total"]
 
-            log.info("Runnng test on EC pool")
-            run_fio_and_migrate_image(
-                rbd1,
-                mirror1,
-                ec_image,
-                src_ec_spec,
-                dest_ec_pool,
-                dest_ec_spec,
-                io_total,
-            )
-            if mirror1.image_exists(dest_rep_spec):
-                log.error(
-                    f"migrated image is not found in {dest_rep_pool} in primary cluster"
-                )
-                return 1
-            log.info(
-                f"image {rep_image} is successfully migrated in {dest_rep_pool} in primary cluster"
-            )
+                try:
+                    log.info("Running test on Replicated pool")
 
-            if mode_type == "snapshot":
-                mirror2.wait_for_snapshot_complete(dest_ec_spec)
-            else:
-                 mirror2.wait_for_replay_complete(dest_ec_spec)
-            if mirror2.image_exists(dest_ec_spec):
-                log.error(
-                    f"Migrated image not found in {dest_ec_pool} in secondary cluster"
-                )
-                return 1
-            log.info(
-                f"Image {ec_image} is successfully migrated in {dest_ec_pool} in secondary cluster"
-            )
+                    mirror2.wait_for_replay_complete(src_rep_spec)
 
-        except RbdBaseException as error:
-            log.error(error.message)
-            return 1
-
-        finally:
-            if not kw.get("config").get("do_not_cleanup_pool"):
-                mirror1.clean_up(
-                    peercluster=mirror2,
-                    pools=[
-                        src_rep_pool,
+                    run_fio_and_migrate_image(
+                        rbd1,
+                        mirror1,
+                        mirror2,
+                        rep_image,
+                        src_rep_spec,
                         dest_rep_pool,
-                        src_ec_pool,
+                        dest_rep_spec,
+                        io_total,
+                    )
+
+                    log.info("Runnng test on EC pool")
+
+                    mirror2.wait_for_replay_complete(src_ec_spec)
+                    run_fio_and_migrate_image(
+                        rbd1,
+                        mirror1,
+                        mirror2,
+                        ec_image,
+                        src_ec_spec,
                         dest_ec_pool,
-                        src_data_pool,
-                        dest_data_pool,
-                    ],
-                )
+                        dest_ec_spec,
+                        io_total,
+                    )
+
+                except RbdBaseException as error:
+                    log.error(error.message)
+                    return 1
+
+                finally:
+                    if not kw.get("config").get("do_not_cleanup_pool"):
+                        mirror1.clean_up(
+                            peercluster=mirror2,
+                            pools=[
+                                src_rep_pool,
+                                dest_rep_pool,
+                                src_ec_pool,
+                                dest_ec_pool,
+                                src_data_pool,
+                                dest_data_pool,
+                            ],
+                        )
     return 0

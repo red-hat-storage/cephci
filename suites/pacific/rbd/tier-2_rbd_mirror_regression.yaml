@@ -395,7 +395,7 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            journal:
+            pool_based:
               source:
                 ec_pool_config:
                   pool: rbd_ECpool1
@@ -415,11 +415,10 @@ tests:
                   data_pool: data_pool_ec2
                 rep_pool_config:
                   pool: rbd_RepPool2
-            snapshot:
+            image_based:
               source:
                 ec_pool_config:
                   mode: image
-                  mirrormode: snapshot
                   pool: rbd_ECpool1
                   data_pool: data_pool_ec1
                   image: rbd_ec_image
@@ -427,7 +426,6 @@ tests:
                   io_total: 200M
                 rep_pool_config:
                   mode: image
-                  mirrormode: snapshot
                   pool: rbd_RepPool1
                   image: rbd_rep_image
                   size: 2G
@@ -436,12 +434,10 @@ tests:
                 do_not_create_image: True
                 ec_pool_config:
                   mode: image
-                  mirrormode: snapshot
                   pool: rbd_ECpool2
                   data_pool: data_pool_ec2
                 rep_pool_config:
                   mode: image
-                  mirrormode: snapshot
                   pool: rbd_RepPool2
       polarion-id: CEPH-83573320
       desc: Image migration of mirrored image
