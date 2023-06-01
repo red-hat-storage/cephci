@@ -359,3 +359,17 @@ tests:
             config-file-name:  test_lc_rule_prefix_and_tag.yaml
             timeout: 300
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
+
+# please include test cases before below rename testcase as the process is disruptive currently
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_zonegroup_rename.yaml
+            timeout: 300
+      desc: Test zonegroup rename in master
+      module: sanity_rgw_multisite.py
+      name: Perform zonegroup rename in master
+      polarion-id: CEPH-10740
+      comments: known issue (BZ2210695)
