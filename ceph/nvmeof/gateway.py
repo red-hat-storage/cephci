@@ -19,14 +19,22 @@ CTRL_DAEMON_CLI = f"{CTRL_DAEMON}.cli"
 
 
 def fetch_spdk_pid(node: CephNode):
-    """Fetch SPDK Process Id."""
+    """Fetch SPDK Process id.
+
+    Args:
+        node: Gateway Node
+    """
     out, _ = node.exec_command(cmd=f"pgrep -f '{CTRL_DAEMON}'", check_ec=False)
     LOG.debug(out)
     return out.strip() if out else False
 
 
 def kill_spdk_process(node: CephNode):
-    """Kill SPDK daemon."""
+    """Kill SPDK daemon.
+
+    Args:
+        node: Gateway node
+    """
     pid = fetch_spdk_pid(node)
     if pid:
         node.exec_command(cmd=f"kill -9 {pid}", check_ec=False, sudo=True)
@@ -93,6 +101,19 @@ def configure_spdk(node: CephNode):
         raise Exception("Control and SPDK process is not running.")
 
     node.exec_command(sudo=True, cmd="systemctl stop firewalld", check_ec=False)
+
+
+def delete_gateway(node: CephNode):
+    """Cleanup the gateway.
+
+    - Kill Gateway process
+    - remove the repository
+
+    Args:
+        node: CephNode (gateway node)
+    """
+    kill_spdk_process(node)
+    node.exec_command(sudo=True, cmd=f"rm -rf {REPO_PATH}", check_ec=False)
 
 
 def run_control_cli(node: CephNode, action, **cmd_args):
