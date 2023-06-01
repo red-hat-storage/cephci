@@ -377,3 +377,14 @@ tests:
               io_total: 200M
       polarion-id: CEPH-9515
       desc: Testing parent snapshot deletion for mirrored image
+
+  - test:
+      name: Test to change of mirror pool replica size
+      module: test_rbd_mirror_replica_count.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io_total: 200M
+      polarion-id: CEPH-9518
+      desc: Verify changing mirror pool replica size shouldn't affect mirroring with IO
