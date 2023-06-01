@@ -252,7 +252,7 @@ def configure_osd_flag(ceph_cluster, action, flag):
         ceph_cluster: ceph cluster
         action: set or unset
           example: set|unset
-        flag - value of the flag
+        flag:  value of the flag
           example:pause|noup|nodown|noout|noin|nobackfill|
             norebalance|norecover|noscrub|nodeep-scrub|notieragent
     Returns: True/False

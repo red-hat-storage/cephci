@@ -36,8 +36,8 @@ def run(ceph_cluster, **kw):
             desc: Add new host node with IP address
             module: test_host.py
             config:
-                command: host
-                service: add | remove | label_add | label_remove | set_address
+                service: host
+                command: add | remove | label_add | label_remove | set_address
                 base_cmd_args:
                   nodes:
                     - "node3"

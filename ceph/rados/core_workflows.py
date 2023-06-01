@@ -384,6 +384,8 @@ class RadosOrchestrator:
         cmd = f"ceph osd pool create {pool_name}"
         if kwargs.get("pg_num"):
             cmd = f"{cmd} {kwargs['pg_num']} {kwargs['pg_num']}"
+        if kwargs.get("pg_num_max"):
+            cmd = f"{cmd} --pg_num_max {kwargs['pg_num_max']}"
         if kwargs.get("ec_profile_name"):
             cmd = f"{cmd} erasure {kwargs['ec_profile_name']}"
         if kwargs.get("bulk"):
@@ -619,7 +621,7 @@ class RadosOrchestrator:
 
     def configure_pg_autoscaler(self, **kwargs) -> bool:
         """
-        Configures pg_Autoscaler as a global global parameter and on pools
+        Configures pg_Autoscaler as a global parameter and on pools
         Args:
             **kwargs: Any other param that needs to be set
                 1. mon_target_pg_per_osd -> Sets the target number of PG's per OSD
@@ -632,7 +634,7 @@ class RadosOrchestrator:
                     3. on -> automatically autoscale based on PG count in pool
                 4. default_mode -> Default mode to be set for all the newly created pools on the cluster (str)
                     the allowed values are :
-                    1. off -> turns off PG autoscaler on the given pool
+                    1. off -> turns off PG autoscaler globally for subsequent pools
                     2. warn -> displays warnings in ceph status, but does not trigger autoscale
                     3. on -> automatically autoscale based on PG count in pool
         Returns: True -> pass, False -> fail
@@ -1322,17 +1324,23 @@ class RadosOrchestrator:
         pool_id: int = None,
         osd: int = None,
         osd_primary: int = None,
+        states: str = None,
     ) -> list:
         """
         Retrieves all the PG IDs for a pool or PG IDs where a
         certain osd is primary in the acting set or PG IDs which are
         utilizing the concerned osd
-        Ideally, only one argument should be provided
         Args:
             pool_name: name of the pool
             pool_id: pool id
             osd: osd id whose pgs are to be retrieved
             osd_primary: primary osd id whose pgs are to be retrieved
+            states:
+        E.g:
+            cph pg ls [<pool:int>] [<states>...]
+            ceph pg ls-by-osd <id|osd.id> [<pool:int>] [<states>...]
+            ceph pg ls-by-pool <poolstr> [<states>...]
+            ceph pg ls-by-primary <id|osd.id> [<pool:int>] [<states>...]
         Returns:
             list having pgids in string format
         """
@@ -1341,15 +1349,21 @@ class RadosOrchestrator:
         cmd = "ceph pg "
         if pool_name:
             cmd += f"ls-by-pool {pool_name}"
-        elif pool_id:
-            cmd += f"ls {pool_id}"
+            cmd = f"{cmd} {pool_id}" if pool_id else cmd
         elif osd:
             cmd += f"ls-by-osd {osd}"
+            cmd = f"{cmd} {pool_id}" if pool_id else cmd
         elif osd_primary:
             cmd += f"ls-by-primary {osd_primary}"
+            cmd = f"{cmd} {pool_id}" if pool_id else cmd
+        elif pool_id:
+            cmd += f"ls {pool_id}"
         else:
             log.info("No argument was provided.")
             return pgid_list
+
+        if states:
+            cmd = f"{cmd} {states}"
 
         pgid_dict = self.run_ceph_command(cmd=cmd)
 
@@ -1580,3 +1594,36 @@ class RadosOrchestrator:
         self.client.exec_command(sudo=True, cmd=client_run_cmd, check_ec=False)
         log.info(f"Running cmd: {inst_run_cmd} on {installer_node.hostname}")
         installer_node.exec_command(sudo=True, cmd=inst_run_cmd)
+
+    def get_fragmentation_score(self, osd_id) -> float:
+        """
+        Retrieves and returns the fragmentation score for a particular osd
+        Args:
+            osd_id: OSD ID
+        Return:
+            (float) fragmentation score for the given OSD
+        """
+        # fragmentation scores for OSD
+        frag_cmd = f"ceph tell osd.{osd_id} bluestore allocator score block"
+        return self.run_ceph_command(cmd=frag_cmd)["fragmentation_rating"]
+
+    def check_fragmentation_score(self, osd_id) -> bool:
+        """
+        Checks whether fragmentation score of the given osd is within
+        acceptable range (below 0.9)
+        Args:
+             osd_id: OSD ID
+        Return:
+            True -> pass, False -> Fail
+        """
+        log.info(f"Checking the Fragmentation score for OSD.{osd_id}")
+        frag_score = self.get_fragmentation_score(osd_id=osd_id)
+        log.info(f"Fragmentation score for the OSD.{osd_id} : {frag_score}")
+
+        if 0.9 < float(frag_score) < 1.0:
+            log.error(
+                f"Fragmentation on osd {osd_id} is dangerously high."
+                f"Ideal range 0.0 to 0.7. Actual fragmentation on OSD.{osd_id}: {frag_score}"
+            )
+            return False
+        return True
