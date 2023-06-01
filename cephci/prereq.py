@@ -9,11 +9,11 @@ from utils.configs import (
     get_repos,
     get_subscription_credentials,
 )
-from utils.configure import setup_ssh_keys
+from utils.configure import exec_cephadm_preflight, setup_ssh_keys
 
-from cli.exceptions import NodeConfigError
+from cli.exceptions import ConfigError, NodeConfigError
 from cli.utilities.containers import Registry
-from cli.utilities.packages import Package
+from cli.utilities.packages import Package, Rpm
 from cli.utilities.packages import SubscriptionManager as sm
 from cli.utilities.packages import SubscriptionManagerError
 from cli.utilities.utils import os_major_version
@@ -21,6 +21,8 @@ from cli.utilities.waiter import WaitUntil
 from utility.log import Log
 
 log = Log(__name__)
+
+CEPHADM_ANSIBLE = "cephadm-ansible"
 
 doc = """
 Utility to configure prerequisites for deployed cluster
@@ -32,6 +34,9 @@ Utility to configure prerequisites for deployed cluster
             [--setup-ssh-keys <BOOL>]
             [--config <FILE>]
             [--log-level <LOG>]
+            [--cephadm-ansible <BOOL>]
+            [--cephadm-preflight <BOOL>]
+            [--ceph-repo <REPO>]
 
         cephci/prereq.py --help
 
@@ -44,6 +49,9 @@ Utility to configure prerequisites for deployed cluster
         -k --setup-ssh-keys <BOOL>  Setup SSH keys on cluster
         -f --config <FILE>          CephCI configuration file
         -l --log-level <LOG>        Log level for log utility
+        -a --cephadm-ansible <BOOL> Setup cephadm ansible
+        -p --cephadm-preflight <BOOL> Setup cephadm preflight
+        -o --ceph-repo <REPO>       Ceph repository
 """
 
 
@@ -142,8 +150,18 @@ def enable_rhel_repos(node, server, distro):
     return True
 
 
-def prereq(cluster, build, subscription, registry, ssh=False):
+def prereq(
+    cluster,
+    build,
+    subscription,
+    registry,
+    ssh=False,
+    cephadm_ansible=False,
+    cephdam_preflight=False,
+    ceph_repo=None,
+):
     nodes = cluster.get_nodes()
+    installer = cluster.get_ceph_object("installer")
     packages = " ".join(get_packages())
     for node in nodes:
         distro = f"rhel-{os_major_version(node)}"
@@ -167,8 +185,16 @@ def prereq(cluster, build, subscription, registry, ssh=False):
             registry_login(node, registry, build)
 
     if ssh:
-        installer = cluster.get_ceph_object("installer")
         setup_ssh_keys(installer, nodes)
+
+    if cephadm_ansible and not Rpm(installer).query(CEPHADM_ANSIBLE):
+        Package(installer).install(CEPHADM_ANSIBLE, nogpgcheck=True)
+    if cephdam_preflight:
+        if not (ssh or cephadm_ansible):
+            raise ConfigError(
+                "SSH keys and cephadm-ansible params are required for executing preflight playbook"
+            )
+        exec_cephadm_preflight(installer, build, ceph_repo)
 
 
 if __name__ == "__main__":
@@ -181,10 +207,22 @@ if __name__ == "__main__":
     setup_ssh = args.get("--setup-ssh-keys")
     config = args.get("--config")
     log_level = args.get("--log-level")
+    cephadm_ansible = args.get("--cephadm-ansible")
+    cephadm_preflight = args.get("--cephadm-preflight")
+    ceph_repo = args.get("--ceph-repo")
 
     _set_log(log_level)
     get_configs(config)
 
     cluster_dict = _load_cluster_config(cluster)
     for cluster_name in cluster_dict:
-        prereq(cluster_dict.get(cluster_name), build, subscription, registry, setup_ssh)
+        prereq(
+            cluster_dict.get(cluster_name),
+            build,
+            subscription,
+            registry,
+            setup_ssh,
+            cephadm_ansible,
+            cephadm_preflight,
+            ceph_repo,
+        )

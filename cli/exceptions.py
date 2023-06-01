@@ -51,3 +51,9 @@ class MonDaemonError(Exception):
     """
     Custom exception thrown when Mon daemon is not in expected state.
     """
+
+
+class AnsiblePlaybookExecutionError(Exception):
+    """
+    Custom exception thrown when ansible playbook execution fails.
+    """
