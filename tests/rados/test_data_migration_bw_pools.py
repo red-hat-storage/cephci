@@ -46,10 +46,13 @@ def run(ceph_cluster, **kw) -> int:
     create_given_pool(rados_obj, pool_orig)
     create_given_pool(rados_obj, pool_target)
 
-    # Writing objects with huge omap entries
-    if not pool_obj.fill_omap_entries(pool_name=pool_orig["pool_name"], obj_end=500):
-        log.error(f"Omap entries not generated on pool {pool_orig['pool_name']}")
-        return 1
+    # Writing objects with omap entries
+    if pool_orig["pool_type"] == "replicated":
+        if not pool_obj.fill_omap_entries(
+            pool_name=pool_orig["pool_name"], obj_end=500
+        ):
+            log.error(f"Omap entries not generated on pool {pool_orig['pool_name']}")
+            return 1
 
     do_rados_put(mon=client_node, pool=pool_orig["pool_name"], nobj=1000)
 

@@ -1,4 +1,6 @@
-# Suite contains tier-4 tests to verify and test ceph pools upon OSD changes
+# Suite contains tier-4 tests to verify and test ceph pools upon OSD changes.
+# This suite is to be run with conf : conf/pacific/rados/13-node-cluster.yaml
+
 tests:
   - test:
       name: setup install pre-requisistes
@@ -140,6 +142,7 @@ tests:
         node: node8                       # client node
         install_packages:
           - ceph-common
+          - ceph-base
         copy_admin_keyring: true          # Copy admin keyring to node
         caps: # authorize client capabilities
           mon: "allow *"

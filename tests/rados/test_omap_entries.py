@@ -36,26 +36,17 @@ def run(ceph_cluster, **kw):
             log.debug(
                 f"Creating {entry['pool_type']} pool on the cluster with name {entry['pool_name']}"
             )
-            if entry.get("pool_type", "replicated") == "erasure":
-                log.info(
-                    "\n***[27-Mar-2023]***\nIt has been found that omap entries/object creation "
-                    "on an EC pool with concerned python script(generate_omap_entries.py) "
-                    "is not working.\nA BZ will be raised for this and this test will be "
-                    "updated post resolution, until then EC pool section of this test "
-                    "shall remain inactive."
-                )
-                method_should_succeed(
-                    rados_obj.create_erasure_pool, name=entry["pool_name"], **entry
-                )
-            else:
-                method_should_succeed(rados_obj.create_pool, **entry)
+            # omap entries cannot exist on EC pools. Removing the code for EC pools,
+            # And testing only on RE pools.
+            method_should_succeed(rados_obj.create_pool, **entry)
 
             for omap_config in omap_target_configs.keys():
                 normal_objs = omap_target_configs[omap_config]["normal_objs"]
-                # create n number of objects without any omap entry
-                pool_obj.do_rados_put(
-                    client=client_node, pool=entry["pool_name"], nobj=normal_objs
-                )
+                if normal_objs > 0:
+                    # create n number of objects without any omap entry
+                    pool_obj.do_rados_put(
+                        client=client_node, pool=entry["pool_name"], nobj=normal_objs
+                    )
 
                 # calculate objects to be written with omaps and begin omap creation process
                 omap_obj_num = (
@@ -63,7 +54,7 @@ def run(ceph_cluster, **kw):
                     - omap_target_configs[omap_config]["obj_start"]
                 )
                 log.debug(
-                    "Created the pool. beginning to create large number of omap entries on the pool"
+                    f"Created the pool. beginning to create omap entries on the pool. Count : {omap_obj_num}"
                 )
                 if not pool_obj.fill_omap_entries(
                     pool_name=entry["pool_name"], **omap_target_configs[omap_config]
@@ -98,6 +89,10 @@ def run(ceph_cluster, **kw):
                 log.debug(
                     f"Cluster reached clean state after osd {osd_id} stop and restart"
                 )
+            log.info(
+                f"All the OSD's from the acting set {acting_set} were restarted "
+                f"and object movement completed for pool {entry['pool_name']}"
+            )
         except Exception as e:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
@@ -106,11 +101,6 @@ def run(ceph_cluster, **kw):
             rados_obj.change_recover_threads(config={}, action="rm")
             # deleting the pool created after the test
             rados_obj.detete_pool(pool=entry["pool_name"])
-
-            log.info(
-                f"All the OSD's from the acting set {acting_set} were restarted "
-                f"and object movement completed for pool {entry['pool_name']}"
-            )
 
     log.info("Completed testing effects of large number of omap entries on pools ")
     return 0

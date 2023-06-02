@@ -124,7 +124,7 @@ tests:
               conf: sample-pool-2
         pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
       desc: Verify that scrub & deep-scrub logs are captured in OSD logs
-      abort-on-fail: true
+
 
   - test:
       name: Autoscaler test - pool target size ratio

@@ -51,11 +51,15 @@ class CrushToolWorkflows:
         """
         self.rados_obj = RadosOrchestrator(node=node)
         self.cluster = node.cluster
+        self.config = node.config
         self.client = node.cluster.get_nodes(role="client")[0]
 
         # Checking and installing ceph-base package on Client
-        out, rc = self.client.exec_command(sudo=True, cmd="rpm -qa | grep ceph-base")
-        if "ceph-base" not in out:
+        try:
+            out, rc = self.client.exec_command(
+                sudo=True, cmd="rpm -qa | grep ceph-base"
+            )
+        except Exception:
             self.client.exec_command(sudo=True, cmd="yum install -y ceph-base")
 
     def generate_crush_map_bin(self, loc="/tmp") -> (bool, str):
@@ -622,6 +626,13 @@ class CrushToolWorkflows:
 
         # Setting the contents of the bin file in json
         cmd = f"crushtool -i {loc} --test --{test}"
+        regex = r"\s*(\d.\d)-rhel-\d"
+        build = (
+            re.search(regex, self.config.get("build", self.config.get("rhbuild")))
+        ).groups()[0]
+        if float(build) >= 6.0:
+            cmd = cmd + " --num-rep 100"
+
         try:
             out, err = self.client.exec_command(cmd=cmd, sudo=True)
         except Exception as error:

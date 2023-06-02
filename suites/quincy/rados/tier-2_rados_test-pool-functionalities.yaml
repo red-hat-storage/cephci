@@ -74,6 +74,7 @@ tests:
       desc: Configures client admin node on cluster
       module: test_client.py
       polarion-id:
+      abort-on-fail: true
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
@@ -94,6 +95,28 @@ tests:
       config:
         log_to_file: true
       desc: Change config options to enable logging to file
+
+  - test:
+      name: Verify scrub logs
+      module: test_scrub_log.py
+      polarion-id: CEPH-83575403
+      config:
+        pool_configs:
+            - type: replicated
+              conf: sample-pool-2
+            - type: erasure
+              conf: sample-pool-2
+        pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+      desc: Verify that scrub & deep-scrub logs are captured in OSD logs
+
+  - test:
+      name: Verify pool behaviour at min_size
+      module: pool_tests.py
+      polarion-id: CEPH-9167
+      config:
+        Verify_pool_min_size_behaviour:
+          pool_name: test-pool-3
+      desc: Verify that Clients can read and write data into pools with min_size OSDs
 
   - test:
       name: Autoscaler test - pool target size ratio
@@ -139,7 +162,6 @@ tests:
             - 50
           delete_pool: true
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Mon target for PG num
@@ -188,22 +210,11 @@ tests:
       config:
         verify_osd_omap_entries:
           pool_config:
-            # EC pool config is commented out because
-            # omap entries is not working on an EC pool
-#            pool-1:
-#              pool_name: ec_pool_3
-#              pool_type: erasure
-#              pg_num: 1
-#              k: 8
-#              m: 4
-#              plugin: jerasure
-#              crush-failure-domain: osd
-#              disable_pg_autoscale: true
-            pool-2:
+            # EC pool config is commented out because omaps can be written only on RE pools
+            pool-1:
               pool_type: replicated
               pool_name: re_pool_3
               pg_num: 1
-              disable_pg_autoscale: true
           omap_config:
             small_omap:
               large_warn: false
