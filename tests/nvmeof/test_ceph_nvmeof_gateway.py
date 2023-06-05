@@ -99,6 +99,7 @@ def initiators(ceph_cluster, gateway, config):
                 "size": "100%",
                 "client_node": client,
                 "long_running": True,
+                "cmd_timeout": "notimeout",
             }
             p.spawn(run_fio, **io_args)
 

@@ -1799,6 +1799,7 @@ def run_fio(**fio_args):
         long_running(bool): True for long running required
         client_node: node where fio needs to be run
         size: 'size' for file size/io size
+        cmd_timeout: command timeout in seconds eg., 'notimeout' | 1200
     Prerequisite: fio package must have been installed on the client node.
     One of device_name, filename, (rbdname,pool) is required.
     """
@@ -1836,9 +1837,15 @@ def run_fio(**fio_args):
         f" --group_reporting {opt_args}"
     )
 
-    return fio_args["client_node"].exec_command(
-        cmd=cmd, long_running=long_running, sudo=True
-    )
+    exec_args = {
+        "cmd": cmd,
+        "long_running": long_running,
+        "sudo": True,
+    }
+    if fio_args.get("cmd_timeout"):
+        exec_args.update({"timeout": fio_args["cmd_timeout"]})
+
+    return fio_args["client_node"].exec_command(**exec_args)
 
 
 def fetch_image_tag(rhbuild):

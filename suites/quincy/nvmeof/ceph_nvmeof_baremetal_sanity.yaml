@@ -120,14 +120,14 @@ tests:
             serial: 1
             bdevs:
               count: 10
-              size: 2G
+              size: 10G
             listener_port: 5001
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 2
             bdevs:
               count: 10
-              size: 3G
+              size: 15G
             listener_port: 5002
             allow_host: "*"
         initiators:                             # Configure Initiators with all pre-req
