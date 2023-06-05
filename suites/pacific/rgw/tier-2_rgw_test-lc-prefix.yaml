@@ -172,3 +172,25 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_ecpool_with_prefix_rule.yaml
         timeout: 300
+
+  # bucket lifecycle with resharding
+
+  - test:
+      name: test lifecycle expiration with dynamic resharding
+      desc: test lifecycle expiration with dynamic resharding
+      polarion-id: CEPH-83574679
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_expiration_dynamic_reshard.yaml
+        timeout: 300
+
+  - test:
+      name: test lifecycle expiration with manual resharding
+      desc: test lifecycle expiration with manual resharding
+      polarion-id: CEPH-83574679
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_expiration_manual_reshard.yaml
+        timeout: 300

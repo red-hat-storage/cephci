@@ -380,7 +380,7 @@ pipelines:
           metadata:
             - rgw
         - name: "RGW Regression testing"
-          execution_time: "2h 54m 12s"
+          execution_time: "2h 57m 12s"
           suite: "suites/quincy/rgw/tier-2_rgw_regression.yaml"
           global-conf: "conf/pacific/rgw/tier-2_rgw_regression.yaml"
           platform: "rhel-9"
@@ -509,6 +509,17 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rbd
+      stage-7:
+        - name: "tier-4 rgw suite"
+          execution_time: "1h 18m 52s"
+          suite: "suites/pacific/rgw/tier-4-rgw.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rgw
   schedule:
     tier-1:
       stage-1:
@@ -768,7 +779,7 @@ pipelines:
           metadata:
             - rgw
         - name: "test-rgw-lc-expiration-with-prefix-as-special-character"
-          execution_time: "2h 14m 3s"
+          execution_time: "4h 17m 54s"
           suite: "suites/pacific/rgw/tier-2_rgw_test-lc-prefix.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-9"
