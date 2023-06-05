@@ -257,16 +257,6 @@ pipelines:
           metadata:
             - rados
       stage-2:
-        - name: "Testing RBD tier-2 regression scenarios"
-          execution_time: "37m 6s"
-          suite: "suites/quincy/rbd/tier-2_rbd_regression.yaml"
-          global-conf: "conf/quincy/rbd/4-node-cluster-with-1-client.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rbd
         - name: "Tier-2 Cephfs test Nfs"
           execution_time: "33m 49s"
           suite: "suites/pacific/cephfs/tier-2_cephfs_test-nfs.yaml"
@@ -308,6 +298,46 @@ pipelines:
           metadata:
             - dmfg
       stage-3:
+        - name: "Testing RBD tier-2 regression scenarios"
+          execution_time: "57m 0s"
+          suite: "suites/quincy/rbd/tier-2_rbd_regression.yaml"
+          global-conf: "conf/quincy/rbd/4-node-cluster-with-1-client.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
+        - name: "Testing RBD tier-2 image live migration"
+          execution_time: "50m 13s"
+          suite: "suites/quincy/rbd/tier-2_rbd_regression_Image_migration.yaml"
+          global-conf: "conf/quincy/rbd/4-node-cluster-with-1-client.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
+        - name: "Testing RBD tier-2 rbd trash feature"
+          execution_time: "46m 52s"
+          suite: "suites/quincy/rbd/tier-2_rbd_regression_trash.yaml"
+          global-conf: "conf/quincy/rbd/4-node-cluster-with-1-client.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
+        - name: "Testing RBD tier-2 rbd trash purge functionality"
+          execution_time: "1h 38m 10s"
+          suite: "suites/quincy/rbd/tier-2_rbd_trash_purge.yaml"
+          global-conf: "conf/quincy/rbd/4-node-cluster-with-1-client.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
         - name: "Tier-2 RGW cloud transitions"
           execution_time: "47m 35s"
           suite: "suites/quincy/rgw/tier-2_rgw_cloud_transition.yaml"

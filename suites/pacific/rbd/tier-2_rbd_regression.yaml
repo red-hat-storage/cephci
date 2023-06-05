@@ -1,15 +1,24 @@
 # Tier2: Extended RBD acceptance testing
 #
 # This test suite runs addition test scripts to evaluate the existing functionality of
-# Ceph RBD component.
+# Ceph RBD component like clone, snapshot and image feature.
 #
 # Conf File - conf/pacific/rbd/tier-0_rbd.yaml
 #
 # The following tests are covered
 #   - CEPH-9230 - verification snap and clone on an imported image
-#   - CEPH-83573308, CEPH-83573307 - clones creation with v2clone format and deletion
-#   - CEPH-83573289 - Verify force remove on trash images
-#   - CEPH-83573298 - Move images to trash, restore them and verify
+#   - CEPH-11408 - If the image has an exclusive-lock on it, verify the behaviour on delayed deletion
+#   - CEPH-11409 - Delayed Deletion - Create a clone of a RBD image, and then try to delete the parent image while the relationship is active
+#   - CEPH-83573309 - Verify deletion of parent Image when clone is flattened
+#   - CEPH-83573650 - Create image with Deep Flattening enabled,take snap,protect,clone,snap,flatten the clone, unprotect the parent snap, delete the parent snap
+#   - CEPH-9833 - Create multiple snapshot from Parent and its clone Image, rename all the snapshot one-by-one
+#   - CEPH-9835 - Create multiple snapshot, on top create clone image, then try to rename the snapshot which hosts the clone (Negative)
+#   - CEPH-9836 - [Rbd] - Rename the snapshot when different operations on the clone/parent image is in progress
+#   - CEPH-9224 - RBD-Kernel_Client: Try to delete a protected snapshot
+#   - CEPH-9862 - Perform flatten operations while changing the image feature
+#   - CEPH-9861 - Perform resize operations while changing the image feature
+#   - CEPH-83574644 - set "rbd_compression_hint" globally, per-pool, or per-image and check the behaviour
+
 tests:
 
   # Setup the cluster
@@ -121,50 +130,6 @@ tests:
       polarion-id: CEPH-83573650
 
   - test:
-      desc: Enable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are moved to trash automatically
-      destroy-cluster: false
-      config:
-        enable: true
-      module: rbd_trash.py
-      name: Check trash if the deleted images are moved to trash automatically
-      polarion-id: CEPH-83573297
-
-  - test:
-      desc: Disable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are not moved to trash automatically
-      destroy-cluster: false
-      config:
-        enable: false
-      module: rbd_trash.py
-      name: Disable Trash and Delete images and check if they are not moved to trash automatically
-      polarion-id: CEPH-83573296
-
-  - test:
-      desc: Verify force remove on trash images
-      destroy-cluster: false
-      module: rbd_trash_remove.py
-      name: Test force remove on trash images
-      polarion-id: CEPH-83573289
-
-  - test:
-      desc: Move images to trash, restore them and verify
-      destroy-cluster: false
-      module: trash_restore.py
-      name: Check trash restore functionality
-      polarion-id: CEPH-83573298
-
-  - test:
-      desc: Move image to trash restore back and try create snap and clone on restored image
-      module: trash_restore_create_clone_snap.py
-      name: Test snap and clone creation on restored image from trash
-      polarion-id: CEPH-11413
-
-  - test:
-      desc: Verify parent-clone relationship and clone IOs are not affected when parent moved to trash
-      module: rbd_trash_restore_image_having_clone.py
-      name: Test parent trash restore with clone IOs
-      polarion-id: CEPH-11414
-
-  - test:
       desc: Rename image snapshots on an image on replicated and ecpools and its clones
       module: rbd_snapshot_rename.py
       name: Test Snapshot Rename functionality
@@ -183,12 +148,6 @@ tests:
       polarion-id: CEPH-9836
 
   - test:
-      desc: Image migration from two different EC pools to EC pool
-      module: rbd_migration_2diff_ec_pool_ec.py
-      name: Test image migration on ecpool with different K_m values
-      polarion-id: CEPH-83573322
-
-  - test:
       desc: Trying to delete a protected snapshot should fail - negative
       config:
         do_not_create_image: True
@@ -201,136 +160,12 @@ tests:
       polarion-id: CEPH-9224
 
   - test:
-      desc: Image migration from replication pools to replication pool
-      module: rbd_image_migration.py
-      config:
-        source:
-          rep-pool-only: True
-          rep_pool_config:
-            pool: rbd_RepPool1
-            image: rbd_image
-            size: 10G
-        destination:
-          rep-pool-only: True
-          do_not_create_image: True
-          rep_pool_config:
-            pool: rbd_RepPool2
-      name: Test image migration on replication pool
-      polarion-id: CEPH-83573293
-
-  - test:
-      desc: Image migration from EC pool to EC pool with default K_m value
-      module: rbd_image_migration.py
-      config:
-        source:
-          ec-pool-only: True
-          ec-pool-k-m: "2,2"
-          crush-failure-domain: osd
-          ec_pool_config:
-            pool: rbd_ECpool1
-            image: rbd_image_ec1
-            data_pool: data_pool_ec1
-            size: 10G
-        destination:
-          ec-pool-only: True
-          ec-pool-k-m: "2,2"
-          do_not_create_image: True
-          crush-failure-domain: osd
-          ec_pool_config:
-            pool: rbd_ECpool2
-            data_pool: data_pool_ec2
-      name: Test image migration on EC pool with default k_m value
-      polarion-id: CEPH-83573327
-
-  - test:
-      desc: Abort image migration from source to destination pool
-      module: rbd_abort_image_migration.py
-      config:
-        source:
-          ec-pool-k-m: "2,2"
-          crush-failure-domain: osd
-          rep_pool_config:
-            pool: rbd_RepPool1
-            image: rbd_image
-            size: 10G
-          ec_pool_config:
-            pool: rbd_ECpool1
-            image: rbd_image_ec1
-            data_pool: data_pool_ec1
-            size: 10G
-        destination:
-          ec-pool-k-m: "2,2"
-          do_not_create_image: True
-          crush-failure-domain: osd
-          rep_pool_config:
-            pool: rbd_RepPool2
-          ec_pool_config:
-            pool: rbd_ECpool2
-            data_pool: data_pool_ec2
-      name: Test abort image migration from source to destination pool
-      polarion-id: CEPH-83573324
-
-  - test:
-      desc: Setting up RGW user for s3 image migration test
-      module: exec.py
-      name: Setup rgw s3 user
-      config:
-        commands:
-          - "radosgw-admin user create --uid=test_rbd --display_name='test_rbd' --access-key test_rbd --secret test_rbd"
-
-  - test:
-      name: Image migration from s3 source
-      desc: Export an image to s3 source and reinstall as new image using migration
-      module: test_rbd_migration_image_s3_object.py
-      polarion-id: CEPH-83574092
-      config:
-        ec_pool_config:
-          pool: rbd_pool
-          data_pool: rbd_ec_pool
-          image: rbd_image
-          size: 100M
-        rep_pool_config:
-          pool: rbd_pool
-          image: rbd_rep_image
-          size: 100M
-
-  - test:
-      desc: Disable the image features on image when image is moved to trash and verify
-      module: rbd_features_disable.py
-      name: Test to disable the image features on image when image is moved to trash
-      polarion-id: CEPH-11415
-
-  - test:
       desc: Perform flatten operations while changing the image feature
       config:
         rbd_op_thread_timeout: 120
       module: rbd_flatten_image_feature_disable.py
       name: Test to disable image feature when flatten operation is performed
       polarion-id: CEPH-9862
-
-  - test:
-      desc: Perform trash purge on images with clone and images without clone
-      module: rbd_trash_purge.py
-      config:
-        do_not_create_image: True # to prevent initial_rbd_config from creating an image
-        no_of_images: 10 # number of images to create for testing
-        no_of_clones: 4 # number of images for which clones to be created
-      name: Test to perform trash purge on images with and without clone
-      polarion-id: CEPH-83574482
-
-  - test:
-      desc: Add trash purge schedule and verify the schedule
-      module: test_rbd_trash_purge_schedule.py
-      name: Test to verify trash purge schedule
-      config:
-        do_not_create_image: True
-      polarion-id: CEPH-83573660
-
-  - test:
-      desc: Verify image trash restore when same name image is already present
-      module: trash_restore_same_name_image.py
-      name: Test to verify image restore with same name
-      polarion-id: CEPH-11393
 
   - test:
       desc: Verify image feature disable on image having image meta set on it
@@ -353,27 +188,6 @@ tests:
       module: rbd_resize_image_with_image_feature.py
       name: Test to verify image resize operation while changing image feature
       polarion-id: CEPH-9861
-
-  - test:
-      desc: Image migration from namespace for read-only client
-      module: readonly_namespace_image_migration.py
-      config:
-        source:
-          do_not_create_image: True
-          rep_pool_config:
-            pool: rbd_RepPool1
-          ec_pool_config:
-            pool: rbd_ECpool1
-            data_pool: data_pool_ec1
-        destination:
-          do_not_create_image: True
-          rep_pool_config:
-            pool: rbd_RepPool2
-          ec_pool_config:
-            pool: rbd_ECpool1
-            data_pool: data_pool_ec2
-      name: Test image migration from namespace for read-only client
-      polarion-id: CEPH-83573341
 
   - test:
       desc: Verify rbd_compression_hint config settings
