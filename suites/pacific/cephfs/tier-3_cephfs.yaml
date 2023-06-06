@@ -104,3 +104,8 @@ tests:
       module: osd_add_rm_FS_IO.py
       polarion-id: CEPH-11258
       desc: Add & remove osd while doing CephFS IOs & check cluster health
+  - test:
+      name: client config option and value verification
+      module: client_option_value_verification.py
+      polarion-id: CEPH-11330
+      desc: set config option and verify the value
