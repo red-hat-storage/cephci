@@ -1487,7 +1487,7 @@ class CephNode(object):
         self.id_rsa_pub, _ = self.exec_command(cmd="cat ~/.ssh/id_rsa.pub")
 
     def long_running(self, **kw):
-        """Method to execute long running command.
+        """Method to execute long-running command.
 
         Args:
             **kw: execute command configuration
@@ -1497,8 +1497,11 @@ class CephNode(object):
         """
         ssh = self.rssh if kw.get("sudo") else self.ssh
         cmd = kw["cmd"]
-        timeout = kw.get("timeout", 3600)
-        logger.info(f"long running command on {self.ip_address} -- {cmd}")
+        timeout = None if kw.get("timeout") == "notimeout" else kw.get("timeout", 3600)
+
+        logger.info(
+            f"long running command on {self.ip_address} -- {cmd} with {timeout} seconds"
+        )
 
         try:
             channel = ssh().get_transport().open_session()
@@ -1531,7 +1534,7 @@ class CephNode(object):
             raise CommandFailed(be)
 
     def exec_command(self, **kw):
-        """execute a command on the vm.
+        """execute a command.
 
         Attributes:
             kw (Dict): execute command configuration
