@@ -284,6 +284,36 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
+        - name: "Tier-2 test suite for 5x - RBD functionality"
+          execution_time: "57m 0s"
+          suite: "suites/pacific/rbd/tier-2_rbd_regression.yaml"
+          global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rbd
+        - name: "Tier-2 test suite for 5x - RBD image migration"
+          execution_time: "50m 13s"
+          suite: "suites/pacific/rbd/tier-2_rbd_regression_Image_migration.yaml"
+          global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rbd
+        - name: "Tier-2 test suite for 5x - RBD trash feature"
+          execution_time: "46m 52s"
+          suite: "suites/pacific/rbd/tier-2_rbd_regression_trash.yaml"
+          global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rbd
         - name: "test-lc-process-single-bucket"
           execution_time: "57m 49s"
           suite: "suites/pacific/rgw/tier-2_rgw-single-bucket-process.yaml"
@@ -695,9 +725,9 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rados
-        - name: "Tier-2 test suite for 5x - RBD functionality"
-          execution_time: "42m 41s"
-          suite: "suites/pacific/rbd/tier-2_rbd_regression.yaml"
+        - name: "Tier-2 test suite for 5x - RBD trash purge functionality"
+          execution_time: "98m 10s"
+          suite: "suites/pacific/rbd/tier-2_rbd_trash_purge.yaml"
           global-conf: "conf/pacific/rbd/tier-0_rbd.yaml"
           platform: "rhel-8"
           inventory:
