@@ -499,4 +499,30 @@ tests:
       name: test sync on bucket with 0 shards
       polarion-id: CEPH-83575573
       comments: bug-2188022, 2180549 HotFix for Square eCommerce
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_transition_with_prefix_rule_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test LC transition on multisite
+      module: sanity_rgw_multisite.py
+      name: test LC transition on multisite
+      polarion-id: CEPH-83574048
+      comments: bug-2000115, test LC rules transition from primary to secondary
 
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_transition_with_obj_acl_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test LC transition on multisite with object acl set
+      module: sanity_rgw_multisite.py
+      name: test LC transition on multisite with object acl set
+      polarion-id: CEPH-83574048
+      comments: known issue, upstream issue 51437
