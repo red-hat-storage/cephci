@@ -304,6 +304,95 @@ def test_sync_via_bucket_stats(primary_rgw_node, secondary_rgw_node):
         raise Exception("Buckets not synced across sites, test failure.")
 
 
+def test_bucket_stats_with_archive(
+    primary_client_node, secondary_client_node, archive_client_node
+):
+    """
+    verify and monitor sync consistency via bucket stats across sites.
+    """
+    bucket_stat_pri_doc = json.loads(
+        primary_client_node.exec_command(cmd="sudo radosgw-admin bucket stats")[0]
+    )
+    bucket_stat_sec_doc = json.loads(
+        secondary_client_node.exec_command(cmd="sudo radosgw-admin bucket stats")[0]
+    )
+    total_buckets_pri = json.loads(
+        primary_client_node.exec_command(cmd="sudo radosgw-admin bucket list | wc -l")[
+            0
+        ]
+    )
+    total_buckets_sec = json.loads(
+        secondary_client_node.exec_command(
+            cmd="sudo radosgw-admin bucket list | wc -l"
+        )[0]
+    )
+    total_buckets_arc = json.loads(
+        archive_client_node.exec_command(cmd="sudo radosgw-admin bucket list | wc -l")[
+            0
+        ]
+    )
+    log.info(
+        f"number of buckets at primary and secondary are {total_buckets_pri} and {total_buckets_sec}"
+    )
+    deleted_buckets_arc = json.loads(
+        archive_client_node.exec_command(
+            cmd="sudo radosgw-admin bucket list | grep deleted | wc -l"
+        )[0]
+    )
+    actual_bucket_arc = total_buckets_arc - deleted_buckets_arc
+    log.info(
+        f"number of buckets at archive site is {total_buckets_arc} - {deleted_buckets_arc} = {actual_bucket_arc}"
+    )
+
+    if total_buckets_pri == total_buckets_sec == actual_bucket_arc:
+        log.info("Number of buckets same on all sites, test data consistency now")
+        for bucket in range(0, total_buckets_pri - 2):
+            primary_objects = (
+                bucket_stat_pri_doc[bucket]["usage"]
+                .get("rgw.main", {})
+                .get("num_objects", 0)
+            )
+            secondary_objects = (
+                bucket_stat_sec_doc[bucket]["usage"]
+                .get("rgw.main", {})
+                .get("num_objects", 0)
+            )
+            bucket_stat_arc_doc = json.loads(
+                archive_client_node.exec_command(
+                    cmd=f"sudo radosgw-admin bucket stats --bucket {bucket_stat_sec_doc[bucket]['bucket']}"
+                )[0]
+            )
+            archive_objects = (
+                bucket_stat_arc_doc["usage"].get("rgw.main", {}).get("num_objects", 0)
+            )
+            primary_size_actual = (
+                bucket_stat_pri_doc[bucket]["usage"]
+                .get("rgw.main", {})
+                .get("size_actual", 0)
+            )
+            secondary_size_actual = (
+                bucket_stat_sec_doc[bucket]["usage"]
+                .get("rgw.main", {})
+                .get("size_actual", 0)
+            )
+            archive_size_actual = (
+                bucket_stat_arc_doc["usage"].get("rgw.main", {}).get("size_actual", 0)
+            )
+            bucket_name = bucket_stat_sec_doc[bucket]["bucket"]
+            if (
+                primary_objects == secondary_objects == archive_objects
+                and primary_size_actual == secondary_size_actual == archive_size_actual
+            ):
+                log.info(f"bucket stats for bucket {bucket_name} is consistent")
+
+            else:
+                raise Exception(
+                    f"bucket stats for bucket {bucket_name} is inconsistent, test failure."
+                )
+    else:
+        raise Exception("Buckets not synced across sites, test failure.")
+
+
 def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     """
     verify RGW multisite sync status
