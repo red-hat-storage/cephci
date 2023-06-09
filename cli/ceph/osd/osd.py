@@ -1,4 +1,5 @@
 from cli import Cli
+from cli.utilities.utils import build_cmd_from_args
 
 from .crush import Crush
 from .pool import Pool
@@ -40,3 +41,18 @@ class Osd(Cli):
         """
         cmd = f"{self.base_cmd} unset {flag}"
         return self.execute(sudo=True, long_running=True, cmd=cmd)
+
+    def tree(self, epoch=None, states=None, **kw):
+        """To list osd tree
+        Args:
+            epoch (int): state time
+            states (str): osd state
+            kw (dict): execute command parameters
+        """
+        cmd = f"{self.base_cmd} tree"
+        if epoch:
+            cmd += f" {epoch}"
+        if states:
+            cmd += f" {states}"
+        cmd += build_cmd_from_args(**kw)
+        return self.execute(sudo=True, cmd=cmd)
