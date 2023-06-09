@@ -409,6 +409,46 @@ tests:
         config-file-name: test_bucketlocation_using_bucketpolicy_with_tenantuser.yaml
         timeout: 300
 
+  - test:
+      name: test bucket policy with multiple statements
+      desc: test bucket policy with multiple statements
+      polarion-id: CEPH-11216
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_multiple_statements.yaml
+        timeout: 500
+
+  - test:
+      name: test bucket policy with conflicting statements
+      desc: test bucket policy with conflicting statements
+      polarion-id: CEPH-11217
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_multiple_conflicting_statements.yaml
+        timeout: 500
+
+  - test:
+      name: test bucket policy with condition blocks
+      desc: test bucket policy with condition blocks
+      polarion-id: CEPH-11590
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_condition.yaml
+        timeout: 500
+
+  - test:
+      name: test bucket policy condition block with explicit deny
+      desc: test bucket policy condition block with explicit deny
+      polarion-id: CEPH-11590
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_condition_explicit_deny.yaml
+        timeout: 500
+
   # Bucket Lifecycle Tests
 
   - test:
