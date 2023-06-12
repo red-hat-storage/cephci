@@ -1,4 +1,5 @@
-# cluster-conf file: conf/pacific/rados/stretch-mode-host-location-attrs.yaml
+# Use cluster-conf file: conf/quincy/rados/stretch-mode-host-location-attrs.yaml
+# Stretch mode tests performing site down scenarios
 
 tests:
   - test:
@@ -6,6 +7,7 @@ tests:
       desc: installation of ceph pre-requisites
       module: install_prereq.py
       abort-on-fail: true
+
   - test:
       name: Cephadm Bootstrap with apply-spec
       desc: Apply spec in Bootstrap with host location attributes
@@ -153,5 +155,30 @@ tests:
       config:
         no_affinity: true
         stretch_rule_name: stretch_rule
+        tiebreaker_mon_site_name: arbiter
       desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site down - Data site
+      module: test_stretch_site_down.py
+      polarion-id: CEPH-83574975
+      config:
+        pool_name: test_stretch_pool
+        shutdown_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when we have only 1 of 2 DC's surviving
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site down - Arbiter site
+      module: test_stretch_site_down.py
+      polarion-id: CEPH-83574974
+      config:
+        pool_name: test_stretch_pool
+        shutdown_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the arbiter site is shut down
       abort-on-fail: true

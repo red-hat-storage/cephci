@@ -327,7 +327,7 @@ def wait_for_clean_pg_sets(
 
     while condition(end_time if isinstance(timeout, int) else timeout):
         flag = True
-        status_report = rados_obj.run_ceph_command(cmd="ceph report")
+        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
 
         # Proceeding to check if all PG's are in active + clean
         for entry in status_report["num_pg_by_state"]:

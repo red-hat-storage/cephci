@@ -46,6 +46,7 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
     stretch_rule_name = config.get("stretch_rule_name", "stretch_rule")
     no_affinity_crush_rule = config.get("no_affinity", False)
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
 
     log.debug("Running pre-checks to deploy Stretch mode on the cluster")
 
@@ -189,27 +190,29 @@ def run(ceph_cluster, **kw):
             f"Added hosts : {[entry['name'] for entry in mons['mons'] if entry.get('crush_location') != '{}']}"
         )
         raise Exception("Stretch mode deployment Failed")
+
+    # Directly selecting tiebreaker mon as we have confirmed only 1 mon exists without location
     tiebreaker_mon = [
         entry["name"] for entry in mons["mons"] if entry.get("crush_location") == "{}"
     ][0]
     # Setting up CRUSH location on the final Arbiter mon
-    for entry in mons["mons"]:
-        if entry.get("crush_location") == "{}":
-            cmd = f"ceph mon set_location {entry['name']} datacenter=arbiter"
-            try:
-                rados_obj.run_ceph_command(cmd)
-                mons = rados_obj.run_ceph_command(mon_dump_cmd)
+    arbiter_cmd = (
+        f"ceph mon set_location {tiebreaker_mon} datacenter={tiebreaker_mon_site_name}"
+    )
+    try:
+        rados_obj.run_ceph_command(arbiter_cmd)
 
-                # Verifying is tiebreaker mon is set with CRUSH locations successfully
-                for mon in mons["mons"]:
-                    if mon["name"] == tiebreaker_mon:
-                        if mon["crush_location"] == "{}":
-                            log.error("Location attribute not added on the arbiter mon")
-                            raise Exception("Stretch mode deployment Failed")
-                        break
-            except Exception:
-                log.error(f"Failed to set location on mon : {entry['name']}")
-                raise Exception("Stretch mode deployment Failed")
+        # Verifying is tiebreaker mon is set with CRUSH locations successfully via mon dump
+        mons = rados_obj.run_ceph_command(mon_dump_cmd)
+        for mon in mons["mons"]:
+            if mon["name"] == tiebreaker_mon:
+                if mon["crush_location"] == "{}":
+                    log.error("Location attribute not added on the arbiter mon")
+                    raise Exception("Stretch mode deployment Failed")
+                break
+    except Exception:
+        log.error(f"Failed to set location on mon : {entry['name']}")
+        raise Exception("Stretch mode deployment Failed")
 
     log.info("Set-up CRUSH location attributes on all the mon daemons")
 
