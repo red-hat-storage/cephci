@@ -1405,6 +1405,7 @@ class RadosOrchestrator:
                 "OBJECT_MISPLACED",
                 "OBJECT_UNFOUND",
                 "SLOW_OPS",
+                "RECENT_CRASH",
             )
 
             flag = (
@@ -1627,3 +1628,23 @@ class RadosOrchestrator:
             )
             return False
         return True
+
+    def get_stretch_mode_dump(self) -> dict:
+        """
+        retrieves the dump values for the stretch mode from the osd dump
+
+        Return:
+            Dict with the stretch mode details
+            {
+                'stretch_mode_enabled': False,
+                'stretch_bucket_count': 0,
+                'degraded_stretch_mode': 0,
+                'recovering_stretch_mode': 0,
+                'stretch_mode_bucket': 0
+            }
+        """
+        cmd = "ceph osd dump"
+        osd_dump = self.run_ceph_command(cmd=cmd)
+        stretch_details = osd_dump["stretch_mode"]
+        log.debug(f"Stretch mode dump : {stretch_details}")
+        return stretch_details

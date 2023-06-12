@@ -19,7 +19,6 @@ tests:
           registry-json: registry.redhat.io
           custom_image: true
           mon-ip: node1
-          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
           ssh-user: cephuser
           apply-spec:
             - service_type: host
@@ -55,6 +54,7 @@ tests:
                 label: mgr
       destroy-cluster: false
       abort-on-fail: true
+
   - test:
       name: Service deployment with spec
       desc: Add OSD services using spec file.
@@ -78,3 +78,80 @@ tests:
               command: shell
               args: # display OSD tree
                 - "ceph osd tree"
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node8                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Deploy stretch Cluster
+      module: test_stretch_deployment_with_placement.py
+      polarion-id: CEPH-83573621
+      config:
+        no_affinity: true
+        stretch_rule_name: stretch_rule
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+      abort-on-fail: true

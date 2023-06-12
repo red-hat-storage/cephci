@@ -1,3 +1,9 @@
+# Test Suite for deploying and testing Stretch mode.
+
+# Example of the cluster taken from the MDR deployment guide for ODF.
+# ref: https://access.redhat.com/documentation/en-us/red_hat_openshift_data_foundation/4.12/html/
+# configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads/metro-dr-solution#hardware_requirements
+
 globals:
   - ceph-cluster:
       name: ceph
@@ -7,70 +13,49 @@ globals:
           - mon
           - mgr
           - installer
-          - node-exporter
           - alertmanager
           - grafana
           - prometheus
-          - crash
-          - iscsi
       node2:
         role:
           - mon
           - mds
-          - node-exporter
-          - alertmanager
-          - crash
           - osd
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 25
       node3:
         role:
           - mon
+          - mgr
           - osd
-          - node-exporter
-          - crash
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 25
       node4:
         role:
+          - rgw
           - osd
-          - node-exporter
-          - crash
-          - iscsi
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 25
       node5:
         role:
           - mon
+          - mgr
           - osd
-          - node-exporter
-          - crash
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 25
       node6:
         role:
           - mon
           - osd
           - rgw
-          - node-exporter
-          - crash
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 25
       node7:
         role:
-          - rgw
-          - node-exporter
-          - crash
           - osd
-        no-of-volumes: 4
-        disk-size: 15
-      node8:
-        role:
-          - nfs
-          - node-exporter
-          - iscsi
-          - crash
           - mds
-      node9:
+        no-of-volumes: 4
+        disk-size: 25
+      node8:
         role:
           - client
