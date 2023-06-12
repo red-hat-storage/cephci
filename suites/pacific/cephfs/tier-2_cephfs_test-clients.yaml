@@ -178,34 +178,10 @@ tests:
       module: test_client.py
       name: "configure client"
   - test:
-      name: Filesystem information restriction for client
-      module: clients.client_fs_information_restriction.py
-      polarion-id: CEPH-83573875
-      desc: Test Filesystem information restriction for client for multiple cephfs
-      abort-on-fail: false
-  - test:
-      name: mds restriction for client for multifs
-      module: clients.client_mds_restriction.py
-      polarion-id: CEPH-83573869
-      desc: Test mds restriction for client for multiple cephfs
-      abort-on-fail: false
-  - test:
-      name: Mount multifs with same client
-      module: clients.multifs_mount_same_client.py
-      polarion-id: CEPH-83573877
-      desc: Test mounting multiple cephfs with same client
-      abort-on-fail: false
-  - test:
-      name: No data sharing between multifs
-      module: clients.test_no_data_sharing_multifs.py
-      polarion-id: CEPH-83573876
-      desc: Test no data sharing between multiple cephfs
-      abort-on-fail: false
-  - test:
-      name: Mount single directory and perform IO ops from multiple clients
-      module: clients.multiclients_io_on_same_directory.py
-      polarion-id: CEPH-11224
-      desc: multiple clients performing IO on same directory
+      name: multiple clients run IO's on same directory from each clients and exersize POSIX locks
+      module: clients.multiple_clients_posix_calls.py
+      polarion-id: CEPH-10529
+      desc: multiple clients exersizing POSIX locks
       abort-on-fail: false
   - test:
       name: smallfile IO on multiple clients with diff operations
@@ -214,15 +190,11 @@ tests:
       desc: smallfiles with different operations
       abort-on-fail: false
   - test:
-       name: Running basic bash commands on fuse,Kernel and NFS mounts
-       module: clients.fs_basic_bash_cmds.py
-       polarion-id: CEPH-11300
-       desc: Running basic bash commands on fuse,Kernel and NFS mounts
-       abort-on-fail: false
-       config:
-         no_of_files: 1000
-         size_of_files: 1
-         num_dir: 100
+      name: Mount single directory and perform IO ops from multiple clients
+      module: clients.multiclients_io_on_same_directory.py
+      polarion-id: CEPH-11224
+      desc: multiple clients performing IO on same directory
+      abort-on-fail: false
   - test:
       name: rsync tests bw fs and other location and vice versa
       module: clients.rsync_bw_fs_and_other_location.py
@@ -236,16 +208,20 @@ tests:
       desc: scp bw filesystem and remote directory and vice versa
       abort-on-fail: false
   - test:
-        name: Filesystem information restriction for client
-        module: clients.multiclient_cephx_restrict_fs.py
-        polarion-id: CEPH-11338
-        desc: Test Filesystem information restriction for client for multiple cephfs
-        abort-on-fail: false
+       name: Running basic bash commands on fuse,Kernel and NFS mounts
+       module: clients.fs_basic_bash_cmds.py
+       polarion-id: CEPH-11300
+       desc: Running basic bash commands on fuse,Kernel and NFS mounts
+       abort-on-fail: false
+       config:
+         no_of_files: 1000
+         size_of_files: 1
+         num_dir: 100
   - test:
-      name: Filesystem mount with fstab entry and reboot the client
-      module: clients.client_fstab_auto_mount.py
-      polarion-id: CEPH-11336
-      desc: Update fstab and reboot client to check auto mount of FS works
+      name: Client File locking on mounts
+      module: clients.file_lock_on_mounts.py
+      polarion-id: CEPH-11304
+      desc: Test File locking on mounts
       abort-on-fail: false
   - test:
       name: Client eviction
@@ -254,18 +230,28 @@ tests:
       desc: Test Filesystem client eviction
       abort-on-fail: false
   - test:
+      name: Filesystem mount with fstab entry and reboot the client
+      module: clients.client_fstab_auto_mount.py
+      polarion-id: CEPH-11336
+      desc: Update fstab and reboot client to check auto mount of FS works
       abort-on-fail: false
-      desc: "MDS failover while IO is going on each client"
-      module: clients.MDS_failover_while_client_IO.py
-      polarion-id: CEPH-11242
-      config:
-        num_of_file_dir: 1000
-      name: "MDS failover whi client IO"
   - test:
-      name: Client File locking on mounts
-      module: clients.file_lock_on_mounts.py
-      polarion-id: CEPH-11313
-      desc: Test File locking on mounts
+      name: Mount and unmount CephFS repeatedly in interval of 30 min & check data integrity
+      module: clients.integrity_check_after_remount.py
+      polarion-id: CEPH-11337
+      desc: Mount and unmount CephFS repeatedly in interval of 30 min & check data integrity
+      abort-on-fail: false
+  - test:
+        name: Filesystem information restriction for client
+        module: clients.multiclient_cephx_restrict_fs.py
+        polarion-id: CEPH-11338
+        desc: Test Filesystem information restriction for client for multiple cephfs
+        abort-on-fail: false
+  - test:
+      name: multi client file and dir ops
+      module: clients.multiclient_file_dir_ops.py
+      polarion-id: CEPH-83573529
+      desc: multi client file and dir ops
       abort-on-fail: false
   - test:
       name: cross delete operations
@@ -274,16 +260,28 @@ tests:
       desc: Cross Delete Ops b/w Fuse and Kernel mounts
       abort-on-fail: false
   - test:
-      name: multi client file and dir ops
-      module: clients.multiclient_file_dir_ops.py
-      polarion-id: CEPH-83573529
-      desc: multi client file and dir ops
+      name: mds restriction for client for multifs
+      module: clients.client_mds_restriction.py
+      polarion-id: CEPH-83573869
+      desc: Test mds restriction for client for multiple cephfs
       abort-on-fail: false
   - test:
-      name: multi client unlink file
-      module: clients.file_unlink_on_clients.py
-      polarion-id: CEPH-83575042
-      desc: multi client unlink file
+      name: Filesystem information restriction for client
+      module: clients.client_fs_information_restriction.py
+      polarion-id: CEPH-83573875
+      desc: Test Filesystem information restriction for client for multiple cephfs
+      abort-on-fail: false
+  - test:
+      name: No data sharing between multifs
+      module: clients.test_no_data_sharing_multifs.py
+      polarion-id: CEPH-83573876
+      desc: Test no data sharing between multiple cephfs
+      abort-on-fail: false
+  - test:
+      name: Mount multifs with same client
+      module: clients.multifs_mount_same_client.py
+      polarion-id: CEPH-83573877
+      desc: Test mounting multiple cephfs with same client
       abort-on-fail: false
   - test:
       name: Create users with permissions
@@ -298,8 +296,22 @@ tests:
       desc: generate all the possible permissions and verify the permissions
       abort-on-fail: false
   - test:
+      name: multi client unlink file
+      module: clients.file_unlink_on_clients.py
+      polarion-id: CEPH-83575042
+      desc: multi client unlink file
+      abort-on-fail: false
+  - test:
       name: verify user read and write permissions
       module: clients.verify_user_read_write_permissions.py
       polarion-id: CEPH-83575574
       desc: verify user read and write permissions
       abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "MDS failover while IO is going on each client"
+      module: clients.MDS_failover_while_client_IO.py
+      polarion-id: CEPH-11242
+      config:
+        num_of_file_dir: 1000
+      name: "MDS failover whi client IO"
