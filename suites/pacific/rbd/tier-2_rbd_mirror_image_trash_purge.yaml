@@ -1,0 +1,225 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_mirror_image_trash_purge.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/pacific/rbd/tier-2_rbd_mirror.yaml
+#    No of Clusters : 2
+#    Each cluster configuration
+#    5-Node cluster(RHEL-8.3 and above)
+#    1 MONS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client
+#     Node3 - OSD
+#     Node4 - OSD
+#     Node5 - OSD, RBD Mirror
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd1:
+            config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true
+          ceph-rbd2:
+            config:
+                command: add
+                id: client.1
+                node: node2
+                install_packages:
+                    - ceph-common
+                copy_admin_keyring: true
+        desc: Configure the client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      name: test-image-delete-from-primary-site
+      module: test-image-delete-primary-site.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9501
+      desc: Verify that image deleted at primary site updated at secondary
+
+  - test:
+      name: test mirror on image having snap and clone after restoring from trash
+      module: test_mirror_move_primary_trash_restore.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-11417
+      desc: Verify that image is restore and mirroring is intact
+
+  - test:
+      name: test image delete from secondary after promote and demote
+      module: test-image-delete-from-secondary.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            repeat_count: 1
+      polarion-id: CEPH-83574741
+      desc: Verify that deleting primary image also delete the secondary image
+
+  - test:
+      name: image removal from secondary after journaling feature disable
+      module: test_image_removal_from_secondary.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            repeat_count: 10
+      polarion-id: CEPH-10470
+      desc: verify that image removal from secondary after disabling journaling feature
+
+  - test:
+      name: Attempt moving secondary image to trash
+      module: test_mirror_move_secondary_trash.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-11416
+      desc: Verify that moving secondary to trash fails
+
+  - test:
+      name: Delete parent snap for mirrored image
+      module: test_rbd_mirror_delete_parent_snap.py
+      clusters:
+        ceph-rbd1:
+          config:
+            ec_pool_config:
+              imagesize: 2G
+              io_total: 200M
+            rep_pool_config:
+              imagesize: 2G
+              io_total: 200M
+      polarion-id: CEPH-9515
+      desc: Testing parent snapshot deletion for mirrored image
