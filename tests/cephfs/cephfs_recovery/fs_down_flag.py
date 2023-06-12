@@ -60,8 +60,10 @@ def run(ceph_cluster, **kw):
 
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount(
-            [clients[0]],
+        retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.kernel_mount)
+        retry_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
+        retry_mount(
+            [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             extra_params=f",fs={default_fs}",
@@ -117,8 +119,8 @@ def run(ceph_cluster, **kw):
 
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
 
     finally:
