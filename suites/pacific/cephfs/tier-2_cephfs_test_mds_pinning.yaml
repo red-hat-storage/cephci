@@ -188,3 +188,15 @@ tests:
       polarion-id: CEPH-11230
       desc: MDSfailover on active-active mdss,performing client IOs with equal directory pinning with 2 active mdss
       abort-on-fail: false
+  - test:
+      name: Directory pinning on two MDS with node reboots
+      module: cephfs_mds_pinning.mds_pinning_node_reboots.py
+      polarion-id: CEPH-11231
+      desc: Directory pinning on two MDS with node reboots
+      abort-on-fail: false
+  - test:
+      name: Subtree Split and Subtree merging by pinning Subtrees/directories to MDS.
+      module: cephfs_mds_pinning.mds_pinning_split_merge.py
+      polarion-id: CEPH-11233
+      desc: Subtree Split and Subtree merging by pinning Subtrees/directories to MDS.
+      abort-on-fail: false
