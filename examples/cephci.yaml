@@ -114,3 +114,14 @@ packages:
     - python-virtualenv
     - lsb-release
     - ntp
+
+images:
+  pacific:
+    - rhceph/rhceph-5-rhel8:latest
+    - openshift4/ose-prometheus-node-exporter:v4.6
+    - rhceph/rhceph-5-dashboard-rhel8
+    - openshift4/ose-prometheus:v4.6
+    - openshift4/ose-prometheus-alertmanager:v4.6
+
+  quincy:
+    - rhceph/rhceph-6-rhel9:latest

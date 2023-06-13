@@ -155,6 +155,17 @@ def _get_packages():
         raise ConfigError("Packages configurations are missing from config")
 
 
+def _get_images():
+    """Get images from config file"""
+    if not CONFIG:
+        raise ConfigError("Configuration is not passed")
+
+    try:
+        return CONFIG["images"]
+    except KeyError:
+        raise ConfigError("Image configurations are missing from config")
+
+
 def get_packages(version=None):
     """Get packages from config for version
 
@@ -170,3 +181,16 @@ def get_packages(version=None):
         return packages
     except KeyError:
         raise ConfigError(f"Insufficient config for '{version}' in package")
+
+
+def get_images(build_type):
+    """Get images from config for build type
+
+    Args:
+        build_type (str): Ceph build version (pacific, quincy)
+    """
+    log.info(f"Loading images for build '{build_type}'")
+    try:
+        return _get_images()[build_type]
+    except KeyError:
+        raise ConfigError(f"Insufficient config for '{build_type}' in images")
