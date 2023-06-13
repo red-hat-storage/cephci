@@ -24,25 +24,14 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    #CEPH-83571715
-    Verify cluster behaviour when OSDs are nearfull, backfill-full, and completely full.
+    Module to verify scenarios related to OSD being nearfull, backfill-full
+    and completely full
+
+    Currently, covers the following tests:
+    - CEPH-83571715: Verify cluster behaviour when OSDs are nearfull, backfill-full, and completely full.
     Autoscale PGs, ensure proper backfilling and rebalancing
-    1. Create replicated pool with single PG and autoscaling disabled
-    2. Retrieve the acting set for the pool
-    3. Calculate the amount of data to be written to pools in
-        order to trigger near-full, backfill-full, and completely
-        full OSD health warnings
-    4. Perform IOPS using rados bench to fill up the pool
-        up till nearfull, backfillfull and completely full capacity
-    5. Verify the number of objects written to the pool and the cluster
-        health warning after each IOPS iteration
-    6. Perform IOPS again and ensure IOPS was unsuccessful as OSDs are full
-    7. Increase the set-full-ratio to a higher value and set-backfillfull-ratio
-        to a value higher than the previous value of set-full-ratio
-    8. Ensure that completely full and backfillfull warning disappear and
-        nearfull warning remains
-    9. Enable autoscaling and observe the acting set OSD's 'used capacity' decreasing
-    10. Eventually nearfull warning should disappear, wait for PGs to achieve active+clean state
+    - CEPH-9323: Verify cluster rebalacing when cluster is full and new OSDs are added
+    - CEPH-83572758(BZ-2214864): Verify IOs are possbile on a cluster after one OSD reaches FULL state
     """
 
     log.info(run.__doc__)
@@ -57,19 +46,19 @@ def run(ceph_cluster, **kw):
     # object size for bench ops is chosen as 16 MB as this is the safe max value
     # as per RHCS Administration Guide | benchmarking-ceph-performance_admin (https://red.ht/3zyuIrp)
 
-    def create_pool_per_config():
+    def create_pool_per_config(**entry):
         # Creating pools
         log.info(
-            f"Creating {entry['pool_type']} pool on the cluster with name {pool_name}"
+            f"Creating {entry['pool_type']} pool on the cluster with name {entry['pool_name']}"
         )
         if entry.get("pool_type", "replicated") == "erasure":
             method_should_succeed(
-                rados_obj.create_erasure_pool, name=pool_name, **entry
+                rados_obj.create_erasure_pool, entry["pool_name"], **entry
             )
         else:
             method_should_succeed(rados_obj.create_pool, **entry)
 
-        log.info(f"Pool {pool_name} created successfully")
+        log.info(f"Pool {entry['pool_name']} created successfully")
         return True
 
     def perform_write_after_full(full_obj):
@@ -90,6 +79,19 @@ def run(ceph_cluster, **kw):
         log.info(
             f"Pool has {pool_stat['stats']['objects']} objs | Expected {full_obj} objs"
         )
+
+    def match_osd_size(a_set):
+        for osd_id in a_set:
+            osd_df_stats = rados_obj.get_osd_df_stats(
+                tree=False, filter_by="name", filter=f"osd.{osd_id}"
+            )
+            osd_sizes[osd_id] = osd_df_stats["nodes"][0]["kb"]
+
+        primary_osd_size = osd_sizes[a_set[0]]
+        for osd_id in a_set:
+            if osd_sizes[osd_id] != primary_osd_size:
+                log.error(f"All OSDs of the acting set {a_set} are not of same size")
+                raise Exception("Total capacity of OSDs is not same")
 
     def check_full_warning(type, a_set):
         if type == "nearfull":
@@ -148,22 +150,11 @@ def run(ceph_cluster, **kw):
             try:
                 rados_obj.configure_pg_autoscaler(**{"default": "off"})
                 pool_name = entry["pool_name"]
-                assert create_pool_per_config()
+                assert create_pool_per_config(**entry)
                 # retrieving the size of each osd part of acting set for the pool
                 acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
-                for osd_id in acting_set:
-                    osd_df_stats = rados_obj.get_osd_df_stats(
-                        tree=False, filter_by="name", filter=f"osd.{osd_id}"
-                    )
-                    osd_sizes[osd_id] = osd_df_stats["nodes"][0]["kb"]
-
+                match_osd_size(a_set=acting_set)
                 primary_osd_size = osd_sizes[acting_set[0]]
-                for osd_id in acting_set:
-                    if osd_sizes[osd_id] != primary_osd_size:
-                        log.error(
-                            f"All OSDs of the acting set {acting_set} are not of same size"
-                        )
-                        raise Exception("Total capacity of OSDs is not same")
 
                 log.info(
                     f"All OSDs part of acting set {acting_set} are of same size {primary_osd_size} KB"
@@ -294,8 +285,8 @@ def run(ceph_cluster, **kw):
                 this is to enable the cluster to backfill to other pgs when autoscaling
                 is enabled for the pool """
                 cmds = [
-                    "ceph osd set-full-ratio 0.97",
-                    "ceph osd set-backfillfull-ratio 0.96",
+                    "ceph osd set-full-ratio 0.98",
+                    "ceph osd set-backfillfull-ratio 0.975",
                 ]
 
                 [cephadm.shell(args=[cmd]) for cmd in cmds]
@@ -307,7 +298,7 @@ def run(ceph_cluster, **kw):
                     and "near full" in health_detail
                 )
                 log.info("backfill full and osd full health warnings disappeared")
-                log.debug(f"Health warning: \n {health_detail}")
+                log.info(f"Health warning: \n {health_detail}")
 
                 # proceed to remove the pg autoscaling restriction for the pool
                 # and check ceph health warning should disappear
@@ -399,30 +390,19 @@ def run(ceph_cluster, **kw):
             try:
                 rados_obj.configure_pg_autoscaler(**{"default": "off"})
                 pool_name = entry["pool_name"]
-                assert create_pool_per_config()
+                assert create_pool_per_config(**entry)
                 # retrieving the size of each osd part of acting set for the pool
                 acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
-                for osd_id in acting_set:
-                    osd_df_stats = rados_obj.get_osd_df_stats(
-                        tree=False, filter_by="name", filter=f"osd.{osd_id}"
-                    )
-                    osd_sizes[osd_id] = osd_df_stats["nodes"][0]["kb"]
-
+                match_osd_size(a_set=acting_set)
                 primary_osd_size = osd_sizes[acting_set[0]]
-                for osd_id in acting_set:
-                    if osd_sizes[osd_id] != primary_osd_size:
-                        log.error(
-                            f"All OSDs of the acting set {acting_set} are not of same size"
-                        )
-                        raise Exception("Total capacity of OSDs is not same")
 
                 log.info(
                     f"All OSDs part of acting set {acting_set} are of same size {primary_osd_size} KB"
                 )
 
-                # change the nearfull, backfill-full and full-ratio to 0.65, 0.69, and 0.7 respectively
+                # change the nearfull, backfill-full and full-ratio to 0.60, 0.69, and 0.7 respectively
                 cmds = [
-                    "ceph osd set-nearfull-ratio 0.65",
+                    "ceph osd set-nearfull-ratio 0.60",
                     "ceph osd set-backfillfull-ratio 0.69",
                     "ceph osd set-full-ratio 0.70",
                 ]
@@ -432,7 +412,7 @@ def run(ceph_cluster, **kw):
                 # to achieve nearfull, backfillfull and full state.
                 full_objs = int(primary_osd_size * 0.7 / bench_obj_size_kb) + 1
 
-                # perform rados bench to trigger nearfull warning
+                # perform rados bench to trigger full warning
                 full_config = {
                     "seconds": 200,
                     "b": f"{bench_obj_size_kb}KB",
@@ -465,15 +445,6 @@ def run(ceph_cluster, **kw):
                 ]["objects"]
                 perform_write_after_full(full_obj=curr_pool_objs)
 
-                cephadm.shell(args=["ceph osd set-full-ratio 0.75"])
-                cephadm.shell(args=["ceph osd set-backfillfull-ratio 0.73"])
-                # proceed to remove the pg autoscaling restriction for the pool
-                # and check ceph health warning should disappear
-                rados_obj.configure_pg_autoscaler(**{"default": "on"})
-                rados_obj.set_pool_property(
-                    pool=pool_name, props="pg_autoscale_mode", value="on"
-                )
-
                 # adding node13 as a new host to the cluster while rebalancing in-progress
                 add_args = {
                     "service": "host",
@@ -498,6 +469,17 @@ def run(ceph_cluster, **kw):
                 log.info(
                     "New hosts added to the cluster successfully, Proceeding to deploy OSDs on the same."
                 )
+
+                # increase backfill-full and full ratio to enable backfilling
+                cephadm.shell(args=["ceph osd set-full-ratio 0.75"])
+                cephadm.shell(args=["ceph osd set-backfillfull-ratio 0.73"])
+                # proceed to remove the pg autoscaling restriction for the pool
+                # and check ceph health warning should disappear
+                rados_obj.configure_pg_autoscaler(**{"default": "on"})
+                rados_obj.set_pool_property(
+                    pool=pool_name, props="pg_autoscale_mode", value="on"
+                )
+
                 # Deploying OSDs on the new nodes.
                 osd_args = {
                     "steps": [
@@ -533,9 +515,17 @@ def run(ceph_cluster, **kw):
 
                 # new OSD host RAW USE(kb) before rebalaning
                 new_host = get_node_by_id(ceph_cluster, "node13")
+                """
+                This check fails because ceph osd df stats shows incorrect
+                data for an OSD host if OSDs are yet to be deployed or if
+                the host has been removed from the cluster
+                This only happens if ceph osd df stats are fetched with name
+                filter, instead of showing 0, it shows the total cluster summary stats
+                BZ -
                 raw_use_org = rados_obj.get_osd_df_stats(
                     tree=False, filter_by="name", filter=f"{new_host.hostname}"
                 )["summary"]["total_kb_used"]
+                """
 
                 timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
                 while datetime.datetime.now() < timeout_time:
@@ -574,12 +564,17 @@ def run(ceph_cluster, **kw):
                     "Cluster reached clean state after PG autoscaling and new OSDs addition"
                 )
 
-                # check ODS host utilization post rebalancing
+                # check OSD host utilization post rebalancing
                 raw_use_after = rados_obj.get_osd_df_stats(
                     tree=False, filter_by="name", filter=f"{new_host.hostname}"
                 )["summary"]["total_kb_used"]
 
-                assert raw_use_after > raw_use_org
+                log.info(
+                    f"Checking if new OSD host got backfilled,"
+                    f"assert {raw_use_after} > 0"
+                )
+                # assert raw_use_after > raw_use_org
+                assert raw_use_after > 0
                 log.info("Data successfully backfilled to newly added OSDs")
 
                 # check fragmentation score for acting set osds
@@ -693,4 +688,164 @@ def run(ceph_cluster, **kw):
             log.info(
                 "Verification of OSD host addition during rebalancing and cluster full has been completed"
             )
+        return 0
+
+    if config.get("iops_with_full_osds"):
+        doc = (
+            "\n # CEPH-83572758 | BZ-2214864"
+            "\n Verify IOs are possbile on a cluster after one OSD reaches FULL state"
+            "\n\t 1. Create a replicated pool with single PG and autoscaling disabled"
+            "\n\t 2. Retrieve the acting set for pool 1"
+            "\n\t 3. Reweight the OSDs part of acting set of Pool 1 to 0"
+            "\n\t 4. Create another replicated pool and EC pool with single PG and autoscaling disabled"
+            "\n\t 5. Retrieve the acting set for pool 2 and 3, should not have any OSD from acting set of Pool 1"
+            "\n\t 6. Reweight the OSDs part of acting set of Pool 1 back to 1"
+            "\n\t 7. Perform IOPS using rados bench to fill up Pool 1 up till completely full capacity"
+            "\n\t 8. Perform IOPS on Pool 2 and Pool 3 and ensure IOPS is successful as full "
+            "OSDs are not part of acting set"
+        )
+
+        log.info(doc)
+        config = config["iops_with_full_osds"]
+        log.info("Running test for IOPs with cluster having full OSDs")
+
+        try:
+            rados_obj.configure_pg_autoscaler(**{"default": "off"})
+            pool1_name = pool_name = config["pool-1"]["pool_name"]
+            assert create_pool_per_config(**config["pool-1"])
+
+            # retrieving the size of each osd part of acting set for the pool
+            acting_set1 = rados_obj.get_pg_acting_set(pool_name=pool1_name)
+            match_osd_size(a_set=acting_set1)
+            primary_osd_size = osd_sizes[acting_set1[0]]
+
+            log.info(
+                f"All OSDs part of acting set {acting_set1} are of same size {primary_osd_size} KB"
+            )
+
+            # reweight osds to 0
+            for osd_id in acting_set1:
+                cephadm.shell([f"ceph osd reweight osd.{osd_id} 0"])
+
+            pool2_name = config["pool-2"]["pool_name"]
+            assert create_pool_per_config(**config["pool-2"])
+            acting_set2 = rados_obj.get_pg_acting_set(pool_name=pool2_name)
+
+            pool3_name = config["pool-3"]["pool_name"]
+            assert create_pool_per_config(**config["pool-3"])
+            acting_set3 = rados_obj.get_pg_acting_set(pool_name=pool3_name)
+
+            for osd_id in acting_set1:
+                assert osd_id not in acting_set2
+                assert osd_id not in acting_set3
+
+            log.info(
+                "None of the OSDs part of acting set of Pool 1 are part of acting set of Pool 2 and 3"
+            )
+            log.info(
+                f"\n Acting set of Pool 1: {acting_set1} | Acting set of Pool 2: {acting_set2} | "
+                f"Acting set of Pool 3: {acting_set3}"
+            )
+
+            # change the nearfull, backfill-full and full-ratio to 0.60, 0.65, and 0.7 respectively
+            cmds = [
+                "ceph osd set-nearfull-ratio 0.65",
+                "ceph osd set-backfillfull-ratio 0.69",
+                "ceph osd set-full-ratio 0.70",
+            ]
+            [cephadm.shell(args=[cmd]) for cmd in cmds]
+
+            # determine the number of objects to be written to the pool
+            # to achieve nearfull, backfillfull and full state.
+            full_objs = int(primary_osd_size * 0.7 / bench_obj_size_kb) + 1
+
+            # reweight osds to 1
+            for osd_id in acting_set1:
+                cephadm.shell([f"ceph osd reweight osd.{osd_id} 1"])
+
+            # check if acting set of pool1 returned after reweight to 0 and 1
+            time.sleep(5)
+            acting_set1_post_reweight = rados_obj.get_pg_acting_set(
+                pool_name=pool1_name
+            )
+            log.info(f"Acting set of {pool1_name} before reweight: {acting_set1}")
+            log.info(
+                f"Acting set of {pool1_name} after reweight process: {acting_set1_post_reweight}"
+            )
+            assert sorted(acting_set1) == sorted(acting_set1_post_reweight)
+
+            # perform rados bench to trigger full warning
+            full_config = {
+                "seconds": 200,
+                "b": f"{bench_obj_size_kb}KB",
+                "no-cleanup": True,
+                "max-objects": full_objs,
+            }
+            bench_obj.write(client=client_node, pool_name=pool1_name, **full_config)
+
+            log.info(f"{full_objs + 1} objects have been written to pool {pool1_name}")
+
+            check_full_warning(type="full", a_set=acting_set1)
+
+            # perform rados bench to ensure IOPS is still possible for Pool 2 and Pool 3
+            pool2_config = {
+                "seconds": 60,
+                "b": f"{bench_obj_size_kb}KB",
+                "no-cleanup": True,
+            }
+            bench_obj.write(client=client_node, pool_name=pool2_name, **pool2_config)
+            bench_obj.write(client=client_node, pool_name=pool3_name, **pool2_config)
+
+            time.sleep(7)  # blind sleep to let all objs show up in ceph df stats
+            pool_stat = rados_obj.get_cephdf_stats(pool_name=pool2_name)
+            if pool_stat["stats"]["objects"] == 0:
+                log.error(f"Pool {pool2_name} is not having any objects")
+                raise Exception(
+                    f"{pool2_name} expected to have some objects,"
+                    f" had {pool_stat['stats']['objects']} objects"
+                )
+            log.info(
+                f"{pool_stat['stats']['objects']} objects have been written to pool {pool2_name}"
+            )
+
+            pool_stat = rados_obj.get_cephdf_stats(pool_name=pool3_name)
+            if pool_stat["stats"]["objects"] == 0:
+                log.error(f"Pool {pool3_name} is not having any objects")
+                raise Exception(
+                    f"{pool3_name} expected to have some objects,"
+                    f" had {pool_stat['stats']['objects']} objects"
+                )
+            log.info(
+                f"{pool_stat['stats']['objects']} objects have been written to pool {pool3_name}"
+            )
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            return 1
+        finally:
+            # deleting the created pool
+            rados_obj.detete_pool(pool=pool1_name)
+            rados_obj.detete_pool(pool=pool2_name)
+            rados_obj.detete_pool(pool=pool3_name)
+
+            # reset full ratios
+            cmds = [
+                "ceph osd set-nearfull-ratio 0.85",
+                "ceph osd set-backfillfull-ratio 0.90",
+                "ceph osd set-full-ratio 0.95",
+            ]
+            [cephadm.shell(args=[cmd]) for cmd in cmds]
+            rados_obj.configure_pg_autoscaler(**{"default": "on"})
+
+            # reweight osds to 1
+            for osd_id in acting_set1:
+                cephadm.shell([f"ceph osd reweight osd.{osd_id} 1"])
+
+            # Waiting for recovery post test execution completion
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            log.info("PG's are active + clean post test workflow")
+
+        log.info(
+            "Verification of possible IOPs on a Cluster with full OSDs has been completed"
+        )
         return 0
