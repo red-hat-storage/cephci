@@ -106,6 +106,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: BlueStore Checksum algorithms
       module: test_bluestore_configs.py
       polarion-id: CEPH-83571646
@@ -153,3 +160,9 @@ tests:
                  rados_write_duration: 50
                  rados_read_duration: 50
           desc: Verification of the bluestore pinned tests
+
+  - test:
+      name: ceph-bluestore-tool utility
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83571692
+      desc: Verify ceph-bluestore-tool functionalities
