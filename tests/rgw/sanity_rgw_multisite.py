@@ -57,6 +57,7 @@ from utility.utils import (
     install_start_kafka,
     set_config_param,
     setup_cluster_access,
+    test_bucket_stats_with_archive,
     test_sync_via_bucket_stats,
     test_user_stats_consistency,
     verify_sync_status,
@@ -240,6 +241,15 @@ def run(**kw):
         if monitor_consistency_via_bucket_stats:
             log.info("Monitor sync consistency via bucket stats across sites.")
             test_sync_via_bucket_stats(primary_rgw_node, secondary_rgw_node)
+
+        test_bucket_stats_at_archive = config.get("test-archive-bucket-stats")
+        if test_bucket_stats_at_archive:
+            log.info(
+                "Test no duplicate objects created at archive site via bucket stats"
+            )
+            test_bucket_stats_with_archive(
+                primary_client_node, secondary_client_node, archive_client_node
+            )
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:
