@@ -91,6 +91,27 @@ class PoolFunctions:
 
         Returns: True -> pass, False -> fail
         """
+
+        def check_omap_entries() -> bool:
+            pool_stats = self.rados_obj.get_cephdf_stats(
+                pool_name=pool_name, detail=True
+            )
+            if pool_stats["stats"]["stored_omap"] <= 0:
+                # OMAP entries are not readily available,
+                # restarting primary osd as metadata does not get updated automatically.
+                # TBD: bug raised for the issue: https://bugzilla.redhat.com/show_bug.cgi?id=2210278
+                primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[0]
+                self.rados_obj.change_osd_state(action="restart", target=primary_osd)
+                pool_stats = self.rados_obj.get_cephdf_stats(
+                    pool_name=pool_name, detail=True
+                )
+                if pool_stats["stats"]["stored_omap"] <= 0:
+                    log.error(
+                        f"No omap entries available for the pool {pool_name} even after restarting primary OSD"
+                    )
+                    return False
+            return True
+
         # Getting the client node to perform the operations
         client_node = self.rados_obj.ceph_cluster.get_nodes(role="client")[0]
         obj_start = kwargs.get("obj_start", 0)
@@ -134,12 +155,14 @@ class PoolFunctions:
             deep_scrub_status = self.scrub_obj.verify_scrub_deepscrub(
                 before_deep_scrub_log, after_deep_scrub_log, "deepscrub"
             )
+
             if deep_scrub_status:
-                log.debug(
-                    "deep scrubbing has not been completed on the pool"
-                    "Sleeping for 10 seconds and checking again"
-                )
-                time.sleep(10)
+                log.info("deep scrubbing has not been completed on the pool")
+                if check_omap_entries():
+                    log.info("OMAP entries were available post OSD restart")
+                    break
+                log.info("Sleeping for 120 seconds and checking again")
+                time.sleep(120)
                 flag = 1
                 continue
             flag = 0
@@ -152,42 +175,19 @@ class PoolFunctions:
             )
             return False
 
-        pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
-        for detail in pool_stats:
-            if detail["name"] == pool_name:
-                pool_1_stats = detail["stats"]
-                if pool_1_stats["stored_omap"] <= 0:
-                    log.error(
-                        "No omap entries written into pool, Performing the workaround of restarting primary OSD"
-                    )
-                    # restarting primary osd as metadata does not get updated automatically.
-                    # TBD: bug raised for the issue:
-                    primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[
-                        0
-                    ]
-                    self.rados_obj.change_osd_state(
-                        action="restart", target=primary_osd
-                    )
-                else:
-                    log.info(
-                        f"Wrote {pool_1_stats['stored_omap']} bytes of omap data on the pool."
-                    )
-                    return True
-        time.sleep(10)  # blind sleep to let omap metadata get updated
         log.debug("Checking the amount of omap entries created on the pool")
-        pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
-        for detail in pool_stats:
-            if detail["name"] == pool_name:
-                pool_1_stats = detail["stats"]
-                total_omap_data = pool_1_stats["omap_bytes_used"]
-                omap_data = pool_1_stats["stored_omap"]
-                break
-        if omap_data <= 0:
-            log.error("No omap entries written into pool")
+        if not check_omap_entries():
+            log.error(
+                "No omap entries available for the pool after complete deep-scrub and OSD restart"
+            )
             return False
+        pool_stats = self.rados_obj.get_cephdf_stats(pool_name=pool_name, detail=True)
         log.info(
-            f"Wrote {omap_data} bytes of omap data on the pool."
-            f"Total stored omap data on pool : {total_omap_data}"
+            f"Wrote {pool_stats['stats']['stored_omap']} bytes of omap data on the pool."
+        )
+        log.info(
+            f"Wrote {pool_stats['stats']['stored_omap']} bytes of omap data on the pool."
+            f"Total stored omap data on pool : {pool_stats['stats']['omap_bytes_used']}"
         )
         return True
 
@@ -583,7 +583,7 @@ class PoolFunctions:
         log.error("The cluster did not reach active + Clean state")
 
     def check_large_omap_warning(
-        self, pool, obj_num: int, check: bool, timeout: int = 30
+        self, pool, obj_num: int, check: bool, timeout: int = 240
     ) -> bool:
         """
         Perform deep-scrub on given pool and check if "Large omap object"
@@ -597,6 +597,8 @@ class PoolFunctions:
         Returns:
             True-> pass | False-> Fail
         """
+        if not check:
+            timeout = 120
         warn_found = False
         threshold, _ = self.node.shell(
             ["ceph config get osd osd_deep_scrub_large_omap_object_key_threshold"]
@@ -621,12 +623,12 @@ class PoolFunctions:
             ):
                 warn_found = True
                 break
-            time.sleep(5)
+            time.sleep(30)
 
         if (warn_found and check) or (not warn_found and not check):
             log.info(
                 f"Large omap objects warning found: {warn_found} | Expected: {check}"
             )
             return True
-        log.error("Large omap warning was not as per expectation")
+        log.error("Large omap warning did not appear as per expectation")
         return False

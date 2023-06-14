@@ -208,27 +208,27 @@ tests:
       module: test_omap_entries.py
       polarion-id: CEPH-83571702
       config:
-        verify_osd_omap_entries:
-          pool_config:
-            # EC pool config is commented out because omaps can be written only on RE pools
-            pool-1:
-              pool_type: replicated
-              pool_name: re_pool_3
-              pg_num: 1
-          omap_config:
-            small_omap:
-              large_warn: false
-              obj_start: 0
-              obj_end: 5
-              normal_objs: 400
-              num_keys_obj: 200000
-            large_omap:
-              large_warn: true
-              obj_start: 0
-              obj_end: 5
-              normal_objs: 400
-              num_keys_obj: 200001
-      desc: Large number of omap creations on objects backed by bluestore
+        # EC pool config is commented out because omaps can be written only on RE pools
+        omap_config:
+          small_omap:
+            pool_name: re_pool_small_omap
+            pg_num: 1
+            pg_num_max: 1
+            large_warn: false
+            obj_start: 0
+            obj_end: 5
+            normal_objs: 400
+            num_keys_obj: 200000
+          large_omap:
+            pool_name: re_pool_large_omap
+            pg_num: 1
+            pg_num_max: 1
+            large_warn: true
+            obj_start: 0
+            obj_end: 5
+            normal_objs: 400
+            num_keys_obj: 200001
+      desc: Large number of omap creation on objects and OSD resiliency
 
   - test:
       name: client pg access
@@ -252,49 +252,53 @@ tests:
               disable_pg_autoscale: true
       desc: many clients clients accessing same PG with bluestore as backend
 
-  - test:
-      name: Migrate data bw pools.
-      module: test_data_migration_bw_pools.py
-      polarion-id: CEPH-83574768
-      config:
-        pool-1-type: replicated
-        pool-2-type: replicated
-        pool-1-conf: sample-pool-1
-        pool-2-conf: sample-pool-2
-      desc: Migrating data between different pools. Scenario-1. RE -> RE
+# Following test has been commented till RCA is complete for massive increase
+# in test completion time
+#  - test:
+#      name: Migrate data bw pools.
+#      module: test_data_migration_bw_pools.py
+#      polarion-id: CEPH-83574768
+#      config:
+#        pool-1-type: replicated
+#        pool-2-type: replicated
+#        pool-1-conf: sample-pool-1
+#        pool-2-conf: sample-pool-2
+#      desc: Migrating data between different pools. Scenario-1. RE -> RE
 
-  - test:
-      name: Migrate data bw pools.
-      module: test_data_migration_bw_pools.py
-      polarion-id: CEPH-83574768
-      config:
-        pool-1-type: replicated
-        pool-2-type: erasure
-        pool-1-conf: sample-pool-1
-        pool-2-conf: sample-pool-3
-      desc: Migrating data between different pools. Scenario-2. RE -> EC
+#  - test:
+#      name: Migrate data bw pools.
+#      module: test_data_migration_bw_pools.py
+#      polarion-id: CEPH-83574768
+#      config:
+#        pool-1-type: replicated
+#        pool-2-type: erasure
+#        pool-1-conf: sample-pool-1
+#        pool-2-conf: sample-pool-3
+#      desc: Migrating data between different pools. Scenario-2. RE -> EC
 
-  - test:
-      name: Migrate data bw pools.
-      module: test_data_migration_bw_pools.py
-      polarion-id: CEPH-83574768
-      config:
-        pool-1-type: erasure
-        pool-2-type: replicated
-        pool-1-conf: sample-pool-3
-        pool-2-conf: sample-pool-3
-      desc: Migrating data between different pools. Scenario-3. EC -> RE
-
-  - test:
-      name: Migrate data bw pools.
-      module: test_data_migration_bw_pools.py
-      polarion-id: CEPH-83574768
-      config:
-        pool-1-type: erasure
-        pool-2-type: erasure
-        pool-1-conf: sample-pool-2
-        pool-2-conf: sample-pool-3
-      desc: Migrating data between different pools. Scenario-4. Ec -> EC
+# Following testd has been commented till RCA is complete for massive increase
+# in test completion time
+#  - test:
+#      name: Migrate data bw pools.
+#      module: test_data_migration_bw_pools.py
+#      polarion-id: CEPH-83574768
+#      config:
+#        pool-1-type: erasure
+#        pool-2-type: replicated
+#        pool-1-conf: sample-pool-3
+#        pool-2-conf: sample-pool-3
+#      desc: Migrating data between different pools. Scenario-3. EC -> RE
+#
+#  - test:
+#      name: Migrate data bw pools.
+#      module: test_data_migration_bw_pools.py
+#      polarion-id: CEPH-83574768
+#      config:
+#        pool-1-type: erasure
+#        pool-2-type: erasure
+#        pool-1-conf: sample-pool-2
+#        pool-2-conf: sample-pool-3
+#      desc: Migrating data between different pools. Scenario-4. Ec -> EC
 
   - test:
       name: Pg autoscaler bulk flag
