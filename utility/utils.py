@@ -393,6 +393,46 @@ def test_bucket_stats_with_archive(
         raise Exception("Buckets not synced across sites, test failure.")
 
 
+def retain_bucket_pol_at_archive(
+    primary_client_node, secondary_client_node, archive_client_node
+):
+    """
+    Bucket policy shoud not disappear in archive zone when an object is inserted in master zone bucket.
+    """
+    bucket_stat_pri_doc = json.loads(
+        primary_client_node.exec_command(cmd="sudo radosgw-admin bucket stats")[0]
+    )
+    total_buckets = json.loads(
+        primary_client_node.exec_command(cmd="sudo radosgw-admin bucket list | wc -l")[
+            0
+        ]
+    )
+    for bucket in range(0, total_buckets - 2):
+        bucket_id = bucket_stat_pri_doc[bucket]["id"]
+        bucket_name = bucket_stat_pri_doc[bucket]["bucket"]
+        log.info(f"Test attrs are same for bucket {bucket_name} on all sites")
+        json_doc_arc = json.loads(
+            archive_client_node.exec_command(
+                cmd=f"radosgw-admin metadata get bucket.instance:{bucket_name}:{bucket_id}"
+            )[0]
+        )
+        json_doc_pri = json.loads(
+            primary_client_node.exec_command(
+                cmd=f"radosgw-admin metadata get bucket.instance:{bucket_name}:{bucket_id}"
+            )[0]
+        )
+        attrs_arc = json_doc_arc["data"]["attrs"][0]
+        attrs_pri = json_doc_pri["data"]["attrs"][0]
+        if attrs_arc == attrs_pri:
+            log.info(
+                f"Bucket policy retained at archive archive site after writing objects to the bucket {bucket_name}"
+            )
+        else:
+            raise Exception(
+                "Bucket policy not retained after put objects, test failure."
+            )
+
+
 def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     """
     verify RGW multisite sync status

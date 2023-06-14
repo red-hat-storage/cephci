@@ -55,6 +55,7 @@ from utility.log import Log
 from utility.utils import (
     configure_kafka_security,
     install_start_kafka,
+    retain_bucket_pol_at_archive,
     set_config_param,
     setup_cluster_access,
     test_bucket_stats_with_archive,
@@ -248,6 +249,17 @@ def run(**kw):
                 "Test no duplicate objects created at archive site via bucket stats"
             )
             test_bucket_stats_with_archive(
+                primary_client_node, secondary_client_node, archive_client_node
+            )
+
+        test_retain_bucket_pol_at_archive = config.get(
+            "test-bucket-pol-retained-archive"
+        )
+
+        if test_retain_bucket_pol_at_archive:
+            log.info("test bucket policies are retained at archive site")
+            time.sleep(120)
+            retain_bucket_pol_at_archive(
                 primary_client_node, secondary_client_node, archive_client_node
             )
 
