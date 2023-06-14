@@ -393,13 +393,15 @@ def get_service_id(node, service_name):
 
     Returns (str/list): Service ID /ID's
     """
-    out, err = node.exec_command(cmd=f"systemctl --type=service | grep {service_name}")
+    out, err = node.exec_command(
+        cmd=f"systemctl --type=service | grep {service_name} | awk '{{print $1}}'"
+    )
     if err:
         return None
 
     service_ids = []
     for item in out.strip().split("\n"):
-        service_ids.append(item.split(" ")[0])
+        service_ids.append(item.strip())
     return service_ids
 
 
