@@ -298,7 +298,7 @@ tests:
       polarion-id: CEPH-10362
 
 
-### create a tenanted user for secondary site
+### create a non-tenanted user for secondary site
 
   - test:
       clusters:
@@ -306,13 +306,13 @@ tests:
           config:
             set-env: true
             script-name: user_create.py
-            config-file-name: tenanted_user.yaml
+            config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
             timeout: 300
-      desc: create tenanted user
-      module: sanity_rgw_multisite.py
-      name: create tenanted user
+      desc: create non-tenanted user
       polarion-id: CEPH-83575199
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
 
 ### create a tenanted user for archive site
 
@@ -540,3 +540,17 @@ tests:
       module: sanity_rgw_multisite.py
       name: m buckets with n objects
       comments: bug-2213138, known failure
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_Mbuckets_with_Nobjects_bucket_pol_retain.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            run-on-haproxy: true
+            timeout: 600
+            test-bucket-pol-retained-archive: true
+      desc: Test bucket policies are reatined at archive site post object uploads
+      polarion-id: CEPH-83575576
+      module: sanity_rgw_multisite.py
+      name: bucket policies retained at archive site
+      comments: bug-1937618, Inditex.
