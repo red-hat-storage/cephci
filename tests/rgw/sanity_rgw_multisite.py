@@ -46,6 +46,7 @@ Below configs are needed in order to run the tests
                                     - pkg2
 """
 
+import json
 import time
 
 import yaml
@@ -262,6 +263,25 @@ def run(**kw):
             retain_bucket_pol_at_archive(
                 primary_client_node, secondary_client_node, archive_client_node
             )
+
+        stat_all_archive_site_buckets = config.get("stat-all-buckets-at-archive")
+        if stat_all_archive_site_buckets:
+            log.info("Bucket stats should not fail for any bucket at the archive site")
+            bucket_list_archive = json.loads(
+                archive_client_node.exec_command(cmd="radosgw-admin bucket list")[0]
+            )
+            try:
+                for bucket in bucket_list_archive:
+                    log.info(f"Perform bucket stats on {bucket} at archive site")
+                    output, _ = archive_client_node.exec_command(
+                        cmd=f"sudo radosgw-admin bucket stats --bucket {bucket}"
+                    )
+                    log.info(f"Output : {output}")
+            except BaseException as err:
+                log.error("Error: %s" % err)
+                raise Exception(
+                    "bucket stats should not fail for any deleted bucket at archive."
+                )
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:
