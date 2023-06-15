@@ -38,14 +38,13 @@ def run(**kw):
     kw["config"]["ec-pool-k-m"] = "go_with_default"
     scenarios.append(Rbd(**kw))
 
-    config = kw["config"]
-
     pools = ["test_rbd_ec_pool_scenario", "test_rbd_rep_pool"]
-    image = config.get("image_name", "rbd_test_image")
+    images = ["rbd_ec_image", "rbd_rep_image"]
     size = "10G"
 
     for rbd in scenarios:
         pool = pools.pop()
+        image = images.pop()
         kw["rbd_obj"] = rbd
         try:
 
@@ -87,16 +86,16 @@ def run(**kw):
             log.info("Creating image, snaps, clones with IO")
             with parallel() as p:
                 p.spawn(create_clone)
-                time.sleep(10)
+                time.sleep(30)
                 p.spawn(krbd_io_handler, **kw)
 
-            log.info("Deleting image, snaps, clones with IO")
+            log.info("Deleting clones with IO")
             with parallel() as p:
                 p.spawn(delete_clone)
                 p.spawn(krbd_io_handler, **kw)
 
         except RbdBaseException as error:
-            print(error.message)
+            log.error(error.message)
             return 1
 
         finally:
