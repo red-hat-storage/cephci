@@ -898,6 +898,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rados
+        - name: "RADOS regression for testing OMAP related scenarios"
+          execution_time: "1h 10m 56s"
+          suite: "suites/pacific/rados/tier-2_rados_test_omap.yaml"
+          global-conf: "conf/pacific/rados/7-node-cluster.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rados
       stage-4:
         - name: "Tier-2 test suite for 5x - RBD Snapshot mirroring functionality"
           execution_time: "3h 56m 3s"

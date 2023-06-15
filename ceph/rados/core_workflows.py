@@ -1213,16 +1213,18 @@ class RadosOrchestrator:
         """
         return self.node.shell([f"ceph config set {osd} osd_mclock_profile {profile}"])
 
-    def get_cephdf_stats(self, pool_name: str = None) -> dict:
+    def get_cephdf_stats(self, pool_name: str = None, detail: bool = False) -> dict:
         """
         Retrieves and returns the output ceph df command
         as a dictionary
         Args:
             pool_name: name of the pool whose stats are
             specifically required
-        Returns:  dictionary output of ceph df
+            detail: enables ceph df detail command (default: False)
+        Returns:  dictionary output of ceph df/ceph df detail
         """
-        cephdf_stats = self.run_ceph_command(cmd="ceph df", client_exec=True)
+        _cmd = "ceph df detail" if detail else "ceph df"
+        cephdf_stats = self.run_ceph_command(cmd=_cmd, client_exec=True)
 
         if pool_name:
             try:
