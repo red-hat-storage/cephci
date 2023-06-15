@@ -2,16 +2,29 @@ import pickle
 import re
 
 from docopt import docopt
-from utils.configs import (
+
+from cephci.utils.configs import (
     get_configs,
     get_packages,
     get_registry_credentials,
     get_repos,
     get_subscription_credentials,
 )
-from utils.configure import exec_cephadm_preflight, setup_ssh_keys
-
-from cli.exceptions import ConfigError, NodeConfigError
+from cephci.utils.configure import (
+    add_cert_to_trusted_list,
+    add_images_to_private_registry,
+    copy_cert_to_secondary_node,
+    create_link_to_domain_cert,
+    create_registry_directories,
+    create_self_signed_certificate,
+    exec_cephadm_preflight,
+    set_registry_credentials,
+    setup_ssh_keys,
+    start_local_private_registry,
+    update_ca_trust,
+    validate_trusted_list,
+)
+from cli.exceptions import NodeConfigError
 from cli.utilities.containers import Registry
 from cli.utilities.packages import Package, Rpm
 from cli.utilities.packages import SubscriptionManager as sm
@@ -23,6 +36,8 @@ from utility.log import Log
 log = Log(__name__)
 
 CEPHADM_ANSIBLE = "cephadm-ansible"
+REGISTRY_USERNAME = "Test"
+REGISTRY_PASSWORD = "Test"
 
 doc = """
 Utility to configure prerequisites for deployed cluster
@@ -36,22 +51,26 @@ Utility to configure prerequisites for deployed cluster
             [--log-level <LOG>]
             [--cephadm-ansible <BOOL>]
             [--cephadm-preflight <BOOL>]
+            [--private-registry <BOOL>]
+            [--build-type <BUILD>]
             [--ceph-repo <REPO>]
 
         cephci/prereq.py --help
 
     Options:
-        -h --help                   Help
-        -c --cluster <FILE>         Cluster config file
-        -b --build <BUILD>          Build type [rh|ibm]
-        -s --subscription <CRED>    Subscription manager server
-        -r --registry <STR>         Container registry server
-        -k --setup-ssh-keys <BOOL>  Setup SSH keys on cluster
-        -f --config <FILE>          CephCI configuration file
-        -l --log-level <LOG>        Log level for log utility
-        -a --cephadm-ansible <BOOL> Setup cephadm ansible
-        -p --cephadm-preflight <BOOL> Setup cephadm preflight
-        -o --ceph-repo <REPO>       Ceph repository
+        -h --help                       Help
+        -c --cluster <FILE>             Cluster config file
+        -b --build <BUILD>              Build type [rh|ibm]
+        -s --subscription <CRED>        Subscription manager server
+        -r --registry <STR>             Container registry server
+        -k --setup-ssh-keys <BOOL>      Setup SSH keys on cluster
+        -f --config <FILE>              CephCI configuration file
+        -l --log-level <LOG>            Log level for log utility
+        -p --private-registry <BOOL>    Use private registry
+        -a --cephadm-ansible <BOOL>     Setup cephadm ansible
+        -cp --cephadm-preflight <BOOL>  Run cephadm preflight
+        -bt --build-type <BUILD>        Build type [rh|ibm]
+        -cr --ceph-repo <REPO>          Ceph repo [rh|ibm]
 """
 
 
@@ -150,19 +169,79 @@ def enable_rhel_repos(node, server, distro):
     return True
 
 
+def setup_private_container_registry(installer, nodes, registry, build_type):
+    """
+    Performs the pre-reqs required for the disconnected install
+    """
+
+    # Step 1: Create folders for the private registry
+    if not create_registry_directories(installer):
+        return False
+
+    # Step 2: Create credentials for accessing the private registry
+    if not set_registry_credentials(installer, REGISTRY_USERNAME, REGISTRY_PASSWORD):
+        return False
+
+    # Step 3: Create a self-signed certificate
+    if not create_self_signed_certificate(installer):
+        return False
+
+    # Step 4: Create a symbolic link to domain.cert to allow skopeo to locate the
+    # certificate with the file extension .cert
+    if not create_link_to_domain_cert(installer):
+        return False
+
+    # Step 5: Add the certificate to the trusted list on the private registry node
+    if not add_cert_to_trusted_list(installer):
+        return False
+
+    # Validate the truster list is updated
+    if not validate_trusted_list(installer):
+        return False
+
+    # Step 6: Copy the certificate to any nodes that will access the private registry for installation and update the
+    # trusted list
+    if not copy_cert_to_secondary_node(installer, nodes[1]):
+        return False
+
+    # Update ca-trust in secondary node
+    if not update_ca_trust(nodes[1]):
+        return False
+
+    # Verify trust list is updated
+    if not validate_trusted_list(nodes[1]):
+        return False
+
+    # Step 7: Start the local secure private registry
+    if not start_local_private_registry(installer):
+        return False
+
+    # Step 8: Add images to the private registry
+    if not add_images_to_private_registry(
+        installer, REGISTRY_USERNAME, REGISTRY_PASSWORD, registry, build_type
+    ):
+        return False
+
+    log.info("Private registry setup successfully for disconnected install")
+    return True
+
+
 def prereq(
     cluster,
     build,
     subscription,
     registry,
-    ssh=False,
+    build_type,
     cephadm_ansible=False,
     cephdam_preflight=False,
     ceph_repo=None,
+    ssh=False,
+    create_private_registry=False,
 ):
     nodes = cluster.get_nodes()
     installer = cluster.get_ceph_object("installer")
     packages = " ".join(get_packages())
+
     for node in nodes:
         distro = f"rhel-{os_major_version(node)}"
         if subscription == "skip":
@@ -184,17 +263,22 @@ def prereq(
         if registry != "skip":
             registry_login(node, registry, build)
 
-    if ssh:
+    if ssh or cephdam_preflight:
+        # cephadm preflight is required to have ssh keys setup
         setup_ssh_keys(installer, nodes)
 
-    if cephadm_ansible and not Rpm(installer).query(CEPHADM_ANSIBLE):
+    if (cephadm_ansible or cephdam_preflight) and not Rpm(installer).query(
+        CEPHADM_ANSIBLE
+    ):
+        # cephadm preflight is required to have cephadm-ansible installed
         Package(installer).install(CEPHADM_ANSIBLE, nogpgcheck=True)
+
     if cephdam_preflight:
-        if not (ssh or cephadm_ansible):
-            raise ConfigError(
-                "SSH keys and cephadm-ansible params are required for executing preflight playbook"
-            )
         exec_cephadm_preflight(installer, build, ceph_repo)
+
+    if create_private_registry:
+        setup_private_container_registry(installer, nodes, registry, build_type)
+        registry_login(installer, registry, build)
 
 
 if __name__ == "__main__":
@@ -209,6 +293,8 @@ if __name__ == "__main__":
     log_level = args.get("--log-level")
     cephadm_ansible = args.get("--cephadm-ansible")
     cephadm_preflight = args.get("--cephadm-preflight")
+    create_private_registry = args.get("--private-registry")
+    build_type = args.get("--build-type")
     ceph_repo = args.get("--ceph-repo")
 
     _set_log(log_level)
@@ -221,8 +307,10 @@ if __name__ == "__main__":
             build,
             subscription,
             registry,
-            setup_ssh,
+            build_type,
             cephadm_ansible,
             cephadm_preflight,
             ceph_repo,
+            setup_ssh,
+            create_private_registry,
         )

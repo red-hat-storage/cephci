@@ -2110,6 +2110,15 @@ class CephNode(object):
         client = self.rssh if sudo else self.ssh
         client().open_sftp().get(src, dst)
 
+    def create_dirs(self, dir_path, sudo=False):
+        """Create directory on node
+        Args:
+            dir_path (str): Directory path to create
+            sudo (bool): Use root access
+        """
+        client = self.rssh if sudo else self.ssh
+        client().open_sftp().mkdir(dir_path)
+
 
 class CephObject(object):
     def __init__(self, role, node):
@@ -2141,6 +2150,18 @@ class CephObject(object):
             node's exec_command result
         """
         return self.node.exec_command(cmd=cmd, **kw)
+
+    def create_dirs(self, dir_path, sudo=False):
+        """
+        Proxy to node's create_dirs
+        Args:
+            dir_path (str): Directory path to create
+            sudo (bool): Use root access
+
+        Returns:
+            node's create_dirs result
+        """
+        return self.node.create_dirs(dir_path=dir_path, sudo=sudo)
 
     def remote_file(self, **kw):
         """
