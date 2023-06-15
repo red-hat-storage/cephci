@@ -198,4 +198,10 @@ tests:
       module: cephfs_system.shutdown_mds_bring_one_by_one.py
       polarion-id: CEPH-11241
       name: "shutdown_mds_bring_one_by_one.py"
+  - test:
+      abort-on-fail: false
+      desc: "mds_shutdown_together_io_continue"
+      module: cephfs_system.mds_shutdown_together_io_continue.py
+      polarion-id: CEPH-11241
+      name: "mds_shutdown_together_io_continue.py"
 
