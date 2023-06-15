@@ -143,19 +143,23 @@ class RadosOrchestrator:
         log.info("Email alerts configured on the cluster")
         return True
 
-    def run_ceph_command(self, cmd: str, timeout: int = 300):
+    def run_ceph_command(self, cmd: str, timeout: int = 300, client_exec: bool = False):
         """
         Runs ceph commands with json tag for the action specified otherwise treats action as command
         and returns formatted output
         Args:
             cmd: Command that needs to be run
             timeout: Maximum time allowed for execution.
+            client_exec: Selection if true, runs the command on the client node
         Returns: dictionary of the output
         """
 
         cmd = f"{cmd} -f json"
         try:
-            out, err = self.node.shell([cmd], timeout=timeout)
+            if client_exec:
+                out, err = self.client.exec_command(cmd=cmd, sudo=True, timeout=timeout)
+            else:
+                out, err = self.node.shell([cmd], timeout=timeout)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             return None
@@ -1218,7 +1222,7 @@ class RadosOrchestrator:
             specifically required
         Returns:  dictionary output of ceph df
         """
-        cephdf_stats = self.run_ceph_command(cmd="ceph df")
+        cephdf_stats = self.run_ceph_command(cmd="ceph df", client_exec=True)
 
         if pool_name:
             try:
@@ -1405,6 +1409,7 @@ class RadosOrchestrator:
                 "OBJECT_MISPLACED",
                 "OBJECT_UNFOUND",
                 "SLOW_OPS",
+                "RECENT_CRASH",
             )
 
             flag = (
@@ -1627,3 +1632,23 @@ class RadosOrchestrator:
             )
             return False
         return True
+
+    def get_stretch_mode_dump(self) -> dict:
+        """
+        retrieves the dump values for the stretch mode from the osd dump
+
+        Return:
+            Dict with the stretch mode details
+            {
+                'stretch_mode_enabled': False,
+                'stretch_bucket_count': 0,
+                'degraded_stretch_mode': 0,
+                'recovering_stretch_mode': 0,
+                'stretch_mode_bucket': 0
+            }
+        """
+        cmd = "ceph osd dump"
+        osd_dump = self.run_ceph_command(cmd=cmd, client_exec=True)
+        stretch_details = osd_dump["stretch_mode"]
+        log.debug(f"Stretch mode dump : {stretch_details}")
+        return stretch_details

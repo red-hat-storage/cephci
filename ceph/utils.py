@@ -1220,3 +1220,59 @@ def systemctl(node, op, unit):
     out, err = node.exec_command(cmd=cmd_, sudo=True)
     log.info(out)
     return out, err
+
+
+def host_shutdown(gyaml, name) -> bool:
+    """
+    Method to shut down the openstack instance
+    Args:
+        gyaml: openstack credentials to be used
+        name: Name of the host to be operated upon
+    Return:
+        Pass -> True ( host shutdown successfully )
+        Fail -> False ( Host not shutdown )
+    """
+    driver = get_openstack_driver(gyaml)
+    pattern = re.compile(name, re.IGNORECASE)
+    for node in driver.list_nodes():
+        if pattern.search(node.name):
+            log.debug("Doing power-off on %s" % node.name)
+            driver.ex_stop_node(node)
+            time.sleep(20)
+            op = driver.ex_get_node_details(node)
+            if op.state == "stopped":
+                log.info(f"Node: {name} stopped successfully")
+                return True
+            else:
+                log.error(f"Failed to stop host {name}")
+                return False
+    log.error(f"node {name} not found in the list obtained from driver")
+    return False
+
+
+def host_restart(gyaml, name) -> bool:
+    """
+    Method to restart the openstack instance
+    Args:
+        gyaml: openstack credentials to be used
+        name: Name of the host to be operated upon
+    Return:
+        Pass -> True ( host re-start successfully )
+        Fail -> False ( Host could not be restarted )
+    """
+    driver = get_openstack_driver(gyaml)
+    pattern = re.compile(name, re.IGNORECASE)
+    for node in driver.list_nodes():
+        if pattern.search(node.name):
+            log.debug("Doing power-on on %s" % node.name)
+            driver.ex_start_node(node)
+            time.sleep(20)
+            op = driver.ex_get_node_details(node)
+            if op.state == "running":
+                log.info(f"Node {name} restarted successfully")
+                return True
+            else:
+                log.error(f"Failed to start node : {name}")
+                return False
+    log.error(f"node {name} not found in the list obtained from driver")
+    return False

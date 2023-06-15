@@ -1,3 +1,13 @@
+"""
+This module would be deprecated soon, as this followed old method of distributing OSDs on the cluster,
+Randomly creating new Host Crush entries.
+
+New we have methods 2 Methods for deployment :
+1. Move Hosts/Buckets to the required Crush map post deployment.
+2. Move hosts/Buckets with spec file, by providing location attributes during deployment.
+
+Once all the code movement for stretch mode happens, Test cases will be updated to use one of the two methods mentioned.
+"""
 import datetime
 import re
 import time
@@ -317,7 +327,7 @@ def wait_for_clean_pg_sets(
 
     while condition(end_time if isinstance(timeout, int) else timeout):
         flag = True
-        status_report = rados_obj.run_ceph_command(cmd="ceph report")
+        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
 
         # Proceeding to check if all PG's are in active + clean
         for entry in status_report["num_pg_by_state"]:
@@ -605,3 +615,25 @@ def wait_for_alert(node: CephAdmin, alert: str, duration: int) -> bool:
         f"The alert {alert} still active on cluster after timeout of {duration} seconds"
     )
     return False
+
+
+def setup_crush_rule_with_no_affinity(node, rule_name: str) -> bool:
+    """
+    Adds the crush rule required for stretch cluster into crush map, without adding read affinity towards any DCs
+    This will create random placement of Primary PGs across both the sites
+    Args:
+        node: ceph client node where the commands need to be executed
+        rule_name: Name of the crush rule to add
+    Returns: True -> pass, False -> fail
+    """
+    rule = rule_name
+    rules = """id 11
+    type replicated
+    step take default
+    step choose firstn 0 type datacenter
+    step chooseleaf firstn 2 type host
+    step emit"""
+    if not add_crush_rules(node=node, rule_name=rule, rules=rules):
+        log.error("Failed to add the new crush rule")
+        return False
+    return True

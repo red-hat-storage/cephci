@@ -232,6 +232,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rados
+        - name: "RADOS regression testing for Stretch cluster Site-down scenarios"
+          execution_time: "56 mins, 46 secs"
+          suite: "suites/pacific/rados/tier-3_rados_test-location-stretch-mode.yaml"
+          global-conf: "conf/pacific/rados/stretch-mode-host-location-attrs.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rados
       stage-2:
         - name: "Tier-2 Cephfs test Volume Management"
           execution_time: "39m 25s"
