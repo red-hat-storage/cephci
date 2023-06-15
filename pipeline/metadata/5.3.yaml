@@ -1016,6 +1016,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rados
+        - name: "test-rgw-ms-dbr-disable"
+          execution_time: "1h 32m 51s"
+          suite: "suites/pacific/rgw/tier-2_rgw_ms-dbr-disable.yaml"
+          global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
       stage-7:
         - name: "Test multiple path upgrade to 5x latest"
           execution_time: ""
