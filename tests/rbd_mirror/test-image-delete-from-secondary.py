@@ -61,6 +61,10 @@ def test_image_delete_from_secondary(rbd_mirror, pool_type, **kw):
         log.exception(e)
         return 1
 
+    # Cleans up the pool configuration
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[pool])
+
 
 def run(**kw):
     log.info("Starting RBD mirroring test case - CEPH-83574741")

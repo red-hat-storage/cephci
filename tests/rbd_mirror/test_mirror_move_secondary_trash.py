@@ -17,6 +17,7 @@ def test_image_move_secondary_trash(rbd_mirror, pool_type, **kw):
     """
     try:
         mirror1 = rbd_mirror.get("mirror1")
+        mirror2 = rbd_mirror.get("mirror2")
         config = kw.get("config")
         pool = config[pool_type]["pool"]
         image = config[pool_type]["image"]
@@ -40,6 +41,10 @@ def test_image_move_secondary_trash(rbd_mirror, pool_type, **kw):
     except Exception as e:
         log.exception(e)
         return 1
+
+    # Cleans up the pool configuration
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[pool])
 
 
 def run(**kw):

@@ -22,6 +22,10 @@ def test_image_delete_from_primary(rbd_mirror, pool_type, **kw):
     except Exception as e:
         log.exception(e)
 
+    # Cleans up the pool configuration
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[pool])
+
     return 1
 
 
