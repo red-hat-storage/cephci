@@ -192,4 +192,10 @@ tests:
       module: cephfs_system.snap_rollback_with_node_reboots.py
       polarion-id: CEPH-11320
       name: "snap_rollback_with_node_reboots.py"
+  - test:
+      abort-on-fail: false
+      desc: "shutdown_mds_bring_one_by_one"
+      module: cephfs_system.shutdown_mds_bring_one_by_one.py
+      polarion-id: CEPH-11241
+      name: "shutdown_mds_bring_one_by_one.py"
 
