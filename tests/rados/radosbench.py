@@ -9,6 +9,7 @@ def run(**kw):
     log.info("Running exec test")
     ceph_nodes = kw.get("ceph_nodes")
     config = kw.get("config")
+    rhbuild = config.get("rhbuild")
 
     clients = []
     role = "client"
@@ -45,8 +46,13 @@ def run(**kw):
     pool_create = "sudo ceph osd pool create {pool_name} {pg_num}".format(
         pool_name=pool_name, pg_num=pg_num
     )
+    pool_enable_app = "sudo ceph osd pool application enable {pool_name} rados".format(
+        pool_name=pool_name
+    )
 
     client.exec_command(cmd=pool_create)
+    if rhbuild and rhbuild.split(".")[0] >= "3":
+        client.exec_command(cmd=pool_enable_app)
     block = str(config.get("size", 4 << 20))
     time = str(config.get("time", 360))
     # block and time parameters are hardcoded to unblock the CI jobs.
