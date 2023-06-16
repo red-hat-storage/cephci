@@ -142,11 +142,20 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         """
         Enable the cdn Tools repo on all ceph node.
         """
-        os_major_version = self.config.get("rhbuild", "6.0-rhel-9").split("-")[-1]
-        cdn_repo = {
-            "8": "rhceph-5-tools-for-rhel-8-x86_64-rpms",
-            "9": "rhceph-5-tools-for-rhel-9-x86_64-rpms",
-        }
+        rh_build = self.config.get("rhbuild", "6.0-rhel-9")
+        os_major_version = rh_build.split("-")[-1]
+
+        if rh_build.startswith("6"):
+            cdn_repo = {
+                "9": "rhceph-6-tools-for-rhel-9-x86_64-rpms",
+            }
+        elif rh_build.startswith("5"):
+            cdn_repo = {
+                "8": "rhceph-5-tools-for-rhel-8-x86_64-rpms",
+                "9": "rhceph-5-tools-for-rhel-9-x86_64-rpms",
+            }
+        else:
+            raise Exception(f"Unsupported version {rh_build}")
 
         cmd = f"subscription-manager repos --enable={cdn_repo[os_major_version]}"
 
