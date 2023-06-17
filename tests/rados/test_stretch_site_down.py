@@ -1,9 +1,14 @@
 """
-This test module is used to test side down scenarios with recovery in the stretch environment
+This test module is used to test site down scenarios with recovery in the stretch environment
+includes:
+CEPH-83574976 - Data Site and Arbiter site Nodes enter maintenance mode.
+1. Data Sites are shut down
+2. Arbiter Site hosts are shut down
 
 """
 
 import time
+from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -13,6 +18,8 @@ from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
 log = Log(__name__)
+
+Hosts = namedtuple("Hosts", ["dc_1_hosts", "dc_2_hosts", "tiebreaker_hosts"])
 
 
 def run(ceph_cluster, **kw):
@@ -33,28 +40,15 @@ def run(ceph_cluster, **kw):
     shutdown_site = config.get("shutdown_site", "DC1")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "Arbiter")
 
-    log.debug(
-        "Running checks to see if stretch mode is already deployed on the cluster"
-    )
-    stretch_details = rados_obj.get_stretch_mode_dump()
-    if not stretch_details["stretch_mode_enabled"]:
+    if not stretch_enabled_checks(rados_obj=rados_obj):
         log.error(
-            f"Stretch mode not enabled on the cluster. Details : {stretch_details}"
+            "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
         )
-        raise Exception("Stretch mode deployment Failed on the provided cluster")
-
-    log.debug(
-        "Running sanity check on the cluster before starting the tests to make sure health is ok"
-    )
-    if not rados_obj.run_pool_sanity_check():
-        log.error("Checks failed on the provided cluster. Health not OK. Exiting...")
-        raise Exception("Sanity checks failed on the Stretch cluster provided")
+        raise Exception("Test pre-execution checks failed")
 
     log.info(
         f"Starting tests performing site down of {shutdown_site}. Pre-checks Passed"
     )
-
-    # getting the CRUSH buckets added into the cluster via osd tree
     osd_tree_cmd = "ceph osd tree"
     buckets = rados_obj.run_ceph_command(osd_tree_cmd)
     dc_buckets = [d for d in buckets["nodes"] if d.get("type") == "datacenter"]
@@ -62,42 +56,18 @@ def run(ceph_cluster, **kw):
     dc_1_name = dc_1["name"]
     dc_2 = dc_buckets.pop()
     dc_2_name = dc_2["name"]
-    dc_1_hosts = []
-    dc_2_hosts = []
+    all_hosts = get_stretch_site_hosts(
+        rados_obj=rados_obj, tiebreaker_mon_site_name=tiebreaker_mon_site_name
+    )
+    dc_1_hosts = all_hosts.dc_1_hosts
+    dc_2_hosts = all_hosts.dc_2_hosts
+    tiebreaker_hosts = all_hosts.tiebreaker_hosts
 
-    # Fetching the hosts of the two DCs
-    for crush_id in dc_1["children"]:
-        for entry in buckets["nodes"]:
-            if entry.get("id") == crush_id:
-                dc_1_hosts.append(entry.get("name"))
-    for crush_id in dc_2["children"]:
-        for entry in buckets["nodes"]:
-            if entry.get("id") == crush_id:
-                dc_2_hosts.append(entry.get("name"))
-
-    # Fetching the Mon daemon placement in each CRUSH locations
-    def get_mon_from_dc(site_name) -> list:
-        """
-        Returns the list of dictionaries that are part of the site_name passed
-
-        Args:
-            site_name: Name of the site, whose mons have to be fetched
-
-        Return:
-            List of dictionaries that are present in a particular site
-            eg:
-            [
-                {'rank': 1, 'name': 'ceph-pdhiran-snap-0by4ho-node6', 'crush_location': '{datacenter=DC1}'},
-                {'rank': 2, 'name': 'ceph-pdhiran-snap-0by4ho-node3', 'crush_location': '{datacenter=DC1}'},
-            ]
-        """
-        mons = rados_obj.run_ceph_command("ceph mon dump")
-        site_mons = [
-            d
-            for d in mons["mons"]
-            if d.get("crush_location") == "{datacenter=" + site_name + "}"
-        ]
-        return site_mons
+    log.debug(f"Hosts present in Datacenter : {dc_1_name} : {dc_1_hosts}")
+    log.debug(f"Hosts present in Datacenter : {dc_2_name} : {dc_2_hosts}")
+    log.debug(
+        f"Hosts present in Datacenter : {tiebreaker_mon_site_name} : {tiebreaker_hosts}"
+    )
 
     # Checking if the site passed to shut down is present in the Cluster CRUSH
     if shutdown_site not in [tiebreaker_mon_site_name, dc_1_name, dc_2_name]:
@@ -106,34 +76,6 @@ def run(ceph_cluster, **kw):
             f"locations present on cluster : {[tiebreaker_mon_site_name, dc_1_name, dc_2_name]}"
         )
         raise Exception("Test execution failed")
-
-    # Getting the mon hosts for both the DCs from the mon dump
-    dc_1_mons = set(entry.get("name") for entry in get_mon_from_dc(site_name=dc_1_name))
-    dc_2_mons = set(entry.get("name") for entry in get_mon_from_dc(site_name=dc_2_name))
-
-    # Combining each DCs OSD & MON hosts to get list of all the hosts in that site
-    dc_1_hosts.extend(dc_1_mons)
-    dc_2_hosts.extend(dc_2_mons)
-
-    # Using sets as the OSD & MON hosts could be overlapping
-    dc_1_hosts = list(set(dc_1_hosts))
-    dc_2_hosts = list(set(dc_2_hosts))
-    tiebreaker_hosts = list(
-        set(
-            entry.get("name")
-            for entry in get_mon_from_dc(site_name=tiebreaker_mon_site_name)
-        )
-    )
-
-    log.info(
-        f"Hosts present in Datacenter : {dc_1_name} : {[entry for entry in dc_1_hosts]}"
-    )
-    log.info(
-        f"Hosts present in Datacenter : {dc_2_name} : {[entry for entry in dc_2_hosts]}"
-    )
-    log.info(
-        f"Hosts present in Datacenter : {tiebreaker_mon_site_name} : {[entry for entry in tiebreaker_hosts]}"
-    )
 
     # Creating test pool to check the effect of Site down on the Pool IO
     if not rados_obj.create_pool(pool_name=pool_name):
@@ -317,4 +259,127 @@ def post_site_down_checks(rados_obj) -> bool:
         )
         return False
     log.info("Degraded Stretch Cluster mode exited post active + Clean. Pass")
+    return True
+
+
+def get_stretch_site_hosts(rados_obj, tiebreaker_mon_site_name) -> tuple:
+    """
+    Method to get the site hosts from the stretch cluster
+    Uses osd tree and mon dump commands to prepare a set of all the hosts from each DC
+    Args:
+        rados_obj: rados object for command execution
+        tiebreaker_mon_site_name: name of the tiebreaker monitor site
+    Returns:
+            Returns:
+        Hosts: A named tuple containing information about the hosts.
+            - dc_1_hosts (list): A list of hosts in data center 1.
+            - dc_2_hosts (list): A list of hosts in data center 2.
+            - tiebreaker_hosts (list): A list of hosts for tiebreaker purposes.
+    """
+
+    hosts = Hosts(dc_1_hosts=[], dc_2_hosts=[], tiebreaker_hosts=[])
+
+    # getting the CRUSH buckets added into the cluster via osd tree
+    osd_tree_cmd = "ceph osd tree"
+    buckets = rados_obj.run_ceph_command(osd_tree_cmd)
+    dc_buckets = [d for d in buckets["nodes"] if d.get("type") == "datacenter"]
+    dc_1 = dc_buckets.pop()
+    dc_1_name = dc_1["name"]
+    dc_2 = dc_buckets.pop()
+    dc_2_name = dc_2["name"]
+    osd_hosts_dc1 = []
+    osd_hosts_dc2 = []
+
+    # Fetching the hosts of the two DCs
+    for crush_id in dc_1["children"]:
+        for entry in buckets["nodes"]:
+            if entry.get("id") == crush_id:
+                osd_hosts_dc1.append(entry.get("name"))
+    for crush_id in dc_2["children"]:
+        for entry in buckets["nodes"]:
+            if entry.get("id") == crush_id:
+                osd_hosts_dc2.append(entry.get("name"))
+
+    # Fetching the Mon daemon placement in each CRUSH locations
+    def get_mon_from_dc(site_name) -> list:
+        """
+        Returns the list of dictionaries that are part of the site_name passed
+
+        Args:
+            site_name: Name of the site, whose mons have to be fetched
+
+        Return:
+            List of dictionaries that are present in a particular site
+            eg:
+            [
+                {'rank': 1, 'name': 'ceph-pdhiran-snap-0by4ho-node6', 'crush_location': '{datacenter=DC1}'},
+                {'rank': 2, 'name': 'ceph-pdhiran-snap-0by4ho-node3', 'crush_location': '{datacenter=DC1}'},
+            ]
+        """
+        mons = rados_obj.run_ceph_command("ceph mon dump")
+        site_mons = [
+            d
+            for d in mons["mons"]
+            if d.get("crush_location") == "{datacenter=" + site_name + "}"
+        ]
+        return site_mons
+
+    # Getting the mon hosts for both the DCs from the mon dump
+    dc_1_mons = [entry.get("name") for entry in get_mon_from_dc(site_name=dc_1_name)]
+    dc_2_mons = [entry.get("name") for entry in get_mon_from_dc(site_name=dc_2_name)]
+
+    # Combining each DCs OSD & MON hosts to get list of all the hosts in that site
+    hosts.dc_1_hosts.extend(list(set(osd_hosts_dc1 + dc_1_mons)))
+    hosts.dc_2_hosts.extend(list(set(osd_hosts_dc2 + dc_2_mons)))
+
+    hosts.tiebreaker_hosts.extend(
+        list(
+            set(
+                entry.get("name")
+                for entry in get_mon_from_dc(site_name=tiebreaker_mon_site_name)
+            )
+        )
+    )
+
+    log.debug(f"Hosts present in Datacenter : {dc_1_name} : {hosts.dc_1_hosts}")
+    log.debug(f"Hosts present in Datacenter : {dc_2_name} : {hosts.dc_2_hosts}")
+    log.debug(
+        f"Hosts present in Datacenter : {tiebreaker_mon_site_name} : {hosts.tiebreaker_hosts}"
+    )
+
+    return hosts
+
+
+def stretch_enabled_checks(rados_obj) -> bool:
+    """
+    Preforms pre-checks before running the stretch mode tests
+    Test includes :
+    1. Checking if the Stretch mode is enabled on the cluster
+    2. Running scrubs on pools,a nd checking the heatlh status of the pool. Checking for any warnings
+
+    Args:
+        rados_obj: rados object for command execution
+
+    Returns:
+        Pass -> True, Fail -> False
+
+    """
+    log.debug(
+        "Running checks to see if stretch mode is already deployed on the cluster"
+    )
+    stretch_details = rados_obj.get_stretch_mode_dump()
+    if not stretch_details["stretch_mode_enabled"]:
+        log.error(
+            f"Stretch mode not enabled on the cluster. Details : {stretch_details}"
+        )
+        return False
+
+    log.debug(
+        "Running sanity check on the cluster before starting the tests to make sure health is ok"
+    )
+    if not rados_obj.run_pool_sanity_check():
+        log.error("Checks failed on the provided cluster. Health not OK. Exiting...")
+        return False
+
+    log.info("Passed the pre-checks on the stretch cluster")
     return True

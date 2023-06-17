@@ -420,7 +420,7 @@ EOF"""
         cmd = "/bin/ceph osd setcrushmap -i /tmp/crush2.map.bin"
         node.exec_command(cmd=cmd, sudo=True)
 
-        log.info(f"Crush rule : {rule_name} added successfully")
+        log.info(f"Crush rule: {rule_name} added successfully")
         return True
     except Exception as err:
         log.error("Failed to set the crush rules")
@@ -628,11 +628,12 @@ def setup_crush_rule_with_no_affinity(node, rule_name: str) -> bool:
     """
     rule = rule_name
     rules = """id 11
-    type replicated
-    step take default
-    step choose firstn 0 type datacenter
-    step chooseleaf firstn 2 type host
-    step emit"""
+type replicated
+min_size 1
+max_size 10
+step choose firstn 0 type datacenter
+step chooseleaf firstn 2 type host
+step emit"""
     if not add_crush_rules(node=node, rule_name=rule, rules=rules):
         log.error("Failed to add the new crush rule")
         return False

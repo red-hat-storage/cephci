@@ -29,6 +29,7 @@ globals:
           - mon
           - mgr
           - osd
+          - nfs
         no-of-volumes: 4
         disk-size: 25
       node4:
@@ -56,8 +57,12 @@ globals:
         role:
           - osd
           - mds
+          - nfs
         no-of-volumes: 4
         disk-size: 25
       node8:
+        image-name:
+          openstack: RHEL-8.8.0-x86_64-ga-latest
+          ibmc: rhel-87-server-released
         role:
           - client
