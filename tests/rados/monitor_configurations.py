@@ -374,3 +374,24 @@ class MonConfigMethods:
         except Exception:
             log.error("The log collected does not contain the name of change made")
             return False
+
+    def show_config(self, daemon: str, id: str, param: str) -> str:
+        """
+        Reports the  running configuration value of a paramter for a running daemon
+        Usage - config show <daemon>.<id> <param>
+        Args:
+            daemon: Ceph daemons like osd,mon,mgr.
+            id: Id's of the mon
+            param: Parameter name
+        Returns: null if no output from the command or string output of ceph config shoe <daemon>.<id>  command.
+        E.g.
+            - # ceph config show osd.0 osd_recovery_max_active
+        """
+        cmd = f"ceph config show {daemon}.{id} {param}"
+        try:
+            result, _ = self.rados_obj.node.shell([cmd])
+        except Exception as error:
+            log.error("The parameter not exist or getting error while execution")
+            log.error(f"The error is:{error}")
+            return "null"
+        return result
