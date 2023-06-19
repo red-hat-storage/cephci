@@ -114,6 +114,87 @@ class FsUtils(object):
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
 
+    def enable_mds_logs(self, client, fs_name="cephfs", validate=True):
+        """
+
+        Args:
+            fs_name:
+
+        Returns:
+
+        """
+        out, rc = client.exec_command(sudo=True, cmd="ceph orch ps -f json")
+        output = json.loads(out)
+        deamon_dict = self.filter_daemons(output, "mds", fs_name)
+        set_log_dict = {"log_to_file": "true", "debug_mds": "5", "debug_ms": "1"}
+        for mds_nodes in deamon_dict:
+            for hostname, deamon in mds_nodes.items():
+                node = self.ceph_cluster.get_node_by_hostname(hostname)
+                for k, v in set_log_dict.items():
+                    node.exec_command(
+                        sudo=True,
+                        cmd=f"cephadm shell -- ceph daemon {deamon} config set {k} {v}",
+                    )
+            if validate:
+                for k, v in set_log_dict.items():
+                    out, rc = node.exec_command(
+                        sudo=True,
+                        cmd=f"cephadm shell -- ceph daemon {deamon} config get {k}",
+                    )
+                    if v not in out:
+                        log.error("Unable to set the debug logs")
+                        raise CommandFailed(f"Unable to set the debug logs : {out}")
+
+    def disable_mds_logs(self, client, fs_name="cephfs", validate=True):
+        """
+
+        Args:
+            fs_name:
+
+        Returns:
+
+        """
+        out, rc = client.exec_command(sudo=True, cmd="ceph orch ps -f json")
+        output = json.loads(out)
+        deamon_dict = self.filter_daemons(output, "mds", fs_name)
+        for mds_nodes in deamon_dict:
+            for hostname, deamon in mds_nodes.items():
+                node = self.ceph_cluster.get_node_by_hostname(hostname)
+                set_log_dict = {
+                    "log_to_file": "false",
+                    "debug_mds": "1",
+                    "debug_ms": "0",
+                }
+                for k, v in set_log_dict.items():
+                    node.exec_command(
+                        sudo=True,
+                        cmd=f"cephadm shell -- ceph daemon {deamon} config set {k} {v}",
+                    )
+                if validate:
+                    for k, v in set_log_dict.items():
+                        out, rc = node.exec_command(
+                            sudo=True,
+                            cmd=f"cephadm shell -- ceph daemon {deamon} config get {k}",
+                        )
+                        if v not in out:
+                            log.error("Unable to set the debug logs")
+                            raise CommandFailed(f"Unable to set the debug logs : {out}")
+
+    def filter_daemons(self, daemon_list, daemon_type, daemon_id_prefix):
+        filtered_list = []
+
+        for daemon in daemon_list:
+            if daemon["daemon_type"] == daemon_type and daemon["daemon_id"].startswith(
+                daemon_id_prefix
+            ):
+                filtered_list.append(
+                    {
+                        daemon["hostname"]: daemon["daemon_name"],
+                    }
+                )
+
+        return filtered_list
+
     @staticmethod
     def deamon_op(node, service, op, **kwargs):
         """
