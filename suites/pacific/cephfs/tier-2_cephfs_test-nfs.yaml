@@ -287,3 +287,9 @@ tests:
       module: nfs.nfs_mount_with_fstab.py
       name: "cephfs nfs mount with fstab entry"
       polarion-id: "CEPH-83574025"
+  - test:
+      abort-on-fail: true
+      desc: "test cephfs nfs RO and RW export"
+      module: nfs.nfs_ro_rw_access.py
+      name: "cephfs nfs RO and RW export"
+      polarion-id: "CEPH-83574001"
