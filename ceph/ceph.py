@@ -1465,7 +1465,7 @@ class CephNode(object):
         set the internal ip of the vm which differs from floating ip
         """
         out, _ = self.exec_command(
-            cmd="/sbin/ifconfig eth0 | grep 'inet ' | awk '{ print $2}'"
+            cmd="ping -c 1 `hostname` | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+'| head -n 1"
         )
         self.internal_ip = out.strip()
 
