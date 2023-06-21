@@ -99,3 +99,7 @@ def run(**kw):
     except Exception as e:
         log.exception(e)
         return 1
+
+    # Cleans up the pool configuration
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
