@@ -224,7 +224,7 @@ tests:
             verify-io-on-site: [ "ceph-arc" ]
       desc: Resharding test - dynamic with versioning on primary and verify on archive
       name: Dynamic Resharding with versioning on primary and verify on archive
-      polarion-id: CEPH-83571740
+      polarion-id: CEPH-83575380
       module: sanity_rgw_multisite.py
 
   - test:

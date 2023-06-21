@@ -331,7 +331,7 @@ tests:
       desc: Execute M buckets with N objects on secondary cluster
       module: sanity_rgw_multisite.py
       name: m buckets with n objects
-      polarion-id: CEPH-9789
+      polarion-id: CEPH-14236
 
   - test:
       name: enable compression on secondary
@@ -399,7 +399,7 @@ tests:
   - test:
       name: multipart upload on secondary
       desc: test_Mbuckets_with_Nobjects_multipart on secondary
-      polarion-id: CEPH-9801
+      polarion-id: CEPH-14267
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -410,9 +410,9 @@ tests:
             timeout: 300
 
   - test:
-      name: test Mbuckets on secondary
-      desc: test_Mbuckets on secondary
-      polarion-id: CEPH-9789
+      name: Test large omap objects warnings via ceph status in a multisite
+      desc: Test large omap objects warnings via ceph status in a multisite on secondary
+      polarion-id: CEPH-83574987
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -451,7 +451,7 @@ tests:
   - test:
       name: modify bucket policy on secondary
       desc: test_bucket_policy_modify.yaml on secondary
-      polarion-id: CEPH-11214
+      polarion-id: CEPH-11633
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:

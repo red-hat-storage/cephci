@@ -93,7 +93,7 @@ tests:
               rgw_pull_proto: http
               rgw_pull_port: 8080
       desc: Deploying Ceph multisite RGW cluster using ceph-ansible
-      polarion-id: CEPH-83574664
+      polarion-id: CEPH-83575224
       module: test_ansible.py
       name: deploy ceph multisite cluster from cdn
 
@@ -304,7 +304,7 @@ tests:
               upgrade_ceph_packages: true
       desc: Upgrading the clusters to the specified build.
       abort-on-fail: true
-      polarion-id: CEPH-83574647
+      polarion-id: CEPH-83574664
 
   # Test cluster post upgrade
 
@@ -393,7 +393,7 @@ tests:
       desc: Check DBR feature enabled on upgraded cluster
       abort-on-fail: true
       module: sanity_rgw_multisite.py
-      polarion-id: CEPH-83573596
+      polarion-id: CEPH-83574628
       clusters:
         ceph-pri:
           config:
@@ -479,4 +479,4 @@ tests:
       desc: verify datalog type is fifo after upgrade
       module: sanity_rgw_multisite.py
       name: verify datalog type is fifo after upgrade
-      polarion-id: CEPH-83573696
+      polarion-id: CEPH-83573697

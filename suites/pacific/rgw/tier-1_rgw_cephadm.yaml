@@ -179,3 +179,14 @@ tests:
       module: exec.py
       name: configure realm
       polarion-id: CEPH-83573815
+
+  - test:
+      name: Test the byte ranges with get object
+      desc: Test the byte ranges with get_object
+      polarion-id: CEPH-83572691
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_byte_range.py
+        config-file-name: test_byte_range.yaml
+        timeout: 500

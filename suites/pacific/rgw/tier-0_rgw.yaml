@@ -144,7 +144,7 @@ tests:
       desc: test to create "M" no of buckets and "N" no of objects with multipart upload
       module: sanity_rgw.py
       name: Test multipart upload of M buckets with N objects
-      polarion-id: CEPH-9801
+      polarion-id: CEPH-9803
 
   - test:
       config:

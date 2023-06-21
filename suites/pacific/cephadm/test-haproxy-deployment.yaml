@@ -256,6 +256,7 @@ tests:
       name: check-ceph-health and crash status on client node5
       desc: Check for ceph health and crash status after ha proxy has be re-enabled
       module: exec.py
+      polarion-id: CEPH-83574606
       config:
         sudo: True
         check_status: True
