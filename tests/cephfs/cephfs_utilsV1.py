@@ -2615,3 +2615,30 @@ os.system('sudo systemctl start  network')
 
         # Setup Crefi pre-requisites : pyxattr
         node.exec_command(sudo=True, cmd="pip3 install pyxattr", long_running=True)
+
+    def create_erasure_profile(self, client, profile_name, k, m):
+        client.exec_command(
+            sudo=True,
+            cmd="ceph osd erasure-code-profile set %s k=%s m=%s" % (profile_name, k, m),
+        )
+        return profile_name
+
+    def create_pool(self, client, pool_name, **kwargs):
+        if kwargs:
+            client.exec_command(
+                sudo=True,
+                cmd="ceph osd pool create %s %s %s"
+                % (
+                    pool_name,
+                    kwargs.get("pool_type"),
+                    kwargs.get("profile_name"),
+                ),
+            )
+            client.exec_command(
+                sudo=True,
+                cmd="ceph osd pool set %s allow_ec_overwrites true" % pool_name,
+            )
+        else:
+            client.exec_command(
+                sudo=True, cmd="ceph osd pool create" % pool_name,
+            )

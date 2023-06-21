@@ -17,6 +17,12 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
         io_func = []
+        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        ec_profile42="ec_4_2";
+        ec_pool42="pool42";
+        ec_pool_type="erasure";
+        fs_util_v1.create_erasure_profile(clients, ec_profile42, 4,2)
+        fs_util_v1.create_pool(clients, pool_name=ec_pool42, pool_type=ec_pool_type,profile_name=ec_profile42 );
         if config.get("cephfs"):
             fs_util = FsUtils(ceph_cluster)
             fs_util.prepare_clients(clients, build)

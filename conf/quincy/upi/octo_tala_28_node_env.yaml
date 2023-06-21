@@ -1,0 +1,475 @@
+# Cluster for Baremetal environment.
+# The below defined cluster has 11 nodes.
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.131.0/21']
+      nodes:
+        -
+          hostname: tala001
+          id: node1
+          ip: 10.8.131.1
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala002
+          id: node2
+          ip: 10.8.131.2
+          root_password: passwd
+          role:
+            - mgr
+            - mon
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala003
+          id: node3
+          ip: 10.8.131.3
+          root_password: passwd
+          role:
+            - mon
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala004
+          id: node4
+          ip: 10.8.131.4
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - mon
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala005
+          id: node5
+          ip: 10.8.131.5
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - mon
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala006
+          id: node6
+          ip: 10.8.131.6
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala007
+          id: node7
+          ip: 10.8.131.7
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala008
+          id: node8
+          ip: 10.8.131.8
+          root_password: passwd
+          role:
+            - mds
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+        -
+          hostname: tala009
+          id: node9
+          ip: 10.8.131.9
+          root_password: passwd
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala010
+          id: node10
+          ip: 10.8.131.10
+          root_password: passwd
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala011
+          id: node11
+          ip: 10.8.131.11
+          root_password: passwd
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala012
+          id: node12
+          ip: 10.8.131.12
+          root_password: passwd
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala013
+          id: node13
+          ip: 10.8.131.13
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala014
+          id: node14
+          ip: 10.8.131.14
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala015
+          id: node15
+          ip: 10.8.131.15
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala016
+          id: node16
+          ip: 10.8.131.16
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala017
+          id: node17
+          ip: 10.8.131.17
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala018
+          id: node18
+          ip: 10.8.131.18
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala019
+          id: node19
+          ip: 10.8.131.19
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala020
+          id: node20
+          ip: 10.8.131.20
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala021
+          id: node21
+          ip: 10.8.131.21
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala022
+          id: node22
+          ip: 10.8.131.22
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala023
+          id: node23
+          ip: 10.8.131.23
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala024
+          id: node24
+          ip: 10.8.131.24
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala025
+          id: node25
+          ip: 10.8.131.25
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala0026
+          id: node26
+          ip: 10.8.131.36
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala027
+          id: node27
+          ip: 10.8.131.27
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: tala028
+          id: node28
+          ip: 10.8.131.28
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: argo027
+          id: node29
+          ip: 10.8.128.227
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: argo028
+          id: node30
+          ip: 10.8.128.228
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: magna029
+          id: node31
+          ip: 10.8.128.229
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: magna030
+          id: node32
+          ip: 10.8.128.230
+          root_password: passwd
+          role:
+            - client
