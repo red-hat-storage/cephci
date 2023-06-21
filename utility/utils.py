@@ -57,6 +57,29 @@ class TestSetupFailure(Exception):
     pass
 
 
+def config_dict_to_string(data: Dict) -> str:
+    """
+    Convert the provided data to a string of optional arguments.
+
+    Args:
+        data (Dict):   Key/value pairs that are CLI optional arguments
+
+    Return:
+        string instead of the a data dict (Str)
+    """
+    rtn = ""
+    for key, value in data.items():
+        if isinstance(value, bool) and value is False:
+            continue
+
+        rtn += f" -{key}" if len(key) == 1 else f" --{key}"
+
+        if not isinstance(value, bool):
+            rtn += f" {value}"
+
+    return rtn
+
+
 # function for getting the clients
 def get_client_info(ceph_nodes, clients):
     log.info("Getting Clients")
@@ -1932,22 +1955,28 @@ def run_fio(**fio_args):
     Prerequisite: fio package must have been installed on the client node.
     One of device_name, filename, (rbdname,pool) is required.
     """
-    log.debug(f"Config Recieved for fio: {fio_args}")
-
+    log.debug(f"Config Received for fio: {fio_args}")
+    cmd_args = {}
     if fio_args.get("filename"):
         file_name = fio_args["filename"]
         if os.path.isdir(file_name):
             file_name = f"{file_name}/file"
-        opt_args = f" --filename={file_name}"
+        cmd_args.update({"filename": file_name})
 
     elif fio_args.get("device_name"):
-        opt_args = f" --ioengine=libaio --filename={fio_args['device_name']}"
+        cmd_args.update({"ioengine": "libaio", "filename": fio_args["device_name"]})
 
     else:
-        opt_args = f" --ioengine=rbd --rbdname={fio_args['image_name']} --pool={fio_args['pool_name']}"
+        cmd_args.update(
+            {
+                "ioengine": "rbd",
+                "rbdname": fio_args["image_name"],
+                "pool": fio_args["pool_name"],
+            }
+        )
 
     if fio_args.get("size"):
-        opt_args += f" --size={fio_args.get('size', '100M')}"
+        cmd_args.update({"size": fio_args.get("size", "100M")})
 
     run_time = fio_args.get("run_time")
 
@@ -1957,24 +1986,41 @@ def run_fio(**fio_args):
         run_time = 120
 
     if run_time:
-        opt_args += f" --runtime={run_time} --time_based"
+        cmd_args.update({"runtime": run_time, "time_based": True})
 
-    long_running = fio_args.get("long_running", False)
-    cmd = (
-        "fio --name=test-1  --numjobs=1 --rw=write"
-        " --iodepth=8 --fsync=32 "
-        f" --group_reporting {opt_args}"
+    if fio_args.get("rwmixread"):
+        cmd_args.update({"rwmixread": fio_args["rwmixread"]})
+
+    cmd_args.update(
+        {
+            "name": fio_args.get("test_name", "test-1"),
+            "numjobs": fio_args.get("num_jobs", "1"),
+            "rw": fio_args.get("io_type", "write"),
+            "iodepth": fio_args.get("iodepth", "8"),
+            "fsync": fio_args.get("fsync", "32"),
+            "group_reporting": True,
+        }
     )
 
+    output_fmt = fio_args.get("output_format")
+    if output_fmt:
+        cmd_args.update(
+            {"output-format": output_fmt, "output": f"{cmd_args['name']}_{output_fmt}"}
+        )
+
+    # Execute FIO
     exec_args = {
-        "cmd": cmd,
-        "long_running": long_running,
+        "cmd": f"fio {config_dict_to_string(cmd_args)}",
+        "long_running": fio_args.get("long_running", False),
         "sudo": True,
     }
     if fio_args.get("cmd_timeout"):
         exec_args.update({"timeout": fio_args["cmd_timeout"]})
 
-    return fio_args["client_node"].exec_command(**exec_args)
+    out = fio_args["client_node"].exec_command(**exec_args)
+    if output_fmt:
+        return cmd_args["output"]
+    return out
 
 
 def fetch_image_tag(rhbuild):
