@@ -40,11 +40,15 @@ class Openstack:
         # Set default socket timeout
         socket.setdefaulttimeout(timeout)
 
-        # Set default node and volume
+        # Set default values to cloud resources
+        self._flavors, self._networks, self._images = {}, {}, {}
         self._nodes, self._volumes = {}, {}
 
-        # Connect to Openstack driver
         try:
+            log.info(
+                f"Connecting to server {config['auth-url']} for project {config['tenant-name']}"
+            )
+
             self._driver = get_driver(Provider.OPENSTACK)(
                 config["username"],
                 config["password"],
@@ -56,6 +60,7 @@ class Openstack:
                 ex_tenant_domain_id=config["tenant-domain-id"],
                 api_version=api_version,
             )
+
         except KeyError:
             msg = "Insufficient config related to Cloud provider"
             log.error(msg)
@@ -64,6 +69,38 @@ class Openstack:
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
+
+    def create_node(
+        self, name, image, size, cloud_data, networks, timeout=300, interval=10
+    ):
+        """Create node on openstack
+
+        Args:
+            name (str): Name of node
+            image (str): Image to be used for node
+            size (int): Node root volume size
+            cloud_data (dict):
+            networks (list|tuple): Networks to be attached to node
+            timeout (int): Operation waiting time in sec
+            interval (int): Operation retry time in sec
+        """
+        try:
+            node = self._driver.create_node(
+                name=name,
+                image=image,
+                size=size,
+                ex_userdata=cloud_data,
+                networks=networks,
+            )
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
+
+        self.wait_for_node_state(
+            name, STATE_RUNNING, timeout, interval
+        ) if node else None
+
+        return True
 
     def get_nodes(self, refresh=False):
         """Get nodes available from cloud
@@ -219,6 +256,27 @@ class Openstack:
 
         return True
 
+    def create_volume(self, name, size, timeout=300, interval=10):
+        """Crate volume on openstack
+
+        Args:
+            name (str): Volume name
+            size (int): Volume size
+            timeout (int): Operation waiting time in sec
+            interval (int): Operation retry time in sec
+        """
+        try:
+            volume = self._driver.create_volume(name=name, size=size)
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
+
+        self.wait_for_volume_state(
+            name, STATE_AVAILABLE, timeout, interval
+        ) if volume else None
+
+        return True
+
     def get_volumes(self, refresh=False):
         """Get volumes available from cloud
 
@@ -293,6 +351,19 @@ class Openstack:
         volume = self.get_volume_by_id(self._volumes.get(name))
 
         return volume.state if volume else None
+
+    def attach_volume(self, node, volume):
+        """Attach volume to node
+
+        Args:
+            node (OpenstackNode): Openstack node object
+            volume (OpenstackVolume): Openstack volume object
+        """
+        try:
+            return self._driver.attach_volume(node=node, volume=volume)
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
 
     def detach_volume(self, name, timeout=300, interval=10):
         """Detach volume from node
@@ -506,3 +577,169 @@ class Openstack:
             msg = f"No IP address assigned to node '{name}'"
             log.error(msg)
             raise UnexpectedStateError(msg)
+
+    def get_networks(self, refresh=False):
+        """Get networks available on cloud
+
+        Args:
+            refresh (bool): Option to reload
+        """
+        if refresh or not self._networks:
+            try:
+                for n in self._driver.ex_list_networks():
+                    self._networks[n.name] = n.id
+            except Exception as e:
+                log.error(e)
+                raise CloudProviderError(e)
+
+        return self._networks.keys()
+
+    def get_network_id(self, name):
+        """Get network by id
+
+        Args:
+            name (str): Network name
+        """
+        if not self._networks or name not in self._networks.keys():
+            self.get_networks()
+
+        return self._networks.get(name)
+
+    def get_network_by_id(self, id):
+        """Get network by id
+
+        Args:
+            id (str): Network id
+        """
+        try:
+            return self._driver.ex_get_network(id)
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
+
+    def get_network_by_name(self, name):
+        """Get network
+
+        Args:
+            name (str): Network name
+        """
+        if not self._networks or name not in self._networks.keys():
+            self.get_networks()
+
+        return self.get_network_by_id(self._networks.get(name))
+
+    def get_subnets_by_network_name(self, name):
+        """Get subnets available on network
+
+        Args:
+            name (str): Network name
+        """
+        id = self.get_network_id(name)
+        url = f"/v2.0/network-ip-availabilities/{id}"
+        try:
+            response = self._driver.network_connection.request(url)
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
+
+        return response.object["network_ip_availability"]["subnet_ip_availability"]
+
+    def get_images(self, refresh=False):
+        """Get images available in cloud
+
+        Args:
+            refresh (bool): Option to reload
+        """
+        if refresh or not self._images:
+            try:
+                for i in self._driver.list_images():
+                    self._images[i.name] = i.id
+            except Exception as e:
+                log.error(e)
+                raise CloudProviderError(e)
+
+        return self._images.keys()
+
+    def get_image_id(self, name):
+        """Get image id
+
+        Args:
+            name (str): Image name
+        """
+        if not self._images or name not in self._images.keys():
+            self.get_images()
+
+        return self._images.get(name)
+
+    def get_image_by_id(self, id):
+        """Get image by id
+
+        Args:
+            id (str): Image id
+        """
+        try:
+            return self._driver.get_image(id)
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
+
+    def get_image_by_name(self, name):
+        """Get image
+
+        Args:
+            name (str): Image name
+        """
+        if not self._images or name not in self._images.keys():
+            self.get_images()
+
+        return self.get_image_by_id(self._images.get(name))
+
+    def get_flavors(self, refresh=False):
+        """Get flavors available in cloud
+
+        Args:
+            refresh (bool): Option to reload
+        """
+        if refresh or not self._flavors:
+            try:
+                for f in self._driver.list_sizes():
+                    self._flavors[f.name] = f.id
+            except Exception as e:
+                log.error(e)
+                raise CloudProviderError(e)
+
+        return self._flavors.keys()
+
+    def get_flavor_id(self, name):
+        """Get flavor id
+
+        Args:
+            name (str): Flavor name
+        """
+        if not self._flavors or name not in self._flavors.keys():
+            self.get_flavor()
+
+        return self._flavors.get(name)
+
+    def get_flavor_by_id(self, id):
+        """Get flavor by id
+
+        Args:
+            id (str): Flavor id
+        """
+        try:
+            return self._driver.ex_get_size(id)
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
+
+    def get_flavor_by_name(self, name):
+        """Get flavour
+
+        Args:
+            name (str): Flavor name
+        """
+        if not self._flavors or name not in self._flavors.keys():
+            self.get_flavors()
+
+        return self.get_flavor_by_id(self._flavors.get(name))
