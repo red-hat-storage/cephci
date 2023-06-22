@@ -283,11 +283,17 @@ class BootstrapMixin:
         # Todo: need to switch installer node on any other node name provided
         #       other than installer node
         mon_node = get_node_by_id(
-            self.cluster, args.pop("mon-ip", self.installer.node.shortname)
+            self.cluster, args.get("mon-ip", self.installer.node.shortname)
         )
         if not mon_node:
-            raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
-        cmd += f" --mon-ip {mon_node.ip_address}"
+            mon_ip = args.pop("mon-ip", None)
+            if mon_ip:
+                cmd += f" --mon-ip {mon_ip}"
+            else:
+                raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
+        else:
+            args.pop("mon-ip", None)
+            cmd += f" --mon-ip {mon_node.ip_address}"
 
         # Bootstrap with Ceph service specification
         specs = args.get("apply-spec")
