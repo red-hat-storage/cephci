@@ -18,10 +18,10 @@ from cephci.utils.configure import (
     create_registry_directories,
     create_self_signed_certificate,
     exec_cephadm_preflight,
+    get_private_registry_image,
     set_registry_credentials,
     setup_ssh_keys,
     start_local_private_registry,
-    update_ca_trust,
     validate_trusted_list,
 )
 from cli.exceptions import NodeConfigError
@@ -36,8 +36,6 @@ from utility.log import Log
 log = Log(__name__)
 
 CEPHADM_ANSIBLE = "cephadm-ansible"
-REGISTRY_USERNAME = "Test"
-REGISTRY_PASSWORD = "Test"
 
 doc = """
 Utility to configure prerequisites for deployed cluster
@@ -169,9 +167,32 @@ def enable_rhel_repos(node, server, distro):
     return True
 
 
-def setup_private_container_registry(installer, nodes, registry, build_type):
+def setup_private_container_registry(
+    installer,
+    nodes,
+    registry,
+    reg_username,
+    reg_password,
+    build_type,
+    private_reg_username,
+    private_reg_password,
+    detach,
+    images=None,
+):
     """
     Performs the pre-reqs required for the disconnected install
+
+    Args:
+        installer (ceph.ceph.Ceph): Installer node
+        nodes (ceph.ceph.Ceph): List of nodes
+        registry (str): registery name
+        reg_username (str): registry username
+        reg_password (str): registry password
+        build_type (str): build type
+        private_reg_username (str): private registry username
+        private_reg_password (str): private registry password
+        detach (str): detach/docker-registry image name
+        images (str): list of images
     """
 
     # Step 1: Create folders for the private registry
@@ -179,7 +200,9 @@ def setup_private_container_registry(installer, nodes, registry, build_type):
         return False
 
     # Step 2: Create credentials for accessing the private registry
-    if not set_registry_credentials(installer, REGISTRY_USERNAME, REGISTRY_PASSWORD):
+    if not set_registry_credentials(
+        installer, private_reg_username, private_reg_password
+    ):
         return False
 
     # Step 3: Create a self-signed certificate
@@ -201,24 +224,35 @@ def setup_private_container_registry(installer, nodes, registry, build_type):
 
     # Step 6: Copy the certificate to any nodes that will access the private registry for installation and update the
     # trusted list
-    if not copy_cert_to_secondary_node(installer, nodes[1]):
+    if not copy_cert_to_secondary_node(installer, nodes):
         return False
 
-    # Update ca-trust in secondary node
-    if not update_ca_trust(nodes[1]):
+    # Step 7: Login to the registry
+    for node in nodes:
+        Registry(node).login(
+            registry=registry, username=reg_username, password=reg_password
+        )
+
+    # Step 8: Start the local secure private registry
+    if not start_local_private_registry(installer, detach):
         return False
 
-    # Verify trust list is updated
-    if not validate_trusted_list(nodes[1]):
-        return False
-
-    # Step 7: Start the local secure private registry
-    if not start_local_private_registry(installer):
-        return False
-
-    # Step 8: Add images to the private registry
+    # Step 9: Add images to the private registry
     if not add_images_to_private_registry(
-        installer, REGISTRY_USERNAME, REGISTRY_PASSWORD, registry, build_type
+        installer,
+        reg_username,
+        reg_password,
+        private_reg_username,
+        private_reg_password,
+        registry,
+        build_type,
+        images,
+    ):
+        return False
+
+    # Step 10: List down private registry images
+    if not get_private_registry_image(
+        installer, private_reg_username, private_reg_password
     ):
         return False
 
