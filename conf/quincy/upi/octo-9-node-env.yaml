@@ -1,0 +1,115 @@
+# Physical/Bare-metal environment required for Ceph Nvme-oF.
+# The below defined cluster has 5 nodes + 1 Ceph-Nvmeof node + 1 Client node.
+# Cluster configuration:
+#      3 MONS, 2 MGR, 5 OSD nodes
+#      1 Ceph NVMeoF GW node
+#      4 NVMe initiator nodes
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.1.172.0/21']
+      nodes:
+        -
+          hostname: folio01
+          id: node1
+          ip: 10.1.172.221
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - osd
+            - mgr
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        -
+          hostname: folio02
+          id: node2
+          ip: 10.1.172.222
+          root_password: passwd
+          role:
+            - mon
+            - osd
+            - mgr
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        -
+          hostname: folio03
+          id: node3
+          ip: 10.1.172.223
+          root_password: passwd
+          role:
+            - mon
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        -
+          hostname: folio04
+          id: node4
+          ip: 10.1.172.224
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        -
+          hostname: folio05
+          id: node5
+          ip: 10.1.172.225
+          root_password: passwd
+          role:
+            - osd
+            - nvmeof-gw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        -
+          hostname: folio06
+          id: node6
+          ip: 10.1.172.226
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: folio07
+          id: node7
+          ip: 10.1.172.227
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: folio08
+          id: node8
+          ip: 10.1.172.228
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: folio09
+          id: node9
+          ip: 10.1.172.229
+          root_password: passwd
+          role:
+            - client
+
