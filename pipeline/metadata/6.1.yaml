@@ -958,9 +958,29 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
           metadata:
             - rados
-        - name: "Testing RBD-mirror tier-2 regression scenarios"
-          execution_time: "2h 9m 13s"
-          suite: "suites/quincy/rbd/tier-2_rbd_mirror_regression.yaml"
+        - name: "Testing RBD-mirror image operations regression scenarios"
+          execution_time: "1h 57m 13s"
+          suite: "suites/quincy/rbd/tier-2_rbd_mirror_image_operations.yaml"
+          global-conf: "conf/quincy/rbd/5-node-2-clusters.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
+        - name: "Testing RBD-mirror image trash regression scenarios"
+          execution_time: "1h 57m"
+          suite: "suites/quincy/rbd/tier-2_rbd_mirror_image_trash_purge.yaml"
+          global-conf: "conf/quincy/rbd/5-node-2-clusters.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rbd
+        - name: "Testing RBD-mirror failover regression scenarios"
+          execution_time: "9h 30m 13s"
+          suite: "suites/quincy/rbd/tier-2_rbd_mirror_failover_recovery.yaml"
           global-conf: "conf/quincy/rbd/5-node-2-clusters.yaml"
           platform: "rhel-9"
           inventory:
