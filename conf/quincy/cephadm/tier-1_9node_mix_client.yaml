@@ -61,21 +61,13 @@ globals:
           - client
       node6:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
-        networks:
-          -  provider_net_cci_7
-        role:
-          - client
-      node7:
-        image-name:
           openstack: RHEL-9.1.0-x86_64-ga-latest
           ibmc: rhel-91-server-released
         networks:
           -  provider_net_cci_8
         role:
           - client
-      node8:
+      node7:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
           ibmc: rhel-87-server-released
@@ -83,7 +75,7 @@ globals:
           -  provider_net_cci_8
         role:
           - client
-      node9:
+      node8:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
           ibmc: rhel-87-server-released

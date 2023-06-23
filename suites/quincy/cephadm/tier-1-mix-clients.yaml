@@ -100,26 +100,6 @@ tests:
           mgr: "allow *"
 
   - test:
-      name: Configure client N version on RHEL N-1 version for Cluster N version
-      desc: Configure rhcs 6 client on RHEL 8 for rhcs 6 cluster
-      module: test_client.py
-      polarion-id: CEPH-83575551
-      config:
-        command: add
-        id: client.2
-        nodes:
-            - node6:
-                release: 6
-        install_packages:
-          - ceph-common
-        copy_admin_keyring: true
-        caps:
-          mon: "allow *"
-          osd: "allow *"
-          mds: "allow *"
-          mgr: "allow *"
-
-  - test:
       name: Configure client N-1 version on RHEL N version for Cluster N version
       desc: Configure rhcs5 client on rhel9 for rhcs6 cluster
       module: test_client.py
@@ -128,7 +108,7 @@ tests:
         command: add
         id: client.3
         nodes:
-            - node7:
+            - node6:
                 release: 5
         install_packages:
           - ceph-common
@@ -148,7 +128,7 @@ tests:
         command: add
         id: client.4
         nodes:
-            - node8:
+            - node7:
                 release: 5
         install_packages:
           - ceph-common
@@ -168,7 +148,7 @@ tests:
         command: add
         id: client.5
         nodes:
-            - node9:
+            - node8:
                 release: 4
         install_packages:
           - ceph-common
