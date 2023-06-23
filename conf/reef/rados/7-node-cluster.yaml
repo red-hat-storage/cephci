@@ -1,0 +1,57 @@
+# Rados tier-2 test configuration, small test config for basic tests
+# Deployment for all the ceph daemons , with 3 mon's, 3 mgr's, and 15 OSD daemons
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+      node2:
+        role:
+          - mon
+          - mgr
+          - mds
+          - rgw
+          - node-exporter
+          - alertmanager
+          - crash
+      node3:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node4:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node5:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node6:
+        role:
+          - mon
+          - mgr
+          - mds
+          - rgw
+          - node-exporter
+          - crash
+      node7:
+        role:
+          - client

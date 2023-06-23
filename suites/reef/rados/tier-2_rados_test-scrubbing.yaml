@@ -1,0 +1,93 @@
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      name: Default scheduled scrub
+      polarion-id: CEPH-9361
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "default"
+  - test:
+      name: Begin Time = End Time
+      polarion-id: CEPH-9362
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "begin_end_time_equal"
+  - test:
+      name: Begin time > End time
+      polarion-id: CEPH-9363
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "beginTime gt endTime"
+  - test:
+      name: Begin Time >End time<current
+      polarion-id: CEPH-9365
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "beginTime gt endTime lt currentTime"
+  - test:
+      name: Begin Time & End time > current
+      polarion-id: CEPH-9368
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "beginTime and endTime gt currentTime"
+  - test:
+      name: Decrease scrub time
+      polarion-id: CEPH-9371
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "decreaseTime"
+  - test:
+      name: Unsetting scrubbing
+      polarion-id: CEPH-9374
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        scenario: "unsetScrub"
