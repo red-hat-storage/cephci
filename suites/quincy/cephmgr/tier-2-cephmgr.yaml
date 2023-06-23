@@ -206,5 +206,5 @@ tests:
   - test:
       name: Verify pg autoscaler on with crush rule
       desc: Verify  Module 'pg_autoscaler' has failed 'op' error with crush rule set
-      polarion-id: 83575456
+      polarion-id: CEPH-83575456
       module: test_cephmgr_validate_crush_rule.py
