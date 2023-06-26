@@ -130,7 +130,9 @@ tests:
   - test:
       name: Test configuration Assimilation
       module: test_config_assimilation.py
-      polarion-id: CEPH-83573480
+      # CEPH-83573805 is generic polarion test
+      # for generic rados test with cephadm module
+      polarion-id: CEPH-83573480, CEPH-83573805
       config:
         cluster_conf_path: "conf/pacific/rados/test-confs/cluster-configs"
         Verify_config_parameters:
@@ -298,7 +300,7 @@ tests:
   - test:
       name: Compression algorithm tuneables
       module: rados_prep.py
-      polarion-id: CEPH-83571669
+      polarion-id: CEPH-83571671
       config:
         enable_compression:
           pool_name: re_pool_compress

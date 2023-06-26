@@ -21,8 +21,9 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                custom_image: "registry.redhat.io/rhceph/rhceph-5-rhel8:5-184"
-                custom_repo: "https://download.eng.bos.redhat.com/rel-eng/rhel-8/RHCEPH-5/RHCEPH-5.1-RHEL-8-RC-4.1/compose/Tools/x86_64/os/"
+                # using 6.1 rc candidate
+                custom_image: "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:6-177"
+                custom_repo: "http://download-node-02.eng.bos.redhat.com/rhel-9/rel-eng/RHCEPH-6/RHCEPH-6.1-RHEL-9-20230602.0/compose/Tools/x86_64/os/"
                 mon-ip: depressa007
                 allow-fqdn-hostname: true
                 yes-i-know: true
