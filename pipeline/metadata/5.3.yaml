@@ -1037,7 +1037,7 @@ pipelines:
           metadata:
             - rados
         - name: "test-rgw-ms-dbr-disable"
-          execution_time: "1h 32m 51s"
+          execution_time: "1h 43m 40s"
           suite: "suites/pacific/rgw/tier-2_rgw_ms-dbr-disable.yaml"
           global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
           platform: "rhel-9"
