@@ -560,7 +560,7 @@ pipelines:
     tier-1:
       stage-1:
         - name: "test-rgw-lc-expiration-multiple-bucket"
-          execution_time: "34m 51s"
+          execution_time: "1h 16m 25s"
           suite: "suites/pacific/rgw/tier-1_rgw_test-lc-multiple-bucket.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-9"
