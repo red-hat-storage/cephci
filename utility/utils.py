@@ -1952,6 +1952,7 @@ def run_fio(**fio_args):
         client_node: node where fio needs to be run
         size: 'size' for file size/io size
         cmd_timeout: command timeout in seconds eg., 'notimeout' | 1200
+        no_run_time: None | no_runtime
     Prerequisite: fio package must have been installed on the client node.
     One of device_name, filename, (rbdname,pool) is required.
     """
@@ -1985,7 +1986,9 @@ def run_fio(**fio_args):
     if not run_time and not fio_args.get("size"):
         run_time = 120
 
-    if run_time:
+    if run_time == "no_runtime":
+        log.info("No runtime provided.")
+    elif run_time:
         cmd_args.update({"runtime": run_time, "time_based": True})
 
     if fio_args.get("rwmixread"):
@@ -2004,9 +2007,10 @@ def run_fio(**fio_args):
 
     output_fmt = fio_args.get("output_format")
     if output_fmt:
-        cmd_args.update(
-            {"output-format": output_fmt, "output": f"{cmd_args['name']}_{output_fmt}"}
-        )
+        fio_file = f"{cmd_args['name']}_{output_fmt}"
+        if fio_args.get("output_dir"):
+            fio_file = f"{fio_args['output_dir']}/{fio_file}"
+        cmd_args.update({"output-format": output_fmt, "output": fio_file})
 
     # Execute FIO
     exec_args = {

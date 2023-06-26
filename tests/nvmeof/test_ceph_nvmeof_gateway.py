@@ -89,28 +89,37 @@ def initiators(ceph_cluster, gateway, config):
     # Connect to the subsystem
     LOG.debug(initiator.connect(**cmd_args))
 
-    # List NVMe targets.
+    # List NVMe targets
     targets, _ = initiator.list(**json_format)
     LOG.debug(targets)
 
+    results = []
     with parallel() as p:
         for target in json.loads(targets)["Devices"]:
-            io_args = {
-                "device_name": target["DevicePath"],
-                "size": "100%",
-                "client_node": client,
-                "long_running": True,
-                "cmd_timeout": "notimeout",
-            }
+            io_args = config["io_args"] if config.get("io_args") else {"size": "100%"}
+            io_args.update(
+                {
+                    "device_name": target["DevicePath"],
+                    "client_node": client,
+                    "long_running": True,
+                    "cmd_timeout": "notimeout",
+                }
+            )
+
             p.spawn(run_fio, **io_args)
+        for op in p:
+            results.append(op)
+    return results
 
 
-import logging
+def disconnect_initiator(ceph_cluster, node, subnqn):
+    """Disconnect Initiator."""
+    node = get_node_by_id(ceph_cluster, node)
+    initiator = Initiator(node)
+    initiator.disconnect(**{"nqn": subnqn})
 
-logger = logging.getLogger(__name__)
 
-
-def cleanup(ceph_cluster, rbd_obj, config):
+def teardown(ceph_cluster, rbd_obj, config):
     """Cleanup the ceph-nvme gw entities.
 
     Args:
@@ -118,76 +127,90 @@ def cleanup(ceph_cluster, rbd_obj, config):
         rbd_obj: RBD object
         config: test config
     """
-    if "cleanup" in config:
-        if "subsystems" in config["cleanup"]:
-            for sub_cfg in config["cleanup"]["subsystems"]:
-                gw_node = get_node_by_id(
-                    ceph_cluster, config["cleanup"]["gateway"]["node"]
-                )
-                gateway = Gateway(gw_node)
-                logger.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {gw_node}")
-                gateway.delete_subsystem(subnqn=sub_cfg["nqn"])
+    if "initiators" in config["cleanup"]:
+        for initiator_cfg in config["initiators"]:
+            node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
+            initiator = Initiator(node)
+            LOG.info(
+                f"Disconnecting initiator {initiator_cfg['subnqn']} on node {initiator_cfg['node']}"
+            )
+            initiator.disconnect(nqn=initiator_cfg["subnqn"])
+
+    if "subsystems" in config["cleanup"]:
+        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+        gateway = Gateway(gw_node)
+        for sub_cfg in config["subsystems"]:
+            LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {gw_node}")
+            gateway.delete_subsystem(subnqn=sub_cfg["nqn"])
 
         if "gateway" in config["cleanup"]:
-            gw_node = get_node_by_id(ceph_cluster, config["cleanup"]["gateway"]["node"])
-            logger.info(f"Deleting gateway {gw_node}")
             delete_gateway(gw_node)
 
-        if "initiators" in config["cleanup"]:
-            for initiator_cfg in config["cleanup"]["initiators"]:
-                node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
-                initiator = Initiator(node)
-                logger.info(
-                    f"Disconnecting initiator {initiator_cfg['subnqn']} on node {initiator_cfg['node']}"
-                )
-                initiator.disconnect(nqn=initiator_cfg["subnqn"])
-
-        if "pool" in config["cleanup"]:
-            pool = config["cleanup"]["pool"]
-            logger.info(f"Cleaning up pool {pool}")
-            rbd_obj.clean_up(pools=[pool])
-    else:
-        logger.info("No cleanup configuration found in the test config.")
+    if "pool" in config["cleanup"]:
+        rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
-    """
-    Return the status of the Ceph NVMEof test execution.
+    """Return the status of the Ceph NVMEof test execution.
 
     - Configure SPDK and install with control interface.
     - Configures Initiators and Run FIO on NVMe targets.
 
     Args:
         ceph_cluster: Ceph cluster object
-        kwargs:     Key/value pairs of configuration information to be used in the test.
+        kwargs: Key/value pairs of configuration information to be used in the test.
 
     Returns:
         int - 0 when the execution is successful else 1 (for failure).
 
     Example:
-        - test:
-            name: Ceph NVMeoF deployment
-            desc: Configure NVMEoF gateways and initiators
-            config:
-                gw_node: node6
-                rbd_pool: rbd
-                do_not_create_image: true
-                rep-pool-only: true
-                rep_pool_config:
-                  pool: rbd
-                  install: true                             # Run SPDK with all pre-requisites
-                subsystems:                                 # Configure subsystems with all sub-entities
-                  - nqn: nqn.2016-06.io.spdk:cnode3
-                    serial: 3
-                    bdevs:
-                      count: 1
-                      size: 100G
-                    listener_port: 5002
-                    allow_host: "*"
-                initiators:                                 # Configure Initiators with all pre-req
-                  - subnqn: nqn.2016-06.io.spdk:cnode2
-                    listener_port: 5002
-                    node: node7
+
+        # Execute the nvmeof GW test
+            - test:
+                name: Ceph NVMeoF deployment
+                desc: Configure NVMEoF gateways and initiators
+                config:
+                    gw_node: node6
+                    rbd_pool: rbd
+                    do_not_create_image: true
+                    rep-pool-only: true
+                    cleanup-only: true                          # only for cleanup
+                    rep_pool_config:
+                      pool: rbd
+                    install: true                               # Run SPDK with all pre-requisites
+                    subsystems:                                 # Configure subsystems with all sub-entities
+                      - nqn: nqn.2016-06.io.spdk:cnode3
+                        serial: 3
+                        bdevs:
+                          count: 1
+                          size: 100G
+                        listener_port: 5002
+                        allow_host: "*"
+                    initiators:                                 # Configure Initiators with all pre-req
+                      - subnqn: nqn.2016-06.io.spdk:cnode2
+                        listener_port: 5002
+                        node: node7
+
+        # Cleanup-only
+            - test:
+                  abort-on-fail: true
+                  config:
+                    gw_node: node6
+                    rbd_pool: rbd
+                    do_not_create_image: true
+                    rep-pool-only: true
+                    rep_pool_config:
+                    subsystems:
+                      - nqn: nqn.2016-06.io.spdk:cnode1
+                    initiators:
+                        - subnqn: nqn.2016-06.io.spdk:cnode1
+                          node: node7
+                    cleanup-only: true                          # Important param for clean up
+                    cleanup:
+                        - pool
+                        - subsystems
+                        - initiators
+                        - gateway
     """
     LOG.info("Starting Ceph Ceph NVMEoF deployment.")
 
@@ -195,12 +218,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
+    if config.get("cleanup-only"):
+        teardown(ceph_cluster, rbd_obj, config)
+        return 0
+
     try:
         gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
 
         gateway = Gateway(gw_node)
         if config.get("install"):
-            configure_spdk(gw_node)
+            configure_spdk(gw_node, rbd_pool)
 
         if config.get("subsystems"):
             with parallel() as p:
@@ -217,6 +244,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.error(err)
     finally:
         if config.get("cleanup"):
-            cleanup(ceph_cluster, rbd_obj, config)
+            teardown(ceph_cluster, rbd_obj, config)
 
     return 1

@@ -31,6 +31,7 @@ setup(
         "jinja2",
         "junitparser",
         "paramiko",
+        "plotly",
         "pyyaml",
         "reportportal-client==5.2.5",
         "requests",
