@@ -284,16 +284,6 @@ pipelines:
           metadata:
             - rgw
       stage-3:
-        - name: "Tier-2 RGW bucket_lc_multipart_object_expired"
-          execution_time: "48m 37s"
-          suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
-          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - rgw
         - name: "Tier-2 test suite for 5x - RBD functionality"
           execution_time: "57m 0s"
           suite: "suites/pacific/rbd/tier-2_rbd_regression.yaml"
@@ -571,6 +561,16 @@ pipelines:
           execution_time: "2h 8m 36s"
           suite: "suites/pacific/rgw/tier-2_rgw_ms_test-bucket-notifications.yaml"
           global-conf: "conf/pacific/rgw/rgw_multisite"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rgw
+        - name: "Tier-2 RGW bucket_lc_multipart_object_expired"
+          execution_time: "48m 37s"
+          suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
+          global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
           platform: "rhel-8"
           inventory:
             openstack: "conf/inventory/rhel-8-latest.yaml"
