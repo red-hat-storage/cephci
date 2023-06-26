@@ -22,8 +22,7 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         stop = datetime.now() + timedelta(seconds=timeout)
     else:
         stop = 0
-
-    while not stop_flag:
+    while True:
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
@@ -32,6 +31,8 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
             client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
         )
         iter = iter + 1
+        if stop_flag:
+            break
 
 
 def run(ceph_cluster, **kw):
@@ -123,7 +124,15 @@ def run(ceph_cluster, **kw):
                     None,
                     300,
                 )
-                fs_util_v1.node_power_failure(node=mon.node, sleep_time=120, **params)
+                try:
+                    fs_util_v1.node_power_failure(
+                        node=mon.node, sleep_time=120, **params
+                    )
+                except Exception as e:
+                    log.error(e)
+                    log.error(traceback.format_exc())
+                    log.error("Failed While doing power off operation")
+                    stop_flag = True
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,

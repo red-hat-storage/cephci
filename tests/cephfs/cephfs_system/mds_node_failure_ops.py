@@ -8,6 +8,7 @@ from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
+from ceph.ceph import CommandFailed
 
 log = Log(__name__)
 
@@ -23,8 +24,7 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         stop = datetime.now() + timedelta(seconds=timeout)
     else:
         stop = 0
-
-    while not stop_flag:
+    while True:
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
@@ -33,6 +33,8 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
             client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
         )
         iter = iter + 1
+        if stop_flag:
+            break
 
 
 def run(ceph_cluster, **kw):
@@ -90,6 +92,7 @@ def run(ceph_cluster, **kw):
             extra_params=f" --client_fs {fs_name}",
         )
         with parallel() as p:
+            global stop_flag
             p.spawn(
                 start_io_time,
                 fs_util_v1,
@@ -103,7 +106,7 @@ def run(ceph_cluster, **kw):
                 clients[0],
                 kernel_mount_dir,
             )
-            global stop_flag
+
             for mds in mds_nodes:
                 cluster_health_beforeIO = check_ceph_healthly(
                     clients[0],
@@ -111,16 +114,21 @@ def run(ceph_cluster, **kw):
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
-                fs_util_v1.reboot_node(ceph_node=mds)
+                try:
+                    fs_util_v1.reboot_node(ceph_node=mds)
+                except:
+                    # global stop_flag
+                    stop_flag = True
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
                 if cluster_health_afterIO == cluster_health_beforeIO:
                     log.info("cluster is healthy")
@@ -134,16 +142,27 @@ def run(ceph_cluster, **kw):
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
-                fs_util_v1.deamon_op(mds, "mds", "restart")
+                try:
+                    # fs_util_v1.reboot_node(ceph_node=mds)
+                    fs_util_v1.deamon_op(mds, f"mds\.{fs_name}\.", "restart")
+                    # raise CommandFailed("Failing Command in restart")
+                except:
+                    # global stop_flag
+                    log.info(
+                        "FAiling the command in restart............................"
+                    )
+                    log.info("*****************************************************")
+                    stop_flag = True
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
                 if cluster_health_afterIO == cluster_health_beforeIO:
                     log.info("cluster is healthy")
@@ -158,16 +177,21 @@ def run(ceph_cluster, **kw):
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
-                fs_util_v1.pid_kill(mds, "mds")
+                try:
+                    fs_util_v1.pid_kill(mds, "mds")
+                except:
+                    # global stop_flag
+                    stop_flag = True
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
                 if cluster_health_afterIO == cluster_health_beforeIO:
                     log.info("cluster is healthy")
@@ -181,19 +205,27 @@ def run(ceph_cluster, **kw):
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
                 deamon_name = fs_util_v1.deamon_name(mds, "mds")
-                fs_util_v1.deamon_op(mds, "mds", "stop")
-                sleep(60)
-                fs_util_v1.deamon_op(mds, "mds", "start", service_name=deamon_name)
+
+                try:
+                    fs_util_v1.deamon_op(mds, f"mds\.{fs_name}\.", "stop")
+                    sleep(60)
+                    fs_util_v1.deamon_op(
+                        mds, f"mds\.{fs_name}\.", "start", service_name=deamon_name
+                    )
+                except:
+                    # global stop_flag
+                    stop_flag = True
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
                 if cluster_health_afterIO == cluster_health_beforeIO:
                     log.info("cluster is healthy")
@@ -209,16 +241,20 @@ def run(ceph_cluster, **kw):
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
-                fs_util_v1.network_disconnect(mds)
+                try:
+                    fs_util_v1.network_disconnect(mds)
+                except:
+                    stop_flag = True
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
                     len(mds_nodes),
                     build,
                     None,
-                    300,
+                    30,
                 )
                 if cluster_health_afterIO == cluster_health_beforeIO:
                     log.info("cluster is healthy")
@@ -227,8 +263,8 @@ def run(ceph_cluster, **kw):
             log.info(
                 "mon services have been stopped and started and cluster is Healthy"
             )
-            log.info("Setting stop flag")
-            stop_flag = True
+        log.info("Setting stop flag")
+        stop_flag = True
         return 0
 
     except Exception as e:

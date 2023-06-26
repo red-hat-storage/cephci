@@ -138,7 +138,7 @@ class FsUtils(object):
     def deamon_name(node, service):
         out, rc = node.exec_command(
             sudo=True,
-            cmd=f"systemctl list-units --type=service | grep {service}.ceph | awk {{'print $1'}}",
+            cmd=f"systemctl list-units --type=service | grep {service} | awk {{'print $1'}}",
         )
         service_deamon = out.strip()
         return service_deamon
@@ -511,6 +511,7 @@ class FsUtils(object):
                 )
         return 0
 
+    @retry(CommandFailed, tries=3, delay=60)
     def fuse_mount(self, fuse_clients, mount_point, **kwargs):
         """
         Mounts the drive using Fuse mount
@@ -1646,10 +1647,24 @@ class FsUtils(object):
     def pid_kill(self, node, daemon):
         out, rc = node.exec_command(cmd="pgrep %s " % daemon, container_exec=False)
         out = out.split("\n")
+        log.info(out)
         out.pop()
         for pid in out:
-            node.exec_command(sudo=True, cmd="kill -9 %s" % pid, container_exec=False)
+            node.exec_command(
+                sudo=True, cmd="kill -9 %s" % pid, container_exec=False, check_ec=False
+            )
             sleep(10)
+        out_2, rc = node.exec_command(
+            cmd="pgrep %s " % daemon, container_exec=False, check_ec=False
+        )
+        if rc:
+            return 0
+        out_2 = out_2.split("\n")
+        out_2.pop()
+        if out == out_2:
+            raise CommandFailed(
+                f"PID Kill Operation Failed pid Before : {out}, PID After : {out_2}"
+            )
         return 0
 
     def network_disconnect(self, ceph_object, sleep_time=20):

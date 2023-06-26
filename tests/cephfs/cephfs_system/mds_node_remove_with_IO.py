@@ -9,6 +9,7 @@ from ceph.ceph_admin import CephAdmin
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -25,6 +26,13 @@ Steps:
 Identify the faulty MDS node it can be either active
 or stand-by MDS node and remove it from cluster using Ansible or manual way.
 """
+
+
+@retry(CommandFailed, tries=5, delay=60)
+def check_nodes(admin, target_node, check_node_cmd):
+    out2, _ = admin.installer.exec_command(sudo=True, cmd=check_node_cmd)
+    if str(out2).strip() == "No daemons reported":
+        raise CommandFailed(f"{target_node} daemons are not removed")
 
 
 def run(ceph_cluster, **kw):
@@ -85,9 +93,7 @@ def run(ceph_cluster, **kw):
         time.sleep(20)
         admin.installer.exec_command(sudo=True, cmd=remove_node_cmd)
         time.sleep(20)
-        out2, _ = admin.installer.exec_command(sudo=True, cmd=check_node_cmd)
-        if str(out2).strip() == "No daemons reported":
-            raise CommandFailed(f"{target_node} daemons are not removed")
+        check_node_cmd(admin, target_node, check_node_cmd)
         add_node_cmd = f"cephadm shell ceph orch host add {target_node} --labels mds"
         admin.installer.exec_command(sudo=True, cmd=add_node_cmd)
         time.sleep(10)

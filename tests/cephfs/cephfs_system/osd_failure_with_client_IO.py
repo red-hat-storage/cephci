@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
+from tests.cephfs.cephfs_system.osd_node_failure_ops import object_compare
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
 
@@ -49,7 +50,12 @@ def run(ceph_cluster, **kw):
     """
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
-        osd_nodes = ceph_cluster.get_ceph_objects("osd")
+        osd_nodes_list = ceph_cluster.get_ceph_objects("osd")
+        unique_objects = []
+        for obj in osd_nodes_list:
+            if not any(object_compare(obj, u_obj) for u_obj in unique_objects):
+                unique_objects.append(obj)
+        osd_nodes = unique_objects
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
         osp_cred = config.get("osp_cred")
