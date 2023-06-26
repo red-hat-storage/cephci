@@ -2,9 +2,11 @@ import random
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -149,8 +151,9 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"cd {kernel_mounting_dir_1};rm -rf *",
             )
+            retry_revert = retry(CommandFailed, tries=3, delay=60)(client1.exec_command)
             p.spawn(
-                client1.exec_command,
+                retry_revert,
                 sudo=True,
                 cmd=f"cd {kernel_mounting_dir_1};yes | cp -rf .snap/_snap_1_*/* .",
             )
@@ -167,7 +170,7 @@ def run(ceph_cluster, **kw):
                 return 1
 
             p.spawn(
-                client1.exec_command,
+                retry_revert,
                 sudo=True,
                 cmd=f"cd {kernel_mounting_dir_1};yes | cp -rf .snap/_snap_2_*/* .",
             )
@@ -182,7 +185,7 @@ def run(ceph_cluster, **kw):
                 log.error("checksum is not matching after snapshot2 revert")
                 return 1
             p.spawn(
-                client1.exec_command,
+                retry_revert,
                 sudo=True,
                 cmd=f"cd {fuse_mounting_dir_1};yes | cp -rf .snap/_snap_3_*/* .",
             )
@@ -196,8 +199,9 @@ def run(ceph_cluster, **kw):
             if files_checksum_snap_3_revert != files_checksum_snap_3:
                 log.error("checksum is not matching after snapshot3 revert")
                 return 1
+
             p.spawn(
-                client1.exec_command,
+                retry_revert,
                 sudo=True,
                 cmd=f"cd {fuse_mounting_dir_1};yes | cp -rf .snap/_snap_4_*/* .",
             )
