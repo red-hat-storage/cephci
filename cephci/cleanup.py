@@ -4,9 +4,10 @@ import sys
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
 
+from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
-from cli.exceptions import UnexpectedStateError
-from cli.utilities.waiter import WaitUntil
+from cli.cluster.volume import Volume
+from cli.exceptions import OperationFailedError
 from utility.log import Log
 
 log = Log(__name__)
@@ -31,6 +32,8 @@ Utility to cleanup cluster from cloud
         -c --config <CRED>          Config file with cloud credentials
 """
 
+RECYCLE = []
+
 
 def _set_log(level):
     """Set log level"""
@@ -39,68 +42,71 @@ def _set_log(level):
 
 def _get_nodes(prefix, cloud, configs):
     """Get nodes with prefix"""
-    # Get nodes with prefix
-    nodes = Node.nodes(prefix, cloud, **configs)
+    nodes = [n for n, _ in CloudProvider(cloud, **configs).nodes(prefix)]
 
     # Check for nodes available with prefix
     if not nodes:
-        log.info(f"No resources available with prefix '{prefix}'. Exiting ....")
+        log.error(f"No resources available with prefix '{prefix}'. Exiting....")
         sys.exit(1)
 
-    log.info(f"Nodes with prefix '{prefix}' are {', '.join([n for n, _ in nodes])}")
+    log.info(f"Nodes with prefix '{prefix}' are {', '.join(nodes)}")
     return nodes
 
 
-def delete_node(node, cloud, configs):
+def delete_node(node, cloud, timeout, interval, configs):
     """Delete node"""
+    global RECYCLE
+
     log.info(f"Deleting node '{node}'")
 
     # Connect to OSP cloud
     node = Node(node, cloud, **configs)
 
-    # Get volumes attached to node
-    volumes = node.volumes()
-    log.info(f"Volumes attached to the node '{node.name}' are {volumes}")
+    # Add node to recycle bucket
+    RECYCLE.append(node)
+
+    # Delete volumes attached to node
+    volumes = node.volumes
+    if volumes:
+        log.info(f"Volumes attached to the node '{node.name}' are {', '.join(volumes)}")
+        for volume in volumes:
+            log.info(f"Deleting volume {volume}")
+            _volume = Volume(volume, cloud, **configs)
+
+            # Add volume to recycle bucket
+            RECYCLE.append(_volume)
+
+            _volume.delete(timeout, interval)
+
+    else:
+        log.info(f"No volumes are attached to the node '{node.name}'")
 
     # Delete node from OSP
-    node.delete()
-
-    # Get timeout and interval
-    timeout = configs.get("timeout")
-    retry = configs.get("retry")
-    interval = int(timeout / retry)
-
-    # Wait until node get deleted
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        state = node.state()
-        if not state:
-            log.info(f"Node '{node.name}' deleted successfully")
-            return True
-
-        log.info(f"Node '{node.name}' in '{state}' state, retry after {interval} sec")
-
-    # Check status for operation
-    if w.expired:
-        raise UnexpectedStateError(
-            f"Failed to delete node '{node.name}' even after {timeout} sec"
-        )
+    node.delete(timeout, interval)
 
 
 def cleanup(cloud, prefix):
     """Cleanup nodes with prefix"""
-    # Get cloud configuration
+    global RECYCLE
+
     configs = get_cloud_credentials(cloud)
+
+    # Get timeout and interval
+    timeout, retry = configs.get("timeout"), configs.get("retry")
+    interval = int(timeout / retry)
 
     # Get nodes with prefix
     procs, nodes = [], _get_nodes(prefix, cloud, configs)
 
     # Start deleting nodes in parallel
-    for node, _ in nodes:
+    for node in nodes:
         proc = mp.Process(
             target=delete_node,
             args=(
                 node,
                 cloud,
+                timeout,
+                interval,
                 configs,
             ),
         )
@@ -110,7 +116,13 @@ def cleanup(cloud, prefix):
     # Wait till all nodes gets cleaned
     [p.join() for p in procs]
 
-    log.info(f"Cleaned cluster with prefix '{prefix}' sucessfully")
+    # Check if any resource deletion failed
+    stale = [r.name for r in RECYCLE if r.state]
+    if stale:
+        msg = f"Failed to clean resources {', '.join(stale)}"
+        log.error(msg)
+        raise OperationFailedError(msg)
+
     return True
 
 
@@ -132,3 +144,4 @@ if __name__ == "__main__":
 
     # Cleanup cluster
     cleanup(cloud, prefix)
+    log.info(f"Cleaned cluster with prefix '{prefix}' sucessfully")
