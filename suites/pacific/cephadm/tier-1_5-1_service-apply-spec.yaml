@@ -250,7 +250,7 @@ tests:
       name: SNMP Gateway Service deployment with spec
       desc: Add SNMP Gateway services using spec file
       module: test_cephadm.py
-      polarion-id: CEPH-83574743
+      polarion-id: CEPH-83574743,CEPH-83574677
       config:
         steps:
           - config:

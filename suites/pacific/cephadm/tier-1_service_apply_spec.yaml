@@ -70,33 +70,33 @@ tests:
       polarion-id: CEPH-83574726
       config:
         steps:
-        - config:
+          - config:
             service: host
             command: set_address
             args:
               node: node1
-        - config:
+          - config:
             service: host
             command: label_add
             args:
               node: node1
               labels: apply-all-labels
-        - config:
+          - config:
             command: apply_spec
             service: orch
             specs:
-             - service_type: host
-               address: true
-               labels: apply-all-labels
-               nodes:
-                 - node2
-                 - node3
-             - service_type: host
-               address: true
-               labels: apply-all-labels
-               nodes:
-                 - node4
-        - config:
+              - service_type: host
+                address: true
+                labels: apply-all-labels
+                nodes:
+                  - node2
+                  - node3
+              - service_type: host
+                address: true
+                labels: apply-all-labels
+                nodes:
+                  - node4
+          - config:
             command: apply
             service: rbd-mirror
             args:
@@ -111,51 +111,51 @@ tests:
       polarion-id: CEPH-83574727
       config:
         steps:
-        - config:
+          - config:
             command: apply_spec
             service: orch
             specs:
-            - service_type: mon
-              placement:
-                nodes:
-                - node1
-                - node2
-                - node3
-            - service_type: mgr
-              placement:
-                label: mgr
-            - service_type: prometheus
-              placement:
-                count: 1
-                nodes:
-                  - node1
-            - service_type: grafana
-              placement:
-                nodes:
-                  - node1
-            - service_type: alertmanager
-              placement:
-                count: 2
-                label: alertmanager
-            - service_type: node-exporter
-              placement:
-                host_pattern: "*"
-            - service_type: crash
-              placement:
-                host_pattern: "*"
-            - service_type: osd
-              service_id: all-available-devices
-              placement:
-                host_pattern: "*"
-              spec:
-                data_devices:
-                  all: "true"                         # boolean as string
-                encrypted: "true"                     # boolean as string
-        - config:
-            command: shell
-            args:                 # sleep to get all services deployed
-              - sleep
-              - "300"
+              - service_type: mon
+                placement:
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
+              - service_type: mgr
+                placement:
+                  label: mgr
+              - service_type: prometheus
+                placement:
+                  count: 1
+                  nodes:
+                    - node1
+              - service_type: grafana
+                placement:
+                  nodes:
+                    - node1
+              - service_type: alertmanager
+                placement:
+                  count: 2
+                  label: alertmanager
+              - service_type: node-exporter
+                placement:
+                  host_pattern: "*"
+              - service_type: crash
+                placement:
+                  host_pattern: "*"
+              - service_type: osd
+                service_id: all-available-devices
+                placement:
+                  host_pattern: "*"
+                spec:
+                  data_devices:
+                    all: "true"                         # boolean as string
+                  encrypted: "true"                     # boolean as string
+          - config:
+              command: shell
+              args:                 # sleep to get all services deployed
+                - sleep
+                - "300"
   - test:
       name: MDS Service deployment with spec
       desc: Add MDS services using spec file
@@ -304,3 +304,11 @@ tests:
         result: count-per-host must be combined with label or hosts or host_pattern
       polarion-id: CEPH-83574642
       module: test_collocate_rgw_node_count.py
+  - test:
+      name: test_label_no_schedule
+      desc: Adding  "__no_schedule" label to a node and verify its functionality in a cluster.
+      polarion-id: CEPH-83574672
+      module: test_label_no_schedule.py
+      config:
+        nodes:
+          - node2
