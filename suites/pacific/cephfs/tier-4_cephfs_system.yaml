@@ -204,4 +204,10 @@ tests:
       module: cephfs_system.mds_shutdown_together_io_continue.py
       polarion-id: CEPH-11241
       name: "mds_shutdown_together_io_continue.py"
+  - test:
+      abort-on-fail: false
+      desc: "MDS admin socket dump testing"
+      module: cephfs_system.mds_admin_daemon_socket_dump.py
+      polarion-id: CEPH-83572891
+      name: "MDS admin socket dump testing"
 
