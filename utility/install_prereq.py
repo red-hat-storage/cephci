@@ -229,10 +229,18 @@ class ConfigureCephToolsRepositories:
             base_url (str): Custom repo build url
             rhbuild (str): RHCS build version with RHEL
         """
-        if build_type in ["latest", "tier-0", "tier-1", "tier-2", "rc", "upstream"]:
+        if build_type in [
+            "latest",
+            "tier-0",
+            "tier-1",
+            "tier-2",
+            "rc",
+            "upstream",
+            None,
+        ]:
             Package(nodes).add_repo(base_url)
 
-        elif build_type in ["ga", "ga-async"]:
+        elif build_type in ["released"]:
             rhcs, rhel = get_builds_by_rhbuild(rhbuild)
             repos = RHCS5_REPOS
             if int(float(rhcs)) == 6:
