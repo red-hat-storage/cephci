@@ -144,9 +144,9 @@ class Gateway:
         args = {"bdev": name}
         return run_control_cli(self.node, "delete_bdev", **args)
 
-    def create_subsystem(self, subnqn, serial_num):
+    def create_subsystem(self, subnqn, serial_num, max_ns):
         """Create subsystem."""
-        args = {"subnqn": subnqn, "serial": serial_num}
+        args = {"subnqn": subnqn, "serial": serial_num, "max-namespaces": max_ns}
         return run_control_cli(self.node, "create_subsystem", **args)
 
     def delete_subsystem(self, subnqn):

@@ -20,7 +20,8 @@ LOG = Log(__name__)
 def configure_subsystems(rbd, pool, gw, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_nqn = config["nqn"]
-    gw.create_subsystem(sub_nqn, config["serial"])
+    max_ns = config.get("max_ns", 32)
+    gw.create_subsystem(sub_nqn, config["serial"], max_ns)
     gw.create_listener(sub_nqn, config["listener_port"])
     gw.add_host(sub_nqn, config["allow_host"])
     if config.get("bdevs"):
