@@ -1,11 +1,11 @@
-from cli.cloundproviders.openstack import Openstack
-from cli.exceptions import ConfigError, ResourceNotFoundError
+from cli.cloudproviders import CloudProvider
+from cli.exceptions import OperationFailedError
 from utility.log import Log
 
 log = Log(__name__)
 
 
-class Node:
+class Node(CloudProvider):
     """Interface to perform node operations"""
 
     def __init__(self, name, cloud="openstack", **config):
@@ -18,26 +18,12 @@ class Node:
         **kwargs:
             <key-val> for cloud credentials
         """
-        self._cloud = Node._get_cloud(cloud, **config)
+        super(Node, self).__init__(cloud, **config)
+
         self._node = self._cloud.get_node_by_name(name)
-        self._id = self._node.id
+        self._id = self._cloud.get_node_id(self._node)
+
         self._name = name
-
-    @staticmethod
-    def _get_cloud(cloud, **config):
-        """Get cloud object"""
-        if cloud.lower() == "openstack":
-            return Openstack(**config)
-        elif cloud == "ibmc":
-            pass
-        else:
-            raise ConfigError(f"Unsupported cloud provider '{cloud}'")
-
-    @staticmethod
-    def nodes(prefix, cloud="openstack", **config):
-        """Get nodes with prefix"""
-        _cloud = Node._get_cloud(cloud, **config)
-        return _cloud.get_nodes_by_prefix(prefix)
 
     @property
     def name(self):
@@ -49,37 +35,54 @@ class Node:
         """Node ID"""
         return self._id
 
-    def delete(self):
-        """Delete node"""
-        try:
-            self._cloud.detach_node_private_ips(self._node)
-        except ResourceNotFoundError as e:
-            log.error(str(e))
-
-        try:
-            self._cloud.detach_node_public_ips(self._node)
-        except ResourceNotFoundError as e:
-            log.error(str(e))
-
-        try:
-            self._cloud.delete_node_volumes(self._node)
-        except ResourceNotFoundError as e:
-            log.error(str(e))
-
-        self._cloud.delete_node(self._node)
-
-    def volumes(self):
-        """Get volumes attached to node"""
-        return self._cloud.get_node_volumes(self._node)
-
+    @property
     def state(self):
-        """Get node state"""
-        return self._cloud.get_node_state_by_id(self._id)
+        """Node state"""
+        return self._cloud.get_volume_state_by_id(self.id) if self._node else None
 
+    @property
     def public_ips(self):
-        """Get public attached to public IP address"""
-        return self._cloud.get_node_public_ips(self._node)
+        """Public IPs attached to node"""
+        self._cloud.get_node_public_ips(self._node) if self._node else None
 
+    @property
     def private_ips(self):
-        """Get public attached to private IP address"""
-        return self._cloud.get_node_private_ips(self._node)
+        """Private IPs attached to node"""
+        self._cloud.get_node_private_ips(self._node) if self._node else None
+
+    @property
+    def volumes(self):
+        """Volume names attached to node"""
+        return [
+            self._cloud.get_volume_name_by_id(id)
+            for id in self._cloud.get_node_volumes(self._node)
+        ]
+
+    def delete(self, timeout=300, interval=10):
+        """Delete node from cloud
+
+        Args:
+            timeout (int): Operation waiting time in sec
+            interval (int): Operation retry time in sec
+        """
+        if not self._node:
+            msg = f"Node with name '{self._name}' doesn't exists"
+            log.error(msg)
+            raise OperationFailedError(msg)
+
+        if self.private_ips:
+            log.info(
+                f"Dettaching private IPs {self.private_ips} assigned to node '{self.name}'"
+            )
+            self._cloud.detach_node_private_ips(self._node)
+
+        if self.public_ips:
+            log.info(
+                f"Dettaching public IPs {self.public_ips} assigned to node '{self.name}'"
+            )
+            self._cloud.detach_node_public_ips(self._node)
+
+        self._cloud.delete_node(self._node, timeout, interval)
+
+        self._node = None
+        return True
