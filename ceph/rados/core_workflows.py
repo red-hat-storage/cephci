@@ -271,6 +271,73 @@ class RadosOrchestrator:
         prop_details = json.loads(out)
         return prop_details
 
+    def host_maintenance_enter(self, hostname: str, retry: int = 10) -> bool:
+        """
+        Adds the specified host into maintenance mode
+        Args:
+            hostname: name of the host which needs to be added into maintenance mode
+            retry: max number of retries to put host into maintenance mode
+        Returns:
+            True -> Host successfully added to maintenance mode
+            False -> Host Could not be added to maintenance mode
+        """
+        log.debug(f"Passed host : {hostname} to be added into maintenance mode")
+        iteration = 0
+
+        while iteration <= retry:
+            iteration += 1
+            cmd = f"ceph orch host maintenance enter {hostname} --force"
+            out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
+            log.debug(f"o/p of maintenance enter cmd : {out}")
+            time.sleep(20)
+
+            if not self.check_host_status(hostname=hostname, status="maintenance"):
+                log.error(
+                    f"Host: {hostname}, not in maintenance mode. Retrying again in 15 seconds, Retry count :{iteration}"
+                )
+                # retrying in 15 seconds
+                time.sleep(15)
+                if iteration == retry:
+                    return False
+            else:
+                log.info(f"Added host {hostname} into maintenance mode on the cluster")
+                return True
+
+    def host_maintenance_exit(self, hostname: str, retry: int = 3) -> bool:
+        """
+        Removes the specified host from maintenance mode
+        Args:
+            hostname: name of the host which needs to be removed from maintenance mode
+            retry: no of retries to be done to remove host from maintenance mode
+
+        Returns:
+            True -> Host successfully added to maintenance mode
+            False -> Host Could not be added to maintenance mode
+        """
+        log.debug(f"Passed host : {hostname} to be removed from maintenance mode")
+        iteration = 0
+
+        while iteration <= retry:
+            iteration += 1
+            cmd = f"ceph orch host maintenance exit {hostname} "
+            out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
+            log.debug(f"o/p of maintenance exit cmd : {out}")
+            time.sleep(20)
+
+            if not self.check_host_status(hostname=hostname):
+                log.error(
+                    f"Host:{hostname}, in maintenance mode. Retrying again in 15 seconds, Retry count :{iteration}"
+                )
+                # retrying in 15 seconds
+                time.sleep(15)
+                if iteration == retry:
+                    return False
+            else:
+                log.info(
+                    f"Removed host {hostname} from maintenance mode on the cluster"
+                )
+                return True
+
     def set_pool_property(self, pool, props, value):
         """
         Used to fetch a given property set on the pool
@@ -511,7 +578,7 @@ class RadosOrchestrator:
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd scrub all"
-        self.node.shell([cmd])
+        self.client.exec_command(cmd=cmd, sudo=True)
 
     def run_deep_scrub(self, **kwargs):
         """
@@ -535,7 +602,7 @@ class RadosOrchestrator:
         else:
             # scrubbing all the OSD's
             cmd = "ceph osd deep-scrub all"
-        self.node.shell([cmd])
+        self.client.exec_command(cmd=cmd, sudo=True)
 
     def collect_osd_daemon_ids(self, osd_node) -> dict:
         """
@@ -891,10 +958,10 @@ class RadosOrchestrator:
         Returns: True -> pass, False -> fail
         """
         # Checking if config is set to allow pool deletion
-        config_dump = self.run_ceph_command(cmd="ceph config dump")
+        config_dump = self.run_ceph_command(cmd="ceph config dump", client_exec=True)
         if "mon_allow_pool_delete" not in [conf["name"] for conf in config_dump]:
             cmd = "ceph config set mon mon_allow_pool_delete true"
-            self.node.shell([cmd])
+            self.client.exec_command(cmd=cmd, sudo=True)
 
         existing_pools = self.run_ceph_command(cmd="ceph df")
         if pool not in [ele["name"] for ele in existing_pools["pools"]]:
@@ -902,9 +969,9 @@ class RadosOrchestrator:
             return True
 
         cmd = f"ceph osd pool delete {pool} {pool} --yes-i-really-really-mean-it"
-        self.node.shell([cmd])
+        self.client.exec_command(cmd=cmd, sudo=True)
 
-        existing_pools = self.run_ceph_command(cmd="ceph df")
+        existing_pools = self.run_ceph_command(cmd="ceph df", client_exec=True)
         if pool not in [ele["name"] for ele in existing_pools["pools"]]:
             log.info(f"Pool:{pool} deleted Successfully")
             return True
@@ -1394,7 +1461,7 @@ class RadosOrchestrator:
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
         flag = False
         while end_time > datetime.datetime.now():
-            status_report = self.run_ceph_command(cmd="ceph report")
+            status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
             ceph_health_status = status_report["health"]
             health_warns = (
                 "PG_AVAILABILITY",
@@ -1510,19 +1577,24 @@ class RadosOrchestrator:
             service_name_ls.append(service["service_name"])
         return service_name_ls
 
-    def check_host_status(self, hostname) -> bool:
+    def check_host_status(self, hostname, status: str = None) -> bool:
         """
         Checks the status of host(offline or online) using
         ceph orch host ls and return boolean
         Args:
             hostname: hostname of host to be checked
+            status: custom status check for the host
         Returns:
             (bool) True -> online | False -> offline
         """
         host_cmd = f"ceph orch host ls --host_pattern {hostname} -f json"
         out, _ = self.client.exec_command(cmd=host_cmd, sudo=True)
-        host_status = json.loads(out)[0]["status"]
-        return False if "Offline" in host_status else True
+        host_status = json.loads(out)[0]["status"].lower()
+        if status and status.lower() in host_status:
+            return True
+        elif "offline" in host_status:
+            return False
+        return True
 
     def run_concurrent_io(self, pool_name: str, obj_name: str, obj_size: int):
         """

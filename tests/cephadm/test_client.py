@@ -124,6 +124,12 @@ def add(cls, config: Dict) -> None:
                 for repos in cdn_ceph_repo[rhel_version][rhcs_version]:
                     _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
+                # Clearing the release preference set and cleaning all yum repos
+                # Observing selinux package dependency issues for ceph-base
+                wa_cmds = ["subscription-manager release --unset", "yum clean all"]
+                for wa_cmd in wa_cmds:
+                    _node.exec_command(sudo=True, cmd=wa_cmd)
+
             # Copy the keyring to client
             _node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
             put_file(_node, client_file, cnt_key, "w")

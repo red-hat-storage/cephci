@@ -264,7 +264,7 @@ class MonConfigMethods:
     def verify_set_config(self, **kwargs):
         """
         Verifies the values of configurations set in the mon config db via ceph config dump command
-         Args:
+        Args:
             **kwargs: Any other param that needs to be set
                 1. section: which section of daemons to target
                     allowed values: global, mon, mgr, osd, mds, client
@@ -275,45 +275,53 @@ class MonConfigMethods:
                 5. device_class: Value for location_type
                 6. location_value: value for location_type
         Returns: True -> Pass, False -> fail
-
         """
         cmd = "ceph config dump"
         config_dump = self.rados_obj.run_ceph_command(cmd)
         for entry in config_dump:
             if (
-                entry["name"] == kwargs["name"]
-                and entry["section"] == kwargs["section"]
+                entry["name"].lower() == kwargs["name"].lower()
+                and entry["section"].lower() == kwargs["section"].lower()
             ):
                 entry["value"] = str(entry["value"]).strip("\n").strip()
                 kwargs["value"] = str(kwargs["value"]).strip("\n").strip()
-                if not entry["value"] == kwargs["value"]:
+                if not entry["value"].lower() == kwargs["value"].lower():
                     log.error(
                         f"Value for config: {entry['name']} does not match in the ceph config\n"
                         f"sent value : {kwargs['value']}, Set value : {entry['value']}"
                     )
                     return False
                 if kwargs.get("location_type"):
-                    if kwargs.get("location_type") != "class":
-                        if not entry["location_type"] == kwargs["location_type"]:
+                    if kwargs.get("location_type").lower() != "class":
+                        if (
+                            not entry["location_type"].lower()
+                            == kwargs["location_type"].lower()
+                        ):
                             log.error(
                                 f"Value for config: {entry['name']} does not match in the ceph config\n"
                                 f"sent value : {kwargs['location_type']}, Set value : {entry['location_type']}"
                             )
                             return False
-                        if not entry["location_value"] == kwargs["location_value"]:
+                        if (
+                            not entry["location_value"].lower()
+                            == kwargs["location_value"].lower()
+                        ):
                             log.error(
                                 f"Value for config: {entry['name']} does not match in the ceph config\n"
                                 f"sent value : {kwargs['location_value']}, Set value : {entry['location_value']}"
                             )
                             return False
                     else:
-                        if not entry["device_class"] == kwargs["location_value"]:
+                        if (
+                            not entry["device_class"].lower()
+                            == kwargs["location_value"].lower()
+                        ):
                             log.error(
                                 f"Value for config: {entry['name']} does not match in the ceph config\n"
                                 f"sent value : {kwargs['location_value']}, Set value : {entry['device_class']}"
                             )
                             return False
-                log.info(f"Verified the value set for the config : {entry['name']}")
+                log.info(f"Verified the value set for the config: {entry['name']}")
                 return True
         log.error(f"The Config: {kwargs['name']} not listed under in the dump")
         return False
