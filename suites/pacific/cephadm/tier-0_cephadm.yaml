@@ -494,7 +494,7 @@ tests:
       name: Apply Node-exporter Service
       desc: Apply Node-exporter service on role nodes
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573884
       config:
         command: apply
         service: node-exporter
@@ -526,7 +526,7 @@ tests:
       name: Apply Grafana Service
       desc: Apply Grafana service on role nodes
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573886
       config:
         command: apply
         service: grafana
@@ -636,7 +636,7 @@ tests:
       name: Apply Crash Service
       desc: Apply Crash service on all nodes
       module: test_crash.py
-      polarion-id:
+      polarion-id: CEPH-83573887
       config:
         command: apply
         service: crash
@@ -651,7 +651,7 @@ tests:
       name: Remove NFS-Ganesha Service
       desc: Remove NFS-Ganesha service using orch remove option
       module: test_nfs.py
-      polarion-id:
+      polarion-id: CEPH-83573834
       config:
         command: remove
         service: nfs
@@ -708,7 +708,7 @@ tests:
       name: Remove Node-exporter Service
       desc: Remove Node-exporter service using orch remove option
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573884
       config:
         command: remove
         service: node-exporter
@@ -732,7 +732,7 @@ tests:
       name: Remove Grafana Service
       desc: Remove Grafana service using orch remove option
       module: test_monitoring.py
-      polarion-id:
+      polarion-id: CEPH-83573886
       config:
         command: remove
         service: grafana
@@ -790,7 +790,7 @@ tests:
       name: Remove Crash Service
       desc: Remove Crash service using orch remove option
       module: test_crash.py
-      polarion-id: CEPH-83573784
+      polarion-id: CEPH-83573784,CEPH-83573887
       config:
         command: remove
         service: crash

@@ -145,7 +145,7 @@ tests:
       name: Add osd on single device
       desc: Add osd on single device
       module: test_daemon.py
-      polarion-id: CEPH-83573736
+      polarion-id: CEPH-83573736,CEPH-83573764
       config:
         command: add
         service: osd

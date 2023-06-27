@@ -246,7 +246,7 @@ tests:
       desc: Retrieve the configured environment details
       module: exec.py
       name: get shared realm info on primary
-      polarion-id: CEPH-83575227
+      polarion-id: CEPH-83575227,CEPH-83573752
   - test:
       abort-on-fail: true
       clusters:
