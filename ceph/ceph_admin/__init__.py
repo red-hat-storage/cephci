@@ -117,6 +117,11 @@ class CephAdmin(BootstrapMixin, ShellMixin):
                     ),
                 )
                 node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
+        elif repo:
+            base_url = repo
+            cmd = f"yum-config-manager --add-repo {base_url}"
+            for node in self.cluster.get_nodes():
+                node.exec_command(sudo=True, cmd=cmd)
 
         elif base_url.endswith(".repo"):
             cmd = f"yum-config-manager --add-repo {base_url}"
@@ -129,14 +134,6 @@ class CephAdmin(BootstrapMixin, ShellMixin):
                 base_url += "Tools"
             else:
                 base_url += "compose/Tools/x86_64/os/"
-
-            if repo:
-                # provide whole path till "/x86_64/os/" for openstack,
-                # "/Tools" for IBM
-                base_url = repo
-            cmd = f"yum-config-manager --add-repo {base_url}"
-            for node in self.cluster.get_nodes():
-                node.exec_command(sudo=True, cmd=cmd)
 
     def set_cdn_tool_repo(self):
         """
