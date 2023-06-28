@@ -206,9 +206,16 @@ def get_entity_level(config):
     return config_level, entity
 
 
-def fio_ready(config, client):
+def fio_ready(config, client, **kw):
     """Method to prepare FIO config args."""
     fio_args = config["fio"]
     fio_args["client_node"] = client
     fio_args["long_running"] = True
+
+    if kw:
+        fio_args.update(kw)
+    # if kw.get("test_name"):
+    #     fio_args["test_name"] = kw["test_name"]
+    # if kw.get("size"):
+    #     fio_args["size"] = kw["size"]
     return fio_args

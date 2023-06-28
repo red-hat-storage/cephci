@@ -116,10 +116,17 @@ def krbd_io_handler(**kw):
                         size=config.get("file_size", "100M"),
                     )
                 else:
+                    fio_args = {
+                        "client_node": rbd.ceph_client,
+                        "device_name": device_names[-1]
+                    }
+                    if config.get("io_size"):
+                        fio_args.update({"size": config.get("io_size")})
+                    else:
+                        fio_args.update({"runtime": config.get("runtime", 30)})
+
                     run_fio(
-                        client_node=rbd.ceph_client,
-                        device_name=device_names[-1],
-                        runtime=config.get("runtime", 30),
+                        **fio_args
                     )
 
             if operations.get("fsck"):
@@ -139,7 +146,7 @@ def krbd_io_handler(**kw):
                         )
                         return_flag = 1
                     if operations.get("device_map"):
-                        if rbd.device_unmap(
+                        if rbd.device_map(
                             "unmap",
                             f"{pool_name}/{image_name}",
                             config.get("device_type", "nbd"),

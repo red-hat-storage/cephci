@@ -1920,8 +1920,9 @@ def run_fio(**fio_args):
         opt_args += f" --runtime={run_time} --time_based"
 
     long_running = fio_args.get("long_running", False)
+    test_name = fio_args.get("test_name", "test-1")
     cmd = (
-        "fio --name=test-1  --numjobs=1 --rw=write"
+        f"fio --name={test_name}  --numjobs=1 --rw=write"
         " --iodepth=8 --fsync=32 "
         f" --group_reporting {opt_args}"
     )
