@@ -71,7 +71,7 @@ def run(ceph_cluster, **kw):
             "objecter_requests",
             "dirfrag ls /",
             "ops",
-            "cache status"
+            "cache status",
         ]
         out1, ec = client1.exec_command(sudo=True, cmd="ceph fs status -f json-pretty")
         output1 = json.loads(out1)
