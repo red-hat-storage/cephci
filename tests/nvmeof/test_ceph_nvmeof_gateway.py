@@ -105,6 +105,11 @@ def initiators(ceph_cluster, gateway, config):
             p.spawn(run_fio, **io_args)
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def cleanup(ceph_cluster, rbd_obj, config):
     """Cleanup the ceph-nvme gw entities.
 
@@ -113,23 +118,36 @@ def cleanup(ceph_cluster, rbd_obj, config):
         rbd_obj: RBD object
         config: test config
     """
-    if "initiators" in config["cleanup"]:
-        for initiator_cfg in config["initiators"]:
-            node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
-            initiator = Initiator(node)
-            initiator.disconnect(**{"nqn": initiator_cfg["subnqn"]})
-
-    if "subsystems" in config["cleanup"]:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        gateway = Gateway(gw_node)
-        for sub_cfg in config["subsystems"]:
-            gateway.delete_subsystem(**{"subnqn": sub_cfg["nqn"]})
+    if "cleanup" in config:
+        if "subsystems" in config["cleanup"]:
+            for sub_cfg in config["cleanup"]["subsystems"]:
+                gw_node = get_node_by_id(
+                    ceph_cluster, config["cleanup"]["gateway"]["node"]
+                )
+                gateway = Gateway(gw_node)
+                logger.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {gw_node}")
+                gateway.delete_subsystem(subnqn=sub_cfg["nqn"])
 
         if "gateway" in config["cleanup"]:
+            gw_node = get_node_by_id(ceph_cluster, config["cleanup"]["gateway"]["node"])
+            logger.info(f"Deleting gateway {gw_node}")
             delete_gateway(gw_node)
 
-    if "pool" in config["cleanup"]:
-        rbd_obj.clean_up(pools=[config["rbd_pool"]])
+        if "initiators" in config["cleanup"]:
+            for initiator_cfg in config["cleanup"]["initiators"]:
+                node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
+                initiator = Initiator(node)
+                logger.info(
+                    f"Disconnecting initiator {initiator_cfg['subnqn']} on node {initiator_cfg['node']}"
+                )
+                initiator.disconnect(nqn=initiator_cfg["subnqn"])
+
+        if "pool" in config["cleanup"]:
+            pool = config["cleanup"]["pool"]
+            logger.info(f"Cleaning up pool {pool}")
+            rbd_obj.clean_up(pools=[pool])
+    else:
+        logger.info("No cleanup configuration found in the test config.")
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
