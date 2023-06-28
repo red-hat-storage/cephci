@@ -287,7 +287,7 @@ tests:
   - test:
       name:  datalog omap offload on secondary
       desc: Execute datalog omap offload on secondary
-      polarion-id: CEPH-83573691
+      polarion-id: CEPH-83573695
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -322,6 +322,7 @@ tests:
             config-file-name: test_data_omap_offload_versioned_bucket.yaml
             verify-io-on-site: ["ceph-pri"]
             timeout: 300
+
   - test:
       name: datalog trim command with delete marker enabled on secondary
       desc: Execute datalog trim command with delete marker enabled on secondary
@@ -359,6 +360,34 @@ tests:
             config-file-name:  test_lc_rule_prefix_and_tag.yaml
             timeout: 300
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
+
+  - test:
+      name: RGW multipart object expiration through lc on Secondary
+      desc: RGW multipart object expiration through lc on Secondary
+      polarion-id: CEPH-83574834
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name:  test_bucket_lc_object_exp_multipart.py
+            config-file-name:  test_bucket_lc_object_exp_multipart.yaml
+            timeout: 300
+            verify-io-on-site: ["ceph-pri"]
+
+  - test:
+      name: Basic ACLs Test
+      desc: Test basic acls
+      polarion-id: CEPH-14241
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            test-version: v1
+            run-on-rgw: true
+            script-name: test_acls.py
+            config-file-name: test_acls.yaml
+            timeout: 300
+            verify-io-on-site: ["ceph-sec"]
 
 # please include test cases before below rename testcase as the process is disruptive currently
   - test:

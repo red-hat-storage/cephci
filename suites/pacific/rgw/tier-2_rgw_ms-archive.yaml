@@ -280,7 +280,7 @@ tests:
             verify-io-on-site: [ "ceph-sec", "ceph-arc" ]
       desc: Resharding test - dynamic resharding on versioned bucket on primary and verify on secondary & archive cluster
       name: Dynamic Resharding with versioning on primary and verify on archive
-      polarion-id: CEPH-83571740
+      polarion-id: CEPH-83575393
       module: sanity_rgw_multisite.py
 
   - test:

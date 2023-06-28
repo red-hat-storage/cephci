@@ -190,6 +190,19 @@ tests:
         config-file-name: test_bucket_notification_ssl_kafka_none_persistent_multipart.yaml
         timeout: 300
 
+  # kafka broker type broker with persistent flag enabled
+  - test:
+      name: notify put,delete events with kafka_broker_persistent with rgw ssl
+      desc: notify put,delete events with kafka_broker_persistent with rgw ssl
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574489
+      config:
+        run-on-rgw: true
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
+        timeout: 300
+
   - test:
       name: check-ceph-health
       module: exec.py

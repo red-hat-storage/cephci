@@ -301,9 +301,9 @@ tests:
       polarion-id: CEPH-83575199
 
   - test:
-      name: listing flat ordered versioned buckets on secondary
-      desc: test_bucket_listing_flat_ordered_versionsing on secondary
-      polarion-id: CEPH-83573545
+      name: Test the bucket and user stats behaviour by listing flat ordered versioned buckets on secondary
+      desc: test the bucket and user stats behaviour by bucket listing flat ordered versionsing on secondary
+      polarion-id: CEPH-83573208
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
@@ -315,7 +315,7 @@ tests:
   - test:
       name: listing flat ordered buckets on secondary
       desc: test_bucket_listing_flat_ordered on secondary
-      polarion-id: CEPH-83573545
+      polarion-id: CEPH-83574826
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
