@@ -220,5 +220,5 @@ tests:
             osds_to_remove:
               - node5
               - node6
-      polarion-id: CEPH-9501
+      polarion-id: CEPH-9489
       desc: Verify that image deleted at primary site updated at secondary

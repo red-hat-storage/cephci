@@ -220,5 +220,5 @@ tests:
             rep_pool_config:
               pool: sync_snap_del_1
               image: image_rep
-      polarion-id: CEPH-83573332
+      polarion-id: CEPH-10466
       desc: Verify sync point snapshot deletion in journal based

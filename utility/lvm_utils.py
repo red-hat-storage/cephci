@@ -12,6 +12,26 @@ def lvcreate(osd, lv_name, vg_name, size):
     return lv_name
 
 
+def lvm_create(osd, lv_name, vg_name, size):
+    osd.exec_command(cmd="sudo lvcreate -n %s -L %s %s " % (lv_name, size, vg_name))
+    return lv_name
+
+
+def lvconvert(osd, cache_type, vg_name, cache_name, data_name):
+    if cache_type == "cache":
+        command = (
+            f"echo 'y' | lvconvert --type {cache_type} --cachepool "
+            f"{vg_name}/{cache_name} {vg_name}/{data_name}"
+        )
+        osd.exec_command(cmd=command, sudo=True)
+    else:
+        command = (
+            f"echo -e 'y\ny' | lvconvert --type {cache_type} --cachevol "
+            f"{vg_name}/{cache_name} {vg_name}/{data_name}"
+        )
+        osd.exec_command(cmd=command, sudo=True)
+
+
 def make_partition(osd, device, start=None, end=None, gpt=False):
     osd.exec_command(
         cmd="sudo parted --script %s mklabel gpt" % device
