@@ -88,6 +88,8 @@ def krbd_io_handler(**kw):
             image_index = config["image_spec"].index(image_spec)
 
             if operations.get("mount"):
+                if not device_names:
+                    device_names = config.get("device_names")
                 if not config.get("skip_mkfs"):
                     run_mkfs(
                         client_node=rbd.ceph_client,
@@ -120,11 +122,16 @@ def krbd_io_handler(**kw):
                         size=config.get("file_size", "100M"),
                     )
                 else:
-                    run_fio(
-                        client_node=rbd.ceph_client,
-                        device_name=device_names[-1],
-                        runtime=config.get("runtime", 30),
-                    )
+                    fio_args = {
+                        "client_node": rbd.ceph_client,
+                        "device_name": device_names[-1],
+                    }
+                    if config.get("io_size"):
+                        fio_args.update({"size": config.get("io_size")})
+                    else:
+                        fio_args.update({"runtime": config.get("runtime", 30)})
+
+                    run_fio(**fio_args)
 
             if operations.get("fsck"):
                 if rbd.exec_cmd(cmd=f"fsck -n {device_names[-1]}"):
@@ -143,7 +150,7 @@ def krbd_io_handler(**kw):
                         )
                         return_flag = 1
                     if operations.get("device_map"):
-                        if rbd.device_unmap(
+                        if rbd.device_map(
                             "unmap",
                             f"{pool_name}/{image_name}",
                             config.get("device_type", "nbd"),

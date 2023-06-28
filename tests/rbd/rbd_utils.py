@@ -89,6 +89,7 @@ class Rbd:
                 )
                 return out
 
+            err = ""
             out, err = node.exec_command(
                 sudo=True,
                 cmd=cmd,
@@ -814,7 +815,7 @@ class Rbd:
         cmd = f"rbd encryption format {image_spec} {encryption_type} {passphrase}"
         return self.exec_cmd(cmd=cmd)
 
-    def device_map(self, operation, image_spec, device_type, encryption_config):
+    def device_map(self, operation, image_spec, device_type, encryption_config, **kw):
         """Perform rbd device map operation using given parameters
 
         Args:
@@ -835,7 +836,9 @@ class Rbd:
             cmd = cmd[:-1]  # remove trailing comma
         cmd += f" {image_spec}"
         # add validations to return value as per document
-        return self.exec_cmd(cmd=cmd, all=True)
+        return self.exec_cmd(
+            cmd=cmd, all=True, long_running=kw.get("long_running", False)
+        )
 
     def trash_purge(self, pool_name, **kw):
         """

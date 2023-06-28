@@ -62,6 +62,7 @@ tests:
         install_packages:
           - ceph-common
           - fio
+          - rbd-nbd
         copy_admin_keyring: true
       desc: Configure client node
       destroy-cluster: false
@@ -410,3 +411,28 @@ tests:
           desc: RBD Persistent Cache invalidate image level
           module: test_rbd_persistent_writeback_cache_invalidate.py
           name: PWL cache path validation at image level
+
+  - test:
+      abort-on-fail: true
+      config:
+        level: client                        # PWL at client
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        validate_exclusive_lock: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: Validate concurrent writes to exclusive lock feature with persistent cache enabled
+      destroy-cluster: false
+      module: test_concurrent_write_pwl_cache.py
+      name: PWL cache creation with exclusive lock and concurrent writes
+      polarion-id: CEPH-83574720
