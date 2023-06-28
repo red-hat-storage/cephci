@@ -483,7 +483,7 @@ pipelines:
         - name: "RGW bucket notifications testing on Multisite"
           execution_time: "2h 8m 36s"
           suite: "suites/pacific/rgw/tier-2_rgw_ms_test-bucket-notifications.yaml"
-          global-conf: "conf/pacific/rgw/rgw_multisite"
+          global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
