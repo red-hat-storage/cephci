@@ -196,3 +196,14 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_conflict_transition_actions.yaml
         timeout: 500
+
+  # swift container operation
+  - test:
+      name: test swift enable version on conatainer of different user
+      desc: test swift enable version on conatainer of different user
+      polarion-id: CEPH-10650
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_enable_version_with_different_user.yaml
+        timeout: 500
