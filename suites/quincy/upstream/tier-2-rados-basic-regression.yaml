@@ -296,7 +296,7 @@ tests:
   - test:
       name: Compression algorithm tuneables
       module: rados_prep.py
-      polarion-id: CEPH-83571669
+      polarion-id: CEPH-83571671
       config:
         enable_compression:
           pool_name: re_pool_compress
