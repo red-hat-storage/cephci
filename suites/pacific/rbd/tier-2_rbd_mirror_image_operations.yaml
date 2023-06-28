@@ -1,12 +1,19 @@
 #===============================================================================================
 # Tier-level: 2
-# Test-Suite: tier-2_rbd_mirror_regression.yaml
-# Suite contains rbd-mirror tier-2 testcases
+# Test-Suite: tier-2_rbd_mirror_image_operations.yaml
 #
 # Cluster Configuration:
-#    Conf file - conf/quincy/rbd/5-node-2-clusters.yaml
+#    cephci/conf/pacific/rbd/tier-1_rbd_mirror.yaml
 #    No of Clusters : 2
-#    Node 2 must to be a client node
+#    Each cluster configuration
+#    6-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client
+#     Node3 - Mon, Mgr, OSD
+#     Node4 - OSD, Mon
+#     Node5 - OSD,
+#     Node6 - RBD Mirror
 #===============================================================================================
 tests:
   - test:
@@ -14,6 +21,7 @@ tests:
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
+
   - test:
       abort-on-fail: true
       clusters:
@@ -103,6 +111,7 @@ tests:
       destroy-clster: false
       module: test_cephadm.py
       name: deploy cluster
+
   - test:
         abort-on-fail: true
         clusters:
@@ -126,6 +135,7 @@ tests:
         destroy-cluster: false
         module: test_client.py
         name: configure client
+
   - test:
       abort-on-fail: true
       clusters:
@@ -142,135 +152,6 @@ tests:
       desc: Enable mon_allow_pool_delete to True for deleting the pools
       module: exec.py
       name: configure mon_allow_pool_delete to True
-
-  - test:
-      name: test-image-delete-from-primary-site
-      module: test-image-delete-primary-site.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-9501
-      desc: Verify that image deleted at primary site updated at secondary
-
-  - test:
-      name: test mirror on image having snap and clone after restoring from trash
-      module: test_mirror_move_primary_trash_restore.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-11417
-      desc: Verify that image is restore and mirroring is intact
-
-  - test:
-      name: test image delete from secondary after multiple promote and demote
-      module: test-image-delete-from-secondary.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-            repeat_count: 1
-      polarion-id: CEPH-83574741
-      desc: Verify that deleting primary image also delete the secondary image
-
-  - test:
-      name: image removal from secondary after journaling feature disable
-      module: test_image_removal_from_secondary.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-            repeat_count: 10
-      polarion-id: CEPH-10470
-      desc: verify that image removal from secondary after disabling journaling feature
-
-  - test:
-      name: Attempt expanding or shrinking secondary image
-      module: test_expand_or_shrink_img_at_secondary.py
-      clusters:
-        ceph-rbd1:
-          config:
-            ec_pool_config:
-              imagesize: 2G
-              io-total: 200M
-            rep_pool_config:
-              imagesize: 2G
-              io-total: 200M
-      polarion-id: CEPH-9500
-      desc: Verify that resizing secondary image fails
-
-  - test:
-      name: Attempt moving secondary image to trash
-      module: test_mirror_move_secondary_trash.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-11416
-      desc: Verify that moving secondary to trash fails
-
-  - test:
-      name: test image meta operations sync to secondary
-      module: test_rbd_image_meta_mirroring.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-            key: ping
-            value: pong
-      polarion-id: CEPH-9524
-      desc: Verify removal of image meta gets mirrored
-
-  - test:
-      name: Recovery of abrupt failure of primary cluster
-      module: test_9470.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-9470
-      desc: Test unplanned failover and failback scenario
-
-  - test:
-      name: Recovery of shutdown primary cluster
-      module: test_9471.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-9471
-      desc: Test planned failover and failback scenario
-
-  - test:
-      name: Recovery of abrupt failure of secondary cluster
-      module: test_9474.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-9474
-      desc: Recovery of abrupt failure of secondary cluster
-
-  - test:
-      name: Recovery of shutdown secondary cluster
-      module: test_9475.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io-total: 200M
-      polarion-id: CEPH-9475
-      desc: Testing secondary cluster unplanned failover test
 
   - test:
       name: Mirroring of cloned image
@@ -293,14 +174,32 @@ tests:
       desc: Testing journal mirroring to snapshot mirroring
 
   - test:
-      name: Mirroring in same cluster should be prevented
-      module: test_rbd_mirror_reconfig.py
+      name: Attempt expanding or shrinking secondary image
+      module: test_expand_or_shrink_img_at_secondary.py
+      clusters:
+        ceph-rbd1:
+          config:
+            ec_pool_config:
+              imagesize: 2G
+              io-total: 200M
+            rep_pool_config:
+              imagesize: 2G
+              io-total: 200M
+      polarion-id: CEPH-9500
+      desc: Verify that resizing secondary image fails
+
+  - test:
+      name: test image meta operations sync to secondary
+      module: test_rbd_image_meta_mirroring.py
       clusters:
         ceph-rbd1:
           config:
             imagesize: 2G
-      polarion-id: CEPH-9511
-      desc: Verify configuring mirror to same source and target should fail
+            io-total: 200M
+            key: ping
+            value: pong
+      polarion-id: CEPH-9524
+      desc: Verify removal of image meta gets mirrored
 
   - test:
       name: Image shrink in primary cluster
@@ -330,6 +229,17 @@ tests:
       desc: Verify image size at secondary when image shrink at primary cluster
 
   - test:
+      name: Test to change of mirror pool replica size
+      module: test_rbd_mirror_replica_count.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io_total: 200M
+      polarion-id: CEPH-9518
+      desc: Verify changing mirror pool replica size shouldn't affect mirroring with IO
+
+  - test:
       desc: Enable and disable image feature from primary gets reflected to secondary
       module: test_rbd_mirror_image_features.py
       clusters:
@@ -357,32 +267,6 @@ tests:
       polarion-id: CEPH-9520
 
   - test:
-      name: Delete parent snap for mirrored image
-      module: test_rbd_mirror_delete_parent_snap.py
-      clusters:
-        ceph-rbd1:
-          config:
-            ec_pool_config:
-              imagesize: 2G
-              io_total: 200M
-            rep_pool_config:
-              imagesize: 2G
-              io_total: 200M
-      polarion-id: CEPH-9515
-      desc: Testing parent snapshot deletion for mirrored image
-
-  - test:
-      name: Test to change of mirror pool replica size
-      module: test_rbd_mirror_replica_count.py
-      clusters:
-        ceph-rbd1:
-          config:
-            imagesize: 2G
-            io_total: 200M
-      polarion-id: CEPH-9518
-      desc: Verify changing mirror pool replica size shouldn't affect mirroring with IO
-
-  - test:
       name: Testing image live migration of mirrored image
       module: test_rbd_mirror_image_migration.py
       clusters:
@@ -391,46 +275,46 @@ tests:
             pool_based:
               source:
                 ec_pool_config:
-                  pool: rbd_ECpool_src1
-                  data_pool: data_pool_src1
-                  image: rbd_ec_image_src1
+                  pool: rbd_ECpool1
+                  data_pool: data_pool_ec1
+                  image: rbd_ec_image
                   size: 2G
                   io_total: 200M
                 rep_pool_config:
-                  pool: rbd_RepPool_src1
-                  image: rbd_rep_image_src1
+                  pool: rbd_RepPool1
+                  image: rbd_rep_image
                   size: 2G
                   io_total: 200M
               destination:
                 do_not_create_image: True
                 ec_pool_config:
-                  pool: rbd_ECpool_dst1
-                  data_pool: data_pool_dst1
+                  pool: rbd_ECpool2
+                  data_pool: data_pool_ec2
                 rep_pool_config:
-                  pool: rbd_RepPool_dst1
+                  pool: rbd_RepPool2
             image_based:
               source:
                 ec_pool_config:
                   mode: image
-                  pool: rbd_ECpool_src2
-                  data_pool: data_pool_src2
-                  image: rbd_ec_image_src2
+                  pool: rbd_ECpool1
+                  data_pool: data_pool_ec1
+                  image: rbd_ec_image
                   size: 2G
                   io_total: 200M
                 rep_pool_config:
                   mode: image
-                  pool: rbd_RepPool_src2
-                  image: rbd_rep_image_src2
+                  pool: rbd_RepPool1
+                  image: rbd_rep_image
                   size: 2G
                   io_total: 200M
               destination:
                 do_not_create_image: True
                 ec_pool_config:
                   mode: image
-                  pool: rbd_ECpool_dst2
-                  data_pool: data_pool_dst2
+                  pool: rbd_ECpool2
+                  data_pool: data_pool_ec2
                 rep_pool_config:
                   mode: image
-                  pool: rbd_RepPool_dst2
+                  pool: rbd_RepPool2
       polarion-id: CEPH-83573320
       desc: Image migration of mirrored image
