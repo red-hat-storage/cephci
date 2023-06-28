@@ -210,4 +210,10 @@ tests:
       module: cephfs_system.mds_admin_daemon_socket_dump.py
       polarion-id: CEPH-83572891
       name: "MDS admin socket dump testing"
+  - test:
+      abort-on-fail: false
+      desc: "MDS admin socket perf flush log testing"
+      module: cephfs_system.mds_admin_daemon_socket_perf_flush_log.py
+      polarion-id: CEPH-83572890
+      name: "MDS admin socket perf flush log testing"
 
