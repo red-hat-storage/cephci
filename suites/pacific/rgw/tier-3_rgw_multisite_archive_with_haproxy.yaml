@@ -555,3 +555,15 @@ tests:
       module: sanity_rgw_multisite.py
       name: bucket policies retained at archive site
       comments: bug-1937618, Inditex.
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_suspend_archive_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test versioning suspend on archive
+      module: sanity_rgw_multisite.py
+      name: test versioning suspend on archive
+      polarion-id: CEPH-83575578
