@@ -102,17 +102,10 @@ def validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
 
 
 def get_registry_details(config):
-    ibm_build = config.get("ibm_build")
-    registry_url = None
-    if ibm_build:
-        _config = get_cephci_config()["registry_credentials"]
-        registry_url = _config["registry"]
+    build_type = "ibm" if config.get("ibm_build") else "rh"
+    _config = get_cephci_config()[f"{build_type}_registry_credentials"]
 
-    else:
-        _config = get_cephci_config()["cdn_credentials"]
-        registry_url = _config.get("docker_registry")
-
-    return registry_url, _config["username"], _config["password"]
+    return _config["registry"], _config["username"], _config["password"]
 
 
 def wait_for_daemon_state(client, type, id, state):
