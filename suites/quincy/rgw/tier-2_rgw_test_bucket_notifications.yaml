@@ -147,9 +147,9 @@ tests:
         timeout: 300
 
   - test:
-      name: notify on multipart upload events with kafka_none
-      desc: notify on multipart upload events with kafka_none
-      polarion-id: CEPH-83574064
+      name: notify on multipart upload events with kafka_none and verify timestamp of event record
+      desc: notify on multipart upload events with kafka_none and verify timestamp of event record
+      polarion-id: CEPH-83574693
       comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
