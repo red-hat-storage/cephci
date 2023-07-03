@@ -1,5 +1,4 @@
 import multiprocessing as mp
-import sys
 
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
@@ -40,27 +39,28 @@ def _set_log(level):
     log.logger.setLevel(level.upper())
 
 
-def _get_nodes(prefix, cloud, configs):
-    """Get nodes with prefix"""
-    nodes = [n for n, _ in CloudProvider(cloud, **configs).nodes(prefix)]
+def delete_volume(name, cloud, timeout=600, interval=10):
+    """Delete volume"""
+    log.info(f"Deleting volume '{name}'")
 
-    # Check for nodes available with prefix
-    if not nodes:
-        log.error(f"No resources available with prefix '{prefix}'. Exiting....")
-        sys.exit(1)
+    # Connect to OSP cloud for volume
+    volume = Volume(name, cloud)
 
-    log.info(f"Nodes with prefix '{prefix}' are {', '.join(nodes)}")
-    return nodes
+    # Add volume to recycle bucket
+    RECYCLE.append(volume)
+
+    # Delete volume
+    volume.delete(timeout, interval)
 
 
-def delete_node(node, cloud, timeout, interval, configs):
+def delete_node(name, cloud, timeout=600, interval=10):
     """Delete node"""
     global RECYCLE
 
-    log.info(f"Deleting node '{node}'")
+    log.info(f"Deleting node '{name}'")
 
-    # Connect to OSP cloud
-    node = Node(node, cloud, **configs)
+    # Connect to OSP cloud for node
+    node = Node(name, cloud)
 
     # Add node to recycle bucket
     RECYCLE.append(node)
@@ -68,15 +68,9 @@ def delete_node(node, cloud, timeout, interval, configs):
     # Delete volumes attached to node
     volumes = node.volumes
     if volumes:
-        log.info(f"Volumes attached to the node '{node.name}' are {', '.join(volumes)}")
+        log.info(f"Deleting volumes {', '.join(volumes)} attached to node '{name}'")
         for volume in volumes:
-            log.info(f"Deleting volume {volume}")
-            _volume = Volume(volume, cloud, **configs)
-
-            # Add volume to recycle bucket
-            RECYCLE.append(_volume)
-
-            _volume.delete(timeout, interval)
+            delete_volume(volume, cloud, timeout, interval)
 
     else:
         log.info(f"No volumes are attached to the node '{node.name}'")
@@ -85,35 +79,40 @@ def delete_node(node, cloud, timeout, interval, configs):
     node.delete(timeout, interval)
 
 
-def cleanup(cloud, prefix):
+def cleanup(cloud, prefix, timeout=600, interval=10):
     """Cleanup nodes with prefix"""
     global RECYCLE
 
-    configs = get_cloud_credentials(cloud)
-
-    # Get timeout and interval
-    timeout, retry = configs.get("timeout"), configs.get("retry")
-    interval = int(timeout / retry)
-
     # Get nodes with prefix
-    procs, nodes = [], _get_nodes(prefix, cloud, configs)
+    procs, nodes = [], cloud.get_nodes_by_prefix(prefix)
+    if nodes:
+        log.info(f"Nodes with prefix '{prefix}' are {', '.join(nodes)}")
+    else:
+        log.error(f"No nodes are available with prefix '{prefix}'")
 
     # Start deleting nodes in parallel
     for node in nodes:
-        proc = mp.Process(
-            target=delete_node,
-            args=(
-                node,
-                cloud,
-                timeout,
-                interval,
-                configs,
-            ),
-        )
+        proc = mp.Process(target=delete_node, args=(node, cloud, timeout, interval))
         proc.start()
         procs.append(proc)
 
     # Wait till all nodes gets cleaned
+    [p.join() for p in procs]
+
+    # Get nodes woth prefix
+    procs, volumes = [], cloud.get_volumes_by_prefix(prefix)
+    if volumes:
+        log.info(f"Volumes with prefix '{prefix}' are {', '.join(volumes)}")
+    else:
+        log.error(f"No volumes available with prefix '{prefix}'.")
+
+    # Start deleting volumes in parallel
+    for volume in volumes:
+        proc = mp.Process(target=delete_volume, args=(volume, cloud, timeout, interval))
+        proc.start()
+        procs.append(proc)
+
+    # Wait till all volumes gets cleaned
     [p.join() for p in procs]
 
     # Check if any resource deletion failed
@@ -142,6 +141,15 @@ if __name__ == "__main__":
     # Read configuration for cloud
     get_configs(config)
 
+    # Read configurations
+    cloud_configs = get_cloud_credentials(cloud)
+
+    # Connect to cloud
+    cloud = CloudProvider(cloud, **cloud_configs)
+
+    # Get timeout and interval
+    timeout, retry = cloud_configs.pop("timeout"), cloud_configs.pop("retry")
+    interval = int(timeout / retry) if timeout and retry else None
+
     # Cleanup cluster
-    cleanup(cloud, prefix)
-    log.info(f"Cleaned cluster with prefix '{prefix}' sucessfully")
+    cleanup(cloud, prefix, timeout, interval)
