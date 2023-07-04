@@ -160,3 +160,24 @@ tests:
         script-name: ../aws/test_sts_rename_large_object.py
         config-file-name: ../../aws/configs/test_s3copyObj_admin_user.yaml
         timeout: 500
+
+ # testing rgw through curl
+  - test:
+      name: Test rgw through CURL
+      desc: Test rgw through CURL
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
+        timeout: 500
+
+  - test:
+      name: Test rgw put object through curl using transfer_encoding chunked
+      desc: Test rgw put object through curl using transfer_encoding chunked
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_curl_transfer_encoding_chunked.yaml
+        timeout: 500
