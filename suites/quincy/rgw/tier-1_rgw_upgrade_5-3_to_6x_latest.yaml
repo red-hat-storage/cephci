@@ -309,7 +309,7 @@ tests:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
         timeout: 300
-      desc: test_sse_s3_per_bucket_encryption_version_enabled
+      desc: test_sse_s3_per_bucket_encryption_version_enabled after upgrade
       module: sanity_rgw.py
-      name: sse-s3 per bucket encryption test on a versiond bucket
-      polarion-id: CEPH-83574619 # CEPH-83575150 #CEPH-83575152
+      name: sse-s3 per bucket encryption test on a versiond bucket after upgrade
+      polarion-id: CEPH-83575152 # CEPH-83575150 #CEPH-83574619
