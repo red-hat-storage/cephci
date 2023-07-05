@@ -381,7 +381,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/upgrades.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
@@ -606,7 +606,7 @@ pipelines:
           global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
@@ -637,7 +637,7 @@ pipelines:
           global-conf: "conf/pacific/rgw/upgrades.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
@@ -688,7 +688,7 @@ pipelines:
           global-conf: "conf/pacific/rgw/upgrades.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
@@ -708,7 +708,7 @@ pipelines:
           global-conf: "conf/pacific/rbd/tier-1_rbd_mirror.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rbd
@@ -945,7 +945,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/10-node-cluster-with-6-pools.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
@@ -958,7 +958,7 @@ pipelines:
           global-conf: "conf/pacific/cephfs/tier-2_cephfs_upgrade.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - cephfs
@@ -1192,7 +1192,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
@@ -1203,7 +1203,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/upgrades.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
@@ -1214,7 +1214,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/upgrades.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
@@ -1405,7 +1405,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
@@ -1416,7 +1416,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/upgrades.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
@@ -1427,7 +1427,7 @@ pipelines:
           global-conf: "conf/pacific/upgrades/upgrades.yaml"
           platform: "rhel-8"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-8.6-server-x86_64.yaml"
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - upgrades
