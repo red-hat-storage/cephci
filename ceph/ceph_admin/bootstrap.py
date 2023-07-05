@@ -21,7 +21,9 @@ __DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
-def construct_registry(cls, registry: str, json_file: bool = False):
+def construct_registry(
+    cls, registry: str, json_file: bool = False, ibm_build: bool = False
+):
     """
     Construct registry credentials for bootstrapping cluster
 
@@ -41,8 +43,12 @@ def construct_registry(cls, registry: str, json_file: bool = False):
         constructed string of registry credentials ( Str )
     """
     # Todo: Retrieve credentials based on registry name
+    build_type = "ibm" if ibm_build else "rh"
+
     _config = get_cephci_config()
-    cdn_cred = _config.get("registry_credentials", _config["cdn_credentials"])
+    cdn_cred = _config.get(
+        f"{build_type}_registry_credentials", _config["cdn_credentials"]
+    )
     reg_args = {
         "registry-url": cdn_cred.get("registry", registry),
         "registry-username": cdn_cred.get("username"),
@@ -193,6 +199,7 @@ class BootstrapMixin:
         rhbuild = self.config.get("rhbuild")
         base_url = self.config.get("base_url")
         cloud_type = self.config.get("cloud-type", "openstack")
+        ibm_build = self.config.get("ibm_build", False)
 
         # Support installation of the baseline cluster whose version is not available in
         # CDN. This is primarily used for an upgrade scenario. This support is currently
@@ -260,11 +267,13 @@ class BootstrapMixin:
         # Construct registry credentials as string or json.
         registry_url = args.pop("registry-url", None)
         if registry_url:
-            cmd += construct_registry(self, registry_url)
+            cmd += construct_registry(self, registry_url, ibm_build=ibm_build)
 
         registry_json = args.pop("registry-json", None)
         if registry_json:
-            cmd += construct_registry(self, registry_json, json_file=True)
+            cmd += construct_registry(
+                self, registry_json, json_file=True, ibm_build=ibm_build
+            )
 
         """ Generate dashboard certificate and key if bootstrap cli
             have this options as dashboard-key and dashboard-crt """

@@ -29,7 +29,15 @@
 #  username: <user_name>
 #  password: <user_password>
 
-# registry_credentials:
+# Provide container registry details for redhat and ibm images. Registry keyword should
+# start with 'rh' for redhat and 'ibm' for IBM builds
+
+# rh_registry_credentials:
+#  registry: <registry_url>
+#  username: <user_name>
+#  password: <user_password>
+
+# ibm_registry_credentials:
 #  registry: <registry_url>
 #  username: <user_name>
 #  password: <user_password>
