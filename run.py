@@ -667,7 +667,10 @@ def run(args):
 
     # Initialize test return code
     rc = 0
-
+    run_config = {
+        "log_dir": run_dir,
+        "run_id": run_id,
+    }
     for test in tests:
         test = test.get("test")
         tc = fetch_test_details(test)
@@ -676,7 +679,7 @@ def run(args):
         test_names.append(unique_test_name)
 
         tc["log-link"] = log.configure_logger(unique_test_name, run_dir)
-
+        run_config.update({"test_name": unique_test_name, "log_link": tc["log-link"]})
         mod_file_name = os.path.splitext(test_file)[0]
         test_mod = importlib.import_module(mod_file_name)
         print("\nRunning test: {test_name}".format(test_name=tc["name"]))
@@ -772,6 +775,7 @@ def run(args):
                     test_data=ceph_test_data,
                     ceph_cluster_dict=ceph_cluster_dict,
                     clients=clients,
+                    run_config=run_config,
                 )
             except BaseException as be:  # noqa
                 log.exception(be)
@@ -780,6 +784,10 @@ def run(args):
                 collect_recipe(ceph_cluster_dict[cluster_name])
                 if store:
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
+
+                # Artifacts from test appended to comments
+                if config.get("artifacts"):
+                    tc["comments"] += f"\n{config['artifacts']}"
 
             if rc != 0:
                 break
