@@ -73,6 +73,7 @@ def install(nodes: List[CephNode]) -> None:
             continue
         except CommandFailed:
             pass
+        node.exec_command(sudo=True, cmd="yum remove -y java-*")
         node.exec_command(sudo=True, cmd=f"yum install -y {pre_req_pkgs}")
         node.exec_command(cmd=f"curl -L {CB_URL} -O")
         node.exec_command(cmd=f"unzip {CB_FILE}")
@@ -150,7 +151,7 @@ def execute_cosbench_script(nodes: List[CephNode], script: str) -> None:
     """
     LOG.debug(f"Executing COS Bench script: {script}")
     for node in nodes:
-        node.exec_command(cmd=f"cd /opt/cosbench && ./{script}")
+        node.exec_command(cmd=f"cd /opt/cosbench && sudo ./{script}")
 
 
 def get_or_create_user(node: CephNode) -> Dict:
@@ -162,12 +163,12 @@ def get_or_create_user(node: CephNode) -> Dict:
     LOG.debug("Get or Create cosbench01 user using radosgw-admin.")
     user = "cosbench01"
     try:
-        out, err = node.exec_command(cmd=f"radosgw-admin user info --uid {user}")
+        out, err = node.exec_command(cmd=f"sudo radosgw-admin user info --uid {user}")
         out = loads(out)
         return out["keys"][0]
     except CommandFailed:
         out, err = node.exec_command(
-            cmd=f"radosgw-admin user create --uid {user} --display-name {user}"
+            cmd=f"sudo radosgw-admin user create --uid {user} --display-name {user}"
             f" --email {user}@noreply.com"
         )
         out = loads(out)
@@ -190,7 +191,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         0 on Success and 1 on Failure.
     """
     LOG.info("Being COSBench deploy and configuration workflow.")
-    client = ceph_cluster.get_nodes(role="client")[0]
+    client = ceph_cluster.get_nodes(role="installer")[0]
     controllers = get_nodes_by_ids(ceph_cluster, kwargs["config"]["controllers"])
     drivers = get_nodes_by_ids(ceph_cluster, kwargs["config"]["drivers"]["hosts"])
 
