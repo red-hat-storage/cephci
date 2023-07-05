@@ -1862,7 +1862,7 @@ def clone_the_repo(config, node, path_to_clone):
 
 def calculate_available_storage(node):
     log.info("Calculate current storage present in cluster")
-    out, err = node.exec_command(cmd="ceph df --format json")
+    out, err = node.exec_command(cmd="sudo ceph df --format json")
     import json
 
     out = json.loads(out)

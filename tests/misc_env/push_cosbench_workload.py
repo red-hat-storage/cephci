@@ -100,7 +100,7 @@ def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
     LOG.info(f"workload endpoint: {workload_endpoint}")
     fill_workload = fill_workload.replace("workload_endpoint", workload_endpoint)
 
-    out, err = rgw.exec_command(
+    out, err = controller.exec_command(
         cmd="sh /opt/cosbench/cli.sh info | grep drivers | awk '{print $2}'"
     )
     LOG.info(out)
@@ -197,7 +197,7 @@ def run(ceph_cluster, **kwargs) -> int:
     """
     LOG.info("preaparing and pushing cosbench workload to fill 30% of the cluster")
     controller = get_nodes_by_ids(ceph_cluster, kwargs["config"]["controllers"])[0]
-    client = ceph_cluster.get_nodes(role="client")[0]
+    client = ceph_cluster.get_nodes(role="installer")[0]
     rgw = ceph_cluster.get_nodes(role="rgw")[0]
 
     workload_file_name = prepare_fill_workload(
