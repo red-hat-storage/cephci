@@ -1,26 +1,25 @@
 from cli.cloudproviders.openstack import Openstack
 from cli.exceptions import ConfigError
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class CloudProvider:
+    """Interface for common cloud operations"""
+
     def __init__(self, cloud, **config):
-        self._cloud = self._get_cloud(cloud, **config)
+        log.info(f"Initiating instance for cloud '{cloud}'")
 
-    def _get_cloud(self, cloud, **config):
-        """Get cloud object"""
-        if cloud.lower() == "openstack":
-            return Openstack(**config)
-
-        elif cloud.lower() == "ibmc":
-            pass
+        self._type = cloud.lower()
+        if self._type == "openstack":
+            self._cloud = Openstack(**config)
 
         else:
             raise ConfigError(f"Unsupported cloud provider '{cloud}'")
 
-    def nodes(self, prefix):
-        """Get nodes with prefix"""
-        return self._cloud.get_nodes_by_prefix(prefix)
+    def __getattr__(self, name):
+        return self._cloud.__getattribute__(name)
 
-    def volumes(self, prefix):
-        """Get volumes with prefix"""
-        return self._cloud.get_volumes_by_prefix(prefix)
+    def __repr__(self):
+        return self._type

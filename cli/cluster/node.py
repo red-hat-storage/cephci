@@ -8,22 +8,22 @@ log = Log(__name__)
 class Node(CloudProvider):
     """Interface to perform node operations"""
 
-    def __init__(self, name, cloud="openstack", **config):
+    def __init__(self, name, cloud):
         """Initialize instance with provided details
 
         Args:
             name (str): Node name
-            cloud (str): Cloud type [openstack|ibmc|baremetal]
+            cloud (CloudProvider): CloudProvider object
 
         **kwargs:
             <key-val> for cloud credentials
         """
-        super(Node, self).__init__(cloud, **config)
+        self._cloud, self._name = cloud, name
 
-        self._node = self._cloud.get_node_by_name(name)
-        self._id = self._cloud.get_node_id(self._node)
-
-        self._name = name
+    @property
+    def cloud(self):
+        """Cloud provider object"""
+        return self._cloud
 
     @property
     def name(self):
@@ -33,30 +33,27 @@ class Node(CloudProvider):
     @property
     def id(self):
         """Node ID"""
-        return self._id
+        return self.cloud.get_node_id(self.name)
 
     @property
     def state(self):
         """Node state"""
-        return self._cloud.get_volume_state_by_id(self.id) if self._node else None
+        return self.cloud.get_node_state_by_name(self.name)
 
     @property
     def public_ips(self):
         """Public IPs attached to node"""
-        self._cloud.get_node_public_ips(self._node) if self._node else None
+        return self.cloud.get_node_public_ips(self.name)
 
     @property
     def private_ips(self):
         """Private IPs attached to node"""
-        self._cloud.get_node_private_ips(self._node) if self._node else None
+        return self.cloud.get_node_private_ips(self.name)
 
     @property
     def volumes(self):
         """Volume names attached to node"""
-        return [
-            self._cloud.get_volume_name_by_id(id)
-            for id in self._cloud.get_node_volumes(self._node)
-        ]
+        return self.cloud.get_node_volumes(self.name)
 
     def delete(self, timeout=300, interval=10):
         """Delete node from cloud
@@ -65,24 +62,23 @@ class Node(CloudProvider):
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
-        if not self._node:
-            msg = f"Node with name '{self._name}' doesn't exists"
+        if not self.id:
+            msg = f"Node with name '{self.name}' doesn't exists"
             log.error(msg)
             raise OperationFailedError(msg)
 
         if self.private_ips:
             log.info(
-                f"Dettaching private IPs {self.private_ips} assigned to node '{self.name}'"
+                f"Dettaching private IPs {', '.join(self.private_ips)} assigned to node '{self.name}'"
             )
-            self._cloud.detach_node_private_ips(self._node)
+            self.cloud.detach_node_private_ips(self.name, self.private_ips)
 
         if self.public_ips:
             log.info(
-                f"Dettaching public IPs {self.public_ips} assigned to node '{self.name}'"
+                f"Dettaching public IPs {', '.join(self.public_ips)} assigned to node '{self.name}'"
             )
-            self._cloud.detach_node_public_ips(self._node)
+            self.cloud.detach_node_public_ips(self.name, self.public_ips)
 
-        self._cloud.delete_node(self._node, timeout, interval)
+        self.cloud.delete_node(self.name, timeout, interval)
 
-        self._node = None
         return True

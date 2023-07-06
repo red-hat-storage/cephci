@@ -15,7 +15,6 @@ STATE_PENDING = "pending"
 STATE_RUNNING = "running"
 STATE_AVAILABLE = "available"
 STATE_DESTROY = "destroy"
-STATE_DELETE = None
 
 
 class Openstack:
@@ -38,8 +37,13 @@ class Openstack:
             service-region (str): Realm to be used
             domain (str): Authentication domain to be used
         """
+        # Set default socket timeout
         socket.setdefaulttimeout(timeout)
 
+        # Set default node and volume
+        self._nodes, self._volumes = {}, {}
+
+        # Connect to Openstack driver
         try:
             self._driver = get_driver(Provider.OPENSTACK)(
                 config["username"],
@@ -61,253 +65,294 @@ class Openstack:
             log.error(e)
             raise CloudProviderError(e)
 
+    def get_nodes(self, refresh=False):
+        """Get nodes available from cloud
+
+        Args:
+            refresh (bool): Option to reload
+        """
+        if refresh or not self._nodes:
+            try:
+                for n in self._driver.list_nodes():
+                    self._nodes[n.name] = n.id
+            except Exception as e:
+                log.error(e)
+                raise CloudProviderError(e)
+
+        return self._nodes.keys()
+
+    def get_nodes_by_prefix(self, prefix, refresh=False):
+        """Get list of nodes by prefix
+
+        Args:
+            prefix (str): Node name prefix
+            refresh (bool): Option to reload
+        """
+        if not self._nodes or refresh:
+            self.get_nodes(refresh=True)
+
+        return [n for n in self._nodes.keys() if prefix in n]
+
+    def get_node_id(self, name):
+        """Get node by id
+
+        Args:
+            name (str): Node name
+        """
+        if not self._nodes or name not in self._nodes.keys():
+            self.get_nodes(refresh=True)
+
+        return self._nodes.get(name)
+
+    def get_node_by_id(self, id):
+        """Get node by id
+
+        Args:
+            id (str): Node id
+        """
+        try:
+            return self._driver.ex_get_node_details(id) if id else None
+        except Exception as e:
+            log.error(e)
+            raise CloudProviderError(e)
+
     def get_node_by_name(self, name):
         """Get node object by name
 
         Args:
             name (str): Name of node
         """
-        try:
-            nodes = [node for node in self._driver.list_nodes() if node.name == name]
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        if not self._nodes or name not in self._nodes.keys():
+            self.get_nodes(refresh=True)
 
-        return nodes[0] if nodes else None
+        return self.get_node_by_id(self._nodes.get(name))
 
-    def get_node_id(self, node):
-        """Get node id
+    def get_node_state_by_name(self, name):
+        """Get node status by name
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of node
         """
-        try:
-            return node.id
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        if not self._nodes or name not in self._nodes.keys():
+            self.get_nodes(refresh=True)
 
-    def get_node_state_by_id(self, id):
-        """Get node status by id
+        node = self.get_node_by_id(self._nodes.get(name))
+
+        return node.state if node else None
+
+    def get_node_volumes(self, name):
+        """Get list of storage volume ids attached to node
 
         Args:
-            id (str): id of node
+            name (str): Name of node
         """
-        try:
-            node = self._driver.ex_get_node_details(id)
-            return node.state if node else None
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        node = self.get_node_by_name(name)
+        if not node:
+            return
 
-    def get_nodes_by_prefix(self, prefix):
-        """Get list of nodes by prefix
-
-        Args:
-            prefix (str): Node name prefix
-        """
         try:
             return [
-                (n.name, n.id) for n in self._driver.list_nodes() if prefix in n.name
+                self.get_volume_by_id(volume.get("id")).name
+                for volume in node.extra.get("volumes_attached")
             ]
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
 
-    def get_node_volumes(self, node):
-        """Get list of storage volume ids attached to node
-
-        Args:
-            node (OpenstackNode): Openstack node object
-        """
-        try:
-            return [v.get("id") for v in node.extra.get("volumes_attached")]
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
-
-    def wait_for_node_state(self, node, state, timeout, interval):
+    def wait_for_node_state(self, name, state, timeout=300, interval=10):
         """Wait for node to be in state
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of node
             state (str): Expected node state
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
-        id = self.get_node_id(node)
-        log.info(f"Waiting for node '{id}' to be in '{state}' state")
-        for w in WaitUntil(timeout=timeout, interval=interval):
-            try:
-                _state = self.get_node_state_by_id(id)
-            except Exception as e:
-                log.error(e)
-                raise CloudProviderError(e)
+        id = self.get_node_id(name)
+
+        log.info(f"Waiting for node '{name}' to be in '{state}' state")
+        for w in WaitUntil(timeout, interval):
+            node = self.get_node_by_id(id)
+            if not node and state == STATE_DESTROY:
+                _state = STATE_DESTROY
+
+            else:
+                try:
+                    _state = node.state
+                except Exception as e:
+                    log.error(e)
+                    raise CloudProviderError(e)
 
             if _state == state:
-                log.info(f"Node '{id}' is in exptected '{_state}' state")
+                log.info(f"Node '{name}' is in exptected '{state}' state")
                 break
 
-            msg = f"Node '{id}' is not in expected '{_state}' state, retry after {interval} sec"
+            msg = f"Node '{name}' is not in expected '{state}' state, retry after {interval} sec"
             log.info(msg)
 
         if w.expired:
-            msg = f"Node '{id}' is in unexpected state '{_state}'"
+            msg = f"Node '{name}' is in unexpected state '{_state}'"
             log.error(msg)
             raise UnexpectedStateError(msg)
 
-    def delete_node(self, node, timeout=300, interval=10):
+    def delete_node(self, name, timeout=300, interval=10):
         """Delete node from project
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of node
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
+        node = self.get_node_by_name(name)
+        if not node:
+            return
+
         try:
             self._driver.destroy_node(node)
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
 
-        self.wait_for_node_state(node, STATE_DELETE, timeout, interval)
+        self.wait_for_node_state(name, STATE_DESTROY, timeout, interval)
 
-    def get_volume_by_name(self, name):
-        """Get node object using name
+        del self._nodes[name]
+
+        return True
+
+    def get_volumes(self, refresh=False):
+        """Get volumes available from cloud
 
         Args:
-            name (str): Node name
+            refresh (bool): Option to reload
         """
-        try:
-            volumes = [v for v in self._driver.list_volumes() if name == v.name]
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        if refresh or not self._volumes:
+            try:
+                for v in self._driver.list_volumes():
+                    self._volumes[v.name] = v.id
+            except Exception as e:
+                log.error(e)
+                raise CloudProviderError(e)
 
-        return volumes[0] if volumes else None
+        return self._volumes.keys()
 
-    def get_volumes_by_prefix(self, prefix):
+    def get_volumes_by_prefix(self, prefix, refresh=False):
         """Get list of volumes by prefix
 
         Args:
             prefix (str): Volume name prefix
+            refresh (bool): Option to reload
         """
-        try:
-            return [
-                (v.name, v.id) for v in self._driver.list_volumes() if prefix in v.name
-            ]
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        if not self._volumes or refresh:
+            self.get_volumes(refresh=True)
 
-    def get_volume_id(self, volume):
-        """Get volume id
+        return [v for v in self._volumes.keys() if prefix in v]
+
+    def get_volume_id(self, name):
+        """Get volume by id
 
         Args:
-            node (OpenstackVolume): Openstack volume object
+            name (str): Volume name
         """
-        try:
-            return volume.id
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        if not self._volumes or name not in self._volumes.keys():
+            self.get_volumes(refresh=True)
 
-    def get_volume_name_by_id(self, id):
-        """Get volume id
-
-        Args:
-            node (OpenstackVolume): Openstack volume object
-        """
-        try:
-            volume = self._driver.ex_get_volume(id)
-            return volume.name if volume else None
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        return self._volumes.get(name)
 
     def get_volume_by_id(self, id):
         """Get volume by id
 
         Args:
-            id (str): Node id
-        """
-        try:
-            return self._driver.ex_get_volume(id)
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
-
-    def get_volume_state_by_id(self, id):
-        """Get volume status by id
-
-        Args:
             id (str): Volume id
         """
         try:
-            volume = self._driver.ex_get_volume(id)
-            return volume.state if volume else None
+            return self._driver.ex_get_volume(id) if id else None
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
 
-    def attach_volume(self, node, volume):
-        """Attach volume to node
+    def get_volume_by_name(self, name):
+        """Get volume by name
 
         Args:
-            node (OpenstackNode): Openstack node object
-            volume (OpenstackVolume): Openstack volume object
+            name (str): Name of volume
         """
-        try:
-            return self._driver.attach_volume(node=node, volume=volume)
-        except Exception as e:
-            log.error(e)
-            raise CloudProviderError(e)
+        if not self._volumes or name not in self._volumes.keys():
+            self.get_volumes(refresh=True)
 
-    def detach_volume(self, volume, timeout=300, interval=10):
+        return self.get_volume_by_id(self._volumes.get(name))
+
+    def get_volume_state_by_name(self, name):
+        """Get volume status by name
+
+        Args:
+            name (str): Name of volume
+        """
+        if not self._volumes or name not in self._volumes.keys():
+            self.get_volumes(refresh=True)
+
+        volume = self.get_volume_by_id(self._volumes.get(name))
+
+        return volume.state if volume else None
+
+    def detach_volume(self, name, timeout=300, interval=10):
         """Detach volume from node
 
         Args:
-            volume (OpenstackVolume): Openstack volume object
+            name (str): Name of volume
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
+        volume = self.get_volume_by_name(name)
+        if not volume:
+            return
+
         try:
             self._driver.detach_volume(volume)
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
 
-        self.wait_for_volume_state(volume, STATE_AVAILABLE, timeout, interval)
+        self.wait_for_volume_state(name, STATE_AVAILABLE, timeout, interval)
 
-    def destroy_volume(self, volume, timeout=300, interval=10):
+        return True
+
+    def destroy_volume(self, name, timeout=300, interval=10):
         """Destroy volume from node
 
         Args:
-            volume (OpenstackVolume): Openstack volume object
+            name (str): Name of volume
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
+        volume = self.get_volume_by_name(name)
+        if not volume:
+            return
+
         try:
             self._driver.destroy_volume(volume)
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
 
-        self.wait_for_volume_state(volume, STATE_DESTROY, timeout, interval)
+        self.wait_for_volume_state(name, STATE_DESTROY, timeout, interval)
 
-    def wait_for_volume_state(self, volume, state, timeout, interval):
+        return True
+
+    def wait_for_volume_state(self, name, state, timeout=300, interval=10):
         """Wait for volume to be in state
 
         Args:
-            volume (OpenstackVolume): Openstack volume object
+            name (str): Name of volume
+            state (str): Expected volume state
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
-        id = self.get_volume_id(volume)
-        log.info(f"Waiting for volume '{id}' to be in '{state}' state")
+        id = self.get_volume_id(name)
+
+        log.info(f"Waiting for volume '{name}' to be in '{state}' state")
         for w in WaitUntil(timeout=timeout, interval=interval):
             try:
-                _state = self.get_volume_state_by_id(id)
+                _state = self.get_volume_by_id(id).state
             except Exception as e:
                 if f"404 Not Found Volume {id} could not be found" in str(e):
                     _state = STATE_DESTROY
@@ -316,60 +361,78 @@ class Openstack:
                     raise CloudProviderError(e)
 
             if _state == state:
-                log.info(f"Volume '{id}' is in expected '{_state}' state")
+                log.info(f"Volume '{name}' is in expected '{state}' state")
                 break
 
             log.info(
-                f"Volume '{id}' is not in '{_state}' state, retry after {interval} sec"
+                f"Volume '{name}' is not in expected '{state}' state, retry after {interval} sec"
             )
 
         if w.expired:
-            msg = f"Volume '{id}' is in unexpected state '{_state}'"
+            msg = f"Volume '{name}' is in unexpected state '{_state}'"
             log.error(msg)
             raise UnexpectedStateError(msg)
 
-    def get_node_public_ips(self, node):
+    def get_node_public_ips(self, name):
         """Detach public IP address from node
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of name
         """
+        node = self.get_node_by_name(name)
+        if not node:
+            return
+
         try:
             return node.public_ips
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
 
-    def wait_for_node_public_ips(self, node, timeout=300, interval=10):
+    def wait_for_node_public_ips(self, name, timeout=300, interval=10):
         """Wait for node public IP address
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of name
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
-        id = self.get_node_id(node)
-        log.info(f"Waiting for node '{id}' public IP")
-        for w in WaitUntil(timeout=timeout, interval=interval):
-            if self.get_node_public_ips(node):
-                msg = f"Public IP addresses {self.get_node_public_ips(node)} are assigned to node '{id}'"
-                log.info(msg)
+        id = self.get_node_id(name)
+
+        log.info(f"Waiting for node '{name}' public IP addresses")
+        for w in WaitUntil(timeout, interval):
+            try:
+                public_ips = self.get_node_by_id(id).public_ips
+            except Exception as e:
+                log.error(e)
+                raise CloudProviderError(e)
+
+            if public_ips:
+                log.info(
+                    f"Public IP addresses {','.join(public_ips)} are assigned to node '{name}'"
+                )
                 break
 
-            msg = f"No IP address assigned to node '{id}', retry after {interval} sec"
-            log.info(msg)
+            log.info(
+                f"No IP address assigned to node '{name}', retry after {interval} sec"
+            )
 
         if w.expired:
-            msg = f"No IP address assigned to node '{id}'"
+            msg = f"No IP address assigned to node '{name}'"
             log.error(msg)
             raise UnexpectedStateError(msg)
 
-    def detach_node_public_ips(self, node, ips):
+    def detach_node_public_ips(self, name, ips):
         """Detach public IP address from node
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of name
+            ips (list|tuple): List of IP adresses
         """
+        node = self.get_node_by_name(name)
+        if not node:
+            return
+
         try:
             [self._driver.ex_detach_floating_ip_from_node(node, ip) for ip in ips]
             return True
@@ -377,24 +440,33 @@ class Openstack:
             log.error(e)
             raise CloudProviderError(e)
 
-    def get_node_private_ips(self, node):
+    def get_node_private_ips(self, name):
         """Detach public IP address from node
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of name
         """
+        node = self.get_node_by_name(name)
+        if not node:
+            return
+
         try:
             return node.private_ips
         except Exception as e:
             log.error(e)
             raise CloudProviderError(e)
 
-    def detach_node_private_ips(self, node, ips):
+    def detach_node_private_ips(self, name, ips):
         """Detach private IP address from node
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of name
+            ips (list|tuple): List of IP adresses
         """
+        node = self.get_node_by_name(name)
+        if not node:
+            return
+
         try:
             [self._driver.ex_detach_floating_ip_from_node(node, ip) for ip in ips]
             return True
@@ -402,26 +474,35 @@ class Openstack:
             log.error(e)
             raise CloudProviderError(e)
 
-    def wait_for_node_private_ips(self, node, timeout=300, interval=10):
+    def wait_for_node_private_ips(self, name, timeout=300, interval=10):
         """Wait for node private IP address
 
         Args:
-            node (OpenstackNode): Openstack node object
+            name (str): Name of name
             timeout (int): Operation waiting time in sec
             interval (int): Operation retry time in sec
         """
-        id = self.get_node_id(node)
-        log.info(f"Waiting for node '{id}' private IP")
-        for w in WaitUntil(timeout=timeout, interval=interval):
-            if self.get_node_private_ips(node):
-                msg = f"Private IP addresses {self.get_node_private_ips(node)} are assigned to node '{id}'"
-                log.info(msg)
+        id = self.get_node_id(name)
+
+        log.info(f"Waiting for node '{name}' private IP")
+        for w in WaitUntil(timeout, interval):
+            try:
+                private_ips = self.get_node_by_id(id).private_ips
+            except Exception as e:
+                log.error(e)
+                raise CloudProviderError(e)
+
+            if private_ips:
+                log.info(
+                    f"Private IP addresses {','.join(private_ips)} are assigned to node '{name}'"
+                )
                 break
 
-            msg = f"No IP address assigned to node '{id}', retry after {interval} sec"
-            log.info(msg)
+            log.info(
+                f"No IP address assigned to node '{name}', retry after {interval} sec"
+            )
 
         if w.expired:
-            msg = f"No IP address assigned to node '{id}'"
+            msg = f"No IP address assigned to node '{name}'"
             log.error(msg)
             raise UnexpectedStateError(msg)
