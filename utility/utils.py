@@ -462,16 +462,34 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     """
     ceph_version = verify_io_on_site_node.exec_command(cmd="sudo ceph version")
     ceph_version = ceph_version[0].split()[4]
+    out = verify_io_on_site_node.exec_command(cmd="ceph orch ls | grep rgw")
+    rgw_name = out[0].split()[0]
     if ceph_version == "pacific":
         out = verify_io_on_site_node.exec_command(cmd="ceph orch ps | grep rgw")
         rgw_process_name = out[0].split()[0]
         out = verify_io_on_site_node.exec_command(
             cmd=f"ceph config set client.{rgw_process_name} rgw_sync_lease_period 120"
         )
-        out = verify_io_on_site_node.exec_command(cmd="ceph orch ls | grep rgw")
-        rgw_name = out[0].split()[0]
         verify_io_on_site_node.exec_command(cmd=f"ceph orch restart {rgw_name}")
         time.sleep(20)
+
+    for retry_count in range(3):
+        check_sync_status, err = verify_io_on_site_node.exec_command(
+            cmd="sudo radosgw-admin sync status"
+        )
+        log.info(check_sync_status)
+        if (
+            "failed to fetch master sync status" in check_sync_status
+            or "failed to retrieve sync info" in check_sync_status
+            or "Input/output error" in check_sync_status
+        ):
+            verify_io_on_site_node.exec_command(cmd=f"ceph orch restart {rgw_name}")
+            time.sleep(120)
+        else:
+            break
+    else:
+        raise Exception("input/output failure in sync status")
+
     check_sync_status, err = verify_io_on_site_node.exec_command(
         cmd="sudo radosgw-admin sync status"
     )
@@ -511,6 +529,7 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
                 f"sync is still in progress. with {retry} retries and sleep of {delay}secs between each retry"
             )
 
+    log.info(check_sync_status)
     # check metadata sync status
     if "metadata is behind" in check_sync_status:
         raise Exception("metadata sync is either in progress or stuck")
