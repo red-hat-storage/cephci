@@ -40,13 +40,14 @@ def kill_spdk_process(node: CephNode):
         node.exec_command(cmd=f"kill -9 {pid}", check_ec=False, sudo=True)
 
 
-def configure_spdk(node: CephNode):
+def configure_spdk(node: CephNode, rbd_pool):
     """SPDK installation on Gateway node.
 
     - Supports only RHEL-9.
 
     Args:
         node: Ceph Node object.
+        rbd_pool: RBD Pool
     """
     pkg_mgr = Package(nodes=[node])
     pkg_mgr.install("git")
@@ -63,6 +64,7 @@ def configure_spdk(node: CephNode):
 
     conf = update_cfg(out, "spdk_path", REPO_PATH)
     conf = update_cfg(conf, "addr", node.ip_address)
+    conf = update_cfg(conf, "pool", rbd_pool)
 
     _file = node.remote_file(
         sudo=True, file_name=f"{REPO_PATH}/ceph-nvmeof.conf", file_mode="w"

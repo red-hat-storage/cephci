@@ -5,6 +5,7 @@ tests:
       abort-on-fail: true
       module: install_prereq.py
       name: install ceph pre-requisites
+
   - test:
       abort-on-fail: true
       config:
@@ -66,7 +67,6 @@ tests:
 #  Configure Ceph NVMeoF gateway
 #  Configure Initiators
 #  Run IO on NVMe Targets
-
   - test:
       abort-on-fail: true
       config:
@@ -142,3 +142,25 @@ tests:
       module: test_ceph_nvmeof_gateway.py
       name: Performs IOs on targets from multiple subsystems
       polarion-id:
+
+  - test:
+      name: librbd VS nvmeof - Read and Write IO comparison bench test
+      description: Write and Read IO comparison on 10G image with 4kb-block-size
+      module: test_io_perf.py
+      config:
+        iterations: 1               # number of iterations to find out average
+        io_profiles:
+          - FIO_WRITE_BS_4k_IODepth8_LIBAIO
+          - FIO_READ_BS_4k_IODepth8_LIBAIO
+        io_exec:
+            -   proto: librbd
+                image:
+                    size: 10G
+                    count: 1
+                node: node7             # client node
+            -   proto: nvmeof
+                image:
+                    size: 10G
+                    count: 1
+                gw_node: node6          # gateway node
+                initiator_node: node7   # client node
