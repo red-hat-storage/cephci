@@ -54,28 +54,30 @@ class Container(Cli):
     def run(
         self,
         image=None,
-        name=None,
         rm=None,
+        name=None,
         env=None,
         volume=None,
         ports=None,
         restart=None,
-        detach=None,
+        detach_key=None,
+        detach=False,
         cmds=None,
     ):
         """Executes the provided command using podman
         Args
             image (str): Image name
+            rm (str): Image name to remove from background
             name (str): Container name
             env (list): List of environment variables
             volume (list): List of volumes
             ports (list): List of ports
-            rm (str): Image name to remove from background
-            detach (str): Image name to detach
             restart (str): Restart flag
+            detach_key (list): List of detach operation
+            detach (str): Image name to detach
             cmds (str): Other commands to be executed
         """
-        if not image or not rm:
+        if not image and not rm:
             raise NotSupportedError("Image or rm needs to be provided")
 
         cmd = f"{self.base_cmd} run"
@@ -101,10 +103,15 @@ class Container(Cli):
             env = " -e ".join(env)
             cmd += f" -e {env}"
 
+        if detach_key:
+            detach_key = (
+                detach_key if type(detach_key) in (list, tuple) else [detach_key]
+            )
+            detach_key = " -d ".join(detach_key)
+            cmd += f" {detach_key}"
+
         if detach:
-            detach = detach if type(detach) in (list, tuple) else [detach]
-            detach = " -d ".join(detach)
-            cmd += f" -d {detach}"
+            cmd += " -d"
 
         if rm:
             cmd += f" --rm {rm}"
