@@ -120,3 +120,15 @@ class Orch(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def redeploy(self, service):
+        """
+        Redeploy a service.
+        Args:
+          service (str): name of the service to be redeploy
+        """
+        cmd = f"{self.base_cmd} redeploy {service}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
