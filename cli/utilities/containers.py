@@ -54,71 +54,78 @@ class Container(Cli):
     def run(
         self,
         image=None,
+        name=None,
         rm=None,
         env=None,
         volume=None,
         ports=None,
-        detach_key=None,
         restart=None,
-        detach=False,
+        detach=None,
         cmds=None,
     ):
         """Executes the provided command using podman
         Args
             image (str): Image name
+            name (str): Container name
             env (list): List of environment variables
             volume (list): List of volumes
             ports (list): List of ports
-            rm (list): List of entries to be removed
-            detach (bool): Detach flag
+            rm (str): Image name to remove from background
+            detach (str): Image name to detach
             restart (str): Restart flag
             cmds (str): Other commands to be executed
         """
-        if not image and not rm:
-            raise NotSupportedError("Image name or rm option needs to be provided")
+        if not image or not rm:
+            raise NotSupportedError("Image or rm needs to be provided")
 
         cmd = f"{self.base_cmd} run"
+
+        if name:
+            cmd += f" --name {name}"
 
         if restart:
             cmd += f" --restart={restart}"
 
-        if rm:
-            cmd += f" --rm {rm}"
-        else:
-            cmd += f" {image}"  # Add image only if not an rm operation
-
-        if env:
-            env = env if type(env) in (list, tuple) else [env]
-            env = " -e ".join(env)
-            cmd += f" {env}"
+        if ports:
+            ports = ports if type(ports) in (list, tuple) else [ports]
+            ports = " -p ".join(ports)
+            cmd += f" -p {ports}"
 
         if volume:
             volume = volume if type(volume) in (list, tuple) else [volume]
             volume = " -v ".join(volume)
-            cmd += f" {volume}"
+            cmd += f" -v {volume}"
 
-        if ports:
-            ports = ports if type(ports) in (list, tuple) else [ports]
-            ports = " -p ".join(ports)
-            cmd += f" {ports}"
-
-        if detach_key:
-            detach_key = (
-                detach_key if type(detach_key) in (list, tuple) else [detach_key]
-            )
-            detach_key = " -d ".join(detach_key)
-            cmd += f" {detach_key}"
+        if env:
+            env = env if type(env) in (list, tuple) else [env]
+            env = " -e ".join(env)
+            cmd += f" -e {env}"
 
         if detach:
-            cmd += " -d"
+            detach = detach if type(detach) in (list, tuple) else [detach]
+            detach = " -d ".join(detach)
+            cmd += f" -d {detach}"
 
         if rm:
-            rm = rm if type(rm) in (list, tuple) else [rm]
-            rm = " --rm ".join(rm)
-            cmd += f" {rm}"
+            cmd += f" --rm {rm}"
+
+        if image:
+            cmd += f" {image}"
 
         if cmds:
             cmd += f" {cmds}"
 
         if self.execute(sudo=True, long_running=True, cmd=cmd):
             raise ContainerRegistryError(f"Failed to run {cmd} on container")
+
+    def pull(self, image):
+        """Pull container image
+
+        Args:
+            image (str): Container image url
+        """
+
+        cmd = f"{self.base_cmd} pull {image}"
+
+        if self.execute(sudo=True, long_running=True, cmd=cmd):
+            raise ContainerRegistryError(f"Failed to pull container image '{image}'")

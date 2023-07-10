@@ -1,4 +1,5 @@
-from cephci.utils.configs import get_images
+from json import loads
+
 from cli.cephadm.ansible import Ansible
 from cli.exceptions import AnsiblePlaybookExecutionError
 from cli.utilities.containers import Container
@@ -183,7 +184,7 @@ def create_self_signed_certificate(node):
 
 def create_link_to_domain_cert(node):
     """Creates a link to the domain certificate"""
-    cmd = f"ln -sf {DOMAIN_CERT_PATH} {REGISTRY_CERT_PATH}"
+    cmd = f"ln -s {DOMAIN_CERT_PATH} {DOMAIN_CERT_PATH_CERT}"
     out, _ = node.exec_command(cmd=cmd, sudo=True)
     if out:
         log.error("Failed to create a link to the domain certificate")
@@ -225,19 +226,38 @@ def validate_trusted_list(node):
     return True
 
 
-def copy_cert_to_secondary_node(node, secondary_node):
-    """Copy the certificate to anotheer node in the cluster"""
-    cmd = (
-        f"scp {DOMAIN_CERT_PATH} root@{secondary_node.hostname}:{CA_TRUST_ANCHORS_PATH}"
-    )
-    out, _ = node.exec_command(cmd=cmd, sudo=True)
-    if out:
-        log.error("Failed to copy the certificate to another node")
-        return False
+def copy_cert_to_secondary_node(node, secondary_nodes):
+    """Copy the certificate to another nodes in the cluster"""
+    for secondary_node in secondary_nodes:
+        cmd = f"scp {DOMAIN_CERT_PATH} root@{secondary_node.hostname}:{CA_TRUST_ANCHORS_PATH}"
+        out, _ = node.exec_command(cmd=cmd, sudo=True, timeout=800)
+        if out:
+            log.error(f"Failed to copy the certificate to {secondary_node} node")
+            return False
+
+        # Update the ca-trust
+        if not update_ca_trust(node):
+            log.error(f"Failed to update ca trust on {secondary_node} node")
+            return False
+
+        # Validate the trusted list
+        if not validate_trusted_list(node):
+            log.error(f"Failed to validate trusted list on {secondary_node} node")
+            return False
     return True
 
 
-def start_local_private_registry(node):
+def get_private_registry_image(node, username, password):
+    """Using the curl command, verify the images reside in the local registry
+    Args:
+        node (ceph.ceph.Ceph): CephNode or list of CephNode object
+    """
+    cmd = f"curl -u {username}:{password} https://{node.hostname}:5000/v2/_catalog"
+    out = loads(node.exec_command(sudo=True, cmd=cmd)[0])
+    return out
+
+
+def start_local_private_registry(node, detach):
     """Start local private registry"""
 
     volumes = [
@@ -246,29 +266,35 @@ def start_local_private_registry(node):
         f"{REGISTRY_CERTS}:/certs:z",
     ]
     env = [
-        "REGISTRY_AUTH=htpasswd",
-        "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm",
+        '"REGISTRY_AUTH=htpasswd"',
+        '"REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm"',
         "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd",
-        "REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt",
-        "REGISTRY_HTTP_TLS_KEY=/certs/domain.key",
+        '"REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt"',
+        '"REGISTRY_HTTP_TLS_KEY=/certs/domain.key"',
         "REGISTRY_COMPATIBILITY_SCHEMA1_ENABLED=true",
     ]
-    detach = ["registry:2"]
 
-    if not Container(node).run(
-        image=PRIVATE_REGISTRY_NAME,
+    Container(node).run(
+        name=PRIVATE_REGISTRY_NAME,
         volume=volumes,
         env=env,
         ports=PRIVATE_REGISTRY_PORT,
         restart="always",
-        detach_key=detach,
-    ):
-        log.error("Failed to start local secure private registry")
-        return False
+        detach=detach,
+    )
     return True
 
 
-def add_images_to_private_registry(node, username, password, registry, build_type):
+def add_images_to_private_registry(
+    node,
+    src_username,
+    src_password,
+    username,
+    password,
+    registry,
+    build_type,
+    images=None,
+):
     """Red Hat Ceph Storage 5 image, Prometheus images, and Dashboard image from the Red Hat Customer Portal
     to the private registry:"""
 
@@ -277,15 +303,14 @@ def add_images_to_private_registry(node, username, password, registry, build_typ
         f"{DOMAIN_CERT_PATH_CERT}:/certs/domain.cert:Z",
     ]
 
-    src_creds = f"{username}:{password}"
+    src_creds = f"{src_username}:{src_password}"
     dest_creds = f"{username}:{password}"
     dst_creds_dir = "./certs/"
 
-    # Get the required images here
-    images = get_images(build_type)
     for image in images:
-        src_image = f"docker://{registry}/{image}"
-        dst_image = f"docker://{node.hostname}:5000/{image}"
+        img_reg = image.replace(f"{registry}/", "")
+        src_image = f"{image}"
+        dst_image = f"{node.hostname}:5000/{img_reg}"
         skopeo_cmd = generate_skopeo_copy_cmd(
             src_image,
             dst_image,
@@ -312,9 +337,9 @@ def generate_skopeo_copy_cmd(
         cmd += " --remove-signatures"
     if src_creds:
         cmd += f" --src-creds {src_creds}"
-    if dest_creds:
-        cmd += f" --dest-creds {dest_creds}"
     if dst_cert_dir:
         cmd += f" --dest-cert-dir={dst_cert_dir}"
+    if dest_creds:
+        cmd += f" --dest-creds {dest_creds}"
     cmd += f" docker://{src_image} docker://{dst_image}"
     return cmd
