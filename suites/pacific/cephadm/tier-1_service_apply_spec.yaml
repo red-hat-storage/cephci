@@ -71,38 +71,38 @@ tests:
       config:
         steps:
           - config:
-            service: host
-            command: set_address
-            args:
-              node: node1
+              service: host
+              command: set_address
+              args:
+                node: node1
           - config:
-            service: host
-            command: label_add
-            args:
-              node: node1
-              labels: apply-all-labels
-          - config:
-            command: apply_spec
-            service: orch
-            specs:
-              - service_type: host
-                address: true
+              service: host
+              command: label_add
+              args:
+                node: node1
                 labels: apply-all-labels
-                nodes:
-                  - node2
-                  - node3
-              - service_type: host
-                address: true
-                labels: apply-all-labels
-                nodes:
-                  - node4
           - config:
-            command: apply
-            service: rbd-mirror
-            args:
-              placement:
-                nodes:
-                  - node3
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: host
+                  address: true
+                  labels: apply-all-labels
+                  nodes:
+                    - node2
+                    - node3
+                - service_type: host
+                  address: true
+                  labels: apply-all-labels
+                  nodes:
+                    - node4
+          - config:
+              command: apply
+              service: rbd-mirror
+              args:
+                placement:
+                  nodes:
+                    - node3
       abort-on-fail: true
   - test:
       name: Service deployment with spec
@@ -112,45 +112,45 @@ tests:
       config:
         steps:
           - config:
-            command: apply_spec
-            service: orch
-            specs:
-              - service_type: mon
-                placement:
-                  nodes:
-                    - node1
-                    - node2
-                    - node3
-              - service_type: mgr
-                placement:
-                  label: mgr
-              - service_type: prometheus
-                placement:
-                  count: 1
-                  nodes:
-                    - node1
-              - service_type: grafana
-                placement:
-                  nodes:
-                    - node1
-              - service_type: alertmanager
-                placement:
-                  count: 2
-                  label: alertmanager
-              - service_type: node-exporter
-                placement:
-                  host_pattern: "*"
-              - service_type: crash
-                placement:
-                  host_pattern: "*"
-              - service_type: osd
-                service_id: all-available-devices
-                placement:
-                  host_pattern: "*"
-                spec:
-                  data_devices:
-                    all: "true"                         # boolean as string
-                  encrypted: "true"                     # boolean as string
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: mon
+                  placement:
+                    nodes:
+                      - node1
+                      - node2
+                      - node3
+                - service_type: mgr
+                  placement:
+                    label: mgr
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 2
+                    label: alertmanager
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+                - service_type: osd
+                  service_id: all-available-devices
+                  placement:
+                    host_pattern: "*"
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
+                    encrypted: "true"                     # boolean as string
           - config:
               command: shell
               args:                 # sleep to get all services deployed
