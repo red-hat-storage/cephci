@@ -1,0 +1,251 @@
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 10.8.128.0/21
+      nodes:
+        - hostname: mero001
+          id: node1
+          ip: 10.8.129.221
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - mds
+          root_password: passwd
+        - hostname: mero003
+          id: node2
+          ip: 10.8.129.223
+          role:
+            - mds
+            - mgr
+            - mon
+          root_password: passwd
+        - hostname: mero004
+          id: node3
+          ip: 10.8.129.224
+          role:
+            - mds
+            - mon
+          root_password: passwd
+        - hostname: mero005
+          id: node4
+          ip: 10.8.129.225
+          role:
+            - osd
+            - rgw
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+        - hostname: mero007
+          id: node5
+          ip: 10.8.129.227
+          role:
+            - osd
+            - rgw
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/nvme0n1
+        - hostname: mero009
+          id: node6
+          ip: 10.8.129.229
+          role:
+            - osd
+            - rgw
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/nvme0n1
+        - hostname: mero011
+          id: node7
+          ip: 10.8.129.231
+          role:
+            - osd
+            - rgw
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+            - /dev/sdn
+            - /dev/nvme0n1
+        - hostname: mero013
+          id: node8
+          ip: 10.8.129.233
+          role:
+            - mds
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdm
+            - /dev/nvme0n1
+        - hostname: mero014
+          id: node9
+          ip: 10.8.129.234
+          role:
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/nvme0n1
+        - hostname: mero015
+          id: node10
+          ip: 10.8.129.235
+          role:
+            - client
+          root_password: passwd
+        - hostname: mero016
+          id: node11
+          ip: 10.8.129.236
+          role:
+            - client
+          root_password: passwd
+        - hostname: mero017
+          id: node12
+          ip: 10.8.129.237
+          role:
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/nvme0n1
+        - hostname: mero018
+          id: node13
+          ip: 10.8.129.238
+          role:
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+        - hostname: mero019
+          id: node14
+          ip: 10.8.129.239
+          role:
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/nvme0n1
+        - hostname: mero020
+          id: node15
+          ip: 10.8.129.240
+          role:
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/nvme0n1
