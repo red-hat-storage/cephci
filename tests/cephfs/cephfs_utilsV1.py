@@ -70,7 +70,7 @@ class FsUtils(object):
             cmd = "yum install -y --nogpgcheck " + " ".join(pkgs)
             client.node.exec_command(sudo=True, cmd=cmd, long_running=True)
             client.node.exec_command(
-                sudo=True, cmd="pip3 install xattr", long_running=True
+                sudo=True, cmd="pip3 install xattr numpy scipy", long_running=True
             )
             out, rc = client.node.exec_command(sudo=True, cmd="ls /home/cephuser")
             if "smallfile" not in out:
