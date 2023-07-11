@@ -6,6 +6,7 @@ from .config import Config
 from .config_key import ConfigKey
 from .crash import Crash
 from .mgr import Mgr
+from .nfs.nfs import Nfs
 from .orch.orch import Orch
 from .osd.osd import Osd
 from .rgw.rgw import Rgw
@@ -25,6 +26,7 @@ class Ceph(Cli):
         self.config_key = ConfigKey(nodes, self.base_cmd)
         self.config = Config(nodes, self.base_cmd)
         self.crash = Crash(nodes, self.base_cmd)
+        self.nfs = Nfs(nodes, self.base_cmd)
         # ToDo: Renaming as _osd due to conflicting method name. Fix in progress
         self._osd = Osd(nodes, self.base_cmd)
 
