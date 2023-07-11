@@ -204,6 +204,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rbd
+        - name: "RGW Tier-1 multisite_multirealm_upgrade-5-to-latest"
+          execution_time: ""
+          suite: "suites/pacific/rgw/tier-1_rgw_multisite_multirealm_upgrade-5-to-latest.yaml"
+          global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
     tier-2:
       stage-1:
         - name: "tier-2_rbd_cli_regression"
@@ -544,10 +554,10 @@ pipelines:
           execution_time: "1h 22m 52s"
           suite: "suites/pacific/rgw/tier-4-rgw.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-          platform: "rhel-8"
+          platform: "rhel-9"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
   schedule:
@@ -645,26 +655,6 @@ pipelines:
           metadata:
             - rgw
       stage-3:
-        - name: "tier-1_rgw_ms_upgrade_5-2GA_to_6x_latest"
-          execution_time: ""
-          suite: "suites/quincy/rgw/tier-1_rgw_ms_upgrade_5-2GA_to_6x_latest.yaml"
-          global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rgw
-        - name: "tier-1_rgw_upgrade_5-2GA_to_6x_latest"
-          execution_time: ""
-          suite: "suites/quincy/rgw/tier-1_rgw_upgrade_5-2GA_to_6x_latest.yaml"
-          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rgw
         - name: "tier-1_rgw_upgrade_5-3_to_6x_latest"
           execution_time: ""
           suite: "suites/quincy/rgw/tier-1_rgw_upgrade_5-3_to_6x_latest.yaml"
@@ -689,6 +679,17 @@ pipelines:
           execution_time: "3h 19m 29s"
           suite: "suites/quincy/rgw/tier-1_rgw_ms_archive_test-upgrade-5-to-latest.yaml"
           global-conf: "conf/pacific/rgw/rgw_ms_archive.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+      stage-4:
+        - name: "tier-1_rgw_multisite"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-1_rgw_multisite.yaml"
+          global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
@@ -1001,6 +1002,7 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
           metadata:
             - rgw
+      stage-7:
         - name: "Tier-2 cephfs upgrade 5-3 to 6-0"
           execution_time: "54m 21s"
           suite: "suites/quincy/cephfs/tier-0_cephfs_upgrade_53_to_6x.yaml"
@@ -1011,7 +1013,6 @@ pipelines:
           metadata:
             - cephfs
             - upgrades
-      stage-7:
         - name: "Testing RADOS regression for slow op requests"
           execution_time: "1h 40m 1s"
           suite: "suites/quincy/rados/tier-2_rados_test-slow-op-requests.yaml"
@@ -1049,6 +1050,26 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+      stage-8:
+        - name: "test-rgw-ingress-with-and-without-ssl-tier-2"
+          execution_time: ""
+          suite: "suites/pacific/rgw/tier-2_rgw_ingress_with_ssl.yaml"
+          global-conf: "conf/pacific/rgw/tier-1_rgw_cephadm.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-rgw-ms-with-archive"
+          execution_time: "2h 18m 17s"
+          suite: "suites/pacific/rgw/tier-2_rgw_ms-archive.yaml"
+          global-conf: "conf/pacific/rgw/rgw_ms_archive.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
   rc:
     tier-0:
       stage-1:

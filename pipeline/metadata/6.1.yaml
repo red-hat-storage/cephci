@@ -200,6 +200,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+        - name: "RGW Tier-1 multisite_multirealm_upgrade-5-to-latest"
+          execution_time: ""
+          suite: "suites/pacific/rgw/tier-1_rgw_multisite_multirealm_upgrade-5-to-latest.yaml"
+          global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
     tier-2:
       stage-1:
         - name: "tier-2_rbd_cli_regression"
@@ -550,10 +560,30 @@ pipelines:
           execution_time: "1h 22m 52s"
           suite: "suites/pacific/rgw/tier-4-rgw.yaml"
           global-conf: "conf/pacific/rgw/tier-0_rgw.yaml"
-          platform: "rhel-8"
+          platform: "rhel-9"
           inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-kafka-ssl-bucket-notifications"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-ssl.yaml"
+          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-kafka-sasl-sanity-bucket-notifications"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-sasl-sanity.yaml"
+          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
   schedule:
@@ -661,26 +691,6 @@ pipelines:
           metadata:
             - rgw
       stage-3:
-        - name: "tier-1_rgw_ms_upgrade_5-2GA_to_6x_latest"
-          execution_time: ""
-          suite: "suites/quincy/rgw/tier-1_rgw_ms_upgrade_5-2GA_to_6x_latest.yaml"
-          global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rgw
-        - name: "tier-1_rgw_upgrade_5-2GA_to_6x_latest"
-          execution_time: ""
-          suite: "suites/quincy/rgw/tier-1_rgw_upgrade_5-2GA_to_6x_latest.yaml"
-          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rgw
         - name: "tier-1_rgw_upgrade_5-3_to_6x_latest"
           execution_time: ""
           suite: "suites/quincy/rgw/tier-1_rgw_upgrade_5-3_to_6x_latest.yaml"
@@ -715,6 +725,16 @@ pipelines:
         - name: "tier-1_rgw_ms_upgrade_6-0GA_to_6x_latest"
           execution_time: "3h 44m 19s"
           suite: "suites/quincy/rgw/tier-1_rgw_ms_upgrade_6-0GA_to_6x_latest.yaml"
+          global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "tier-1_rgw_multisite"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-1_rgw_multisite.yaml"
           global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
           platform: "rhel-9"
           inventory:
@@ -918,36 +938,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rados
-        - name: "Tier-2 RADOS test clay ecpool"
-          execution_time: ""
-          suite: "suites/quincy/rados/tier-2_rados_test-clay-ecpool.yaml"
-          global-conf: "conf/quincy/rados/11-node-cluster.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rados
-        - name: "Tier-4 RADOS tests"
-          execution_time: ""
-          suite: "suites/quincy/rados/tier-4_rados_tests.yaml"
-          global-conf: "conf/quincy/rados/11-node-cluster.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rados
-        - name: "Tier-4 RADOS test pool osd recovery"
-          execution_time: ""
-          suite: "suites/quincy/rados/tier-4_rados_test-pool-osd-recovery.yaml"
-          global-conf: "conf/quincy/rados/13-node-cluster.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rados
       stage-5:
         - name: "RADOS regression testing for Scrubbing scenarios"
           execution_time: ""
@@ -995,16 +985,6 @@ pipelines:
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
-          metadata:
-            - rgw
-        - name: "test-rgw-ms-dbr-disable"
-          execution_time: "1h 59m 49s"
-          suite: "suites/quincy/rgw/tier-2_rgw_ms-dbr-disable.yaml"
-          global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
       stage-6:
@@ -1055,6 +1035,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rbd
+      stage-7:
         - name: "RADOS paramter checking"
           execution_time: "60m"
           suite: "suites/quincy/rados/tier-2_rados_test_parameters.yaml"
@@ -1064,6 +1045,76 @@ pipelines:
             openstack: "conf/inventory/rhel-9-latest.yaml"
           metadata:
             - rados
+        - name: "Tier-2 RADOS test clay ecpool"
+          execution_time: ""
+          suite: "suites/quincy/rados/tier-2_rados_test-clay-ecpool.yaml"
+          global-conf: "conf/quincy/rados/11-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rados
+        - name: "Tier-4 RADOS tests"
+          execution_time: ""
+          suite: "suites/quincy/rados/tier-4_rados_tests.yaml"
+          global-conf: "conf/quincy/rados/11-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rados
+        - name: "Tier-4 RADOS test pool osd recovery"
+          execution_time: ""
+          suite: "suites/quincy/rados/tier-4_rados_test-pool-osd-recovery.yaml"
+          global-conf: "conf/quincy/rados/13-node-cluster.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rados
+        - name: "test-rgw-ms-dbr-disable"
+          execution_time: "1h 59m 49s"
+          suite: "suites/quincy/rgw/tier-2_rgw_ms-dbr-disable.yaml"
+          global-conf: "conf/quincy/rgw/rgw_multisite.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+      stage-8:
+        - name: "test-kafka-sasl-scheduled-bucket-notifications"
+          execution_time: ""
+          suite: "suites/quincy/rgw/tier-2_rgw_test-bucket-notifications-kafka-sasl-scheduled.yaml"
+          global-conf: "conf/quincy/rgw/tier-0_rgw.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-rgw-ingress-with-and-without-ssl-tier-2"
+          execution_time: ""
+          suite: "suites/pacific/rgw/tier-2_rgw_ingress_with_ssl.yaml"
+          global-conf: "conf/pacific/rgw/tier-1_rgw_cephadm.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+          metadata:
+            - rgw
+        - name: "test-rgw-ms-with-archive"
+          execution_time: "2h 18m 17s"
+          suite: "suites/pacific/rgw/tier-2_rgw_ms-archive.yaml"
+          global-conf: "conf/pacific/rgw/rgw_ms_archive.yaml"
+          platform: "rhel-9"
+          inventory:
+            openstack: "conf/inventory/rhel-9-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
+          metadata:
+            - rgw
 
   rc:
     tier-0:
