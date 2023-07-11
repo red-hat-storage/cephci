@@ -30,6 +30,7 @@ class fs_io:
         self.io_tool = fs_config.get("io_tool")
         self.pool = ""
         self.mounting_dir = fs_config.get("mounting_dir", None)
+        self.batch_size = fs_config.get("batch_size", 10)
         if not self.mounting_dir:
             self.mounting_dir = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -83,6 +84,12 @@ class fs_io:
         fs_details = FsUtils.get_fs_info(self.client, self.file_system)
         self.pool = fs_details["data_pool_name"]
         mounting_dir = self.mount_fs()
+
         start_io(
-            self, mounting_dir, docker_compose=True, compose_file="fs_compose.yaml"
+            self,
+            mounting_dir,
+            docker_compose=True,
+            compose_file="fs_compose.yaml",
+            batch_size=self.batch_size,
+            **kwargs,
         )
