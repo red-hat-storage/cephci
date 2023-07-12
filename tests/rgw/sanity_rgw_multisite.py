@@ -68,11 +68,16 @@ from utility.utils import (
 log = Log(__name__)
 
 TEST_DIR = {
+    "v1": {
+        "script": "/ceph-qe-scripts/rgw/v1/tests/multisite/",
+        "lib": "/ceph-qe-scripts/rgw/v1/lib/",
+        "config": "/ceph-qe-scripts/rgw/v1/tests/multisite/yamls/",
+    },
     "v2": {
         "script": "/ceph-qe-scripts/rgw/v2/tests/s3_swift/",
         "lib": "/ceph-qe-scripts/rgw/v2/lib/",
         "config": "/ceph-qe-scripts/rgw/v2/tests/s3_swift/multisite_configs/",
-    }
+    },
 }
 
 
