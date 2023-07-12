@@ -195,7 +195,7 @@ def run(ceph_cluster, **kwargs) -> int:
     Returns:
         0 on Success and raises Exception on Failure.
     """
-    LOG.info("preaparing and pushing cosbench workload to fill 30% of the cluster")
+    LOG.info("preparing and pushing cosbench workload to fill 30% of the cluster")
     controller = get_nodes_by_ids(ceph_cluster, kwargs["config"]["controllers"])[0]
     client = ceph_cluster.get_nodes(role="installer")[0]
     rgw = ceph_cluster.get_nodes(role="rgw")[0]
