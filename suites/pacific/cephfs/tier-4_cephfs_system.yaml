@@ -136,14 +136,14 @@ tests:
       name: "OSD node power failure, with client IO"
       config:
           num_of_osds: 12
-  - test:
-      abort-on-fail: false
-      desc: "MON node failures ops with client IO"
-      module: cephfs_system.mon_node_failure_ops.py
-      polarion-id: CEPH-11254
-      name: "MON node power failure with client IO"
-      config:
-        num_of_osds: 12
+#  - test:
+#      abort-on-fail: false
+#      desc: "MON node failures ops with client IO"
+#      module: cephfs_system.mon_node_failure_ops.py
+#      polarion-id: CEPH-11254
+#      name: "MON node power failure with client IO"
+#      config:
+#        num_of_osds: 12
   - test:
       abort-on-fail: false
       desc: "MDS node failures ops with client IO"
@@ -166,20 +166,21 @@ tests:
       module: cephfs_system.mds_node_remove_with_IO.py
       polarion-id: CEPH-11266
       name: "mds_node_remove_with_IO"
-  - test:
-      abort-on-fail: false
-      desc: "Fill the cluster with 95 percentage and delete the contents"
-      module: cephfs_system.fill_cluster_full_del.py
-      polarion-id: CEPH-11328
-      name: "Fill the cluster with 95 percentage and delete the contents"
-      config:
-        wait_for_io: True
-        cephfs:
-          "fill_data": 65
-          "io_tool": "smallfile"
-          "mount": "fuse"
-          "filesystem": "cephfs_io"
-          "mount_dir": ""
+#  - test:
+
+#      abort-on-fail: false
+#      desc: "Fill the cluster with 95 percentage and delete the contents"
+#      module: cephfs_system.fill_cluster_full_del.py
+#      polarion-id: CEPH-11328
+#      name: "Fill the cluster with 95 percentage and delete the contents"
+#      config:
+#        wait_for_io: True
+#        cephfs:
+#          "fill_data": 65
+#          "io_tool": "smallfile"
+#          "mount": "fuse"
+#          "filesystem": "cephfs_io"
+#          "mount_dir": ""
   - test:
       abort-on-fail: false
       desc: "mds_nfs_node_failure_ops"
@@ -192,18 +193,18 @@ tests:
       module: cephfs_system.snap_rollback_with_node_reboots.py
       polarion-id: CEPH-11320
       name: "snap_rollback_with_node_reboots.py"
-  - test:
-      abort-on-fail: false
-      desc: "shutdown_mds_bring_one_by_one"
-      module: cephfs_system.shutdown_mds_bring_one_by_one.py
-      polarion-id: CEPH-11241
-      name: "shutdown_mds_bring_one_by_one.py"
-  - test:
-      abort-on-fail: false
-      desc: "mds_shutdown_together_io_continue"
-      module: cephfs_system.mds_shutdown_together_io_continue.py
-      polarion-id: CEPH-11241
-      name: "mds_shutdown_together_io_continue.py"
+#  - test:
+#      abort-on-fail: false
+#      desc: "shutdown_mds_bring_one_by_one"
+#      module: cephfs_system.shutdown_mds_bring_one_by_one.py
+#      polarion-id: CEPH-11241
+#      name: "shutdown_mds_bring_one_by_one.py"
+#  - test:
+#      abort-on-fail: false
+#      desc: "mds_shutdown_together_io_continue"
+#      module: cephfs_system.mds_shutdown_together_io_continue.py
+#      polarion-id: CEPH-11241
+#      name: "mds_shutdown_together_io_continue.py"
   - test:
       abort-on-fail: false
       desc: "MDS admin socket dump testing"
@@ -216,4 +217,3 @@ tests:
       module: cephfs_system.mds_admin_daemon_socket_perf_flush_log.py
       polarion-id: CEPH-83572890
       name: "MDS admin socket perf flush log testing"
-

@@ -45,7 +45,7 @@ def smallfile_io(client, **kwargs):
             cmd=f"cd {compose_dir} ; podman-compose -f {kwargs.get('compose_file')} config --services",
         )
         services = out.strip().split("\n")
-        total_services = len(services) - 1
+        total_services = len(services) - 1 if len(services) != 1 else 1
         BATCH_SIZE = 10
         service_prefix = "fs_compose.yaml_smallfile_"
         failed_containers = []

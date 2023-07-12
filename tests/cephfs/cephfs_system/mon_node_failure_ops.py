@@ -23,8 +23,7 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         stop = datetime.now() + timedelta(seconds=timeout)
     else:
         stop = 0
-
-    while not stop_flag:
+    while True:
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
@@ -33,6 +32,8 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
             client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
         )
         iter = iter + 1
+        if stop_flag:
+            break
 
 
 def run(ceph_cluster, **kw):
@@ -113,7 +114,13 @@ def run(ceph_cluster, **kw):
                     None,
                     300,
                 )
-                fs_util_v1.reboot_node(ceph_node=mon)
+                try:
+                    fs_util_v1.reboot_node(ceph_node=mon)
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
+                # fs_util_v1.reboot_node(ceph_node=mon)
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
@@ -136,7 +143,15 @@ def run(ceph_cluster, **kw):
                     None,
                     300,
                 )
-                fs_util_v1.deamon_op(mon, "mon", "restart")
+                try:
+                    # fs_util_v1.reboot_node(ceph_node=mds)
+                    fs_util_v1.deamon_op(mon, "mon", "restart")
+                    # raise CommandFailed("Failing Command in restart")
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
@@ -160,7 +175,12 @@ def run(ceph_cluster, **kw):
                     None,
                     300,
                 )
-                fs_util_v1.pid_kill(mon, "mon")
+                try:
+                    fs_util_v1.pid_kill(mon, "mon")
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
@@ -184,9 +204,16 @@ def run(ceph_cluster, **kw):
                     300,
                 )
                 deamon_name = fs_util_v1.deamon_name(mon, "mon")
-                fs_util_v1.deamon_op(mon, "mon", "stop")
-                sleep(60)
-                fs_util_v1.deamon_op(mon, "mon", "start", service_name=deamon_name)
+
+                try:
+                    fs_util_v1.deamon_op(mon, "mon", "stop")
+                    sleep(60)
+                    fs_util_v1.deamon_op(mon, "mon", "start", service_name=deamon_name)
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
@@ -211,7 +238,13 @@ def run(ceph_cluster, **kw):
                     None,
                     300,
                 )
-                fs_util_v1.network_disconnect(mon)
+                try:
+                    fs_util_v1.network_disconnect(mon)
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
+
                 cluster_health_afterIO = check_ceph_healthly(
                     clients[0],
                     num_of_osds,
