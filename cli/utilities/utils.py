@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import datetime
 from json import loads
 from subprocess import PIPE, Popen
 from threading import Thread
@@ -522,3 +523,42 @@ def get_disk_devlinks(node, disk):
         elif "by-path" in path:
             by_path.append(path)
     return by_id, by_path
+
+
+def get_process_id(node, process):
+    """
+    Returns the process of the given process
+    Args:
+        node (ceph): Node where the cmd has to be executed
+        process (str): Name of the process
+    """
+    cmd = f"pidof {process}"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    return out
+
+
+def check_coredump_generated(node, coredump_path, created_after):
+    """
+    Checks if the coredump file is generated in the given location
+    Args:
+        node (ceph): Node where coredump has to be checked
+        coredump_path (str): Path where coredump is found
+        created_after (datetime): Time from when coredump has to be checked.
+    """
+    # Get the latest file in the cordump folder
+    cmd = f"ls -Art {coredump_path} | tail -n 1"
+    file_name, _ = node.exec_command(cmd=cmd, sudo=True)
+
+    # Get the file creation time
+    cmd = f"stat -c '%w' {file_name}"
+    created_time, _ = node.exec_command(cmd=cmd, sudo=True)
+
+    # Remove timezone and fractional seconds from time
+    # E.g : => 2023-06-16 10:15:38.186183240 +0530
+    created_time = created_time.split(".")[0]
+    created_time = datetime.strptime(created_time, "%Y-%m-%d %H:%M:%S")
+
+    # Verify if the file is created after the given time
+    if created_time > created_after:
+        return False
+    return True
