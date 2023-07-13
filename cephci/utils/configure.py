@@ -216,10 +216,10 @@ def update_ca_trust(node):
     return True
 
 
-def validate_trusted_list(node):
+def validate_trusted_list(node, secondary_node):
     """Verify trust list is updated with hostname"""
     cmd = f"trust list | grep -i {node.hostname}"
-    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    out, _ = secondary_node.exec_command(cmd=cmd, sudo=True)
     if node.hostname not in out:
         log.error("Trust list not updated")
         return False
@@ -232,17 +232,21 @@ def copy_cert_to_secondary_node(node, secondary_nodes):
         cmd = f"scp {DOMAIN_CERT_PATH} root@{secondary_node.hostname}:{CA_TRUST_ANCHORS_PATH}"
         out, _ = node.exec_command(cmd=cmd, sudo=True, timeout=800)
         if out:
-            log.error(f"Failed to copy the certificate to {secondary_node} node")
+            log.error(
+                f"Failed to copy the certificate to {secondary_node.hostname} node"
+            )
             return False
 
         # Update the ca-trust
-        if not update_ca_trust(node):
-            log.error(f"Failed to update ca trust on {secondary_node} node")
+        if not update_ca_trust(secondary_node):
+            log.error(f"Failed to update ca trust on {secondary_node.hostname} node")
             return False
 
         # Validate the trusted list
-        if not validate_trusted_list(node):
-            log.error(f"Failed to validate trusted list on {secondary_node} node")
+        if not validate_trusted_list(node, secondary_node):
+            log.error(
+                f"Failed to validate trusted list on {secondary_node.hostname} node"
+            )
             return False
     return True
 
@@ -257,7 +261,7 @@ def get_private_registry_image(node, username, password):
     return out
 
 
-def start_local_private_registry(node, detach):
+def start_local_private_registry(node, image):
     """Start local private registry"""
 
     volumes = [
@@ -276,11 +280,12 @@ def start_local_private_registry(node, detach):
 
     Container(node).run(
         name=PRIVATE_REGISTRY_NAME,
+        image=image,
         volume=volumes,
         env=env,
         ports=PRIVATE_REGISTRY_PORT,
         restart="always",
-        detach=detach,
+        detach=True,
     )
     return True
 

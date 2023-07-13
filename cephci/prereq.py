@@ -22,7 +22,6 @@ from cephci.utils.configure import (
     set_registry_credentials,
     setup_ssh_keys,
     start_local_private_registry,
-    validate_trusted_list,
 )
 from cli.exceptions import NodeConfigError
 from cli.utilities.containers import Registry
@@ -176,7 +175,7 @@ def setup_private_container_registry(
     build_type,
     private_reg_username,
     private_reg_password,
-    detach,
+    docker_reg_image,
     images=None,
 ):
     """
@@ -191,7 +190,7 @@ def setup_private_container_registry(
         build_type (str): build type
         private_reg_username (str): private registry username
         private_reg_password (str): private registry password
-        detach (str): detach/docker-registry image name
+        docker_reg_image (str): docker-registry image name
         images (str): list of images
     """
 
@@ -218,23 +217,18 @@ def setup_private_container_registry(
     if not add_cert_to_trusted_list(installer):
         return False
 
-    # Validate the truster list is updated
-    if not validate_trusted_list(installer):
-        return False
-
     # Step 6: Copy the certificate to any nodes that will access the private registry for installation and update the
     # trusted list
     if not copy_cert_to_secondary_node(installer, nodes):
         return False
 
     # Step 7: Login to the registry
-    for node in nodes:
-        Registry(node).login(
-            registry=registry, username=reg_username, password=reg_password
-        )
+    Registry(installer).login(
+        registry=registry, username=reg_username, password=reg_password
+    )
 
     # Step 8: Start the local secure private registry
-    if not start_local_private_registry(installer, detach):
+    if not start_local_private_registry(installer, docker_reg_image):
         return False
 
     # Step 9: Add images to the private registry
@@ -251,6 +245,12 @@ def setup_private_container_registry(
         return False
 
     # Step 10: List down private registry images
+    if not get_private_registry_image(
+        installer, private_reg_username, private_reg_password
+    ):
+        return False
+
+    # Step 11: List down private registry images
     if not get_private_registry_image(
         installer, private_reg_username, private_reg_password
     ):
