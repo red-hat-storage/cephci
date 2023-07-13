@@ -104,6 +104,36 @@ tests:
       name: configure client
 
   - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
       name: Nfs Ganesha File Lock
       module: nfs_verify_file_lock.py
       desc: Perform locking on same file from 2 different clients
@@ -125,6 +155,16 @@ tests:
       name: Nfs Ganesha Bonnie
       module: nfs_verify_bonnie.py
       desc: Perform bonnie tests on the Nfs cluster
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+
+
+  - test:
+      name: Nfs Verify Readdir Ops
+      module: nfs_verify_readdir_ops.py
+      desc: Perform readir operation from clients
       polarion-id:
       abort-on-fail: false
       config:
