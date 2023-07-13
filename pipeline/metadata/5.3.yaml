@@ -180,6 +180,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rbd
+        - name: "RGW Tier-1 multisite_multirealm_upgrade-5-to-latest"
+          execution_time: ""
+          suite: "suites/pacific/rgw/tier-1_rgw_multisite_multirealm_upgrade-5-to-latest.yaml"
+          global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rgw
     tier-2:
       stage-1:
         - name: "Tier-2 Cephfs test clients"
@@ -567,6 +577,7 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
+      stage-8:
         - name: "Tier-2 RGW bucket_lc_multipart_object_expired"
           execution_time: "48m 37s"
           suite: "suites/pacific/rgw/tier-2_rgw_bucket_lc_multipart_object_expired.yaml"
@@ -1163,6 +1174,16 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rbd
+        - name: "tier-2_rgw_test-multisite-metadata-sync"
+          execution_time: "1h 21m 12s"
+          suite: "suites/pacific/rgw/tier-2_rgw_test-multisite-metadata-sync.yaml"
+          global-conf: "conf/pacific/rgw/rgw_multisite.yaml"
+          platform: "rhel-8"
+          inventory:
+            openstack: "conf/inventory/rhel-8-latest.yaml"
+            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
+          metadata:
+            - rgw
   rc:
     tier-0:
       stage-1:
