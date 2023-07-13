@@ -125,3 +125,12 @@ images:
 
   quincy:
     - rhceph/rhceph-6-rhel9:latest
+
+reports:
+  polarion:
+    url: <fake-serverurl>
+    svn_repo: <fake-svnrepourl>
+    user: <fake-username>
+    token: <fake-token>
+    default_project: <fake-project>
+    cert_path: <fake-certificate-path>
