@@ -83,6 +83,30 @@ class Package(Cli):
         elif out:
             raise PackageError(f"Failed to install package '{pkg}'")
 
+    def remove(self, pkg, nogpgcheck=False, env_vars={}):
+        """Remove a package or packages
+
+        Args:
+            pkg (str): package needs to be removed
+            env_vars (dict): dictiory with environment variables
+        """
+
+        cmd = ""
+        if env_vars:
+            for k, v in env_vars.items():
+                cmd += f"{k}={v} "
+
+        cmd += f"{self.manager} remove -y {pkg}"
+        if nogpgcheck:
+            cmd += " --nogpgcheck"
+
+        out = self.execute(sudo=True, long_running=True, cmd=cmd)
+        if isinstance(out, dict):
+            if not verify_execution_status(out, pkg):
+                raise PackageError(f"Failed to remove package '{pkg}'")
+        elif out:
+            raise PackageError(f"Failed to remove package '{pkg}'")
+
     def upgrade(self, pkg):
         """upgrade a package or packages
 
