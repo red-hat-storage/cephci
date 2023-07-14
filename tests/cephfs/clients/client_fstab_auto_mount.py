@@ -95,14 +95,15 @@ def run(ceph_cluster, **kw):
         client1[0].exec_command(
             sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
         )
+        fs_name = "cephfs"
         for mon in fs_util_v1.mons:
-            FsUtilsV1.deamon_op(mon, "mon", "restart")
+            FsUtilsV1.deamon_op(mon, "mon.ceph", "restart")
         for mon in fs_util_v1.mons:
-            FsUtilsV1.check_deamon_status(mon, "mon", "active")
+            FsUtilsV1.check_deamon_status(mon, "mon.ceph", "active")
         for mds in fs_util_v1.mdss:
-            FsUtilsV1.deamon_op(mds, "mds", "restart")
+            FsUtilsV1.deamon_op(mds, rf"mds\.{fs_name}\.", "restart")
         for mds in fs_util_v1.mdss:
-            FsUtilsV1.check_deamon_status(mds, "mds", "active")
+            FsUtilsV1.check_deamon_status(mds, rf"mds\.{fs_name}\.", "active")
         client1[0].exec_command(
             cmd="sudo mkdir -p %s%s" % (client_info["mounting_dir"], dir_name)
         )
@@ -328,11 +329,11 @@ def run(ceph_cluster, **kw):
                 sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
             )
             for mon in fs_util_v1.mons:
-                FsUtilsV1.deamon_op(mon, "mon", "restart")
+                FsUtilsV1.deamon_op(mon, "mon.ceph", "restart")
             for mon in fs_util_v1.mons:
                 FsUtilsV1.check_deamon_status(mon, "mon", "active")
             for mds in fs_util_v1.mdss:
-                FsUtilsV1.deamon_op(mds, "mds", "restart")
+                FsUtilsV1.deamon_op(mds, rf"mds\.{fs_name}\.", "restart")
             for mds in fs_util_v1.mdss:
                 FsUtilsV1.check_deamon_status(mds, "mds", "active")
         else:
@@ -344,11 +345,11 @@ def run(ceph_cluster, **kw):
                 sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
             )
             for mon in fs_util_v1.mons:
-                FsUtilsV1.deamon_op(mon, "mon", "restart")
+                FsUtilsV1.deamon_op(mon, "mon.ceph", "restart")
             for mon in fs_util_v1.mons:
                 FsUtilsV1.check_deamon_status(mon, "mon", "active")
             for mds in fs_util_v1.mdss:
-                FsUtilsV1.deamon_op(mds, "mds", "restart")
+                FsUtilsV1.deamon_op(mds, rf"mds\.{fs_name}\.", "restart")
             for mds in fs_util_v1.mdss:
                 FsUtilsV1.check_deamon_status(mds, "mds", "active")
 
