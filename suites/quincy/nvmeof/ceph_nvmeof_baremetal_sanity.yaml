@@ -156,11 +156,11 @@ tests:
             -   proto: librbd
                 image:
                     size: 10G
-                    count: 1
+                    count: 10
                 node: node7             # client node
             -   proto: nvmeof
                 image:
                     size: 10G
-                    count: 1
+                    count: 10
                 gw_node: node6          # gateway node
                 initiator_node: node7   # client node
