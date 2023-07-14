@@ -41,3 +41,6 @@ globals:
       node4:
         role:
           - client
+      node5:
+        role:
+          - client
