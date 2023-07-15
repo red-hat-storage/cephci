@@ -30,10 +30,11 @@ def smallfile_io(client, **kwargs):
                     {
                         "name": f"{kwargs.get('compose_file')}_smallfile_{i}",
                         "command": f"git clone https://github.com/distributed-system-analysis/smallfile.git;"
-                        f"mkdir -p /app_test_io/dir_{i};python3 smallfile/smallfile_cli.py --operation {op} "
+                        f"mkdir -p /app_test_io/dir_{client.node.hostname}_{i};python3 smallfile/smallfile_cli.py "
+                        f"--operation {op} "
                         f"--threads {int(small_config.get('threads'))} --file-size {small_config.get('file_size')} "
                         f"--files {small_config.get('files')} --top "
-                        f"/app_test_io/dir_{i}",
+                        f"/app_test_io/dir_{client.node.hostname}_{i}",
                         "volumes": [f"{mounting_dir}:/app_test_io"],
                     }
                 )
@@ -46,7 +47,7 @@ def smallfile_io(client, **kwargs):
         )
         services = out.strip().split("\n")
         total_services = len(services) - 1 if len(services) != 1 else 1
-        BATCH_SIZE = 10
+        BATCH_SIZE = kwargs.get("batch_size", 10)
         service_prefix = "fs_compose.yaml_smallfile_"
         failed_containers = []
         for i in range(0, total_services, BATCH_SIZE):
@@ -125,6 +126,7 @@ def start_io(io_obj, mounting_dir, **kwargs):
                     mounting_dir=mounting_dir,
                     docker_compose=kwargs.get("docker_compose", True),
                     compose_file=kwargs.get("compose_file"),
+                    batch_size=kwargs.get("batch_size", 10),
                 )
             return 0
         elif io_obj.timeout:

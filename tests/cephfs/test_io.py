@@ -21,10 +21,18 @@ def run(ceph_cluster, **kw):
             fs_util = FsUtils(ceph_cluster)
             fs_util.prepare_clients(clients, build)
             fs_util.auth_list(clients)
-            fs_io_obj = fs_io(
-                client=clients[0], fs_config=config.get("cephfs"), fs_util=fs_util
-            )
-            io_func.append(fs_io_obj.run_fs_io)
+            client_count = config.get("cephfs").get("num_of_clients")
+            if client_count > len(clients):
+                log.error(
+                    f"NFS clients required to perform test is {client_count} but "
+                    f"conf file has only {len(clients)}"
+                )
+                return 1
+            for client in clients[:client_count]:
+                fs_io_obj = fs_io(
+                    client=client, fs_config=config.get("cephfs"), fs_util=fs_util
+                )
+                io_func.append(fs_io_obj.run_fs_io)
         if config.get("rbd"):
             rbd_io_obj = rbd_io(
                 client=clients[0],
