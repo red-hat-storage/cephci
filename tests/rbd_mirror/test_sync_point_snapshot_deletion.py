@@ -50,7 +50,7 @@ def run(**kw):
     with parallel() as p:
         for imagespec in imagespecs:
             p.spawn(mirror2.promote, force=True, imagespec=imagespec)
-            write_data(mirror2, imagespecs, "100M")
+            write_data(mirror2, [imagespec], "100M")
 
         for imagespec in imagespecs:
             p.spawn(prepare_for_failback, mirror1, imagespec)
