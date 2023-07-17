@@ -108,6 +108,7 @@ tests:
       abort-on-fail: false
       desc: "Fill the cluster with specific percentage"
       module: test_io.py
+      name: Fill_Cluster
       config:
         cephfs:
           "fill_data": 60
