@@ -194,3 +194,35 @@ def get_images(build_type):
         return _get_images()[build_type]
     except KeyError:
         raise ConfigError(f"Insufficient config for '{build_type}' in images")
+
+
+def _get_reports():
+    """Get report details from config file"""
+    if not CONFIG:
+        raise ConfigError("Configuration is not passed")
+
+    try:
+        return CONFIG["reports"]
+    except KeyError:
+        raise ConfigError("Reports configurations are missing from config")
+
+
+def get_reports(service):
+    """Get reporting details from config for service
+
+    Args:
+        service (str): Service name
+    """
+    _dict = {}
+    log.info(f"Loading credentials for reporting service '{service}'")
+    try:
+        _service = _get_reports()[service]
+        _dict["url"] = _service["url"]
+        _dict["svn_repo"] = _service["svn_repo"]
+        _dict["user"] = _service["user"]
+        _dict["token"] = _service["token"]
+        _dict["default_project"] = _service.get("default_project", "CEPH")
+        _dict["cert_path"] = _service["cert_path"]
+        return _dict
+    except KeyError:
+        raise ConfigError(f"Insufficient config for '{service}'")
