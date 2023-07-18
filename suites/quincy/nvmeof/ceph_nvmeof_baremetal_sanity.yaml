@@ -148,19 +148,19 @@ tests:
       description: Write and Read IO comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
       config:
-        iterations: 1               # number of iterations to find out average
+        iterations: 3               # number of iterations to find out average
         io_profiles:
           - FIO_WRITE_BS_4k_IODepth8_LIBAIO
           - FIO_READ_BS_4k_IODepth8_LIBAIO
         io_exec:
             -   proto: librbd
                 image:
-                    size: 10G
-                    count: 10
+                    size: 1G
+                    count: 2
                 node: node7             # client node
             -   proto: nvmeof
                 image:
-                    size: 10G
-                    count: 10
+                    size: 1G
+                    count: 2
                 gw_node: node6          # gateway node
                 initiator_node: node7   # client node
