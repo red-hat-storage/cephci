@@ -25,7 +25,7 @@ from utility.utils import create_run_dir, generate_unique_id, run_fio
 LOG = Log(__name__)
 results = {}
 csv_op = [
-    "name,protocol,io_type,read_iops,read_bandwidth,read_slat_avg_ns,read_clat_avg_ns,"
+    "name,protocol,io_type,image,iteration,read_iops,read_bandwidth,read_slat_avg_ns,read_clat_avg_ns,"
     "read_lat_avg_ns,write_iops,write_bandwidth,write_slat_avg_ns,write_clat_avg_ns,"
     "write_lat_avg_ns"
 ]
@@ -245,10 +245,11 @@ def parse_fio_output(node, op_file):
     _file.close()
 
     job = data["jobs"][0]
-    name, _, _, protocol = job["jobname"].split("-")
+    # FIO_WRITE_BS_4k_IODepth8_LIBAIO-TIEA-0-_dev_rbd17-librbd
+    name, _, iteration, protocol, image = job["jobname"].split("-")
     io_type = job["job options"]["rw"]
     io_information = data["global options"] | job["job options"]
-    _csv_op += [name, protocol, io_type]
+    _csv_op += [name, protocol, io_type, image, iteration]
 
     if io_type not in results:
         results[io_type] = {}
@@ -359,13 +360,14 @@ def librbd(ceph_cluster, **args):
                     io_args = IO_Profiles[io_profile]
                     io_args.update(
                         {
-                            "test_name": f"{io_profile}-{name}-{count}-librbd",
                             "output_dir": ARTIFACTS_DIR,
                         }
                     )
                     for _, dev in images.items():
+                        test_name = f"{io_profile}-{name}-{count}-librbd-{dev.replace('/', '_')}"
                         io_args.update(
                             {
+                                "test_name": test_name,
                                 "device_name": dev,
                                 "client_node": client,
                                 "long_running": True,

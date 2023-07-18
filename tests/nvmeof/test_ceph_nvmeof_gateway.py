@@ -4,6 +4,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 
 """
 import json
+from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
@@ -94,10 +95,19 @@ def initiators(ceph_cluster, gateway, config):
     LOG.debug(targets)
 
     results = []
+    io_args = {"size": "100%"}
+    if config.get("io_args"):
+        io_args = config["io_args"]
     with parallel() as p:
         for target in json.loads(targets)["Devices"]:
-            io_args = config["io_args"] if config.get("io_args") else {"size": "100%"}
-            io_args.update(
+            _io_args = deepcopy(io_args)
+            if _io_args.get("test_name"):
+                test_name = (
+                    f"{_io_args['test_name']}-"
+                    f"{target['DevicePath'].replace('/', '_')}"
+                )
+                _io_args.update({"test_name": test_name})
+            _io_args.update(
                 {
                     "device_name": target["DevicePath"],
                     "client_node": client,
@@ -106,7 +116,7 @@ def initiators(ceph_cluster, gateway, config):
                 }
             )
 
-            p.spawn(run_fio, **io_args)
+            p.spawn(run_fio, **_io_args)
         for op in p:
             results.append(op)
     return results
