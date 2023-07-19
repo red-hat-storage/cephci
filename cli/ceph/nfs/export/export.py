@@ -23,3 +23,16 @@ class Export(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def delete(self, cluster, export):
+        """
+        Deletes a given nfs export
+        Args:
+            cluster (str): Nfs cluster name
+            export (str): Nfs export name
+        """
+        cmd = f"{self.base_cmd} delete {cluster} {export}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out

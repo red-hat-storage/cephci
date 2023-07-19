@@ -18,3 +18,15 @@ class Cluster(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def delete(self, name):
+        """
+        Perform delete operation for nfs cluster
+        Args:
+            name (str): Name of the cluster
+        """
+        cmd = f"{self.base_cmd} delete {name}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out

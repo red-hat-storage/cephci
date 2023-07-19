@@ -141,6 +141,7 @@ tests:
       abort-on-fail: false
       config:
         nfs_version: 4.1
+        clients: 2
 
   - test:
       name: Nfs Ganesha Pynfs
@@ -150,6 +151,7 @@ tests:
       abort-on-fail: false
       config:
         nfs_version: 4.1
+        clients: 2
 
   - test:
       name: Nfs Ganesha Bonnie
@@ -159,6 +161,7 @@ tests:
       abort-on-fail: false
       config:
         nfs_version: 4.2
+        clients: 4
 
 
   - test:
@@ -169,3 +172,4 @@ tests:
       abort-on-fail: false
       config:
         nfs_version: 4.2
+        clients: 4
