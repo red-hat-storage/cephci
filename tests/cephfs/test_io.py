@@ -21,7 +21,7 @@ def run(ceph_cluster, **kw):
             fs_util = FsUtils(ceph_cluster)
             fs_util.prepare_clients(clients, build)
             fs_util.auth_list(clients)
-            client_count = config.get("cephfs").get("num_of_clients")
+            client_count = config.get("cephfs").get("num_of_clients", 1)
             if client_count > len(clients):
                 log.error(
                     f"NFS clients required to perform test is {client_count} but "
