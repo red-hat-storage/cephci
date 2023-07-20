@@ -9,7 +9,6 @@ from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
 from ceph.nvmeof.initiator import Initiator
-from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -27,27 +26,16 @@ def configure_subsystems(rbd, pool, gw, config):
     gw.add_host(sub_nqn, config["allow_host"])
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
-        with parallel() as p:
-            count = config["bdevs"].get("count", 1)
-            size = config["bdevs"].get("size", "1G")
-            # Create image
-            for num in range(count):
-                p.spawn(rbd.create_image, pool, f"{name}-image{num}", size)
+        count = config["bdevs"].get("count", 1)
+        size = config["bdevs"].get("size", "1G")
+        # Create image on ceph cluster
+        for num in range(count):
+            rbd.create_image(pool, f"{name}-image{num}", size)
 
-        with parallel() as p:
-            # Create block device in gateway
-            for num in range(count):
-                p.spawn(
-                    gw.create_block_device,
-                    f"{name}-bdev{num}",
-                    f"{name}-image{num}",
-                    pool,
-                )
-
-        with parallel() as p:
-            # Add namespace
-            for num in range(count):
-                p.spawn(gw.add_namespace, sub_nqn, f"{name}-bdev{num}")
+        # Create block device and add namespace in gateway
+        for num in range(count):
+            gw.create_block_device(f"{name}-bdev{num}", f"{name}-image{num}", pool)
+            gw.add_namespace(sub_nqn, f"{name}-bdev{num}")
 
     gw.get_subsystems()
 
@@ -107,17 +95,17 @@ def run_io(ceph_cluster, io):
     # List NVMe targets.
     targets, _ = initiator.list(**json_format)
     LOG.debug(targets)
-    with parallel() as p:
-        for target in json.loads(targets)["Devices"]:
-            io_args = {
-                "device_name": target["DevicePath"],
-                "size": io["size"],
-                "client_node": client,
-                "long_running": True,
-                "io_type": io["io_type"],
-                "cmd_timeout": "notimeout",
-            }
-            p.spawn(run_fio, **io_args)
+
+    for target in json.loads(targets)["Devices"]:
+        io_args = {
+            "device_name": target["DevicePath"],
+            "client_node": client,
+            "run_time": "30",
+            "long_running": True,
+            "io_type": io["io_type"],
+            "cmd_timeout": "notimeout",
+        }
+        run_fio(**io_args)
 
 
 def cleanup(ceph_cluster, rbd_obj, config):
@@ -174,8 +162,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                   pool: rbd
                   install: true                             # Run SPDK with all pre-requisites
                 subsystems:                                 # Configure subsystems with all sub-entities
-                  - nqn: nqn.2016-06.io.spdk:cnode3
-                    serial: 3
+                  - nqn: nqn.2016-06.io.spdk:cnode2
+                    serial: 2
                     bdevs:
                       count: 1
                       size: 100G
@@ -184,10 +172,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 initiators:                                 # Configure Initiators with all pre-req
                   - subnqn: nqn.2016-06.io.spdk:cnode2
                     listener_port: 5002
-                    node: node7
+                    node: node6
                 run_io:
                   - node: node6
-                    size: 10%
     """
     LOG.info("Starting Ceph Ceph NVMEoF deployment.")
 
@@ -203,9 +190,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             configure_spdk(gw_node, rbd_pool)
 
         if config.get("subsystems"):
-            with parallel() as p:
-                for subsystem in config["subsystems"]:
-                    p.spawn(configure_subsystems, rbd_obj, rbd_pool, gateway, subsystem)
+            for subsystem in config["subsystems"]:
+                configure_subsystems(rbd_obj, rbd_pool, gateway, subsystem)
 
         if config.get("initiators"):
             for initiator in config["initiators"]:
@@ -216,10 +202,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 run_io(ceph_cluster, io)
 
         instance = CephAdmin(cluster=ceph_cluster, **config)
-        usage, _ = instance.installer.exec_command(
+        ceph_usage, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph df", sudo=True
+        )
+        LOG.info(ceph_usage)
+
+        rbd_usage, _ = instance.installer.exec_command(
             cmd="cephadm shell rbd du", sudo=True
         )
-        LOG.info(usage)
+        LOG.info(rbd_usage)
 
         health, _ = instance.installer.exec_command(
             cmd="cephadm shell ceph -s", sudo=True
