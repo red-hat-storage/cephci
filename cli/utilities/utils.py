@@ -99,6 +99,18 @@ def start_container(node, container_id):
     return node.exec_command(cmd=cmd, sudo=True)
 
 
+def restart_container(node, container_id):
+    """
+    Restarts a given container
+    Args:
+        node (ceph): ceph node object
+        container_id: id/name of the container
+    """
+    cmd = f"podman restart {container_id}"
+
+    return node.exec_command(cmd=cmd, sudo=True)
+
+
 def exec_command_on_container(node, ctr, cmd, **kw):
     """Execute command on container
 

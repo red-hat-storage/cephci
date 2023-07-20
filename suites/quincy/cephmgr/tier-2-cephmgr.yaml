@@ -75,6 +75,20 @@ tests:
       name: Deploy cluster using cephadm
 
   - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the client system
+      destroy-cluster: false
+      module: test_client.py
+      name: Configure client
+
+  - test:
       name: Enable ceph insights on a ceph cluster
       desc: Enables ceph insights
       polarion-id: CEPH-83573683
@@ -215,3 +229,8 @@ tests:
       polarion-id: CEPH-11389
       module: test_cephmgr_plugins.py
 
+  - test:
+      name: Verify dashboard URL
+      desc: Verify dashboard URL does not bind to host.containers.internal
+      polarion-id: CEPH-83575611
+      module: test_dashboard_url.py
