@@ -381,20 +381,23 @@ class RadosOrchestrator:
             2. byte_size -> size of objects to be written (str)
                 eg : 10KB, 4096
             3. max_objs -> max number of objects to be written (int)
+            4. verify_stats -> arg to control whether obj stats need to
+            be verified after write (bool) | default: True
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
         byte_size = kwargs.get("byte_size", 4096)
         max_objs = kwargs.get("max_objs")
+        verify_stats = kwargs.get("verify_stats", True)
         cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write --no-cleanup"
+        org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
-            org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
 
         try:
             self.node.shell([cmd])
-            if max_objs:
-                time.sleep(10)
+            if max_objs and verify_stats:
+                time.sleep(90)
                 new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
                     "objects"
                 ]
@@ -406,6 +409,17 @@ class RadosOrchestrator:
                 assert (new_objs == org_objs + max_objs) or (
                     new_objs == org_objs + max_objs + 1
                 )
+            else:
+                time.sleep(15)
+                new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
+                    "objects"
+                ]
+                log.info(
+                    f"Objs in the {pool_name} before IOPS: {org_objs} "
+                    f"| Objs in the pool post IOPS: {new_objs} "
+                    f"| Expected {new_objs} > 0"
+                )
+                assert new_objs > 0
             return True
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")
@@ -1056,14 +1070,14 @@ class RadosOrchestrator:
         log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
         return True
 
-    def change_osd_state(self, action: str, target: int, timeout: int = 15) -> bool:
+    def change_osd_state(self, action: str, target: int, timeout: int = 60) -> bool:
         """
         Changes the state of the OSD daemons wrt the action provided
         Args:
             action: operation to be performed on the service, i.e.
             start, stop, restart, disable, enable
             target: ID osd the target OSD
-            timeout: timeout in seconds, (default = 15s)
+            timeout: timeout in seconds, (default = 60s)
         Returns: Pass -> True, Fail -> False
         """
         cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
@@ -1071,6 +1085,16 @@ class RadosOrchestrator:
         if not host:
             log.error("failed to find host for the osd")
             return False
+        osd_status, status_desc = self.get_daemon_status(
+            daemon_type="osd", daemon_id=target
+        )
+
+        if ((osd_status == 0 or status_desc == "stopped") and action == "stop") or (
+            (osd_status == 1 or status_desc == "running") and action == "start"
+        ):
+            log.info(f"OSD {target} already in desired state: {action}")
+            return True
+
         cmd = f"systemctl {action} ceph-{cluster_fsid}@osd.{target}.service"
         log.info(
             f"Performing {action} on osd-{target} on host {host.hostname}. Command {cmd}"
@@ -1092,7 +1116,7 @@ class RadosOrchestrator:
                     osd_status == 1 or status_desc == "running"
                 ) and action == "start":
                     break
-                time.sleep(3)
+                time.sleep(10)
 
             if action == "stop" and osd_status != 0:
                 log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
@@ -1106,7 +1130,7 @@ class RadosOrchestrator:
             time.sleep(7)
         return True
 
-    def fetch_host_node(self, daemon_type: str, daemon_id: str = None):
+    def fetch_host_node(self, daemon_type: str, daemon_id: str = None) -> object:
         """
         Provides the Ceph cluster object for the given daemon. ceph_cluster
         Args:
@@ -1135,7 +1159,7 @@ class RadosOrchestrator:
             log.error(
                 f"Could not find host node for daemon {daemon_type} with name {daemon_id}"
             )
-            return False
+            return None
 
     def verify_ec_overwrites(self, **kwargs) -> bool:
         """

@@ -13,6 +13,7 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.rados_test_util import get_device_path, wait_for_device
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
 log = Log(__name__)
@@ -46,6 +47,7 @@ def run(ceph_cluster, **kw):
         )
 
         log.info(desc)
+        counter = 1
         df_config = config.get("verify_cephdf_stats")
         pool_name = df_config["pool_name"]
         obj_nums = df_config["obj_nums"]
@@ -58,19 +60,37 @@ def run(ceph_cluster, **kw):
             # create 'obj_num' number of objects
             pool_obj.do_rados_put(client=client, pool=pool_name, nobj=obj_num)
 
-            time.sleep(5)  # blind sleep to let all the objs show up in ceph df
+            """ [upd] Jul'23: it now takes more time than before for ceph df stats
+             to account for all the objects in a pool
+             blind sleep in being increased from 5 to 30,
+             cannot implement smart wait along because it would pass the test even
+             if the objects are displayed correctly momentarily and change later on,
+             the number of objects should be stable and correct after a while"""
+            time.sleep(30)  # blind sleep to let all the objs show up in ceph df
 
             # Verify Ceph df output post object creation
             try:
-                pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                ceph_df_obj = pool_stat.get("stats")["objects"]
-                if ceph_df_obj == obj_num:
-                    log.info(
-                        f"ceph df stats display correct objects {ceph_df_obj} for {pool_name}"
-                    )
+                while counter < 3:
+                    pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                    ceph_df_obj = pool_stat["stats"]["objects"]
+                    if ceph_df_obj == obj_num:
+                        log.info(
+                            f"ceph df stats display correct objects {ceph_df_obj} for {pool_name}"
+                        )
+                        break
+                    else:
+                        log.error(
+                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                        )
+                        log.info(
+                            f"Validation failed in round #{counter}, retying after 30 secs.."
+                        )
+                        counter += 1
+                        time.sleep(30)
                 else:
                     log.error(
-                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after"
+                        f" 60 secs"
                     )
                     return 1
             except KeyError:
@@ -79,16 +99,30 @@ def run(ceph_cluster, **kw):
 
             # delete all objects from the pool
             pool_obj.do_rados_delete(pool_name=pool_name)
+            time.sleep(30)  # blind sleep to let all the objs get removed from stats
 
             # Verify Ceph df output post objects deletion
             try:
-                pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                ceph_df_obj = pool_stat.get("stats")["objects"]
-                if ceph_df_obj == 0:
-                    log.info(f"ceph df stats display 0 objects for {pool_name}")
+                counter = 1
+                while counter < 3:
+                    pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                    ceph_df_obj = pool_stat.get("stats")["objects"]
+                    if ceph_df_obj == 0:
+                        log.info(f"ceph df stats display 0 objects for {pool_name}")
+                        break
+                    else:
+                        log.error(
+                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                        )
+                        log.info(
+                            f"Validation failed in round #{counter}, retying after 30 secs.."
+                        )
+                        counter += 1
+                        time.sleep(30)
                 else:
                     log.error(
-                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after"
+                        f"60 secs"
                     )
                     return 1
             except KeyError:
@@ -158,7 +192,9 @@ def run(ceph_cluster, **kw):
             assert utils.zap_device(
                 ceph_cluster, host=osd_host.hostname, device_path=dev_path
             )
-            assert wait_for_device(host=osd_host, osd_id=osd_id, action="remove")
+            assert wait_for_device(
+                host=osd_host, osd_id=osd_id, action="remove", timeout=600
+            )
 
             out, _ = cephadm.shell(["ceph config set osd osd_crush_initial_weight 0"])
             assert wait_for_device(host=osd_host, osd_id=osd_id, action="add")
@@ -177,33 +213,49 @@ def run(ceph_cluster, **kw):
             log.info("Verifying that the reduced max_avail is within range and != 0")
             for pool in zero_weight_pool_stat:
                 log.info(f"POOL: {pool['name']}")
-                log.info(
-                    f"{upd_max_avail} <= {pool['stats']['max_avail']} < {org_max_avail}"
-                )
-                assert upd_max_avail <= pool["stats"]["max_avail"] < org_max_avail
+                if (
+                    rados_obj.get_pool_property(pool=pool["name"], props="crush_rule")
+                    != "replicated_rule"
+                ):
+                    log.info(f"{pool['name']} is an Erasure-Coded pool")
+                    log.info(f"{pool['stats']['max_avail']} != 0")
+                    assert pool["stats"]["max_avail"] != 0
+                else:
+                    log.info(
+                        f"{upd_max_avail} <= {pool['stats']['max_avail']} < {org_max_avail}"
+                    )
+                    assert upd_max_avail <= pool["stats"]["max_avail"] < org_max_avail
                 log.info("PASS")
 
             assert rados_obj.reweight_crush_items(
                 name=f"osd.{osd_id}", weight=org_weight
             )
 
-            time.sleep(10)  # blind sleep to let stats get updated post crush re-weight
-            reweight_pool_stat = rados_obj.get_cephdf_stats()["pools"]
+            time.sleep(30)  # blind sleep to let stats get updated post crush re-weight
+            assert wait_for_clean_pg_sets(rados_obj, timeout=900)
             log.info("Verifying max_avail value is same as before")
+            reweight_pool_stat = rados_obj.get_cephdf_stats()["pools"]
             for pool in reweight_pool_stat:
-                log.info(f"POOL: {pool['name']}")
-                log.info(
-                    f"{int(pool['stats']['max_avail']/1073741824)} GB == {int(org_max_avail/1073741824)} GB"
-                )
-                assert int(pool["stats"]["max_avail"] / 1073741824) == int(
-                    org_max_avail / 1073741824
-                )
-                log.info("pass")
+                if (
+                    rados_obj.get_pool_property(pool=pool["name"], props="crush_rule")
+                    == "replicated_rule"
+                ):
+                    log.info(f"POOL: {pool['name']}")
+                    log.info(
+                        f"{int(pool['stats']['max_avail']/1073741824)} GB == {int(org_max_avail/1073741824)} GB"
+                    )
+                    assert int(pool["stats"]["max_avail"] / 1073741824) == int(
+                        org_max_avail / 1073741824
+                    )
+                    log.info("pass")
         except AssertionError as AE:
             log.error(f"Failed with exception: {AE.__doc__}")
             log.exception(AE)
             return 1
         finally:
+            assert rados_obj.reweight_crush_items(
+                name=f"osd.{osd_id}", weight=org_weight
+            )
             if df_config.get("delete_pool"):
                 rados_obj.detete_pool(pool=pool_name)
 

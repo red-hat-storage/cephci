@@ -349,7 +349,7 @@ def wait_for_clean_pg_sets(
             log.info("The recovery and back-filling of the OSD is completed")
             return True
         log.info(
-            f"Waiting for active + clean. Active aletrs: {status_report['health']['checks'].keys()},"
+            f"Waiting for active + clean. Active alerts: {status_report['health']['checks'].keys()},"
             f"PG States : {status_report['num_pg_by_state']}"
             f" checking status again in {_sleep} seconds"
         )
