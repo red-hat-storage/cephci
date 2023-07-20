@@ -276,26 +276,32 @@ tests:
       name: "nfs cluster host changes and verification"
       polarion-id: "CEPH-83574013"
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       desc: "test cephfs nfs with io and network failures"
       module: nfs.nfs_io_network_failures.py
       name: "cephfs nfs with io and network failures"
       polarion-id: "CEPH-83574020"
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       desc: "test cephfs nfs mount with fstab entry"
       module: nfs.nfs_mount_with_fstab.py
       name: "cephfs nfs mount with fstab entry"
       polarion-id: "CEPH-83574025"
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       desc: "test cephfs nfs RO and RW export"
       module: nfs.nfs_ro_rw_access.py
       name: "cephfs nfs RO and RW export"
       polarion-id: "CEPH-83574001"
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       desc: "test cephfs nfs RO and RW export"
       module: nfs.nfs_export_config.py
       name: "cephfs nfs export creation using config file"
       polarion-id: "CEPH-83574008"
+  - test:
+      abort-on-fail: false
+      desc: "test cephfs nfs config reset"
+      module: nfs.nfs_config_reset.py
+      name: "cephfs nfs export creation using config file"
+      polarion-id: "CEPH-83573999"
