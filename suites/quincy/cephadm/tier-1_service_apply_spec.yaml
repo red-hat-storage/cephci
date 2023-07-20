@@ -38,6 +38,7 @@
 #   (6) Deploy NFS service using spec file,
 #       (a) Create OSD pool 'nfs-rgw-pool'
 #       (b) Deploy NFS on node4 using 'nfs-rgw-pool' pool.
+#   (7) Verify spam logs not present in cephadm logs
 #===============================================================================================
 tests:
   - test:
@@ -263,3 +264,8 @@ tests:
       config:
         nodes:
           - node2
+  - test:
+      name: Verify spam logs not present in cephadm logs
+      desc: Verify spam logs such as 'DEBUG sestatus' not present in cephadm logs (customer_bz)
+      polarion-id: CEPH-83575589
+      module: test_cephadm_log_spam.py
