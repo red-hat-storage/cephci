@@ -196,6 +196,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     drivers = get_nodes_by_ids(ceph_cluster, kwargs["config"]["drivers"]["hosts"])
 
     try:
+        client.exec_command(cmd="sudo yum install -y --nogpgcheck ceph-common")
         install(controllers)
         for ctrl in controllers:
             enable_ports(ctrl, port=19088)
