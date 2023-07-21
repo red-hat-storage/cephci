@@ -60,6 +60,7 @@ def initiators(ceph_cluster, gateway, config):
     """
     client = get_node_by_id(ceph_cluster, config["node"])
     initiator = Initiator(client)
+    initiator.configure()
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,

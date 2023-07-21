@@ -6,4 +6,3 @@ class Initiator(NVMeCLI):
     def __init__(self, node):
         super().__init__(node)
         self.node = node
-        self.configure()
