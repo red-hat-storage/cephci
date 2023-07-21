@@ -53,9 +53,12 @@ def configure_spdk(node: CephNode, rbd_pool):
     pkg_mgr.install("git")
 
     # Clone the ceph-nvmeof repository
+    SHA_ID = "70f4728e916346cd59dd335897e53f9a618b98de"
     node.exec_command(
         sudo=True,
-        cmd=f"rm -rf {REPO_PATH}; git clone --recursive {CEPH_NVMEOF_REPO} {REPO_PATH}",
+        cmd=f"rm -rf {REPO_PATH};"
+        f"git clone --recursive {CEPH_NVMEOF_REPO} {REPO_PATH};"
+        f"cd {REPO_PATH}; git checkout {SHA_ID}",
     )
     out, _ = node.exec_command(cmd=f"cat {REPO_PATH}/ceph-nvmeof.conf")
 

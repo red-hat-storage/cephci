@@ -29,6 +29,13 @@ csv_op = [
     "read_lat_avg_ns,write_iops,write_bandwidth,write_slat_avg_ns,write_clat_avg_ns,"
     "write_lat_avg_ns"
 ]
+METRICS = [
+    "iops",
+    "bandwidth",
+    "submission_latency_in_nanoseconds",
+    "completion_latency_in_nanoseconds",
+    "overall_latency_in_nanoseconds",
+]
 
 RBD_MAP = "rbd map {pool}/{image}"
 RBD_UNMAP = "rbd unmap {device}"
@@ -148,7 +155,7 @@ def plot(io_type, name, metric, data, cfg):
     return html_file
 
 
-def build_charts(io_type, data, cfg):
+def build_charts(io_type, data, test_config, cfg):
     """Builds charts based on IO types.
 
     - Develop charts based on IOType(s) comparing LibRBD and NVMeoF protocols.
@@ -164,14 +171,19 @@ def build_charts(io_type, data, cfg):
             if io not in ["write", "read"]:
                 continue
             ios.append(io)
+            __list = []
+            for i in _list:
+                __list.append(dict((k, v) for k, v in i.items() if k in METRICS))
             LOG.info(f"Calculating Averages for {proto}-{io} with data {_list}")
-            data[proto][io] = calculate_average(_list)
+            data[proto][io] = calculate_average(__list)
 
     for io, metrics in data[protocols[0]].items():
         if io not in ["write", "read"]:
             continue
         charts = {}
         for metric in metrics.keys():
+            if metric not in METRICS:
+                continue
             charts.update(
                 {
                     metric.upper(): plot(
@@ -193,6 +205,7 @@ def build_charts(io_type, data, cfg):
             "protocols": [
                 {proto: data[proto]["io_information"]} for proto in protocols
             ],
+            "test_config": test_config,
         }
         with open(html_file, "w+") as fd:
             fd.write(combine_charts(charts, info))
@@ -262,6 +275,7 @@ def parse_fio_output(node, op_file):
             "io_information": io_information,
         }
 
+    results[io_type][protocol]["num_of_iterations"] = iteration
     if job["job options"]["rw"] in ["read", "randread", "rw", "readwrite"]:
         read = job["read"]
         if "read" not in results[io_type][protocol]:
@@ -269,6 +283,8 @@ def parse_fio_output(node, op_file):
 
         results[io_type][protocol]["read"].append(
             {
+                "iteration": iteration,
+                "image": image,
                 "iops": read["iops"],
                 "bandwidth": read["bw_mean"],
                 "submission_latency_in_nanoseconds": read["slat_ns"]["mean"],
@@ -294,7 +310,9 @@ def parse_fio_output(node, op_file):
 
         results[io_type][protocol]["write"].append(
             {
+                "iteration": iteration,
                 "iops": write["iops"],
+                "image": image,
                 "bandwidth": write["bw_mean"],
                 "submission_latency_in_nanoseconds": write["slat_ns"]["mean"],
                 "completion_latency_in_nanoseconds": write["clat_ns"]["mean"],
@@ -466,7 +484,7 @@ def nvmeof(ceph_cluster, **args):
             # disconnect and delete subsystems
             cleanup_cfg = {
                 "gw_node": args["gw_node"],
-                "cleanup": ["initiators", "subsystems", "gateway"],
+                "cleanup": ["initiators", "subsystems"],
                 "initiators": [initiator_cfg],
                 "subsystems": [subsystem],
             }
@@ -563,7 +581,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.info(f"Json file located here: {json_file}")
 
     # Plot charts
+    test_config = {
+        "io_exec": config["io_exec"],
+        "iterations": config["iterations"],
+    }
     for io_type, data in results.items():
-        build_charts(io_type, data, run_cfg)
+        build_charts(io_type, data, test_config, run_cfg)
 
     return 0
