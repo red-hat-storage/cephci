@@ -76,7 +76,7 @@ for suite in "${!TEST_SUITES[@]}" ; do
     TEST_SUITE=$suite
     TEST_CONFIG=${TEST_SUITES[$suite]}
     if [[ $TEST_SUITE =~ "quincy" ]]; then
-      RHCS_VERSION="6.0"
+      RHCS_VERSION="6.1"
     elif [[ $TEST_SUITE =~ "pacific" ]]; then
       RHCS_VERSION="5.3"
     elif [[ $TEST_SUITE =~ "nautilus" ]]; then
