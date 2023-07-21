@@ -1,7 +1,8 @@
 from threading import Thread
 
-from cli.ceph.ceph import Ceph
-from cli.exceptions import OperationFailedError
+from nfs_operations import cleanup_cluster, setup_nfs_cluster
+
+from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
 
 log = Log(__name__)
@@ -30,42 +31,39 @@ def run(ceph_cluster, **kw):
 
     port = config.get("port", "2049")
     version = config.get("nfs_version", "4.2")
+    no_clients = int(config.get("clients", "2"))
 
+    # If the setup doesn't have required number of clients, exit.
+    if no_clients > len(clients):
+        raise ConfigError("The test requires more clients than available")
+
+    clients = clients[:no_clients]  # Select only the required number of clients
     nfs_node = nfs_nodes[0]
-
-    # Step 1: Enable nfs
-    Ceph(clients[0]).mgr.module(action="enable", module="nfs", force=True)
-
-    # Step 2: Create an NFS cluster
-    nfs_name = "cephfs-nfs"
-    nfs_server_name = nfs_node.hostname
-    Ceph(clients[0]).nfs.cluster.create(name=nfs_name, nfs_server=nfs_server_name)
-
-    # Step 3: Perform Export on clients
     fs_name = "cephfs"
     nfs_name = "cephfs-nfs"
     nfs_export = "/export"
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
-    for client in clients[:1]:
-        Ceph(client).nfs.export.create(
-            fs_name=fs_name, nfs_name=nfs_name, nfs_export=nfs_export, fs=fs
-        )
+    nfs_server_name = nfs_node.hostname
 
-    # Step 4: Perform nfs mount
-    for client in clients[:1]:
-        # Create mount dirs
-        client.exec_command(cmd=f"mkdir -p {nfs_mount}", sudo=True)
-        cmd = f"mount -t nfs -o vers={version},port={port} {nfs_server_name}:{nfs_export} {nfs_mount}"
-        out, _ = client.exec_command(cmd=cmd, sudo=True)
-        if out:
-            raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
+    # Setup nfs cluster
+    setup_nfs_cluster(
+        clients,
+        nfs_server_name,
+        port,
+        version,
+        nfs_name,
+        nfs_mount,
+        fs_name,
+        nfs_export,
+        fs,
+    )
 
-    # Step 5: Create a file on Client 1
+    # Create a file on Client 1
     file_path = "/mnt/nfs/sample_file"
     clients[0].exec_command(cmd=f"touch {file_path}", sudo=True)
 
-    # Step 6: Perform File Lock from client 1
+    # Perform File Lock from client 1
     c1 = Thread(target=get_file_lock, args=(clients[0],))
     c1.start()
     log.info("Acquired lock from client 1")
@@ -80,6 +78,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "Expected: Failed to acquire lock from client 2 while client 1 lock is in on"
         )
+        return 1
 
     # Wait for the lock to release
     c1.join()
@@ -91,25 +90,11 @@ def run(ceph_cluster, **kw):
             "Expected: Successfully acquired lock from client 2 while client 1 lock is released"
         )
     except Exception:
-        raise OperationFailedError(
+        log.error(
             "Unexpected: Failed to acquire lock from client 2 while client 1 lock is in removed"
         )
+        return 1
     finally:
-        for client in clients:
-            client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/*")
-            log.info("Unmounting nfs-ganesha mount on client:")
-            client.exec_command(sudo=True, cmd=" umount %s -l" % (nfs_mount))
-            log.info("Removing nfs-ganesha mount dir on client:")
-            client.exec_command(sudo=True, cmd="rm -rf  %s" % (nfs_mount))
-            client.exec_command(
-                sudo=True,
-                cmd=f"ceph nfs export delete {nfs_name} {nfs_export}",
-                check_ec=False,
-            )
-            client.exec_command(
-                sudo=True,
-                cmd=f"ceph nfs cluster delete {nfs_name}",
-                check_ec=False,
-            )
-            log.info("Cleaning up successfull")
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        log.info("Cleaning up successful")
     return 0
