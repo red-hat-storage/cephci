@@ -266,7 +266,7 @@ class BootstrapMixin:
 
         # Construct registry credentials as string or json.
         registry_url = args.pop("registry-url", None)
-        if registry_url:
+        if registry_url or ibm_build:
             cmd += construct_registry(self, registry_url, ibm_build=ibm_build)
 
         registry_json = args.pop("registry-json", None)
