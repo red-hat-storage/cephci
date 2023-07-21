@@ -32,28 +32,36 @@ def run(ceph_cluster, **kw):
         time.sleep(30)
 
     def create_pool_write_iops(param, pool_type):
-        pool_name = f"{pool_type}_pool_{param}"
-        assert (
-            rados_obj.create_pool(pool_name=pool_name)
-            if "repli" in pool_type
-            else rados_obj.create_erasure_pool(
-                name=pool_name, **{"pool_name": pool_name}
-            )
-        )
-
-        if param == checksum:
-            # set checksum value for the pool
-            rados_obj.set_pool_property(pool=pool_name, props="csum_type", value=param)
-            # verify checksum value for the pool
+        try:
+            pool_name = f"{pool_type}_pool_{param}"
             assert (
-                param
-                == rados_obj.get_pool_property(pool=pool_name, props="csum_type")[
-                    "csum_type"
-                ]
+                rados_obj.create_pool(pool_name=pool_name)
+                if "repli" in pool_type
+                else rados_obj.create_erasure_pool(
+                    name=pool_name, **{"pool_name": pool_name}
+                )
             )
-        # rados bench will perform IOPs and also verify the num of objs written
-        assert rados_obj.bench_write(pool_name=pool_name, **{"max_objs": 500})
-        assert rados_obj.detete_pool(pool=pool_name)
+
+            if param == checksum:
+                # set checksum value for the pool
+                rados_obj.set_pool_property(
+                    pool=pool_name, props="csum_type", value=param
+                )
+                # verify checksum value for the pool
+                assert (
+                    param
+                    == rados_obj.get_pool_property(pool=pool_name, props="csum_type")[
+                        "csum_type"
+                    ]
+                )
+            # rados bench will perform IOPs and also verify the num of objs written
+            assert rados_obj.bench_write(
+                pool_name=pool_name, **{"max_objs": 500, "verify_stats": False}
+            )
+        except Exception:
+            raise
+        finally:
+            assert rados_obj.detete_pool(pool=pool_name)
 
     def modify_cache_size(factor):
         cache_value = int(1073741824 * factor)

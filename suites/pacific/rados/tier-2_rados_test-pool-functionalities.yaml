@@ -110,7 +110,6 @@ tests:
             - 50
           delete_pool: true
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Verify scrub logs

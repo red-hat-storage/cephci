@@ -53,16 +53,17 @@ def write_to_pools(config, rados_obj, client_node):
             method_should_succeed(rados_obj.bench_write, **cr_pool)
 
 
-def wait_for_device(host, osd_id, action: str) -> bool:
+def wait_for_device(host, osd_id, action: str, timeout: int = 9000) -> bool:
     """
     Waiting for the device to be removed/added based on the action
     Args:
         host: host object
         osd_id: osd id
         action: add/remove device path
+        timeout: wait timeout in seconds
     Returns:  True -> pass, False -> fail
     """
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
     while end_time > datetime.datetime.now():
         flag = True
 

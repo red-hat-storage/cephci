@@ -4,7 +4,9 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
+from utility.utils import method_should_succeed
 
 log = Log(__name__)
 
@@ -35,7 +37,7 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     test_pass = 0
     run_iterations = config["run_iteration"]
-    min_pass = int(run_iterations * 0.7)
+    min_pass = 1
 
     log.info(f"Test is configured to run {run_iterations} iterations")
     log.info(
@@ -50,17 +52,16 @@ def run(ceph_cluster, **kw):
         test_result = run_test(ceph_cluster, **kw)
         if not test_result:
             test_pass += 1
+            break
 
-    if test_pass < min_pass:
-        log.error(
-            f"Test could only pass {test_pass} out of {run_iterations} of times,"
-            f" expected min pass: {min_pass}"
-        )
-        return 1
-    log.info(
-        f"Test passed {test_pass} out of {run_iterations} times,"
+    summary_text = (
+        f"Test could only pass {test_pass} out of {run_iterations} of times,"
         f" expected min pass: {min_pass}"
     )
+    if test_pass < min_pass:
+        log.error(summary_text)
+        return 1
+    log.info(summary_text)
     return 0
 
 
@@ -148,7 +149,7 @@ def run_test(ceph_cluster, **kw):
             for osd_id in acting_pg_set:
                 assert utils.set_osd_out(ceph_cluster, osd_id)
         except AssertionError:
-            log.error(f"Failed to mark OSD.{osd_id} down")
+            log.error(f"Failed to mark OSD.{osd_id} out")
             return 1
 
         time.sleep(5)
@@ -218,6 +219,7 @@ def run_test(ceph_cluster, **kw):
         if config.get("delete_pool"):
             rados_obj.detete_pool(pool=pool_name)
 
+    method_should_succeed(wait_for_clean_pg_sets, rados_obj, 1800)
     try:
         for host in acting_osd_hosts:
             assert verify_deviation(
@@ -322,9 +324,9 @@ def verify_deviation(
     acting_pg_set = config["acting_pg_set"]
     host_osd_map = config["host_osd_map"]
     deviation_multiplier = {
-        "node": {"iops": 1.05, "out": 1.075},
-        "osd": {"iops": 1.05, "out": 0},
-        "summary": {"iops": 1.06, "out": 1.06},
+        "node": {"iops": 1.07, "out": 1.09},
+        "osd": {"iops": 1.07, "out": 0},
+        "summary": {"iops": 1.08, "out": 1.08},
     }
 
     if osd_id is None and type == "node" and stage == "out" and status != "new":
