@@ -11,9 +11,11 @@ class Cluster(Cli):
         Perform create operation for nfs cluster
         Args:
             name (str): Name of the cluster
-            nfs_server (str): Name of the servere for which OSD to be created
+            nfs_server (list,tuple): Name of the server on which NFS Cluster to be created
         """
-        cmd = f"{self.base_cmd} create {name} {nfs_server}"
+        nfs_server = nfs_server if type(nfs_server) in (list, tuple) else [nfs_server]
+        nfs_server = " ".join(nfs_server)
+        cmd = f"{self.base_cmd} create {name} '{nfs_server}'"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
