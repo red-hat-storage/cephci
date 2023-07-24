@@ -233,6 +233,7 @@ tests:
               - "ceph orch restart rgw.shared.pri.8080"
         ceph-sec:
           config:
+            cephadm: true
             commands:
               - "sleep 120"
               - "radosgw-admin realm pull --rgw-realm india --url http://folio15:8080 --access-key test123 --secret test123 --default"

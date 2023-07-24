@@ -119,12 +119,12 @@ def get_or_create_user(node: CephNode) -> Dict:
     LOG.debug("Get or Create cosbench01 user using radosgw-admin.")
     user = "warp_usr"
     try:
-        out, err = node.exec_command(cmd=f"radosgw-admin user info --uid {user}")
+        out, err = node.exec_command(cmd=f"sudo radosgw-admin user info --uid {user}")
         out = loads(out)
         return out["keys"][0]
     except CommandFailed:
         out, err = node.exec_command(
-            cmd=f"radosgw-admin user create --uid {user} --display-name {user}"
+            cmd=f"sudo radosgw-admin user create --uid {user} --display-name {user}"
             f" --email {user}@noreply.com"
         )
         out = loads(out)
@@ -145,13 +145,14 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         0 on Success and 1 on Failure.
     """
     LOG.info("Being WARP deploy and configuration workflow.")
-    client = ceph_cluster.get_nodes(role="client")[0]
+    client = ceph_cluster.get_nodes(role="installer")[0]
     warp_server = get_nodes_by_ids(ceph_cluster, kwargs["config"]["warp_server"])
     warp_clients = get_nodes_by_ids(
         ceph_cluster, kwargs["config"]["warp_client"]["hosts"]
     )
 
     try:
+        client.exec_command(cmd="sudo yum install -y --nogpgcheck ceph-common")
         install(warp_server)
         install(warp_clients)
         get_or_create_user(client)

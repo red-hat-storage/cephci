@@ -6,7 +6,7 @@ Sample test script
     - test:
         abort-on-fail: true
         config:
-          haproxy_client:
+          haproxy_clients:
             - node6
           rgw_endpoints:
               - node6:<port>
