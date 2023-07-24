@@ -1,7 +1,7 @@
 #=======================================================================================================================
 # Tier-level: 3
 # Test-Suite: cephfs_bugs
-# Conf file : conf/pacific/cephfs/tier_0_fs.yaml
+# Conf file : conf/pacific/cephfs/tier-3_cephfs_bugs.yaml
 # Description - This test suite contains tests which were automated during bug verification
 # Test-Case Covered:
   # CEPH-11260 - Change replication size of Cephfs pools increase and decrease, with client IO
@@ -131,7 +131,11 @@ tests:
         config:
             command: add
             id: client.1
-            node: node7
+            nodes:
+              - node9
+              - node10
+              - node11
+              - node12
             install_packages:
                 - ceph-common
             copy_admin_keyring: true
