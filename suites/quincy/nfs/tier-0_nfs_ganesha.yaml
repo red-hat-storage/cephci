@@ -173,3 +173,27 @@ tests:
       config:
         nfs_version: 4.2
         clients: 4
+
+  - test:
+      name: Nfs Ganesha rename operations
+      module: test_file_ops_renames.py
+      desc: Perform file and dir renaming and lookups in parallel
+      polarion-id:
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+
+  - test:
+      name: Nfs Ganesha copy operations
+      module: test_file_ops_copy.py
+      desc: Perform file and dir copy and lookups in parallel
+      polarion-id:
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
