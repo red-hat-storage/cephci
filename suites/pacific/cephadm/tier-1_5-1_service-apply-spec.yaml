@@ -146,8 +146,9 @@ tests:
                   placement:
                     nodes:
                       - node1
-                  data_devices:
-                    all: "true"                         # boolean as string
+                  spec:
+                    data_devices:
+                      all: "true"                       # boolean as string
                 - service_type: osd
                   service_id: all_other_nodes
                   placement:
