@@ -163,7 +163,6 @@ tests:
         nfs_version: 4.2
         clients: 4
 
-
   - test:
       name: Nfs Verify Readdir Ops
       module: nfs_verify_readdir_ops.py
@@ -208,3 +207,28 @@ tests:
         nfs_version: 4.2
         clients: 3
         file_count: 100
+
+  - test:
+      name: Nfs Verify Multi volume export and mount
+      module: nfs_verify_multple_volumes.py
+      desc: Perform multi volume export and mount
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+        no_volumes: 4
+
+
+  - test:
+      name: Nfs Verify Multi volume export mount unmount in loop
+      module: nfs_verify_multple_volumes.py
+      desc: Perform multi volume export mount and unmount in a loop
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+        no_volumes: 4
+        perform_mount_umount_loop: True
+        no_loops: 10
