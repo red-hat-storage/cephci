@@ -197,3 +197,14 @@ tests:
         clients: 3
         num_files: 1000
         num_dirs: 1000
+
+  - test:
+      name: Verify create file, create soflink and lookups from nfs clients
+      module: nfs_verify_file_ops_soft_links.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
