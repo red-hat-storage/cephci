@@ -46,33 +46,20 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
         5. delete cluster
     Args:
         clients (ceph): Client nodes
-        nfs_mount (str, dict): nfs mount path(s)
-        nfs_name (str, list): nfs cluster name(s)
-        nfs_export (str, dict): nfs export path(s)
+        nfs_mount (str): nfs mount path
+        nfs_name (str): nfs cluster name
+        nfs_export (str): nfs export path
     """
     if not isinstance(clients, list):
         clients = [clients]
-    if not isinstance(nfs_export, dict):
-        nfs_export = {nfs_export: nfs_name}
 
     for client in clients:
-        if isinstance(nfs_mount, dict):
-            # To handle the corner scenario where the process failed at one client and other clients were skipped.
-            # In those case, we don't have to perform cleanup on unused clients
-            if client.hostname not in nfs_mount:
-                continue
-            mount_path = nfs_mount[client.hostname]
-        else:
-            mount_path = nfs_mount
-
-        client.exec_command(sudo=True, cmd=f"rm -rf {mount_path}/*")
+        client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/*")
         log.info("Unmounting nfs-ganesha mount on client:")
-        if Unmount(client).unmount(mount_path):
+        if Unmount(client).unmount(nfs_mount):
             raise OperationFailedError(f"Failed to unmount nfs on {client.hostname}")
         log.info("Removing nfs-ganesha mount dir on client:")
-        client.exec_command(sudo=True, cmd=f"rm -rf  {mount_path}")
+        client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}")
 
-    # Delete all exports
-    for export, nfs_server in nfs_export.items():
-        Ceph(clients[0]).nfs.export.delete(nfs_server, export)
-        Ceph(clients[0]).nfs.cluster.delete(nfs_server)
+    Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_export)
+    Ceph(clients[0]).nfs.cluster.delete(nfs_name)

@@ -1,23 +1,23 @@
 from threading import Thread
+from time import sleep
 
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
-from cli.exceptions import ConfigError, OperationFailedError
+from cli.exceptions import ConfigError
 from utility.log import Log
 
 log = Log(__name__)
 
 
-CMD = """python3 -c 'from fcntl import flock, LOCK_EX, LOCK_NB, LOCK_UN;from time import sleep;f = open(
-"/mnt/nfs/sample_file", "w");flock(f.fileno(), LOCK_EX | LOCK_NB);sleep(30);flock(f.fileno(), LOCK_UN)'"""
-
-
 def get_file_lock(client):
-    try:
-        client.exec_command(cmd=CMD, sudo=True)
-        log.info("Executed successfully")
-    except Exception:
-        log.info(f"Exception happened while running on {client.hostname}")
+    """
+    Gets the file lock on the file
+    Args:
+        client (ceph): Ceph client node
+    """
+    cmd = """python3 -c 'from fcntl import flock, LOCK_EX, LOCK_NB, LOCK_UN;from time import sleep;f = open(
+"/mnt/nfs/sample_file", "w");flock(f.fileno(), LOCK_EX | LOCK_NB);sleep(30);flock(f.fileno(), LOCK_UN)'"""
+    client.exec_command(cmd=cmd, sudo=True)
 
 
 def run(ceph_cluster, **kw):
@@ -46,55 +46,59 @@ def run(ceph_cluster, **kw):
     fs = "cephfs"
     nfs_server_name = nfs_node.hostname
 
-    # Setup nfs cluster
-    setup_nfs_cluster(
-        clients,
-        nfs_server_name,
-        port,
-        version,
-        nfs_name,
-        nfs_mount,
-        fs_name,
-        nfs_export,
-        fs,
-    )
+    try:
+        # Setup nfs cluster
+        setup_nfs_cluster(
+            clients,
+            nfs_server_name,
+            port,
+            version,
+            nfs_name,
+            nfs_mount,
+            fs_name,
+            nfs_export,
+            fs,
+        )
+    except Exception as e:
+        log.error(f"Failed to setup nfs cluster {e}")
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        return 1
 
     # Create a file on Client 1
-    file_path = "/mnt/nfs/sample_file"
+    file_path = f"{nfs_mount}/sample_file"
     clients[0].exec_command(cmd=f"touch {file_path}", sudo=True)
 
     # Perform File Lock from client 1
     c1 = Thread(target=get_file_lock, args=(clients[0],))
     c1.start()
-    log.info("Acquired lock from client 1")
 
-    # At the same time, try locking file from client 2
+    # Adding a constant sleep as its required for the thread call to start the lock process
+    sleep(2)
     try:
-        clients[1].exec_command(cmd=CMD, sudo=True)
-        raise OperationFailedError(
+        get_file_lock(clients[1])
+        log.error(
             "Unexpected: Client 2 was able to access file lock while client 1 lock was active"
         )
-    except Exception:
-        log.info(
-            "Expected: Failed to acquire lock from client 2 while client 1 lock is in on"
-        )
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
+    except Exception as e:
+        log.info(
+            f"Expected: Failed to acquire lock from client 2 while client 1 lock is in on {e}"
+        )
 
-    # Wait for the lock to release
     c1.join()
 
-    # Try again when the lock is released
     try:
-        clients[1].exec_command(cmd=CMD, sudo=True)
+        get_file_lock(clients[1])
         log.info(
             "Expected: Successfully acquired lock from client 2 while client 1 lock is released"
         )
-    except Exception:
+    except Exception as e:
         log.error(
-            "Unexpected: Failed to acquire lock from client 2 while client 1 lock is in removed"
+            f"Unexpected: Failed to acquire lock from client 2 while client 1 lock is in removed {e}"
         )
-        return 1
-    finally:
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-        log.info("Cleaning up successful")
+        return 1
+
+    cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
     return 0
