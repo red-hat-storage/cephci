@@ -195,7 +195,9 @@ tests:
           config:
             command: add
             id: client.pri
-            node: folio01
+            node:
+              - folio01
+              - folio10
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -203,7 +205,9 @@ tests:
           config:
             command: add
             id: client.sec
-            node: folio04
+            node:
+              - folio04
+              - folio14
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -233,6 +237,7 @@ tests:
               - "ceph orch restart rgw.shared.pri.8080"
         ceph-sec:
           config:
+            cephadm: true
             commands:
               - "sleep 120"
               - "radosgw-admin realm pull --rgw-realm india --url http://folio15:8080 --access-key test123 --secret test123 --default"
