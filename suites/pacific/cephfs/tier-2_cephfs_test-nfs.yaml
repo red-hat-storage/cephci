@@ -305,3 +305,9 @@ tests:
       module: nfs.nfs_config_reset.py
       name: "cephfs nfs export creation using config file"
       polarion-id: "CEPH-83573999"
+  - test:
+    abort-on-fail: false
+    desc: "modifying_nfs_cluster_invalid_value"
+    module: nfs.modifying_nfs_cluster_invalid_value.py
+    name: "modifying_nfs_cluster_invalid_value"
+    polarion-id: "CEPH-83574014"
