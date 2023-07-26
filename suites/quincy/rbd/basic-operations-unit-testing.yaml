@@ -93,6 +93,8 @@ tests:
         install_packages:
           - ceph-common
           - rbd-nbd
+          - jq
+          - fio
         node: node6
       desc: "Configure the client system"
       destroy-cluster: false

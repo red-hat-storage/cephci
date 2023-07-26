@@ -166,7 +166,7 @@ class Rbd:
             cmd += " --thick-provision"
         if self.ceph_version > 2 and self.k_m:
             cmd += f" --data-pool {self.datapool}"
-        self.exec_cmd(cmd=cmd)
+        return self.exec_cmd(cmd=cmd)
 
     def set_ec_profile(self, profile):
         self.exec_cmd(cmd="ceph osd erasure-code-profile rm {}".format(profile))

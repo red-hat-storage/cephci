@@ -49,7 +49,7 @@ def verify_schedule_add(
     log.debug(f"Verifying purge on pool {pool}")
     while iterations_remaining > 0:
         log.debug(f"Sleeping for {schedule_interval} mins with buffer")
-        time.sleep(schedule_interval * 60 + 5)
+        time.sleep(schedule_interval * 60 + 60)
         trash_list = rbd.trash_list(pool)
         log.debug(f"Trash list: {trash_list}")
         if len(trash_list) > 3:
@@ -99,7 +99,7 @@ def rbd_trash_purge_schedule(rbd, pool_type, **kw):
         )
 
     except Exception as error:
-        log.error(error.message)
+        log.error(error)
         return 1
 
     finally:
