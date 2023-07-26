@@ -152,8 +152,21 @@ suites:
     - stage-2
 
 - name: "Basic Ceph-NVMeoF Testing - Non Containerized"
-  suite: "suites/quincy/nvmeof/ceph_nvmeof_deployment.yaml"
-  global-conf: "conf/quincy/nvmeof/ceph_nvmeof_cluster.yaml"
+  suite: "suites/quincy/nvmeof/tier-0_nvmeof_sanity.yaml"
+  global-conf: "conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - ceph-nvmeof
+    - upstream
+    - openstack
+    - stage-3
+
+- name: "Ceph-NVMeoF - IO Perf testing LibRBD vs NVMeoTCP"
+  suite: "suites/quincy/nvmeof/tier-0_nvmeof_librbd_vs_nvmeof.yaml"
+  global-conf: "conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"
   inventory:
@@ -188,7 +201,7 @@ suites:
     - ceph-nvmeof
     - upstream
     - openstack
-    - stage-3
+    - stage-4
 
 - name: "Explore nvmeof single GW subsystem limitations"
   suite: "suites/quincy/nvmeof/ceph_nvmeof_subsystem_limit.yaml"
@@ -201,4 +214,4 @@ suites:
     - ceph-nvmeof
     - upstream
     - openstack
-    - stage-3
+    - stage-4
