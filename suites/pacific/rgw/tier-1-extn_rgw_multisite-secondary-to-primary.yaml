@@ -387,7 +387,6 @@ tests:
             script-name: test_acls.py
             config-file-name: test_acls.yaml
             timeout: 300
-            verify-io-on-site: ["ceph-sec"]
 
 # please include test cases before below rename testcase as the process is disruptive currently
   - test:
