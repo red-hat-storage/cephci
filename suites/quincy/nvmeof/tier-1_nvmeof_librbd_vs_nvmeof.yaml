@@ -1,0 +1,92 @@
+# Basic IO Perf comparison test LibRBD vs NVMeoF protocols
+# cluster configuration: conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml
+
+tests:
+
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  # Test IO Perf
+  - test:
+      name: librbd VS nvmeof - Read and Write IO comparison bench test
+      description: Write and Read IO comparison on 10G image with 4kb-block-size
+      module: test_io_perf.py
+      config:
+        iterations: 1               # number of iterations to find out average
+        io_profiles:
+          - FIO_WRITE_BS_4k_IODepth8_LIBAIO
+          - FIO_READ_BS_4k_IODepth8_LIBAIO
+        io_exec:
+            -   proto: librbd
+                image:
+                    size: 10G
+                    count: 1
+                node: node7             # client node
+            -   proto: nvmeof
+                image:
+                    size: 10G
+                    count: 1
+                gw_node: node6          # gateway node
+                initiator_node: node7   # client node
