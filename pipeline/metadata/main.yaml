@@ -163,8 +163,8 @@ suites:
     - openstack
     - stage-3
 
-- name: "Test nvmeof scale test scenario"
-  suite: "suites/quincy/nvmeof/ceph_nvmeof_openstack_scale.yaml"
+- name: "Test nvmeof single GW scale scenario"
+  suite: "suites/quincy/nvmeof/tier-2_nvmeof_scale_sub_ns.yaml"
   global-conf: "conf/quincy/nvmeof/ceph_nvmeof_scale_cluster.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"
@@ -176,8 +176,21 @@ suites:
     - openstack
     - stage-3
 
+- name: "Test nvmeof single GW scale scenario"
+  suite: "suites/quincy/nvmeof/tier-2_nvmeof_scale_ns.yaml"
+  global-conf: "conf/quincy/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml"
+  platform: "rhel-9"
+  rhbuild: "6.0"
+  inventory:
+    openstack: "conf/inventory/rhel-9-latest.yaml"
+  metadata:
+    - ceph-nvmeof
+    - upstream
+    - openstack
+    - stage-3
+
 - name: "Explore nvmeof single GW namespace limitations"
-  suite: "suites/quincy/nvmeof/ceph_nvmeof_namespace_limit.yaml"
+  suite: "suites/quincy/nvmeof/tier-2_nvmeof_namespace_limit.yaml"
   global-conf: "conf/quincy/nvmeof/ceph_nvmeof_namespace_scale_cluster.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"
@@ -190,7 +203,7 @@ suites:
     - stage-3
 
 - name: "Explore nvmeof single GW subsystem limitations"
-  suite: "suites/quincy/nvmeof/ceph_nvmeof_subsystem_limit.yaml"
+  suite: "suites/quincy/nvmeof/tier-2_nvmeof_subsystem_limit.yaml"
   global-conf: "conf/quincy/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"
