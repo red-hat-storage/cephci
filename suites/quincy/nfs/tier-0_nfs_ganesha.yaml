@@ -208,3 +208,33 @@ tests:
         nfs_version: 4.2
         clients: 3
         file_count: 100
+
+  - test:
+      name: Nfs Verify File Operations
+      module: nfs_verify_file_operations.py
+      desc: Change the ownership (user and group) of files within the NFS export
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_ownership
+          client03 : perform_lookups
+
+  - test:
+      name: Nfs Verify File Operations
+      module: nfs_verify_file_operations.py
+      desc: Set different file permissions (read, write, execute) for files within the NFS
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_permission
+          client03 : perform_lookups
