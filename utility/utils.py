@@ -554,6 +554,7 @@ def check_ceph_status(site):
     """
     log.info("get ceph status")
     ceph_status = site.exec_command(cmd="sudo ceph status")
+    log.info(ceph_status)
     if "HEALTH_ERR" in ceph_status or "large omap objects" in ceph_status:
         raise Exception(
             "ceph status is either in HEALTH_ERR or we have large omap objects."
@@ -1925,24 +1926,55 @@ def calculate_available_storage(node):
     """
     import json
 
-    log.info(
-        "Calculate maximum storage that is available to be used."
-        + " It is the amount of data that can be used before the first OSD becomes full."
-        + " This is implicitly divided by replication factor or erasure code"
-    )
+    log.info("Fetching maximum available storage")
     out, err = node.exec_command(cmd="sudo radosgw-admin zone get --format json")
     out = json.loads(out)
     zone_name = out["name"]
     rgw_bucket_data_pool = f"{zone_name}.rgw.buckets.data"
     out, err = node.exec_command(cmd="sudo ceph df --format json")
     if rgw_bucket_data_pool not in out:
+        log.info(
+            f"{rgw_bucket_data_pool} doesn't exist, so creating it and enabling rgw application"
+        )
         node.exec_command(cmd=f"sudo ceph osd pool create {rgw_bucket_data_pool}")
+        time.sleep(10)
+        node.exec_command(
+            cmd=f"sudo ceph osd pool application enable {rgw_bucket_data_pool} rgw"
+        )
         time.sleep(10)
         out, err = node.exec_command(cmd="sudo ceph df --format json")
     ceph_df_json = json.loads(out)
     for pool in ceph_df_json["pools"]:
         if pool["name"] == rgw_bucket_data_pool:
             return pool["stats"]["max_avail"]
+    raise Exception(f"{rgw_bucket_data_pool} not found")
+
+
+def get_utilized_space(node, pool_name=None):
+    """
+    Returns actual number of bytes used up in the pool. This is without replicated space
+
+    Args:
+        node: node on which ceph commands are executed
+        pool_name: number of
+
+    Returns:
+        actual number of bytes used up in the pool
+    """
+    import json
+
+    log.info("Fetching number of bytes used up in the pool")
+    if pool_name is None:
+        out, err = node.exec_command(cmd="sudo radosgw-admin zone get --format json")
+        out = json.loads(out)
+        zone_name = out["name"]
+        pool_name = f"{zone_name}.rgw.buckets.data"
+    out, err = node.exec_command(cmd="sudo ceph df --format json")
+    ceph_df_json = json.loads(out)
+    for pool in ceph_df_json["pools"]:
+        if pool["name"] == pool_name:
+            return pool["stats"]["stored"]
+    raise Exception(f"{pool_name} not found")
 
 
 def perform_env_setup(config, node, ceph_cluster):

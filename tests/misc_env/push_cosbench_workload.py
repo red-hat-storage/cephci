@@ -160,9 +160,22 @@ def push_workload(controller, client, workload_file_name):
     LOG.info(out)
     wid = out.strip().split(": ")[1]
 
+    sleep_time = 300
+    stored_bytes_prev = utils.get_utilized_space(client)
     while "PROCESSING" in get_workload_status(controller, wid):
-        LOG.info("sleeping for 30 seconds as the workload is in progress")
-        time.sleep(30)
+        LOG.info(f"sleeping for {sleep_time} seconds as the workload is in progress")
+        time.sleep(sleep_time)
+        utils.check_ceph_status(client)
+        stored_bytes_curr = utils.get_utilized_space(client)
+        LOG.info(
+            f"used up storage before {sleep_time} sec in bytes:{stored_bytes_prev}"
+        )
+        LOG.info(f"used up storage now in bytes:{stored_bytes_curr}")
+        if stored_bytes_prev == stored_bytes_curr:
+            raise Exception(
+                f"used up storage before {sleep_time} sec and now are same while the workload is in progress"
+            )
+        stored_bytes_prev = stored_bytes_curr
     workload_status = get_workload_status(controller, wid)
     if "FINISHED" in workload_status:
         LOG.info("workload completed successfully")
