@@ -168,7 +168,12 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 2G
+            rep_pool_config:
+              mode: "image"
+              size: "2G"
+            ec_pool_config:
+              mode: "image"
+              size: "2G"
       polarion-id: CEPH-83573618
       desc: Testing journal mirroring to snapshot mirroring
 

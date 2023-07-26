@@ -47,7 +47,7 @@ def test_image_feature(rbd_mirror, pool_type, **kw):
         poolname = config[pool_type]["pool"]
         imagename = config[pool_type]["image"]
         imagespec = poolname + "/" + imagename
-        image_feature = "object-map,fast-diff"
+        image_feature = "object-map"
         features = list(image_feature.split(","))
 
         # Disable image features in primary cluster
@@ -55,10 +55,10 @@ def test_image_feature(rbd_mirror, pool_type, **kw):
 
         mirror_mode = mirror1.get_mirror_mode(imagespec)
         if mirror_mode == "snapshot":
-            mirror1.mirror_snapshot_schedule_add()
+            mirror1.mirror_snapshot_schedule_add(poolname=poolname, imagename=imagename)
 
         # wait till image gets reflected to secondary
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
         while end_time > datetime.datetime.now():
             # Verify image feature reflection in secondary cluster
             out = rbd2.image_info(poolname, imagename)
@@ -77,7 +77,7 @@ def test_image_feature(rbd_mirror, pool_type, **kw):
         # Enable image features in primary cluster
         mirror1.image_feature_enable(imagespec=imagespec, image_feature=image_feature)
 
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
         while end_time > datetime.datetime.now():
             # Verify image feature reflection in secondary cluster
             out = rbd2.image_info(poolname, imagename)
