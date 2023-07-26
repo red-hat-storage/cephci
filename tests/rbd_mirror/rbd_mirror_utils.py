@@ -1267,6 +1267,10 @@ def rbd_mirror_config(**kw):
             RbdMirror(cluster, kw.get("config", {}))
             for cluster in kw.get("ceph_cluster_dict").values()
         ]
+        # RbdMirror class initiates a different poolname for data pool in every cluster
+        # Since we are using same ec pool, it would be required to use same data pool as well,
+        # Below line of code ensures that.
+        ec_mirror2.datapool = ec_mirror1.datapool
 
         # Create ec pool config with all necessary config when some ec pool config is specified
         if kw.get("config").get("ec_pool_config"):

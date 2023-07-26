@@ -179,6 +179,10 @@ def run(**kw):
                     log.error(error.message)
                     return 1
 
+                except Exception as error:
+                    log.error(error)
+                    return 1
+
                 finally:
                     if not kw.get("config").get("do_not_cleanup_pool"):
                         mirror1.clean_up(
