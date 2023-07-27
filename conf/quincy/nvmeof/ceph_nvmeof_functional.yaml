@@ -40,3 +40,9 @@ globals:
       node7:
         role:
           - client
+      node8:
+        role:
+          - client
+      node9:
+        role:
+          - client
