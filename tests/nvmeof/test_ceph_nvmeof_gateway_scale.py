@@ -100,7 +100,7 @@ def run_io(ceph_cluster, io):
         io_args = {
             "device_name": target["DevicePath"],
             "client_node": client,
-            "run_time": "30",
+            "run_time": "10",
             "long_running": True,
             "io_type": io["io_type"],
             "cmd_timeout": "notimeout",
