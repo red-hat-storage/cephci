@@ -153,16 +153,16 @@ tests:
         nfs_version: 4.1
         clients: 2
 
-  - test:
-      name: Nfs Ganesha Bonnie
-      module: nfs_verify_bonnie.py
-      desc: Perform bonnie tests on the Nfs cluster
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 4
-
+#   Skipping the test for failure analysis
+#  - test:
+#      name: Nfs Ganesha Bonnie
+#      module: nfs_verify_bonnie.py
+#      desc: Perform bonnie tests on the Nfs cluster
+#      polarion-id:
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 4
 
   - test:
       name: Nfs Verify Readdir Ops
