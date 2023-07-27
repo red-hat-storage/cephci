@@ -238,3 +238,13 @@ tests:
           client01 : create_files
           client02 : change_permission
           client03 : perform_lookups
+
+  - test:
+      name: Nfs export Readonly parameter
+      module: test_export_readonly.py
+      desc: Test NFS export with Readonly
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
