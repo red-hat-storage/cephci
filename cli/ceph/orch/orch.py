@@ -66,7 +66,7 @@ class Orch(Cli):
         """
         cmd = f"{self.base_cmd} apply"
         if service_name:
-            cmd += " {service_name}"
+            cmd += f" {service_name}"
         for arg in kw.pop("pos_args"):
             cmd += f" {arg}"
         cmd += build_cmd_from_args(**kw)
