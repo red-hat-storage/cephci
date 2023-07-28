@@ -36,7 +36,8 @@ def run_io(ceph_cluster, gateway, config, io):
     }
     json_format = {"output-format": "json"}
     # Discover the subsystems
-    sub_nqns, _ = initiator.discover(**{**cmd_args | json_format})
+    _disc_cmd = {**cmd_args, **json_format}
+    sub_nqns, _ = initiator.discover(**_disc_cmd)
     LOG.debug(sub_nqns)
     for nqn in json.loads(sub_nqns)["records"]:
         if nqn["trsvcid"] == str(config["listener_port"]):
