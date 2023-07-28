@@ -278,3 +278,14 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
+
+  - test:
+      name: Verify deployment NFS-Ganesha cluster on 2 Nodes
+      module: nfs_verify_multi_node_cluster.py
+      desc: Verify deployment of NFS ganesha on a given number of nodes
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        nfs_cluster_nodes: 2
