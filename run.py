@@ -89,6 +89,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
         [--skip-sos-report]
+        [--skip-tc <items>]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
@@ -149,6 +150,7 @@ Options:
                                     rhel images for Interop runs
   --skip-sos-report                 Enables to collect sos-report on test suite failures
                                     [default: false]
+  --skip-tc <items>                 skip test case provided in comma seperated fashion
 """
 log = Log()
 test_names = []
@@ -448,6 +450,13 @@ def run(args):
 
     post_results = args.get("--post-results")
     skip_setup = args.get("--skip-cluster")
+    skip_tc = args.get("--skip-tc")
+    if skip_tc:
+        skip_tc_list = (
+            [item for item in skip_tc.split(",")] if "," in skip_tc else [skip_tc]
+        )
+    else:
+        skip_tc_list = []
     skip_subscription = args.get("--skip-subscription")
 
     instances_name = args.get("--instances-name")
@@ -767,17 +776,19 @@ def run(args):
                     _rhcs_version = config["build"]
                 # Initialize the cluster with the expected rhcs_version
                 ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
-
-                rc = test_mod.run(
-                    ceph_cluster=ceph_cluster_dict[cluster_name],
-                    ceph_nodes=ceph_cluster_dict[cluster_name],
-                    config=config,
-                    parallel=parallel,
-                    test_data=ceph_test_data,
-                    ceph_cluster_dict=ceph_cluster_dict,
-                    clients=clients,
-                    run_config=run_config,
-                )
+                if mod_file_name not in skip_tc_list:
+                    rc = test_mod.run(
+                        ceph_cluster=ceph_cluster_dict[cluster_name],
+                        ceph_nodes=ceph_cluster_dict[cluster_name],
+                        config=config,
+                        parallel=parallel,
+                        test_data=ceph_test_data,
+                        ceph_cluster_dict=ceph_cluster_dict,
+                        clients=clients,
+                        run_config=run_config,
+                    )
+                else:
+                    rc = -1
             except BaseException as be:  # noqa
                 log.exception(be)
                 rc = 1
@@ -799,6 +810,14 @@ def run(args):
         if rc == 0:
             tc["status"] = "Pass"
             msg = "Test {} passed".format(test_mod)
+            log.info(msg)
+            print(msg)
+
+            if post_results:
+                post_to_polarion(tc=tc)
+        elif rc == -1:
+            tc["status"] = "Skipped"
+            msg = "Test {} Skipped".format(test_mod)
             log.info(msg)
             print(msg)
 
