@@ -1,5 +1,7 @@
 """
-This file contains the  methods to verify the Bluestore features.
+This file contains the  methods to verify the following Bluestore features.
+1.Checking the OSD memory with the heap dump
+2.Checking the OSD memory growth with the dump mem pools
 """
 
 import datetime
@@ -7,6 +9,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.rados_scrub import RadosScrubber
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -16,7 +19,7 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    Performs various pool related validation tests
+    Performs the Bluestore related tests.
     Returns:
         1 -> Fail, 0 -> Pass
     """
@@ -24,10 +27,12 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_object = RadosOrchestrator(node=cephadm)
+    scrub_object = RadosScrubber(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_object)
     ceph_nodes = kw.get("ceph_nodes")
     osd_list = []
     total_osd_app_mem = {}
+    osd_mem_pool = {}
 
     for node in ceph_nodes:
         if node.role == "osd":
@@ -83,8 +88,8 @@ def run(ceph_cluster, **kw):
         # get the osd application used memory
         osd_app_mem = get_bytes_used_by_app(heap_dump)
         total_osd_app_mem = mergeDictionary(total_osd_app_mem, osd_app_mem)
-        # wait for 10 seconds and collecting the memory
-        time.sleep(10)
+        # wait for 60 seconds and collecting the memory
+        time.sleep(60)
     for osd_id, mem_list in total_osd_app_mem.items():
         mem_growth = is_what_percent_mem(mem_list)
         if mem_growth > 80:
@@ -95,6 +100,48 @@ def run(ceph_cluster, **kw):
         log.info(f"The relative memory growth for the osd.{osd_id} is {mem_growth} ")
 
     rados_object.change_heap_profiler_state(osd_list, "stop")
+    execution_time = config["execution-time"]
+    log.info(f"Checking osd memery growth for {execution_time} minutes")
+
+    # Setting the scheduled scrub parameters to enable scrubbing continiously
+    if scrub_object.get_osd_configuration("osd_scrub_begin_hour") != 0:
+        scrub_object.set_osd_configuration("osd_scrub_begin_hour", 0)
+        log.info("The osd_scrub_begin_hour is set to 0")
+    if scrub_object.get_osd_configuration("osd_scrub_end_hour") != 0:
+        scrub_object.set_osd_configuration("osd_scrub_end_hour", 0)
+        log.info("The osd_scrub_end_hour is set to 0")
+    if scrub_object.get_osd_configuration("osd_scrub_begin_week_day") != 0:
+        scrub_object.set_osd_configuration("osd_scrub_begin_week_day", 0)
+        log.info("The osd_scrub_begin_week_day is set to 0")
+    if scrub_object.get_osd_configuration("osd_scrub_end_week_day") != 0:
+        scrub_object.set_osd_configuration("osd_scrub_end_week_day", 0)
+        log.info("The osd_scrub_end_week_day is set to 0")
+
+    # Stroring the initial memory
+    for osd in osd_list:
+        memory = get_mempool_bytes(rados_object, osd)
+        osd_mem_pool[osd] = memory
+
+    # Intentional sleep
+    time.sleep(int(execution_time) * 60)
+    log.info(f"Intentional sleep for the {execution_time} minutes")
+
+    # Checking the osd memory
+    for osd in osd_list:
+        new_memory = get_mempool_bytes(rados_object, osd)
+        old_memory = osd_mem_pool.get(osd)
+        log.info(f"The initial memory is :{old_memory}")
+        log.info(f"The new memory is :{new_memory}")
+        rel_mem_bytes = int(new_memory) - int(old_memory)
+        # convert bytes to gb
+        gb = rel_mem_bytes / (1024 * 1024 * 1024)
+        log.info(f"The relative memory growth of OSD{osd} is {gb}")
+
+        # Checking the OSD memory is increased or not while scrubbing
+        if int(gb) > 2:
+            msg = f"The memory for the osd.'{osd}' increasing and memory is greater than 2gb"
+            log.error(msg)
+            return 1
 
     # check fo the crashes in the cluster
     crash_list = rados_object.do_crash_ls()
@@ -102,6 +149,21 @@ def run(ceph_cluster, **kw):
         return 0
     else:
         return 1
+
+
+def get_mempool_bytes(rados_obj, osd_id):
+    """
+    To get the memory occupied by  the OSD
+    Args:
+         rados_obj : Rados object for executing ceph commands
+         osd_id: osd id number
+    Return:
+          mem_bytes : Memory occuped by the osd in bytes
+    """
+    cmd = f"ceph tell osd.{osd_id} dump_mempools"
+    out = rados_obj.run_ceph_command(cmd)
+    mem_bytes = int(out["mempool"]["total"]["bytes"])
+    return mem_bytes
 
 
 def is_what_percent_mem(mem_list):

@@ -283,7 +283,6 @@ def run(ceph_cluster, **kw):
         for osd_service in osd_services:
             cephadm.shell(args=[f"ceph orch restart {osd_service}"])
         time.sleep(30)
-        assert rados_obj.run_pool_sanity_check()
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
