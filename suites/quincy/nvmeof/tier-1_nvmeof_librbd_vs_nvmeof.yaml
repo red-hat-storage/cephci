@@ -57,8 +57,6 @@ tests:
         nodes:
           - node6
           - node7
-          - node8
-          - node9
         install_packages:
           - ceph-common
         copy_admin_keyring: true
