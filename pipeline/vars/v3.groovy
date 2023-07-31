@@ -1143,11 +1143,13 @@ def getBuildUser() {
 
 def getNodeList(def clusterConf){
     def conf = yamlToMap(clusterConf, env.WORKSPACE)
-    def nodesMap = conf.globals[0]["ceph-cluster"].nodes
     def nodeList = []
 
-    nodesMap.eachWithIndex { item, index ->
-        nodeList.add(item.hostname)
+    conf.globals.each { globalConfig ->
+        def nodesMap = globalConfig["ceph-cluster"].nodes
+        nodesMap.each { item ->
+            nodeList.add(item.hostname)
+        }
     }
 
     return nodeList
