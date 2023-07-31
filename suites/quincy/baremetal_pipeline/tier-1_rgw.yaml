@@ -1,212 +1,72 @@
-# Test suite for for baremetal rgw-multisite deployment and testing multisite sync at scale.
-#
-# This suite deploys a Longevity environment on baremetal machines. It is a multisite environment with each site having a storage capacity of 617Tb.
-# each site has around 7 osd hosts and a total of 90 osds.
-# A single realm (India) spanning across two RHCS clusters. It has a
-# zonegroup (shared) which also spans across the clusters. There exists a master (primary)
-# and secondary (secondary) zone within this group. The master zone is part of the pri
-# cluster whereas the sec zone is part of the sec datacenter (cluster).
+# RGW build evaluation
+# The following evaluations are carried out
+# - Build can be deployed using CephADM
+# - The cluster health is good
+# - End users can perform object operations.
 
-# The deployment is evaluated by running IOs across the environments.
+# tested with conf file: conf/quincy/baremetal_pipeline/mero_conf.yaml
 
 tests:
+
+  # Cluster deployment stage
+
   - test:
       abort-on-fail: true
       desc: Install software pre-requisites for cluster deployment.
       module: install_prereq.py
       name: setup pre-requisites
+
   - test:
       abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: bootstrap
-                  service: cephadm
-                  args:
-                    registry-url: registry.redhat.io
-                    mon-ip: folio01
-                    allow-fqdn-hostname: true
-                    orphan-initial-daemons: true
-                    initial-dashboard-password: admin@123
-                    dashboard-password-noupdate: true
-              - config:
-                  command: add_hosts
-                  service: host
-                  args:
-                    attach_ip_address: true
-                    labels: apply-all-labels
-              - config:
-                  command: apply
-                  service: mgr
-                  args:
-                    placement:
-                      label: mgr
-              - config:
-                  command: apply
-                  service: mon
-                  args:
-                    placement:
-                      label: mon
-              - config:
-                  command: apply
-                  service: osd
-                  args:
-                    all-available-devices: true
-              - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.pri.8080
-                  args:
-                    port: 8080
-                    placement:
-                      nodes:
-                        - folio15
-                        - folio16
-                        - folio17
-                        - folio18
-                        - folio19
-        ceph-sec:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: bootstrap
-                  service: cephadm
-                  args:
-                    registry-url: registry.redhat.io
-                    mon-ip: folio04
-                    allow-fqdn-hostname: true
-                    orphan-initial-daemons: true
-                    initial-dashboard-password: admin@123
-                    dashboard-password-noupdate: true
-              - config:
-                  command: add_hosts
-                  service: host
-                  args:
-                    attach_ip_address: true
-                    labels: apply-all-labels
-              - config:
-                  command: apply
-                  service: mgr
-                  args:
-                    placement:
-                      label: mgr
-              - config:
-                  command: apply
-                  service: mon
-                  args:
-                    placement:
-                      label: mon
-              - config:
-                  command: apply
-                  service: osd
-                  args:
-                    all-available-devices: true
-              - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.sec.8080
-                  args:
-                    port: 8080
-                    placement:
-                      nodes:
-                        - folio20
-                        - folio21
-                        - folio22
-                        - folio23
-                        - folio24
-      desc: RHCS cluster deployment using cephadm.
-      polarion-id: CEPH-83575222
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
+      polarion-id: CEPH-83573713
       module: test_cephadm.py
-      name: deploy cluster
+      name: RHCS deploy cluster using cephadm
 
   - test:
       abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - folio01
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - folio01
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-        ceph-sec:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - folio04
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - folio04
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-      name: Monitoring Services deployment
-      desc: Add monitoring services using spec file.
-      module: test_cephadm.py
-      polarion-id: CEPH-83574727
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            command: add
-            id: client.pri
-            node: folio01
-            install_packages:
-              - ceph-common
-            copy_admin_keyring: true
-        ceph-sec:
-          config:
-            command: add
-            id: client.sec
-            node: folio04
-            install_packages:
-              - ceph-common
-            copy_admin_keyring: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
       desc: Configure the RGW client system
       polarion-id: CEPH-83573758
       destroy-cluster: false
@@ -250,105 +110,66 @@ tests:
       polarion-id: CEPH-10362
 
   - test:
-      clusters:
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-              - "radosgw-admin user list"
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-              - "radosgw-admin user list"
-      desc: Retrieve the configured environment details
-      polarion-id: CEPH-83575227
-      module: exec.py
-      name: get shared realm info
+      name: Parallel run
+      desc: RGW tier-0 parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
 
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            haproxy_clients:
-              - folio01
-              - folio02
-              - folio03
-            rgw_endpoints:
-              - "folio15:8080"
-              - "folio16:8080"
-              - "folio17:8080"
-              - "folio18:8080"
-              - "folio19:8080"
-        ceph-sec:
-          config:
-            haproxy_clients:
-              - folio04
-              - folio05
-              - folio06
-            rgw_endpoints:
-              - "folio20:8080"
-              - "folio21:8080"
-              - "folio22:8080"
-              - "folio23:8080"
-              - "folio24:8080"
-      desc: "Configure HAproxy"
-      module: haproxy.py
-      name: "Configure HAproxy"
-      polarion-id: CEPH-83572703
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with delete
+            module: sanity_rgw.py
+            name: Test delete using M buckets with N objects
+            polarion-id: CEPH-14237
 
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            controllers:
-              - folio01
-            drivers:
-              count: 3
-              hosts:
-                - folio01
-                - folio02
-                - folio03
-        ceph-sec:
-          config:
-            controllers:
-              - folio04
-            drivers:
-              count: 3
-              hosts:
-                - folio04
-                - folio05
-                - folio06
-      desc: Start COS Bench controller and driver
-      module: cosbench.py
-      name: deploy cosbench
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with download
+            module: sanity_rgw.py
+            name: Test download with M buckets with N objects
+            polarion-id: CEPH-14237
 
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            controllers:
-              - folio01
-            drivers: # if drivers are not specified will use one of the rgw node
-              - folio01
-              - folio02
-              - folio03
-            fill_percent: 30
-    desc: prepare and push cosbench fill workload
-    module: push_cosbench_workload.py
-    name: push cosbench fill workload
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+            module: sanity_rgw.py
+            name: Test multipart upload of M buckets with N objects
+            polarion-id: CEPH-9801
+
+        - test:
+            config:
+              script-name: test_swift_basic_ops.py
+              config-file-name: test_swift_basic_ops.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: Test object operations with swift
+            module: sanity_rgw.py
+            name: Swift based tests
+            polarion-id: CEPH-11019

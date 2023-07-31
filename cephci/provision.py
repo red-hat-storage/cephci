@@ -1,6 +1,7 @@
 import multiprocessing as mp
 
 import yaml
+from cluster_conf import collect_conf, write_output
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
 
@@ -24,6 +25,7 @@ Utility to cleanup cluster from cloud
             (--inventory <YAML>)
             (--prefix <STR>)
             (--log-level <LOG>)
+            [--cluster-conf <YAML>]
             [--config <YAML>]
             [--image <STR>]
             [--vmsize <STR>]
@@ -41,6 +43,7 @@ Utility to cleanup cluster from cloud
         --image <STR>               Cloud images to be used for node
         --network <STR>             Cloud network to be attached to node
         --vmsize <STR>              Cloud image flavor
+        --cluster-conf <YAML>       Cluster config file path
         --config <YAML>             Config file with cloud credentials
 """
 
@@ -193,6 +196,7 @@ if __name__ == "__main__":
     image = args.get("--image")
     vmsize = args.get("--vmsize")
     log_level = args.get("--log-level")
+    cluster_conf = args.get("--cluster-conf")
 
     # Set log level
     _set_log(log_level)
@@ -214,3 +218,12 @@ if __name__ == "__main__":
 
     # Provision cluster
     provision(cloud, prefix, global_configs, node_configs, timeout, interval)
+
+    # Cleanup cluster
+    data = collect_conf(cloud, prefix, global_configs)
+
+    # Log cluster configuration
+    log.info(f"\nCluster configuration details -\n{data}")
+
+    # write output to yaml
+    write_output(cluster_conf, data) if cluster_conf else None

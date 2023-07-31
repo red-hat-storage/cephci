@@ -51,7 +51,7 @@ def run(ceph_cluster, **kw):
         out, err = cephadm.shell(args=[exec_cmd], check_status=False)
         log.debug(f"stdout: {out}")
         log.debug(f"stderr: {err}")
-        if type(value) == str and (
+        if isinstance(value, str) and (
             f"Invalid command: {value} doesn't represent a float" in err
             or f"Invalid command: {value} doesn't represent an int"
         ):

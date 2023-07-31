@@ -71,7 +71,7 @@ tests:
   - test:
       abort-on-fail: true
       config:
-        gw_node: node6
+        gw_node: node6                        # NVMEoF Gateway node collocated with OSD node
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
@@ -90,10 +90,39 @@ tests:
           - subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
             node: node7
-      desc: Setup NVMEoF Gateway and Run IOs on targets
+      desc: Deploy NVMEoF Gateway collocated with OSD node
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
-      name: Basic Ceph NVMEoF GW sanity test
+      name: Test to setup NVMEoF Gateway collocated with OSD node and run IOs
+      polarion-id:
+
+#  Perform Data Integrity tests
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node6                        # NVMEoF Gateway node collocated with OSD node
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: false                           # Run SPDK with all pre-requisites
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 2
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 5002
+            allow_host: "*"
+        initiator: # Configure Initiators with all pre-req
+            subnqn: nqn.2016-06.io.spdk:cnode2
+            listener_port: 5002
+            node: node7
+      desc: Perform Data integrity test over NVMEoF targets
+      destroy-cluster: false
+      module: test_ceph_nvmeof_data_integrity.py
+      name: Test to perform Data Integrity test over NVMe-OF targets
       polarion-id:
 
 # Run IOs using multiple-initiators against multi-subsystems based NVMe-OF targets using fio tool
@@ -108,13 +137,6 @@ tests:
           pool: rbd
         install: false                           # Run SPDK with all pre-requisites
         subsystems:                             # Configure subsystems with all sub-entities
-          - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 2
-            bdevs:
-              count: 1
-              size: 10G
-            listener_port: 5002
-            allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
             serial: 3
             bdevs:
@@ -122,12 +144,19 @@ tests:
               size: 10G
             listener_port: 5003
             allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            serial: 4
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 5004
+            allow_host: "*"
         initiators:                             # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:cnode2
-            listener_port: 5002
-            node: node8
           - subnqn: nqn.2016-06.io.spdk:cnode3
             listener_port: 5003
+            node: node8
+          - subnqn: nqn.2016-06.io.spdk:cnode4
+            listener_port: 5004
             node: node9
       desc: Perform IOs on multi-subsystems with Multiple-Initiators
       destroy-cluster: false
@@ -135,7 +164,7 @@ tests:
       name: Test to run IOs using multiple-initiators against multi-subsystems
       polarion-id:
 
-  # Cleanup Test Case
+#  # Cleanup Test Case
   - test:
       abort-on-fail: true
       config:
@@ -148,12 +177,15 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
           - nqn: nqn.2016-06.io.spdk:cnode2
           - nqn: nqn.2016-06.io.spdk:cnode3
+          - nqn: nqn.2016-06.io.spdk:cnode4
         initiators:
           - subnqn: nqn.2016-06.io.spdk:cnode1
             node: node7
           - subnqn: nqn.2016-06.io.spdk:cnode2
-            node: node8
+            node: node7
           - subnqn: nqn.2016-06.io.spdk:cnode3
+            node: node8
+          - subnqn: nqn.2016-06.io.spdk:cnode4
             node: node9
         cleanup-only: true                        # clean up only
         cleanup:
@@ -165,26 +197,3 @@ tests:
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
       name: Cleanup the nvme-of Gateway entities
-
-  # Test IO Perf
-  - test:
-      name: librbd VS nvmeof - Read and Write IO comparison bench test
-      description: Write and Read IO comparison on 10G image with 4kb-block-size
-      module: test_io_perf.py
-      config:
-        iterations: 1               # number of iterations to find out average
-        io_profiles:
-          - FIO_WRITE_BS_4k_IODepth8_LIBAIO
-          - FIO_READ_BS_4k_IODepth8_LIBAIO
-        io_exec:
-            -   proto: librbd
-                image:
-                    size: 10G
-                    count: 1
-                node: node7             # client node
-            -   proto: nvmeof
-                image:
-                    size: 10G
-                    count: 1
-                gw_node: node6          # gateway node
-                initiator_node: node7   # client node

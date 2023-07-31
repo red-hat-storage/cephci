@@ -1,21 +1,21 @@
-# Test suite for evaluating RGW multi-site deployment scenario.
+# Test suite for for baremetal rgw-multisite deployment and testing multisite sync at scale.
 #
-# This suite deploys a single realm (India) spanning across two RHCS clusters. It has a
-# zonegroup (shared) which also spans across the clusters. There exists a master (pri)
-# and secondary (sec) zones within this group. The master zone is part of the pri
+# This suite deploys a Longevity environment on baremetal machines. It is a multisite environment with each site having a storage capacity of 617Tb.
+# each site has around 7 osd hosts and a total of 90 osds.
+# A single realm (India) spanning across two RHCS clusters. It has a
+# zonegroup (shared) which also spans across the clusters. There exists a master (primary)
+# and secondary (secondary) zone within this group. The master zone is part of the pri
 # cluster whereas the sec zone is part of the sec datacenter (cluster).
 
 # The deployment is evaluated by running IOs across the environments.
+# tested with conf file: conf/quincy/baremetal_pipeline/folio_conf.yaml
+
 tests:
-
-  # Cluster deployment stage
-
   - test:
       abort-on-fail: true
       desc: Install software pre-requisites for cluster deployment.
       module: install_prereq.py
       name: setup pre-requisites
-
   - test:
       abort-on-fail: true
       clusters:
@@ -28,7 +28,8 @@ tests:
                   service: cephadm
                   args:
                     registry-url: registry.redhat.io
-                    mon-ip: node1
+                    mon-ip: folio01
+                    allow-fqdn-hostname: true
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
@@ -59,11 +60,16 @@ tests:
                   command: apply
                   service: rgw
                   pos_args:
-                    - shared.pri
+                    - shared.pri.8080
                   args:
+                    port: 8080
                     placement:
                       nodes:
-                        - node5
+                        - folio15
+                        - folio16
+                        - folio17
+                        - folio18
+                        - folio19
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -73,7 +79,8 @@ tests:
                   service: cephadm
                   args:
                     registry-url: registry.redhat.io
-                    mon-ip: node1
+                    mon-ip: folio04
+                    allow-fqdn-hostname: true
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
@@ -104,11 +111,16 @@ tests:
                   command: apply
                   service: rgw
                   pos_args:
-                    - shared.sec
+                    - shared.sec.8080
                   args:
+                    port: 8080
                     placement:
                       nodes:
-                        - node5
+                        - folio20
+                        - folio21
+                        - folio22
+                        - folio23
+                        - folio24
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -131,11 +143,11 @@ tests:
                       placement:
                         count: 1
                         nodes:
-                          - node1
+                          - folio01
                     - service_type: grafana
                       placement:
                         nodes:
-                          - node1
+                          - folio01
                     - service_type: alertmanager
                       placement:
                         count: 1
@@ -158,11 +170,11 @@ tests:
                       placement:
                         count: 1
                         nodes:
-                          - node1
+                          - folio04
                     - service_type: grafana
                       placement:
                         nodes:
-                          - node1
+                          - folio04
                     - service_type: alertmanager
                       placement:
                         count: 1
@@ -172,7 +184,7 @@ tests:
                     - service_type: crash
                       placement:
                         host_pattern: "*"
-      name: Monitoring Service deployment
+      name: Monitoring Services deployment
       desc: Add monitoring services using spec file.
       module: test_cephadm.py
       polarion-id: CEPH-83574727
@@ -183,16 +195,20 @@ tests:
         ceph-pri:
           config:
             command: add
-            id: client.1
-            node: node6
+            id: client.pri
+            node:
+              - folio01
+              - folio10
             install_packages:
               - ceph-common
             copy_admin_keyring: true
         ceph-sec:
           config:
             command: add
-            id: client.1
-            node: node6
+            id: client.sec
+            node:
+              - folio04
+              - folio14
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -201,6 +217,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+
   - test:
       abort-on-fail: true
       clusters:
@@ -209,195 +226,134 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
-              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key test123 --secret test123 --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key test123 --secret test123"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
-              - "ceph orch restart {service_name:shared.pri}"
+              - "ceph config set client.rgw.* rgw_realm india"
+              - "ceph config set client.rgw.* rgw_zonegroup shared"
+              - "ceph config set client.rgw.* rgw_zone primary"
+              - "ceph orch restart rgw.shared.pri.8080"
         ceph-sec:
           config:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin realm pull --rgw-realm india --url http://folio15:8080 --access-key test123 --secret test123 --default"
+              - "radosgw-admin period pull --url http://folio15:8080 --access-key test123 --secret test123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:folio20}:8080,http://{node_ip:folio21}:8080,http://{node_ip:folio22}:8080,http://{node_ip:folio23}:8080,http://{node_ip:folio24}:8080 --access-key test123 --secret test123"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
-              - "ceph orch restart {service_name:shared.sec}"
+              - "ceph config set client.rgw.* rgw_realm india"
+              - "ceph config set client.rgw.* rgw_zonegroup shared"
+              - "ceph config set client.rgw.* rgw_zone secondary"
+              - "ceph orch restart rgw.shared.sec.8080"
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
+
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
             cephadm: true
             commands:
+              - "ceph versions"
               - "radosgw-admin sync status"
               - "ceph -s"
               - "radosgw-admin realm list"
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
-      desc: Retrieve the configured environment details
-      polarion-id: CEPH-83575227
-      module: exec.py
-      name: get shared realm info on primary
-  - test:
-      abort-on-fail: true
-      clusters:
+              - "radosgw-admin user list"
         ceph-sec:
           config:
             cephadm: true
             commands:
+              - "ceph versions"
               - "radosgw-admin sync status"
               - "ceph -s"
               - "radosgw-admin realm list"
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
+              - "radosgw-admin user list"
       desc: Retrieve the configured environment details
       polarion-id: CEPH-83575227
       module: exec.py
-      name: get shared realm info on secondary
-  # Test work flow
+      name: get shared realm info
 
   - test:
+      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
-            set-env: true
-            script-name: user_create.py
-            config-file-name: non_tenanted_user.yaml
-            copy-user-info-to-site: ceph-sec
-            timeout: 300
-      desc: create non-tenanted user
-      polarion-id: CEPH-83575199
-      module: sanity_rgw_multisite.py
-      name: create non-tenanted user
-  # add datalog omap tests
-  - test:
-      name:  datalog omap offload on secondary
-      desc: Execute datalog omap offload on secondary
-      polarion-id: CEPH-83573695
-      module: sanity_rgw_multisite.py
-      clusters:
+            haproxy_clients:
+              - folio01
+              - folio02
+              - folio03
+            rgw_endpoints:
+              - "folio15:8080"
+              - "folio16:8080"
+              - "folio17:8080"
+              - "folio18:8080"
+              - "folio19:8080"
         ceph-sec:
           config:
-            script-name: test_data_omap_offload.py
-            config-file-name: test_data_omap_offload.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
+            haproxy_clients:
+              - folio04
+              - folio05
+              - folio06
+            rgw_endpoints:
+              - "folio20:8080"
+              - "folio21:8080"
+              - "folio22:8080"
+              - "folio23:8080"
+              - "folio24:8080"
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+      polarion-id: CEPH-83572703
 
   - test:
-      name:  datalog omap offload with multipart objects on secondary
-      desc: Execute datalog omap offload with multipart objects on secondary
-      polarion-id: CEPH-83573691
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_data_omap_offload.py
-            config-file-name: test_data_omap_offload_multipart.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-
-  - test:
-      name:  datalog omap offload on versioned bucket on secondary
-      desc:  Execute datalog omap offload on versioned bucket on secondary
-      polarion-id: CEPH-83573691
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_data_omap_offload.py
-            config-file-name: test_data_omap_offload_versioned_bucket.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-
-  - test:
-      name: datalog trim command with delete marker enabled on secondary
-      desc: Execute datalog trim command with delete marker enabled on secondary
-      polarion-id: CEPH-83574591
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name:  test_Mbuckets_with_Nobjects.py
-            config-file-name:  test_datalog_trim_command.yaml
-            timeout: 300
-            verify-io-on-site: ["ceph-pri"]
-  - test:
-      name: Test DBR reshard list and cancel command on secondary
-      desc: Test DBR reshard list and cancel command on secondary
-      polarion-id: CEPH-83573590
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name:  test_Mbuckets_with_Nobjects.py
-            config-file-name:  test_Mbuckets_with_Nobjects_reshard_cancel_cmd.yaml
-            timeout: 300
-            verify-io-on-site: ["ceph-pri"]
-
-  - test:
-      name: Test LC Expiration on multisite
-      desc: Test LC Expiration on multisite
-      polarion-id: CEPH-10737
-      module: sanity_rgw_multisite.py
+      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
-            script-name:  test_bucket_lifecycle_object_expiration_transition.py
-            config-file-name:  test_lc_rule_prefix_and_tag.yaml
-            timeout: 300
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-
-  - test:
-      name: RGW multipart object expiration through lc on Secondary
-      desc: RGW multipart object expiration through lc on Secondary
-      polarion-id: CEPH-83574834
-      module: sanity_rgw_multisite.py
-      clusters:
+            controllers:
+              - folio01
+            drivers:
+              count: 3
+              hosts:
+                - folio01
+                - folio02
+                - folio03
         ceph-sec:
           config:
-            script-name:  test_bucket_lc_object_exp_multipart.py
-            config-file-name:  test_bucket_lc_object_exp_multipart.yaml
-            timeout: 300
-            verify-io-on-site: ["ceph-pri"]
+            controllers:
+              - folio04
+            drivers:
+              count: 3
+              hosts:
+                - folio04
+                - folio05
+                - folio06
+      desc: Start COS Bench controller and driver
+      module: cosbench.py
+      name: deploy cosbench
 
   - test:
-      name: Basic ACLs Test
-      desc: Test basic acls
-      polarion-id: CEPH-14241
-      module: sanity_rgw_multisite.py
+      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
-            test-version: v1
-            run-on-rgw: true
-            script-name: test_acls.py
-            config-file-name: test_acls.yaml
-            timeout: 300
-
-# please include test cases before below rename testcase as the process is disruptive currently
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_check_sharding_enabled.py
-            config-file-name: test_zonegroup_rename.yaml
-            timeout: 300
-      desc: Test zonegroup rename in master
-      module: sanity_rgw_multisite.py
-      name: Perform zonegroup rename in master
-      polarion-id: CEPH-10740
-      comments: known issue (BZ2210695)
+            controllers:
+              - folio01
+            drivers: # if drivers are not specified will use one of the rgw node
+              - folio01
+              - folio02
+              - folio03
+            fill_percent: 30
+      desc: prepare and push cosbench fill workload
+      module: push_cosbench_workload.py
+      name: push cosbench fill workload

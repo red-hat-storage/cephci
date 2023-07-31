@@ -56,24 +56,12 @@ def test_journal_to_snapshot(rbd_mirror, pool_type, **kw):
     """
     try:
         log.info("Starting RBD mirroring test case")
-        config = kw.get("config")
+        config = kw.get("config", {}).get(pool_type)
         mirror1 = rbd_mirror.get("mirror1")
         mirror2 = rbd_mirror.get("mirror2")
-        poolname = mirror1.random_string() + "_tier_2_rbd_mirror_pool"
-        imagename = mirror1.random_string() + "_tier_2_rbd_mirror_image"
+        poolname = config.get("pool")
+        imagename = config.get("image")
         imagespec = poolname + "/" + imagename
-
-        # initial mirror configuration
-        mirror1.initial_mirror_config(
-            mirror2,
-            poolname=poolname,
-            imagename=imagename,
-            imagesize=config.get("imagesize", "1G"),
-            io_total=config.get("io-total", "1G"),
-            mode="image",
-            mirrormode="journal",
-            **kw,
-        )
 
         mirrormode = mirror1.get_mirror_mode(imagespec)
         # Verification of Negative test as image should not allow write operation from secondary

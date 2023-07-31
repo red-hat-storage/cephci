@@ -8,7 +8,7 @@ globals:
         -
           hostname: folio01.ceph.redhat.com
           ip: 10.1.172.221
-          root_password: r
+          root_password: passwd
           role:
             - _admin
             - installer
@@ -17,21 +17,21 @@ globals:
         -
           hostname: folio02.ceph.redhat.com
           ip: 10.1.172.222
-          root_password: r
+          root_password: passwd
           role:
             - mon
             - mgr
         -
           hostname: folio03.ceph.redhat.com
           ip: 10.1.172.223
-          root_password: r
+          root_password: passwd
           role:
             - mon
             - mgr
         -
           hostname: folio15.ceph.redhat.com
           ip: 10.8.128.131
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -46,7 +46,7 @@ globals:
         -
           hostname: folio16.ceph.redhat.com
           ip: 10.8.128.132
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -61,7 +61,7 @@ globals:
         -
           hostname: folio17.ceph.redhat.com
           ip: 10.8.128.133
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -76,7 +76,7 @@ globals:
         -
           hostname: folio18.ceph.redhat.com
           ip: 10.8.128.134
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -91,7 +91,7 @@ globals:
         -
           hostname: folio19.ceph.redhat.com
           ip: 10.8.128.135
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -106,7 +106,7 @@ globals:
         -
           hostname: folio07.ceph.redhat.com
           ip: 10.1.172.227
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -119,7 +119,7 @@ globals:
         -
           hostname: folio08.ceph.redhat.com
           ip: 10.1.172.228
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -132,7 +132,7 @@ globals:
         -
           hostname: folio09.ceph.redhat.com
           ip: 10.1.172.229
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -145,16 +145,9 @@ globals:
         -
           hostname: folio10.ceph.redhat.com
           ip: 10.1.172.230
-          root_password: r
+          root_password: passwd
           role:
-            - osd
-            - rgw
-          volumes:
-            - /dev/sdb
-            - /dev/sdc
-            - /dev/sdd
-            - /dev/sde
-            - /dev/nvme0n1
+            - client
   -
     ceph-cluster:
       name: ceph-sec
@@ -164,7 +157,7 @@ globals:
         -
           hostname: folio04.ceph.redhat.com
           ip: 10.1.172.224
-          root_password: r
+          root_password: passwd
           role:
             - _admin
             - installer
@@ -173,21 +166,21 @@ globals:
         -
           hostname: folio05.ceph.redhat.com
           ip: 10.1.172.225
-          root_password: r
+          root_password: passwd
           role:
             - mon
             - mgr
         -
           hostname: folio06.ceph.redhat.com
           ip: 10.1.172.226
-          root_password: r
+          root_password: passwd
           role:
             - mon
             - mgr
         -
           hostname: folio20.ceph.redhat.com
           ip: 10.8.128.136
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -202,7 +195,7 @@ globals:
         -
           hostname: folio21.ceph.redhat.com
           ip: 10.8.128.137
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -217,7 +210,7 @@ globals:
         -
           hostname: folio22.ceph.redhat.com
           ip: 10.8.128.138
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -232,7 +225,7 @@ globals:
         -
           hostname: folio23.ceph.redhat.com
           ip: 10.8.128.139
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -247,7 +240,7 @@ globals:
         -
           hostname: folio24.ceph.redhat.com
           ip: 10.8.128.140
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -262,7 +255,7 @@ globals:
         -
           hostname: folio11.ceph.redhat.com
           ip: 10.1.172.231
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -275,7 +268,7 @@ globals:
         -
           hostname: folio12.ceph.redhat.com
           ip: 10.1.172.232
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -288,7 +281,7 @@ globals:
         -
           hostname: folio13.ceph.redhat.com
           ip: 10.1.172.233
-          root_password: r
+          root_password: passwd
           role:
             - osd
             - rgw
@@ -301,13 +294,6 @@ globals:
         -
           hostname: folio14.ceph.redhat.com
           ip: 10.1.172.234
-          root_password: r
+          root_password: passwd
           role:
-            - osd
-            - rgw
-          volumes:
-            - /dev/sdb
-            - /dev/sdc
-            - /dev/sdd
-            - /dev/sde
-            - /dev/nvme0n1
+            - client

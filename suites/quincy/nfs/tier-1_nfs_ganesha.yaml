@@ -2,13 +2,12 @@
 #-------------------------------------
 #---    Test Suite for Nfs Ganesha ---
 #-------------------------------------
-# Conf: conf/quincy/nfs/tier-0.yaml
+# Conf: conf/quincy/nfs/tier-1-8node.yaml
 # Smoke test cases for
 #    - Bootstrap
 #    - Host management
 #    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
 #    - Test NFS cluster and export create
-#
 #===============================================================================================
 tests:
   - test:
@@ -78,7 +77,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node4
+        node: node9
         install_packages:
           - ceph-common
           - ceph-fuse
@@ -93,7 +92,7 @@ tests:
       config:
         command: add
         id: client.2
-        node: node5
+        node: node10
         install_packages:
           - ceph-common
           - ceph-fuse
@@ -108,7 +107,7 @@ tests:
       config:
         command: add
         id: client.3
-        node: node6
+        node: node11
         install_packages:
           - ceph-common
           - ceph-fuse
@@ -123,7 +122,7 @@ tests:
       config:
         command: add
         id: client.4
-        node: node7
+        node: node12
         install_packages:
           - ceph-common
           - ceph-fuse
@@ -134,117 +133,51 @@ tests:
       name: configure client
 
   - test:
-      name: Nfs Ganesha File Lock
-      module: nfs_verify_file_lock.py
-      desc: Perform locking on same file from 2 different clients
+      name: NFS Service deployment with spec with 4 nodes
+      desc: Add NFS services using spec file with 4 nodes
+      module: test_cephadm.py
       polarion-id:
-      abort-on-fail: false
       config:
-        nfs_version: 4.1
-        clients: 2
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-service
+                  placement:
+                    nodes:
+                      - node1
+                      - node2
+                      - node3
+                      - node4
+                  spec:
+                    port: 2049
 
   - test:
-      name: Nfs Ganesha Pynfs
-      module: nfs_verify_pynfs.py
-      desc: Perform pynfs tests on the Nfs cluster
+      name: NFS Service deployment with spec with 8 nodes
+      desc: Add NFS services using spec file with 8 nodes
+      module: test_cephadm.py
       polarion-id:
-      abort-on-fail: false
       config:
-        nfs_version: 4.1
-        clients: 2
-
-#   Skipping the test for failure analysis
-#  - test:
-#      name: Nfs Ganesha Bonnie
-#      module: nfs_verify_bonnie.py
-#      desc: Perform bonnie tests on the Nfs cluster
-#      polarion-id:
-#      abort-on-fail: false
-#      config:
-#        nfs_version: 4.2
-#        clients: 4
-
-  - test:
-      name: Nfs Verify Readdir Ops
-      module: nfs_verify_readdir_ops.py
-      desc: Perform readir operation from clients
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 4
-
-  - test:
-      name: Nfs Ganesha rename operations
-      module: test_file_ops_renames.py
-      desc: Perform file and dir renaming and lookups in parallel
-      polarion-id:
-      abort-on-fail: true
-      config:
-        nfs_version: 4.1
-        clients: 3
-        num_files: 1000
-        num_dirs: 1000
-
-  - test:
-      name: Nfs Ganesha copy operations
-      module: test_file_ops_copy.py
-      desc: Perform file and dir copy and lookups in parallel
-      polarion-id:
-      abort-on-fail: true
-      config:
-        nfs_version: 4.1
-        clients: 3
-        num_files: 1000
-        num_dirs: 1000
-
-  - test:
-      name: Verify create file, create soflink and lookups from nfs clients
-      module: nfs_verify_file_ops_soft_links.py
-      desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-
-  - test:
-      name: Nfs Verify File Operations
-      module: nfs_verify_file_operations.py
-      desc: Change the ownership (user and group) of files within the NFS export
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-        operations:
-          client01 : create_files
-          client02 : change_ownership
-          client03 : perform_lookups
-
-  - test:
-      name: Nfs Verify File Operations
-      module: nfs_verify_file_operations.py
-      desc: Set different file permissions (read, write, execute) for files within the NFS
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-        operations:
-          client01 : create_files
-          client02 : change_permission
-          client03 : perform_lookups
-
-  - test:
-      name: Nfs export Readonly parameter
-      module: test_export_readonly.py
-      desc: Test NFS export with Readonly
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: 4.1
-        clients: 1
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-service
+                  placement:
+                    nodes:
+                      - node1
+                      - node2
+                      - node3
+                      - node4
+                      - node5
+                      - node6
+                      - node7
+                      - node8
+                  spec:
+                    port: 2049

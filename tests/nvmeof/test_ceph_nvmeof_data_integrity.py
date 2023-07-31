@@ -1,10 +1,4 @@
-"""
-Test suite that verifies the deployment of Ceph NVMeoF Gateway
- with supported entities like subsystems , etc.,
-
-"""
 import json
-from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
@@ -13,7 +7,7 @@ from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
-from utility.utils import generate_unique_id, run_fio
+from utility.utils import generate_unique_id
 
 LOG = Log(__name__)
 
@@ -48,6 +42,25 @@ def configure_subsystems(rbd, pool, gw, config):
             # Add namespace
             for num in range(count):
                 p.spawn(gw.add_namespace, sub_nqn, f"{name}-bdev{num}")
+
+
+def create_filesystem_and_mount(rbd_obj, devicepath, mount_point):
+    """Create a filesystem and mount it.
+
+    Args:
+        rbd_obj: rbdcfg object
+        devicepath: Device path to create filesystem and mount
+        mount_point: Mount point for the filesystem
+         mount_point: Mount point for the filesystem
+    """
+    # Create a filesystem
+    cmd_mkfs = f"mkfs.ext4 {devicepath}"
+    rbd_obj.exec_cmd(cmd=cmd_mkfs)
+    # Create a directory to mount the filesystem
+    rbd_obj.exec_cmd(cmd=f"mkdir -p {mount_point}")
+    # Mount the filesystem
+    cmd_mount = f"mount {devicepath} {mount_point}"
+    rbd_obj.exec_cmd(cmd=cmd_mount)
 
 
 def initiators(ceph_cluster, gateway, config):
@@ -94,33 +107,7 @@ def initiators(ceph_cluster, gateway, config):
     # List NVMe targets
     targets, _ = initiator.list(**json_format)
     LOG.debug(targets)
-
-    results = []
-    io_args = {"size": "100%"}
-    if config.get("io_args"):
-        io_args = config["io_args"]
-    with parallel() as p:
-        for target in json.loads(targets)["Devices"]:
-            _io_args = deepcopy(io_args)
-            if _io_args.get("test_name"):
-                test_name = (
-                    f"{_io_args['test_name']}-"
-                    f"{target['DevicePath'].replace('/', '_')}"
-                )
-                _io_args.update({"test_name": test_name})
-            _io_args.update(
-                {
-                    "device_name": target["DevicePath"],
-                    "client_node": client,
-                    "long_running": True,
-                    "cmd_timeout": "notimeout",
-                }
-            )
-
-            p.spawn(run_fio, **_io_args)
-        for op in p:
-            results.append(op)
-    return results
+    return targets
 
 
 def disconnect_initiator(ceph_cluster, node, subnqn):
@@ -165,9 +152,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
     - Configure SPDK and install with control interface.
-    - Configures Initiators and Run FIO on NVMe targets.
+    - Configures Initiators and Run FIO and test data integrity on NVMe targets.
+    - Cleanup the ceph-nvme gw entities.
 
     Args:
+
         ceph_cluster: Ceph cluster object
         kwargs: Key/value pairs of configuration information to be used in the test.
 
@@ -176,58 +165,14 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     Example:
 
-        # Execute the nvmeof GW test
-            - test:
-                name: Ceph NVMeoF deployment
-                desc: Configure NVMEoF gateways and initiators
-                config:
-                    gw_node: node6
-                    rbd_pool: rbd
-                    do_not_create_image: true
-                    rep-pool-only: true
-                    cleanup-only: true                          # only for cleanup
-                    rep_pool_config:
-                      pool: rbd
-                    install: true                               # Run SPDK with all pre-requisites
-                    subsystems:                                 # Configure subsystems with all sub-entities
-                      - nqn: nqn.2016-06.io.spdk:cnode3
-                        serial: 3
-                        bdevs:
-                          count: 1
-                          size: 100G
-                        listener_port: 5002
-                        allow_host: "*"
-                    initiators:                                 # Configure Initiators with all pre-req
-                      - subnqn: nqn.2016-06.io.spdk:cnode2
-                        listener_port: 5002
-                        node: node7
 
-        # Cleanup-only
-            - test:
-                  abort-on-fail: true
-                  config:
-                    gw_node: node6
-                    rbd_pool: rbd
-                    do_not_create_image: true
-                    rep-pool-only: true
-                    rep_pool_config:
-                    subsystems:
-                      - nqn: nqn.2016-06.io.spdk:cnode1
-                    initiators:
-                        - subnqn: nqn.2016-06.io.spdk:cnode1
-                          node: node7
-                    cleanup-only: true                          # Important param for clean up
-                    cleanup:
-                        - pool
-                        - subsystems
-                        - initiators
-                        - gateway
     """
     LOG.info("Starting Ceph Ceph NVMEoF deployment.")
 
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+    rbd_obj.ceph_client = get_node_by_id(ceph_cluster, config["initiator"]["node"])
 
     if config.get("cleanup-only"):
         teardown(ceph_cluster, rbd_obj, config)
@@ -245,10 +190,49 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 for subsystem in config["subsystems"]:
                     p.spawn(configure_subsystems, rbd_obj, rbd_pool, gateway, subsystem)
 
-        if config.get("initiators"):
-            with parallel() as p:
-                for initiator in config["initiators"]:
-                    p.spawn(initiators, ceph_cluster, gateway, initiator)
+        if config.get("initiator"):
+            targets = json.loads(initiators(ceph_cluster, gateway, config["initiator"]))
+            LOG.info(f"Targets discovered: {targets}")
+
+            # verifying data integrity on NVMe targets
+            for target in targets["Devices"]:
+                nvme = generate_unique_id(length=4)
+                mount_point = f"/tmp/{nvme}"  # Change this to the desired mount point
+                create_filesystem_and_mount(rbd_obj, target["DevicePath"], mount_point)
+                # FIO command to run on NVMe targets
+                fio_command = (
+                    f"fio --ioengine=sync --refill_buffers=1 "
+                    f"--log_avg_msec=1000 --size=1g --bs=128k "
+                    f"--filename={mount_point}/test.txt"
+                )
+
+                # Run FIO for Writing the files
+                LOG.info("Running FIO for write operations.")
+                cmd_write = f"{fio_command} --name=writeiops --rw=randwrite"
+                rbd_obj.exec_cmd(cmd=cmd_write)
+                # Calculate md5sum after FIO write
+                md5sum_write = rbd_obj.exec_cmd(cmd=f"md5sum {mount_point}/test.txt")
+                # unmount the device
+                rbd_obj.exec_cmd(cmd=f"umount {mount_point}")
+                # mount the NVMe target
+                rbd_obj.exec_cmd(cmd=f"mount {target['DevicePath']} {mount_point}")
+                # Run FIO for reading the files
+                LOG.info("Running FIO for read operations.")
+                cmd_read = f"{fio_command} --name=readiops --rw=randread"
+                rbd_obj.exec_cmd(cmd=cmd_read)
+                # Calculate md5sum after FIO read
+                md5sum_read = rbd_obj.exec_cmd(cmd=f"md5sum {mount_point}/test.txt")
+
+                # Compare md5sum values
+                if md5sum_write == md5sum_read:
+                    LOG.info(
+                        f"Data integrity verified successfully for target {target['DevicePath']}."
+                    )
+                else:
+                    LOG.error(
+                        f"Data integrity verification failed for target {target['DevicePath']}."
+                    )
+                    return 1
 
         return 0
     except Exception as err:

@@ -352,6 +352,21 @@ class Openstack:
 
         return volume.state if volume else None
 
+    def get_volume_device_by_name(self, name):
+        """Get volume status by name
+
+        Args:
+            name (str): Name of volume
+        """
+        if not self._volumes or name not in self._volumes.keys():
+            self.get_volumes(refresh=True)
+
+        volume = self.get_volume_by_id(self._volumes.get(name))
+        if not volume:
+            return None
+
+        return [v.get("device") for v in volume.extra.get("attachments", [])]
+
     def attach_volume(self, node, volume):
         """Attach volume to node
 

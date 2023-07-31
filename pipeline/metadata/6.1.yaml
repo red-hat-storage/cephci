@@ -49,7 +49,7 @@ pipelines:
             - rbd
         - name: "Basic Ceph-NVMeoF testing"
           execution_time: "36m 36s"
-          suite: "suites/quincy/nvmeof/ceph_nvmeof_deployment.yaml"
+          suite: "suites/quincy/nvmeof/tier-0_nvmeof_sanity.yaml"
           global-conf: "conf/quincy/nvmeof/ceph_nvmeof_cluster.yaml"
           platform: "rhel-9"
           inventory:

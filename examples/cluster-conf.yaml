@@ -1,0 +1,84 @@
+
+<cluster-name>:
+  <node-name-1>:
+    hostname: <fake-hostname>
+    id: <fake-node-id>
+    credentials:
+      - user: <user-root>
+        password: <user-root-password>
+      - user: <user-cephuser>
+        password: <user-cephuser-password>
+    roles:
+      - _admin
+      - installer
+      - osd
+      - mon
+      - rgw
+    private_ips:
+      - 10.x.x.1
+    public_ips:
+      - 11.x.x.1
+    devices:
+      - /dev/sda
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+  <node-name-2>:
+    hostname: <fake-hostname>
+    id: <fake-node-id>
+    credentials:
+      - user: <user-root>
+        password: <user-root-password>
+      - user: <user-cephuser>
+        password: <user-cephuser-password>
+    roles:
+      - osd
+      - mon
+      - rgw
+    private_ips:
+      - 10.x.x.1
+    public_ips:
+      - 11.x.x.1
+    devices:
+      - /dev/sda
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+  <node-name-3>:
+    hostname: <fake-hostname>
+    id: <fake-node-id>
+    credentials:
+      - user: <user-root>
+        password: <user-root-password>
+      - user: <user-cephuser>
+        password: <user-cephuser-password>
+    roles:
+      - osd
+      - mon
+      - rgw
+    private_ips:
+      - 10.x.x.1
+    public_ips:
+      - 11.x.x.1
+    devices:
+      - /dev/sda
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+  <node-name-4>:
+    hostname: <fake-hostname>
+    id: <fake-node-id>
+    credentials:
+      - user: <user-root>
+        password: <user-root-password>
+      - user: <user-cephuser>
+        password: <user-cephuser-password>
+    roles:
+      - client
+    private_ips:
+      - 10.x.x.1
+    public_ips:
+      - 11.x.x.1

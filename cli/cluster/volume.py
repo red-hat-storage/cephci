@@ -39,6 +39,11 @@ class Volume:
         """Volume state"""
         return self.cloud.get_volume_state_by_name(self.name)
 
+    @property
+    def device(self):
+        """Volume disk"""
+        return self.cloud.get_volume_device_by_name(self.name)
+
     def create(self, size, timeout=300, interval=10):
         """Create volume on cloud
 

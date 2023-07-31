@@ -58,7 +58,7 @@ def run(ceph_cluster, **kw):
         if "FailureException" in out:
             OperationFailedError(f"Failed to run {cmd} on {clients[0].hostname}")
     except Exception as e:
-        log.error(f"Failed to run {cmd} on {clients[0].hostname}, Error: {e}")
+        log.error(f"Failed to run pynfs on {clients[0].hostname}, Error: {e}")
         return 1
 
     finally:
