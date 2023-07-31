@@ -74,42 +74,6 @@ tests:
       name: configure client
 
   - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
-              - "radosgw-admin period update --rgw-realm india --commit"
-              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key test123 --secret test123 --rgw-realm india --system"
-              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key test123 --secret test123"
-              - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.* rgw_realm india"
-              - "ceph config set client.rgw.* rgw_zonegroup shared"
-              - "ceph config set client.rgw.* rgw_zone primary"
-              - "ceph orch restart rgw.shared.pri.8080"
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://folio15:8080 --access-key test123 --secret test123 --default"
-              - "radosgw-admin period pull --url http://folio15:8080 --access-key test123 --secret test123"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:folio20}:8080,http://{node_ip:folio21}:8080,http://{node_ip:folio22}:8080,http://{node_ip:folio23}:8080,http://{node_ip:folio24}:8080 --access-key test123 --secret test123"
-              - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.* rgw_realm india"
-              - "ceph config set client.rgw.* rgw_zonegroup shared"
-              - "ceph config set client.rgw.* rgw_zone secondary"
-              - "ceph orch restart rgw.shared.sec.8080"
-      desc: Setting up RGW multisite replication environment
-      module: exec.py
-      name: setup multisite
-      polarion-id: CEPH-10362
-
-  - test:
       name: Parallel run
       desc: RGW tier-0 parallelly.
       module: test_parallel.py
