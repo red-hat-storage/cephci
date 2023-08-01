@@ -248,3 +248,13 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
+
+  - test:
+      name: Nfs export rootsquash permission
+      module: test_export_rootsquash.py
+      desc: Test NFS export with rootsquash
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
