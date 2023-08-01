@@ -3,16 +3,16 @@
 # Test attributes
   #  Single ceph-nvmeof GW colocated with osd on node5, node 6,7,8 and 9 are nvmeof initiators
   #  nvmeof GW - at end of each scale step/ test below is the configuration
-     # Scale-1 : 1 subsystem, 32 namespaces,  32 RBD images of 50G size each
-     # Scale-2 : 2 subsystem, 64 namespaces, 64 RBD images of 50G size each
-     # Scale-3 : 3 subsystem, 96 namespaces, 96 RBD images of 50G size each
-     # Scale-4 : 4 subsystem, 128 namespaces, 128 RBD images of 50G size each
+     # Scale-1 : 1 subsystem, 32 namespaces,  32 RBD images of 500M size each
+     # Scale-2 : 2 subsystem, 64 namespaces, 64 RBD images of 500M size each
+     # Scale-3 : 3 subsystem, 96 namespaces, 96 RBD images of 500M size each
+     # Scale-4 : 4 subsystem, 128 namespaces, 128 RBD images of 500M size each
   #  nvmeof initiator - Each initiator/ client connects to a subsystem ( 4 initiator : 4 subsystems)
   #  io test (no performance tests)
      # Tool : fio
      # io is run on all nvme volumes listed on all initiators configured to that point
      # io type combination : For volumes listed on an initiator a write in first test followed by a read in next test
-     # io runtime is 30 seconds per volume/ image
+     # io runtime is 10 seconds per volume/ image
   # Check ceph health and rbd image usage at end of each test
 tests:
   - test:

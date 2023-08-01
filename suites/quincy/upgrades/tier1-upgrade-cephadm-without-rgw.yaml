@@ -4,7 +4,7 @@
 # Test-Case: Upgrade ceph cluster from Build-to-Build (B2B)
 #
 # Cluster Configuration:
-#    conf/pacific/upgrades/tier-1_upgrade_cephadm_without_rgw.yaml
+#    conf/quincy/upgrades/tier-1_upgrade_cephadm_without_rgw.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD service daemon(s)

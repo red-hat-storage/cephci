@@ -6,7 +6,9 @@ class Export(Cli):
         super(Export, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} export"
 
-    def create(self, fs_name, nfs_name, nfs_export, fs, subvol_path=None):
+    def create(
+        self, fs_name, nfs_name, nfs_export, fs, subvol_path=None, readonly=None
+    ):
         """
         Perform create operation for nfs cluster
         Args:
@@ -15,10 +17,13 @@ class Export(Cli):
             nfs_export (str): Name of nfs export
             fs (str) : fs path
             subvol_path (str) : subvolume path
+            readonly (Boolean) : enable readonly on export
         """
         cmd = f"{self.base_cmd} create {fs_name} {nfs_name} {nfs_export} {fs}"
         if subvol_path:
             cmd += f" path={subvol_path}"
+        if readonly:
+            cmd += " --readonly"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()

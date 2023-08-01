@@ -1,12 +1,11 @@
 #===============================================================================================
 # Tier-level: 1
-# Test-Suite: tier-1_ssl_dashboard_port.yaml
 # Test-Case:
 #      Bootstrap cluster with multiple admin nodes and apply-spec options.
 #      Deploy HA proxy service and verify service disable, enable, restart options.
 #
 # Cluster Configuration:
-#   cephci/conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#   cephci/conf/quincy/cephadm/tier-1_5node_cephadm_bootstrap.yaml
 #
 #    4-Node cluster(RHEL-8.3 and above)
 #    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)

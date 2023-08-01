@@ -1,0 +1,100 @@
+# Test module to explore subsystem scale limitations in Single subsystem
+# Test conf at conf/quincy/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml
+# Test attributes
+  #  Single ceph-nvmeof GW colocated with osd on node5, node 6 is nvmeof initiator
+  #  nvmeof GW - at end of each scale step/ test below is the configuration
+     # Scale-1 : 500 subsystems
+  #  nvmeof initiator - initiator/ client connects to newly added subsystem in each iteration
+  #  io test (no performance tests)
+     # Tool : fio
+     # io is run IO only on devices discovered from newly added subsystem
+     # io type : write
+     # io runtime: 10 seconds
+tests:
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  #  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node5
+          - node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node5
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true
+        subsystems:
+          start_count: 1
+          end_count: 500
+          size: 50M
+        initiators:
+          node: node6
+        run_io:
+          node: node6
+          io_type: write
+      desc: test subsystem limitations
+      destroy-cluster: false
+      module: test_ceph_nvmeof_sub_limit.py
+      name: Scale 500 subsystems in Single GW
+      polarion-id:

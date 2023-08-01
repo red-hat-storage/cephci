@@ -7,6 +7,7 @@ from threading import Thread
 from time import sleep
 
 from ceph.waiter import WaitUntil
+from cli.exceptions import OperationFailedError
 from utility.log import Log
 
 log = Log(__name__)
@@ -574,3 +575,84 @@ def check_coredump_generated(node, coredump_path, created_after):
     if created_time > created_after:
         return False
     return True
+
+
+def create_files(client, mount_point, file_count):
+    """
+    Create files
+    Args:
+        clients (ceph): Client nodes
+        mount_point (str): mount path
+        file_count (int): total file count
+    """
+    for i in range(1, file_count + 1):
+        try:
+            client.exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1",
+            )
+        except Exception:
+            raise OperationFailedError(f"failed to create file file{i}")
+
+
+def perform_lookups(client, mount_point, num_files):
+    """
+    Perform lookups
+    Args:
+        clients (ceph): Client nodes
+        mount_point (str): mount path
+        num_files (int): total file count
+    """
+    for _ in range(1, num_files):
+        try:
+            log.info(
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"ls -laRt {mount_point}/",
+                )
+            )
+        except FileNotFoundError as e:
+            error_message = str(e)
+            if "No such file or directory" not in error_message:
+                raise OperationFailedError("failed to perform lookups")
+            log.warning(f"Ignoring error: {error_message}")
+        except Exception:
+            raise OperationFailedError("failed to perform lookups")
+
+
+def change_ownership(client, mount_point, file_count, user):
+    """
+    Perform lookups
+    Args:
+        clients (ceph): Client nodes
+        mount_point (str): mount path
+        num_files (int): total file count
+        user (str): user name
+    """
+    for i in range(1, file_count + 1):
+        try:
+            client.exec_command(
+                sudo=True,
+                cmd=f"chown {user} {mount_point}/file{i}",
+            )
+        except Exception:
+            raise OperationFailedError(f"failed to change ownership for file{i}")
+
+
+def change_permission(client, mount_point, file_count, permissions):
+    """
+    Perform lookups
+    Args:
+        clients (ceph): Client nodes
+        mount_point (str): mount path
+        num_files (int): total file count
+        permissions (str): file permissions
+    """
+    for i in range(1, file_count + 1):
+        try:
+            client.exec_command(
+                sudo=True,
+                cmd=f"chmod {permissions} {mount_point}/file{i}",
+            )
+        except Exception:
+            raise OperationFailedError(f"failed to change permission for file{i}")
