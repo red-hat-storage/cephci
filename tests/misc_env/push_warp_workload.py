@@ -11,7 +11,7 @@ Sample test script
         config:
           duration: 60m
           obj_size:256KiB
-          operation: fill
+          operation: put/mixed
           bucket_count: 5
           warp_server:
             - node6
@@ -43,6 +43,7 @@ def push_io(
     client,
     bucket_count,
     run_duration,
+    warp_operation,
 ) -> None:
     """
     Push WARP workload to its clients.
@@ -65,9 +66,14 @@ def push_io(
     for bkt in range(bucket_count):
         bucket_name = bkt + 1
         cli = (
-            f"nohup warp put --obj.size 256KiB --duration={run_duration} --concurrent=1 --obj.randsize "
+            f"nohup warp {warp_operation} --obj.size 256KiB --duration={run_duration} --concurrent=1 --obj.randsize "
             + "--host-select=roundrobin --noclear --no-color"
         )
+        if warp_operation == "mixed":
+            cli = (
+                cli
+                + " --put-distrib 35 --delete-distrib 5 --get-distrib 45 --stat-distrib 15"
+            )
 
         cli_list = ""
         stop_flag = len(client_nodes)
@@ -126,21 +132,28 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         0 on Success and 1 on Failure.
     """
     LOG.info("Push workload to warp.")
-    client = ceph_cluster.get_nodes(role="client")[0]
+    client = ceph_cluster.get_nodes(role="installer")[0]
     warp_server = get_nodes_by_ids(ceph_cluster, kwargs["config"]["warp_server"])
     warp_clients = get_nodes_by_ids(ceph_cluster, kwargs["config"]["warp_client"])
     ha_clients = get_nodes_by_ids(ceph_cluster, kwargs["config"]["haproxy_client"])
     run_duration = kwargs["config"].get("duration", "1m")
+    warp_operation = kwargs["config"].get("operation", "put")
     bucket_count = kwargs["config"].get("bucket_count", 6)
 
     try:
         bucket_count = kwargs["config"].get("bucket_count", 6)
         push_io(
-            warp_server, warp_clients, ha_clients, client, bucket_count, run_duration
+            warp_server,
+            warp_clients,
+            ha_clients,
+            client,
+            bucket_count,
+            run_duration,
+            warp_operation,
         )
 
     except BaseException as be:  # noqa
         LOG.error(be)
         return 1
-    LOG.info("Workload completed successfully!!!")
+    LOG.info("Workload initited successfully!!!")
     return 0
