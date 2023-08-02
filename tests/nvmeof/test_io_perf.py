@@ -23,12 +23,7 @@ from utility.log import Log
 from utility.utils import create_run_dir, generate_unique_id, run_fio
 
 LOG = Log(__name__)
-results = {}
-csv_op = [
-    "name,protocol,io_type,image,iteration,read_iops,read_bandwidth,read_slat_avg_ns,read_clat_avg_ns,"
-    "read_lat_avg_ns,write_iops,write_bandwidth,write_slat_avg_ns,write_clat_avg_ns,"
-    "write_lat_avg_ns"
-]
+
 METRICS = [
     "iops",
     "bandwidth",
@@ -37,9 +32,23 @@ METRICS = [
     "overall_latency_in_nanoseconds",
 ]
 
+results = {}
+csv_op = []
+
 RBD_MAP = "rbd map {pool}/{image}"
 RBD_UNMAP = "rbd unmap {device}"
 ARTIFACTS_DIR = tempfile.TemporaryDirectory().name
+
+
+def initialize():
+    """Initialize the reports."""
+    _results = {}
+    _csv_op = [
+        "name,protocol,io_type,image,iteration,read_iops,read_bandwidth,read_slat_avg_ns,read_clat_avg_ns,"
+        "read_lat_avg_ns,write_iops,write_bandwidth,write_slat_avg_ns,write_clat_avg_ns,"
+        "write_lat_avg_ns"
+    ]
+    return _results, _csv_op
 
 
 def calculate_average(data):
@@ -441,7 +450,10 @@ def nvmeof(ceph_cluster, **args):
     gateway = Gateway(gw_node)
     initiator = get_node_by_id(ceph_cluster, args["initiator_node"])
     initiator.exec_command(cmd=f"mkdir -p {ARTIFACTS_DIR}", sudo=True)
-    configure_spdk(gw_node, pool)
+
+    # Install Gateway
+    if args.get("install_gw"):
+        configure_spdk(gw_node, pool)
 
     for count in range(args["iterations"]):
         name = generate_unique_id(4)
@@ -478,14 +490,20 @@ def nvmeof(ceph_cluster, **args):
                     )
                     for i in initiators(ceph_cluster, gateway, initiator_cfg)
                 ]
+
+                # disconnect initiator
+                ini_disconnect = {
+                    "initiators": [initiator_cfg],
+                    "cleanup": ["initiators"],
+                }
+                teardown(ceph_cluster, rbd, ini_disconnect)
         except Exception as err:
             raise Exception(err)
         finally:
             # disconnect and delete subsystems
             cleanup_cfg = {
                 "gw_node": args["gw_node"],
-                "cleanup": ["initiators", "subsystems"],
-                "initiators": [initiator_cfg],
+                "cleanup": ["subsystems"],
                 "subsystems": [subsystem],
             }
             teardown(ceph_cluster, rbd, cleanup_cfg)
@@ -539,9 +557,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                       gw_node: node6
                       initiator_node: node7
     """
+    global results, csv_op
+    results, csv_op = initialize()
+
     config = kwargs["config"]
     LOG.info(f"Test IO Performance : {config}")
-    rbd_pool = f"rbd_{generate_unique_id(6)}"
+    rbd_pool = config.get("rbd_pool", "rbd_pool")
     kwargs["config"].update(
         {
             "do_not_create_image": True,
@@ -561,6 +582,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             io_profiles=config["io_profiles"],
             **io,
         )
+
+    # cleanup pool
+    if not config.get("do_not_delete_pool"):
+        rbd_obj.clean_up(pools=[rbd_pool])
 
     # Build artifacts, Create CSV and Json file
     run_cfg = kwargs["run_config"]
