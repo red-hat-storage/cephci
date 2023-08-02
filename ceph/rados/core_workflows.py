@@ -1750,3 +1750,25 @@ class RadosOrchestrator:
         stretch_details = osd_dump["stretch_mode"]
         log.debug(f"Stretch mode dump : {stretch_details}")
         return stretch_details
+
+    def get_ceph_pg_dump(self, pg_id: str) -> dict:
+        """
+        Fetches ceph pg dump in json format and returns the data
+        for input PG
+        Args:
+            pg_id: Placement Group ID for which pg dump has to be fetched
+
+        Returns: dictionary output of ceph pg dump for input PG ID
+        """
+        _cmd = "ceph pg dump_json pgs"
+        dump_out_str, _ = self.client.exec_command(cmd=_cmd)
+        if dump_out_str.isspace():
+            return {}
+        dump_out = json.loads(dump_out_str)
+        pg_stats = dump_out["pg_map"]["pg_stats"]
+        for pg_stat in pg_stats:
+            if pg_stat["pgid"] == pg_id:
+                return pg_stat
+
+        log.error(f"PG {pg_id} not found in ceph pg dump output")
+        raise KeyError(f"PG {pg_id} not found in ceph pg dump output")

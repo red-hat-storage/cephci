@@ -43,6 +43,39 @@ tests:
       name: deploy cluster
 
   - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: verify scrub chunk max
+      polarion-id: CEPH-10792
+      module: test_scrub_chunk_max.py
+      config:
+        delete_pool: true
+      desc: Scrub Chunk max validation
+
+  - test:
       name: Default scheduled scrub
       polarion-id: CEPH-9361
       module: scheduled_scrub_scenarios.py
