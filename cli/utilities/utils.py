@@ -1,5 +1,7 @@
 import os
+import random
 import re
+import string
 from datetime import datetime
 from json import loads
 from subprocess import PIPE, Popen
@@ -290,7 +292,10 @@ def build_cmd_from_args(seperator="=", **kw):
     cmd = ""
     for k, v in kw.items():
         if v is True:
-            cmd += f" {k}"
+            cmd += f" --{k}"
+        elif isinstance(v, list):
+            for val in v:
+                cmd += build_cmd_from_args(**val)
         else:
             if seperator and seperator in k:
                 cmd += f" --{k}{v}"
@@ -656,3 +661,20 @@ def change_permission(client, mount_point, file_count, permissions):
             )
         except Exception:
             raise OperationFailedError(f"failed to change permission for file{i}")
+
+
+def generate_random_string(**kw):
+    """
+    Generates a random string and returns it
+
+    Args:
+        kw: {
+            "len": 20
+        }
+
+    Returns:
+        The generated string
+    """
+    length = kw.get("len", 5)
+    temp_str = "".join([random.choice(string.ascii_letters) for _ in range(length)])
+    return temp_str

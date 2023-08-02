@@ -1,3 +1,6 @@
+from functools import partialmethod
+
+
 class Cli:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -22,3 +25,5 @@ class Cli:
             return self.ctx.exec_command(
                 cmd=cmd, sudo=sudo, long_running=long_running, check_ec=check_ec
             )
+
+    execute_as_sudo = partialmethod(execute, sudo=True)
