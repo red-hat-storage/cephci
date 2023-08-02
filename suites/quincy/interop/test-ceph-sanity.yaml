@@ -84,6 +84,8 @@ tests:
         install_packages:
           - ceph-common
           - rbd-nbd
+          - jq
+          - fio
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
