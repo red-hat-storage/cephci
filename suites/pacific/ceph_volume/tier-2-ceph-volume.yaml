@@ -76,13 +76,13 @@ tests:
 
   - test:
       name: Configure client
-      desc: Configure client on node5
+      desc: Configure client on node4
       module: test_client.py
       polarion-id: CEPH-83573758
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node5                       # client node
+        node: node4                       # client node
         install_packages:
           - ceph-common                   # install ceph common packages
         copy_admin_keyring: true          # Copy admin keyring to node
