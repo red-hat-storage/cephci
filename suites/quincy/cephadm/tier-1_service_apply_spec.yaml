@@ -161,6 +161,7 @@ tests:
                     data_devices:
                       all: "true"                         # boolean as string
                     encrypted: "true"                     # boolean as string
+                    unmanaged: "true"
           - config:
               command: shell
               args:                 # sleep to get all services deployed
@@ -269,3 +270,52 @@ tests:
       desc: Verify spam logs such as 'DEBUG sestatus' not present in cephadm logs (customer_bz)
       polarion-id: CEPH-83575589
       module: test_cephadm_log_spam.py
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node5
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      name: Deploy OSD with limit filter spec
+      desc: Deploy OSD with limit filter spec
+      module: test_cephadm.py
+      config:
+        steps:                          # Deploy OSD with limit filter
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: osd
+                  service_id: small_db
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      size: '11GB:16GB'
+                      limit: 2
+                - service_type: osd
+                  service_id: big_db
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      size: '11GB:16GB'
+                      limit: 2
+          - config:
+              command: shell
+              args:                 # sleep to get all services deployed
+                - sleep
+                - "300"
+  - test:
+      name: Verify OSD deployed with limit filter spec
+      desc: Verify OSD deployed with limit filter spec
+      polarion-id: CEPH-83575588
+      module: test_osd_limit_filter.py
