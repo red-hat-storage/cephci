@@ -7,7 +7,14 @@ class Export(Cli):
         self.base_cmd = f"{base_cmd} export"
 
     def create(
-        self, fs_name, nfs_name, nfs_export, fs, subvol_path=None, readonly=None
+        self,
+        fs_name,
+        nfs_name,
+        nfs_export,
+        fs,
+        subvol_path=None,
+        readonly=None,
+        squash=None,
     ):
         """
         Perform create operation for nfs cluster
@@ -18,12 +25,15 @@ class Export(Cli):
             fs (str) : fs path
             subvol_path (str) : subvolume path
             readonly (Boolean) : enable readonly on export
+            squash (str) : value to squash
         """
         cmd = f"{self.base_cmd} create {fs_name} {nfs_name} {nfs_export} {fs}"
         if subvol_path:
             cmd += f" path={subvol_path}"
         if readonly:
             cmd += " --readonly"
+        if squash:
+            cmd += f" --squash={squash}"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
