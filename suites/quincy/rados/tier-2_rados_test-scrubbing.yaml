@@ -1,6 +1,6 @@
 tests:
 
-  # Cluster deployment stage
+   # Cluster deployment stage
 
   - test:
       abort-on-fail: true
@@ -43,12 +43,46 @@ tests:
       name: deploy cluster
 
   - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: verify scrub chunk max
+      polarion-id: CEPH-10792
+      module: test_scrub_chunk_max.py
+      config:
+        delete_pool: true
+      desc: Scrub Chunk max validation
+
+  - test:
       name: Default scheduled scrub
       polarion-id: CEPH-9361
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
         scenario: "default"
+
   - test:
       name: Begin Time = End Time
       polarion-id: CEPH-9362
@@ -56,6 +90,7 @@ tests:
       desc: Scheduled scrub validation
       config:
         scenario: "begin_end_time_equal"
+
   - test:
       name: Begin time > End time
       polarion-id: CEPH-9363
@@ -63,6 +98,7 @@ tests:
       desc: Scheduled scrub validation
       config:
         scenario: "beginTime gt endTime"
+
   - test:
       name: Begin Time >End time<current
       polarion-id: CEPH-9365
@@ -70,6 +106,7 @@ tests:
       desc: Scheduled scrub validation
       config:
         scenario: "beginTime gt endTime lt currentTime"
+
   - test:
       name: Begin Time & End time > current
       polarion-id: CEPH-9368
@@ -77,6 +114,7 @@ tests:
       desc: Scheduled scrub validation
       config:
         scenario: "beginTime and endTime gt currentTime"
+
   - test:
       name: Decrease scrub time
       polarion-id: CEPH-9371
@@ -84,6 +122,7 @@ tests:
       desc: Scheduled scrub validation
       config:
         scenario: "decreaseTime"
+
   - test:
       name: Unsetting scrubbing
       polarion-id: CEPH-9374
