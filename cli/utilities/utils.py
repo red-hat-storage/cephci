@@ -678,3 +678,29 @@ def generate_random_string(**kw):
     length = kw.get("len", 5)
     temp_str = "".join([random.choice(string.ascii_letters) for _ in range(length)])
     return temp_str
+
+
+def get_file_owner(filepath, clients):
+    """
+    Get file owner
+    Args:
+        filepath (str): file path
+        clients (ceph): Client nodes
+    """
+    out = clients[0].exec_command(sudo=True, cmd=f"ls -n {filepath}")
+    uid = int(out[0].split()[2])
+    gid = int(out[0].split()[3])
+
+    # uid and gid for rootuser
+    if uid == 0 and gid == 0:
+        log.info(f"The file '{filepath}' is created by the root user.")
+        return "rootuser"
+    # uid and gid for squashuser
+    elif uid == 4294967294 and gid == 4294967294:
+        log.info(f"The file '{filepath}' is created by the squashed user.")
+        return "squashuser"
+    else:
+        log.info(
+            f"The file '{filepath}' is created by an unknown user with UID: {uid} and GID: {gid}."
+        )
+        return None

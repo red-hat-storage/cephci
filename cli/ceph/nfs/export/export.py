@@ -51,3 +51,29 @@ class Export(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def get(self, nfs_name, nfs_export):
+        """
+        get a given nfs export
+        Args:
+            nfs_name (str): Name of nfs cluster
+            nfs_export (str): Name of nfs export
+        """
+        cmd = f"{self.base_cmd} get {nfs_name} {nfs_export}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
+
+    def apply(self, nfs_name, export_conf):
+        """
+        apply a given nfs export
+        Args:
+            nfs_name (str): Name of nfs cluster
+            export_conf (str): Export conf file name
+        """
+        cmd = f"{self.base_cmd} apply {nfs_name} -i {export_conf}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
