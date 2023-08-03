@@ -640,3 +640,30 @@ class CrushToolWorkflows:
             return False, " "
         log.debug(f"Successfully tested the bin file for {test} and output : {out}")
         return True, out
+
+    def add_crush_rule(self, rule_name: str, rules: str) -> bool:
+        """
+        Method to add new crush rules into the cluster
+        Args:
+            rules: Crush rules.
+            rule_name: name of the rule
+        Usage:
+            add_crush_rule(rule_name=test_rule, rules=<string of rules>
+        Returns:
+            True -> Rules added successfully
+            False -> Rules not added
+        """
+        _, loc = self.generate_crush_map_bin()
+        _, loc = self.decompile_crush_map_txt(source_loc=loc)
+
+        # Adding the crush rules into the file
+        rule_str = f"rule {rule_name} {{ \n{rules}\n}}"
+        cmd = f"echo '{rule_str}' >> {loc}"
+        self.client.exec_command(cmd=cmd, sudo=True)
+
+        _, loc = self.compile_crush_map_txt(source_loc=loc)
+        if not self.set_crush_map_bin(loc=loc):
+            log.error(f"Failed to set rules {rules} on the cluster")
+            return False
+        log.info(f"Successfully set rules with name {rule_name} on the cluster")
+        return True
