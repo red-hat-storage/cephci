@@ -160,9 +160,33 @@ def push_workload(controller, client, workload_file_name):
     LOG.info(out)
     wid = out.strip().split(": ")[1]
 
+    sleep_time = 30
+    retry_limit = 20
     while "PROCESSING" in get_workload_status(controller, wid):
-        LOG.info("sleeping for 30 seconds as the workload is in progress")
-        time.sleep(30)
+        utils.check_ceph_status(client)
+        stored_bytes_prev = utils.get_utilized_space(client)
+        LOG.info(
+            f"utilized space before sleep of {sleep_time} seconds in bytes:{stored_bytes_prev}"
+        )
+        for _ in range(retry_limit):
+            LOG.info(f"sleeping for {sleep_time} seconds")
+            time.sleep(sleep_time)
+            stored_bytes_curr = utils.get_utilized_space(client)
+            LOG.info(f"utilized space now in bytes:{stored_bytes_curr}")
+            if stored_bytes_prev != stored_bytes_curr:
+                LOG.info("utilized space changed as expected")
+                break
+            elif "PROCESSING" not in get_workload_status(controller, wid):
+                LOG.info(
+                    "Workload is not in PROCESSING state. stopping workload progress check"
+                )
+                break
+            else:
+                LOG.info("utilized space not changed, retrying again..")
+        else:
+            raise Exception(
+                f"utilized space not changed even after waiting for {retry_limit * sleep_time} seconds"
+            )
     workload_status = get_workload_status(controller, wid)
     if "FINISHED" in workload_status:
         LOG.info("workload completed successfully")
