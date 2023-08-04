@@ -1,0 +1,208 @@
+# Tier2: Extended RBD acceptance testing
+#
+# This test suite runs addition test scripts to evaluate the existing functionality of
+# Ceph RBD component.
+#
+# Cluster Configuration:
+#    Conf file - conf/reef/rbd/4-node-cluster-with-1-client.yaml
+#    Node 2 must to be a client node
+#
+# The following tests are covered
+#   - CEPH-83573322 - Migrate the images from 2 different source pools to destination and check the behaviour
+#   - CEPH-83573293 - Move image from rep pool to rep pool while it is being used and check the behavior
+#   - CEPH-83573327 - Verify when images move from Ec pool to Ec pool with default k_m values
+#   - CEPH-83573324 - Copy the image from source to destination and stop in between and check the appropriate messages
+#   - CEPH-83574092 - Image migration : verify S3 image import as local image as image migration works
+#   - CEPH-83573341 - Set read only for client-X on namespace using cephx caps and migrate the images from namespace and verify migration is not allowed for client-X
+
+tests:
+
+   #Setup the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+# # Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: Image migration from two different EC pools to EC pool
+      module: rbd_migration_2diff_ec_pool_ec.py
+      name: Test image migration on ecpool with different K_m values
+      polarion-id: CEPH-83573322
+
+  - test:
+      desc: Image migration from replication pools to replication pool
+      module: rbd_image_migration.py
+      config:
+        source:
+          rep-pool-only: True
+          rep_pool_config:
+            pool: rbd_RepPool1
+            image: rbd_image
+            size: 10G
+        destination:
+          rep-pool-only: True
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool2
+      name: Test image migration on replication pool
+      polarion-id: CEPH-83573293
+
+  - test:
+      desc: Image migration from EC pool to EC pool with default K_m value
+      module: rbd_image_migration.py
+      config:
+        source:
+          ec-pool-only: True
+          ec-pool-k-m: "2,2"
+          crush-failure-domain: osd
+          ec_pool_config:
+            pool: rbd_ECpool1
+            image: rbd_image_ec1
+            data_pool: data_pool_ec1
+            size: 10G
+        destination:
+          ec-pool-only: True
+          ec-pool-k-m: "2,2"
+          do_not_create_image: True
+          crush-failure-domain: osd
+          ec_pool_config:
+            pool: rbd_ECpool2
+            data_pool: data_pool_ec2
+      name: Test image migration on EC pool with default k_m value
+      polarion-id: CEPH-83573327
+
+  - test:
+      desc: Abort image migration from source to destination pool
+      module: rbd_abort_image_migration.py
+      config:
+        source:
+          ec-pool-k-m: "2,2"
+          crush-failure-domain: osd
+          rep_pool_config:
+            pool: rbd_RepPool1
+            image: rbd_image
+            size: 10G
+          ec_pool_config:
+            pool: rbd_ECpool1
+            image: rbd_image_ec1
+            data_pool: data_pool_ec1
+            size: 10G
+        destination:
+          ec-pool-k-m: "2,2"
+          do_not_create_image: True
+          crush-failure-domain: osd
+          rep_pool_config:
+            pool: rbd_RepPool2
+          ec_pool_config:
+            pool: rbd_ECpool2
+            data_pool: data_pool_ec2
+      name: Test abort image migration from source to destination pool
+      polarion-id: CEPH-83573324
+
+  - test:
+      desc: Setting up RGW user for s3 image migration test
+      module: exec.py
+      name: Setup rgw s3 user
+      config:
+        commands:
+          - "radosgw-admin user create --uid=test_rbd --display_name='test_rbd' --access-key test_rbd --secret test_rbd"
+
+  - test:
+      name: Image migration from s3 source
+      desc: Export an image to s3 source and reinstall as new image using migration
+      module: test_rbd_migration_image_s3_object.py
+      polarion-id: CEPH-83574092
+      config:
+        ec_pool_config:
+          pool: rbd_pool
+          data_pool: rbd_ec_pool
+          image: rbd_image
+          size: 100M
+        rep_pool_config:
+          pool: rbd_pool
+          image: rbd_rep_image
+          size: 100M
+
+  - test:
+      desc: Image migration pool namespace
+      module: readonly_namespace_image_migration.py
+      config:
+        source:
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool1
+          ec_pool_config:
+            pool: rbd_ECpool1
+            data_pool: data_pool_ec1
+        destination:
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool2
+          ec_pool_config:
+            pool: rbd_ECpool1
+            data_pool: data_pool_ec2
+      name: Test image migration from pool namespace
+      polarion-id: CEPH-83573341
