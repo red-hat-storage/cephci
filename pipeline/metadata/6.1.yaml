@@ -25,6 +25,9 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+  # Executing only tier-0 suites in old pipeline to update recipe files.
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-sanity:
     tier-1:
       stage-1:
         - name: "Basic operation test suite for 6x for RGW sanity"
@@ -586,7 +589,8 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-  schedule:
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-schedule:
     tier-1:
       stage-1:
         - name: "test-rgw-lc-expiration-multiple-bucket"
@@ -1129,6 +1133,10 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-rc:
+    tier-1:
+      stage-1:
         - name: "Upgrade from RHCS5 to RHCS6 in RHEL9"
           execution_time: "32m 13s"
           suite: "suites/quincy/upgrades/tier-1_upgrade_5x-to-6x.yaml"
@@ -1140,8 +1148,6 @@ pipelines:
           metadata:
             - upgrades
             - dmfg
-    tier-1:
-      stage-1:
         - name: "Basic operation test suite for 6x for RGW sanity"
           execution_time: "32m 41s"
           suite: "suites/quincy/rgw/test-basic-object-operations.yaml"
@@ -1310,6 +1316,8 @@ pipelines:
           metadata:
             - upgrades
             - dmfg
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-live:
     tier-1:
       stage-1:
         - name: "Basic operation test suite for 6x for RGW sanity"
@@ -1395,4 +1403,3 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-  stage:

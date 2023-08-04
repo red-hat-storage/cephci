@@ -426,10 +426,13 @@ if __name__ == "__main__":
     if merge_file:
         with open(merge_file, "r") as lf:
             launchList = json.load(lf)
-        mergedLaunch = merge_launches(config_file, launchList["launch"][::-1])
-        launchList["mergedLaunch"] = mergedLaunch
-        with open(merge_file, "w") as wmf:
-            json.dump(launchList, wmf, indent=4)
+        if len(launchList["launch"]) == 2:
+            mergedLaunch = merge_launches(config_file, launchList["launch"][::-1])
+            launchList["mergedLaunch"] = mergedLaunch
+            with open(merge_file, "w") as wmf:
+                json.dump(launchList, wmf, indent=4)
+        else:
+            log.info("Failed to merge launches.")
         sys.exit(0)
 
     payload_dir = args.get("--payload_dir")
