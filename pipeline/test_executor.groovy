@@ -106,12 +106,7 @@ node("rhel-9-medium"){
             ]]
         ])
         sharedLib = load("${env.WORKSPACE}/pipeline/vars/v3.groovy")
-        if(params.Destroy_Cluster != 'Destroy always'){
-            sharedLib.prepareNode(0,"ceph-ci")
-        }
-        else{
-            sharedLib.prepareNode()
-        }
+        sharedLib.prepareNode(0,"ceph-ci")
         def buildUser = sharedLib.getBuildUser()
         buildUserId = buildUser["buildUserId"]
         buildUserEmail = buildUser["buildUserEmail"]
