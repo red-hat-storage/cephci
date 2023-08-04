@@ -25,6 +25,9 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - dmfg
+  # Executing only tier-0 suites in old pipeline to update recipe files.
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-sanity:
     tier-1:
       stage-1:
         - name: "Tier-1 Cephfs Mirror"
@@ -588,7 +591,8 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - rgw
-  schedule:
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-schedule:
     tier-1:
       stage-1:
         - name: "test-rgw-lc-expiration-multiple-bucket"
@@ -1197,6 +1201,10 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - dmfg
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-rc:
+    tier-0:
+      stage-1:
         - name: "Smoke test of RH Ceph build"
           execution_time: "28m 21s"
           suite: "suites/pacific/cephadm/tier-0.yaml"
@@ -1418,6 +1426,8 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - dmfg
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-live:
     tier-1:
       stage-1:
         - name: "Upgrade ceph cluster from build to build"
@@ -1453,7 +1463,8 @@ pipelines:
           metadata:
             - upgrades
             - dmfg
-  cvp:
+  # Marking these suites as obsolete as we moved to new pipeline.
+  obsolete-cvp:
     tier-0:
       stage-1:
         - name: "Smoke test of RH Ceph build"
