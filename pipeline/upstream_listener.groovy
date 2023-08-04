@@ -84,6 +84,11 @@ node("rhel-9-medium") {
                 job: "rhceph-upstream-listener",
                 parameters: [string(name: 'releaseName', value: "quincy")]
             ])
+            build ([
+                wait: false,
+                job: "rhceph-upstream-listener",
+                parameters: [string(name: 'releaseName', value: "reef")]
+            ])
         }
     }
 }
