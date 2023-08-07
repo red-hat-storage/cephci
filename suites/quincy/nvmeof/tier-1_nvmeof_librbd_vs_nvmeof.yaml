@@ -69,7 +69,7 @@ tests:
 
   # Test IO Perf
   - test:
-      name: libRBD VS NVMeoF - Read and Write IO comparison bench test
+      name: libRBD VS NVMeoF - Read and Write IOtype
       description: Write and Read IO comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
       config:
@@ -94,7 +94,7 @@ tests:
                 install_gw: true
 
   - test:
-      name: libRBD VS NVMeoF Read-Write IOType comparison bench test
+      name: libRBD VS NVMeoF Read-Write IOType
       description: Read-Write IOType comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
       config:
@@ -103,6 +103,54 @@ tests:
           - FIO_RW_BS_4k_IODepth8_RWRatio70R_LIBAIO
         rbd_pool: rbd
         do_not_delete_pool: true
+        io_exec:
+          -   proto: librbd
+              image:
+                size: 10G
+                count: 1
+              node: node7             # client node
+          -   proto: nvmeof
+              image:
+                size: 10G
+                count: 1
+              gw_node: node6          # gateway node
+              initiator_node: node7   # client node
+
+  - test:
+      name: libRBD VS NVMeoF Random Read and Write IOType
+      description: Random Read and Write IOType comparison on 10G image with 4kb-block-size
+      module: test_io_perf.py
+      config:
+        iterations: 1               # number of iterations to find out average
+        io_profiles:
+          - FIO_RandWRITE_BS_4k_IODepth8_LIBAIO
+          - FIO_RandREAD_BS_4k_IODepth8_LIBAIO
+        rbd_pool: rbd
+        do_not_delete_pool: true
+        io_exec:
+          -   proto: librbd
+              image:
+                size: 10G
+                count: 1
+              node: node7             # client node
+          -   proto: nvmeof
+              image:
+                size: 10G
+                count: 1
+              gw_node: node6          # gateway node
+              initiator_node: node7   # client node
+
+  - test:
+      name: libRBD VS NVMeoF Random Read-Write IOType
+      description: Random Read-Write IOType comparison on 10G image with 4kb-block-size
+      module: test_io_perf.py
+      config:
+        iterations: 1               # number of iterations to find out average
+        io_profiles:
+          - FIO_RW_BS_4k_IODepth8_RandRWRatio70R_LIBAIO
+        rbd_pool: rbd
+        do_not_delete_pool: false
+        delete_gateway: node6
         io_exec:
           -   proto: librbd
               image:

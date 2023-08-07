@@ -9,7 +9,7 @@ import plotly.io as pio
 import yaml
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.gateway import Gateway, configure_spdk
+from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
@@ -586,6 +586,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     # cleanup pool
     if not config.get("do_not_delete_pool"):
         rbd_obj.clean_up(pools=[rbd_pool])
+
+    # delete NVMe Gateway
+    if config.get("delete_gateway"):
+        delete_gateway(get_node_by_id(ceph_cluster, config["delete_gateway"]))
 
     # Build artifacts, Create CSV and Json file
     run_cfg = kwargs["run_config"]
