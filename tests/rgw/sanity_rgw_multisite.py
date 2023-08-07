@@ -295,8 +295,8 @@ def run(**kw):
                 verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
                 log.info(f"Check sync status on {site}")
                 verify_sync_status(verify_io_on_site_node)
-                # adding sleep for 60 seconds before verification of data starts
-                time.sleep(60)
+                # adding sleep for 80 seconds before verification of data starts
+                time.sleep(80)
                 log.info(f"verification IO on {site}")
                 if test_site != site:
                     copy_file_from_node_to_node(
