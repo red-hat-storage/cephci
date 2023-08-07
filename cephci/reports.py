@@ -1,10 +1,13 @@
 import datetime
 import os
+import sys
 import xml.etree.ElementTree as ET
 
 from docopt import docopt
 from utils.configs import get_configs, get_reports
+from utils.utility import set_logging_env
 
+from cli.exceptions import NotSupportedError
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -20,33 +23,30 @@ Utility to report result to service
     Usage:
         cephci/reports.py --service <SERVICE>
             (--testrun-template <STR>)
-            (--testrun-id <STR>)
-            (--testrun-title <STR>)
-            (--xunit <PATH>...)
-            (--log-level <LOG>)
             [--project <STR>]
+            [--testrun-id <STR>]
+            [--testrun-title <STR>]
+            [--xunit <PATH>...]
             [--query <STR>]
             [--config <YAML>]
+            [--log-level <LOG>]
+            [--log-dir <PATH>]
 
         cephci/reports.py --help
 
     Options:
-        -h --help                   Help
-        -s --service <SERVICE>      Service [polarion|report-portal|email]
-        --testrun-template <STR>    Test run template
-        --testrun-id <STR>          Test run ID
-        --testrun-title <STR>       Test run title
-        --xunit <PATH>              XML result files
-        -l --log-level <LOG>        Log level for log utility
-        --project <STR>             Project name
-        --query <STR>               Query to create test plan
-        --config <YAML>             Config file with service details
+        -h --help                       Help
+        -s --service <SERVICE>          Service [polarion|report-portal|email]
+        -t --testrun-template <STR>     Test run template
+        --testrun-id <STR>              Test run ID
+        --testrun-title <STR>           Test run title
+        --xunit <PATH>                  XML result files
+        --project <STR>                 Project name
+        --query <STR>                   Query to create test plan
+        --config <YAML>                 Config file with service details
+        --log-level <LOG>            Log level for log utility Default: DEBUG
+        --log-dir <PATH>                Log directory for logs
 """
-
-
-def _set_log(level):
-    """Set log level"""
-    LOG.logger.setLevel(level.upper())
 
 
 def _set_polarion_env(config, project):
@@ -104,7 +104,7 @@ def create_testrun(project, id, title=None, template=None, status="inprogress"):
         LOG.info(f"Testrun '{id}' created successfully")
     except Exception as e:
         if "Most probably the TestRun with the same ID already exists." in str(e):
-            LOG.info(f"Testrun template '{id}' already present")
+            LOG.info(f"Testrun '{id}' already present")
             return
 
         msg = f"Failed to create testrun {id} with error :\n{str(e)}"
@@ -158,18 +158,22 @@ if __name__ == "__main__":
     args = docopt(doc)
 
     # Get user parameters
-    config = args.get("--config")
     service = args.get("--service")
+    if service.lower() not in ["polarion"]:
+        raise NotSupportedError(f"Service '{service}' not supported")
+
     project = args.get("--project")
-    query = args.get("--query")
     testrun_template = args.get("--testrun-template")
     testrun_id = args.get("--testrun-id")
     testrun_title = args.get("--testrun-title")
+    query = args.get("--query")
     xunit_results = args.get("--xunit")
+    config = args.get("--config")
     log_level = args.get("--log-level")
+    log_dir = args.get("--log-dir")
 
     # Set log level
-    _set_log(log_level)
+    LOG = set_logging_env(level=log_level, path=log_dir)
 
     # Set default project
     if not project:
@@ -180,18 +184,21 @@ if __name__ == "__main__":
     get_configs(config)
 
     # Set reporting environment
-    config = get_reports("polarion")
+    config = get_reports(service)
     if service.lower() == "polarion":
         _set_polarion_env(config, project)
 
     # Create testrun template
-    if testrun_template:
-        create_testrun_template(
-            project, testrun_template, query if query else DEFAULT_QUERY
-        )
+    create_testrun_template(
+        project, testrun_template, query if query else DEFAULT_QUERY
+    )
+
+    # Check for testrun id
+    if not testrun_id:
+        sys.exit(0)
 
     # Create testrun
-    testrun = create_testrun(project, testrun_id, testrun_title, testrun_template)
+    create_testrun(project, testrun_id, testrun_title, testrun_template)
 
     # Update results with testrun
     for xunit in xunit_results:
