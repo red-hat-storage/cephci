@@ -142,7 +142,11 @@ class CephAdmin(BootstrapMixin, ShellMixin):
         rh_build = self.config.get("rhbuild", "6.0-rhel-9")
         os_major_version = rh_build.split("-")[-1]
 
-        if rh_build.startswith("6"):
+        if rh_build.startswith("7"):
+            cdn_repo = {
+                "9": "rhceph-7-tools-for-rhel-9-x86_64-rpms",
+            }
+        elif rh_build.startswith("6"):
             cdn_repo = {
                 "9": "rhceph-6-tools-for-rhel-9-x86_64-rpms",
             }
