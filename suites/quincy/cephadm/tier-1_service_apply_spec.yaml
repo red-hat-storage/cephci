@@ -266,10 +266,19 @@ tests:
         nodes:
           - node2
   - test:
-      name: Verify spam logs not present in cephadm logs
-      desc: Verify spam logs such as 'DEBUG sestatus' not present in cephadm logs (customer_bz)
+      name: Verify spam not present in cephadm log file
+      desc: Verify spam logs 'DEBUG sestatus' not present in cephadm.log file (customer_bz)
       polarion-id: CEPH-83575589
       module: test_cephadm_log_spam.py
+      config:
+        type: file
+  - test:
+      name: Verify spam not present under cephadm logs command
+      desc: Verify spam logs 'Detected' not present under cephadm logs command (customer_bz)
+      polarion-id: CEPH-83575598
+      module: test_cephadm_log_spam.py
+      config:
+        type: command
   - test:
       abort-on-fail: true
       config:
