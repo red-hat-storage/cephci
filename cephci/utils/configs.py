@@ -1,3 +1,5 @@
+import os
+
 import yaml
 
 from cli.exceptions import ConfigError
@@ -5,11 +7,11 @@ from utility.log import Log
 
 log = Log(__name__)
 
-DEFAULT_CONFIG_PATH = "~/.cephci.yaml"
+DEFAULT_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".cephci.yaml")
 CONFIG = None
 
 
-def get_configs(config=DEFAULT_CONFIG_PATH):
+def get_configs(config=None):
     """Read configurations from yaml
 
     Args:
@@ -18,6 +20,9 @@ def get_configs(config=DEFAULT_CONFIG_PATH):
     global CONFIG
     if CONFIG:
         return CONFIG
+
+    # Check for default config
+    config = config if config else DEFAULT_CONFIG_PATH
 
     log.info(f"Loading config file - {config}")
     with open(config, "r") as _stream:
