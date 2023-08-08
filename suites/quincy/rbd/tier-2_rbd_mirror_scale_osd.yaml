@@ -88,13 +88,6 @@ tests:
                       spec:
                         data_devices:
                           all: "true"
-              - config:
-                  command: apply
-                  service: rbd-mirror
-                  args:
-                    placement:
-                      nodes:
-                        - node4
         ceph-rbd2:
           config:
             verify_cluster_health: true
@@ -161,13 +154,6 @@ tests:
                       spec:
                         data_devices:
                           all: "true"
-              - config:
-                  command: apply
-                  service: rbd-mirror
-                  args:
-                    placement:
-                      nodes:
-                        - node4
       desc: RBD Mirror cluster deployment using cephadm
       destroy-clster: false
       module: test_cephadm.py
@@ -195,6 +181,34 @@ tests:
         destroy-cluster: false
         module: test_client.py
         name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
 
   - test:
       name: test-add-remove-osd-with-mirroring
