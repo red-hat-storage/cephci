@@ -1,0 +1,260 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha ---
+#-------------------------------------
+# Conf: conf/reef/nfs/tier-0.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test NFS cluster and export create
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Nfs Ganesha File Lock
+      module: nfs_verify_file_lock.py
+      desc: Perform locking on same file from 2 different clients
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 2
+
+  - test:
+      name: Nfs Ganesha Pynfs
+      module: nfs_verify_pynfs.py
+      desc: Perform pynfs tests on the Nfs cluster
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 2
+
+#   Skipping the test for failure analysis
+#  - test:
+#      name: Nfs Ganesha Bonnie
+#      module: nfs_verify_bonnie.py
+#      desc: Perform bonnie tests on the Nfs cluster
+#      polarion-id:
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 4
+
+  - test:
+      name: Nfs Verify Readdir Ops
+      module: nfs_verify_readdir_ops.py
+      desc: Perform readir operation from clients
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+
+  - test:
+      name: Nfs Ganesha rename operations
+      module: test_file_ops_renames.py
+      desc: Perform file and dir renaming and lookups in parallel
+      polarion-id:
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+
+  - test:
+      name: Nfs Ganesha copy operations
+      module: test_file_ops_copy.py
+      desc: Perform file and dir copy and lookups in parallel
+      polarion-id:
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+
+  - test:
+      name: Verify create file, create soflink and lookups from nfs clients
+      module: nfs_verify_file_ops_soft_links.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+
+  - test:
+      name: Nfs Verify File Operations
+      module: nfs_verify_file_operations.py
+      desc: Change the ownership (user and group) of files within the NFS export
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_ownership
+          client03 : perform_lookups
+
+  - test:
+      name: Nfs Verify File Operations
+      module: nfs_verify_file_operations.py
+      desc: Set different file permissions (read, write, execute) for files within the NFS
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_permission
+          client03 : perform_lookups
+
+  - test:
+      name: Nfs export Readonly parameter
+      module: test_export_readonly.py
+      desc: Test NFS export with Readonly
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Nfs export rootsquash permission
+      module: test_export_rootsquash.py
+      desc: Test NFS export with rootsquash
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
