@@ -451,6 +451,7 @@ tests:
             set-env: true
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_rule_prefix_non_current_days_haproxy.yaml
+            run-on-haproxy: true
             timeout: 300
       desc: test LC from primary to secondary
       module: sanity_rgw_multisite.py
