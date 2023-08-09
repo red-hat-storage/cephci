@@ -197,6 +197,16 @@ tests:
         config-file-name: test_lc_rule_conflict_transition_actions.yaml
         timeout: 500
 
+  - test:
+      name: test bucket lc rules with same ruleid but different rules
+      desc: test bucket lc rules with same ruleid but different rules
+      polarion-id: CEPH-11183
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_same_rule_id_diff_rules.yaml
+        timeout: 500
+
   # swift container operation
   - test:
       name: test swift enable version on conatainer of different user
