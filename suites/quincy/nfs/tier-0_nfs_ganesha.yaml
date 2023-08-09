@@ -289,3 +289,13 @@ tests:
         nfs_version: 4.1
         clients: 3
         nfs_cluster_nodes: 2
+
+  - test:
+      name: Nfs access file from multiple clients with root-squash enabled
+      module: test_nfs_rootsquash_file_access_from_multiple_clients.py
+      desc: Test NFS file access with root-squash enabled from different clients
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
