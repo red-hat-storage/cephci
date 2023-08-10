@@ -110,3 +110,28 @@ tests:
         public_network: 10.0.104.0/22,10.0.204.0/22
       polarion-id: CEPH-83575132
       abort-on-fail: true
+  - test:
+      name: Scale down Monitor with placement
+      desc: Scale down monitor nodes to 3 with placement
+      module: test_mon.py
+      abort-on-fail: true
+      polarion-id: CEPH-83573732
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node3
+              - node5
+            sep: ";"    # separator to be used for placements
+
+  - test:
+      name: Verify the number of Mon nodes post scale down
+      desc: Verify the number of Mon nodes in osd config file
+      module: test_osd_config.py
+      abort-on-fail: true
+      polarion-id: CEPH-83575391
