@@ -2503,7 +2503,7 @@ os.system('sudo systemctl start  network')
                 "Uid",
                 "Gid",
                 "Size",
-                "Links"
+                "Links",
             ]
             output_dic = dict(zip(key_list, out.split(",")))
             print(log.info(output_dic))
