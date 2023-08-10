@@ -20,6 +20,7 @@
 # CEPH-11314 - Backup and restore data using existing NFS backup tools
 # CEPH-83573992 - Verifying ceph nfs ls export with --detailed option and info with cluster_id
 # CEPH-83574013 - nfs cluster host changes and verification
+# CEPH-83575825 - NFS  File Operations: File/Directory copy b/w local FS and NFS and verify the data integrity
 #=======================================================================================================================
 tests:
   -
@@ -306,8 +307,15 @@ tests:
       name: "cephfs nfs export creation using config file"
       polarion-id: "CEPH-83573999"
   - test:
-    abort-on-fail: false
-    desc: "modifying_nfs_cluster_invalid_value"
-    module: nfs.modifying_nfs_cluster_invalid_value.py
-    name: "modifying_nfs_cluster_invalid_value"
-    polarion-id: "CEPH-83574014"
+      abort-on-fail: false
+      desc: "modifying_nfs_cluster_invalid_value"
+      module: nfs.modifying_nfs_cluster_invalid_value.py
+      name: "modifying_nfs_cluster_invalid_value"
+      polarion-id: "CEPH-83574014"
+  - test:
+      abort-on-fail: false
+      desc: "nfs_file_transfer_bw_nfs_and_localfs"
+      module: nfs.test_cephfs_nfs_transfer_file_bw_nfs_and_localfs.py
+      name: "nfs_file_transfer_bw_nfs_and_localfs"
+      polarion-id: "CEPH-83575825"
+
