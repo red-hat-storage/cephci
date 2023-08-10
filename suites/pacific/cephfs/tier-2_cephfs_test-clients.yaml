@@ -315,3 +315,16 @@ tests:
       config:
         num_of_file_dir: 1000
       name: "MDS failover whi client IO"
+  - test:
+      name: Test important MDS Configuration Settings
+      module: clients.mds_conf_modifying.py
+      polarion-id: CEPH-11329
+      desc: Test important MDS Configuration Settings
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "multiple clients permission in mounted directory"
+      module: clients.multiple_clients_permission_mounted_directories.py
+      name: multiple clients permission in mounted directory
+      polarion-id: "CEPH-11340"
+
