@@ -2487,7 +2487,7 @@ os.system('sudo systemctl start  network')
              Birth: -
 
         """
-        standard_format = " --printf='%n,%A,%b,%w,%x,%u,%g,%s'"
+        standard_format = " --printf='%n,%A,%b,%w,%x,%u,%g,%s,%h'"
         stat_cmd = f"stat {file_path} "
         if kwargs.get("format"):
             stat_cmd += f" --printf {kwargs.get('format')}"
@@ -2503,6 +2503,7 @@ os.system('sudo systemctl start  network')
                 "Uid",
                 "Gid",
                 "Size",
+                "Links",
             ]
             output_dic = dict(zip(key_list, out.split(",")))
             print(log.info(output_dic))
