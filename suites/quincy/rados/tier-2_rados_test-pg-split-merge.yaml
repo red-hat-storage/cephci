@@ -87,6 +87,19 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: verify mon parameter 'mon_pg_warn_max_object_skew'
+      polarion-id: CEPH-83575440
+      module: test_mon_pg_warn.py
+      desc: verify auto-increment of 'mon_pg_warn_max_object_skew' MON parameter
+
+  - test:
       name: Verify PG split and merge
       module: test_pg_split.py
       desc: Verify PG splitting and merging
