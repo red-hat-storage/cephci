@@ -53,3 +53,16 @@ class CephAdm(Cli):
         cmd = f"{self.base_cmd} prepare-host {build_cmd_from_args(**kw)}"
 
         return self.execute(sudo=True, cmd=cmd)
+
+    def logs(self, fsid, name):
+        """Run the cephadm logs command
+
+        Args:
+            fsid (str): cluster FSID
+            name (str): daemon name
+        """
+        cmd = f"{self.base_cmd} logs --fsid {fsid} --name {name}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
