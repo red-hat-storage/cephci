@@ -1,0 +1,148 @@
+---
+# ==================================================================================
+# Tier-level: 2
+# Test-Suite: tier2-rgw-with-warn-state.yaml
+# Cluster Configuration:
+#    conf/reef/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+# Test Scenarios:
+#   Bootstrap cluster using cephadm
+#   Configure RGW in warn state
+#   Add OSD nodes
+#   Perform object operations
+# ==================================================================================
+
+tests:
+
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm and configure RGW in warn state.
+      desc: bootstrap and configure RGW in warn state
+      polarion-id: CEPH-83573835
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          # Configure RGW at cluster warn state (OSD count 0 < osd_pool_default_size 3)
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      abort-on-fail: true
+      destroy-cluster: false
+
+  - test:
+      name: configure client
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node5
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      abort-on-fail: true
+      destroy-cluster: false
+
+  - test:
+      name: Test M buckets with N objects
+      desc: test to create "M" no of buckets and "N" no of objects
+      polarion-id: CEPH-9789
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+        timeout: 300
+      abort-on-fail: false
+      destroy-cluster: false
+
+  - test:
+      name: Test delete using M buckets with N objects
+      desc: test to create "M" no of buckets and "N" no of objects with delete
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+        timeout: 300
+      abort-on-fail: false
+      destroy-cluster: false
+
+  - test:
+      name: Test download with M buckets with N objects
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        timeout: 300
+      abort-on-fail: false
+      destroy-cluster: false
+
+  - test:
+      name: Test multipart upload of M buckets with N objects
+      desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+        timeout: 300
+      abort-on-fail: false
+      destroy-cluster: false
+
+  - test:
+      name: Swift based tests
+      desc: Test object operations with swift
+      polarion-id: CEPH-11019
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+        timeout: 300
+      abort-on-fail: false
+      destroy-cluster: false
+
+  - test:
+      name: Verify zone group rgw service with cephadm
+      desc: Defining a zone-group when deploying RGW service with cephadm
+      polarion-id: CEPH-83575108
+      module: test_verify_zone_group_rgw_with_cephadm.py
+      config:
+        realm-name: new_realm
+        zonegroup-name: us_1
+        zone-name: us-east_1

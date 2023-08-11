@@ -1,0 +1,214 @@
+#####################################################################################
+# Tier-level: 1
+# Test-Suite: tier-1-mix-clients.yaml
+# Test-Case: Automation support for deployment of rhcs 6 cluster with mix clients
+#
+# Cluster Configuration:
+#     conf/quincy/cephadm/tier-1_9node_mix_client.yaml
+#
+# Test Steps:
+#     - Deploy RHCS 6 GA cluster in RHEL 9
+#     - Upgrade cluster from RHCS 6 GA to RHCS 6 Latest
+#     - Configure rhcs 6 client on rhel 9 for rhcs 6 cluster
+#     - Configure rhcs 6 client on RHEL 8 for rhcs 6 cluster
+#     - Configure rhcs5 client on rhel9 for rhcs6 cluster
+#     - Configure rhcs5 client on rhel8 for rhcs6 cluster
+#     - Configure rhcs4 client on rhel8 for rhcs6 cluster
+#     - Run I/O's
+#####################################################################################
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      name: Deploy rhcs 6.x cluster
+      desc: Deploy rhcs 6.x cluster with mix clients
+      polarion-id: CEPH-83575549
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      abort-on-fail: true
+      destroy-cluster: false
+
+  - test:
+      name: Configure client N version on RHEL N version for Cluster N version
+      desc: Configure rhcs 6 client on rhel 9 for rhcs 6 cluster
+      module: test_client.py
+      polarion-id: CEPH-83575345
+      config:
+        command: add
+        id: client.1
+        nodes:
+            - node5:
+                release: 6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client N-1 version on RHEL N version for Cluster N version
+      desc: Configure rhcs5 client on rhel9 for rhcs6 cluster
+      module: test_client.py
+      polarion-id: CEPH-83575550
+      config:
+        command: add
+        id: client.3
+        nodes:
+            - node6:
+                release: 5
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client N-1 version on RHEL N-1 version for Cluster N version
+      desc: Configure rhcs5 client on rhel8 for rhcs6 cluster
+      module: test_client.py
+      polarion-id: CEPH-83575551
+      config:
+        command: add
+        id: client.4
+        nodes:
+            - node7:
+                release: 5
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client N-2 version on RHEL N-1 version for Cluster N version
+      desc: Configure rhcs4 client on rhel8 for rhcs6 cluster
+      module: test_client.py
+      polarion-id: CEPH-83575550
+      config:
+        command: add
+        id: client.5
+        nodes:
+            - node8:
+                release: 4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Executes RGW, RBD and FS operations
+      desc: Run object, block and filesystem basic operations parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: Test M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            polarion-id: CEPH-9789
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+        - test:
+            name: Run RBD tier-0 operations
+            desc: Run RBD tier-0 operations
+            module: rbd_tier0.py
+            polarion-id: CEPH-83575401
+            config:
+              ec-pool-k-m: 2,1
+              ec-pool-only: False
+              ec_pool_config:
+                pool: rbd_pool
+                data_pool: rbd_ec_pool
+                ec_profile: rbd_ec_profile
+                image: rbd_image
+                image_thick_provision: rbd_thick_image
+                snap_thick_provision: rbd_thick_snap
+                clone_thick_provision: rbd_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_ec_pool_snap
+                clone: rbd_ec_pool_clone
+              rep_pool_config:
+                pool: rbd_rep_pool
+                image: rbd_rep_image
+                image_thick_provision: rbd_rep_thick_image
+                snap_thick_provision: rbd_rep_thick_snap
+                clone_thick_provision: rbd_rep_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_rep_pool_snap
+                clone: rbd_rep_pool_clone
+              operations:
+                map: true
+                io: true
+                nounmap: false
+        - test:
+            name: cephfs-basics
+            desc: "cephfs basic operations"
+            module: cephfs_basic_tests.py
+            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
