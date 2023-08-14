@@ -7,6 +7,7 @@ from cli.exceptions import ConfigError
 from cli.utilities.utils import (
     change_ownership,
     change_permission,
+    check_coredump_generated,
     create_files,
     perform_lookups,
 )
@@ -118,3 +119,28 @@ def run(ceph_cluster, **kw):
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
     return 0
+
+
+def check_nfs_coredump(
+    nfs_nodes, coredump_path, created_after, conf_file="/etc/systemd/coredump.conf"
+):
+    """nfs_coredump
+    Args:
+        nfs_nodes(obj): nfs server node
+        conf_file: conf file path
+        coredump_path (str): Path where coredump is found
+        created_after (datetime): Time from when coredump has to be checked.
+    """
+    if not isinstance(nfs_nodes, list):
+        nfs_nodes = [nfs_nodes]
+
+    for nfs_node in nfs_nodes:
+        nfs_node.exec_command(sudo=True, cmd=f"echo Storage=external >> {conf_file}")
+        nfs_node.exec_command(
+            sudo=True, cmd=f"echo DefaultLimitCORE=infinity >> {conf_file}"
+        )
+        nfs_node.exec_command(sudo=True, cmd="systemctl daemon-reexec")
+
+        log.info("Check for coredump")
+        if not check_coredump_generated(nfs_node, coredump_path, created_after):
+            return 1
