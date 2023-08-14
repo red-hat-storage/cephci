@@ -2,6 +2,7 @@ import multiprocessing as mp
 
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
+from utils.utility import set_logging_env
 
 from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
@@ -9,7 +10,7 @@ from cli.cluster.volume import Volume
 from cli.exceptions import OperationFailedError
 from utility.log import Log
 
-log = Log(__name__)
+LOG = Log(__name__)
 
 
 doc = """
@@ -18,30 +19,27 @@ Utility to cleanup cluster from cloud
     Usage:
         cephci/cleanup.py --cloud-type <CLOUD>
             (--prefix <STR>)
-            (--log-level <LOG>)
             [--config <CRED>]
+            [--log-level <LOG>]
+            [--log-dir <PATH>]
 
         cephci/cleanup.py --help
 
     Options:
-        -h --help                   Help
-        -t --cloud-type <CLOUD>     Cloud type [openstack|ibmc|baremetal]
-        -p --prefix <STR>           Resource name prefix
-        -l --log-level <LOG>        Log level for log utility
-        -c --config <CRED>          Config file with cloud credentials
+        -h --help                Help
+        --cloud-type <CLOUD>     Cloud type [openstack|ibmc|baremetal]
+        --prefix <STR>           Resource name prefix
+        --config <CRED>          Config file with cloud credentials
+        --log-level <LOG>        Log level for log utility
+        --log-dir <PATH>         Log directory for logs
 """
 
 RECYCLE = []
 
 
-def _set_log(level):
-    """Set log level"""
-    log.logger.setLevel(level.upper())
-
-
 def delete_volume(name, cloud, timeout=600, interval=10):
     """Delete volume"""
-    log.info(f"Deleting volume '{name}'")
+    LOG.info(f"Deleting volume '{name}'")
 
     # Connect to OSP cloud for volume
     volume = Volume(name, cloud)
@@ -57,7 +55,7 @@ def delete_node(name, cloud, timeout=600, interval=10):
     """Delete node"""
     global RECYCLE
 
-    log.info(f"Deleting node '{name}'")
+    LOG.info(f"Deleting node '{name}'")
 
     # Connect to OSP cloud for node
     node = Node(name, cloud)
@@ -68,12 +66,12 @@ def delete_node(name, cloud, timeout=600, interval=10):
     # Delete volumes attached to node
     volumes = node.volumes
     if volumes:
-        log.info(f"Deleting volumes {', '.join(volumes)} attached to node '{name}'")
+        LOG.info(f"Deleting volumes {', '.join(volumes)} attached to node '{name}'")
         for volume in volumes:
             delete_volume(volume, cloud, timeout, interval)
 
     else:
-        log.info(f"No volumes are attached to the node '{node.name}'")
+        LOG.info(f"No volumes are attached to the node '{node.name}'")
 
     # Delete node from OSP
     node.delete(timeout, interval)
@@ -86,9 +84,9 @@ def cleanup(cloud, prefix, timeout=600, interval=10):
     # Get nodes with prefix
     procs, nodes = [], cloud.get_nodes_by_prefix(prefix)
     if nodes:
-        log.info(f"Nodes with prefix '{prefix}' are {', '.join(nodes)}")
+        LOG.info(f"Nodes with prefix '{prefix}' are {', '.join(nodes)}")
     else:
-        log.error(f"No nodes are available with prefix '{prefix}'")
+        LOG.error(f"No nodes are available with prefix '{prefix}'")
 
     # Start deleting nodes in parallel
     for node in nodes:
@@ -102,9 +100,9 @@ def cleanup(cloud, prefix, timeout=600, interval=10):
     # Get nodes woth prefix
     procs, volumes = [], cloud.get_volumes_by_prefix(prefix)
     if volumes:
-        log.info(f"Volumes with prefix '{prefix}' are {', '.join(volumes)}")
+        LOG.info(f"Volumes with prefix '{prefix}' are {', '.join(volumes)}")
     else:
-        log.error(f"No volumes available with prefix '{prefix}'.")
+        LOG.error(f"No volumes available with prefix '{prefix}'.")
 
     # Start deleting volumes in parallel
     for volume in volumes:
@@ -117,12 +115,13 @@ def cleanup(cloud, prefix, timeout=600, interval=10):
 
     # Check if any resource deletion failed
     stale = [r.name for r in RECYCLE if r.state]
-    if stale:
-        msg = f"Failed to clean resources {', '.join(stale)}"
-        log.error(msg)
-        raise OperationFailedError(msg)
+    if not stale:
+        return True
 
-    return True
+    # Fail script in-case stale resources are present
+    msg = f"Failed to clean resources {', '.join(stale)}"
+    LOG.error(msg)
+    raise OperationFailedError(msg)
 
 
 if __name__ == "__main__":
@@ -134,9 +133,10 @@ if __name__ == "__main__":
     cloud = args.get("--cloud-type")
     prefix = args.get("--prefix")
     log_level = args.get("--log-level")
+    log_dir = args.get("--log-dir")
 
     # Set log level
-    _set_log(log_level)
+    LOG = set_logging_env(level=log_level, path=log_dir)
 
     # Read configuration for cloud
     get_configs(config)

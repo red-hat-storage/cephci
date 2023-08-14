@@ -2,6 +2,7 @@ import pickle
 import re
 
 from docopt import docopt
+from utils.utility import set_logging_env
 
 from cephci.utils.configs import (
     get_configs,
@@ -32,7 +33,7 @@ from cli.utilities.utils import os_major_version
 from cli.utilities.waiter import WaitUntil
 from utility.log import Log
 
-log = Log(__name__)
+LOG = Log(__name__)
 
 CEPHADM_ANSIBLE = "cephadm-ansible"
 
@@ -44,49 +45,48 @@ Utility to configure prerequisites for deployed cluster
             (--subscription <SUBSCRIPTION>)
             (--registry <REGISTRY>)
             [--setup-ssh-keys <BOOL>]
-            [--config <FILE>]
-            [--log-level <LOG>]
             [--cephadm-ansible <BOOL>]
             [--cephadm-preflight <BOOL>]
             [--private-registry <BOOL>]
             [--build-type <BUILD>]
             [--ceph-repo <REPO>]
+            [--config <FILE>]
+            [--log-level <LOG>]
+            [--log-dir <PATH>]
 
         cephci/prereq.py --help
 
     Options:
-        -h --help                       Help
-        -c --cluster <FILE>             Cluster config file
-        -b --build <BUILD>              Build type [rh|ibm]
-        -s --subscription <CRED>        Subscription manager server
-        -r --registry <STR>             Container registry server
-        -k --setup-ssh-keys <BOOL>      Setup SSH keys on cluster
-        -f --config <FILE>              CephCI configuration file
-        -l --log-level <LOG>            Log level for log utility
-        -p --private-registry <BOOL>    Use private registry
-        -a --cephadm-ansible <BOOL>     Setup cephadm ansible
-        -cp --cephadm-preflight <BOOL>  Run cephadm preflight
-        -bt --build-type <BUILD>        Build type [rh|ibm]
-        -cr --ceph-repo <REPO>          Ceph repo [rh|ibm]
+        -h --help                    Help
+        --cluster <FILE>             Cluster config file
+        --build <BUILD>              Build version
+        --subscription <CRED>        Subscription manager server
+        --registry <STR>             Container registry server
+        --setup-ssh-keys <BOOL>      Setup SSH keys on cluster
+        --private-registry <BOOL>    Use private registry
+        --cephadm-ansible <BOOL>     Setup cephadm ansible
+        --cephadm-preflight <BOOL>   Run cephadm preflight
+        --build-type <BUILD>         Build type [rh|ibm]
+        --ceph-repo <REPO>           Ceph repo
+        --config <FILE>              Ceph CI configuration file
+        --log-level <LOG>            Log level for log utility Default: DEBUG
+        --log-dir <PATH>             Log directory for logs
 """
 
 
-def _set_log(level):
-    log.logger.setLevel(level.upper())
-
-
 def _load_cluster_config(config):
-    cluster_conf = None
+    """Load cluster configration from Ceph CI object"""
+    cluster = None
     with open(config, "rb") as f:
-        cluster_conf = pickle.load(f)
+        cluster = pickle.load(f)
 
-    for _, cluster in cluster_conf.items():
-        [node.reconnect() for node in cluster]
+    [n.reconnect() for _, c in cluster.items() for n in c]
 
-    return cluster_conf
+    return cluster
 
 
 def setup_subscription_manager(node, server):
+    """Setup subscription manager on node"""
     # Get configuration details from cephci configs
     configs = get_subscription_credentials(server)
     configs["force"] = True
@@ -104,20 +104,21 @@ def setup_subscription_manager(node, server):
     for w in WaitUntil(timeout=timeout, interval=interval):
         try:
             sm(node).register(**configs)
-            log.info(f"Subscribed to '{server}' server successfully")
+            LOG.info(f"Subscribed to '{server}' server successfully")
             return True
         except SubscriptionManagerError:
-            log.error(f"Failed to subscribe to '{server}' server. Retrying")
+            LOG.error(f"Failed to subscribe to '{server}' server. Retrying")
 
     # Check if node subscribe to subscription manager
     if w.expired:
-        log.error(f"Failed to subscribe to '{server}' server.")
+        LOG.error(f"Failed to subscribe to '{server}' server.")
 
-    log.info(f"Logined to subscription manager '{server}' successfully")
+    LOG.info(f"Logined to subscription manager '{server}' successfully")
     return False
 
 
 def subscription_manager_status(node):
+    """Get subscription manager status"""
     # Get subscription manager status
     status = sm(node).status()
 
@@ -126,13 +127,14 @@ def subscription_manager_status(node):
     match = re.search(expr, status)
     if not match:
         msg = "Unexpected subscription manager status"
-        log.error(msg)
+        LOG.error(msg)
         raise SubscriptionManagerError(msg)
 
     return match.group(0)
 
 
 def setup_local_repos(node, distro):
+    """Setup local repositories on nodes"""
     # Get repos from cephci config
     repos = get_repos("local", distro)
 
@@ -140,29 +142,31 @@ def setup_local_repos(node, distro):
     for repo in repos:
         Package(node).add_repo(repo=repo)
 
-    log.info("Added local RHEL repos successfully")
+    LOG.info("Added local RHEL repos successfully")
     return True
 
 
 def registry_login(node, server, build):
+    """Login to container registry"""
     # Get registry config from cephci config
     config = get_registry_credentials(server, build)
 
     # Login to container registry
     Registry(node).login(**config)
 
-    log.info(f"Logined to container registry '{server}' successfully")
+    LOG.info(f"Logined to container registry '{server}' successfully")
     return True
 
 
 def enable_rhel_repos(node, server, distro):
+    """Enable rhel repositories"""
     # Get RHEL repos from cephci config
     repos = get_repos(server, distro)
 
     # Enable RHEL repos
     sm(node).repos.enable(repos)
 
-    log.info(f"Enabled repos '{server}' for '{distro}'")
+    LOG.info(f"Enabled repos '{server}' for '{distro}'")
     return True
 
 
@@ -250,7 +254,7 @@ def setup_private_container_registry(
     ):
         return False
 
-    log.info("Private registry setup successfully for disconnected install")
+    LOG.info("Private registry setup successfully for disconnected install")
     return True
 
 
@@ -266,6 +270,7 @@ def prereq(
     ssh=False,
     create_private_registry=False,
 ):
+    """Configure cluster to install steps"""
     nodes = cluster.get_nodes()
     installer = cluster.get_ceph_object("installer")
     packages = " ".join(get_packages())
@@ -281,7 +286,7 @@ def prereq(
             status = subscription_manager_status(node)
             if status == "Unknown":
                 msg = f"Subscription manager is in '{status}' status"
-                log.error(msg)
+                LOG.error(msg)
                 raise NodeConfigError(msg)
 
             enable_rhel_repos(node, subscription, distro)
@@ -310,24 +315,31 @@ def prereq(
 
 
 if __name__ == "__main__":
+    # Set user parameters
     args = docopt(doc)
 
+    # Get user parameters
     cluster = args.get("--cluster")
     build = args.get("--build")
     subscription = args.get("--subscription")
     registry = args.get("--registry")
     setup_ssh = args.get("--setup-ssh-keys")
-    config = args.get("--config")
-    log_level = args.get("--log-level")
     cephadm_ansible = args.get("--cephadm-ansible")
     cephadm_preflight = args.get("--cephadm-preflight")
     create_private_registry = args.get("--private-registry")
     build_type = args.get("--build-type")
     ceph_repo = args.get("--ceph-repo")
+    config = args.get("--config")
+    log_level = args.get("--log-level")
+    log_dir = args.get("--log-dir")
 
-    _set_log(log_level)
+    # Set log level
+    LOG = set_logging_env(level=log_level, path=log_dir)
+
+    # Read configuration for reporting service
     get_configs(config)
 
+    # Configure cluster
     cluster_dict = _load_cluster_config(cluster)
     for cluster_name in cluster_dict:
         prereq(

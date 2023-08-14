@@ -1,6 +1,7 @@
 import yaml
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
+from utils.utility import set_logging_env
 
 from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
@@ -14,35 +15,33 @@ ROOT_PASSWD = "passwd"
 
 
 doc = """
-Utility to generate cluster conf based on global-conf
+Utility to generate cluster configuration based on global-conf
 
     Usage:
         cephci/cluster_conf.py --cloud-type <CLOUD>
-            (--global-conf <YAML>)
             (--prefix <STR>)
-            (--log-level <LOG>)
+            (--global-conf <YAML>)
             (--cluster-conf <YAML>)
             [--config <YAML>]
+            [--log-level <LOG>]
+            [--log-dir <PATH>]
 
         cephci/cluster_conf.py --help
 
     Options:
-        -h --help                   Help
-        -t --cloud-type <CLOUD>     Cloud type [openstack|ibmc|baremetal]
-        --global-conf <YAML>        Global config file with node details
-        -p --prefix <STR>           Resource name prefix
-        -l --log-level <LOG>        Log level for log utility
-        --cluster-conf <YAML>       Cluster config file path
-        --config <YAML>             Config file with cloud credentials
+        -h --help               Help
+        --cloud-type <CLOUD>    Cloud type [openstack|ibmc|baremetal]
+        --prefix <STR>          Resource name prefix
+        --global-conf <YAML>    Global config file with node details
+        --cluster-conf <YAML>   Cluster config file path
+        --config <YAML>         Config file with cloud credentials
+        --log-level <LOG>       Log level for log utility Default: DEBUG
+        --log-dir <PATH>        Log directory for logs
 """
 
 
-def _set_log(level):
-    """Set log level"""
-    LOG.logger.setLevel(level.upper())
-
-
 def _load_config(config):
+    """Load cluster configration file"""
     LOG.info(f"Loading config file - {config}")
     with open(config, "r") as _stream:
         try:
@@ -52,6 +51,7 @@ def _load_config(config):
 
 
 def write_output(_file, data):
+    """Write output data to file"""
     LOG.info(f"Writing cluster details to {_file}")
     with open(_file, "w") as fp:
         try:
@@ -61,6 +61,7 @@ def write_output(_file, data):
 
 
 def collect_conf(cloud, prefix, config):
+    """Collect cluster information"""
     _conf = {}
     for _c in config:
         cluster = _c.get("ceph-cluster")
@@ -109,15 +110,16 @@ if __name__ == "__main__":
     args = docopt(doc)
 
     # Get user parameters
-    config = args.get("--config")
     cloud = args.get("--cloud-type")
-    global_conf = args.get("--global-conf")
     prefix = args.get("--prefix")
-    log_level = args.get("--log-level")
+    global_conf = args.get("--global-conf")
     cluster_conf = args.get("--cluster-conf")
+    config = args.get("--config")
+    log_level = args.get("--log-level")
+    log_dir = args.get("--log-dir")
 
     # Set log level
-    _set_log(log_level)
+    LOG = set_logging_env(level=log_level, path=log_dir)
 
     # Read configuration for cloud
     get_configs(config)
