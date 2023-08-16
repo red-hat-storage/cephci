@@ -140,6 +140,7 @@ tests:
       module: test_bluestore_features.py
       polarion-id: CEPH-83575438
       config:
+          execution-time: 30
           cache_trim_max_skip_pinned:
             configurations:
                pool-1:
