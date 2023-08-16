@@ -58,13 +58,6 @@ tests:
                   service: osd
                   args:
                     all-available-devices: true
-              - config:
-                  command: apply
-                  service: rbd-mirror
-                  args:
-                    placement:
-                      nodes:
-                        - node5
         ceph-rbd2:
           config:
             verify_cluster_health: true
@@ -99,13 +92,6 @@ tests:
                   service: osd
                   args:
                     all-available-devices: true
-              - config:
-                  command: apply
-                  service: rbd-mirror
-                  args:
-                    placement:
-                      nodes:
-                        - node5
       desc: RBD Mirror cluster deployment using cephadm
       destroy-clster: false
       module: test_cephadm.py
@@ -151,6 +137,34 @@ tests:
       desc: Enable mon_allow_pool_delete to True for deleting the pools
       module: exec.py
       name: configure mon_allow_pool_delete to True
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
 
   - test:
       name: Mirroring of cloned image
