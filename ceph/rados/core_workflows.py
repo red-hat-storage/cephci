@@ -977,7 +977,7 @@ class RadosOrchestrator:
             cmd = "ceph config set mon mon_allow_pool_delete true"
             self.client.exec_command(cmd=cmd, sudo=True)
 
-        existing_pools = self.run_ceph_command(cmd="ceph df")
+        existing_pools = self.run_ceph_command(cmd="ceph df", client_exec=True)
         if pool not in [ele["name"] for ele in existing_pools["pools"]]:
             log.error(f"Pool:{pool} does not exist on cluster, cannot delete")
             return True
