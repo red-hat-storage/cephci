@@ -1138,30 +1138,16 @@ class FsUtils(object):
         Returns:
 
         """
-        output, err = client.exec_command(sudo=True, cmd="ceph version")
-        output_split = output.split()
-        if "nautilus" in output_split:
-            fs_cmd = f"ceph fs volume create {vol_name}"
-            cmd_out, cmd_rc = client.exec_command(
-                sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)
-            )
-            if validate:
-                out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
-                volname_ls = json.loads(out)
-                if vol_name not in [i["name"] for i in volname_ls]:
-                    raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
-            return cmd_out, cmd_rc
-        if "pacific" in output_split or "quincy" in output_split:
-            fs_cmd = f"ceph fs volume create {vol_name}"
-            cmd_out, cmd_rc = client.exec_command(
-                sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)
-            )
-            if validate:
-                out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
-                volname_ls = json.loads(out)
-                if vol_name not in [i["name"] for i in volname_ls]:
-                    raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
-            return cmd_out, cmd_rc
+        fs_cmd = f"ceph fs volume create {vol_name}"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+        if validate:
+            out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
+            volname_ls = json.loads(out)
+            if vol_name not in [i["name"] for i in volname_ls]:
+                raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+        return cmd_out, cmd_rc
 
     def create_subvolumegroup(
         self, client, vol_name, group_name, validate=True, **kwargs
