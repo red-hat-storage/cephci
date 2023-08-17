@@ -40,6 +40,20 @@ def kill_spdk_process(node: CephNode):
         node.exec_command(cmd=f"kill -9 {pid}", check_ec=False, sudo=True)
 
 
+def fetch_gateway_log(node: CephNode):
+    """fetch GW server logs.
+
+    Args:
+        node: Gateway node
+    """
+    out, _ = node.exec_command(
+        sudo=True,
+        cmd=f"cd {REPO_PATH}; cat output.log",
+        check_ec=False,
+    )
+    LOG.debug(out)
+
+
 def configure_spdk(node: CephNode, rbd_pool):
     """SPDK installation on Gateway node.
 

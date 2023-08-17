@@ -6,7 +6,12 @@ to find namespace limitations
 import json
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
+from ceph.nvmeof.gateway import (
+    Gateway,
+    configure_spdk,
+    delete_gateway,
+    fetch_gateway_log,
+)
 from ceph.nvmeof.initiator import Initiator
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
@@ -58,7 +63,7 @@ def initiators(ceph_cluster, gateway, config):
     LOG.debug(initiator.connect(**cmd_args))
 
 
-@retry(Exception, tries=5, delay=10)
+@retry(Exception, tries=3, delay=10)
 def run_io(ceph_cluster, num, io):
     """Run IO on newly added namespace.
 
@@ -74,12 +79,6 @@ def run_io(ceph_cluster, num, io):
     # List NVMe targets.
     targets, _ = initiator.list(**json_format)
     data = json.loads(targets)
-    filtered_namespace = {
-        "Devices": [device for device in data["Devices"] if device["NameSpace"] == num]
-    }
-    if filtered_namespace is None:
-        raise Exception("nvme volume not found")
-    LOG.debug(filtered_namespace)
     device_path = next(
         (
             device["DevicePath"]
@@ -88,16 +87,22 @@ def run_io(ceph_cluster, num, io):
         ),
         None,
     )
+    LOG.debug(device_path)
 
-    io_args = {
-        "device_name": device_path,
-        "client_node": client,
-        "run_time": "10",
-        "long_running": True,
-        "io_type": io["io_type"],
-        "cmd_timeout": "notimeout",
-    }
-    run_fio(**io_args)
+    if device_path is None:
+        raise Exception("nvme volume not found")
+    else:
+        io_args = {
+            "device_name": device_path,
+            "client_node": client,
+            "run_time": "10",
+            "long_running": True,
+            "io_type": io["io_type"],
+            "cmd_timeout": "notimeout",
+        }
+        result = run_fio(**io_args)
+        if result == 1:
+            raise Exception("FIO failure")
 
 
 def cleanup(ceph_cluster, rbd_obj, config):
@@ -211,6 +216,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     except Exception as err:
         LOG.error(err)
     finally:
+        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+        fetch_gateway_log(gw_node)
         if config.get("cleanup"):
             rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
             cleanup(ceph_cluster, rbd_obj, config)
