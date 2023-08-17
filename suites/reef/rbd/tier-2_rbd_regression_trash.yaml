@@ -1,0 +1,133 @@
+# Tier2: Extended RBD acceptance testing
+#
+# This test suite runs addition test scripts to evaluate the existing functionality of
+# Ceph RBD component.
+#
+# Cluster Configuration:
+#    Conf file - conf/reef/rbd/4-node-cluster-with-1-client.yaml
+#    Node 2 must to be a client node
+#
+# The following tests are covered
+#   - CEPH-83573297 - Enable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are moved to trash automatically
+#   - CEPH-83573296 - Disable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are not moved to trash automatically
+#   - CEPH-83573289 - Move images to trash, apply force remove on some of the images and check them
+#   - CEPH-83573298 - Move images to trash, undo them and verify the data which was created previously in it
+#   - CEPH-11413 - Delayed Deletion - In a time based deletion, restore an image which is marked for deletion. Verify if this image can be used as a normal image after. Create snaps on it, and clones from it
+#   - CEPH-11414 - In a parent clone relationship, move parent image to trash. Dont sever the child image from parent, but try to restore the parent, and verify the clone relationship is intact
+#   - CEPH-11415 - Delayed Deletion - Enable the image features on image, and mark for deletion. Now try to enable disable features
+#   - CEPH-11393 - Delayed Deletion - Verify there is no name collision with a trashed image
+
+tests:
+
+   #Setup the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+# # Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: Enable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are moved to trash automatically
+      destroy-cluster: false
+      config:
+        enable: true
+      module: rbd_trash.py
+      name: Check trash if the deleted images are moved to trash automatically
+      polarion-id: CEPH-83573297
+
+  - test:
+      desc: Disable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are not moved to trash automatically
+      destroy-cluster: false
+      config:
+        enable: false
+      module: rbd_trash.py
+      name: Disable Trash and Delete images and check if they are not moved to trash automatically
+      polarion-id: CEPH-83573296
+
+  - test:
+      desc: Verify force remove on trash images
+      destroy-cluster: false
+      module: rbd_trash_remove.py
+      name: Test force remove on trash images
+      polarion-id: CEPH-83573289
+
+  - test:
+      desc: Move images to trash, restore them and verify
+      destroy-cluster: false
+      module: trash_restore.py
+      name: Check trash restore functionality
+      polarion-id: CEPH-83573298
+
+  - test:
+      desc: Move image to trash restore back and try create snap and clone on restored image
+      module: trash_restore_create_clone_snap.py
+      name: Test snap and clone creation on restored image from trash
+      polarion-id: CEPH-11413
+
+  - test:
+      desc: Verify parent-clone relationship and clone IOs are not affected when parent moved to trash
+      module: rbd_trash_restore_image_having_clone.py
+      name: Test parent trash restore with clone IOs
+      polarion-id: CEPH-11414

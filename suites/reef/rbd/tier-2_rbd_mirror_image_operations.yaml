@@ -1,0 +1,338 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_mirror_image_operations.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/reef/rbd/5-node-2-clusters.yaml
+#    No of Clusters : 2
+#    Each cluster configuration
+#    5-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MGR, 3 OSD, 1 RBD MIRROR service daemon(s) and 1 Client
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client
+#     Node3 - OSD, MON, MGR
+#     Node4 - OSD, MON
+#     Node5 - OSD, RBD Mirror
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd1:
+            config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true
+          ceph-rbd2:
+            config:
+                command: add
+                id: client.1
+                node: node2
+                install_packages:
+                    - ceph-common
+                copy_admin_keyring: true
+        desc: Configure the client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      name: Mirroring of cloned image
+      module: test_rbd_clone_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+      polarion-id: CEPH-9521
+      desc: Testing mirroring of cloned image
+
+  - test:
+      name: Mirroring from journal to snapshot
+      module: test_rbd_mirror_journal_to_snap.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              mode: "image"
+              size: "2G"
+            ec_pool_config:
+              mode: "image"
+              size: "2G"
+      polarion-id: CEPH-83573618
+      desc: Testing journal mirroring to snapshot mirroring
+
+  - test:
+      name: Attempt expanding or shrinking secondary image
+      module: test_expand_or_shrink_img_at_secondary.py
+      clusters:
+        ceph-rbd1:
+          config:
+            ec_pool_config:
+              imagesize: 2G
+              io-total: 200M
+            rep_pool_config:
+              imagesize: 2G
+              io-total: 200M
+      polarion-id: CEPH-9500
+      desc: Verify that resizing secondary image fails
+
+  - test:
+      name: test image meta operations sync to secondary
+      module: test_rbd_image_meta_mirroring.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            key: ping
+            value: pong
+      polarion-id: CEPH-9524
+      desc: Verify removal of image meta gets mirrored
+
+  - test:
+      name: Image shrink in primary cluster
+      module: test_rbd_mirror_shrink_image_primary.py
+      clusters:
+        ceph-rbd1:
+          config:
+            journal:
+              ec_pool_config:
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                size: 2G
+                io_total: 10
+            snapshot:
+              ec_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+      polarion-id: CEPH-9499
+      desc: Verify image size at secondary when image shrink at primary cluster
+
+  - test:
+      name: Test to change of mirror pool replica size
+      module: test_rbd_mirror_replica_count.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io_total: 200M
+      polarion-id: CEPH-9518
+      desc: Verify changing mirror pool replica size shouldn't affect mirroring with IO
+
+  - test:
+      desc: Enable and disable image feature from primary gets reflected to secondary
+      module: test_rbd_mirror_image_features.py
+      clusters:
+        ceph-rbd1:
+          config:
+            journal:
+              ec_pool_config:
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                size: 2G
+                io_total: 10
+            snapshot:
+              ec_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+      name: Testing change of image feature reflection from primary to secondary
+      polarion-id: CEPH-9520
+
+  - test:
+      name: Testing image live migration of mirrored image
+      module: test_rbd_mirror_image_migration.py
+      clusters:
+        ceph-rbd1:
+          config:
+            pool_based:
+              source:
+                ec_pool_config:
+                  pool: rbd_ECpool1
+                  data_pool: data_pool_ec1
+                  image: rbd_ec_image
+                  size: 2G
+                  io_total: 200M
+                rep_pool_config:
+                  pool: rbd_RepPool1
+                  image: rbd_rep_image
+                  size: 2G
+                  io_total: 200M
+              destination:
+                do_not_create_image: True
+                ec_pool_config:
+                  pool: rbd_ECpool2
+                  data_pool: data_pool_ec2
+                rep_pool_config:
+                  pool: rbd_RepPool2
+            image_based:
+              source:
+                ec_pool_config:
+                  mode: image
+                  pool: rbd_ECpool1
+                  data_pool: data_pool_ec1
+                  image: rbd_ec_image
+                  size: 2G
+                  io_total: 200M
+                rep_pool_config:
+                  mode: image
+                  pool: rbd_RepPool1
+                  image: rbd_rep_image
+                  size: 2G
+                  io_total: 200M
+              destination:
+                do_not_create_image: True
+                ec_pool_config:
+                  mode: image
+                  pool: rbd_ECpool2
+                  data_pool: data_pool_ec2
+                rep_pool_config:
+                  mode: image
+                  pool: rbd_RepPool2
+      polarion-id: CEPH-83573320
+      desc: Image migration of mirrored image

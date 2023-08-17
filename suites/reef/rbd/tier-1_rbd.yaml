@@ -1,0 +1,187 @@
+# Tier1: RBD build evaluation
+#
+# This test suite evaluates the build to determine the execution of identified
+# regression test suites.
+# This suite requires node2 to be a client node with mons, mgrs and osds
+# Example config - conf/reef/rbd/4-node-cluster-with-1-client.yaml
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: "install ceph pre-requisites"
+  -
+    test:
+      name: Cephadm Bootstrap with custom user option
+      desc: cephadm cluster bootstrap with ssh-user(cephuser) option
+      module: test_bootstrap.py
+      polarion-id: CEPH-83573724
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          ssh-user: cephuser
+          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide with ssh-user
+          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+      destroy-cluster: false
+      abort-on-fail: true
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          -
+            config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+        verify_cluster_health: true
+      desc: "RHCS cluster deployment using cephadm"
+      destroy-clster: false
+      module: test_cephadm.py
+      name: "deploy cluster"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        node: node4
+      desc: "Configure the client system"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+      polarion-id: CEPH-83573758
+  -
+    test:
+      config:
+        script: rbd_groups.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Groups scenarios"
+      module: test_rbd.py
+      name: 1_rbd_cli_groups
+      polarion-id: CEPH-83574239
+  -
+    test:
+      config:
+        script: import_export.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Import Export scenarios"
+      module: test_rbd.py
+      name: 2_rbd_cli_import_export
+      polarion-id: CEPH-83574240
+  -
+    test:
+      config:
+        script: luks-encryption.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD LUKS Encryption scenarios"
+      module: test_rbd.py
+      name: 3_rbd_luks_encryption
+      polarion-id: CEPH-83574242
+  -
+    test:
+      config:
+        script: cli_migration.sh
+        script_path: qa/workunits/rbd
+      desc: "Executing upstream RBD CLI Migration scenarios"
+      module: test_rbd.py
+      name: 4_rbd_cli_migration
+      polarion-id: CEPH-83574243
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: test_librbd_python.sh
+      desc: Executig upstream LibRBD scenarios
+      module: test_rbd.py
+      name: 5_librbd_python
+      polarion-id: CEPH-83574524
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: permissions.sh
+      desc: Executig upstream RBD permissions scenarios
+      module: test_rbd.py
+      name: 6_rbd_permissions
+      polarion-id: CEPH-83574525
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: read-flags.sh
+      desc: Executig upstream RBD Read Flag scenarios
+      module: test_rbd.py
+      name: 7_rbd_read_flags
+      polarion-id: CEPH-83574526
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: journal.sh
+      desc: Executig upstream RBD Journal scenarios
+      module: test_rbd.py
+      name: 9_journal
+      polarion-id: CEPH-83574527
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: kernel.sh
+      desc: Executig upstream RBD Kernal scenarios
+      module: test_rbd.py
+      name: 10_rbd_kernel
+      polarion-id: CEPH-83574528
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: krbd_exclusive_option.sh
+      desc: Executig upstream RBD kernel exclusive scenarios
+      module: test_rbd.py
+      name: 11_rbd_krbd_exclusive
+      polarion-id: CEPH-83574531
+
+  - test:
+      module: delete_clones_with_io.py
+      name: test delete clones with io
+      polarion-id: CEPH-9225
+      Desc: Create clone of an image and delete while krbd IO is running
