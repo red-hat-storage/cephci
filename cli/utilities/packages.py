@@ -118,6 +118,17 @@ class Package(Cli):
         if self.execute(sudo=True, long_running=True, cmd=cmd):
             raise PackageError("Failed to clean repositories")
 
+    def pip_install(self, pkg):
+        """install pip packages
+
+        Args:
+            pkg (str): package need to be installed
+        """
+        cmd = f"pip3 install {pkg}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if "satisfied" not in out[0]:
+            raise PackageError("Failed to install package '{p}'")
+
 
 class SubscriptionManager(Cli):
     """This module provides CLI interface for RH Subscription Manager."""
