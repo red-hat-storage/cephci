@@ -318,7 +318,7 @@ tests:
   - test:
       name: test bucket policy with condition blocks
       desc: test bucket policy with condition blocks
-      polarion-id: CEPH-11590
+      polarion-id: CEPH-11589
       module: sanity_rgw.py
       config:
         script-name: test_bucket_policy_ops.py

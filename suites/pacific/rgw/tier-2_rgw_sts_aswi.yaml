@@ -1,0 +1,125 @@
+# Tier 2: RGW STS assume role with web identity tests
+
+# The primary objective of the test suite is to evaluate the STS assume role with web identity functionality of RGW.
+
+# Requires a 5 node cluster layout having only one node with RGW role.
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  # STS aswi tests
+
+  - test:
+      name: test STS assume role with web identity
+      desc: test STS assume role with web identity without any conditions
+      polarion-id: CEPH-83575817
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi.yaml
+        timeout: 500
+  - test:
+      name: STS aswi Tests to test azp fields in the web token
+      desc: STS aswi Tests to test azp fields in the web token
+      polarion-id: CEPH-83574501
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_azp_claim.yaml
+        timeout: 500
+  - test:
+      name: STS aswi Tests to test sub fields in the web token
+      desc: STS aswi Tests to test sub fields in the web token
+      polarion-id: CEPH-83574500
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_sub_claim.yaml
+        timeout: 500
