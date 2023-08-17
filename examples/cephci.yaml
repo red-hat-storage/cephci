@@ -53,6 +53,15 @@ credentials:
       timeout: 180
       retry: 18
 
+  vault:
+    url: <fake-url>
+    agent:
+      auth: <fake-auth>
+      engine: <fake-engine>
+      role-id: <fake-role-id>
+      secret-id: <fake-secret-id>
+      prefix: <fake-prefix>
+
 repos:
   local:
     rhel-9:

@@ -121,6 +121,25 @@ def get_cloud_credentials(cloud):
     return _dict
 
 
+def get_vault_credentials():
+    _dict = {}
+    _agent = {}
+    log.info("Loading cloud credentials for vault server")
+    try:
+        _vault = _get_credentials()["vault"]
+        _dict["url"] = _vault["url"]
+        _agent["auth"] = _vault["agent"]["auth"]
+        _agent["engine"] = _vault["agent"]["engine"]
+        _agent["role-id"] = _vault["agent"]["role-id"]
+        _agent["secret-id"] = _vault["agent"]["secret-id"]
+        _agent["prefix"] = _vault["agent"]["prefix"]
+        _dict["agent"] = _agent
+    except KeyError:
+        raise ConfigError("Insufficient config for vault server")
+
+    return _dict
+
+
 def _get_repos():
     """Get repositories from config file"""
     if not CONFIG:
