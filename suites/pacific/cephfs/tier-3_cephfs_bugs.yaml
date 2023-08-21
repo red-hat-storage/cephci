@@ -7,7 +7,7 @@
   # CEPH-11260 - Change replication size of Cephfs pools increase and decrease, with client IO
   # CEPH-83574833 - Performace test for file write_sync() on cephfs kernel mount
   # CEPH-83574632 - Allow recreating file system with specific fscid
-
+  # CEPH-83572726 - Active-Active MDS with multiclients to verify the race condition
 #=======================================================================================================================
 ---
 tests:
@@ -160,4 +160,10 @@ tests:
       module: cephfs_bugs.test_custom_fscid_cephfs.py
       polarion-id: CEPH-83574632
       desc: Allow recreating file system with specific fscid
+      abort-on-fail: false
+  - test:
+      name: Active-Active MDS with multiclients to verify the race condition
+      module: cephfs_bugs.verify_race_condition_between_MDS.py
+      polarion-id: CEPH-83572726
+      desc: Active-Active MDS with multiclients to verify the race condition
       abort-on-fail: false
