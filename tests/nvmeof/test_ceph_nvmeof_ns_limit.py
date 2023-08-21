@@ -6,6 +6,7 @@ to find namespace limitations
 import json
 
 from ceph.ceph import Ceph
+from ceph.ceph_admin import CephAdmin
 from ceph.nvmeof.gateway import (
     Gateway,
     configure_spdk,
@@ -211,6 +212,22 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             gateway.create_block_device(f"bdev{num}", f"image{num}", rbd_pool)
             gateway.add_namespace(sub_nqn, f"bdev{num}")
             run_io(ceph_cluster, num, config.get("run_io"))
+
+        instance = CephAdmin(cluster=ceph_cluster, **config)
+        ceph_usage, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph df", sudo=True
+        )
+        LOG.info(ceph_usage)
+
+        rbd_usage, _ = instance.installer.exec_command(
+            cmd="cephadm shell rbd du", sudo=True
+        )
+        LOG.info(rbd_usage)
+
+        health, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph -s", sudo=True
+        )
+        LOG.info(health)
 
         return 0
     except Exception as err:
