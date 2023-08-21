@@ -202,4 +202,10 @@ if __name__ == "__main__":
 
     # Update results with testrun
     for xunit in xunit_results:
+        if not os.path.exists(xunit):
+            LOG.error(
+                f"xunit results {xunit} not present. Skipping polarion update ..."
+            )
+            continue
+
         update_test_results(testrun_id, xunit, config.get("user"))
