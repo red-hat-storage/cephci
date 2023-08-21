@@ -157,3 +157,32 @@ tests:
           Files_per_dir: 30
           File_size: 3k
           Instances: 4
+
+  - test:
+      name: Test nfs scale with spec storage
+      module: nfs_verify_scale.py
+      desc: Test nfs scale setup with spec storage io tool
+      polarion-id:
+      abort-on-fail: false
+      config:
+        execution_type: parallel
+        num_of_servers: 1
+        num_of_exports: 4
+        num_of_clients: 4
+        exports_per_client: 1
+        nfs_version: 4.1
+        benchmark: SWBUILD
+        load: 1
+        incr_load: 1
+        num_runs: 1
+        clients:
+          - client1
+          - client2
+          - client3
+          - client4
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 15
+          Files_per_dir: 30
+          File_size: 3k
+          Instances: 4
