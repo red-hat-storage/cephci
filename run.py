@@ -791,6 +791,12 @@ def run(args):
                     rc = -1
             except BaseException as be:  # noqa
                 log.exception(be)
+
+                # Set failure details
+                tc["err_msg"] = str(be)
+                tc["traceback"] = traceback.format_exc()
+
+                # Set return code to 1
                 rc = 1
             finally:
                 collect_recipe(ceph_cluster_dict[cluster_name])
