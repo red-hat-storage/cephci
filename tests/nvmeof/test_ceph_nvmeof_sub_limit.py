@@ -5,6 +5,7 @@ to find subsystem limitations
 import json
 
 from ceph.ceph import Ceph
+from ceph.ceph_admin import CephAdmin
 from ceph.nvmeof.gateway import (
     Gateway,
     configure_spdk,
@@ -64,7 +65,9 @@ def run_io(ceph_cluster, gateway, config, io):
             "io_type": io["io_type"],
             "cmd_timeout": "notimeout",
         }
-        run_fio(**io_args)
+        result = run_fio(**io_args)
+        if result == 1:
+            raise Exception("FIO failure")
 
 
 def cleanup(ceph_cluster, rbd_obj, config):
@@ -159,6 +162,22 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 LOG.info(init_config)
                 run_io(ceph_cluster, gateway, init_config, config.get("run_io"))
                 listener_port += 1
+
+        instance = CephAdmin(cluster=ceph_cluster, **config)
+        ceph_usage, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph df", sudo=True
+        )
+        LOG.info(ceph_usage)
+
+        rbd_usage, _ = instance.installer.exec_command(
+            cmd="cephadm shell rbd du", sudo=True
+        )
+        LOG.info(rbd_usage)
+
+        health, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph -s", sudo=True
+        )
+        LOG.info(health)
 
         return 0
     except Exception as err:

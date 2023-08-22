@@ -133,7 +133,7 @@ tests:
           io_type: write
       desc: test namespace limitations
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_ns_limit.py
       name: test 2k namespace with 1 subsystem in Single GW
       polarion-id:
 
