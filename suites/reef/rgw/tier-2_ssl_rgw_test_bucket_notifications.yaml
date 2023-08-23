@@ -1,0 +1,81 @@
+# Tier 2: RGW kafka tests with ssl
+
+# The primary objective of the test suite is to evaluate the notification functionality with kafka endpoint
+
+# Requires a 5 node cluster layout having only one node with RGW role with SSL
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-dashboard: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.ssl
+                  placement:
+                    nodes:
+                      - node5
+                  spec:
+                    ssl: true
+                    rgw_frontend_ssl_certificate: create-cert
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-83573777
+
+
+  # kafka broker type broker with persistent flag enabled
+  - test:
+      name: notify put,delete events with kafka_broker_persistent with rgw ssl
+      desc: notify put,delete events with kafka_broker_persistent with rgw ssl
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574489
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
+        timeout: 300
