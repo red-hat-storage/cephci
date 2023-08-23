@@ -2452,7 +2452,7 @@ os.system('sudo systemctl start  network')
         Gets the stat of a file.
         Args:
             client: client node
-            file_path: path of a file to collec the stats
+            file_path: path of a file to collect the stats
             **kwargs:
                 --printf : option to print a particular value
         Return:
@@ -2473,7 +2473,7 @@ os.system('sudo systemctl start  network')
              Birth: -
 
         """
-        standard_format = " --printf='%n,%A,%b,%w,%x,%u,%g,%s,%h'"
+        standard_format = " --printf='%n,%a,%A,%b,%w,%x,%u,%g,%s,%h'"
         stat_cmd = f"stat {file_path} "
         if kwargs.get("format"):
             stat_cmd += f" --printf {kwargs.get('format')}"
@@ -2482,6 +2482,7 @@ os.system('sudo systemctl start  network')
             out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
             key_list = [
                 "File",
+                "Octal_Permission",
                 "Permission",
                 "Blocks",
                 "Birth",
