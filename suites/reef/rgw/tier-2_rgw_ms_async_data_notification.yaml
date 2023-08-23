@@ -6,8 +6,9 @@
 # cluster whereas the sec zone is part of the sec datacenter (cluster).
 
 # The deployment is evaluated by running IOs across the environments.
-# conf : conf/reef/rgw/rgw_multisite.yaml
 tests:
+
+  # Cluster deployment stage
 
   - test:
       abort-on-fail: true
@@ -109,11 +110,9 @@ tests:
                       nodes:
                         - node5
       desc: RHCS cluster deployment using cephadm.
-      polarion-id: CEPH-83575222
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
-
   - test:
       abort-on-fail: true
       clusters:
@@ -175,7 +174,6 @@ tests:
       desc: Add monitoring services using spec file.
       module: test_cephadm.py
       polarion-id: CEPH-83574727
-
   - test:
       abort-on-fail: true
       clusters:
@@ -196,11 +194,9 @@ tests:
               - ceph-common
             copy_admin_keyring: true
       desc: Configure the RGW client system
-      polarion-id: CEPH-83573758
       destroy-cluster: false
       module: test_client.py
       name: configure client
-
   - test:
       abort-on-fail: true
       clusters:
@@ -235,8 +231,6 @@ tests:
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
-      polarion-id: CEPH-10362
-
   - test:
       abort-on-fail: true
       clusters:
@@ -250,10 +244,8 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
-      polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on primary
-
   - test:
       abort-on-fail: true
       clusters:
@@ -267,9 +259,9 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
-      polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on secondary
+  # Test work flow
 
   - test:
       clusters:
@@ -281,153 +273,203 @@ tests:
             copy-user-info-to-site: ceph-sec
             timeout: 300
       desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      name: create user
       polarion-id: CEPH-83575199
-      module: sanity_rgw_multisite.py
-      name: create non-tenanted user
-
   - test:
       clusters:
         ceph-pri:
           config:
+            config-file-name: test_bucket_create_del.yaml
             script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
             timeout: 300
-      desc: Test dynamic resharding brownfield scenario in greenfield
-      abort-on-fail: true
+      desc: bucket create and delete operation
+      polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
-      name: Dynamic Resharding tests on Primary cluster
-      polarion-id: CEPH-83574737
-
+      name: bucket create and delete operation
   - test:
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_manual_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
-      desc: Test manual resharding brownfield scenario in greenfield
-      abort-on-fail: true
-      module: sanity_rgw_multisite.py
-      name: Manual Resharding tests on Primary cluster
-      polarion-id: CEPH-83574734
-  - test:
-      name: listing flat ordered buckets on secondary
-      desc: test_bucket_listing_flat_ordered on secondary
-      polarion-id: CEPH-83574826
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: listing pseudo ordered dir only buckets on secondary
-      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
-      polarion-id: CEPH-83573651
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: ordered listing of bucket with pseudo directories and objects
-      desc: measure execution time for ordered listing of bucket with pseudo directories and objects
-      polarion-id: CEPH-83573545
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: setting acls to versioned objects on secondary
-      desc: test_versioning_objects_acls on secondary
-      polarion-id: CEPH-9190
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_acls.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: delete versioned objects on secondary
-      desc: test_versioning_objects_delete on secondary
-      polarion-id: CEPH-14262
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_delete.yaml
-            timeout: 300
-  - test:
-      name: enabling bucket versioning and uploading objects on secondary
-      desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-10652 # also applies to CEPH-14261 and CEPH-9222
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: delete bucket policy on secondary
-      desc: test_bucket_policy_delete.yaml on secondary
-      polarion-id: CEPH-11213
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_policy_ops.py
-            config-file-name: test_bucket_policy_delete.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: download objects on secondary
-      desc: test_Mbuckets_with_Nobjects_download on secondary
-      polarion-id: CEPH-14237
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            timeout: 300
-  - test:
-      name: multipart upload on primary
-      desc: test_Mbuckets_with_Nobjects_multipart on primary
-      polarion-id: CEPH-14265
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
+            run-on-rgw: true
+            config-file-name: test_multisite_async_data_notifications.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             timeout: 300
-  - test:
-      name: enable compression on secondary
-      desc: test_Mbuckets_with_Nobjects_compression on secondary
-      polarion-id: CEPH-11350
+      desc: test_async_data_notifications_on_primary
+      polarion-id: CEPH-83575231
       module: sanity_rgw_multisite.py
+      name: test_async_data_notifications_on_primary
+  - test:
       clusters:
         ceph-sec:
           config:
+            run-on-rgw: true
+            config-file-name: test_multisite_async_data_notifications.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
             timeout: 300
+      desc: test_async_data_notifications_on_secondary
+      polarion-id: CEPH-83575268
+      module: sanity_rgw_multisite.py
+      name: test_async_data_notifications_on_secondary
+# testing bucket and object encryption with sse-s3 and sse-kms on multisite
+# configuring vault agent on both the sites
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+        ceph-sec:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:shared.sec}"
+            timeout: 120
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:shared.pri}"
+            timeout: 120
+      desc: Setting vault configs for sse-s3 on multisite
+      module: exec.py
+      name: set sse-s3 vault configs on multisite
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_object.yaml
+        timeout: 300
+      desc: test_sse_s3_per_object
+      module: sanity_rgw.py
+      name: sse-s3 per object encryption test
+      polarion-id: CEPH-83575153
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+            timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw_multisite.py
+      name: sse-s3 per bucket encryption test
+      polarion-id: CEPH-83574622
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
+        timeout: 300
+      desc: sse_s3_per_bucket_enc_multipart_upload
+      module: sanity_rgw.py
+      name: sse_s3_per_bucket_enc_multipart_upload
+      polarion-id: CEPH-83575155
+      comments: known issue (bz-2153452)
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+            timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_version_enabled
+      module: sanity_rgw_multisite.py
+      name: sse-s3 per bucket encryption test on a versiond bucket
+      polarion-id: CEPH-83574622
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
+            timeout: 300
+      desc: test_sse_s3_per_object_with_versioning
+      module: sanity_rgw_multisite.py
+      name: est_sse_s3_per_object_with_versioning
+      polarion-id: CEPH-83575153
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_kms_per_object_versioninig_enabled.yaml
+            timeout: 300
+      desc: test_sse_kms_per_object_with_versioning
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_per_object_with_versioning
+      polarion-id: CEPH-83574038
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_kms_per_bucket_encryption_version_enabled.yaml
+            timeout: 300
+      desc: test_sse_kms_per_bucket_with_versioning
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_per_bucket_with_versioning
+      polarion-id: CEPH-83574620
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_kms_per_object.yaml
+        timeout: 300
+      desc: test_sse_kms_per_object
+      module: sanity_rgw.py
+      name: test_sse_kms_per_object
+      polarion-id: CEPH-83574040
+
+# please include test cases before below rename testcase as the process is disruptive currently
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_zonegroup_rename.yaml
+            timeout: 300
+      desc: Test zonegroup rename in master
+      module: sanity_rgw_multisite.py
+      name: Perform zonegroup rename in master
+      polarion-id: CEPH-10740
+      comments: known issue (BZ2210695)
