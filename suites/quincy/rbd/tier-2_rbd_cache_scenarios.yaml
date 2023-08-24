@@ -93,6 +93,7 @@ tests:
           pool: pool_test
           image1: image1
           image2: image2
+          image3: image3
           size: 20G
         fio:
           runtime: 120
@@ -100,4 +101,4 @@ tests:
       destroy-cluster: false
       module: test_rbd_dm_cache.py
       name: DM cache and DM write cache creation
-      polarion-id: CEPH-83574719
+      polarion-id: CEPH-83575581
