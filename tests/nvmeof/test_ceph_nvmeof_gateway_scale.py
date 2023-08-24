@@ -7,7 +7,12 @@ import json
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
-from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
+from ceph.nvmeof.gateway import (
+    Gateway,
+    configure_spdk,
+    delete_gateway,
+    fetch_gateway_log,
+)
 from ceph.nvmeof.initiator import Initiator
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
@@ -106,7 +111,9 @@ def run_io(ceph_cluster, io):
             "io_type": io["io_type"],
             "cmd_timeout": "notimeout",
         }
-        run_fio(**io_args)
+        result = run_fio(**io_args)
+        if result == 1:
+            raise Exception("FIO failure")
 
 
 def cleanup(ceph_cluster, rbd_obj, config):
@@ -222,6 +229,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     except Exception as err:
         LOG.error(err)
     finally:
+        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+        fetch_gateway_log(gw_node)
         if config.get("cleanup"):
             rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
             cleanup(ceph_cluster, rbd_obj, config)

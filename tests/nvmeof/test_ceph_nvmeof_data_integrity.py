@@ -233,6 +233,26 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         f"Data integrity verification failed for target {target['DevicePath']}."
                     )
                     return 1
+                # copy the file to the local system
+                rbd_obj.exec_cmd(cmd=f"cp {mount_point}/test.txt /tmp/copy.txt")
+                # Rename the file
+                rbd_obj.exec_cmd(
+                    cmd=f"mv {mount_point}/test.txt {mount_point}/test1.txt"
+                )
+                # Copy the file back to the NVMe target
+                rbd_obj.exec_cmd(cmd=f"cp /tmp/copy.txt {mount_point}/test1.txt")
+                # Calculate md5sum after copying the file back to the NVMe target
+                md5sum_copy = rbd_obj.exec_cmd(cmd=f"md5sum {mount_point}/test1.txt")
+                # Compare md5sum values
+                if md5sum_write == md5sum_copy:
+                    LOG.info(
+                        f"Data integrity verified successfully for copy and compare on {target['DevicePath']}."
+                    )
+                else:
+                    LOG.error(
+                        f"Data integrity verification failed for copy and compare on {target['DevicePath']}."
+                    )
+                    return 1
 
         return 0
     except Exception as err:

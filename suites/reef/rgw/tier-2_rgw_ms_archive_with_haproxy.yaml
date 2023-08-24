@@ -1,0 +1,570 @@
+# This test to verify the archive zone with multisite where all the zones are configured behind a Load Balancer.
+
+tests:
+
+  # Cluster deployment stage
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-dashboard: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+                        - node4
+
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-dashboard: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+                        - node4
+
+        ceph-arc:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-dashboard: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.arc
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+                        - node4
+
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573386
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+
+# cofiguring clients for all the clusters on node-6
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-arc:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80,http://{node_ip:node4}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80,http://{node_ip:node4}:80 --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key a123 --secret s123 --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key a123 --secret s123"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.pri rgw_realm india"
+              - "ceph config set client.rgw.shared.pri rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.pri rgw_zone primary"
+              - "ceph orch restart rgw.shared.pri"
+              - "radosgw-admin zonegroup modify --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node6}:5000"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node6}:5000"
+              - "radosgw-admin period update --rgw-realm india --commit"
+      desc: Setting up primary site in a multisite.
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+
+# configuring HAproxy on the client node 'node6' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node4:80
+              - node5:80
+
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node4:80
+              - node5:80
+        ceph-arc:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node4:80
+              - node5:80
+
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+
+#configuring the secondary zone and archive zone from the Primary's Haproxy.
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch restart rgw.shared.pri"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node6}:5000 --access-key a123 --secret s123 --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node6}:5000 --access-key a123 --secret s123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node5}:80,http://{node_ip:node4}:80 --access-key a123 --secret s123"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.sec rgw_realm india"
+              - "ceph config set client.rgw.shared.sec rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.sec rgw_zone secondary"
+              - "ceph orch restart rgw.shared.sec"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node6}:5000"
+              - "radosgw-admin period update --rgw-realm india --commit"
+
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node6}:5000 --access-key a123 --secret s123 --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node6}:5000 --access-key a123 --secret s123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints http://{node_ip:node5}:80,http://{node_ip:node4}:80 --access-key a123 --secret s123 --tier-type=archive"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.arc rgw_realm india"
+              - "ceph config set client.rgw.shared.arc rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.arc rgw_zone archive"
+              - "ceph orch restart rgw.shared.arc"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints http://{node_ip:node6}:5000"
+              - "radosgw-admin period update --rgw-realm india --commit"
+
+      desc: Setting up RGW multisite replication environment with archive zone
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-83574575
+
+
+### create a non-tenanted user for secondary site
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+            timeout: 300
+      desc: create non-tenanted user
+      polarion-id: CEPH-83575199
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+
+### create a tenanted user for archive site
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: tenanted_user.yaml
+            copy-user-info-to-site: ceph-arc
+            timeout: 300
+      desc: create tenanted user
+      module: sanity_rgw_multisite.py
+      name: create tenanted user
+      polarion-id: CEPH-83575199
+
+# configuring vault agent on all the sites
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+        ceph-sec:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+        ceph-arc:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.sec rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.sec"
+            timeout: 120
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.pri"
+            timeout: 120
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.arc rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.arc"
+            timeout: 120
+      desc: Setting vault configs for sse-s3 on multisite archive
+      module: exec.py
+      name: set sse-s3 vault configs on multisite
+
+#Performing IOs via the HAproxy node
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            set-env: true
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_multipart_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test M buckets multipart uploads on haproxy node
+      module: sanity_rgw_multisite.py
+      name: test M buckets multipart uploads on haproxy node
+      polarion-id: CEPH-83575433
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            set-env: true
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_compression_haproxy.yaml
+            run-on-haproxy: true
+            monitor-consistency-bucket-stats: true
+            timeout: 300
+      desc: test M buckets compression on haproxy node
+      polarion-id: CEPH-83575199
+      module: sanity_rgw_multisite.py
+      name: test M buckets compression on haproxy node
+
+# creating a test bucket on the primary site
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test M buckets on haproxy node
+      module: sanity_rgw_multisite.py
+      name: test M buckets on haproxy node
+      polarion-id: CEPH-9789
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_rule_prefix_non_current_days_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test LC from primary to secondary
+      module: sanity_rgw_multisite.py
+      name: test LC from primary to secondary
+      polarion-id: CEPH-11194
+      comments: bug-1991808, test LC rules from primary to secondary
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.sec rgw_sync_lease_period 10"
+              - "ceph orch restart rgw.shared.sec"
+            timeout: 120
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri rgw_sync_lease_period 10"
+              - "ceph orch restart rgw.shared.pri"
+            timeout: 120
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.arc rgw_sync_lease_period 10"
+              - "ceph orch restart rgw.shared.arc"
+            timeout: 120
+      desc: Setting rgw_sync_lease_period to 100 on multisite archive
+      module: exec.py
+      name: Setting rgw_sync_lease_period to 100 on multisite archive
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_0_shards_sync_test_haproxy.yaml
+            run-on-haproxy: true
+            monitor-consistency-bucket-stats: true
+            timeout: 300
+      desc: test sync on bucket with 0 shards
+      module: sanity_rgw_multisite.py
+      name: test sync on bucket with 0 shards
+      polarion-id: CEPH-83575573
+      comments: bug-2188022, 2180549 HotFix for Square eCommerce
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_transition_with_prefix_rule_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+            stat-all-buckets-at-archive: true
+      desc: test LC transition on multisite, and bucket stats at archive
+      module: sanity_rgw_multisite.py
+      name: test LC transition on multisite, and bucket stats at archive
+      polarion-id: CEPH-83575377
+      comments: known failure below rhcs-6.1 and old buckets[bug-2128421]
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_transition_with_obj_acl_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test LC transition on multisite with object acl set
+      module: sanity_rgw_multisite.py
+      name: test LC transition on multisite with object acl set
+      polarion-id: CEPH-83574048
+      comments: known issue, bug-2213801
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_Mbuckets_with_Nobjects_no_reshard_haproxy.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            run-on-haproxy: true
+            timeout: 600
+            test-archive-bucket-stats: true
+      desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
+      polarion-id: CEPH-83575575
+      module: sanity_rgw_multisite.py
+      name: m buckets with n objects
+      comments: bug-2213138, known failure
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_Mbuckets_with_Nobjects_bucket_pol_retain.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            run-on-haproxy: true
+            timeout: 600
+            test-bucket-pol-retained-archive: true
+      desc: Test bucket policies are reatined at archive site post object uploads
+      polarion-id: CEPH-83575576
+      module: sanity_rgw_multisite.py
+      name: bucket policies retained at archive site
+      comments: bug-1937618, Inditex.
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_suspend_archive_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test versioning suspend on archive
+      module: sanity_rgw_multisite.py
+      name: test versioning suspend on archive
+      polarion-id: CEPH-83575578
