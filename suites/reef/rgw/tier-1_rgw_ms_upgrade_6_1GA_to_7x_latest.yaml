@@ -1,11 +1,10 @@
-# Test suite for evaluating RGW multi-site deployment scenario.
+# Test suite for evaluating RGW multi-site upgrade scenario.
 #
 # This suite deploys a single realm (India) spanning across two RHCS clusters. It has a
 # zonegroup (shared) which also spans across the clusters. There exists a master (pri)
 # and secondary (sec) zones within this group. The master zone is part of the pri
 # cluster whereas the sec zone is part of the sec datacenter (cluster).
 
-# The deployment is evaluated by running IOs across the environments.
 # conf : conf/reef/rgw/rgw_multisite.yaml
 tests:
 
@@ -13,7 +12,7 @@ tests:
       abort-on-fail: true
       desc: Install software pre-requisites for cluster deployment.
       module: install_prereq.py
-      name: setup pre-requisites
+      name: install vm pre-requsites
 
   - test:
       abort-on-fail: true
@@ -26,6 +25,8 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
+                    rhcs-version: 6.1
+                    release: ga
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
@@ -71,6 +72,8 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
+                    rhcs-version: 6.1
+                    release: ga
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
@@ -196,10 +199,10 @@ tests:
               - ceph-common
             copy_admin_keyring: true
       desc: Configure the RGW client system
-      polarion-id: CEPH-83573758
       destroy-cluster: false
       module: test_client.py
       name: configure client
+      polarion-id: CEPH-83573758
 
   - test:
       abort-on-fail: true
@@ -244,6 +247,7 @@ tests:
           config:
             cephadm: true
             commands:
+              - "ceph versions"
               - "radosgw-admin sync status"
               - "ceph -s"
               - "radosgw-admin realm list"
@@ -261,6 +265,7 @@ tests:
           config:
             cephadm: true
             commands:
+              - "ceph versions"
               - "radosgw-admin sync status"
               - "ceph -s"
               - "radosgw-admin realm list"
@@ -281,153 +286,145 @@ tests:
             copy-user-info-to-site: ceph-sec
             timeout: 300
       desc: create non-tenanted user
-      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
+      polarion-id: CEPH-83575199
+
+  # Baseline tests before upgrade
 
   - test:
       clusters:
         ceph-pri:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 300
-      desc: Test dynamic resharding brownfield scenario in greenfield
-      abort-on-fail: true
+      desc: test to create "M" buckets and "N" objects with multipart upload
       module: sanity_rgw_multisite.py
-      name: Dynamic Resharding tests on Primary cluster
-      polarion-id: CEPH-83574737
+      name: multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
 
   - test:
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_manual_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            script-name: test_swift_basic_ops.py
+            config-file-name: test_swift_basic_ops.yaml
+            verify-io-on-site: ["ceph-sec"]
             timeout: 300
-      desc: Test manual resharding brownfield scenario in greenfield
-      abort-on-fail: true
+      desc: Test object operations with swift
       module: sanity_rgw_multisite.py
-      name: Manual Resharding tests on Primary cluster
-      polarion-id: CEPH-83574734
+      name: swift basic operations pre upgrade
+      polarion-id: CEPH-11019
+
+  # Bucket Listing Tests
+
   - test:
-      name: listing flat ordered buckets on secondary
-      desc: test_bucket_listing_flat_ordered on secondary
-      polarion-id: CEPH-83574826
-      module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-pri:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
-            monitor-consistency-bucket-stats: true
             timeout: 300
-  - test:
-      name: listing pseudo ordered dir only buckets on secondary
-      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
-      polarion-id: CEPH-83573651
+      desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: ordered listing of bucket with pseudo directories and objects
-      desc: measure execution time for ordered listing of bucket with pseudo directories and objects
+      name: ordered listing of buckets pre upgrade
       polarion-id: CEPH-83573545
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            timeout: 300
+      desc: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
+      name: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
+      polarion-id: CEPH-83574736
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_manual_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            timeout: 300
+      desc: Create bucket for Testing manual resharding brownfield scenario after upgrade
+      module: sanity_rgw_multisite.py
+      name: Create bucket for Testing manual resharding brownfield scenario after upgrade
+      polarion-id: CEPH-83574735
+
+#   # Performing cluster upgrade
+
+  - test:
+      abort-on-fail: true
+      desc: Multisite upgrade
+      module: test_cephadm_upgrade.py
+      name: multisite ceph upgrade
+      polarion-id: CEPH-83574647
+      clusters:
+        ceph-pri:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+        ceph-sec:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_swift_basic_ops.py
+            config-file-name: test_swift_object_expire_op.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 500
+      desc: test object expiration with swift
+      module: sanity_rgw_multisite.py
+      name: swift object expiration post upgrade
+      polarion-id: CEPH-9718
+
+  - test:
       clusters:
         ceph-pri:
           config:
             script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered.yaml
-            monitor-consistency-bucket-stats: true
+            config-file-name: test_bucket_listing_flat_unordered.yaml
             timeout: 300
-  - test:
-      name: setting acls to versioned objects on secondary
-      desc: test_versioning_objects_acls on secondary
-      polarion-id: CEPH-9190
+      desc: test duration for unordered listing of buckets
       module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_acls.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
+      name: unordered listing of buckets post upgrade
+      polarion-id: CEPH-83573545
+
   - test:
-      name: delete versioned objects on secondary
-      desc: test_versioning_objects_delete on secondary
-      polarion-id: CEPH-14262
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_delete.yaml
-            timeout: 300
-  - test:
-      name: enabling bucket versioning and uploading objects on secondary
-      desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-10652 # also applies to CEPH-14261 and CEPH-9222
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: delete bucket policy on secondary
-      desc: test_bucket_policy_delete.yaml on secondary
-      polarion-id: CEPH-11213
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_policy_ops.py
-            config-file-name: test_bucket_policy_delete.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: download objects on secondary
-      desc: test_Mbuckets_with_Nobjects_download on secondary
-      polarion-id: CEPH-14237
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            timeout: 300
-  - test:
-      name: multipart upload on primary
-      desc: test_Mbuckets_with_Nobjects_multipart on primary
-      polarion-id: CEPH-14265
-      module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+            config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
             timeout: 300
-  - test:
-      name: enable compression on secondary
-      desc: test_Mbuckets_with_Nobjects_compression on secondary
-      polarion-id: CEPH-11350
+      desc: Test dynamic resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
+      name: Test dynamic resharding brownfield scenario after upgrade
+      polarion-id: CEPH-83574736
+
+  - test:
       clusters:
-        ceph-sec:
+        ceph-pri:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+            config-file-name: test_multisite_manual_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
             timeout: 300
+      desc: Test manual resharding brownfield scenario after upgrade
+      module: sanity_rgw_multisite.py
+      name: Test manual resharding brownfield scenario after upgrade
+      polarion-id: CEPH-83574735

@@ -46,3 +46,10 @@ globals:
       node9:
         role:
           - client
+      node10:
+        role:
+          - client
+          - nvmeof-gw        # Multiple gateways in the cluster
+      node11:
+        role:
+          - client

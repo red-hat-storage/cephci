@@ -136,25 +136,34 @@ def teardown(ceph_cluster, rbd_obj, config):
         rbd_obj: RBD object
         config: test config
     """
+    # Delete the multiple Initiators across multiple gateways
     if "initiators" in config["cleanup"]:
         for initiator_cfg in config["initiators"]:
-            node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
-            initiator = Initiator(node)
-            LOG.info(
-                f"Disconnecting initiator {initiator_cfg['subnqn']} on node {initiator_cfg['node']}"
+            disconnect_initiator(
+                ceph_cluster, initiator_cfg["node"], initiator_cfg["subnqn"]
             )
-            initiator.disconnect(nqn=initiator_cfg["subnqn"])
 
+    # Delete the multiple subsystems across multiple gateways
     if "subsystems" in config["cleanup"]:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        gateway = Gateway(gw_node)
-        for sub_cfg in config["subsystems"]:
-            LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {gw_node}")
-            gateway.delete_subsystem(subnqn=sub_cfg["nqn"])
+        config_sub_node = config["subsystems"]
+        if not isinstance(config_sub_node, list):
+            config_sub_node = [config_sub_node]
+        for sub_cfg in config_sub_node:
+            node = sub_cfg["node"]
+            sub_node = get_node_by_id(ceph_cluster, node)
+            sub_gw = Gateway(sub_node)
+            LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {node}")
+            sub_gw.delete_subsystem(subnqn=sub_cfg["nqn"])
 
-        if "gateway" in config["cleanup"]:
+    # Delete the gateway
+    if "gateway" in config["cleanup"]:
+        config_gw_node = config["gw_node"]
+        if not isinstance(config_gw_node, list):
+            config_gw_node = [config_gw_node]
+        for gw_node in config_gw_node:
+            gw_node = get_node_by_id(ceph_cluster, gw_node)
             delete_gateway(gw_node)
-
+    # Delete the pool
     if "pool" in config["cleanup"]:
         rbd_obj.clean_up(pools=[config["rbd_pool"]])
 

@@ -1,13 +1,11 @@
-# Test suite for evaluating RGW multi-site deployment scenario.
 #
-# This suite deploys a single realm (India) spanning across two RHCS clusters. It has a
-# zonegroup (shared) which also spans across the clusters. There exists a master (pri)
-# and secondary (sec) zones within this group. The master zone is part of the pri
-# cluster whereas the sec zone is part of the sec datacenter (cluster).
-
-# The deployment is evaluated by running IOs across the environments.
-# conf : conf/reef/rgw/rgw_multisite.yaml
+# Objective: Test bucket notifications with kafka endpoint
+#       - with ack_type broker/none
+#       - w/o persistent flag
+#
 tests:
+
+  # Cluster deployment stage
 
   - test:
       abort-on-fail: true
@@ -109,73 +107,10 @@ tests:
                       nodes:
                         - node5
       desc: RHCS cluster deployment using cephadm.
-      polarion-id: CEPH-83575222
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - node1
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - node1
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-        ceph-sec:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - node1
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - node1
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-      name: Monitoring Services deployment
-      desc: Add monitoring services using spec file.
-      module: test_cephadm.py
-      polarion-id: CEPH-83574727
-
+      polarion-id: CEPH-83575222
   - test:
       abort-on-fail: true
       clusters:
@@ -196,11 +131,10 @@ tests:
               - ceph-common
             copy_admin_keyring: true
       desc: Configure the RGW client system
-      polarion-id: CEPH-83573758
       destroy-cluster: false
       module: test_client.py
       name: configure client
-
+      polarion-id: CEPH-83573758
   - test:
       abort-on-fail: true
       clusters:
@@ -236,7 +170,6 @@ tests:
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
-
   - test:
       abort-on-fail: true
       clusters:
@@ -250,10 +183,9 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
-      polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on primary
-
+      polarion-id: CEPH-83575227
   - test:
       abort-on-fail: true
       clusters:
@@ -267,9 +199,10 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
       desc: Retrieve the configured environment details
-      polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on secondary
+      polarion-id: CEPH-83575227
+  # Test work flow
 
   - test:
       clusters:
@@ -281,153 +214,125 @@ tests:
             copy-user-info-to-site: ceph-sec
             timeout: 300
       desc: create non-tenanted user
-      polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
+      polarion-id: CEPH-83575199
 
   - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
-      desc: Test dynamic resharding brownfield scenario in greenfield
-      abort-on-fail: true
+      name: notify copy events with kafka_broker_persistent
+      desc: notify copy events with kafka_broker_persistent
+      polarion-id: CEPH-83574066
       module: sanity_rgw_multisite.py
-      name: Dynamic Resharding tests on Primary cluster
-      polarion-id: CEPH-83574737
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml
+        timeout: 300
 
   - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_manual_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
-      desc: Test manual resharding brownfield scenario in greenfield
-      abort-on-fail: true
-      module: sanity_rgw_multisite.py
-      name: Manual Resharding tests on Primary cluster
-      polarion-id: CEPH-83574734
-  - test:
-      name: listing flat ordered buckets on secondary
-      desc: test_bucket_listing_flat_ordered on secondary
-      polarion-id: CEPH-83574826
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: listing pseudo ordered dir only buckets on secondary
-      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
-      polarion-id: CEPH-83573651
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: ordered listing of bucket with pseudo directories and objects
-      desc: measure execution time for ordered listing of bucket with pseudo directories and objects
-      polarion-id: CEPH-83573545
+      name: notify put,delete events with kafka_broker_persistent
+      desc: notify put,delete events with kafka_broker_persistent
+      polarion-id: CEPH-83574086
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered.yaml
-            monitor-consistency-bucket-stats: true
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
             timeout: 300
+
   - test:
-      name: setting acls to versioned objects on secondary
-      desc: test_versioning_objects_acls on secondary
-      polarion-id: CEPH-9190
+      name: notify on multipart upload events with kafka_broker_persistent
+      desc: notify on multipart upload events with kafka_broker_persistent
+      polarion-id: CEPH-83574086
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_acls.yaml
-            verify-io-on-site: ["ceph-pri"]
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_persistent_multipart.yaml
             timeout: 300
+
   - test:
-      name: delete versioned objects on secondary
-      desc: test_versioning_objects_delete on secondary
-      polarion-id: CEPH-14262
+      name: notify copy events with kafka_none
+      desc: notify copy events with kafka_none
+      polarion-id: CEPH-83574066
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
           config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_delete.yaml
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_none_copy.yaml
             timeout: 300
+
   - test:
-      name: enabling bucket versioning and uploading objects on secondary
-      desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-10652 # also applies to CEPH-14261 and CEPH-9222
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: delete bucket policy on secondary
-      desc: test_bucket_policy_delete.yaml on secondary
-      polarion-id: CEPH-11213
+      name: notify on put,copy,delete events with kafka_broker_persistent when kafka is down
+      desc: notify on put,copy,delete events with kafka_broker_persistent when kafka is down
+      polarion-id: CEPH-83574078
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_bucket_policy_ops.py
-            config-file-name: test_bucket_policy_delete.yaml
-            verify-io-on-site: ["ceph-pri"]
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_down_broker_persistent.yaml
             timeout: 300
+
   - test:
-      name: download objects on secondary
-      desc: test_Mbuckets_with_Nobjects_download on secondary
-      polarion-id: CEPH-14237
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            timeout: 300
-  - test:
-      name: multipart upload on primary
-      desc: test_Mbuckets_with_Nobjects_multipart on primary
-      polarion-id: CEPH-14265
+      name: notify on multipart events with kafka_broker_persistent when kafka is down
+      desc: notify on multipart events with kafka_broker_persistent when kafka is down
+      polarion-id: CEPH-83574417
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_down_broker_persistent_multipart.yaml
             timeout: 300
+
   - test:
-      name: enable compression on secondary
-      desc: test_Mbuckets_with_Nobjects_compression on secondary
-      polarion-id: CEPH-11350
+      name: notify on multisite replication create events with kafka_broker on pri site
+      desc: notify on multisite replication create events with kafka_broker on pri site
+      polarion-id: CEPH-83575571
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_pri.yaml
             timeout: 300
+
+  - test:
+      name: notify on multisite replication create events with kafka_broker on sec site
+      desc: notify on multisite replication create events with kafka_broker on sec site
+      polarion-id: CEPH-83575571
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_sec.yaml
+            timeout: 300
+
+# please include test cases before below rename testcase as the process is disruptive currently
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_zone_rename.yaml
+            timeout: 300
+      desc: Test zone rename in master
+      module: sanity_rgw_multisite.py
+      name: Perform zone rename in master
+      polarion-id: CEPH-10740
+      comments: known issue (BZ2210757)

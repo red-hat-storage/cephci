@@ -38,7 +38,7 @@ globals:
       - nfs
       root_password: passwd
       volumes:
-      - /dev/sdb
+      - /dev/sda
       - /dev/sdc
       - /dev/sdd
       - /dev/sde
@@ -73,7 +73,7 @@ globals:
       - osd
       root_password: passwd
       volumes:
-      - /dev/sda
+      - /dev/sdb
       - /dev/sdc
       - /dev/sdd
       - /dev/sde
@@ -84,7 +84,7 @@ globals:
       - osd
       root_password: passwd
       volumes:
-      - /dev/sda
+      - /dev/sdc
       - /dev/sdb
       - /dev/sdd
       - /dev/sde
@@ -135,9 +135,9 @@ globals:
       - mgr
       root_password: passwd
       volumes:
-      - /dev/sdb
       - /dev/sda
-      - /dev/sdd
+      - /dev/sdb
+      - /dev/sdc
       - /dev/sde
     - hostname: extensa016
       id: node14
@@ -161,7 +161,7 @@ globals:
       root_password: passwd
       volumes:
       - /dev/sdb
-      - /dev/sda
+      - /dev/sdc
       - /dev/sdd
       - /dev/sde
     - hostname: extensa018

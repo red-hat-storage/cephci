@@ -82,7 +82,7 @@ tests:
 
   - test:
       name: Parallel run
-      desc: RGW tier-0 parallelly.
+      desc: RGW tier-1 parallelly.
       module: test_parallel.py
       parallel:
         - test:
@@ -132,15 +132,41 @@ tests:
             module: sanity_rgw.py
             name: Test multipart upload of M buckets with N objects
             polarion-id: CEPH-9801
-
         - test:
-            config:
-              script-name: test_swift_basic_ops.py
-              config-file-name: test_swift_basic_ops.yaml
-              timeout: 300
-              install_common: false
-              run-on-rgw: true
-            desc: Test object operations with swift
+            name: test_bi_purge for a bucket
+            desc: test bi_purge should not error
             module: sanity_rgw.py
-            name: Swift based tests
-            polarion-id: CEPH-11019
+            polarion-id: CEPH-83575234
+            config:
+              install_common: false
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_bi_purge.yaml
+              timeout: 300
+
+  - test:
+      name: enable bucket versioning
+      desc: Basic versioning test, also called as test to enable bucket versioning
+      polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_enable.yaml
+        timeout: 300
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests for non current version expiration
+      desc: Test object expiration for non current version expiration
+      polarion-id: CEPH-11190
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_prefix_non_current_days.yaml
+        timeout: 300
+  - test:
+      name: Bucket Lifecycle Object_transition_tests for Prefix filter and versioned buckets
+      desc: Test object transition for Prefixand versioned buckets
+      polarion-id: CEPH-83574050 # also applies to CEPH-83574049, CEPH-83574053
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_with_prefix_rule.yaml
+        timeout: 300

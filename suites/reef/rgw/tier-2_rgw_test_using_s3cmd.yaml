@@ -1,0 +1,272 @@
+# RHCS 7.x sanity test suite for RGW daemon with S3CMD. And Test s3cmd malformed bucket url with operations like put, get, cp etc..
+
+# Runs the Object Gateway tests from https://github.com/red-hat-storage/ceph-qe-scripts/tree/master/rgw
+# each script under the above repo has a yaml ( config defined ) which is actually a test
+# We are calling the script and associated yaml here.
+#
+#
+# examples:
+# config:
+#    script-name: test_s3cmd.py
+#    config-file-name: test_s3cmd.yaml
+#    timeout: 300
+#
+# some of the other config option for this yamls are
+#
+# 1. To run verification of io generated.
+#  config:
+#    < script-name >
+#    < config-file-name >
+#    run_io_verify: true or false - to run
+#
+#  ---------------
+# 2. To specify any external packages to be installed for a particular test
+#  a. distro specific packages
+#  config:
+#    <script-name>
+#    <config-file-name>
+#    extra-pkgs:
+#      7:
+#        - pkg1
+#        - pkg2
+#      8:
+#        - pkg1
+#        - pkg2
+#
+#
+#  b. just list of packages which are not distro dependent
+#  config:
+#    <script-name>
+#    <config-file-name>
+#    extra-pkgs:
+#      - pkg1
+#      - pkg2
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#   S3CMD tests
+  - test:
+      name: S3CMD basic  operations
+      desc: S3CMD basic  operations
+      polarion-id: CEPH-83573244
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd.yaml
+        timeout: 300
+
+  - test:
+      name: S3CMD large object download with GC
+      desc: S3CMD large object download with GC
+      polarion-id: CEPH-83574416
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_object_gc.py
+        config-file-name: ../../s3cmd/configs/test_large_object_gc.yaml
+        timeout: 300
+
+  - test:
+      name: S3CMD object header size check
+      desc: S3CMD object header size check
+      polarion-id: CEPH-83574691
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_header_size.py
+        config-file-name: ../../s3cmd/configs/test_header_size.yaml
+        timeout: 300
+
+  - test:
+      name: S3CMD bucket stats consistency
+      desc: S3CMD bucket stats consistency
+      polarion-id: CEPH-83574668
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_bucket_stats.py
+        config-file-name: ../../s3cmd/configs/test_bucket_stats.yaml
+        timeout: 300
+
+  - test:
+      name: S3CMD tests
+      desc: S3CMD tests, Testing rgw opslog
+      polarion-id: CEPH-83575194
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rgw_ops_log.py
+        config-file-name: ../../s3cmd/configs/test_rgw_opslog.yaml
+        timeout: 300
+
+  - test:
+      name: Test single delete marker for versioned object using s3cmd
+      desc: Test single delete marker for versioned object using s3cmd
+      polarion-id: CEPH-83574806
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
+        timeout: 300
+
+  - test:
+      name: Test Ratelimit at global scope
+      desc: Test Ratelimit at global scope
+      polarion-id: CEPH-83574915 # also CEPH-83574916
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_ratelimit_global.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
+        timeout: 300
+
+  - test:
+      name: Test Ratelimit for versioned buckets
+      desc: Test Ratelimit for versioned buckets
+      polarion-id: CEPH-83574912
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_versioned_bucket.yaml
+        timeout: 300
+
+  - test:
+      name: Test Ratelimit for tenanted users
+      desc: Test Ratelimit for tenanted users
+      polarion-id: CEPH-83574914
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
+        timeout: 300
+
+# Testing s3cmd malformed url
+  - test:
+      name: test s3cmd put operation with malformed bucket url
+      desc: test s3cmd put operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_put.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd cp operation with malformed bucket url
+      desc: test s3cmd cp operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_cp.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd del operation with malformed bucket url
+      desc: test s3cmd del operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_del.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd get operation with malformed bucket url
+      desc: test s3cmd get operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_get.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd ls operation with malformed bucket url
+      desc: test s3cmd ls operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_ls.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd multipart operation with malformed bucket url
+      desc: test s3cmd multipart operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_multipart.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd mv operation with malformed bucket url
+      desc: test s3cmd mv operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_mv.yaml
+        timeout: 300
+
+  - test:
+      name: test s3cmd sync operation with malformed bucket url
+      desc: test s3cmd sync operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_sync.yaml
+        timeout: 300
