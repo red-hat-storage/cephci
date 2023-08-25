@@ -92,6 +92,7 @@ tests:
                 gw_node: node6          # gateway node
                 initiator_node: node7   # client node
                 install_gw: true
+        polarion-id: CEPH-83576113
 
   - test:
       name: libRBD VS NVMeoF Read-Write IOType
@@ -115,7 +116,7 @@ tests:
                 count: 1
               gw_node: node6          # gateway node
               initiator_node: node7   # client node
-
+        polarion-id: CEPH-83576113
   - test:
       name: libRBD VS NVMeoF Random Read and Write IOType
       description: Random Read and Write IOType comparison on 10G image with 4kb-block-size
@@ -139,7 +140,7 @@ tests:
                 count: 1
               gw_node: node6          # gateway node
               initiator_node: node7   # client node
-
+        polarion-id: CEPH-83576113
   - test:
       name: libRBD VS NVMeoF Random Read-Write IOType
       description: Random Read-Write IOType comparison on 10G image with 4kb-block-size
@@ -163,3 +164,4 @@ tests:
                 count: 1
               gw_node: node6          # gateway node
               initiator_node: node7   # client node
+        polarion-id: CEPH-83576113
