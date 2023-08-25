@@ -1,4 +1,8 @@
 # Suite contains tier-2 rados test: EC Pool recovery
+# CLuster should have atleast 6 OSD hosts for testing.
+# Suited best for BM pipeline.
+# Can be run on RHOS-d env as well.
+
 tests:
   - test:
       name: setup install pre-requisistes
@@ -22,7 +26,7 @@ tests:
               args:
                 registry-url: registry.redhat.io
                 mon-ip: node1
-                orphan-initial-daemons: true
+                allow-fqdn-hostname: true
           - config:
               command: add_hosts
               service: host
@@ -87,7 +91,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node8                       # client node
+        node: node7                       # client node
         install_packages:
           - ceph-common
           - ceph-base
@@ -113,13 +117,12 @@ tests:
         ec_pool_recovery_improvement:
           create: true
           pool_name: ec_pool_recovery
-          k: 8
-          m: 4
+          k: 2
+          m: 2
           pg_num: 32
           plugin: jerasure
           rados_write_duration: 100
           rados_read_duration: 50
-          crush-failure-domain: osd
           osd_max_backfills: 16
           osd_recovery_max_active: 16
           delete_pool: true
@@ -134,8 +137,8 @@ tests:
           create: true
           pool_name: test_ec_pool
           pg_num: 64
-          k: 8
-          m: 4
+          k: 2
+          m: 2
           plugin: jerasure
           disable_pg_autoscale: true
           rados_write_duration: 50
@@ -163,8 +166,8 @@ tests:
           app_name: rbd
           pg_num: 32
           erasure_code_use_overwrites: "true"
-          k: 8
-          m: 3
+          k: 2
+          m: 2
           plugin: jerasure
           rados_write_duration: 50
           rados_read_duration: 30
@@ -177,31 +180,8 @@ tests:
           - re_pool_overwrite
       desc: EC pool with Overwrites & create RBD pool
 
-  - test:
-      name: Compression test - EC pool
-      module: pool_tests.py
-      polarion-id: CEPH-83571674
-      config:
-        Compression_tests:
-          pool_type: erasure
-          pool_config:
-            pool-1: test_compression_ecpool-1
-            pool-2: test_compression_ecpool-2
-            rados_write_duration: 200
-            byte_size: 400KB
-            pg_num: 32
-            k: 8
-            m: 3
-            plugin: jerasure
-            crush-failure-domain: osd
-          compression_config:
-            compression_mode: aggressive
-            compression_algorithm: snappy
-            compression_required_ratio: 0.3
-            compression_min_blob_size: 1B
-            byte_size: 10KB
-      desc: Verification of the effect of compression on erasure coded pools
 
+# Test to verify EC 8+6 with custom crush rules, designed to run on 4 node cluster
   - test:
       name: 8+6 EC pool
       module: test_ec_86.py

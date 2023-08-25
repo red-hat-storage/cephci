@@ -50,7 +50,7 @@ def run(ceph_cluster, **kw):
 
     try:
         # Execute ceph-bluestore-tool --help
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Running cbt help for OSD {osd_id}"
@@ -60,7 +60,7 @@ def run(ceph_cluster, **kw):
         log.info(out)
 
         # Execute ceph-bluestore-tool fsck --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Running consistency check for OSD {osd_id}"
@@ -71,7 +71,7 @@ def run(ceph_cluster, **kw):
         assert "success" in out
 
         # Execute ceph-bluestore-tool fsck --deep --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Running deep consistency check for OSD {osd_id}"
@@ -83,7 +83,7 @@ def run(ceph_cluster, **kw):
 
         if rhbuild.startswith("6"):
             # Execute ceph-bluestore-tool qfsck --path <osd_path>
-            osd_id = random.randrange(len(osd_list))
+            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Running quick consistency check for OSD {osd_id}"
@@ -94,7 +94,7 @@ def run(ceph_cluster, **kw):
             assert "success" in out
 
             # Execute ceph-bluestore-tool allocmap --path <osd_path>
-            osd_id = random.randrange(len(osd_list))
+            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Fetching allocmap for OSD {osd_id}"
@@ -105,7 +105,7 @@ def run(ceph_cluster, **kw):
             assert "success" in out
 
         # Execute ceph-bluestore-tool repair --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Run BlueFS repair for OSD {osd_id}"
@@ -117,7 +117,7 @@ def run(ceph_cluster, **kw):
 
         """
         # Execute ceph-bluestore-tool restore_cfb --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(f"\n --------------------"
                  f"\n Restoring Column-Family B for OSD {osd_id}"
                  f"\n --------------------")
@@ -137,7 +137,7 @@ def run(ceph_cluster, **kw):
         """
 
         # Execute ceph-bluestore-tool bluefs-export --out-dir <dir> --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Exporting BlueFS contents to an output directory for OSD {osd_id}"
@@ -148,7 +148,7 @@ def run(ceph_cluster, **kw):
         assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
 
         # Execute ceph-bluestore-tool bluefs-bdev-sizes --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Print the device sizes, as understood by BlueFS, to stdout for OSD {osd_id}"
@@ -159,7 +159,7 @@ def run(ceph_cluster, **kw):
         assert "device size" in out
 
         # Execute ceph-bluestore-tool bluefs-bdev-expand --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Checking if size of block device is expanded for OSD {osd_id}"
@@ -181,7 +181,7 @@ def run(ceph_cluster, **kw):
 
         # Execute ceph-bluestore-tool show-label --dev <device>
         for device in ["block", "db", "wal"]:
-            osd_id = random.randrange(len(osd_list))
+            osd_id = random.choice(osd_list)
             osd_node = rados_obj.fetch_host_node(
                 daemon_type="osd", daemon_id=str(osd_id)
             )
@@ -203,7 +203,7 @@ def run(ceph_cluster, **kw):
                 assert dev in out
 
         # Execute ceph-bluestore-tool prime-osd-dir --dev <main_device> --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         osd_node = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=str(osd_id))
         lvm_list, _ = osd_node.exec_command(
             sudo=True,
@@ -221,7 +221,7 @@ def run(ceph_cluster, **kw):
         log.info(out)
 
         # Execute ceph-bluestore-tool free-dump --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Dump all free regions in allocator for OSD {osd_id}"
@@ -236,7 +236,7 @@ def run(ceph_cluster, **kw):
         assert "alloc_name" in out and "extents" in out
 
         # Execute ceph-bluestore-tool free-score --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Get fragmentation score for OSD {osd_id}"
@@ -251,7 +251,7 @@ def run(ceph_cluster, **kw):
         assert "fragmentation_rating" in out
 
         # Execute ceph-bluestore-tool show-sharding --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Show sharding that is currently applied to "
@@ -263,7 +263,7 @@ def run(ceph_cluster, **kw):
         assert "block_cache" in out
 
         # Execute ceph-bluestore-tool bluefs-stats --path <osd_path>
-        osd_id = random.randrange(len(osd_list))
+        osd_id = random.choice(osd_list)
         log.info(
             f"\n --------------------"
             f"\n Display BlueFS statistics for OSD {osd_id}"
