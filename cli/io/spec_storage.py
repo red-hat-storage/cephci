@@ -9,6 +9,7 @@ class SpecStorageError(Exception):
 class SpecStorage(Cli):
     def __init__(self, primary_client):
         super(SpecStorage, self).__init__(primary_client)
+        self.primary_client = primary_client
         self.base_cmd = "python3 /root/SPECstorage2020/SM2020"
         self.packages = ["matplotlib", "PyYAML", "pylibyaml"]
         self.config = "sfs_rc"
