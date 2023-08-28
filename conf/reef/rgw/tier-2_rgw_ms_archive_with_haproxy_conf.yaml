@@ -73,6 +73,7 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node5:
         disk-size: 20
