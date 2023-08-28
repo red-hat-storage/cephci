@@ -174,3 +174,13 @@ tests:
      config:
        nfs_version: 4.1
        clients: 2
+
+  - test:
+      name: Nfs Verify multiple parallel io and lookups
+      module: nfs_verify_multiple_parallel_io_and_lookups.py
+      desc: Perform look ups while multiple parallel io are in progress
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
