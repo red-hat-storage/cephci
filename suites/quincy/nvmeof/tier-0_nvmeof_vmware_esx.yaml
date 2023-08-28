@@ -3,7 +3,9 @@
 # Test attributes
   #  Single ceph-nvmeof GW colocated with osd on node5
   #  nvmeof GW - configuration as 1 subsystem, 32 bdevs of 512 block size, 32 namespaces,  32 RBD images of 500M size each
-  # Check ceph health at end of test
+  #  Configure VMware esx host with a pre-requisite of Vmware vSphere 7.0U3 installed on host and configured NVMe/TCP on a Physical NIC
+  #  Validates Esx host and target subsystem connection after discovery
+  #  Check ceph health at end of test
 tests:
   - test:
       abort-on-fail: true
@@ -89,8 +91,14 @@ tests:
               bdev_size: 512
             listener_port: 5001
             allow_host: "*"
-      desc: test to setup NVMeOF GW node for VMware clients
+        vmware_clients:
+          - esx_host: argo010
+            ip: 10.8.128.210
+            root_password: VMware1!
+            sub_nqn: nqn.2016-06.io.spdk:cnode1
+            sub_port: 5001
+      desc: test to setup NVMeOF GW node and VMware clients
       destroy-cluster: false
       module: test_ceph_nvmeof_vmware_clients.py
-      name: Configure NvmeOF GW for VMware clients
+      name: Configure NvmeOF GW and VMware clients
       polarion-id:
