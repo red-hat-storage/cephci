@@ -15,6 +15,7 @@ class Export(Cli):
         subvol_path=None,
         readonly=None,
         squash=None,
+        client_addr=None,
     ):
         """
         Perform create operation for nfs cluster
@@ -26,6 +27,7 @@ class Export(Cli):
             subvol_path (str) : subvolume path
             readonly (Boolean) : enable readonly on export
             squash (str) : value to squash
+            client-addr (str) : Authorized client hostname/IP
         """
         cmd = f"{self.base_cmd} create {fs_name} {nfs_name} {nfs_export} {fs}"
         if subvol_path:
@@ -34,6 +36,8 @@ class Export(Cli):
             cmd += " --readonly"
         if squash:
             cmd += f" --squash={squash}"
+        if client_addr:
+            cmd += f" --client-addr={client_addr}"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
