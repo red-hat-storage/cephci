@@ -1,0 +1,192 @@
+# Cluster for Baremetal environment.
+# The below defined cluster has 11 nodes.
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: magna021
+          id: node1
+          ip: 10.8.128.21
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        -
+          hostname: magna022
+          id: node2
+          ip: 10.8.128.22
+          root_password: passwd
+          role:
+            - mgr
+            - mon
+            - mds
+        -
+          hostname: magna023
+          id: node3
+          ip: 10.8.128.23
+          root_password: passwd
+          role:
+            - mon
+            - mds
+        -
+          hostname: magna024
+          id: node4
+          ip: 10.8.128.24
+          root_password: passwd
+          role:
+            - mds
+        -
+          hostname: magna025
+          id: node5
+          ip: 10.8.128.25
+          root_password: passwd
+          role:
+            - mds
+            - nfs
+        -
+          hostname: magna026
+          id: node6
+          ip: 10.8.128.26
+          root_password: passwd
+          role:
+            - mds
+            - nfs
+        -
+          hostname: magna027
+          id: node7
+          ip: 10.8.128.27
+          root_password: passwd
+          role:
+            - nfs
+        -
+          hostname: magna028
+          id: node8
+          ip: 10.8.128.28
+          root_password: passwd
+          role:
+            - nfs
+        -
+          hostname: magna029
+          id: node9
+          ip: 10.8.128.29
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: magna030
+          id: node10
+          ip: 10.8.128.30
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: plena001
+          id: node11
+          ip: 10.1.172.1
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+        -
+          hostname: plena002
+          id: node12
+          ip: 10.1.172.2
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: plena003
+          id: node13
+          ip: 10.1.172.3
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: plena004
+          id: node14
+          ip: 10.1.172.4
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: plena005
+          id: node15
+          ip: 10.1.172.5
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: plena006
+          id: node16
+          ip: 10.1.172.6
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: plena007
+          id: node17
+          ip: 10.1.172.7
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
