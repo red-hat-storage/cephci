@@ -143,3 +143,14 @@ tests:
         nfs_version: 4.2
         clients: 3
         file_count: 100
+
+  - test:
+      name: Modifying file attributes such as size, modification time, and access time
+      module: nfs_verify_file_modification.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        file_count: 100
