@@ -9,7 +9,12 @@ from ceph.waiter import WaitUntil
 from cli.utilities.packages import Package
 from cli.utilities.packages import SubscriptionManager as sm
 from cli.utilities.packages import SubscriptionManagerError
-from cli.utilities.utils import os_major_version
+from cli.utilities.utils import (
+    enable_fips_mode,
+    is_fips_mode_enabled,
+    os_major_version,
+    reboot_node,
+)
 from utility.log import Log
 from utility.utils import get_cephci_config
 
@@ -21,6 +26,10 @@ class ConfigNotFoundError(Exception):
 
 
 class RepoConfigError(Exception):
+    pass
+
+
+class FIPSConfigError(Exception):
     pass
 
 
@@ -63,6 +72,7 @@ def run(**kw):
     enable_eus = config.get("enable_eus", False)
     repo = config.get("add-repo", False)
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
+    fips_mode = config.get("enable_fips_mode", False)
 
     cloud_type = config.get("cloud-type", "openstack")
     with parallel() as p:
@@ -75,6 +85,7 @@ def run(**kw):
                 enable_eus,
                 skip_enabling_rhel_rpms,
                 cloud_type,
+                fips_mode,
             )
             time.sleep(20)
 
@@ -88,6 +99,7 @@ def install_prereq(
     enable_eus=False,
     skip_enabling_rhel_rpms=False,
     cloud_type="openstack",
+    fips_mode=False,
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
@@ -212,6 +224,22 @@ def install_prereq(
 
     registry_login(ceph, distro_ver)
     update_iptables(ceph)
+
+    if not fips_mode:
+        return
+
+    # Enable FIPS mode
+    if not enable_fips_mode(ceph):
+        raise FIPSConfigError("Failed to enable FIPS mode")
+    log.info("Enable FIPS mode config set successfully")
+
+    # Restart node and wait
+    reboot_node(ceph)
+
+    # Check for FIPS mode setting
+    if not is_fips_mode_enabled(ceph):
+        raise FIPSConfigError("FIPS mode not enabled after reboot")
+    log.info("FIPS mode is enabled")
 
 
 def setup_addition_repo(ceph, repo):

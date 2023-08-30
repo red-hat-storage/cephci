@@ -380,6 +380,49 @@ def set_selinux_mode(nodes, enforcing_mode):
     return True
 
 
+def enable_fips_mode(node):
+    """Enable FIPS mode on node
+
+    Args:
+        node (CephNode): Ceph Node Object
+    """
+    # Set FIPS commands
+    enable_fips = "fips-mode-setup --enable"
+    finish_fips_setup = "fips-finish-install --complete"
+
+    # Enable FIPS mode
+    out, err = node.exec_command(cmd=enable_fips, sudo=True)
+    if "FIPS mode will be enabled." not in out:
+        log.error(f"Failed to setup FIPS mode config. Error -\n{err}")
+        return False
+
+    # Finish FIPS mode
+    _, err = node.exec_command(cmd=finish_fips_setup, sudo=True)
+    if err:
+        log.error(f"Failed to setup enable mode. Error -\n{err}")
+        return False
+
+    return True
+
+
+def is_fips_mode_enabled(node):
+    """Check for FIPS mode on node
+
+    Args:
+        node (CephNode): Ceph Node Object
+    """
+    # Check FIPS command
+    check_fips_setup = "fips-mode-setup --check"
+
+    # Check for FIPS status
+    out, _ = node.exec_command(cmd=check_fips_setup, sudo=True)
+    if "FIPS mode is enabled" not in out:
+        log.error(f"FIPS mode is disabled on node '{node.hostname}'")
+        return False
+
+    return True
+
+
 def reboot_node(node):
     """
     Reboots a given node and waits till the reboot complete
