@@ -154,3 +154,23 @@ tests:
         nfs_version: 4.1
         clients: 3
         file_count: 100
+
+  - test:
+     name: Nfs export with client permission
+     module: nfs_client_permission_export
+     desc: Test nfs export with authorized client mount
+     polarion-id:
+     abort-on-fail: false
+     config:
+       nfs_version: 4.1
+       clients: 2
+
+  - test:
+     name: Nfs Test File Truncate
+     module: nfs_file_truncate.py
+     desc: Perform file truncate operation from clients
+     polarion-id:
+     abort-on-fail: false
+     config:
+       nfs_version: 4.1
+       clients: 2

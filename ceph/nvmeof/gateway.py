@@ -151,7 +151,7 @@ class Gateway:
 
     def get_subsystems(self):
         """Get all subsystems."""
-        run_control_cli(self.node, "get_subsystems")
+        return run_control_cli(self.node, "get_subsystems")
 
     def create_block_device(self, name, image, pool, block_size):
         """Create block device using rbd image."""
