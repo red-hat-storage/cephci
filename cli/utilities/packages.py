@@ -125,9 +125,10 @@ class Package(Cli):
             pkg (str): package need to be installed
         """
         cmd = f"pip3 install {pkg}"
-        out = self.execute(sudo=True, cmd=cmd)
-        if "satisfied" not in out[0]:
-            raise PackageError("Failed to install package '{p}'")
+        self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd="pip3 list")
+        if pkg not in out[0]:
+            raise PackageError(f"Failed to install package '{pkg}'")
 
 
 class SubscriptionManager(Cli):

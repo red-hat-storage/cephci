@@ -608,7 +608,7 @@ def perform_lookups(client, mount_point, num_files):
         mount_point (str): mount path
         num_files (int): total file count
     """
-    for _ in range(1, num_files):
+    for _ in range(num_files):
         try:
             log.info(
                 client.exec_command(

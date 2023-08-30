@@ -8,7 +8,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def generate_test_case(name, duration, status, polarion_id=None):
+def generate_test_case(name, duration, status, msg=None, text=None, polarion_id=None):
     """Create test case object.
 
     Args:
@@ -28,7 +28,9 @@ def generate_test_case(name, duration, status, polarion_id=None):
         test_case.time = 0.0
 
     if status != "Pass":
-        test_case.result = [Failure("test failed")]
+        _result = Failure(msg, "exception")
+        _result.text = text
+        test_case.result = [_result]
 
     if polarion_id:
         props = Properties()
@@ -71,6 +73,8 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
         pol_ids = tc.get("polarion-id")
         test_status = tc["status"]
         elapsed_time = tc.get("duration")
+        err_msg = tc.get("err_msg")
+        _traceback = tc.get("traceback")
 
         if pol_ids:
             _ids = pol_ids.split(",")
@@ -80,15 +84,15 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
                         test_name,
                         elapsed_time,
                         test_status,
+                        msg=err_msg,
+                        text=_traceback,
                         polarion_id=_id,
                     )
                 )
         else:
             suite.add_testcase(
                 generate_test_case(
-                    test_name,
-                    elapsed_time,
-                    test_status,
+                    test_name, elapsed_time, test_status, msg=err_msg, text=_traceback
                 )
             )
 

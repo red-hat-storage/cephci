@@ -2473,7 +2473,7 @@ os.system('sudo systemctl start  network')
              Birth: -
 
         """
-        standard_format = " --printf='%n,%A,%b,%w,%x,%u,%g,%s,%h'"
+        standard_format = " --printf='%n,%a,%A,%b,%w,%x,%u,%g,%s,%h'"
         stat_cmd = f"stat {file_path} "
         if kwargs.get("format"):
             stat_cmd += f" --printf {kwargs.get('format')}"
@@ -2482,6 +2482,7 @@ os.system('sudo systemctl start  network')
             out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
             key_list = [
                 "File",
+                "Octal_Permission",
                 "Permission",
                 "Blocks",
                 "Birth",
@@ -2915,3 +2916,22 @@ os.system('sudo systemctl start  network')
             fio_filenames.append(filename)
         log.info("Generated all the configs")
         return fio_filenames
+
+    @retry(CommandFailed, tries=3, delay=60)
+    def validate_services(self, client, service_name):
+        """
+        Validate if the Service is up and if it's not up, rety based on the
+        count with a delay of 60 sec.
+        Args:
+            client : client node.
+            service_name : name of the service which needs to be validated.
+        Return:
+            If the service is not up - with an interval of 60 sec, retry for 3 times before failing.
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
+        )
+        service_ls = json.loads(out)
+        log.info(service_ls)
+        if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
+            raise CommandFailed(f"All {service_name} are Not UP")

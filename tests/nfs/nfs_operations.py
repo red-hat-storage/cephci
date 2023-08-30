@@ -22,6 +22,9 @@ def setup_nfs_cluster(
         )
 
     # Step 4: Perform nfs mount
+    # If there are multiple nfs servers provided, only one is required for mounting
+    if isinstance(nfs_server, list):
+        nfs_server = nfs_server[0]
     for client in clients:
         client.create_dirs(dir_path=nfs_mount, sudo=True)
         if Mount(client).nfs(

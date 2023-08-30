@@ -135,6 +135,8 @@
                     <td><a style="color: green;" href="{{ test['log-link'] if  use_abs_log_link else test['log-link'].split("/")[-1] }}">{{ test.status }}</a></td>
                 {% elif test.status == 'Failed' %}
                     <td><a style="color: red;" href="{{ test['log-link'] if use_abs_log_link else test['log-link'].split("/")[-1] }}">{{ test.status }}</a></td>
+                {% elif test.status == 'Skipped' %}
+                    <td><a style="color: grey;" href="{{ test['log-link'] if use_abs_log_link else test['log-link'].split("/")[-1] }}">{{ test.status }}</a></td>
                 {% elif test.status == 'Not Executed' %}
                 <td style="color: grey">{{ test.status }}</td>
                 {% endif %}

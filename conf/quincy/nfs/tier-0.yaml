@@ -36,6 +36,7 @@ globals:
           - crash
           - rgw
           - mds
+          - nfs
         no-of-volumes: 6
         disk-size: 15
       node4:
