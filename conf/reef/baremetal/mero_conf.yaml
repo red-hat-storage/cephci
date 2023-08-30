@@ -109,10 +109,10 @@ globals:
             - /dev/sdg
             - /dev/sdh
             - /dev/sdi
-            - /dev/sdk
             - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
             - /dev/sdm
-            - /dev/sdn
         - hostname: mero013
           id: node8
           ip: 10.8.129.233
