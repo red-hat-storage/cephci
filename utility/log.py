@@ -48,6 +48,7 @@ class Log:
 
         self._log_level = self._logger.getEffectiveLevel()
         self._log_dir = None
+        self._log_errors = []
         self.log_format = LOG_FORMAT
 
     @property
@@ -183,6 +184,7 @@ class Log:
             self.rp_logger.log(message=message, level="ERROR")
 
         self._log("error", message, *args, **kwargs)
+        self._log_errors.append(message)
 
     def exception(self, message: Any, *args, **kwargs) -> None:
         """Log the given message under exception log level.
