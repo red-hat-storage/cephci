@@ -1398,6 +1398,7 @@ class FsUtils(object):
         snap_name,
         target_subvol_name,
         validate=True,
+        timeout=600,
         **kwargs,
     ):
         """
@@ -1426,7 +1427,10 @@ class FsUtils(object):
         if kwargs.get("pool_layout"):
             clone_cmd += f" --pool_layout {kwargs.get('pool_layout')}"
         cmd_out, cmd_rc = client.exec_command(
-            sudo=True, cmd=clone_cmd, check_ec=kwargs.get("check_ec", True)
+            sudo=True,
+            cmd=clone_cmd,
+            check_ec=kwargs.get("check_ec", True),
+            timeout=timeout,
         )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
@@ -1482,7 +1486,9 @@ class FsUtils(object):
                 raise CommandFailed(f"Remove of snapshot : {snap_name} failed")
         return cmd_out, cmd_rc
 
-    def remove_subvolume(self, client, vol_name, subvol_name, validate=True, **kwargs):
+    def remove_subvolume(
+        self, client, vol_name, subvol_name, validate=True, timeout=600, **kwargs
+    ):
         """
         Removes the subvolume based subvol_name,vol_name
         It supports below optional arguments also
@@ -1507,14 +1513,17 @@ class FsUtils(object):
         if kwargs.get("force"):
             rmsubvolume_cmd += " --force"
         cmd_out, cmd_rc = client.exec_command(
-            sudo=True, cmd=rmsubvolume_cmd, check_ec=kwargs.get("check_ec", True)
+            sudo=True,
+            cmd=rmsubvolume_cmd,
+            check_ec=kwargs.get("check_ec", True),
+            timeout=timeout,
         )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("group_name"):
                 listsubvolumes_cmd += f" --group_name {kwargs.get('group_name')}"
             out, rc = client.exec_command(
-                sudo=True, cmd=f"{listsubvolumes_cmd} --format json"
+                sudo=True, cmd=f"{listsubvolumes_cmd} --format json", timeout=timeout
             )
             subvolume_ls = json.loads(out)
             if subvol_name in [i["name"] for i in subvolume_ls]:
@@ -2473,7 +2482,7 @@ os.system('sudo systemctl start  network')
              Birth: -
 
         """
-        standard_format = " --printf='%n,%A,%b,%w,%x,%u,%g,%s,%h'"
+        standard_format = " --printf='%n,%a,%A,%b,%w,%x,%u,%g,%s,%h'"
         stat_cmd = f"stat {file_path} "
         if kwargs.get("format"):
             stat_cmd += f" --printf {kwargs.get('format')}"
@@ -2482,6 +2491,7 @@ os.system('sudo systemctl start  network')
             out, rc = client.exec_command(sudo=True, cmd=stat_cmd)
             key_list = [
                 "File",
+                "Octal_Permission",
                 "Permission",
                 "Blocks",
                 "Birth",
@@ -2915,3 +2925,22 @@ os.system('sudo systemctl start  network')
             fio_filenames.append(filename)
         log.info("Generated all the configs")
         return fio_filenames
+
+    @retry(CommandFailed, tries=3, delay=60)
+    def validate_services(self, client, service_name):
+        """
+        Validate if the Service is up and if it's not up, rety based on the
+        count with a delay of 60 sec.
+        Args:
+            client : client node.
+            service_name : name of the service which needs to be validated.
+        Return:
+            If the service is not up - with an interval of 60 sec, retry for 3 times before failing.
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
+        )
+        service_ls = json.loads(out)
+        log.info(service_ls)
+        if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
+            raise CommandFailed(f"All {service_name} are Not UP")

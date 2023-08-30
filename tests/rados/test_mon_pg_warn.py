@@ -1,7 +1,6 @@
 """
 Module to verify MANY_OBJECTS_PER_PG health warning and
-auto-increment of 'mon_pg_warn_max_object_skew' MON parameter
-due to PG auto-scaling
+manual-increment of 'mon_pg_warn_max_object_skew' MGR parameter
 """
 import datetime
 import time
@@ -19,12 +18,15 @@ def run(ceph_cluster, **kw):
     """
     # CEPH-83575440
     Test to verify occurrence of MANY_OBJECTS_PER_PG health warning and
-    change in 'mon_pg_warn_max_object_skew' due to PG auto-scaling
+    effect of change of 'mon_pg_warn_max_object_skew' MGR parameter
     1. Create a replicated pool with single pg and autoscaling disabled
-    2. Ensure default value of MON parameter 'mon_pg_warn_max_object_skew' is 10
+    2. Ensure default value of MGR parameter 'mon_pg_warn_max_object_skew' is 10
     3. Write huge number of objects to the pool in order to trigger the MANY_OBJECTS_PER_PG
     warning
-    4. Enable pg autoscaling, let the pool autoscale and health warning should disappear
+    4. Increase pool pgs manually and observe the health warning disappearing
+    5. Repeat the above steps with a fresh pool and increase the value of
+    MGR parameter 'mon_pg_warn_max_object_skew' to 100
+    6. Observe the health warning disappearing, delete the pools
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -58,7 +60,7 @@ def run(ceph_cluster, **kw):
         try:
             # fetch the default value of MON parameter 'mon_pg_warn_max_object_skew'
             default_mon_pg_warn = float(
-                mon_obj.get_config(section="mon", param="mon_pg_warn_max_object_skew")
+                mon_obj.get_config(section="mgr", param="mon_pg_warn_max_object_skew")
             )
 
             if not default_mon_pg_warn == 10.000000:
@@ -72,7 +74,7 @@ def run(ceph_cluster, **kw):
             rados_obj.configure_pg_autoscaler(**{"default_mode": "warn"})
             # create a replicated pool with single pg
             assert rados_obj.create_pool(
-                pool_name=pool_name, **{"pg_num": 1, "pgp_num": 1, "pg_num_max": 1}
+                pool_name=pool_name, **{"pg_num": 1, "pgp_num": 1}
             )
 
             # write 10000 objects to the pool to trigger the warning
@@ -87,47 +89,39 @@ def run(ceph_cluster, **kw):
             mon_pg_warn_health_warn(should_contain=True)
 
             if test_type == "pg_autoscale":
-                # enable PG autoscaling
-                mon_obj.remove_config(
-                    section="global", name="osd_pool_default_pg_autoscale_mode"
-                )
-                rados_obj.set_pool_property(
-                    pool=pool_name, props="pg_autoscale_mode", value="on"
-                )
-                rados_obj.set_pool_property(
-                    pool=pool_name, props="pg_num_max", value=256
-                )
+                # PG autoscale WARN mode cannot be removed as it
+                # would also remove the health warning
+                # Scale up PGs in the pool to 32 using pg_num pool property
+                rados_obj.set_pool_property(pool=pool_name, props="pg_num", value=32)
+                rados_obj.set_pool_property(pool=pool_name, props="pgp_num", value=32)
 
-                # wait for Pool to autoscale
+                # wait for Pool to scale to 32
                 timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=155)
                 while datetime.datetime.now() < timeout_time:
                     try:
                         pg_count = pool_obj.get_target_pg_num_bulk_flag(
                             pool_name=pool_name
                         )
-                        assert pg_count > 1
+                        assert pg_count == 32
                         log.info(
-                            f"Number of PGs for {pool_name} has auto-scaled to {pg_count}"
+                            f"Number of PGs for {pool_name} has scaled up to {pg_count}"
                         )
                         break
                     except AssertionError:
                         time.sleep(30)
                         if datetime.datetime.now() >= timeout_time:
                             raise (
-                                f"PG count for {pool_name} is still 1 after enabling"
-                                f" auto-scaling and waiting for 155 secs"
+                                f"PG count for {pool_name} is still 1 after setting "
+                                f"pg_num to 32 and waiting for 155 secs"
                             )
-                # ensure health warning for "MANY_OBJECTS_PER_PG" disappears
-                mon_pg_warn_health_warn(should_contain=False)
             else:
-                # with pg autoscaling restricted as pg_num_max is set to 1,
+                # with pg autoscaling restricted and pool having single PG,
                 # increase the value of 'mon_pg_warn_max_object_skew' to 100
                 mon_obj.set_config(
-                    section="mon", name="mon_pg_warn_max_object_skew", value=100
+                    section="mgr", name="mon_pg_warn_max_object_skew", value=100
                 )
-                # ideally health warning should disappear after setting the above config, however,
-                # it has been observed that health warn '[WRN] MANY_OBJECTS_PER_PG' persists even
-                # if 'mon_pg_warn_max_object_skew' is set to 1000
+            # ensure health warning for "MANY_OBJECTS_PER_PG" disappears
+            mon_pg_warn_health_warn(should_contain=False)
         except Exception as e:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
@@ -136,10 +130,10 @@ def run(ceph_cluster, **kw):
             mon_obj.remove_config(
                 section="global", name="osd_pool_default_pg_autoscale_mode"
             )
-            mon_obj.remove_config(section="mon", name="mon_pg_warn_max_object_skew")
+            mon_obj.remove_config(section="mgr", name="mon_pg_warn_max_object_skew")
             rados_obj.detete_pool(pool=pool_name)
 
     log.info(
-        "Verification of automatic change of 'mon_pg_warn_max_object_skew' parameter completed"
+        "Verification of heath warnings related to 'mon_pg_warn_max_object_skew' parameter completed"
     )
     return 0
