@@ -77,7 +77,7 @@ def run(ceph_cluster, **kw):
         fs_util.remove_floating_ip(floating_ip, **params)
 
 
-@retry(CommandFailed, tries=3, delay=60)
+@retry(CommandFailed, tries=10, delay=60)
 def validate_services(client, service_name):
     out, rc = client.exec_command(
         sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
