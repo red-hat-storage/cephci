@@ -153,9 +153,11 @@ class Gateway:
         """Get all subsystems."""
         return run_control_cli(self.node, "get_subsystems")
 
-    def create_block_device(self, name, image, pool, block_size):
+    def create_block_device(self, name, image, pool, block_size=None):
         """Create block device using rbd image."""
-        args = {"image": image, "pool": pool, "bdev": name, "block-size": block_size}
+        args = {"image": image, "pool": pool, "bdev": name}
+        if block_size:
+            args["block-size"] = block_size
         return run_control_cli(self.node, "create_bdev", **args)
 
     def delete_block_device(self, name):

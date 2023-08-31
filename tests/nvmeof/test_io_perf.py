@@ -14,6 +14,7 @@ from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
+    disconnect_initiator,
     initiators,
     teardown,
 )
@@ -464,6 +465,7 @@ def nvmeof(ceph_cluster, **args):
             "serial": generate_unique_id(2),
             "allow_host": "*",
             "listener_port": find_free_port(gw_node),
+            "node": args["gw_node"],
         }
         initiator_cfg = {
             "subnqn": subsystem["nqn"],
@@ -497,11 +499,9 @@ def nvmeof(ceph_cluster, **args):
                 ]
 
                 # disconnect initiator
-                ini_disconnect = {
-                    "initiators": [initiator_cfg],
-                    "cleanup": ["initiators"],
-                }
-                teardown(ceph_cluster, rbd, ini_disconnect)
+                disconnect_initiator(
+                    ceph_cluster, args["initiator_node"], initiator_cfg
+                )
         except Exception as err:
             raise Exception(err)
         finally:
@@ -511,6 +511,7 @@ def nvmeof(ceph_cluster, **args):
                 "cleanup": ["subsystems"],
                 "subsystems": [subsystem],
             }
+
             teardown(ceph_cluster, rbd, cleanup_cfg)
 
             # cleanup images
