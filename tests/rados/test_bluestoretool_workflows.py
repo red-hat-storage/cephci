@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
         log.info(out)
         assert "success" in out
 
-        if rhbuild.startswith("6"):
+        if rhbuild.split(".")[0] >= "6":
             # Execute ceph-bluestore-tool qfsck --path <osd_path>
             osd_id = random.choice(osd_list)
             log.info(
@@ -229,7 +229,7 @@ def run(ceph_cluster, **kw):
         )
         out = (
             bluestore_obj.get_free_dump(osd_id=osd_id)
-            if rhbuild.startswith("6")
+            if rhbuild.split(".")[0] >= "6"
             else bluestore_obj.get_free_dump(osd_id=osd_id, allocator_type="block")
         )
         log.debug(out)
@@ -244,7 +244,7 @@ def run(ceph_cluster, **kw):
         )
         out = (
             bluestore_obj.get_free_score(osd_id=osd_id)
-            if rhbuild.startswith("6")
+            if rhbuild.split(".")[0] >= "6"
             else bluestore_obj.get_free_score(osd_id=osd_id, allocator_type="block")
         )
         log.info(out)
@@ -255,7 +255,7 @@ def run(ceph_cluster, **kw):
         log.info(
             f"\n --------------------"
             f"\n Show sharding that is currently applied to "
-            f"BlueStore’s RocksDB for OSD {osd_id}"
+            f"BlueStore's RocksDB for OSD {osd_id}"
             f"\n --------------------"
         )
         out = bluestore_obj.show_sharding(osd_id=osd_id)
@@ -271,12 +271,21 @@ def run(ceph_cluster, **kw):
         )
         out = bluestore_obj.show_bluefs_stats(osd_id=osd_id)
         log.info(out)
-        assert (
-            "device size" in out
-            and "wal_total" in out
-            and "db_total" in out
-            and "slow_total" in out
-        )
+        if rhbuild.split(".")[0] >= "7":
+            for pattern in [
+                "device size",
+                "DEV/LEV",
+                "LOG",
+                "WAL",
+                "DB",
+                "SLOW",
+                "MAXIMUMS",
+                "TOTAL",
+            ]:
+                assert pattern in out
+        else:
+            for pattern in ["device size", "wal_total", "db_total", "slow_total"]:
+                assert pattern in out
 
         # restart OSD services
         osd_services = rados_obj.list_orch_services(service_type="osd")
