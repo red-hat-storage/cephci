@@ -1365,13 +1365,17 @@ class RadosOrchestrator:
         current_qos, _ = self.node.shell(["ceph config get osd osd_op_queue"])
         return True if qos.lower() in str(current_qos).lower() else False
 
-    def set_mclock_parameter(self, param: str, value, restart_osd: bool = False):
+    def set_mclock_parameter(
+        self, param: str, value, restart_osd: bool = False
+    ) -> bool:
         """Set value for any of the valid mClock config parameters
         Args:
             param (str): mClock config parameter to be modified
             value: value to be set for the input parameter
             restart_osd (boolean): flag to control restart of all OSDs;
                 necessary only for few parameters, hence added as a tunable setting.
+        Returns:
+            boolean: True if mClock parameter was set, False otherwise
         """
         if self.rhbuild and self.rhbuild.split(".")[0] < "6":
             log.info(
