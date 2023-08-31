@@ -121,6 +121,15 @@ def install_prereq(
     cmd_remove_apache_arrow = "sudo rm -f /etc/yum.repos.d/apache-arrow.repo"
     ceph.exec_command(cmd=cmd_remove_apache_arrow)
 
+    # Max SSH Sessions
+    sshd_configs = [
+        "sed -i '/MaxSessions*/d' /etc/ssh/sshd_config",
+        "echo 'MaxSessions 150' | tee -a /etc/ssh/sshd_config",
+        "systemctl restart sshd",
+    ]
+    for sshd_cfg in sshd_configs:
+        ceph.exec_command(cmd=sshd_cfg, sudo=True)
+
     if ceph.pkg_type == "deb":
         ceph.exec_command(
             cmd="sudo apt-get install -y " + deb_all_packages, long_running=True
