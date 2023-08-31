@@ -509,7 +509,7 @@ class RadosOrchestrator:
                     )
                     log.error(err)
                     return False
-
+        time.sleep(5)
         log.info(f"Created pool {pool_name} successfully")
         return True
 
@@ -1085,6 +1085,8 @@ class RadosOrchestrator:
         if not host:
             log.error("failed to find host for the osd")
             return False
+        init_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        pass_status = True
         osd_status, status_desc = self.get_daemon_status(
             daemon_type="osd", daemon_id=target
         )
@@ -1095,6 +1097,15 @@ class RadosOrchestrator:
             log.info(f"OSD {target} already in desired state: {action}")
             return True
 
+        # If the OSD is stopped and started multiple times, the fail-count can increase
+        # and the service cannot come up, without resetting the failcount of the service.
+
+        # Executing command to reset the fail count on the host and sleeping for 5 seconds
+        cmd = "systemctl reset-failed"
+        host.exec_command(sudo=True, cmd=cmd)
+        time.sleep(5)
+
+        # Executing command to perform desired action.
         cmd = f"systemctl {action} ceph-{cluster_fsid}@osd.{target}.service"
         log.info(
             f"Performing {action} on osd-{target} on host {host.hostname}. Command {cmd}"
@@ -1120,10 +1131,26 @@ class RadosOrchestrator:
 
             if action == "stop" and osd_status != 0:
                 log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
-                return False
+                pass_status = False
             if action == "start" and osd_status != 1:
                 log.error(
                     f"Failed to start the OSD.{target} service on {host.hostname}"
+                )
+                pass_status = False
+            if not pass_status:
+                log.error(
+                    f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
+                )
+                end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+                osd_log_lines = self.get_journalctl_log(
+                    start_time=init_time,
+                    end_time=end_time,
+                    daemon_type="osd",
+                    daemon_id=str(target),
+                )
+                log.error(
+                    f"\n\n ------------ Log lines from journalctl ---------------- \n"
+                    f"{osd_log_lines}\n\n"
                 )
                 return False
         else:
@@ -1196,7 +1223,7 @@ class RadosOrchestrator:
 
         # running rbd bench on the image created
         cmd = f"rbd bench-write {image_name} --pool={metadata_pool}"
-        self.node.shell([cmd])
+        self.node.shell([cmd], check_status=False)
         return True
 
     def check_compression_size(self, pool_name: str, **kwargs) -> bool:
@@ -1540,7 +1567,7 @@ class RadosOrchestrator:
         osds = self.run_ceph_command(cmd)
         return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]
 
-    def change_heap_profiler_state(self, osd_list, action):
+    def change_heap_profiler_state(self, osd_list, action) -> tuple:
         """
         Start/stops the OSD heap profile
         Usage: ceph tell osd.<osd.ID> heap start_profiler
@@ -1548,16 +1575,30 @@ class RadosOrchestrator:
         Args:
              osd_list: The list with the osd IDs
              action : start  or stop actions for heap profiler
-        Return: 0 for Pass , 1 for fail
+        Return: tuple of exit status with the OSD list
+        eg : (1, []) -> Fail
+        (0, [1,2,3,4,5]) -> Pass
         """
         if not osd_list:
             log.error("OSD list is empty")
-            return 1
+            return 1, []
         for osd_id in osd_list:
-            cmd = f"ceph tell osd.{osd_id} heap {action}_profiler"
-            self.node.shell([cmd])
+            osd_status, status_desc = self.get_daemon_status(
+                daemon_type="osd", daemon_id=osd_id
+            )
+            if not (osd_status == 0 or status_desc == "stopped"):
+                log.info(
+                    f"OSD {osd_id} is in running state, enabling/Disabling Heap profiler"
+                )
+                cmd = f"ceph tell osd.{osd_id} heap {action}_profiler"
+                self.node.shell([cmd])
+            else:
+                log.error(
+                    f"OSD {osd_id} in stopped state. Not enabling/disabling the heap profiler on the OSD"
+                )
+                osd_list.remove(osd_id)
         log.info(f"The OSD {osd_list} heap profile is in {action} state")
-        return 0
+        return 0, osd_list
 
     def get_heap_dump(self, osd_list):
         """

@@ -1,6 +1,8 @@
 # Suite contains tests related to mon db trimmings
 # Note: the test cannot be run on a cluster that is just created as the DB size increases with
 # new mappings for around next hour or so.. This test needs to be run on cluster who's age is at least 1 hour.
+# Suited best for BM pipeline.
+# Can be run on RHOS-d env as well.
 
 tests:
   - test:
@@ -23,7 +25,7 @@ tests:
                 verbose: true
               args:
                 mon-ip: node1
-                orphan-initial-daemons: true
+                allow-fqdn-hostname: true
           - config:
               command: add_hosts
               service: host
@@ -88,10 +90,9 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node8                       # client node
+        node: node7                       # client node
         install_packages:
           - ceph-common
-          - ceph-base
         copy_admin_keyring: true          # Copy admin keyring to node
         caps:                             # authorize client capabilities
           mon: "allow *"
@@ -156,6 +157,28 @@ tests:
         config-file-name: test_multitenant_access.yaml
         timeout: 600
       desc: Perform rgw tests
+
+  - test:
+      config:
+        Compression_tests:
+          pool_type: erasure
+          pool_config:
+            pool-1: test_compression_ecpool-1
+            pool-2: test_compression_ecpool-2
+            rados_write_duration: 300
+            byte_size: 10KB
+            pg_num: 32
+            k: 2
+            m: 2
+            plugin: jerasure
+            crush-failure-domain: host
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.3
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on erasure coded pools
 
   - test:
       name: Automatic trimming of Mon DB

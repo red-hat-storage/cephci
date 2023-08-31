@@ -224,7 +224,11 @@ def run(ceph_cluster, **kw):
                 log.error("data not compressed in accordance to ratio set")
                 return 1
 
-        log.info("Pool size is less when compression is enabled")
+        log.info("Pool size is less when compression is enabled, Pass!")
+        if config["Compression_tests"].get("delete_pools"):
+            log.debug("Deleting pools created for compression tests")
+            for pool in config["Compression_tests"]["delete_pools"]:
+                rados_obj.detete_pool(pool=pool)
         return 0
 
     if config.get("test_autoscaler_bulk_feature"):
