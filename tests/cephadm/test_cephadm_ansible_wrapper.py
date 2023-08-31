@@ -224,6 +224,11 @@ def run(ceph_cluster, **kwargs):
             extra_vars["registry_password"],
         ) = get_registry_details(config)
 
+    elif module == "ceph_config":
+        extra_vars["who"] = module_args.get("who")
+        extra_vars["option"] = module_args.get("option")
+        extra_vars["value"] = module_args.get("value")
+
     playbook = aw.get("playbook")
     validate_cephadm_ansible_module(installer, playbook, extra_vars, extra_args)
 
