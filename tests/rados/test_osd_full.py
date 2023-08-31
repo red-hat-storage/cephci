@@ -36,6 +36,7 @@ def run(ceph_cluster, **kw):
 
     log.info(run.__doc__)
     config = kw["config"]
+    rhbuild = config["rhbuild"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
@@ -103,7 +104,7 @@ def run(ceph_cluster, **kw):
         elif type == "full":
             osd_warn = "is full"
             pool_warn = "is full (no space)"
-        timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=125)
+        timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=210)
         while datetime.datetime.now() < timeout_time:
             try:
                 health_detail, _ = cephadm.shell(args=["ceph health detail"])
@@ -111,11 +112,15 @@ def run(ceph_cluster, **kw):
                 if "stray daemon" in health_detail:
                     cephadm.shell(args=["ceph orch restart mgr"])
                 for osd_id in a_set:
-                    assert f"osd.{osd_id} {osd_warn}" in health_detail
+                    if type == "full":
+                        if f"osd.{osd_id} {osd_warn}" in health_detail:
+                            break
+                    else:
+                        assert f"osd.{osd_id} {osd_warn}" in health_detail
                 assert f"pool '{pool_name}' {pool_warn}" in health_detail
                 break
             except AssertionError:
-                time.sleep(10)
+                time.sleep(25)
                 if datetime.datetime.now() >= timeout_time:
                     raise
 
@@ -148,7 +153,7 @@ def run(ceph_cluster, **kw):
 
         for entry in pool_target_configs.values():
             try:
-                rados_obj.configure_pg_autoscaler(**{"default": "off"})
+                rados_obj.configure_pg_autoscaler(**{"default_mode": "off"})
                 pool_name = entry["pool_name"]
                 assert create_pool_per_config(**entry)
                 # retrieving the size of each osd part of acting set for the pool
@@ -160,13 +165,25 @@ def run(ceph_cluster, **kw):
                     f"All OSDs part of acting set {acting_set} are of same size {primary_osd_size} KB"
                 )
 
+                # determine how much % cluster is already filled
+                current_fill_ratio = rados_obj.get_cephdf_stats()["stats"][
+                    "total_used_raw_ratio"
+                ]
+
                 # determine the number of objects to be written to the pool
                 # to achieve nearfull, backfillfull and full state.
                 """ although nearfull warning should get triggered at > 85% capacity,
                 it has been observed that filling the OSDs upto borderline 85% resulted in
                 false failures, therefore, 85.5% OSD capacity is being utilized
                 to trigger nearfull warning """
-                max_obj_nearfull = int(primary_osd_size * 0.855 / bench_obj_size_kb) + 1
+                max_obj_nearfull = (
+                    int(
+                        primary_osd_size
+                        * (0.855 - current_fill_ratio)
+                        / bench_obj_size_kb
+                    )
+                    + 1
+                )
                 subseq_obj_backfillfull = subseq_obj_full = (
                     int(primary_osd_size * 0.05 / bench_obj_size_kb) + 1
                 )
@@ -187,7 +204,7 @@ def run(ceph_cluster, **kw):
                     client=client_node, pool_name=pool_name, **nearfull_config
                 )
 
-                time.sleep(7)  # blind sleep to let all objs show up in ceph df stats
+                time.sleep(10)  # blind sleep to let all objs show up in ceph df stats
                 pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
                 if pool_stat["stats"]["objects"] != max_obj_nearfull + 1:
                     log.error(
@@ -284,9 +301,11 @@ def run(ceph_cluster, **kw):
                 """ change the full-ratio and backfillfull-ratio to 0.97 and 0.96 respectively,
                 this is to enable the cluster to backfill to other pgs when autoscaling
                 is enabled for the pool """
+                # [update] Aug 2023: It has been observed that backfilling takes too much time
+                # with new OSD QoS mClock, to mitigate longer wait time, mClock parameters are tuned
                 cmds = [
-                    "ceph osd set-full-ratio 0.98",
-                    "ceph osd set-backfillfull-ratio 0.975",
+                    "ceph osd set-full-ratio 0.97",
+                    "ceph osd set-backfillfull-ratio 0.96",
                 ]
 
                 [cephadm.shell(args=[cmd]) for cmd in cmds]
@@ -302,12 +321,19 @@ def run(ceph_cluster, **kw):
 
                 # proceed to remove the pg autoscaling restriction for the pool
                 # and check ceph health warning should disappear
-                rados_obj.configure_pg_autoscaler(**{"default": "on"})
+                rados_obj.configure_pg_autoscaler(**{"default_mode": "on"})
                 rados_obj.set_pool_property(
                     pool=pool_name, props="pg_autoscale_mode", value="on"
                 )
 
-                timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=480)
+                # tune mclock recovery settings
+                if rhbuild and rhbuild.split(".")[0] >= "6":
+                    rados_obj.set_mclock_profile(profile="high_recovery_ops")
+                    rados_obj.set_mclock_parameter(param="osd_max_backfills", value=8)
+
+                timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+                # recovery time was previously 480 secs, increased as recovery with mClock
+                # could be slower with default settings
                 while datetime.datetime.now() < timeout_time:
                     health_detail, _ = cephadm.shell(args=["ceph health detail"])
                     if (
@@ -318,9 +344,9 @@ def run(ceph_cluster, **kw):
                     log.info("PG rebalancing and OSD backfilling is still in-progress")
                     log.info(
                         "OSD 'used size' is yet to drop below nearfull threshold \n"
-                        "Sleeping for 25 seconds"
+                        "Sleeping for 45 seconds"
                     )
-                    time.sleep(25)
+                    time.sleep(45)
 
                 if (
                     datetime.datetime.now() > timeout_time
@@ -329,7 +355,7 @@ def run(ceph_cluster, **kw):
                     log.error("OSD nearfull health warning still active after 8 mins")
                     log.info(f"Cluster health:\n {health_detail}")
                     raise Exception(
-                        "Cluster still has nearfull health warning after 8 mins"
+                        "Cluster still has nearfull health warning after 10 mins"
                     )
 
                 log.info(f"Cluster health:\n {health_detail}")
@@ -354,6 +380,8 @@ def run(ceph_cluster, **kw):
                     "ceph osd set-full-ratio 0.95",
                 ]
                 [cephadm.shell(args=[cmd]) for cmd in cmds]
+                if rhbuild and rhbuild.split(".")[0] >= "6":
+                    rados_obj.set_mclock_profile(reset=True)
 
             log.info(
                 "Verification of PG autoscaling and cluster behavior with nearfull,"
@@ -388,7 +416,7 @@ def run(ceph_cluster, **kw):
 
         for entry in pool_target_configs.values():
             try:
-                rados_obj.configure_pg_autoscaler(**{"default": "off"})
+                rados_obj.configure_pg_autoscaler(**{"default_mode": "off"})
                 pool_name = entry["pool_name"]
                 assert create_pool_per_config(**entry)
                 # retrieving the size of each osd part of acting set for the pool
@@ -400,17 +428,29 @@ def run(ceph_cluster, **kw):
                     f"All OSDs part of acting set {acting_set} are of same size {primary_osd_size} KB"
                 )
 
-                # change the nearfull, backfill-full and full-ratio to 0.60, 0.69, and 0.7 respectively
+                # determine how much % cluster is already filled
+                current_fill_ratio = rados_obj.get_cephdf_stats()["stats"][
+                    "total_used_raw_ratio"
+                ]
+
+                # change the nearfull, backfill-full and full-ratio to 0.70, 0.79, and 0.8 respectively
                 cmds = [
-                    "ceph osd set-nearfull-ratio 0.60",
-                    "ceph osd set-backfillfull-ratio 0.69",
-                    "ceph osd set-full-ratio 0.70",
+                    "ceph osd set-nearfull-ratio 0.7",
+                    "ceph osd set-backfillfull-ratio 0.75",
+                    "ceph osd set-full-ratio 0.80",
                 ]
                 [cephadm.shell(args=[cmd]) for cmd in cmds]
 
                 # determine the number of objects to be written to the pool
                 # to achieve nearfull, backfillfull and full state.
-                full_objs = int(primary_osd_size * 0.7 / bench_obj_size_kb) + 1
+                full_objs = (
+                    int(
+                        primary_osd_size
+                        * (0.805 - current_fill_ratio)
+                        / bench_obj_size_kb
+                    )
+                    + 1
+                )
 
                 # perform rados bench to trigger full warning
                 full_config = {
@@ -471,14 +511,19 @@ def run(ceph_cluster, **kw):
                 )
 
                 # increase backfill-full and full ratio to enable backfilling
-                cephadm.shell(args=["ceph osd set-full-ratio 0.75"])
-                cephadm.shell(args=["ceph osd set-backfillfull-ratio 0.73"])
+                cephadm.shell(args=["ceph osd set-full-ratio 0.83"])
+                cephadm.shell(args=["ceph osd set-backfillfull-ratio 0.81"])
                 # proceed to remove the pg autoscaling restriction for the pool
                 # and check ceph health warning should disappear
-                rados_obj.configure_pg_autoscaler(**{"default": "on"})
+                rados_obj.configure_pg_autoscaler(**{"default_mode": "on"})
                 rados_obj.set_pool_property(
                     pool=pool_name, props="pg_autoscale_mode", value="on"
                 )
+
+                # tune mclock recovery settings
+                if rhbuild and rhbuild.split(".")[0] >= "6":
+                    rados_obj.set_mclock_profile(profile="high_recovery_ops")
+                    rados_obj.set_mclock_parameter(param="osd_max_backfills", value=8)
 
                 # Deploying OSDs on the new nodes.
                 osd_args = {
@@ -684,6 +729,8 @@ def run(ceph_cluster, **kw):
                     # Waiting for recovery post OSD host removal
                     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
                     log.info("PG's are active + clean post OSD host removal")
+                    if rhbuild and rhbuild.split(".")[0] >= "6":
+                        rados_obj.set_mclock_profile(reset=True)
 
             log.info(
                 "Verification of OSD host addition during rebalancing and cluster full has been completed"
@@ -710,7 +757,7 @@ def run(ceph_cluster, **kw):
         log.info("Running test for IOPs with cluster having full OSDs")
 
         try:
-            rados_obj.configure_pg_autoscaler(**{"default": "off"})
+            rados_obj.configure_pg_autoscaler(**{"default_mode": "off"})
             pool1_name = pool_name = config["pool-1"]["pool_name"]
             assert create_pool_per_config(**config["pool-1"])
 
@@ -835,15 +882,22 @@ def run(ceph_cluster, **kw):
                 "ceph osd set-full-ratio 0.95",
             ]
             [cephadm.shell(args=[cmd]) for cmd in cmds]
-            rados_obj.configure_pg_autoscaler(**{"default": "on"})
+            rados_obj.configure_pg_autoscaler(**{"default_mode": "on"})
 
             # reweight osds to 1
             for osd_id in acting_set1:
                 cephadm.shell([f"ceph osd reweight osd.{osd_id} 1"])
 
+            # tune mclock recovery settings
+            if rhbuild and rhbuild.split(".")[0] >= "6":
+                rados_obj.set_mclock_profile(profile="high_recovery_ops")
+                rados_obj.set_mclock_parameter(param="osd_max_backfills", value=8)
+
             # Waiting for recovery post test execution completion
             method_should_succeed(wait_for_clean_pg_sets, rados_obj)
             log.info("PG's are active + clean post test workflow")
+            if rhbuild and rhbuild.split(".")[0] >= "6":
+                rados_obj.set_mclock_profile(reset=True)
 
         log.info(
             "Verification of possible IOPs on a Cluster with full OSDs has been completed"
