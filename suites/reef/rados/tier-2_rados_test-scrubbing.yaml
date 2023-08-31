@@ -74,7 +74,20 @@ tests:
       config:
         delete_pool: true
       desc: Scrub Chunk max validation
-
+  - test:
+      name: Scrub enhancement
+      module: test_scrub_enhancement.py
+      desc: Verify scrub enhancement feature
+      polarion-id: CEPH-83575885
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: scrub_pool
+              pg_num: 1
+              pg_num_max: 1
+              pool_type: replicated
+        delete_pools:
+          - scrub_pool
   - test:
       name: Default scheduled scrub
       polarion-id: CEPH-9361
