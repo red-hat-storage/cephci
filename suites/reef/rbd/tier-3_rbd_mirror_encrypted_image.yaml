@@ -1,0 +1,175 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-3_rbd_mirror_encrypted_image.yaml
+# Suite contains rbd-mirror tier-3 testcases with encrypted image
+#
+# Cluster Configuration:
+#    Conf file - conf/reef/rbd/5-node-2-clusters.yaml
+#       this can be changed to a baremetal configuration
+#       once baremetal config for RBD Miror is decided
+#    No of Clusters : 2
+#    Node 2 must to be a client node
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - rbd-nbd
+              - fio
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - rbd-nbd
+              - fio
+            copy_admin_keyring: true
+      desc: Configure the client system 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      abort-on-fail: True
+      desc: Run encryption tests on images with mirroring enabled
+      name: Verify the luks encryption functionality for a mirrored image
+      module: test_encryption_on_mirrored_image.py
+      polarion-id: CEPH-83575408
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 8 # one each of below encryptions will be applied on each image
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              do_not_enable_mirror_on_image: True
+              test_config:
+                encryption_type: #parent,clone
+                  - luks1,luks1
+                  - luks1,NA
+                  - luks2,luks1
+                  - luks2,luks2
+                  - luks2,NA
+                  - NA,luks1
+                  - NA,luks2
+                  - luks1,luks2
+            ec_pool_config:
+              num_pools: 1
+              num_images: 8 # one each of below encryptions will be applied on each image
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              do_not_enable_mirror_on_image: True
+              test_config:
+                encryption_type: #parent,clone
+                  - luks1,luks1
+                  - luks1,NA
+                  - luks2,luks1
+                  - luks2,luks2
+                  - luks2,NA
+                  - NA,luks1
+                  - NA,luks2
+                  - luks1,luks2
