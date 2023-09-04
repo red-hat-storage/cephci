@@ -142,7 +142,7 @@ tests:
           smtp_port: 25
           interval: 10
           smtp_destination:
-            - cephci@redhat.com
+            - pdhiran@redhat.com
           smtp_from_name: CM Scenarios - Dups trimming Cluster Alerts
       desc: Configure email alerts on ceph cluster
 

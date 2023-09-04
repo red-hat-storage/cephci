@@ -87,7 +87,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node8
+        node: node7
         install_packages:
           - ceph-common
           - ceph-base

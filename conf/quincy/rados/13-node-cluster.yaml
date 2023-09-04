@@ -43,11 +43,11 @@ globals:
           - nfs
       node7:
         role:
-          - mon
-          - rgw
+          - client
       node8:
         role:
-          - client
+          - mon
+          - rgw
       node9:
         role:
           - osd

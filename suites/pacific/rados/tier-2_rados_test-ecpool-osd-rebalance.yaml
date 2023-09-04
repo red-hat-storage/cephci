@@ -1,4 +1,5 @@
 # Suite contains tests related to osd re-balance upon OSD addition / removal
+# Can be run on RHOS-d env pipeline or BM pipeline.
 tests:
   - test:
       name: setup install pre-requisistes
@@ -78,10 +79,9 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node8                       # client node
+        node: node7                       # client node
         install_packages:
           - ceph-common
-          - ceph-base
         copy_admin_keyring: true          # Copy admin keyring to node
         caps: # authorize client capabilities
           mon: "allow *"

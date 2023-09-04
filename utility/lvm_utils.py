@@ -18,18 +18,28 @@ def lvm_create(osd, lv_name, vg_name, size):
 
 
 def lvconvert(osd, cache_type, vg_name, cache_name, data_name):
-    if cache_type == "cache":
+    if cache_type == "cache_pool":
         command = (
-            f"echo 'y' | lvconvert --type {cache_type} --cachepool "
+            f"echo 'y' | lvconvert --type cache --cachepool "
             f"{vg_name}/{cache_name} {vg_name}/{data_name}"
         )
-        osd.exec_command(cmd=command, sudo=True)
-    else:
+    elif cache_type == "cache_vol":
         command = (
-            f"echo -e 'y\ny' | lvconvert --type {cache_type} --cachevol "
+            f"echo -e 'y\ny' | lvconvert --type cache --cachevol "
             f"{vg_name}/{cache_name} {vg_name}/{data_name}"
         )
-        osd.exec_command(cmd=command, sudo=True)
+    elif cache_type == "writecache":
+        command = (
+            f"echo -e 'y\ny' | lvconvert --type writecache --cachevol "
+            f"{vg_name}/{cache_name} {vg_name}/{data_name}"
+        )
+
+    osd.exec_command(cmd=command, sudo=True)
+
+
+def lvm_uncache(osd, vg_name):
+    # To flush the cache back to main LV
+    osd.exec_command(cmd=f"sudo lvconvert --uncache {vg_name}")
 
 
 def make_partition(osd, device, start=None, end=None, gpt=False):

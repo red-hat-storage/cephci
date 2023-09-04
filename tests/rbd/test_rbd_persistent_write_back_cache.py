@@ -82,6 +82,8 @@ def run(ceph_cluster, **kw):
     cache_client = get_node_by_id(ceph_cluster, config["client"])
     pool = config["rep_pool_config"]["pool"]
     image = f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"
+    resize = config["rep_pool_config"]["resize_to"]
+    size = config["rep_pool_config"]["size"]
 
     pwl = PersistentWriteAheadLog(rbd_obj, cache_client, config.get("drive"))
     config_level, entity = get_entity_level(config)
@@ -111,6 +113,21 @@ def run(ceph_cluster, **kw):
                 **config,
             )
 
+        # Increasing the image size
+        if rbd_obj.image_resize(pool, image, resize):
+            log.error(f"Image resize failed for {image}")
+            return 1
+
+        # shrinking the image to original size
+        if rbd_obj.image_resize(pool, image, size):
+            log.error(f"Image resize failed for {image}")
+            return 1
+
+        # Removing the image
+        rbd_obj.remove_image(pool_name=pool, image_name=image)
+        if rbd_obj.image_exists(pool_name=pool, image_name=image):
+            log.error(f"Image {image} not deleted successfully")
+            return 1
         return 0
     except Exception as err:
         log.error(err)

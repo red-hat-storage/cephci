@@ -52,13 +52,13 @@ globals:
           - crash
       node7:
         role:
+          - client
+      node8:
+        role:
           - mon
           - rgw
           - node-exporter
           - crash
-      node8:
-        role:
-          - client
       node9:
         role:
           - osd

@@ -2087,6 +2087,7 @@ def run_fio(**fio_args):
             "iodepth": fio_args.get("iodepth", "8"),
             "fsync": fio_args.get("fsync", "32"),
             "group_reporting": True,
+            "bs": fio_args.get("bs", "4k"),
         }
     )
 

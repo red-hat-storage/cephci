@@ -23,7 +23,7 @@
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
-from utility.lvm_utils import lvconvert, lvm_create, pvcreate, vgcreate
+from utility.lvm_utils import lvconvert, lvm_create, lvm_uncache, pvcreate, vgcreate
 from utility.utils import run_fio, run_mkfs
 
 log = Log(__name__)
@@ -49,10 +49,14 @@ def test_configure_cache(rbd_obj, client_node, pool_name, image_name, cache_type
     device_names = []
     lv_sizes = {"data_disk": "4G", "cache_disk": "2G", "meta_disk": "2G"}
 
-    if cache_type == "cache":
-        vg_name = "test_cache_vg"
-        test_folder_path = "/tmp/test_cache"
-        VG_disk = "/dev/test_cache_vg/data_disk"
+    if cache_type == "cache_pool":
+        vg_name = "test_cache_vg_pool"
+        test_folder_path = "/tmp/test_cache_pool"
+        VG_disk = "/dev/test_cache_vg_pool/data_disk"
+    elif cache_type == "cache_vol":
+        vg_name = "test_cache_vg_vol"
+        test_folder_path = "/tmp/test_cache_vol"
+        VG_disk = "/dev/test_cache_vg_vol/data_disk"
     else:
         vg_name = "test_write_cache_vg"
         test_folder_path = "/tmp/test_write_cache"
@@ -65,20 +69,33 @@ def test_configure_cache(rbd_obj, client_node, pool_name, image_name, cache_type
         for name, size in lv_sizes.items():
             lvm_create(client_node, name, vg_name, size)
 
-        if cache_type == "cache":
+        if cache_type == "cache_pool":
+            log.info("Configuring dm-cache with cachepool + rbd device for main LV")
+
             # to configure dm-cache pool in LVM by associating a metadata disk with a cache disk
             command = f"echo 'y' | lvconvert --type cache-pool --poolmetadata {vg_name}/meta_disk {vg_name}/cache_disk"
-            client_node.exec_command(cmd=command, sudo=True)
 
-            lvconvert(client_node, cache_type, vg_name, "cache_disk", "data_disk")
+        elif cache_type == "cache_vol":
+            log.info("Configuring dm-cache with cachevol + rbd device for main LV")
+
+            # to configure dm-cache volume in LVM by associating a metadata disk with a cache disk
+            command = f"echo 'y' | lvconvert --type cache --cachevol {vg_name}/meta_disk {vg_name}/cache_disk"
+
         else:
+            log.info(
+                "Configuring dm-write cache with cachevol + rbd device for main LV"
+            )
+
             # Configure dm-write cache
             command = f"lvchange --activate n {vg_name}/cache_disk"
-            client_node.exec_command(cmd=command, sudo=True)
 
-            lvconvert(client_node, cache_type, vg_name, "cache_disk", "meta_disk")
+        client_node.exec_command(cmd=command, sudo=True)
+
+        lvconvert(client_node, cache_type, vg_name, "cache_disk", "data_disk")
 
         # creating XFS filesystem on VG_disk
+        log.info("Creating file system and mounting the cache disk with IO")
+
         run_mkfs(client_node=client_node, device_name=VG_disk, type="xfs")
 
         command = f"mkdir -p {test_folder_path}"
@@ -102,6 +119,10 @@ def test_configure_cache(rbd_obj, client_node, pool_name, image_name, cache_type
             log.error("Cluster went to error health state")
             return 1
 
+        # Flush the cache back to main LV
+        log.info("Flushing the cache back to main LV")
+        lvm_uncache(client_node, VG_disk)
+
     except Exception as err:
         log.error(err)
         return 1
@@ -109,6 +130,7 @@ def test_configure_cache(rbd_obj, client_node, pool_name, image_name, cache_type
     finally:
         log.info("Starting to cleanup cache drive")
         client_node.exec_command(cmd=f"wipefs -af {device_names[0]}", sudo=True)
+
     return 0
 
 
@@ -134,13 +156,22 @@ def run(ceph_cluster, **kw):
     cache_client = get_node_by_id(ceph_cluster, config["client"])
 
     pool_name = config["rep_pool_config"]["pool"]
-    image_name_cache = config["rep_pool_config"]["image1"]
-    image_name_writecache = config["rep_pool_config"]["image2"]
+
+    # read/write operations + dm-cache as Cache pool + RBD image as Main LV
+    image_name_cache_pool = config["rep_pool_config"]["image1"]
+
+    # read/write operations + dm-cache as Cache vol + RBD image as Main LV
+    image_name_cache_vol = config["rep_pool_config"]["image2"]
+
+    # write operations + dm-cache write as Cachevol + RBD image as Main LV
+    image_name_writecache = config["rep_pool_config"]["image3"]
+
     image_size = config["rep_pool_config"]["size"]
 
     try:
         for cache_type, image_name in [
-            ("cache", image_name_cache),
+            ("cache_pool", image_name_cache_pool),
+            ("cache_vol", image_name_cache_vol),
             ("writecache", image_name_writecache),
         ]:
             rbd.create_image(
@@ -161,7 +192,7 @@ def run(ceph_cluster, **kw):
                 log.error(f"DM-{cache_type} creation failed")
                 return 1
             else:
-                log.info(f"Able to make RBD image as DM-{cache_type}")
+                log.info(f"Able to make RBD image as DM-cache with {cache_type}")
 
                 # creating snapshot of cache disked image
                 if rbd.snap_create(pool_name, image_name, "cache_snap"):

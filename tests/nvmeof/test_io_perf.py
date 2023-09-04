@@ -14,6 +14,7 @@ from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
+    disconnect_initiator,
     initiators,
     teardown,
 )
@@ -382,6 +383,7 @@ def librbd(ceph_cluster, **args):
                 images[img_name] = dev.strip()
 
             # Map the image, Run with profiles and Collect results
+            io_overrides = args.get("io_overrides", {})
             for io_profile in args["io_profiles"]:
                 with parallel() as p:
                     io_args = IO_Profiles[io_profile]
@@ -390,6 +392,7 @@ def librbd(ceph_cluster, **args):
                             "output_dir": ARTIFACTS_DIR,
                         }
                     )
+                    io_args.update(io_overrides)
                     for _, dev in images.items():
                         test_name = f"{io_profile}-{name}-{count}-librbd-{dev.replace('/', '_')}"
                         io_args.update(
@@ -462,6 +465,7 @@ def nvmeof(ceph_cluster, **args):
             "serial": generate_unique_id(2),
             "allow_host": "*",
             "listener_port": find_free_port(gw_node),
+            "node": args["gw_node"],
         }
         initiator_cfg = {
             "subnqn": subsystem["nqn"],
@@ -484,6 +488,9 @@ def nvmeof(ceph_cluster, **args):
                         "output_dir": ARTIFACTS_DIR,
                     }
                 )
+                # apply overrides
+                initiator_cfg["io_args"].update(args.get("io_overrides", {}))
+
                 [
                     parse_fio_output(
                         get_node_by_id(ceph_cluster, args["initiator_node"]), i
@@ -492,11 +499,9 @@ def nvmeof(ceph_cluster, **args):
                 ]
 
                 # disconnect initiator
-                ini_disconnect = {
-                    "initiators": [initiator_cfg],
-                    "cleanup": ["initiators"],
-                }
-                teardown(ceph_cluster, rbd, ini_disconnect)
+                disconnect_initiator(
+                    ceph_cluster, args["initiator_node"], initiator_cfg
+                )
         except Exception as err:
             raise Exception(err)
         finally:
@@ -506,6 +511,7 @@ def nvmeof(ceph_cluster, **args):
                 "cleanup": ["subsystems"],
                 "subsystems": [subsystem],
             }
+
             teardown(ceph_cluster, rbd, cleanup_cfg)
 
             # cleanup images
@@ -572,14 +578,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     )
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
+    io_profiles = config["io_profiles"]
     iterations = config.get("iterations", 1)
     for io in config["io_exec"]:
+        io.update({"io_overrides": config.get("io_overrides", {})})
         IO_PROTO[io["proto"]](
             ceph_cluster=ceph_cluster,
             rbd=rbd_obj,
             pool=rbd_pool,
             iterations=iterations,
-            io_profiles=config["io_profiles"],
+            io_profiles=io_profiles,
             **io,
         )
 

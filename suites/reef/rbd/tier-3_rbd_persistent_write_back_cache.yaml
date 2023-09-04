@@ -280,6 +280,7 @@ tests:
               pool: pool3
               image: image3
               size: 40G
+              resize_to: 50G
             fio:
               image_name: image3
               pool_name: pool3

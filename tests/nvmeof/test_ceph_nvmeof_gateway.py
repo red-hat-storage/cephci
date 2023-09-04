@@ -147,7 +147,7 @@ def teardown(ceph_cluster, rbd_obj, config):
     if "subsystems" in config["cleanup"]:
         config_sub_node = config["subsystems"]
         if not isinstance(config_sub_node, list):
-            config_sub_node = [config_sub_node]
+            config_sub_node = [{"node": config_sub_node}]
         for sub_cfg in config_sub_node:
             node = sub_cfg["node"]
             sub_node = get_node_by_id(ceph_cluster, node)

@@ -26,7 +26,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     timeout = config.get("timeout", 150)
-    recovery_timeout = config.get("recovery_timeout", 500)
+    recovery_timeout = config.get("recovery_timeout", 2400)
     installer_node = ceph_cluster.get_nodes(role="installer")[0]
 
     log.info("Running osd heartbeat check test case")
@@ -106,6 +106,7 @@ def run(ceph_cluster, **kw):
     except Exception as err:
         log.error(f"Failed with exception: {err}")
     finally:
+        log.info("*********** Execution of finally block starts ***********")
         # Flush iptables to reset the rules
         out, _ = osd_node_2.exec_command(sudo=True, cmd="iptables -F")
         out, _ = installer_node.exec_command(sudo=True, cmd="iptables -F")
