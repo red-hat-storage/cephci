@@ -72,6 +72,28 @@ tests:
   - test:
       abort-on-fail: true
       config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  label: nvmeof-gw
+              pos_args:
+                - rbd
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy nvmeof gateway
+
+  - test:
+      abort-on-fail: true
+      config:
         gw_node: node6
         rbd_pool: rbd
         do_not_create_image: true

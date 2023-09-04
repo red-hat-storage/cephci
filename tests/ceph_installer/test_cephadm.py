@@ -27,6 +27,7 @@ from ceph.ceph_admin.mgr import Mgr
 from ceph.ceph_admin.mon import Mon
 from ceph.ceph_admin.nfs import NFS
 from ceph.ceph_admin.node_exporter import NodeExporter
+from ceph.ceph_admin.nvmeof import NVMeoF
 from ceph.ceph_admin.orch import Orch
 from ceph.ceph_admin.osd import OSD
 from ceph.ceph_admin.prometheus import Prometheus
@@ -58,6 +59,7 @@ SERVICE_MAP = dict(
         "cephfs-mirror": CephfsMirror,
         "daemon": Daemon,
         "client-keyring": ClientKeyring,
+        "nvmeof": NVMeoF,
     }
 )
 
