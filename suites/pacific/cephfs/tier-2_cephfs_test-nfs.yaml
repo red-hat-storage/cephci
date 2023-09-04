@@ -326,3 +326,9 @@ tests:
       module: cephfs_nfs.test_cephfs_nfs_file_attributes_retention.py
       name: "nfs_file_attributes_retention_bw_nfs_and_localfs"
       polarion-id: "CEPH-83575937"
+  - test:
+      abort-on-fail: false
+      desc: "nfs_multiple_export_using_single_conf"
+      module: cephfs_nfs.nfs_multiple_export_using_single_conf.py
+      name: "nfs_multiple_export_using_single_conf"
+      polarion-id: "CEPH-83575082"
