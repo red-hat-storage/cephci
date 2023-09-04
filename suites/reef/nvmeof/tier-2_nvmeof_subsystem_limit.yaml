@@ -96,5 +96,5 @@ tests:
       desc: test subsystem limitations
       destroy-cluster: false
       module: test_ceph_nvmeof_sub_limit.py
-      name: Scale 500 subsystems in Single GW
-      polarion-id:
+      name: Test single NVMeOF GW with 500 subsytems and 1 namespace each
+      polarion-id: CEPH-83576692
