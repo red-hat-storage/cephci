@@ -1,3 +1,4 @@
+import datetime
 import time
 import traceback
 
@@ -80,11 +81,19 @@ def run(ceph_cluster, **kw):
                 raise Exception("Failed to delete objects from pool.")
         time.sleep(40)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
-        new_prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
-        if not new_prop["pg_num"] > prop["pg_num"]:
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=400)
+        while datetime.datetime.now() < endtime:
+            new_prop = rados_obj.get_pool_property(
+                pool=pool["pool_name"], props="pg_num"
+            )
+            if new_prop["pg_num"] > prop["pg_num"]:
+                break
             log.error(
                 f"Actual pg_num {new_prop['pg_num']} is expected to be greater than {prop['pg_num']}"
             )
+            log.info("Sleeping for 40 secs")
+            time.sleep(40)
+        else:
             raise Exception(
                 f"Actual pg_num {new_prop['pg_num']} is expected to be greater than {prop['pg_num']}"
             )
@@ -96,12 +105,19 @@ def run(ceph_cluster, **kw):
             raise Exception("Expected bulk flag should be False.")
         time.sleep(20)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
-        time.sleep(40)
-        new_prop1 = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
-        if not new_prop1["pg_num"] < new_prop["pg_num"]:
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=400)
+        while datetime.datetime.now() < endtime:
+            new_prop1 = rados_obj.get_pool_property(
+                pool=pool["pool_name"], props="pg_num"
+            )
+            if new_prop1["pg_num"] < new_prop["pg_num"]:
+                break
             log.error(
                 f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
             )
+            log.info("Sleeping for 40 secs")
+            time.sleep(40)
+        else:
             raise Exception(
                 f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
             )
@@ -112,6 +128,7 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        log.info("*********** Execution of finally block starts ***********")
         if config.get("delete_pools"):
             for name in config["delete_pools"]:
                 method_should_succeed(rados_obj.detete_pool, name)

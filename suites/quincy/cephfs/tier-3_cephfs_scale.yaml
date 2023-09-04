@@ -11,6 +11,7 @@
 #  CEPH-83575405 - Include large number of smallfiles in a single subvolume and take
 #                  snapshots and capture the time taken
 #  CEPH-83575584 - Validate the max snapshot that can be created under a root FS sub volume.
+#  CEPH-83575629 - Validate the max clones can be created from single snapshot of subvolume.
 #=======================================================================================================================
 tests:
   -
@@ -153,3 +154,13 @@ tests:
       module: cephfs_scale.max_snapshots.py
       name: cephfs Scale test for max Snapshots under single subvolume
       polarion-id: "CEPH-83575584"
+  - test:
+      abort-on-fail: false
+      config:
+        subvol_size: 5368706371
+        test_timeout: 7200
+        subvol_data_fill: 2
+      desc: "Validate max clones from single snapshot of subvolume"
+      module: cephfs_scale.max_clones_from_snap.py
+      name: "Clone scale testing"
+      polarion-id: "CEPH-83575629"

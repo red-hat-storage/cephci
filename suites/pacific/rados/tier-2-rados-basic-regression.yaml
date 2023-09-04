@@ -22,7 +22,7 @@ tests:
               args:
                 registry-url: registry.redhat.io
                 mon-ip: node1
-                orphan-initial-daemons: true
+                allow-fqdn-hostname: true
           - config:
               command: add_hosts
               service: host
@@ -228,6 +228,8 @@ tests:
             pg_autoscale_mode: 'on'
             compression_mode: aggressive
             compression_algorithm: zlib
+        delete_pools:
+          - test_re_pool
       desc: Create replicated pools and run IO
 
   - test:
@@ -264,6 +266,8 @@ tests:
                 compression_required_ratio: 0.5
                 compression_min_blob_size: 1KB
                 byte_size: 100KB
+        delete_pools:
+          - re_pool_compress
       desc: Enable/disable different compression algorithms.
 
   - test:
@@ -309,6 +313,8 @@ tests:
             pg_autoscale_mode: "on"
             pg_num_min: 16
             target_size_ratio: 0.4
+        delete_pools:
+          - rep_test_pool
       desc: Ceph PG autoscaler CLI validation
 
   - test:

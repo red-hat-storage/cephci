@@ -36,6 +36,7 @@ class RadosOrchestrator:
         self.node = node
         self.ceph_cluster = node.cluster
         self.client = node.cluster.get_nodes(role="client")[0]
+        self.rhbuild = node.config.get("rhbuild")
 
     def change_recovery_flags(self, action):
         """Sets and unsets the recovery flags on the cluster
@@ -509,7 +510,7 @@ class RadosOrchestrator:
                     )
                     log.error(err)
                     return False
-
+        time.sleep(5)
         log.info(f"Created pool {pool_name} successfully")
         return True
 
@@ -1085,6 +1086,8 @@ class RadosOrchestrator:
         if not host:
             log.error("failed to find host for the osd")
             return False
+        init_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        pass_status = True
         osd_status, status_desc = self.get_daemon_status(
             daemon_type="osd", daemon_id=target
         )
@@ -1095,6 +1098,15 @@ class RadosOrchestrator:
             log.info(f"OSD {target} already in desired state: {action}")
             return True
 
+        # If the OSD is stopped and started multiple times, the fail-count can increase
+        # and the service cannot come up, without resetting the failcount of the service.
+
+        # Executing command to reset the fail count on the host and sleeping for 5 seconds
+        cmd = "systemctl reset-failed"
+        host.exec_command(sudo=True, cmd=cmd)
+        time.sleep(5)
+
+        # Executing command to perform desired action.
         cmd = f"systemctl {action} ceph-{cluster_fsid}@osd.{target}.service"
         log.info(
             f"Performing {action} on osd-{target} on host {host.hostname}. Command {cmd}"
@@ -1120,10 +1132,26 @@ class RadosOrchestrator:
 
             if action == "stop" and osd_status != 0:
                 log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
-                return False
+                pass_status = False
             if action == "start" and osd_status != 1:
                 log.error(
                     f"Failed to start the OSD.{target} service on {host.hostname}"
+                )
+                pass_status = False
+            if not pass_status:
+                log.error(
+                    f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
+                )
+                end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+                osd_log_lines = self.get_journalctl_log(
+                    start_time=init_time,
+                    end_time=end_time,
+                    daemon_type="osd",
+                    daemon_id=str(target),
+                )
+                log.error(
+                    f"\n\n ------------ Log lines from journalctl ---------------- \n"
+                    f"{osd_log_lines}\n\n"
                 )
                 return False
         else:
@@ -1196,7 +1224,7 @@ class RadosOrchestrator:
 
         # running rbd bench on the image created
         cmd = f"rbd bench-write {image_name} --pool={metadata_pool}"
-        self.node.shell([cmd])
+        self.node.shell([cmd], check_status=False)
         return True
 
     def check_compression_size(self, pool_name: str, **kwargs) -> bool:
@@ -1288,7 +1316,7 @@ class RadosOrchestrator:
             log.error(f"Exception hit while command execution. {er}")
         return log_lines
 
-    def set_mclock_profile(self, profile, osd="osd"):
+    def set_mclock_profile(self, profile="balanced", osd="osd", reset=False):
         """Set OSD MClock Profile.
 
         ceph config set osd_mclock_profile <profile_name>
@@ -1301,8 +1329,78 @@ class RadosOrchestrator:
         Args:
             profile: mclock profile name
             osd: "osd" service by default or "osd.<Id>"
+            reset: revert mClock profile to default - balanced
         """
-        return self.node.shell([f"ceph config set {osd} osd_mclock_profile {profile}"])
+        if self.rhbuild and self.rhbuild.split(".")[0] < "6":
+            log.info(
+                f"mClock specific settings are not valid below RHCS 6"
+                f", as the current RH build is {self.rhbuild}, returing TRUE"
+                f" to avoid false failure"
+            )
+            return True
+        if not self.check_osd_op_queue(qos="mclock"):
+            log.error(
+                "Current OSD QoS is not mclock_scheduler. \n"
+                "mClock specific settings cannot be implemented"
+            )
+            raise Exception(
+                "Failed to set mClock profile. OSD OP Queue is not mclock_scheduler"
+            )
+        return (
+            self.node.shell([f"ceph config rm {osd} osd_mclock_profile"])
+            if reset
+            else self.node.shell(
+                [f"ceph config set {osd} osd_mclock_profile {profile}"]
+            )
+        )
+
+    def check_osd_op_queue(self, qos) -> bool:
+        """Matches the input OSD op queue against the active
+        Qos running on the cluster
+        Args:
+            qos: QoS to match [WPQ / mClock]"
+        Returns:
+            True if input QoS matches the active QoS, False otherwise
+        """
+        current_qos, _ = self.node.shell(["ceph config get osd osd_op_queue"])
+        return True if qos.lower() in str(current_qos).lower() else False
+
+    def set_mclock_parameter(
+        self, param: str, value, restart_osd: bool = False
+    ) -> bool:
+        """Set value for any of the valid mClock config parameters
+        Args:
+            param (str): mClock config parameter to be modified
+            value: value to be set for the input parameter
+            restart_osd (boolean): flag to control restart of all OSDs;
+                necessary only for few parameters, hence added as a tunable setting.
+        Returns:
+            boolean: True if mClock parameter was set, False otherwise
+        """
+        if self.rhbuild and self.rhbuild.split(".")[0] < "6":
+            log.info(
+                f"mClock specific settings are not valid below RHCS 6"
+                f", as the current RH build is {self.rhbuild}, returing TRUE"
+                f" to avoid false failure"
+            )
+            return True
+        if not self.check_osd_op_queue(qos="mclock"):
+            log.error(
+                "Current OSD QoS is not mclock_scheduler. \n"
+                "mClock specific settings cannot be implemented"
+            )
+            raise Exception(
+                "Failed to set mClock profile. OSD OP Queue is not mclock_scheduler"
+            )
+        self.node.shell(
+            ["ceph config set osd osd_mclock_override_recovery_settings true"]
+        )
+        self.node.shell([f"ceph config set osd {param} {value}"])
+        if restart_osd:
+            if not self.restart_daemon_services(daemon="osd"):
+                log.error("could not restart the OSD services")
+                return False
+        return True
 
     def get_cephdf_stats(self, pool_name: str = None, detail: bool = False) -> dict:
         """
@@ -1540,7 +1638,7 @@ class RadosOrchestrator:
         osds = self.run_ceph_command(cmd)
         return [entry["name"] for entry in osds["nodes"] if entry["type"] == "host"]
 
-    def change_heap_profiler_state(self, osd_list, action):
+    def change_heap_profiler_state(self, osd_list, action) -> tuple:
         """
         Start/stops the OSD heap profile
         Usage: ceph tell osd.<osd.ID> heap start_profiler
@@ -1548,16 +1646,30 @@ class RadosOrchestrator:
         Args:
              osd_list: The list with the osd IDs
              action : start  or stop actions for heap profiler
-        Return: 0 for Pass , 1 for fail
+        Return: tuple of exit status with the OSD list
+        eg : (1, []) -> Fail
+        (0, [1,2,3,4,5]) -> Pass
         """
         if not osd_list:
             log.error("OSD list is empty")
-            return 1
+            return 1, []
         for osd_id in osd_list:
-            cmd = f"ceph tell osd.{osd_id} heap {action}_profiler"
-            self.node.shell([cmd])
+            osd_status, status_desc = self.get_daemon_status(
+                daemon_type="osd", daemon_id=osd_id
+            )
+            if not (osd_status == 0 or status_desc == "stopped"):
+                log.info(
+                    f"OSD {osd_id} is in running state, enabling/Disabling Heap profiler"
+                )
+                cmd = f"ceph tell osd.{osd_id} heap {action}_profiler"
+                self.node.shell([cmd])
+            else:
+                log.error(
+                    f"OSD {osd_id} in stopped state. Not enabling/disabling the heap profiler on the OSD"
+                )
+                osd_list.remove(osd_id)
         log.info(f"The OSD {osd_list} heap profile is in {action} state")
-        return 0
+        return 0, osd_list
 
     def get_heap_dump(self, osd_list):
         """
@@ -1582,7 +1694,7 @@ class RadosOrchestrator:
             heap_dump[osd_id] = out.strip()
         return heap_dump
 
-    def list_orch_services(self, service_type=None):
+    def list_orch_services(self, service_type=None) -> list:
         """
         Retrieves the list of orch services
         Args:
@@ -1772,3 +1884,67 @@ class RadosOrchestrator:
 
         log.error(f"PG {pg_id} not found in ceph pg dump output")
         raise KeyError(f"PG {pg_id} not found in ceph pg dump output")
+
+    def restart_daemon_services(self, daemon: str):
+        """Module to restart all Orchestrator services belonging to the input
+        daemon.
+        Args:
+            daemon (str): name of daemon whose service has to be restarted
+        Returns:
+            True -> Orch service restarted successfully.
+
+            False -> One or more daemons part of the service could not restart
+            within timeout
+        """
+        daemon_map = dict()
+        success = False
+        daemon_services = self.list_orch_services(service_type=daemon)
+        # capture current start time for each daemon part of the services
+        for service in daemon_services:
+            daemon_status_ls = self.run_ceph_command(
+                cmd=f"ceph orch ps --service_name {service}"
+            )
+            for entry in daemon_status_ls:
+                start_time, _ = self.client.exec_command(
+                    cmd=f"date -d {entry['started']} +'%Y%m%d%H%M%S'"
+                )
+                daemon_map[entry["daemon_name"]] = start_time
+
+        # restart each service for the input daemon
+        for service in daemon_services:
+            self.node.shell([f"ceph orch restart {service}"])
+
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        # wait for each daemon to restart
+        for service in daemon_services:
+            while datetime.datetime.now() <= end_time:
+                daemon_status_ls = self.run_ceph_command(
+                    cmd=f"ceph orch ps --service_name {service}"
+                )
+                for entry in daemon_status_ls:
+                    try:
+                        restart_time, _ = self.client.exec_command(
+                            cmd=f"date -d {entry['started']} +'%Y%m%d%H%M%S'"
+                        )
+                        assert restart_time > daemon_map[entry["daemon_name"]]
+                        assert entry["status_desc"] != "stopped"
+                        success = True
+                    except AssertionError:
+                        log.info(
+                            f"{daemon} daemon {entry['daemon_name']} is yet to restart. "
+                            f"Sleeping for 30 secs"
+                        )
+                        time.sleep(30)
+                        success = False
+                        break
+                if success:
+                    break
+            else:
+                log.error(
+                    f"All the daemons part of the service {service} did not restart within"
+                    f"timeout of 5 mins"
+                )
+                return False
+
+        log.info(f"Ceph Orch Service(s) {daemon_services} has been restarted")
+        return True

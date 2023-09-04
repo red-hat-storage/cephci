@@ -8,7 +8,9 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def generate_test_case(name, duration, status, msg=None, text=None, polarion_id=None):
+def generate_test_case(
+    name, duration, status, err_type=None, err_msg=None, err_text=None, polarion_id=None
+):
     """Create test case object.
 
     Args:
@@ -28,14 +30,15 @@ def generate_test_case(name, duration, status, msg=None, text=None, polarion_id=
         test_case.time = 0.0
 
     if status != "Pass":
-        _result = Failure(msg, "exception")
-        _result.text = text
+        _result = Failure(err_msg, err_type)
+        _result.text = err_text
         test_case.result = [_result]
 
     if polarion_id:
         props = Properties()
         props.append(Property(name="polarion-testcase-id", value=polarion_id))
         test_case.append(props)
+
     return test_case
 
 
@@ -73,8 +76,9 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
         pol_ids = tc.get("polarion-id")
         test_status = tc["status"]
         elapsed_time = tc.get("duration")
+        err_type = tc.get("err_type")
         err_msg = tc.get("err_msg")
-        _traceback = tc.get("traceback")
+        err_text = tc.get("err_text")
 
         if pol_ids:
             _ids = pol_ids.split(",")
@@ -84,15 +88,21 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
                         test_name,
                         elapsed_time,
                         test_status,
-                        msg=err_msg,
-                        text=_traceback,
+                        err_type=err_type,
+                        err_msg=err_msg,
+                        err_text=err_text,
                         polarion_id=_id,
                     )
                 )
         else:
             suite.add_testcase(
                 generate_test_case(
-                    test_name, elapsed_time, test_status, msg=err_msg, text=_traceback
+                    test_name,
+                    elapsed_time,
+                    test_status,
+                    err_type=err_type,
+                    err_msg=err_msg,
+                    err_text=err_text,
                 )
             )
 

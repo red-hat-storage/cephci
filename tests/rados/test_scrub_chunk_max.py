@@ -1,5 +1,5 @@
 """
-Module to verify funationality and effect of OSD scrub_chunk_max parameter.
+Module to verify functionality and effect of OSD scrub_chunk_max parameter.
 BZ #1382226 - PG scrub bypasses 'osd_scrub_chunk_max' limit to find hash boundary
 """
 import datetime
@@ -38,7 +38,6 @@ def run(ceph_cluster, **kw):
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_obj = PoolFunctions(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
-    installer_node = ceph_cluster.get_nodes(role="installer")[0]
     pg_scrub_log_list = []
     pool_name = "test_scrub_max"
     log.info(
@@ -83,6 +82,7 @@ def run(ceph_cluster, **kw):
         pool_pgid = rados_obj.get_pgid(pool_name=pool_name)[0]
         pool_id = pool_obj.get_pool_id(pool_name=pool_name)
         pool_pg_dump = rados_obj.get_ceph_pg_dump(pg_id=pool_pgid)
+        osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=primary_osd)
 
         log.info(f"last_deep_scrub: {pool_pg_dump['last_deep_scrub']}")
         log.info(f"last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}")
@@ -94,7 +94,7 @@ def run(ceph_cluster, **kw):
         # setting log level to 20 for more holistic coverage
         assert mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
 
-        init_time, _ = installer_node.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        init_time, _ = osd_host.exec_command(cmd="date '+%Y-%m-%d %H:%M:%S'", sudo=True)
         rados_obj.run_deep_scrub(pool=pool_name)
 
         start_time = datetime.datetime.now()
@@ -104,8 +104,8 @@ def run(ceph_cluster, **kw):
                 objects_scrubbed = int(pool_pg_dump["objects_scrubbed"])
                 log.info(f"Objects scrubbed: {objects_scrubbed} | Target: {objs}")
                 if (objects_scrubbed - org_objects_scrubbed) >= objs:
-                    end_time, _ = installer_node.exec_command(
-                        cmd="sudo date '+%Y-%m-%d %H:%M:%S'"
+                    end_time, _ = osd_host.exec_command(
+                        cmd="date '+%Y-%m-%d %H:%M:%S'", sudo=True
                     )
                     break
                 else:
@@ -119,8 +119,8 @@ def run(ceph_cluster, **kw):
                 and pool_pg_dump["state"] == "active+clean"
             ):
                 log.info(f"Deep-scrub completed, pg state: {pool_pg_dump['state']}")
-                end_time, _ = installer_node.exec_command(
-                    cmd="sudo date '+%Y-%m-%d %H:%M:%S'"
+                end_time, _ = osd_host.exec_command(
+                    cmd="date '+%Y-%m-%d %H:%M:%S'", sudo=True
                 )
                 break
             else:
@@ -179,6 +179,7 @@ def run(ceph_cluster, **kw):
         log.exception(e)
         return 1
     finally:
+        log.info("*********** Execution of finally block starts ***********")
         mon_obj.remove_config(section="osd", name="osd_scrub_chunk_max")
         mon_obj.remove_config(section="osd", name="debug_osd")
         if config.get("delete_pool"):

@@ -41,7 +41,6 @@ def run(ceph_cluster, **kw):
                     name=pool_name, **{"pool_name": pool_name}
                 )
             )
-
             if param == checksum:
                 # set checksum value for the pool
                 rados_obj.set_pool_property(

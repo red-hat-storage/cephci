@@ -774,6 +774,7 @@ def run(args):
             try:
                 if "build" in config.keys():
                     _rhcs_version = config["build"]
+
                 # Initialize the cluster with the expected rhcs_version
                 ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
                 if mod_file_name not in skip_tc_list:
@@ -787,17 +788,22 @@ def run(args):
                         clients=clients,
                         run_config=run_config,
                     )
+
                 else:
                     rc = -1
+
             except BaseException as be:  # noqa
+                # Log exception to stdout
                 log.exception(be)
 
                 # Set failure details
+                tc["err_type"] = "exception"
                 tc["err_msg"] = str(be)
-                tc["traceback"] = traceback.format_exc()
+                tc["err_text"] = traceback.format_exc()
 
                 # Set return code to 1
                 rc = 1
+
             finally:
                 collect_recipe(ceph_cluster_dict[cluster_name])
                 if store:
@@ -807,11 +813,30 @@ def run(args):
                 if config.get("artifacts"):
                     tc["comments"] += f"\n{config['artifacts']}"
 
+            # Check for Log object
+            _objects, _object = vars(test_mod), None
+            for k in _objects.keys():
+                if type(_objects.get(k)) is Log:
+                    _object = _objects.get(k)
+                    break
+
             if rc != 0:
+                # Check if err_type is set for exception
+                if _object and not (tc.get("err_type") == "exception"):
+                    tc["err_type"], tc["err_msg"] = "error", ""
+
+                    # Get error messages
+                    tc["err_msg"] = "\n".join(map(str, _object._log_errors))
+
                 break
 
+        # Calculate test execution time
         elapsed = datetime.datetime.now() - start
         tc["duration"] = elapsed
+
+        # Reset errors list
+        if _object:
+            _object._log_errors = []
 
         if rc == 0:
             tc["status"] = "Pass"
@@ -821,6 +846,7 @@ def run(args):
 
             if post_results:
                 post_to_polarion(tc=tc)
+
         elif rc == -1:
             tc["status"] = "Skipped"
             msg = "Test {} Skipped".format(test_mod)
@@ -829,6 +855,7 @@ def run(args):
 
             if post_results:
                 post_to_polarion(tc=tc)
+
         else:
             tc["status"] = "Failed"
             msg = "Test {} failed".format(test_mod)
@@ -861,6 +888,7 @@ def run(args):
                 instances_name,
                 enable_eus=enable_eus,
             )
+
         tcs.append(tc)
 
     url_base = (

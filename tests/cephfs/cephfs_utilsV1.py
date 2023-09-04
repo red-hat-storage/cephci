@@ -1398,6 +1398,7 @@ class FsUtils(object):
         snap_name,
         target_subvol_name,
         validate=True,
+        timeout=600,
         **kwargs,
     ):
         """
@@ -1426,7 +1427,10 @@ class FsUtils(object):
         if kwargs.get("pool_layout"):
             clone_cmd += f" --pool_layout {kwargs.get('pool_layout')}"
         cmd_out, cmd_rc = client.exec_command(
-            sudo=True, cmd=clone_cmd, check_ec=kwargs.get("check_ec", True)
+            sudo=True,
+            cmd=clone_cmd,
+            check_ec=kwargs.get("check_ec", True),
+            timeout=timeout,
         )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
@@ -1482,7 +1486,9 @@ class FsUtils(object):
                 raise CommandFailed(f"Remove of snapshot : {snap_name} failed")
         return cmd_out, cmd_rc
 
-    def remove_subvolume(self, client, vol_name, subvol_name, validate=True, **kwargs):
+    def remove_subvolume(
+        self, client, vol_name, subvol_name, validate=True, timeout=600, **kwargs
+    ):
         """
         Removes the subvolume based subvol_name,vol_name
         It supports below optional arguments also
@@ -1507,14 +1513,17 @@ class FsUtils(object):
         if kwargs.get("force"):
             rmsubvolume_cmd += " --force"
         cmd_out, cmd_rc = client.exec_command(
-            sudo=True, cmd=rmsubvolume_cmd, check_ec=kwargs.get("check_ec", True)
+            sudo=True,
+            cmd=rmsubvolume_cmd,
+            check_ec=kwargs.get("check_ec", True),
+            timeout=timeout,
         )
         if validate:
             listsubvolumes_cmd = f"ceph fs subvolume ls {vol_name}"
             if kwargs.get("group_name"):
                 listsubvolumes_cmd += f" --group_name {kwargs.get('group_name')}"
             out, rc = client.exec_command(
-                sudo=True, cmd=f"{listsubvolumes_cmd} --format json"
+                sudo=True, cmd=f"{listsubvolumes_cmd} --format json", timeout=timeout
             )
             subvolume_ls = json.loads(out)
             if subvol_name in [i["name"] for i in subvolume_ls]:
