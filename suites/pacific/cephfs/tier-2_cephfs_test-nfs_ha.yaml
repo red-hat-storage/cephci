@@ -131,3 +131,9 @@ tests:
       desc: nfs-ha-create-using-spec-ingress
       polarion-id: CEPH-83575088
       abort-on-fail: false
+  - test:
+      name: nfs-ha-failover
+      module: cephfs_nfs.test_cephfs_nfs_ha_failover.py
+      desc: nfs-ha-failover
+      polarion-id: CEPH-83575196
+      abort-on-fail: false
