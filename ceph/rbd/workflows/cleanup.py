@@ -1,10 +1,34 @@
 import json
 from time import sleep
 
-from ceph.rbd.utils import exec_cmd
+from ceph.rbd.utils import exec_cmd, getdict
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def cleanup(pool_types, mirror_obj, **kw):
+    """ """
+    pools = list()
+    for pool_type in pool_types:
+        multi_pool_config = kw.get("config").get(pool_type)
+        pools.extend(
+            [key for key in getdict(multi_pool_config).keys() if key != "test_config"]
+        )
+        pools.extend(
+            [
+                val["data_pool"]
+                for val in getdict(multi_pool_config).values()
+                if val.get("data_pool")
+            ]
+        )
+    mirror_obj.pop("output", {})
+    for cluster_config in mirror_obj.values():
+        pool_cleanup(
+            cluster_config.get("client"),
+            pools,
+            ceph_version=int(kw["config"].get("rhbuild")[0]),
+        )
 
 
 def pool_cleanup(client, pools, **kw):

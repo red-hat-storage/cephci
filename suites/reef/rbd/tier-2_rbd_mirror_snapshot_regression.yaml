@@ -172,6 +172,7 @@ tests:
             snapshot_schedule_level: "pool"
       polarion-id: CEPH-83575375
       desc: Create snapshot based RBD mirrored pools, schedule snapshots at pool level and verify
+
   - test:
       name: test_rbd_mirror_snapshot_cluster
       module: test_rbd_mirror_snapshot.py
@@ -188,3 +189,23 @@ tests:
             snapshot_schedule_level: "cluster"
       polarion-id: CEPH-83575376
       desc: Create snapshot based RBD mirrored pools, schedule snapshots at cluster level and verify
+
+  - test:
+      abort-on-fail: True
+      desc: Verify snapshot based mirroring cannot be enabled at pool mode
+      name: Test validating neg scenario snapshot mirroring in pool mode
+      module: test_snapshot_mirroring_on_pool_negative.py
+      polarion-id: CEPH-83573617
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: pool
+              mirrormode: snapshot
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: pool
+              mirrormode: snapshot
