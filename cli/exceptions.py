@@ -57,3 +57,9 @@ class AnsiblePlaybookExecutionError(Exception):
     """
     Custom exception thrown when ansible playbook execution fails.
     """
+
+
+class IOError(Exception):
+    """
+    Custom exception thrown when IO failure happens
+    """
