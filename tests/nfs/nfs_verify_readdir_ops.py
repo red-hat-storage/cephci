@@ -48,7 +48,7 @@ def run(ceph_cluster, **kw):
         )
 
         # Linux untar on client 1
-        _ = linux_untar(clients[0], nfs_mount)
+        io = linux_untar(clients[0], nfs_mount)
 
         # Test 1: Perform Linux untar from 1 client and do readir operation from other client (ls -lart)
         cmd = f"ls -lart {nfs_mount}"
@@ -62,6 +62,22 @@ def run(ceph_cluster, **kw):
         cmd = f"find {nfs_mount} -name *.txt"
         clients[3].exec_command(cmd=cmd, sudo=True)
 
+        # Wait for io to complete on all clients
+        for th in io:
+            th.join()
+
+        # Repeat the tests post untar completes
+        # Test 1: Perform Linux untar from 1 client and do readir operation from other client (ls -lart)
+        cmd = f"ls -lart {nfs_mount}"
+        clients[1].exec_command(cmd=cmd, sudo=True)
+
+        # Test 2: Perform Linux untar from 1 client and do readir operation from other client (du -sh)
+        cmd = f"du -sh {nfs_mount}"
+        clients[2].exec_command(cmd=cmd, sudo=True)
+
+        # Perform Linux untar from 1 client and do readir operation from other client (finds)
+        cmd = f"find {nfs_mount} -name *.txt"
+        clients[3].exec_command(cmd=cmd, sudo=True)
     except Exception as e:
         log.error(f"Failed to validate read dir operations : {e}")
         return 1

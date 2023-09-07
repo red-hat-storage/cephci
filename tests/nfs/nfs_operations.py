@@ -1,9 +1,14 @@
+from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
 from utility.log import Log
 
 log = Log(__name__)
+
+
+class NfsCleanupFailed(Exception):
+    pass
 
 
 def setup_nfs_cluster(
@@ -56,8 +61,23 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
     if not isinstance(clients, list):
         clients = [clients]
 
+    # Wait until the rm operation is complete
+    timeout, interval = 600, 10
     for client in clients:
-        client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/*")
+        # Clear the nfs_mount, at times rm operation can fail
+        # as the dir is not empty, this being an expected behaviour,
+        # the solution is to repeat the rm operation.
+        for w in WaitUntil(timeout=timeout, interval=interval):
+            try:
+                client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/*")
+                break
+            except Exception as e:
+                log.warning(f"rm operation failed, repeating!. Error {e}")
+        if w.expired:
+            raise NfsCleanupFailed(
+                "Failed to cleanup nfs mount dir even after multiple iterations. Timed out!"
+            )
+
         log.info("Unmounting nfs-ganesha mount on client:")
         if Unmount(client).unmount(nfs_mount):
             raise OperationFailedError(f"Failed to unmount nfs on {client.hostname}")
