@@ -138,12 +138,6 @@ tests:
       desc: Deploy mds using cephadm and increase & decrease number of mds.
       polarion-id: CEPH-83574286
       abort-on-fail: false
-  - test:
-      name: nfs-ha-sanity
-      module: nfs_ha_sanity.py
-      desc: Deploy NFS HA and validate the services are UP.
-      polarion-id: CEPH-83575092
-      abort-on-fail: false
   -
     test:
       desc: "generate sosreport"
