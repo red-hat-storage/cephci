@@ -94,7 +94,7 @@ def run(ceph_cluster, **kw):
         time.sleep(25)
 
         log.info("Stopped 2 OSD's from acting set, starting to wait for recovery")
-        rados_obj.change_recover_threads(config=config, action="set")
+        rados_obj.change_recovery_threads(config=config, action="set")
 
         if not rados_obj.bench_write(pool_name=pool_name, **config):
             log.error("Failed to write objects into the Pool")
@@ -230,7 +230,7 @@ def run(ceph_cluster, **kw):
         return 1
 
     # Increasing backfill/rebalance threads so that cluster will re-balance it faster
-    rados_obj.change_recover_threads(config=config, action="set")
+    rados_obj.change_recovery_threads(config=config, action="set")
 
     # wait for active + clean after deployment of stretch mode
     # checking the state after deployment coz of BZ : https://bugzilla.redhat.com/show_bug.cgi?id=2025800
@@ -290,7 +290,7 @@ def run(ceph_cluster, **kw):
                 log.info(res)
         log.info("Successfully completed Add Capacity scenario")
 
-    rados_obj.change_recover_threads(config=config, action="rm")
+    rados_obj.change_recovery_threads(config=config, action="rm")
 
     # Checking if the pools have been updated with the new crush rules
     acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
