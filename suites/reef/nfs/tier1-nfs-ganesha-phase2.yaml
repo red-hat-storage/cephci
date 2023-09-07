@@ -184,3 +184,12 @@ tests:
       config:
         nfs_version: 4.1
         clients: 4
+  - test:
+      name: Nfs Verify rm write lookups in parellel from multi clients
+      module: nfs_verify_parallel_rm_write_lookup.py
+      desc: Perform lookups rm and write at the same time
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
