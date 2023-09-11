@@ -55,8 +55,7 @@ def run(ceph_cluster, **kw):
         return 1
 
     # Set recover threads configurations
-    if not rhbuild.startswith("6"):
-        rados_obj.change_recover_threads(config=pool, action="set")
+    rados_obj.change_recovery_threads(config=pool, action="set")
 
     # Set mclock_profile
     if rhbuild.startswith("6") and config.get("mclock_profile"):
@@ -116,7 +115,7 @@ def run(ceph_cluster, **kw):
     if cr_pool.get("rados_put", False):
         do_rados_get(client_node, pool["pool_name"], 1)
     utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
-    rados_obj.change_recover_threads(config=pool, action="rm")
+    rados_obj.change_recovery_threads(config=pool, action="rm")
 
     if config.get("delete_pools"):
         for name in config["delete_pools"]:

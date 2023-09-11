@@ -39,7 +39,7 @@ def run(ceph_cluster, **kw):
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
         write_to_pools(config, rados_obj, client_node)
-        rados_obj.change_recover_threads(config=pool, action="set")
+        rados_obj.change_recovery_threads(config=pool, action="set")
 
         end_time, err = installer.exec_command(cmd="sudo date -u '+%Y-%m-%d %H:%M:%S'")
         logs = get_slow_requests_log(installer, start_time.strip(), end_time.strip())

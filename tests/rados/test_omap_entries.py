@@ -69,7 +69,7 @@ def run(ceph_cluster, **kw):
             if omap_config["large_warn"]:
                 # Fetching the current acting set for the pool
                 acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
-                rados_obj.change_recover_threads(config={}, action="set")
+                rados_obj.change_recovery_threads(config={}, action="set")
                 log.debug(
                     f"Proceeding to restart OSDs from the acting set {acting_set}"
                 )
@@ -97,7 +97,7 @@ def run(ceph_cluster, **kw):
             log.exception(e)
             return 1
         finally:
-            rados_obj.change_recover_threads(config={}, action="rm")
+            rados_obj.change_recovery_threads(config={}, action="rm")
             # deleting the pool created after the test
             rados_obj.detete_pool(pool=pool_name)
 
