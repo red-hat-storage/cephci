@@ -272,6 +272,23 @@ class RadosOrchestrator:
         prop_details = json.loads(out)
         return prop_details
 
+    def get_pool_details(self, pool) -> dict:
+        """
+        Method to fetch the properties of the pool via ceph osd pool ls commands
+
+        Args:
+            pool: name of the pool
+        returns:
+            Dictionary of pool properties for the selected pool
+        """
+        cmd = "ceph osd pool ls detail"
+        out = self.run_ceph_command(cmd=cmd)
+        for ele in out:
+            if ele["pool_name"] == pool:
+                return ele
+        log.error(f"pool {pool} not found")
+        return {}
+
     def host_maintenance_enter(self, hostname: str, retry: int = 10) -> bool:
         """
         Adds the specified host into maintenance mode
@@ -1071,7 +1088,7 @@ class RadosOrchestrator:
         log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
         return True
 
-    def change_osd_state(self, action: str, target: int, timeout: int = 60) -> bool:
+    def change_osd_state(self, action: str, target: int, timeout: int = 180) -> bool:
         """
         Changes the state of the OSD daemons wrt the action provided
         Args:
@@ -1086,6 +1103,7 @@ class RadosOrchestrator:
         if not host:
             log.error("failed to find host for the osd")
             return False
+        log.debug(f"Hostname of target host : {host.hostname}")
         init_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         pass_status = True
         osd_status, status_desc = self.get_daemon_status(
@@ -1099,7 +1117,7 @@ class RadosOrchestrator:
             return True
 
         # If the OSD is stopped and started multiple times, the fail-count can increase
-        # and the service cannot come up, without resetting the failcount of the service.
+        # and the service cannot come up, without resetting the fail-count of the service.
 
         # Executing command to reset the fail count on the host and sleeping for 5 seconds
         cmd = "systemctl reset-failed"
@@ -1128,7 +1146,7 @@ class RadosOrchestrator:
                     osd_status == 1 or status_desc == "running"
                 ) and action == "start":
                     break
-                time.sleep(10)
+                time.sleep(20)
 
             if action == "stop" and osd_status != 0:
                 log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
@@ -1155,7 +1173,8 @@ class RadosOrchestrator:
                 )
                 return False
         else:
-            time.sleep(7)
+            # Baremetal systems take some time for daemon restarts. changing sleep accordingly
+            time.sleep(20)
         return True
 
     def fetch_host_node(self, daemon_type: str, daemon_id: str = None) -> object:
