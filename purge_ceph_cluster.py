@@ -1,7 +1,7 @@
 """Purge Ceph Cluster.
 
 Usage:
-    purge_cluster.py [--installer <IP>] [--username <USERNAME>] [--password <PASSWORD>]
+    purge_ceph_cluster.py [--installer <IP>] [--username <USERNAME>] [--password <PASSWORD>]
 
 Options:
     -h --help       Show this help message and exit.

@@ -52,12 +52,14 @@ tests:
         command: add
         id: client.1
         nodes:
+          - node2
           - node6
           - node7
           - node8
           - node9
           - node10
           - node11
+          - node12
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -67,8 +69,35 @@ tests:
       name: configure Ceph client for NVMe tests
       polarion-id: CEPH-83573758
 
-#  Configure Ceph NVMeoF gateway
-#  Configure Initiators
+#  Perform Data Integrity tests
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 5001
+            allow_host: "*"
+        initiator: # Configure Initiators with all pre-req
+            subnqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 5001
+            node: node7
+      desc: Perform Data integrity test over NVMEoF targets
+      destroy-cluster: false
+      module: test_ceph_nvmeof_data_integrity.py
+      name: Test to perform Data Integrity test over NVMe-OF targets
+      polarion-id: CEPH-83576094
+
 #  Run IO on NVMe Targets
   - test:
       abort-on-fail: true
@@ -79,37 +108,8 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        install: true                           # Run SPDK with all pre-requisites
-        subsystems:                             # Configure subsystems with all sub-entities
-          - nqn: nqn.2016-06.io.spdk:cnode1
-            serial: 1
-            bdevs:
-              count: 1
-              size: 10G
-            listener_port: 5001
-            allow_host: "*"
-        initiators:                             # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:cnode1
-            listener_port: 5001
-            node: node7
-      desc: Deploy NVMEoF Gateway collocated with OSD node
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway.py
-      name: Test to setup NVMEoF Gateway collocated with OSD node and run IOs
-      polarion-id: CEPH-83575442
-
-#  Perform Data Integrity tests
-  - test:
-      abort-on-fail: true
-      config:
-        gw_node: node6                        # NVMEoF Gateway node collocated with OSD node
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        rep_pool_config:
-          pool: rbd
         install: false                           # Run SPDK with all pre-requisites
-        subsystems: # Configure subsystems with all sub-entities
+        subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 2
             bdevs:
@@ -117,15 +117,15 @@ tests:
               size: 10G
             listener_port: 5002
             allow_host: "*"
-        initiator: # Configure Initiators with all pre-req
-            subnqn: nqn.2016-06.io.spdk:cnode2
+        initiators:                             # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:cnode2
             listener_port: 5002
             node: node7
-      desc: Perform Data integrity test over NVMEoF targets
+      desc: Deploy NVMEoF Gateway collocated with OSD node
       destroy-cluster: false
-      module: test_ceph_nvmeof_data_integrity.py
-      name: Test to perform Data Integrity test over NVMe-OF targets
-      polarion-id: CEPH-83576094
+      module: test_ceph_nvmeof_gateway.py
+      name: Test to setup NVMEoF Gateway collocated with OSD node and run IOs
+      polarion-id: CEPH-83575442
 
 # Run IOs using multiple-initiators against multi-subsystems based NVMe-OF targets using fio tool
   - test:
@@ -195,6 +195,35 @@ tests:
       name: Test to Deploy multiple NVMEoF Gateway on the cluster
       polarion-id: CEPH-83576112
 
+#  GW deployment collocation with Mon_MGR nodes
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node2                       # scaling gateways collocating with mon_mgr nodes on the cluster
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode6
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 5006
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:cnode6
+            listener_port: 5006
+            node: node12
+      desc: Deploy gateways collocation with MON_MGR nodes
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway.py
+      name: Test to Deploy multiple NVMEoF Gateway collocation with MON_MGR nodes in the cluster
+      polarion-id: CEPH-83575443
+
 #  # Cleanup Test Case for gateway nodes
   - test:
       abort-on-fail: true
@@ -217,6 +246,8 @@ tests:
             node: node6
           - nqn: nqn.2016-06.io.spdk:cnode5
             node: node10
+          - nqn: nqn.2016-06.io.spdk:cnode6
+            node: node2
         initiators:
           - subnqn: nqn.2016-06.io.spdk:cnode1
             node: node7
@@ -228,6 +259,8 @@ tests:
             node: node9
           - subnqn: nqn.2016-06.io.spdk:cnode5
             node: node11
+          - subnqn: nqn.2016-06.io.spdk:cnode6
+            node: node12
         cleanup-only: true                        # clean up only
         cleanup:
           - pool

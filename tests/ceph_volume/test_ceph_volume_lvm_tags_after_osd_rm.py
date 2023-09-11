@@ -7,6 +7,9 @@ from cli.utilities.utils import (
     get_lvm_on_osd_container,
     get_running_containers,
 )
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class RemoveOsdError(Exception):
@@ -94,9 +97,16 @@ def run(ceph_cluster, **kw):
             if osd_.get("id") == osd_id and osd_.get("status") == "up":
                 raise RemoveOsdError("The osd is up after rm operation")
 
-        # Get the lvm list after osd remove
-        lvm_list = get_lvm_on_osd_container(container_ids[0], osd_node)
-        if osd_id in (list(lvm_list.keys())):
-            raise RemoveOsdError("OSD id still in lvm even after rm operation")
+        # Validate the osd rm process
+        try:
+            _ = get_lvm_on_osd_container(container_ids[0], osd_node)
+        except Exception as e:
+            if "Error: no container" not in str(e):
+                raise RemoveOsdError("Osd rm operation was not successful")
+            log.info("Osd rm process was successful")
+            return 0
+
+        # Raise error is the container is still up
+        raise RemoveOsdError("OSD id still in lvm even after rm operation")
 
     return 0

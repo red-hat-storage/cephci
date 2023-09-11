@@ -164,12 +164,22 @@ def run(ceph_cluster, **kw):
     if ceph_cluster.containerized:
         file_name = "site-container.yml"
 
-    rc = ceph_installer.exec_command(
-        cmd="cd {ansible_dir} ; ANSIBLE_STDOUT_CALLBACK=debug;ansible-playbook -vvvv -i hosts {file_name}".format(
-            ansible_dir=ansible_dir, file_name=file_name
-        ),
-        long_running=True,
-    )
+    execute_ceph_ansible = f"cd {ansible_dir}; "
+    execute_ceph_ansible += "ANSIBLE_STDOUT_CALLBACK=debug; "
+    execute_ceph_ansible += f"ansible-playbook -vvvv -i hosts {file_name}"
+    rc = ceph_installer.exec_command(cmd=execute_ceph_ansible, long_running=True)
+    if ceph_cluster.containerized and rc != 0:
+        err_msg = "Cluster deployment failed, applying workaround from KCS article - "
+        err_msg += "https://access.redhat.com/solutions/6995089"
+        LOG.error(err_msg)
+
+        chcon_cmd = "chcon system_u:object_r:container_file_t:s0 -R /var/lib/ceph/mgr/ceph-$(hostname -s)"
+        for node in ceph_cluster:
+            out, err = node.exec_command(sudo=True, cmd=chcon_cmd, check_ec=False)
+            LOG.info(f"Apllied workaround -\nout: {out},\nerr:{err}")
+
+        LOG.info("Re-executing ansible playbook -")
+        rc = ceph_installer.exec_command(cmd=execute_ceph_ansible, long_running=True)
 
     # manually handle client creation in a containerized deployment (temporary)
     if ceph_cluster.containerized:

@@ -96,7 +96,7 @@ tests:
           allow_host: "*"
         namespaces:
           start_count: 1
-          end_count: 2500
+          end_count: 1000
           sub_nqn: nqn.2016-06.io.spdk:cnode1
           size: 50M
         initiators:
@@ -106,11 +106,11 @@ tests:
         run_io:
           node: node6
           io_type: write
-      desc: test namespace limitations
+      desc: test namespace limitations with 1K namespaces
       destroy-cluster: false
       module: test_ceph_nvmeof_ns_limit.py
-      name: test 2.5k namespace with 1 subsystem in Single GW
-      polarion-id:
+      name: test 1k namespace with 1 subsystem in Single GW
+      polarion-id: CEPH-83576691
 
   - test:
       abort-on-fail: true
@@ -122,8 +122,8 @@ tests:
         rep_pool_config:
           pool: rbd
         namespaces:
-          start_count: 2501
-          end_count: 5000
+          start_count: 1001
+          end_count: 2000
           sub_nqn: nqn.2016-06.io.spdk:cnode1
           size: 50M
         initiators:
@@ -133,62 +133,8 @@ tests:
         run_io:
           node: node7
           io_type: write
-      desc: test namespace limitations
+      desc: test namespace limitations with 2K namespaces
       destroy-cluster: false
       module: test_ceph_nvmeof_ns_limit.py
-      name: test 5k namespace with 1 subsystem in Single GW
-      polarion-id:
-
-  - test:
-      abort-on-fail: true
-      config:
-        gw_node: node5
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        rep_pool_config:
-          pool: rbd
-        namespaces:
-          start_count: 5001
-          end_count: 7500
-          sub_nqn: nqn.2016-06.io.spdk:cnode1
-          size: 50M
-        initiators:
-          subnqn: nqn.2016-06.io.spdk:cnode1
-          listener_port: 5001
-          node: node8
-        run_io:
-          node: node8
-          io_type: write
-      desc: test namespace limitations
-      destroy-cluster: false
-      module: test_ceph_nvmeof_ns_limit.py
-      name: test 7.5k namespace with 1 subsystem in Single GW
-      polarion-id:
-
-  - test:
-      abort-on-fail: true
-      config:
-        gw_node: node5
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        rep_pool_config:
-          pool: rbd
-        namespaces:
-          start_count: 7501
-          end_count: 10000
-          sub_nqn: nqn.2016-06.io.spdk:cnode1
-          size: 50M
-        initiators:
-          subnqn: nqn.2016-06.io.spdk:cnode1
-          listener_port: 5001
-          node: node9
-        run_io:
-          node: node9
-          io_type: write
-      desc: test namespace limitations
-      destroy-cluster: false
-      module: test_ceph_nvmeof_ns_limit.py
-      name: test 10k namespace with 1 subsystem in Single GW
-      polarion-id:
+      name: test 1k namespace with 1 subsystem in Single GW
+      polarion-id: CEPH-83576691

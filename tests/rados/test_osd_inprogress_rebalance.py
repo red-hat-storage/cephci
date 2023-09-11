@@ -44,7 +44,7 @@ def run(ceph_cluster, **kw):
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
         write_to_pools(config, rados_obj, client_node)
-        rados_obj.change_recover_threads(config=pool, action="set")
+        rados_obj.change_recovery_threads(config=pool, action="set")
         acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
         log.info(f"Acting set {acting_pg_set}")
         should_not_be_empty(acting_pg_set, "Failed to retrieve acting pg set")
@@ -84,7 +84,7 @@ def run(ceph_cluster, **kw):
         if pool.get("rados_put", False):
             do_rados_get(client_node, pool["pool_name"], 1)
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
-        rados_obj.change_recover_threads(config=pool, action="rm")
+        rados_obj.change_recovery_threads(config=pool, action="rm")
         if config.get("delete_pools"):
             for name in config["delete_pools"]:
                 method_should_succeed(rados_obj.detete_pool, name)

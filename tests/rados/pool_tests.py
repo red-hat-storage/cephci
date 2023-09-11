@@ -71,7 +71,7 @@ def run(ceph_cluster, **kw):
                 return 1
 
         log.info("Stopped 'm' number of OSD's from, starting to wait for recovery")
-        rados_obj.change_recover_threads(config=ec_config, action="set")
+        rados_obj.change_recovery_threads(config=ec_config, action="set")
 
         # Sleeping for 25 seconds ( "osd_heartbeat_grace": "20" ) for osd's to be marked down
         time.sleep(25)
@@ -116,7 +116,7 @@ def run(ceph_cluster, **kw):
             return 1
         log.info(f" Acting set of the pool consists of OSD's : {acting_pg_set}")
         # Changing recovery threads back to default
-        rados_obj.change_recover_threads(config=ec_config, action="rm")
+        rados_obj.change_recovery_threads(config=ec_config, action="rm")
 
         log.debug("Starting the stopped OSD's")
         for osd_id in stop_osds:
@@ -319,7 +319,7 @@ def run(ceph_cluster, **kw):
                 return 1
             log.debug("Set the ratio. getting the projected pg's")
 
-            rados_obj.change_recover_threads(config=config, action="set")
+            rados_obj.change_recovery_threads(config=config, action="set")
             log.debug(
                 "Waiting for the rebalancing to complete on the cluster after the change"
             )
@@ -367,7 +367,7 @@ def run(ceph_cluster, **kw):
                     f" after removing the target ratios"
                 )
                 return 1
-            rados_obj.change_recover_threads(config=config, action="rm")
+            rados_obj.change_recovery_threads(config=config, action="rm")
             if entry.get("delete_pool", False):
                 rados_obj.detete_pool(pool=entry["pool_name"])
             log.info(

@@ -104,11 +104,11 @@ tests:
         run_io:
           node: node6
           io_type: write
-      desc: test namespace limitations
+      desc: test namespace limitations with 1K namespaces
       destroy-cluster: false
       module: test_ceph_nvmeof_ns_limit.py
       name: test 1k namespace with 1 subsystem in Single GW
-      polarion-id:
+      polarion-id: CEPH-83576691
 
   - test:
       abort-on-fail: true
@@ -131,9 +131,9 @@ tests:
         run_io:
           node: node7
           io_type: write
-      desc: test namespace limitations
+      desc: test namespace limitations with 2K namespaces
       destroy-cluster: false
       module: test_ceph_nvmeof_ns_limit.py
       name: test 2k namespace with 1 subsystem in Single GW
-      polarion-id:
+      polarion-id: CEPH-83576691
 

@@ -514,7 +514,7 @@ class RadosOrchestrator:
         log.info(f"Created pool {pool_name} successfully")
         return True
 
-    def change_recover_threads(self, config: dict, action: str):
+    def change_recovery_threads(self, config: dict, action: str):
         """
         increases or decreases the recovery threads based on the action sent
         Args:
@@ -528,6 +528,10 @@ class RadosOrchestrator:
             "osd_max_backfills": f"ceph config {action} osd osd_max_backfills",
             "osd_recovery_max_active": f"ceph config {action} osd osd_recovery_max_active",
         }
+        if self.check_osd_op_queue(qos="mclock"):
+            self.node.shell(
+                ["ceph config set osd osd_mclock_override_recovery_settings true"]
+            )
         for cmd in cfg_map:
             if action == "set":
                 command = f"{cfg_map[cmd]} {config.get(cmd, 8)}"
@@ -916,7 +920,7 @@ class RadosOrchestrator:
         Returns: Pass -> True, Fail -> False
         """
         # Increasing backfill & recovery rate
-        self.change_recover_threads(config={}, action="set")
+        self.change_recovery_threads(config={}, action="set")
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
         while end_time > datetime.datetime.now():
             status_report = self.run_ceph_command(cmd="ceph report")
@@ -941,7 +945,7 @@ class RadosOrchestrator:
                 f" checking status again in 1 minutes"
             )
             time.sleep(60)
-        self.change_recover_threads(config={}, action="rm")
+        self.change_recovery_threads(config={}, action="rm")
         if not flag:
             log.error(
                 "The cluster did not reach active + Clean After re-balancing by capacity"

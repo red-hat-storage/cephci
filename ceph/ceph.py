@@ -2117,7 +2117,13 @@ class CephNode(object):
             sudo (bool): Use root access
         """
         client = self.rssh if sudo else self.ssh
-        client().open_sftp().mkdir(dir_path)
+        try:
+            client().open_sftp().mkdir(dir_path)
+        except Exception:
+            # Error happens when the directory already exists
+            logger.info("mkdir failed, retrying with -p param")
+            cmd = f"mkdir -p {dir_path}"
+            self.exec_command(cmd=cmd, sudo=True)
 
 
 class CephObject(object):

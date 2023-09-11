@@ -125,3 +125,9 @@ tests:
       desc: Deploy NFS HA and validate the services are UP.
       polarion-id: CEPH-83575092
       abort-on-fail: false
+  - test:
+      name: nfs-ha-create-using-spec-ingress
+      module: cephfs_nfs.nfs_ha_create_using_spec_ingress.py
+      desc: nfs-ha-create-using-spec-ingress
+      polarion-id: CEPH-83575088
+      abort-on-fail: false
