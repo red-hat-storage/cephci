@@ -1,7 +1,7 @@
 from json import loads
 
 from cli.cephadm.ansible import Ansible
-from cli.exceptions import AnsiblePlaybookExecutionError
+from cli.exceptions import AnsiblePlaybookExecutionError, OperationFailedError
 from cli.utilities.containers import Container
 from cli.utilities.packages import Package
 from utility.log import Log
@@ -348,3 +348,30 @@ def generate_skopeo_copy_cmd(
         cmd += f" --dest-creds {dest_creds}"
     cmd += f" docker://{src_image} docker://{dst_image}"
     return cmd
+
+
+def setup_fio(client):
+    """
+    Installs fio IO tool on the given client
+    Args:
+        client (ceph): Client node
+    """
+    try:
+        # Install Fio packages
+        Package(client).install("fio", nogpgcheck=True)
+    except Exception:
+        raise OperationFailedError(f"Fio installation failed on {client.hostname}")
+
+
+def setup_smallfile_io(client):
+    """
+    Git pulls Smallfile repo
+    Args:
+        client (ceph): Client nod
+    """
+    try:
+        # Install Fio packages
+        cmd = "git clone https://github.com/distributed-system-analysis/smallfile.git"
+        client.exec_command(sudo=True, cmd=cmd)
+    except Exception:
+        raise OperationFailedError("Failed to pull SmallFile")

@@ -11,6 +11,8 @@ globals:
         role:
           - mon
           - mgr
+          - client
+          - nvmeof-gw
       node3:
         role:
           - mon
@@ -51,5 +53,8 @@ globals:
           - client
           - nvmeof-gw        # Multiple gateways in the cluster
       node11:
+        role:
+          - client
+      node12:
         role:
           - client

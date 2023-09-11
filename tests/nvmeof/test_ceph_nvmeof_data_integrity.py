@@ -1,4 +1,5 @@
 import json
+import time
 
 from ceph.ceph import Ceph
 from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
@@ -197,7 +198,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             # verifying data integrity on NVMe targets
             for target in targets["Devices"]:
                 nvme = generate_unique_id(length=4)
-                mount_point = f"/tmp/{nvme}"  # Change this to the desired mount point
+                mount_point = f"/mnt/{nvme}"  # Change this to the desired mount point
                 create_filesystem_and_mount(rbd_obj, target["DevicePath"], mount_point)
                 # FIO command to run on NVMe targets
                 fio_command = (
@@ -209,19 +210,25 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 # Run FIO for Writing the files
                 LOG.info("Running FIO for write operations.")
                 cmd_write = f"{fio_command} --name=writeiops --rw=randwrite"
-                rbd_obj.exec_cmd(cmd=cmd_write)
+                rbd_obj.exec_cmd(cmd=cmd_write, sudo=True)
                 # Calculate md5sum after FIO write
-                md5sum_write = rbd_obj.exec_cmd(cmd=f"md5sum {mount_point}/test.txt")
+                md5sum_write = rbd_obj.exec_cmd(
+                    cmd=f"md5sum {mount_point}/test.txt", sudo=True
+                )
                 # unmount the device
-                rbd_obj.exec_cmd(cmd=f"umount {mount_point}")
+                rbd_obj.exec_cmd(cmd=f"umount {mount_point}", sudo=True)
                 # mount the NVMe target
-                rbd_obj.exec_cmd(cmd=f"mount {target['DevicePath']} {mount_point}")
+                rbd_obj.exec_cmd(
+                    cmd=f"mount {target['DevicePath']} {mount_point}", sudo=True
+                )
                 # Run FIO for reading the files
                 LOG.info("Running FIO for read operations.")
-                cmd_read = f"{fio_command} --name=readiops --rw=randread"
-                rbd_obj.exec_cmd(cmd=cmd_read)
+                cmd_read = f"sudo {fio_command} --name=readiops --rw=randread"
+                rbd_obj.exec_cmd(cmd=cmd_read, sudo=True)
                 # Calculate md5sum after FIO read
-                md5sum_read = rbd_obj.exec_cmd(cmd=f"md5sum {mount_point}/test.txt")
+                md5sum_read = rbd_obj.exec_cmd(
+                    cmd=f"md5sum {mount_point}/test.txt", sudo=True
+                )
 
                 # Compare md5sum values
                 if md5sum_write == md5sum_read:
@@ -234,15 +241,21 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     )
                     return 1
                 # copy the file to the local system
-                rbd_obj.exec_cmd(cmd=f"cp {mount_point}/test.txt /tmp/copy.txt")
+                rbd_obj.exec_cmd(
+                    cmd=f"cp {mount_point}/test.txt /tmp/copy.txt", sudo=True
+                )
                 # Rename the file
                 rbd_obj.exec_cmd(
-                    cmd=f"mv {mount_point}/test.txt {mount_point}/test1.txt"
+                    cmd=f"mv {mount_point}/test.txt {mount_point}/test1.txt", sudo=True
                 )
                 # Copy the file back to the NVMe target
-                rbd_obj.exec_cmd(cmd=f"cp /tmp/copy.txt {mount_point}/test1.txt")
+                rbd_obj.exec_cmd(
+                    cmd=f"cp /tmp/copy.txt {mount_point}/test1.txt", sudo=True
+                )
                 # Calculate md5sum after copying the file back to the NVMe target
-                md5sum_copy = rbd_obj.exec_cmd(cmd=f"md5sum {mount_point}/test1.txt")
+                md5sum_copy = rbd_obj.exec_cmd(
+                    cmd=f"md5sum {mount_point}/test1.txt", sudo=True
+                )
                 # Compare md5sum values
                 if md5sum_write == md5sum_copy:
                     LOG.info(
@@ -251,6 +264,37 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 else:
                     LOG.error(
                         f"Data integrity verification failed for copy and compare on {target['DevicePath']}."
+                    )
+                    return 1
+                # reboot the client node
+                initiator = get_node_by_id(ceph_cluster, config["initiator"]["node"])
+                initiator.exec_command(sudo=True, cmd="reboot", check_ec=False)
+                # Sleep before and after reconnect
+                time.sleep(60)
+                initiator.reconnect()
+                time.sleep(10)
+                # Connect to Initiator
+                if config.get("initiator"):
+                    targets = json.loads(
+                        initiators(ceph_cluster, gateway, config["initiator"])
+                    )
+                    LOG.info(f"Targets discovered: {targets}")
+                # mount the NVMe target
+                rbd_obj.exec_cmd(
+                    cmd=f"mount {target['DevicePath']} {mount_point}", sudo=True
+                )
+                # Calculate md5sum after reboot
+                md5sum_reboot = rbd_obj.exec_cmd(
+                    cmd=f"md5sum {mount_point}/test1.txt", sudo=True
+                )
+                # Compare md5sum values
+                if md5sum_write == md5sum_reboot:
+                    LOG.info(
+                        f"Data integrity verified successfully after reboot on {target['DevicePath']}."
+                    )
+                else:
+                    LOG.error(
+                        f"Data integrity verification failed after reboot on {target['DevicePath']}."
                     )
                     return 1
 
