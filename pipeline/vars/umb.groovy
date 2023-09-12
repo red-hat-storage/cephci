@@ -12,7 +12,7 @@ def postUMBTestQueue(def version, Map recipeMap, def scratch) {
     def payload = [
         "artifact": [
             "nvr": version,
-            "latest": recipeMap['tier-0'],
+            "latest": recipeMap['latest'],
             "stable": stableBuild,
             "scratch": scratch
         ],
