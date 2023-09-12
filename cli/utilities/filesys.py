@@ -1,6 +1,10 @@
 from cli import Cli
 
 
+class MountFailedError(Exception):
+    pass
+
+
 class Mount(Cli):
     """This module provides CLI support for mount operations"""
 
@@ -20,10 +24,14 @@ class Mount(Cli):
         """
         # Create the mount point
         cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port} {server}:{export} {mount}"
-        out = self.execute(sudo=True, cmd=cmd)
+        self.execute(sudo=True, long_running=True, cmd=cmd)
+
+        out = self.execute(sudo=True, cmd="mount")
         if isinstance(out, tuple):
-            return out[0].strip()
-        return out
+            out = out[0]
+
+        if not mount.rstrip("/") in out:
+            raise MountFailedError(f"Nfs mount failed: {out}")
 
 
 class Unmount(Cli):
