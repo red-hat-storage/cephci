@@ -19,9 +19,6 @@ def run(ceph_cluster, **kw):
     log.info("Running Ceph-admin NVMeoF test")
     config = kw.get("config")
 
-    build = config.get("build", config.get("rhbuild"))
-    ceph_cluster.rhcs_version = build
-
     # Manage Ceph using ceph-admin orchestration
     command = config.pop("command")
     log.info("Executing Ceph NVMeoF %s service" % command)

@@ -9,9 +9,11 @@ import plotly.io as pio
 import yaml
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
+from ceph.nvmeof.gateway import delete_gateway
+from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from tests.cephadm import test_nvmeof
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
     disconnect_initiator,
@@ -58,9 +60,8 @@ def calculate_average(data):
     averages = {}
     dict1 = data[0]
     for key in dict1.keys():
-        values = [
-            d[key] for d in dicts
-        ]  # Get the values for the current key from all dictionaries
+        values = [d[key] for d in dicts]
+        # Get the values for the current key from all dictionaries
         average = sum(values) / len(values)  # Calculate the average
         averages[key] = average
 
@@ -450,13 +451,23 @@ def nvmeof(ceph_cluster, **args):
 
     # Configure NVMEoF Gateway
     gw_node = get_node_by_id(ceph_cluster, args["gw_node"])
-    gateway = Gateway(gw_node)
+    gateway = NVMeCLI(gw_node)
     initiator = get_node_by_id(ceph_cluster, args["initiator_node"])
     initiator.exec_command(cmd=f"mkdir -p {ARTIFACTS_DIR}", sudo=True)
 
     # Install Gateway
     if args.get("install_gw"):
-        configure_spdk(gw_node, pool)
+        cfg = {
+            "config": {
+                "command": "apply",
+                "service": "nvmeof",
+                "args": {
+                    "placement": {"nodes": [args["gw_node"]]},
+                },
+                "pos_args": [pool],
+            }
+        }
+        test_nvmeof.run(ceph_cluster, **cfg)
 
     for count in range(args["iterations"]):
         name = generate_unique_id(4)
@@ -466,6 +477,7 @@ def nvmeof(ceph_cluster, **args):
             "allow_host": "*",
             "listener_port": find_free_port(gw_node),
             "node": args["gw_node"],
+            "gateway-name": find_client_daemon_id(ceph_cluster, pool),
         }
         initiator_cfg = {
             "subnqn": subsystem["nqn"],

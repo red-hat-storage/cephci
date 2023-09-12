@@ -120,10 +120,10 @@ class NVMeCLI:
         args = {
             "subnqn": subnqn,
             "trsvcid": port,
-            "gateway-name": kwargs.get("gateway-name", False),
+            "gateway-name": kwargs["gateway-name"],
+            "traddr": kwargs["traddr"],
             "trtype": kwargs.get("trtype", False),
             "adrfam": kwargs.get("adrfam", False),
-            "traddr": kwargs.get("traddr", False),
         }
         return self.run_control_cli("create_listener", **args)
 
@@ -144,37 +144,3 @@ class NVMeCLI:
             "traddr": kwargs.get("traddr", False),
         }
         return self.run_control_cli("delete_listener", **args)
-
-    # # workflows
-    # def configure_subsystems(self, config):
-    #     """Configure Ceph-NVMEoF Subsystems."""
-    #     sub_nqn = config["nqn"]
-    #     max_ns = config.get("max_ns", 32)
-    #     config
-    #     self.create_subsystem(sub_nqn, config["serial"], max_ns)
-    #     self.create_listener(sub_nqn, config["listener_port"])
-    #     self.add_host(sub_nqn, config["allow_host"])
-    #     if config.get("bdevs"):
-    #         name = generate_unique_id(length=4)
-    #         with parallel() as p:
-    #             count = config["bdevs"].get("count", 1)
-    #             size = config["bdevs"].get("size", "1G")
-    #             # Create image
-    #             for num in range(count):
-    #                 p.spawn(rbd.create_image, pool, f"{name}-image{num}", size)
-    #
-    #         with parallel() as p:
-    #             # Create block device in gateway
-    #             for num in range(count):
-    #                 p.spawn(
-    #                     self.create_block_device,
-    #                     f"{name}-bdev{num}",
-    #                     f"{name}-image{num}",
-    #                     pool,
-    #                 )
-    #
-    #         with parallel() as p:
-    #             # Add namespace
-    #             for num in range(count):
-    #                 p.spawn(gw.add_namespace, sub_nqn, f"{name}-bdev{num}")
-    #     pass

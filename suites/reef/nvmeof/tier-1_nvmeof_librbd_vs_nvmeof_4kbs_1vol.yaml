@@ -117,7 +117,7 @@ tests:
               initiator_node: node7   # client node
 
   - test:
-      name: libRBD VS NVMeoF Random-WRITE-READ-IOType 4kblocksize single 10G-vol
+      name: libRBD VS NVMeoF Random-WRITE-READ-IOType 4kblocksize single-10G-vol
       description: Random Read and Write IOType comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
       config:
