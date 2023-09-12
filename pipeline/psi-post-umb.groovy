@@ -5,7 +5,12 @@
     modified releases are then compared against a the list of feature complete releases.
     A message is posted for the filtered list.
 */
-def featureCompleteReleases = ['RHCEPH-4.3.yaml', 'RHCEPH-5.3.yaml', 'RHCEPH-6.0.yaml']
+def featureCompleteReleases = [
+    'RHCEPH-5.3.yaml',
+    'RHCEPH-6.0.yaml',
+    'RHCEPH-6.1.yaml',
+    'RHCEPH-7.0.yaml'
+]
 
 node('rhel-9-medium || ceph-qe-ci') {
     stage('prepareNode') {
