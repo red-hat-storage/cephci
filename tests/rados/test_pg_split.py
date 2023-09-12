@@ -40,37 +40,64 @@ def run(ceph_cluster, **kw):
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
         write_to_pools(config, rados_obj, client_node)
+        log.debug("Completed writing objects into pool")
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
-        prop = rados_obj.get_pool_property(pool=pool["pool_name"], props="pg_num")
-        if not pool["pg_num"] == prop["pg_num"]:
+
+        init_pg_count = rados_obj.get_pool_property(
+            pool=pool["pool_name"], props="pg_num"
+        )["pg_num"]
+        if not pool["pg_num"] == init_pg_count:
             log.error(
-                f"Actual pg_num {prop['pg_num']} does not match with expected pg_num {pool['pg_num']}"
+                f"Actual pg_num {init_pg_count} does not match with expected pg_num {pool['pg_num']}"
             )
             raise Exception(
-                f"Actual pg_num {prop['pg_num']} does not match with expected pg_num {pool['pg_num']}"
+                f"Actual pg_num {init_pg_count} does not match with expected pg_num {pool['pg_num']}"
             )
         bulk = pool_obj.get_bulk_details(pool["pool_name"])
         if bulk:
             log.error("Expected bulk flag should be False.")
             raise Exception("Expected bulk flag should be False.")
+
+        log.debug(
+            f"Bulk flag not enabled on pool {pool['pool_name']}, Proceeding to enable bulk"
+        )
         new_bulk = pool_obj.set_bulk_flag(pool["pool_name"])
         if not new_bulk:
             log.error("Expected bulk flag should be True.")
             raise Exception("Expected bulk flag should be True.")
+        # Sleeping for 60 seconds for bulk flag application and PG count to be increased.
+        time.sleep(60)
+
+        pg_count_bulk_true = rados_obj.get_pool_details(pool=pool["pool_name"])[
+            "pg_num_target"
+        ]
+        log.debug(
+            f"PG count on pool {pool['pool_name']} post addition of bulk flag : {pg_count_bulk_true}"
+        )
+        if pg_count_bulk_true < init_pg_count:
+            raise Exception(
+                f"Actual pg_num {pg_count_bulk_true} is expected to be greater than {init_pg_count}"
+            )
         if pool.get("restart_osd", False):
+            log.debug(
+                f"Proceeding to restart OSDs when PG splits are in progress for pool {pool['pool_name']}"
+            )
             acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
-            log.info(f"Acting set {acting_pg_set}")
+            log.info(f"Acting set {acting_pg_set} for pool {pool['pool_name']}")
             if not acting_pg_set:
                 log.error("Failed to retrieve acting pg set")
                 raise Exception("Failed to retrieve acting pg set")
-            osd_id = acting_pg_set[0]
-            if not rados_obj.change_osd_state(action="stop", target=osd_id):
-                log.error(f"Unable to stop the OSD : {osd_id}")
-                raise Exception(f"Unable to stop the OSD : {osd_id}")
-            if not rados_obj.change_osd_state(action="start", target=osd_id):
-                log.error(f"Unable to start the OSD : {osd_id}")
-                raise Exception(f"Unable to start the OSD : {osd_id}")
+            for osd_id in acting_pg_set:
+                if not rados_obj.change_osd_state(action="restart", target=osd_id):
+                    log.error(f"Unable to restart the OSD : {osd_id}")
+                    raise Exception(f"Unable to restart the OSD : {osd_id}")
+            log.info("Completed reboots for OSDs during PG split scenarios")
+
         if pool.get("del_obj", False):
+            log.info(
+                f"Deleting objects from the pool when PG splits are in progress"
+                f"\n on Pool : {pool['pool_name']}"
+            )
             del_objects = [
                 {"name": f"obj{i}"} for i in range(pool.get("objs_to_del", 5))
             ]
@@ -79,48 +106,85 @@ def run(ceph_cluster, **kw):
             ):
                 log.error("Failed to delete objects from pool.")
                 raise Exception("Failed to delete objects from pool.")
+            log.info("Completed deletion of objects from the pool")
+
         time.sleep(40)
+        log.debug(
+            f" waiting for PGs to settle down on pool {pool['pool_name']} after applying bulk flag"
+        )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=400)
+
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=3000)
         while datetime.datetime.now() < endtime:
-            new_prop = rados_obj.get_pool_property(
+            pool_pg_num = rados_obj.get_pool_property(
                 pool=pool["pool_name"], props="pg_num"
-            )
-            if new_prop["pg_num"] > prop["pg_num"]:
+            )["pg_num"]
+            if pool_pg_num == pg_count_bulk_true:
+                log.debug(f"PG count on pool {pool['pool_name']} is achieved")
                 break
-            log.error(
-                f"Actual pg_num {new_prop['pg_num']} is expected to be greater than {prop['pg_num']}"
+            log.debug(
+                f"PG count on pool {pool['pool_name']} has not reached desired levels."
+                f"Expected : {pg_count_bulk_true}, Current : {pool_pg_num}"
             )
-            log.info("Sleeping for 40 secs")
-            time.sleep(40)
+            log.info("Sleeping for 20 secs and checking again")
+            time.sleep(20)
         else:
             raise Exception(
-                f"Actual pg_num {new_prop['pg_num']} is expected to be greater than {prop['pg_num']}"
+                f"pg_num on pool {pool['pool_name']} did not reach the desired levels of PG count "
+                f"with bulk flag enabled"
+                f"Expected : {pg_count_bulk_true}"
             )
-        pool_obj.rm_bulk_flag(pool["pool_name"])
-        time.sleep(10)
-        rm_bulk = pool_obj.get_bulk_details(pool["pool_name"])
-        if rm_bulk:
-            log.error("Expected bulk flag should be False.")
+        log.info(
+            "PGs increased to desired levels after application of bulk flag on the pool"
+        )
+
+        log.info(
+            f"Proceeding to remove the bulk flag from the pool : {pool['pool_name']}"
+        )
+        if not pool_obj.rm_bulk_flag(pool["pool_name"]):
+            log.error(
+                f"Could not remove the bulk flag from the pool {pool['pool_name']}"
+            )
             raise Exception("Expected bulk flag should be False.")
-        time.sleep(20)
+
+        time.sleep(60)
+        log.debug(
+            f" waiting for PGs to settle down on pool {pool['pool_name']} after removing bulk flag"
+        )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=400)
+        pg_count_bulk_false = rados_obj.get_pool_details(pool=pool["pool_name"])[
+            "pg_num_target"
+        ]
+        log.debug(
+            f"PG count on pool {pool['pool_name']} post removal of bulk flag : {pg_count_bulk_false}"
+        )
+        if pg_count_bulk_true < pg_count_bulk_false:
+            raise Exception(
+                f"pg_num {pg_count_bulk_true} is expected to be greater than {pg_count_bulk_false} after bulk removal"
+            )
+
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=3000)
         while datetime.datetime.now() < endtime:
-            new_prop1 = rados_obj.get_pool_property(
+            pool_pg_num = rados_obj.get_pool_property(
                 pool=pool["pool_name"], props="pg_num"
-            )
-            if new_prop1["pg_num"] < new_prop["pg_num"]:
+            )["pg_num"]
+            if pool_pg_num == pg_count_bulk_false:
+                log.debug(f"PG count on pool {pool['pool_name']} is achieved")
                 break
-            log.error(
-                f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
+            log.debug(
+                f"PG count on pool {pool['pool_name']} has not reached desired levels."
+                f"Expected : {pg_count_bulk_false}, Current : {pool_pg_num}"
             )
-            log.info("Sleeping for 40 secs")
-            time.sleep(40)
+            log.info("Sleeping for 20 secs and checking again")
+            time.sleep(20)
         else:
             raise Exception(
-                f"Actual pg_num {new_prop1['pg_num']} is expected to be smaller than {new_prop['pg_num']}"
+                f"pg_num on pool {pool['pool_name']} did not reach the desired levels of PG count"
+                f"with bulk flag disabled \n Expected : {pg_count_bulk_false}"
             )
+        log.info(
+            "PGs decreased to desired levels after removal of bulk flag on the pool"
+        )
 
     except Exception as e:
         log.info(e)

@@ -108,7 +108,7 @@ tests:
         create_pools:
           - create_pool:
               pool_name: pool1
-              pg_num: 64
+              pg_num: 32
               rados_put: true
               num_objs: 200
               byte_size: 1024
@@ -125,14 +125,14 @@ tests:
         create_pools:
           - create_pool:
               restart_osd: true
-              pool_name: pool1
-              pg_num: 64
+              pool_name: pool2
+              pg_num: 32
               rados_put: true
               num_objs: 200
               byte_size: 1024
               pool_type: replicated
         delete_pools:
-          - pool1
+          - pool2
 
   - test:
       name: Verify delete object during PG split
@@ -143,12 +143,12 @@ tests:
         create_pools:
           - create_pool:
               del_obj: true
-              pool_name: pool1
-              pg_num: 64
+              pool_name: pool3
+              pg_num: 32
               rados_put: true
               num_objs: 200
               objs_to_del: 20
               byte_size: 1024
               pool_type: replicated
         delete_pools:
-          - pool1
+          - pool3

@@ -1,5 +1,8 @@
 from cli import Cli
 from cli.exceptions import NotSupportedError
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class ContainerRegistryError(Exception):
@@ -136,3 +139,35 @@ class Container(Cli):
 
         if self.execute(sudo=True, long_running=True, cmd=cmd):
             raise ContainerRegistryError(f"Failed to pull container image '{image}'")
+
+    def rmi(self, image):
+        """Remove container image
+
+        Args:
+            image (str): Container image url
+        """
+
+        cmd = f"{self.base_cmd} rmi {image}"
+
+        if self.execute(sudo=True, long_running=True, cmd=cmd):
+            raise ContainerRegistryError(f"Failed to remove container image '{image}'")
+
+    def inspect(self, image, format=None):
+        """Inspect container image
+
+        Args:
+            image (str): Container image url
+            format (str): String to format
+        """
+
+        cmd = f"{self.base_cmd} inspect {image}"
+
+        if format:
+            cmd += f" --format={format}"
+
+        out = self.execute(sudo=True, cmd=cmd)
+
+        if not out:
+            raise ContainerRegistryError(f"Failed to inspect container image '{image}'")
+
+        return out
