@@ -1,7 +1,10 @@
+import re
+
 from cli import Cli
 from cli.utilities.utils import verify_execution_status
 
 RPM_QUERY_ERROR_MSG = "package {} is not installed"
+RPM_REGEX = r"Version\s+:\s+(\d+\.\d+)"
 
 
 class PackageError(Exception):
@@ -83,6 +86,23 @@ class Package(Cli):
         elif out:
             raise PackageError(f"Failed to install package '{pkg}'")
 
+    def remove(self, pkgs, nogpgcheck=False):
+        """Remove a package or packages
+
+        Args:
+            pkg (list): package needs to be removed
+            env_vars (dict): dictiory with environment variables
+        """
+        pkgs = pkgs if type(pkgs) in (list, tuple) else [pkgs]
+
+        cmd = f"{self.manager} remove -y {' '.join(pkgs)}"
+        if nogpgcheck:
+            cmd += " --nogpgcheck"
+
+        out = self.execute(sudo=True, long_running=True, cmd=cmd)
+        if out:
+            raise PackageError("Failed to remove package " + " ".join(pkgs))
+
     def upgrade(self, pkg):
         """upgrade a package or packages
 
@@ -129,6 +149,22 @@ class Package(Cli):
         out = self.execute(sudo=True, cmd="pip3 list")
         if pkg not in out[0]:
             raise PackageError(f"Failed to install package '{pkg}'")
+
+    def compare(self, pkg, version):
+        """Compare package version
+
+        Args:
+            pkg (str): package need to compare
+            version (str): package version
+        """
+        out = self.info(pkg)
+        _version = re.search(RPM_REGEX, out).group(1)
+        if _version < version:
+            return -1
+        elif _version == version:
+            return 0
+        else:
+            return 1
 
 
 class SubscriptionManager(Cli):
