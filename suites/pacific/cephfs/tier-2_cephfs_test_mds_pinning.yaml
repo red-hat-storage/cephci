@@ -200,3 +200,9 @@ tests:
       polarion-id: CEPH-11233
       desc: Subtree Split and Subtree merging by pinning Subtrees/directories to MDS.
       abort-on-fail: false
+  - test:
+      name: map and unmap directory trees to a mds rank
+      module: cephfs_mds_pinning.map_and_unmap_directory_trees_to_a_mds_rank.py
+      polarion-id: CEPH-83574329
+      desc: map and unmap directory trees to a mds rank
+      abort-on-fail: false
