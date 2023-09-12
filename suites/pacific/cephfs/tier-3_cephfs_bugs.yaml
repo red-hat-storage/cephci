@@ -1,13 +1,15 @@
 #=======================================================================================================================
 # Tier-level: 3
 # Test-Suite: cephfs_bugs
-# Conf file : conf/pacific/cephfs/tier-3_cephfs_bugs.yaml
+# Conf file : conf/pacific/cephfs/tier-3_cephfs_4clients_4osd.yaml
 # Description - This test suite contains tests which were automated during bug verification
 # Test-Case Covered:
   # CEPH-11260 - Change replication size of Cephfs pools increase and decrease, with client IO
   # CEPH-83574833 - Performace test for file write_sync() on cephfs kernel mount
   # CEPH-83574632 - Allow recreating file system with specific fscid
   # CEPH-83572726 - Active-Active MDS with multiclients to verify the race condition
+  # CEPH-83575622 - create a file(fileA) , create a hard link (fileB),
+  #          remove the fileA first and then fileB and run this in a loop for some time and check for deadlock
 #=======================================================================================================================
 ---
 tests:
@@ -166,4 +168,10 @@ tests:
       module: cephfs_bugs.verify_race_condition_between_MDS.py
       polarion-id: CEPH-83572726
       desc: Active-Active MDS with multiclients to verify the race condition
+      abort-on-fail: false
+  - test:
+      name: Validate deadlock between unlink and rename
+      module: cephfs_bugs.test_validate_deadlock_bw_unlink_and_rename.py
+      polarion-id: CEPH-83575622
+      desc: Validate deadlock between unlink and rename
       abort-on-fail: false
