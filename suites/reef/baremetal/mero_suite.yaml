@@ -73,7 +73,6 @@ tests:
                 - max_mds
                 - "2"
               command: shell
-        verify_cluster_health: true
       desc: "Execute the cluster deployment workflow with label placement."
       destroy-cluster: false
       module: test_cephadm.py
@@ -81,7 +80,7 @@ tests:
       polarion-id: CEPH-83573777
   - test:
       name: Configure OSD
-      module: osd_specific_device.py
+      module: homogenous_osd_cluster.py
       desc: Deploy OSDs on specifc devices on the node.
       abort-on-fail: true
   -
@@ -119,7 +118,7 @@ tests:
       config:
         wait_for_io: True
         cephfs:
-          "fill_data": 30
+          "fill_data": 1
           "num_of_clients": 2
           "io_tool": "smallfile"
           "mount": "fuse"

@@ -78,14 +78,17 @@ def smallfile_io(client, **kwargs):
                     log.info("All the Containers have been Exited")
                     break
                 sleep(30)
-        check_command = (
-            "podman ps -a --format '{{.Names}} {{.Status}}' | grep 'Exited (1)'"
-        )
-        out, rc = client.exec_command(sudo=True, cmd=check_command, check_ec=False)
-        failed_containers += out.strip().split("\n")
-        if failed_containers:
-            for service in failed_containers:
-                log.info(f"Failed Service : {service}")
+            check_command = (
+                "podman ps -a --format '{{.Names}} {{.Status}}' | grep 'Exited (1)'"
+            )
+            out, rc = client.exec_command(sudo=True, cmd=check_command, check_ec=False)
+            failed_containers += out.strip().split("\n")
+            if failed_containers:
+                for service in failed_containers:
+                    log.info(f"Failed Service : {service}")
+            log.info("removing Containers")
+            client.exec_command(sudo=True, cmd="podman rm -f $(podman ps -aq)")
+
     else:
         for op in ops:
             for i in range(0, iter):

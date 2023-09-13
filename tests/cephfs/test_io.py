@@ -51,16 +51,6 @@ def run(ceph_cluster, **kw):
                 if not out:
                     break
                 sleep(30)
-            out, rc = clients[0].exec_command(sudo=True, cmd="podman ps -a -q")
-            contiainter_ids = out.strip().split("\n")
-            for container_id in contiainter_ids:
-                out, rc = clients[0].exec_command(
-                    sudo=True, cmd=f"podman rm {container_id}"
-                )
-                if out:
-                    print(out)
-                else:
-                    print(f"Container {container_id} removed")
         out, rc = clients[0].exec_command(sudo=True, cmd="ceph df")
         log.info(out)
         return 0
