@@ -1,3 +1,4 @@
+import json
 import secrets
 import string
 import traceback
@@ -69,8 +70,8 @@ def run(ceph_cluster, **kw):
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.split()
+        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+        output = json.loads(out)
         if nfs_name in output:
             log.info("ceph nfs cluster created successfully")
         else:

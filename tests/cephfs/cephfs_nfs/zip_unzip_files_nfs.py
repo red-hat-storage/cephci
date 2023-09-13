@@ -1,8 +1,11 @@
+import json
 import secrets
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
 
 log = Log(__name__)
@@ -45,6 +48,17 @@ def run(ceph_cluster, **kw):
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"
+        client1.exec_command(
+            sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
+        )
+        if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
+            raise CommandFailed("Cluster has not been created")
+        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+        output = json.loads(out)
+        if nfs_name in output:
+            log.info("ceph nfs cluster created successfully")
+        else:
+            raise CommandFailed("Failed to create nfs cluster")
         nfs_export_name = "/export_" + "".join(
             secrets.choice(string.digits) for i in range(3)
         )
@@ -171,4 +185,9 @@ def run(ceph_cluster, **kw):
             client1.exec_command(sudo=True, cmd=command)
         client1.exec_command(
             sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/", check_ec=False
+        )
+        client1.exec_command(
+            sudo=True,
+            cmd=f"ceph nfs cluster delete {nfs_name}",
+            check_ec=False,
         )

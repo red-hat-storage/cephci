@@ -151,6 +151,5 @@ def run(ceph_cluster, **kw):
 def smallfile(client, mounting_dir, dir_name):
     client.exec_command(
         sudo=True,
-        cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 8 --file-size 10240 "
-        f"--files 10 --top {mounting_dir}{dir_name}",
+        cmd=f"dd if=/dev/zero of={mounting_dir}{dir_name} bs=100M " "count=10",
     )

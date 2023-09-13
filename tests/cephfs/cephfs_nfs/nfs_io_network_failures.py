@@ -1,3 +1,4 @@
+import json
 import secrets
 import string
 import traceback
@@ -15,6 +16,16 @@ log = Log(__name__)
 def run_io_commands(client, io_commands):
     for command in io_commands:
         client.exec_command(sudo=True, cmd=command, long_running=True)
+
+
+@retry(CommandFailed, tries=3, delay=60)
+def check_nfs_ls(client, nfs_cluster):
+    out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+    output = json.loads(out)
+    if nfs_cluster in output:
+        log.info("ceph nfs cluster created successfully")
+    else:
+        raise CommandFailed("Failed to create nfs cluster")
 
 
 def run(ceph_cluster, **kw):
@@ -67,12 +78,7 @@ def run(ceph_cluster, **kw):
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.split()
-        if nfs_name in output:
-            log.info("ceph nfs cluster created successfully")
-        else:
-            raise CommandFailed("Failed to create nfs cluster")
+        check_nfs_ls(client1, nfs_name)
         nfs_export_name = "/export_" + "".join(
             secrets.choice(string.digits) for i in range(3)
         )

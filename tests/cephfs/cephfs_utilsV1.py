@@ -2573,6 +2573,7 @@ os.system('sudo systemctl start  network')
         f()
         return f
 
+    @retry(CommandFailed, tries=3, delay=60)
     def cephfs_nfs_mount(self, client, nfs_server, nfs_export, nfs_mount_dir, **kwargs):
         """
         Mount cephfs nfs export
