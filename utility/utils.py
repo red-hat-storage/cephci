@@ -2284,3 +2284,19 @@ def save_client_config_keyring(**kw):
     return kw["client_node"].exec_command(
         cmd=f"sudo ceph auth get {kw['client_id']} -o /etc/ceph/ceph.{kw['client_id']}.keyring"
     )
+
+
+def get_sync_status(node):
+    log.info("getting sync status")
+    out, err = node.exec_command(cmd="sudo radosgw-admin sync status")
+    log.info(out)
+    return out
+
+
+def get_bucket_sync_status(node, bucket_name):
+    log.info("getting bucket sync status")
+    out, err = node.exec_command(
+        cmd=f"sudo radosgw-admin bucket sync status --bucket={bucket_name}"
+    )
+    log.info(out)
+    return out

@@ -6,7 +6,7 @@ Sample test script
     - test:
         abort-on-fail: true
         clusters:
-          ceph:
+          ceph-pri:
             config:
               controllers:
                 - node5
@@ -14,13 +14,17 @@ Sample test script
                 - node5
                 - node6
               fill_percent: 30
-      desc: prepare and push cosbench fill workload
-      module: push_cosbench_workload.py
-      name: push cosbench fill workload
+              record_sync_on_site: ceph-sec
+              record_sync_max_duration: 6 # in hours
+              record_sync_sleep_time: 15 # in minutes
+        desc: prepare and push cosbench fill workload
+        module: push_cosbench_workload.py
+        name: push cosbench fill workload
 """
 import json
 import math
 import time
+from datetime import datetime
 
 from ceph.utils import get_nodes_by_ids
 from tests.misc_env.cosbench import get_or_create_user
@@ -50,6 +54,8 @@ fill_workload = """<?xml version="1.0" encoding="UTF-8" ?>
 </workload>"""
 
 avail_storage = 0
+workload_file_id = ""
+bucket_name_prefix = ""
 
 
 def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
@@ -66,7 +72,7 @@ def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
     Returns:
         workload xml file name which is created on controller node
     """
-    global fill_workload, avail_storage
+    global fill_workload, avail_storage, workload_file_id, bucket_name_prefix
     keys = get_or_create_user(client)
     fill_workload = fill_workload.replace(
         "accesskey=x", f"accesskey={keys['access_key']}"
@@ -112,9 +118,8 @@ def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
 
     workload_file_id = utils.generate_unique_id(length=4)
     workload_file_name = f"fill-workload-{workload_file_id}.xml"
-    fill_workload = fill_workload.replace(
-        "pri-bkt", f"pri-bkt-{workload_file_id.lower()}-"
-    )
+    bucket_name_prefix = f"pri-bkt-{workload_file_id.lower()}-"
+    fill_workload = fill_workload.replace("pri-bkt", bucket_name_prefix)
 
     LOG.info(fill_workload)
     controller.exec_command(cmd=f"touch {workload_file_name}")
@@ -209,6 +214,41 @@ def push_workload(controller, client, workload_file_name):
     return workload_status
 
 
+def record_sync_status(record_sync_site_client, config):
+    global workload_file_id, bucket_name_prefix
+    LOG.info(
+        "creating a file to record sync status and bucket sync status until data is caught up"
+    )
+    sync_record_file_name = f"sync_record_{workload_file_id}"
+    record_sync_site_client.exec_command(cmd=f"touch {sync_record_file_name}")
+
+    record_sync_max_hrs = config.get("record_sync_max_duration", 6)
+    record_sync_max_min = record_sync_max_hrs * 60
+    sleep_time = config.get("record_sync_sleep_time", 15)
+    retry_limit = int(record_sync_max_min / sleep_time)
+    LOG.info(
+        f"waiting for sync to complete for a maximum of {record_sync_max_hrs} hours with {retry_limit} retries"
+        + f" and a sleep of {sleep_time} minutes between each retry"
+    )
+    for _ in range(retry_limit):
+        out = utils.get_sync_status(record_sync_site_client)
+        if "data is caught up with source" in out:
+            break
+        sync_record_file = record_sync_site_client.remote_file(
+            file_name=sync_record_file_name, file_mode="a"
+        )
+        sync_record_file.write(f"\n\n{datetime.now()}\n\n")
+        sync_record_file.write(out)
+        for bucket_index in range(1, 7):
+            sync_record_file.write("\n")
+            bucket_name = f"{bucket_name_prefix}{bucket_index}"
+            out = utils.get_bucket_sync_status(record_sync_site_client, bucket_name)
+            sync_record_file.write(out)
+        sync_record_file.flush()
+        LOG.info(f"sleeping for {sleep_time} minutes")
+        time.sleep(sleep_time * 60)
+
+
 def run(ceph_cluster, **kwargs) -> int:
     """
     preparing and pushing cosbench workload
@@ -220,14 +260,24 @@ def run(ceph_cluster, **kwargs) -> int:
         0 on Success and raises Exception on Failure.
     """
     LOG.info("preparing and pushing cosbench workload to fill 30% of the cluster")
-    controller = get_nodes_by_ids(ceph_cluster, kwargs["config"]["controllers"])[0]
+    clusters = kwargs.get("ceph_cluster_dict")
+    config = kwargs["config"]
+    controller = get_nodes_by_ids(ceph_cluster, config["controllers"])[0]
     client = ceph_cluster.get_nodes(role="installer")[0]
     rgw = ceph_cluster.get_nodes(role="rgw")[0]
+    record_sync_on_site = config.get("record_sync_on_site")
 
     workload_file_name = prepare_fill_workload(
-        ceph_cluster, client, rgw, controller, kwargs["config"]
+        ceph_cluster, client, rgw, controller, config
     )
     push_workload(controller, client, workload_file_name)
+    if record_sync_on_site:
+        record_sync_site = clusters.get(record_sync_on_site)
+        record_sync_site_client = record_sync_site.get_nodes(role="installer")[0]
+        record_sync_site_client.exec_command(
+            cmd="sudo yum install -y --nogpgcheck ceph-common"
+        )
+        record_sync_status(record_sync_site_client, config)
 
     LOG.info("Workload completed successfully!!!")
     return 0
