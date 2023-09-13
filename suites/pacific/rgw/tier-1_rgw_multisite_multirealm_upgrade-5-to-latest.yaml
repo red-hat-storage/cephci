@@ -23,7 +23,7 @@ tests:
                   service: cephadm
                   args:
                     rhcs-version: 5.3
-                    release: ga
+                    release: rc
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
@@ -83,7 +83,7 @@ tests:
                   service: cephadm
                   args:
                     rhcs-version: 5.3
-                    release: ga
+                    release: rc
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
