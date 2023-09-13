@@ -27,7 +27,7 @@ tests:
               service: cephadm
               args:
                 custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-5-rhel8:latest"
-                custom_repo: "http://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-5-rhel-9.repo"
+                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-5-rhel-9.repo"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
