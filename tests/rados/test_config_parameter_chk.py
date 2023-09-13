@@ -7,6 +7,7 @@ This method contains the scenarios to check the-
 5. Mclock reservation,weight and limit parameters are not modifiable
 """
 
+import time
 from configparser import ConfigParser
 
 from ceph.ceph_admin import CephAdmin
@@ -15,7 +16,6 @@ from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 
 log = Log(__name__)
-ini_file = "conf/quincy/rados/test-confs/rados_config_parameters.ini"
 
 
 def run(ceph_cluster, **kw):
@@ -24,12 +24,9 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     osd_list = []
     mclock_profile = ["balanced", "high_recovery_ops", "high_client_ops"]
-    # To get the parameters from the ini
     rados_object = RadosOrchestrator(node=cephadm)
     mon_object = MonConfigMethods(rados_obj=rados_object)
-
     config_info = ConfigParser()
-    config_info.read(ini_file)
 
     # To get the OSD list
     ceph_nodes = kw.get("ceph_nodes")
@@ -38,6 +35,8 @@ def run(ceph_cluster, **kw):
             node_osds = rados_object.collect_osd_daemon_ids(node)
             osd_list = osd_list + node_osds
     if config.get("scenario") == "msgrv2_5x":
+        ini_file = config.get("ini-file")
+        config_info.read(ini_file)
         msgr_parameter = config_info.items("MSGRV2")
         result = config_param_checker(mon_object, osd_list, msgr_parameter)
         if result:
@@ -45,6 +44,8 @@ def run(ceph_cluster, **kw):
             return 1
         return 0
     if config.get("scenario") == "msgrv2_6x":
+        ini_file = config.get("ini-file")
+        config_info.read(ini_file)
         msgr_parameter = config_info.items("MSGRV2")
         result = config_param_checker(mon_object, osd_list, msgr_parameter)
         if not result:
@@ -54,6 +55,8 @@ def run(ceph_cluster, **kw):
 
     # Checking all sleep parameters in mclock profiles
     if config.get("scenario") == "mclock_sleep":
+        ini_file = config.get("ini-file")
+        config_info.read(ini_file)
         mclock_sleep_parameters = config_info.items("Mclock_sleep")
         for profile in mclock_profile:
             mon_object.set_config(
@@ -82,11 +85,11 @@ def run(ceph_cluster, **kw):
                     return 1
         return 0
 
-    # Verifying the reservation, weight and limit parameters are not modifiable
-    # Currently a BZ raised on this feature. The number is BZ#2124137.
     change_backfill_values = [0, 1, 2, 3]
     chk_flag = False
     if config.get("scenario") == "mclock_chg_chk":
+        ini_file = config.get("ini-file")
+        config_info.read(ini_file)
         mclock_chg_parameters = config_info.items("Mclock_paramert_set")
         mclock_default_parmeters = config_info.items("Mclock_default")
         for profile in mclock_profile:
@@ -113,7 +116,6 @@ def run(ceph_cluster, **kw):
                     f"The default parameter values are correct for the {profile} profile"
                 )
                 # Changing the Recovery/Backfill options
-                # This scenario  is fail due to the BZ#2215272
                 try:
                     for parameter, old_value in zip(
                         mclock_default_parmeters, change_backfill_values
@@ -121,7 +123,8 @@ def run(ceph_cluster, **kw):
                         mon_object.set_config(
                             section="osd", name=parameter[0], value=old_value
                         )
-
+                    # Implicit Wait after set configuration
+                    time.sleep(5)
                     for parameter in mclock_default_parmeters:
                         for id in osd_list:
                             param_value = mon_object.show_config(
@@ -170,15 +173,22 @@ def run(ceph_cluster, **kw):
                         # Get the Value of the parameter using config show
                         old_value = mon_object.show_config("osd", id, param[0])
                         old_value = str(old_value).strip()
+                        old_value = int(old_value) if "wgt" in param[0] else old_value
                         log.debug(f"The {param[0]}  parameter value is{old_value} ")
                         chg_value = float(old_value) + float(param[-1])
+                        chg_value = int(chg_value) if "wgt" in param[0] else chg_value
                         # set the new value to OSDs
                         mon_object.set_config(
                             section="osd", name=param[0], value=chg_value
                         )
+                        # Implicit Wait after set configuration
+                        time.sleep(5)
                         # Get the new value of the parameter using config show
                         actual_value = mon_object.show_config("osd", id, param[0])
                         actual_value = str(actual_value).strip()
+                        actual_value = (
+                            int(actual_value) if "wgt" in param[0] else actual_value
+                        )
                         log.debug(
                             f"The {param[0]}  parameter value after setting is {actual_value}"
                         )
