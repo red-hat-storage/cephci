@@ -2944,3 +2944,19 @@ os.system('sudo systemctl start  network')
         log.info(service_ls)
         if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
             raise CommandFailed(f"All {service_name} are Not UP")
+
+    def get_ceph_health_status(self, client, validate=True):
+        """
+        Validate if the Ceph Health is OK or in ERROR State.
+        Args:
+            client : client node.
+        Return:
+            Status of the Ceph Health.
+        """
+        out, rc = client.exec_command(sudo=True, cmd="ceph -s -f json")
+        log.info(out)
+        health_status = json.loads(out)["health"]["status"]
+
+        if health_status != "HEALTH_OK":
+            raise CommandFailed(f"Ceph Cluster is in {health_status} State")
+        log.info("Ceph Cluster is Healthy")
