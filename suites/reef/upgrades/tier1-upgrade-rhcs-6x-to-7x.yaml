@@ -1,28 +1,26 @@
-#####################################################################################
-# Tier-level: 1
-# Test-Case: Automation support for upgrade from RHCS 6-GA to RHCS 7-Latest in RHEL9
+#################################################################################
+# Automation support for upgrade from RHCS5 to RHCS7 in RHEL9
 #
-# Cluster Configuration:
-#     conf/reef/upgrades/upgrade_4-node-cluster.yaml
+#--------------------------------------------------------------------------------
+# Cluster Configuration: conf/reef/upgrades/upgrade_4-node-cluster.yaml
+#--------------------------------------------------------------------------------
 #
 # Test Steps:
-#     - Deploy RHCS 6 GA cluster in RHEL 9
-#     - Upgrade cluster from RHCS 6 GA to RHCS 7 Latest
-#     - Validate cluster status
-#     - Run I/O's
-#####################################################################################
+#--------------------------------------------------------------------------------
+# - Deploy RHCS 6 cluster in RHEL 9
+# - Upgrade cluster from rhcs 6 to rhcs 7
+# - Validate cluster status
+# - Run I/O's
+#--------------------------------------------------------------------------------
+#################################################################################
 tests:
   - test:
       name: setup install pre-requisistes
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
-
   - test:
-      name: Deploy RHCS 6 GA cluster using cephadm
-      desc: Deploy RHCS 6 GA cluster using cephadm
-      module: test_cephadm.py
-      polarion-id: CEPH-83573777
+      abort-on-fail: true
       config:
         verify_cluster_health: true
         steps:
@@ -31,7 +29,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 6.1
-                release: ga
+                release: "rc"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -60,7 +58,7 @@ tests:
                 all-available-devices: true
           - config:
               command: shell
-              args:
+              args:          # arguments to ceph orch
                 - ceph
                 - fs
                 - volume
@@ -77,17 +75,17 @@ tests:
           - config:
               command: apply
               service: mds
-              base_cmd_args:
+              base_cmd_args:          # arguments to ceph orch
                 verbose: true
               pos_args:
-                - cephfs
+                - cephfs              # name of the filesystem
               args:
                 placement:
                   nodes:
                     - node2
-                    - node3
-                  limit: 2
-                  sep: " "
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
           - config:
               args:
                 - "ceph osd pool create rbd"
@@ -96,14 +94,13 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
-      destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: configure client
-      desc: Configure the RGW,RBD client system
-      module: test_client.py
+      desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy RHCS cluster using cephadm
+  - test:
+      abort-on-fail: true
       config:
         command: add
         id: client.1
@@ -111,14 +108,15 @@ tests:
         install_packages:
           - ceph-common
         copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
       destroy-cluster: false
-      abort-on-fail: true
-
+      module: test_client.py
+      name: configure client
   - test:
-      name: Upgrade cluster to latest 6.x ceph version
+      name: Upgrade cluster to latest 7.x ceph version
       desc: Upgrade cluster to latest version
       module: test_cephadm_upgrade.py
-      polarion-id: CEPH-83575570
+      polarion-id: CEPH-83573791,CEPH-83573790
       config:
         command: start
         service: upgrade
@@ -127,26 +125,21 @@ tests:
         verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true
-
   - test:
       name: Executes RGW, RBD and FS operations
       desc: Run object, block and filesystem basic operations parallelly.
       module: test_parallel.py
       parallel:
         - test:
-            name: Test M buckets with N objects
-            desc: test to create "M" no of buckets and "N" no of objects
-            module: sanity_rgw.py
-            polarion-id: CEPH-9789
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects.yaml
               timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
         - test:
-            name: Run RBD tier-0 operations
-            desc: Run RBD tier-0 operations
-            module: rbd_tier0.py
-            polarion-id: CEPH-83575401
             config:
               ec-pool-k-m: 2,1
               ec-pool-only: False
@@ -176,8 +169,14 @@ tests:
                 map: true
                 io: true
                 nounmap: false
+            desc: Run RBD tier-0 operations
+            polarion-id: CEPH-83575401
+            destroy-cluster: false
+            module: rbd_tier0.py
+            name: Run RBD tier-0 operations
         - test:
-            name: cephfs-basics
+            abort-on-fail: false
             desc: "cephfs basic operations"
             module: cephfs_basic_tests.py
+            name: cephfs-basics
             polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"

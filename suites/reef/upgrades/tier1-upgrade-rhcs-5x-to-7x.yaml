@@ -1,21 +1,17 @@
 #################################################################################
-# Tier-level: 1
-# Test-Suite: tier-2_upgrade_staggered_6x-to-7x.yaml
-# Test-Case: Automation support for staggered upgrade from RHCS6 to RHCS7 in RHEL9
+# Automation support for upgrade from RHCS5 to RHCS7 in RHEL9
 #
-# Cluster Configuration:
-#     conf/reef/upgrades/upgrade_4-node-cluster.yaml
+#--------------------------------------------------------------------------------
+# Cluster Configuration: conf/reef/upgrades/upgrade_4-node-cluster.yaml
+#--------------------------------------------------------------------------------
 #
 # Test Steps:
-#     - Deploy RHCS 5 cluster in RHEL 9
-#     - Configure client
-#     - Staggered upgrade with daemon types mgr,mon
-#     - Staggered upgrade with daemon-types osd
-#     - Staggered upgrade with osd services
-#     - Staggered upgrade with hosts
-#     - Staggered upgrade with services
-#     - Staggered upgrade with all combinations
-#     - Run I/O's
+#--------------------------------------------------------------------------------
+# - Deploy RHCS 5 cluster in RHEL 9
+# - Upgrade cluster from rhcs 5 to rhcs 7
+# - Validate cluster status
+# - Run I/O's
+#--------------------------------------------------------------------------------
 #################################################################################
 tests:
   - test:
@@ -23,12 +19,8 @@ tests:
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
-
   - test:
-      name: Deploy RHCS 6 GA cluster using cephadm
-      desc: bootstrap and deployment services with label placements.
-      polarion-id: CEPH-83573777
-      module: test_cephadm.py
+      abort-on-fail: true
       config:
         verify_cluster_health: true
         steps:
@@ -36,8 +28,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 6.1
-                release: "ga"
+                rhcs-version: 5.3
+                release: "rc"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -66,7 +58,7 @@ tests:
                 all-available-devices: true
           - config:
               command: shell
-              args:
+              args:          # arguments to ceph orch
                 - ceph
                 - fs
                 - volume
@@ -83,17 +75,17 @@ tests:
           - config:
               command: apply
               service: mds
-              base_cmd_args:
+              base_cmd_args:          # arguments to ceph orch
                 verbose: true
               pos_args:
-                - cephfs
+                - cephfs              # name of the filesystem
               args:
                 placement:
                   nodes:
                     - node2
-                    - node3
-                  limit: 2
-                  sep: " "
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
           - config:
               args:
                 - "ceph osd pool create rbd"
@@ -102,14 +94,13 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
-      destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: configure client
-      desc: Configure the RGW,RBD client system
-      module: test_client.py
+      desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy RHCS cluster using cephadm
+  - test:
+      abort-on-fail: true
       config:
         command: add
         id: client.1
@@ -117,99 +108,23 @@ tests:
         install_packages:
           - ceph-common
         copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      name: Upgrade cluster to latest 7.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791,CEPH-83573790
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true
-
-  - test:
-      name: Staggered upgrade with daemon types mgr,mon
-      desc: Staggered upgrade with daemon types mgr,mon
-      module: test_cephadm_staggered_upgrade.py
-      polarion-id: CEPH-83575554
-      config:
-        action: "daemon_types"
-        osd_flags:
-          - noout
-          - noscrub
-          - nodeep-scrub
-        daemon_types: mgr,mon
-
-  - test:
-      name: Staggered upgrade with daemon-types osd
-      desc: Staggered upgrade with daemon-types osd
-      module: test_cephadm_staggered_upgrade.py
-      polarion-id: CEPH-83575557
-      config:
-        action: "daemon_types"
-        osd_flags:
-          - noout
-          - noscrub
-          - nodeep-scrub
-        daemon_types: osd
-        limit: 30
-
-  - test:
-      name: Staggered upgrade with osd services
-      desc: Staggered upgrade with osd services
-      module: test_cephadm_staggered_upgrade.py
-      polarion-id: CEPH-83575558
-      config:
-        action: "services"
-        osd_flags:
-          - noout
-          - noscrub
-          - nodeep-scrub
-        services: osd.all-available-devices
-        limit: 30
-
-  - test:
-      name: Staggered upgrade with hosts
-      desc: Staggered upgrade with hosts
-      module: test_cephadm_staggered_upgrade.py
-      polarion-id: CEPH-83575556
-      config:
-        action: "hosts"
-        osd_flags:
-          - noout
-          - noscrub
-          - nodeep-scrub
-        nodes:
-          - node0
-          - node1
-          - node2
-          - node3
-
-  - test:
-      name: Staggered upgrade with services
-      desc: Staggered upgrade with services
-      module: test_cephadm_staggered_upgrade.py
-      polarion-id: CEPH-83575555
-      config:
-        action: "services"
-        osd_flags:
-          - noout
-          - noscrub
-          - nodeep-scrub
-        services: mds.cephfs
-
-  - test:
-      name: Staggered upgrade with all combinations
-      desc: Staggered upgrade with all combinations
-      module: test_cephadm_staggered_upgrade.py
-      polarion-id: CEPH-83575559
-      config:
-        action: "all_combination"
-        osd_flags:
-          - noout
-          - noscrub
-          - nodeep-scrub
-        daemon_types: osd
-        limit: 10
-        nodes:
-          - node0
-          - node1
-          - node2
-          - node3
-
   - test:
       name: Executes RGW, RBD and FS operations
       desc: Run object, block and filesystem basic operations parallelly.
