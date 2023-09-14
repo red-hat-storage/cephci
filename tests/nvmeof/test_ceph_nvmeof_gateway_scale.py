@@ -1,56 +1,28 @@
 """
-Test suite that verifies the deployment of Ceph NVMeoF Gateway
- with supported entities like subsystems , etc.,
-
+Test module to test NVMeOF single GW deployment and scale namespaces in single subsystem.
 """
 import json
+from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
-from ceph.nvmeof.gateway import (
-    Gateway,
-    configure_spdk,
-    delete_gateway,
-    fetch_gateway_log,
-)
+from ceph.ceph_admin.common import fetch_method
 from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
+from utility.retry import retry
 from utility.utils import generate_unique_id, run_fio
 
 LOG = Log(__name__)
 
 
-def configure_subsystems(rbd, pool, gw, config):
-    """Configure Ceph-NVMEoF Subsystems."""
-    sub_nqn = config["nqn"]
-    max_ns = config.get("max_ns", 32)
-    gw.create_subsystem(sub_nqn, config["serial"], max_ns)
-    gw.create_listener(sub_nqn, config["listener_port"])
-    gw.add_host(sub_nqn, config["allow_host"])
-    if config.get("bdevs"):
-        name = generate_unique_id(length=4)
-        count = config["bdevs"].get("count", 1)
-        size = config["bdevs"].get("size", "1G")
-        # Create image on ceph cluster
-        for num in range(count):
-            rbd.create_image(pool, f"{name}-image{num}", size)
-
-        # Create block device and add namespace in gateway
-        for num in range(count):
-            gw.create_block_device(f"{name}-bdev{num}", f"{name}-image{num}", pool)
-            gw.add_namespace(sub_nqn, f"{name}-bdev{num}")
-
-    gw.get_subsystems()
-
-
 def initiators(ceph_cluster, gateway, config):
-    """Run IOs from NVMe Initiators.
+    """Configure NVMe Initiators.
 
     - Discover NVMe targets
     - Connect to subsystem
-    - List targets and Run FIO on target devices.
 
     Args:
         ceph_cluster: Ceph cluster
@@ -67,14 +39,13 @@ def initiators(ceph_cluster, gateway, config):
     initiator = Initiator(client)
     cmd_args = {
         "transport": "tcp",
-        "traddr": gateway.node.ip_address,
+        "traddr": gateway.ip_address,
         "trsvcid": config["listener_port"],
     }
     json_format = {"output-format": "json"}
 
     # Discover the subsystems
-    _disc_cmd = {**cmd_args, **json_format}
-    sub_nqns, _ = initiator.discover(**_disc_cmd)
+    sub_nqns, _ = initiator.discover(**{**cmd_args | json_format})
     LOG.debug(sub_nqns)
     for nqn in json.loads(sub_nqns)["records"]:
         if nqn["trsvcid"] == str(config["listener_port"]):
@@ -87,11 +58,13 @@ def initiators(ceph_cluster, gateway, config):
     LOG.debug(initiator.connect(**cmd_args))
 
 
-def run_io(ceph_cluster, io):
-    """
+@retry(Exception, tries=5, delay=10)
+def run_io(ceph_cluster, num, io):
+    """Run IO on newly added namespace.
 
     Args:
         io: io args
+        num: Current Namespace number
         ceph_cluster: Ceph cluster
     """
     json_format = {"output-format": "json"}
@@ -100,11 +73,22 @@ def run_io(ceph_cluster, io):
     initiator = Initiator(client)
     # List NVMe targets.
     targets, _ = initiator.list(**json_format)
-    LOG.debug(targets)
+    data = json.loads(targets)
+    device_path = next(
+        (
+            device["DevicePath"]
+            for device in data["Devices"]
+            if device["NameSpace"] == num
+        ),
+        None,
+    )
+    LOG.debug(device_path)
 
-    for target in json.loads(targets)["Devices"]:
+    if device_path is None:
+        raise Exception("nvme volume not found")
+    else:
         io_args = {
-            "device_name": target["DevicePath"],
+            "device_name": device_path,
             "client_node": client,
             "run_time": "10",
             "long_running": True,
@@ -112,43 +96,13 @@ def run_io(ceph_cluster, io):
             "cmd_timeout": "notimeout",
         }
         result = run_fio(**io_args)
-        if result == 1:
+        if result != 0:
             raise Exception("FIO failure")
-
-
-def cleanup(ceph_cluster, rbd_obj, config):
-    """Cleanup the ceph-nvme gw entities.
-
-    Args:
-        ceph_cluster: Ceph Cluster
-        rbd_obj: RBD object
-        config: test config
-    """
-    if "initiators" in config["cleanup"]:
-        for initiator_cfg in config["initiators"]:
-            node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
-            initiator = Initiator(node)
-            initiator.disconnect(**{"nqn": initiator_cfg["subnqn"]})
-
-    if "subsystems" in config["cleanup"]:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        gateway = Gateway(gw_node)
-        for sub_cfg in config["subsystems"]:
-            gateway.delete_subsystem(**{"subnqn": sub_cfg["nqn"]})
-
-        if "gateway" in config["cleanup"]:
-            delete_gateway(gw_node)
-
-    if "pool" in config["cleanup"]:
-        rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
-    Return the status of the Ceph NVMEof test execution.
-
-    - Configure SPDK and install with control interface.
-    - Configures Initiators and Run FIO on NVMe targets.
+    Return the status of the test execution run with the provided keyword arguments.
 
     Args:
         ceph_cluster: Ceph cluster object
@@ -159,55 +113,107 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     Example:
         - test:
-            name: Ceph NVMeoF deployment
-            desc: Configure NVMEoF gateways and initiators
+            name: Scale to 256 namespaces in single subsystem on NVMeOF GW
+            desc: test with 1 subsystem and 256 namespaces in Single GW
             config:
-                gw_node: node6
-                rbd_pool: rbd
-                do_not_create_image: true
-                rep-pool-only: true
-                rep_pool_config:
-                  pool: rbd
-                  install: true                             # Run SPDK with all pre-requisites
-                subsystems:                                 # Configure subsystems with all sub-entities
-                  - nqn: nqn.2016-06.io.spdk:cnode2
-                    serial: 2
-                    bdevs:
-                      count: 1
-                      size: 100G
-                    listener_port: 5002
-                    allow_host: "*"
-                initiators:                                 # Configure Initiators with all pre-req
-                  - subnqn: nqn.2016-06.io.spdk:cnode2
-                    listener_port: 5002
-                    node: node6
-                run_io:
-                  - node: node6
+                steps:
+                    - config:
+                        command: get_subsystems
+                    - config:
+                        command: create_block_device
+                    - config:
+                         command: create_subsystem
+                         args:
+                           subnqn: nqn.2016-06.io.spdk:cnode1
+                           serial_num: 1
+                    - config:
+                          command: create_listener
+                          args:
+                            subnqn: nqn.2016-06.io.spdk:cnode1
+                            port: 5001
+                    - config:
+                          command: add_host
+                          args:
+                            subnqn: nqn.2016-06.io.spdk:cnode1
+                            hostnqn: *
+                    - config:
+                          command: add_namespace
+                          args:
+                            count: 256
+                            image_size: 500M
+                            pool: rbd
+                            subnqn: nqn.2016-06.io.spdk:cnode1
     """
-    LOG.info("Starting Ceph Ceph NVMEoF deployment.")
+    LOG.info("Configure Ceph NVMeoF entities at scale over CLI.")
+    config = deepcopy(kwargs["config"])
+    node = get_node_by_id(ceph_cluster, config["node"])
 
-    config = kwargs["config"]
-    rbd_pool = config["rbd_pool"]
+    rbd_pool = config.get("rbd_pool", "rbd_pool")
+    kwargs["config"].update(
+        {
+            "do_not_create_image": True,
+            "rep-pool-only": True,
+            "rep_pool_config": {"pool": rbd_pool},
+        }
+    )
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
+    nvme_cli = NVMeCLI(node, config.get("port", 5500))
     try:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        gateway = Gateway(gw_node)
+        steps = config.get("steps", [])
+        init_config = config.get("initiators")
+        for step in steps:
+            cfg = step["config"]
+            command = cfg.pop("command")
 
-        if config.get("install"):
-            configure_spdk(gw_node, rbd_pool)
+            if command in ["create_listener", "delete_listener"]:
+                client_id = find_client_daemon_id(
+                    ceph_cluster, pool_name=cfg["args"].pop("pool")
+                )
+                cfg["args"].update(
+                    {"gateway-name": client_id, "traddr": node.ip_address}
+                )
 
-        if config.get("subsystems"):
-            for subsystem in config["subsystems"]:
-                configure_subsystems(rbd_obj, rbd_pool, gateway, subsystem)
+            if command in ["add_namespace"]:
+                nqn = cfg["args"].pop("subnqn")
+                image_size = cfg["args"].pop("image_size")
+                pool = cfg["args"].pop("pool")
+                initiators(ceph_cluster, node, init_config)
+                name = generate_unique_id(length=4)
+                for num in range(
+                    cfg["args"].pop("start_count"), cfg["args"].pop("end_count")
+                ):
+                    rbd_obj.create_image(
+                        rbd_pool, f"{name}-image{num}", image_size
+                    )  # create image
 
-        if config.get("initiators"):
-            for initiator in config["initiators"]:
-                initiators(ceph_cluster, gateway, initiator)
+                    cfg["args"].clear()
+                    cfg["args"].update(
+                        {
+                            "name": f"{name}-bdev{num}",
+                            "image": f"{name}-image{num}",
+                            "pool": pool,
+                        }
+                    )
+                    bdev_func = fetch_method(
+                        nvme_cli, "create_block_device"
+                    )  # create_bdev
+                    bdev_func(**cfg["args"])
+                    cfg["args"].clear()
 
-        if config.get("run_io"):
-            for io in config["run_io"]:
-                run_io(ceph_cluster, io)
+                    cfg["args"].update({"bdev": f"{name}-bdev{num}", "subnqn": nqn})
+                    namespace_func = fetch_method(nvme_cli, command)  # add namespaces
+                    namespace_func(**cfg["args"])
+                    for io in config["run_io"]:
+                        run_io(ceph_cluster, num, io)
+
+            else:
+                func = fetch_method(nvme_cli, command)
+
+                # Avoiding exception if no args
+                if "args" not in cfg:
+                    cfg["args"] = {}
+                func(**cfg["args"])
 
         instance = CephAdmin(cluster=ceph_cluster, **config)
         ceph_usage, _ = instance.installer.exec_command(
@@ -225,14 +231,22 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         )
         LOG.info(health)
 
-        return 0
-    except Exception as err:
-        LOG.error(err)
-    finally:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        fetch_gateway_log(gw_node)
-        if config.get("cleanup"):
-            rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
-            cleanup(ceph_cluster, rbd_obj, config)
+    except BaseException as be:  # noqa
+        LOG.error(be, exc_info=True)
+        instance = CephAdmin(cluster=ceph_cluster, **config)
+        ceph_usage, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph df", sudo=True
+        )
+        LOG.info(ceph_usage)
 
-    return 1
+        rbd_usage, _ = instance.installer.exec_command(
+            cmd="cephadm shell rbd du", sudo=True
+        )
+        LOG.info(rbd_usage)
+
+        health, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph -s", sudo=True
+        )
+        LOG.info(health)
+        return 1
+    return 0
