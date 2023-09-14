@@ -357,3 +357,21 @@ tests:
       desc: prepare and push cosbench fill workload
       module: push_cosbench_workload.py
       name: push cosbench fill workload
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - folio01
+            drivers: # if drivers are not specified will use one of the rgw node
+              - folio01
+              - folio02
+              - folio03
+            fill_percent: 30
+            workload_type: hybrid
+            run_time: 3600 # value in seconds
+      desc: initiate cosbench hybrid workload
+      module: push_cosbench_workload.py
+      name: push cosbench hybrid workload

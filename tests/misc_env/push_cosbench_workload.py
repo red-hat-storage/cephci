@@ -36,6 +36,7 @@ LOG = Log(__name__)
 
 fill_workload = """<?xml version="1.0" encoding="UTF-8" ?>
 <workload name="fillCluster-s3" description="RGW testing">
+
 <!-- Initialization -->
   <storage type="s3" config="timeout=900000;accesskey=x;secretkey=y;endpoint=workload_endpoint;path_style_access=true"/>
   <auth type="none"/>
@@ -43,24 +44,45 @@ fill_workload = """<?xml version="1.0" encoding="UTF-8" ?>
 
 <!-- Initialization -->
     <workstage name="init_containers">
-        <work type="init" workers="1" config="cprefix=pri-bkt;containers=r(1,6)"/>
+        <work type="init" workers="1" config="cprefix=bucket_prefix;containers=r(1,6)"/>
     </workstage>
 
     <workstage name="preparing_cluster">
-        <work type="prepare" workers="1" config="cprefix=pri-bkt;containers=r(1,6);oprefix=pri-obj;
+        <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,6);oprefix=pri-obj;
         objects=r(1,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
     </workstage>
   </workflow>
 </workload>"""
 
 avail_storage = 0
-workload_file_id = ""
-bucket_name_prefix = ""
+bucket_prefix = ""
+
+hybrid_workload = """<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="worklaodhybrid" description="RGW testing">
+  <storage type="s3" config="timeout=900000;accesskey=x;secretkey=y;endpoint=workload_endpoint;path_style_access=true"/>
+  <auth type="none"/>
+  <workflow>
+    <workstage name="MAIN">
+        <work name="hybrid" workers="1" runtime="run_time" >
+            <operation name="writeOP" type="write" ratio="36" config="cprefix=bucket_prefix;containers=u(1,2);
+            oprefix=pri-obj;objects=u(1,objects_count);
+            sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
+            <operation name="deleteOP" type="delete" ratio="5" config="cprefix=bucket_prefix;containers=u(3,4);
+            oprefix=pri-obj;objects=u(1,objects_count);
+            sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
+            <operation name="readOP" type="read" ratio="44" config="cprefix=bucket_prefix;containers=u(5,6);
+            oprefix=pri-obj;objects=u(1,objects_count)" />
+            <operation name="listOP" type="list" ratio="15" config="cprefix=bucket_prefix;containers=u(5,6);
+            oprefix=pri-obj;objects=u(1,objects_count)" />
+        </work>
+    </workstage>
+  </workflow>
+</workload>"""
 
 
-def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
+def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     """
-    preparing cosbench workload from the template
+    cosbench workload from the template
 
     Args:
         ceph_cluster:   Cluster participating in the test.
@@ -72,12 +94,18 @@ def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
     Returns:
         workload xml file name which is created on controller node
     """
-    global fill_workload, avail_storage, workload_file_id, bucket_name_prefix
+    global fill_workload, avail_storage, hybrid_workload, bucket_prefix
+    workload_type = config.get("workload_type", "fill")
+    workload_conf = fill_workload if workload_type == "fill" else hybrid_workload
+    bucket_prefix = config.get("bucket_prefix", "pri-bkt")
+    workload_conf = workload_conf.replace("bucket_prefix", f"{bucket_prefix}")
+    run_time = config.get("run_time", 3600)
+    workload_conf = workload_conf.replace("run_time", f"{run_time}")
     keys = get_or_create_user(client)
-    fill_workload = fill_workload.replace(
+    workload_conf = workload_conf.replace(
         "accesskey=x", f"accesskey={keys['access_key']}"
     )
-    fill_workload = fill_workload.replace(
+    workload_conf = workload_conf.replace(
         "secretkey=y", f"secretkey={keys['secret_key']}"
     )
 
@@ -92,7 +120,7 @@ def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
     # using the average size to find number of objects
     objects_count = math.floor(bytes_to_fill * 100 / (40456 * 1024))
     LOG.info(f"no of objects for an average of sizes in workload: {objects_count}")
-    fill_workload = fill_workload.replace("objects_count", f"{objects_count}")
+    workload_conf = workload_conf.replace("objects_count", f"{objects_count}")
 
     workload_endpoint = "http://localhost:5000"
     if not config.get("drivers"):
@@ -104,7 +132,7 @@ def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
         port = rgw_service[0]["status"]["ports"][0]
         workload_endpoint = f"http://{ip}:{port}"
     LOG.info(f"workload endpoint: {workload_endpoint}")
-    fill_workload = fill_workload.replace("workload_endpoint", workload_endpoint)
+    workload_conf = workload_conf.replace("workload_endpoint", workload_endpoint)
 
     out, err = controller.exec_command(
         cmd="sh /opt/cosbench/cli.sh info | grep drivers | awk '{print $2}'"
@@ -112,18 +140,19 @@ def prepare_fill_workload(ceph_cluster, client, rgw, controller, config):
     LOG.info(out)
     drivers_count = int(out.strip())
     workers = drivers_count * 100
-    fill_workload = fill_workload.replace(
+    workload_conf = workload_conf.replace(
         'work type="prepare" workers="1"', f'work type="prepare" workers="{workers}"'
     )
+    workload_conf = workload_conf.replace(
+        'work name="hybrid" workers="1"', f'work name="hybrid" workers="{workers}"'
+    )
 
-    workload_file_id = utils.generate_unique_id(length=4)
-    workload_file_name = f"fill-workload-{workload_file_id}.xml"
-    bucket_name_prefix = f"pri-bkt-{workload_file_id.lower()}-"
-    fill_workload = fill_workload.replace("pri-bkt", bucket_name_prefix)
+    workload_file_name = f"{workload_type}-workload.xml"
 
-    LOG.info(fill_workload)
+    LOG.info(workload_conf)
     controller.exec_command(cmd=f"touch {workload_file_name}")
-    controller.exec_command(cmd=f"echo '{fill_workload}' > {workload_file_name}")
+    controller.exec_command(cmd=f"echo '{workload_conf}' > {workload_file_name}")
+
     return workload_file_name
 
 
@@ -215,10 +244,11 @@ def push_workload(controller, client, workload_file_name):
 
 
 def record_sync_status(record_sync_site_client, config):
-    global workload_file_id, bucket_name_prefix
+    global workload_file_id, bucket_prefix
     LOG.info(
         "creating a file to record sync status and bucket sync status until data is caught up"
     )
+    workload_file_id = utils.generate_unique_id(length=4)
     sync_record_file_name = f"sync_record_{workload_file_id}"
     record_sync_site_client.exec_command(cmd=f"touch {sync_record_file_name}")
 
@@ -241,7 +271,7 @@ def record_sync_status(record_sync_site_client, config):
         sync_record_file.write(out)
         for bucket_index in range(1, 7):
             sync_record_file.write("\n")
-            bucket_name = f"{bucket_name_prefix}{bucket_index}"
+            bucket_name = f"{bucket_prefix}{bucket_index}"
             out = utils.get_bucket_sync_status(record_sync_site_client, bucket_name)
             sync_record_file.write(out)
         sync_record_file.flush()
@@ -267,7 +297,7 @@ def run(ceph_cluster, **kwargs) -> int:
     rgw = ceph_cluster.get_nodes(role="rgw")[0]
     record_sync_on_site = config.get("record_sync_on_site")
 
-    workload_file_name = prepare_fill_workload(
+    workload_file_name = prepare_workload_config_file(
         ceph_cluster, client, rgw, controller, config
     )
     push_workload(controller, client, workload_file_name)
