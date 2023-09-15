@@ -527,3 +527,13 @@ tests:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_curl_transfer_encoding_chunked.yaml
         timeout: 500
+
+  - test:
+      name: Test bucket listing is not truncated
+      desc: Test bucket listing is not truncated
+      polarion-id: CEPH-83575816
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_list_not_truncated.yaml
+        timeout: 500
