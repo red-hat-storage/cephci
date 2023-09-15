@@ -54,51 +54,36 @@ def run(ceph_cluster, **kw):
             log.info("ceph nfs cluster created successfully")
         else:
             raise CommandFailed("Failed to create nfs cluster")
+        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+        output = json.loads(out)
+        if nfs_name in output:
+            log.info("ceph nfs cluster created successfully")
+        else:
+            raise CommandFailed("Failed to create nfs cluster")
         nfs_export_name = "/export_" + "".join(
             secrets.choice(string.digits) for i in range(3)
         )
         export_path = "/non_exist"
         fs_name = "cephfs"
         if "5.0" in rhbuild:
-            client1.exec_command(
+            out, rc = client1.exec_command(
                 sudo=True,
                 cmd=f"ceph nfs export create cephfs {fs_name} {nfs_name} "
                 f"{nfs_export_name} path={export_path}",
+                check_ec=False,
             )
         else:
-            client1.exec_command(
+            out, rc = client1.exec_command(
                 sudo=True,
                 cmd=f"ceph nfs export create cephfs {nfs_name} "
                 f"{nfs_export_name} {fs_name} path={export_path}",
+                check_ec=False,
             )
-        out, rc = client1.exec_command(sudo=True, cmd=f"ceph nfs export ls {nfs_name}")
-
-        if nfs_export_name not in out:
-            raise CommandFailed("Failed to create nfs export")
-
-        log.info("ceph nfs export created successfully")
-        out, rc = client1.exec_command(
-            sudo=True, cmd=f"ceph nfs export get {nfs_name} {nfs_export_name}"
+        log.info(
+            f"Returned code for the invalid conf file path is {rc} and out is {out}"
         )
-        output = json.loads(out)
-        nfs_mounting_dir = "/mnt/nfs_" + "".join(
-            secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
-        )
-        export_get_path = output["path"]
-        if export_get_path != export_path:
-            log.error("Export path is not correct")
-            return 1
-
-        log.info("Test completed successfully")
-        client1.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
-        command = f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_name} {nfs_mounting_dir}"
-        output, err = client1.exec_command(sudo=True, cmd=command, check_ec=False)
-        if not err:
-            log.error("cephfs nfs export mount passed with non exiting path")
-            return 1
-        log.info(f"Unable to mount with non-exist path, return code {err}")
-        if "No such file or directory" not in err:
-            return 1
+        if not rc:
+            raise CommandFailed("error message was expected for non-existing path")
         return 0
     except Exception as e:
         log.error(e)
