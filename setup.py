@@ -36,6 +36,7 @@ setup(
         "reportportal-client==5.2.5",
         "requests",
         "softlayer",
+        "python-ipmi",
     ],
     zip_safe=True,
     include_package_data=True,
