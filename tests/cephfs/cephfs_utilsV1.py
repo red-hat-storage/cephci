@@ -2961,3 +2961,23 @@ os.system('sudo systemctl start  network')
         if health_status != "HEALTH_OK":
             raise CommandFailed(f"Ceph Cluster is in {health_status} State")
         log.info("Ceph Cluster is Healthy")
+
+    @retry(CommandFailed, tries=5, delay=30)
+    def wait_for_host_online(self, client1, node):
+        out, rc = client1.exec_command(sudo=True, cmd="ceph orch host ls -f json")
+        hosts = json.loads(out)
+        for host in hosts:
+            if host["hostname"] == node.node.hostname:
+                hostname_status = host["status"]
+                if hostname_status == "Offline":
+                    raise CommandFailed("Host is in Offline state")
+
+    @retry(CommandFailed, tries=5, delay=30)
+    def wait_for_service_to_be_in_running(self, client1, node):
+        out, rc = client1.exec_command(
+            sudo=True, cmd=f"ceph orch ps {node.node.hostname} -f json"
+        )
+        services = json.loads(out)
+        for service in services:
+            if service["status"] != 1:
+                raise CommandFailed(f"service : {service['service_name']} is not UP")
