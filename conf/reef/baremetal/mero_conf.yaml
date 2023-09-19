@@ -13,8 +13,6 @@ globals:
             - _admin
             - installer
             - mon
-            - mgr
-            - mds
           root_password: passwd
         - hostname: mero003
           id: node2
@@ -23,6 +21,7 @@ globals:
             - mds
             - mgr
             - mon
+            - _admin
           root_password: passwd
         - hostname: mero004
           id: node3
@@ -56,8 +55,6 @@ globals:
           ip: 10.8.129.227
           role:
             - osd
-            - rgw
-            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -98,7 +95,6 @@ globals:
           ip: 10.8.129.231
           role:
             - osd
-            - rgw
           root_password: passwd
           volumes:
             - /dev/sda
@@ -109,15 +105,14 @@ globals:
             - /dev/sdg
             - /dev/sdh
             - /dev/sdi
-            - /dev/sdj
             - /dev/sdk
-            - /dev/sdl
+            - /dev/sdj
             - /dev/sdm
+            - /dev/sdn
         - hostname: mero013
           id: node8
           ip: 10.8.129.233
           role:
-            - mds
             - osd
           root_password: passwd
           volumes:
@@ -138,6 +133,8 @@ globals:
           ip: 10.8.129.234
           role:
             - osd
+            - mds
+            - _admin
           root_password: passwd
           volumes:
             - /dev/sda
@@ -169,6 +166,8 @@ globals:
           ip: 10.8.129.237
           role:
             - osd
+            - mon
+            - mds
           root_password: passwd
           volumes:
             - /dev/sda
@@ -188,6 +187,8 @@ globals:
           ip: 10.8.129.238
           role:
             - osd
+            - mon
+            - mgr
           root_password: passwd
           volumes:
             - /dev/sda
@@ -206,6 +207,8 @@ globals:
           ip: 10.8.129.239
           role:
             - osd
+            - rgw
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -225,6 +228,8 @@ globals:
           ip: 10.8.129.240
           role:
             - osd
+            - rgw
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -236,6 +241,6 @@ globals:
             - /dev/sdg
             - /dev/sdh
             - /dev/sdi
-            - /dev/sdm
+            - /dev/sdj
             - /dev/sdk
             - /dev/sdl

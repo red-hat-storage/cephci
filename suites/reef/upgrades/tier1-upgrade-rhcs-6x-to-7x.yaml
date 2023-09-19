@@ -1,14 +1,14 @@
 #################################################################################
-# Automation support for upgrade from RHCS-6 to RHCS-7 in RHEL-9
+# Automation support for upgrade from RHCS5 to RHCS7 in RHEL9
 #
 #--------------------------------------------------------------------------------
-# Cluster Configuration: conf/reef/upgrades/1admin-3node-1client-upgrade.yaml
+# Cluster Configuration: conf/reef/upgrades/upgrade_4-node-cluster.yaml
 #--------------------------------------------------------------------------------
 #
 # Test Steps:
 #--------------------------------------------------------------------------------
-# - Deploy RHCS-6 cluster in RHEL-9
-# - Upgrade cluster from RHCS-6 to RHCS-7
+# - Deploy RHCS 6 cluster in RHEL 9
+# - Upgrade cluster from rhcs 6 to rhcs 7
 # - Validate cluster status
 # - Run I/O's
 #--------------------------------------------------------------------------------
@@ -28,8 +28,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_image: registry-proxy.engineering.redhat.com/rh-osbs/rhceph:6-177
-                custom_repo: http://download-node-02.eng.bos.redhat.com/rhel-9/rel-eng/RHCEPH-6/RHCEPH-6.1-RHEL-9-20230602.0
+                rhcs-version: 6.1
+                release: "rc"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true

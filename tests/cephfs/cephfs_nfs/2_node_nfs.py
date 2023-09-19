@@ -1,3 +1,4 @@
+import json
 import secrets
 import string
 import traceback
@@ -54,7 +55,7 @@ def run(ceph_cluster, **kw):
         rhbuild = config.get("rhbuild")
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs1 = nfs_servers[0].node.hostname
-        nfs2 = nfs_servers[0].node.hostname
+        nfs2 = nfs_servers[1].node.hostname
         nfs_name = "cephfs-nfs"
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
@@ -64,33 +65,20 @@ def run(ceph_cluster, **kw):
         nfs_mounting_dir_2 = "/mnt/nfs_" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
-        nfs_name = "cephfs-nfs"
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.split()
-        if nfs_name in output:
-            log.info("ceph nfs cluster is present")
-        else:
-            raise CommandFailed("ceph nfs cluster is absent")
-        out, rc = client1.exec_command(
-            sudo=True, cmd=f"ceph nfs cluster delete {nfs_name}"
-        )
-        if not wait_for_process(client=client1, process_name=nfs_name, ispresent=False):
-            raise CommandFailed("Cluster has not been deleted")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.split()
-        if nfs_name not in output:
-            log.info("ceph nfs cluster deleted successfully")
-        else:
-            raise CommandFailed("Failed to delete nfs cluster")
+
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs1},{nfs2}"
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")
-        if nfs_name not in output:
+
+        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+        output = json.loads(out)
+        if nfs_name in output:
             log.info("ceph nfs cluster created successfully")
         else:
             raise CommandFailed("Failed to create nfs cluster")
+
         nfs_export_name = "/export_" + "".join(
             secrets.choice(string.digits) for i in range(3)
         )
@@ -116,8 +104,7 @@ def run(ceph_cluster, **kw):
             return 1
         commands = [
             f"mkdir -p {nfs_mounting_dir_1}",
-            f"mount -t nfs -o port=2049 {nfs1}:{nfs_export_name} {nfs_mounting_dir_1}",
-            f"mkdir {nfs_mounting_dir_1}/dir1 {nfs_mounting_dir_1}/dir2"
+            f"mkdir {nfs_mounting_dir_1}/dir1 {nfs_mounting_dir_1}/dir2",
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 40 --files"
             f" 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_1}/dir1",
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 40 --files"
@@ -127,6 +114,8 @@ def run(ceph_cluster, **kw):
             "$n"
             ") bs=500k count=1000; done",
         ]
+        for command in commands:
+            client1.exec_command(sudo=True, cmd=command, long_running=True)
         rc = fs_util.cephfs_nfs_mount(
             client1, nfs2, nfs_export_name, nfs_mounting_dir_2
         )
@@ -134,7 +123,7 @@ def run(ceph_cluster, **kw):
             log.error("cephfs nfs export mount failed")
             return 1
         commands = [
-            f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}"
+            f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}",
             f"mkdir {nfs_mounting_dir_2}/dir3 {nfs_mounting_dir_2}/dir4",
             f"for n in {{1..5}}; do     dd if=/dev/urandom of={nfs_mounting_dir_2}/dir3"
             f"/file$(printf %03d "
@@ -168,4 +157,9 @@ def run(ceph_cluster, **kw):
         )
         client1.exec_command(
             sudo=True, cmd=f"rm -rf {nfs_mounting_dir_2}/", check_ec=False
+        )
+        client1.exec_command(
+            sudo=True,
+            cmd=f"ceph nfs cluster delete {nfs_name}",
+            check_ec=False,
         )

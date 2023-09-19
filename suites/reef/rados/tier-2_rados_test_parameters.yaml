@@ -1,14 +1,12 @@
 #################################################################################
-# Automation support for upgrade from RHCS5 to RHCS6 in RHEL9.
-# Checking various parameters in RHCS5 and RHCS6
+# Checking various parameters in RHCS7
 #--------------------------------------------------------------------------------
-# Cluster Configuration: conf/quincy/rados/7-node-cluster.yaml
+# Cluster Configuration: conf/reef/rados/7-node-cluster.yaml
 #--------------------------------------------------------------------------------
 # Test Steps:
 #--------------------------------------------------------------------------------
-# - Deploy RHCS 5 cluster in RHEL 9
+# - Deploy RHCS 7 cluster in RHEL 9
 # - Check the MSGRV2 parameters
-# - Upgrade cluster from rhcs 5 to rhcs 6.1
 # - Check the MSGRV2 paramters and Mclock parameters
 #--------------------------------------------------------------------------------
 #################################################################################
@@ -27,11 +25,7 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 5.3
-                release: "latest"
                 mon-ip: node1
-                orphan-initial-daemons: true
-                skip-monitoring-stack: true
           - config:
               command: add_hosts
               service: host
@@ -40,74 +34,47 @@ tests:
                 labels: apply-all-labels
           - config:
               command: apply
-              service: mgr
-              args:
-                placement:
-                  label: mgr
-          - config:
-              command: apply
-              service: mon
-              args:
-                placement:
-                  label: mon
-          - config:
-              command: apply
               service: osd
               args:
                 all-available-devices: true
-      desc: bootstrap and deployment services with label placements.
-      polarion-id: CEPH-83573777
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
-      name: Deploy RHCS cluster using cephadm
+      name: deploy cluster
+
   - test:
-      abort-on-fail: true
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
       config:
         command: add
-        id: client.1
-        node: node7
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
         install_packages:
           - ceph-common
-        copy_admin_keyring: true
-        caps:                             # authorize client capabilities
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
           mon: "allow *"
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
-      desc: Configure client node on the Cluster
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
   - test:
-      name: Ceph paramter checking in 5.x
-      desc: MSGRV2 parameter checking in 5.x
-      polarion-id: CEPH-83574890
-      module: test_config_parameter_chk.py
-      config:
-        scenario : msgrv2_5x
-        ini-file: conf/quincy/rados/test-confs/rados_config_parameters.ini
-  - test:
-      name: Upgrade cluster to latest 6.1 ceph version
-      desc: Upgrade cluster to latest version
-      module: test_cephadm_upgrade.py
-      polarion-id: CEPH-83573791
-      config:
-        command: start
-        service: upgrade
-        base_cmd_args:
-          verbose: true
-        verify_cluster_health: true
-      destroy-cluster: false
-      abort-on-fail: true
-  - test:
-      name: Ceph MSGRV2 paramter check in 6.1
-      desc: MSGRV2 parameter check in 6.1
+      name: Ceph MSGRV2 paramter check in 7.x
+      desc: MSGRV2 parameter check in 7.x
       polarion-id: CEPH-83574890
       module: test_config_parameter_chk.py
       config:
         scenario: msgrv2_6x
-        ini-file: conf/quincy/rados/test-confs/rados_config_parameters.ini
-
+        ini-file: conf/reef/rados/test-confs/rados_config_parameters.ini
   - test:
       name: Mclock sleep parameter check
       desc: Mclock sleep parameter check
@@ -115,7 +82,7 @@ tests:
       module: test_config_parameter_chk.py
       config:
         scenario: mclock_sleep
-        ini-file: conf/quincy/rados/test-confs/rados_config_parameters.ini
+        ini-file: conf/reef/rados/test-confs/rados_config_parameters.ini
   - test:
       name: Mclock default,reservation,limit and weight parameter check
       desc: Mclock default,reservation,limit and weight parameter check
@@ -123,4 +90,4 @@ tests:
       module: test_config_parameter_chk.py
       config:
         scenario: mclock_chg_chk
-        ini-file: conf/quincy/rados/test-confs/rados_config_parameters.ini
+        ini-file: conf/reef/rados/test-confs/rados_config_parameters.ini

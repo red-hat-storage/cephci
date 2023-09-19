@@ -19,7 +19,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 6.1
-                release: ga
+                release: rc
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true

@@ -14,7 +14,7 @@ log = Log(__name__)
 
 
 @retry(AssertionError, tries=60, delay=10, backoff=1)
-def fill_volume(client, mounting_dir, expected_percent):
+def fill_volume(data_params):
     """
     To fill volume at mountpoint upto specified percentage
 
@@ -30,20 +30,25 @@ def fill_volume(client, mounting_dir, expected_percent):
     rand_str = "".join(
         random.choice(string.ascii_lowercase + string.digits) for _ in list(range(3))
     )
+    mounting_dir = data_params["mounting_dir"]
+    client = data_params["client"]
     mounting_dir_path = f"{mounting_dir}dir_{rand_str}"
     client.exec_command(
         sudo=True,
         cmd=f"mkdir {mounting_dir_path}",
     )
+    file_size = data_params["file_size"]
+    files = data_params["files"]
+    files_per_dir = data_params["files_per_dir"]
     client.exec_command(
         sudo=True,
-        cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 2 --file-size 500 "
-        f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
+        cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 2 --file-size {file_size} "
+        f"--files {files} --files-per-dir {files_per_dir} --dirs-per-dir 2 --top "
         f"{mounting_dir_path}",
     )
     used_percent = int(get_subvol_usage(client, mounting_dir))
-    if used_percent < expected_percent:
-        raise AssertionError(f"Volume is not filled to {expected_percent}")
+    if used_percent < data_params["expected_percent"]:
+        raise AssertionError("Volume is not filled to expected percent")
 
 
 def get_pool_usage(client, cephfs_name):
@@ -148,11 +153,36 @@ def run(ceph_cluster, **kw):
         --group_name subvolgroup_max_clones
     8. Verify max clones can be created until data pool is full.
 
-
     Clean Up:
     1. Unmount subvolume
     2. Delete all Clones
     3. Delete subvolume, subvolumegroup.
+
+    test params template for yaml suite:
+
+    RHOS VM: Default values in script are applicable to VM
+    - test:
+      abort-on-fail: false
+      config:
+        subvol_size: 5368706371
+        test_timeout: 18000
+        subvol_data_fill: 2
+      desc: "Validate max clones from single snapshot of subvolume"
+      module: cephfs_scale.max_clones_from_snap.py
+      name: "Clone scale testing"
+      polarion-id: "CEPH-83575629"
+    Baremetal: override default values as below
+    - test:
+      abort-on-fail: false
+      config:
+        subvol_size: 53687063710
+        test_timeout: 259200
+        subvol_data_fill: 30
+        platform_type:
+      desc: "Validate max clones from single snapshot of subvolume"
+      module: cephfs_scale.max_clones_from_snap.py
+      name: "Clone scale testing"
+      polarion-id: "CEPH-83575629"
     """
     try:
         fs_util = FsUtils(ceph_cluster)
@@ -170,10 +200,22 @@ def run(ceph_cluster, **kw):
 
         default_fs = "cephfs"
         default_subvol_size = config.get("subvol_size", 5368706371)
-        expected_pool_used = 100
+        expected_pool_used = config.get("expected_pool_usage", 98)
         subvol_data_fill = config.get("subvol_data_fill", 2)
-        test_timeout = config.get("test_timeout", 7200)
+        test_timeout = config.get("test_timeout", 18000)
         cmd_timeout = 3600
+        platform_type = config.get("platform_type", "default")
+        data_fill_params = {
+            "expected_percent": subvol_data_fill,
+        }
+        if platform_type == "baremetal":
+            data_fill_params.update(
+                {"file_size": 2000, "files": 1000, "files_per_dir": 100}
+            )
+        else:
+            data_fill_params.update(
+                {"file_size": 500, "files": 100, "files_per_dir": 10}
+            )
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(3))
@@ -228,7 +270,11 @@ def run(ceph_cluster, **kw):
             extra_params=f" -r {subvol_path.strip()}",
         )
         log.info(f"Add data to Subvolume to fill {subvol_data_fill}% \n")
-        fill_volume(client1, kernel_mounting_dir, subvol_data_fill)
+        data_fill_params.update(
+            {"client": client1, "mounting_dir": kernel_mounting_dir}
+        )
+        log.info(f"IO params:{data_fill_params}")
+        fill_volume(data_fill_params)
 
         log.info("Create snapshot on Subvolume \n")
         snapshot = {

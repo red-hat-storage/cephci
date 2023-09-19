@@ -13,8 +13,6 @@ globals:
             - _admin
             - installer
             - mon
-            - mgr
-            - mds
           root_password: passwd
         - hostname: mero003
           id: node2
@@ -23,6 +21,7 @@ globals:
             - mds
             - mgr
             - mon
+            - _admin
           root_password: passwd
         - hostname: mero004
           id: node3
@@ -51,14 +50,11 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
-            - /dev/nvme0n1
         - hostname: mero007
           id: node5
           ip: 10.8.129.227
           role:
             - osd
-            - rgw
-            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -72,8 +68,7 @@ globals:
             - /dev/sdi
             - /dev/sdk
             - /dev/sdl
-            - /dev/sdm
-            - /dev/nvme0n1
+            - /dev/sdj
         - hostname: mero009
           id: node6
           ip: 10.8.129.229
@@ -95,13 +90,11 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
-            - /dev/nvme0n1
         - hostname: mero011
           id: node7
           ip: 10.8.129.231
           role:
             - osd
-            - rgw
           root_password: passwd
           volumes:
             - /dev/sda
@@ -113,15 +106,13 @@ globals:
             - /dev/sdh
             - /dev/sdi
             - /dev/sdk
-            - /dev/sdl
+            - /dev/sdj
             - /dev/sdm
             - /dev/sdn
-            - /dev/nvme0n1
         - hostname: mero013
           id: node8
           ip: 10.8.129.233
           role:
-            - mds
             - osd
           root_password: passwd
           volumes:
@@ -137,12 +128,13 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdm
-            - /dev/nvme0n1
         - hostname: mero014
           id: node9
           ip: 10.8.129.234
           role:
             - osd
+            - mds
+            - _admin
           root_password: passwd
           volumes:
             - /dev/sda
@@ -156,8 +148,7 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
-            - /dev/sdl
-            - /dev/nvme0n1
+            - /dev/sdm
         - hostname: mero015
           id: node10
           ip: 10.8.129.235
@@ -175,6 +166,8 @@ globals:
           ip: 10.8.129.237
           role:
             - osd
+            - mon
+            - mds
           root_password: passwd
           volumes:
             - /dev/sda
@@ -189,12 +182,13 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
-            - /dev/nvme0n1
         - hostname: mero018
           id: node13
           ip: 10.8.129.238
           role:
             - osd
+            - mon
+            - mgr
           root_password: passwd
           volumes:
             - /dev/sda
@@ -208,12 +202,13 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
-            - /dev/nvme0n1
         - hostname: mero019
           id: node14
           ip: 10.8.129.239
           role:
             - osd
+            - rgw
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -228,12 +223,13 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
-            - /dev/nvme0n1
         - hostname: mero020
           id: node15
           ip: 10.8.129.240
           role:
             - osd
+            - rgw
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -248,4 +244,3 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
-            - /dev/nvme0n1

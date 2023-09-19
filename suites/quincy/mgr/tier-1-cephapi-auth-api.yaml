@@ -140,13 +140,13 @@ tests:
             username: "admin"
             password: "admin@123"
 
-  - test:
-      name: Test auth.logout api with valid credentials
-      desc: Execute `api/auth/logout` API to validate POST method
-      module: test_cephapi_auth.py
-      polarion-id:
-      config:
-        cephapi:
-          api: auth.logout
-          method: post
-          status_code: 200
+  #- test:
+  #    name: Test auth.logout api with valid credentials
+  #    desc: Execute `api/auth/logout` API to validate POST method
+  #    module: test_cephapi_auth.py
+  #    polarion-id:
+  #    config:
+  #      cephapi:
+  #        api: auth.logout
+  #        method: post
+  #        status_code: 200

@@ -19,7 +19,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 5.3
-                release: ga
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
