@@ -73,13 +73,31 @@ tests:
 
   - test:
       name: Set 'osd' config using cephadm-ansible module 'ceph_config'
-      desc: Execute 'playbooks/set-osd-config.yml' playbook
+      desc: Execute 'playbooks/set-ceph-config.yml' playbook
       polarion-id: CEPH-83575214
       module: test_cephadm_ansible_wrapper.py
       config:
         ansible_wrapper:
           module: "ceph_config"
-          playbook: playbooks/set-osd-config.yml
+          playbook: playbooks/set-ceph-config.yml
+          module_args:
+            who: "osd"
+            option: "osd_memory_target_autotune"
+            value: "true"
+
+  - test:
+      name: Set 'osd' global config using cephadm-ansible module 'ceph_config'
+      desc: Execute 'playbooks/set-ceph-config.yml' playbook
+      polarion-id: CEPH-83575594
+      module: test_cephadm_ansible_wrapper.py
+      config:
+        ansible_wrapper:
+          module: "ceph_config"
+          playbook: playbooks/set-ceph-config.yml
+          module_args:
+            who: "global"
+            option: "osd_pool_default_size"
+            value: "2"
 
   - test:
       name: Restart 'osd' service using cephadm-ansible module 'ceph_orch_daemon'

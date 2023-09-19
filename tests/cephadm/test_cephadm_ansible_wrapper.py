@@ -1,5 +1,6 @@
 import json
 import os
+import time
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
@@ -216,6 +217,9 @@ def run(ceph_cluster, **kwargs):
                 extra_vars.get("daemon_id"),
                 daemon_state,
             )
+
+        log.info("Waiting for 180 secs to affect last operation configurations")
+        time.sleep(180)
 
     elif module == "cephadm_registry_login":
         (
