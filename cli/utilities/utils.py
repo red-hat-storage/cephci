@@ -704,3 +704,21 @@ def get_file_owner(filepath, clients):
             f"The file '{filepath}' is created by an unknown user with UID: {uid} and GID: {gid}."
         )
         return None
+
+
+def remove_files(client, mount_point, file_count):
+    """
+    Create files
+    Args:
+        clients (ceph): Client nodes
+        mount_point (str): mount path
+        file_count (int): total file count
+    """
+    for i in range(1, file_count + 1):
+        try:
+            client.exec_command(
+                sudo=True,
+                cmd=f"rm -rf {mount_point}/file{i}",
+            )
+        except Exception:
+            raise OperationFailedError(f"failed to remove file{i}")
