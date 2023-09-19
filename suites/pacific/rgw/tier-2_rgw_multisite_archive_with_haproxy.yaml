@@ -482,9 +482,9 @@ tests:
               - "ceph config set client.rgw.shared.arc rgw_sync_lease_period 10"
               - "ceph orch restart rgw.shared.arc"
             timeout: 120
-      desc: Setting rgw_sync_lease_period to 100 on multisite archive
+      desc: Setting rgw_sync_lease_period to 10 on multisite archive
       module: exec.py
-      name: Setting rgw_sync_lease_period to 100 on multisite archive
+      name: Setting rgw_sync_lease_period to 10 on multisite archive
 
   - test:
       clusters:
@@ -500,6 +500,21 @@ tests:
       name: test sync on bucket with 0 shards
       polarion-id: CEPH-83575573
       comments: bug-2188022, 2180549 HotFix for Square eCommerce
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zonegroup modify --bucket_index_max_shards 11"
+              - "radosgw-admin period update --commit"
+            timeout: 120
+      desc: Setting bucket_index_max_shards back to 11 shards
+      module: exec.py
+      name: Setting bucket_index_max_shards back to 11 shards
+
   - test:
       clusters:
         ceph-pri:
@@ -568,3 +583,32 @@ tests:
       module: sanity_rgw_multisite.py
       name: test versioning suspend on archive
       polarion-id: CEPH-83575578
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_s3_copy_encryption.py
+            run-on-haproxy: true
+            config-file-name: test_server_side_copy_object_via_encryption.yaml
+            timeout: 300
+      desc: test server_side_copy_object_via_encryption
+      module: sanity_rgw_multisite.py
+      name: test server_side_copy_object_via_encryption
+      polarion-id: CEPH-83575711
+      comments: bug-2149450, test server_side_copy_object_via_encryption
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_encrypted_bucket_chown.py
+            run-on-haproxy: true
+            config-file-name: test_encrypted_bucket_chown.yaml
+            timeout: 300
+      desc: test
+      module: sanity_rgw_multisite.py
+      name: Change bucket ownership to a different user when encryption is enabled
+      polarion-id: CEPH-83574621
+      comments: Change bucket ownership to a different user when encryption is enabled
+
