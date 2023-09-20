@@ -6,12 +6,11 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 import json
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.gateway import delete_gateway
 from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.cephadm import test_nvmeof
+from tests.cephadm import test_nvmeof, test_orch
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id, run_fio
@@ -151,9 +150,9 @@ def teardown(ceph_cluster, rbd_obj, config):
     if "subsystems" in config["cleanup"]:
         config_sub_node = config["subsystems"]
         if not isinstance(config_sub_node, list):
-            config_sub_node = [{"node": config_sub_node}]
+            config_sub_node = [config_sub_node]
         for sub_cfg in config_sub_node:
-            node = sub_cfg["node"]
+            node = config["gw_node"] if "node" not in sub_cfg else sub_cfg["node"]
             sub_node = get_node_by_id(ceph_cluster, node)
             sub_gw = NVMeCLI(sub_node)
             LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {node}")
@@ -161,12 +160,14 @@ def teardown(ceph_cluster, rbd_obj, config):
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
-        config_gw_node = config["gw_node"]
-        if not isinstance(config_gw_node, list):
-            config_gw_node = [config_gw_node]
-        for gw_node in config_gw_node:
-            gw_node = get_node_by_id(ceph_cluster, gw_node)
-            delete_gateway(gw_node)
+        cfg = {
+            "config": {
+                "command": "remove",
+                "service": "nvmeof",
+                "args": {"service_name": f"nvmeof.{config['rbd_pool']}"},
+            }
+        }
+        test_orch.run(ceph_cluster, **cfg)
 
     # Delete the pool
     if "pool" in config["cleanup"]:
@@ -251,10 +252,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         gateway = NVMeCLI(gw_node)
         if config.get("install"):
             cfg = {
-                "command": "apply",
-                "service": "nvmeof",
-                "args": {"placement": {"nodes": [gw_node.hostname]}},
-                "pos_args": [rbd_pool],
+                "config": {
+                    "command": "apply",
+                    "service": "nvmeof",
+                    "args": {"placement": {"nodes": [gw_node.hostname]}},
+                    "pos_args": [rbd_pool],
+                }
             }
             test_nvmeof.run(ceph_cluster, **cfg)
 
