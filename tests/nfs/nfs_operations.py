@@ -12,24 +12,42 @@ class NfsCleanupFailed(Exception):
 
 
 def setup_nfs_cluster(
-    clients, nfs_server, port, version, nfs_name, nfs_mount, fs_name, export, fs
+    clients,
+    nfs_server,
+    port,
+    version,
+    nfs_name,
+    nfs_mount,
+    fs_name,
+    export,
+    fs,
+    ha=False,
+    vip=None,
 ):
     # Step 1: Enable nfs
     Ceph(clients[0]).mgr.module(action="enable", module="nfs", force=True)
 
     # Step 2: Create an NFS cluster
-    Ceph(clients[0]).nfs.cluster.create(name=nfs_name, nfs_server=nfs_server)
+    Ceph(clients[0]).nfs.cluster.create(
+        name=nfs_name, nfs_server=nfs_server, ha=ha, vip=vip
+    )
 
     # Step 3: Perform Export on clients
+    i = 0
     for client in clients:
         Ceph(client).nfs.export.create(
-            fs_name=fs_name, nfs_name=nfs_name, nfs_export=export, fs=fs
+            fs_name=fs_name, nfs_name=nfs_name, nfs_export=f"{export}_{i}", fs=fs
         )
+        i += 1
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
     if isinstance(nfs_server, list):
         nfs_server = nfs_server[0]
+    if ha:
+        nfs_server = vip.split("/")[0]  # Remove the port
+
+    i = 0
     for client in clients:
         client.create_dirs(dir_path=nfs_mount, sudo=True)
         if Mount(client).nfs(
@@ -37,9 +55,10 @@ def setup_nfs_cluster(
             version=version,
             port=port,
             server=nfs_server,
-            export=export,
+            export=f"{export}_{i}",
         ):
             raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
+        i += 1
     log.info("Mount succeeded on all clients")
 
 
@@ -84,5 +103,7 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
         log.info("Removing nfs-ganesha mount dir on client:")
         client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}")
 
-    Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_export)
+    # Delete all exports
+    for i in range(len(clients)):
+        Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
