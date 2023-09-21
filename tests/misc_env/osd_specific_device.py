@@ -65,32 +65,34 @@ def dump_osd_data(node: CephNode, osn, osd_node, disk_list: List) -> None:
     Raises:
         CommandFailed
     """
+    disk_list_updated = []
     for i in range(len(disk_list)):
-        add_disk = 0
+        new_disk = ""
         try:
             node.exec_command(
-                cmd=f"sudo cephadm shell -- ceph orch daemon add osd {osn}:{disk_list[i]}"
+                cmd=f"sudo cephadm shell -- ceph orch daemon add osd {osd_node.vmshortname}:{disk_list[i]}"
             )
+            disk_list_updated.append(disk_list[i])
         except CommandFailed:
             log.info(
                 f"Could not deploy OSD on {disk_list[i]},could be root disk, looking for alternate disk of same size"
             )
-            new_disk = get_new_disk(osd_node, disk_list)
-            add_disk = 1
-        if add_disk == 1:
+            new_disk = get_new_disk(node, osd_node, disk_list)
+        if new_disk is not None and new_disk != "":
             try:
                 node.exec_command(
-                    cmd=f"sudo cephadm shell -- ceph orch daemon add osd {osn}:{new_disk}"
+                    cmd=f"sudo cephadm shell -- ceph orch daemon add osd {osd_node.vmshortname}:{new_disk}"
                 )
+                disk_list_updated.append(new_disk)
             except CommandFailed:
                 log.info(
                     f"WARNING:Could not deploy all OSDs. Failed to deploy OSD on alternate disk {new_disk}"
                 )
-    expected_osd_count = len(disk_list)
-    validate_osd(node, osn, expected_osd_count)
+    expected_osd_count = len(disk_list_updated)
+    validate_osd(node, osd_node.vmshortname, expected_osd_count)
 
 
-def get_new_disk(node, disk_list: List) -> None:
+def get_new_disk(node, osd_node, disk_list: List) -> None:
     """
     Find new disk with size same as in disk_list
     Args:
@@ -99,20 +101,20 @@ def get_new_disk(node, disk_list: List) -> None:
     Returns:
         newdisk
     """
-    disk_size, rc = node.exec_command(cmd="lsblk -o NAME,SIZE -d")
-    disk_size_list = str(disk_size).splitlines()
-    disk_dict = {}
-    root_disk_info, rc = node.exec_command(
-        cmd='lsblk -o PKNAME,MOUNTPOINT -P | grep "MOUNTPOINT=\\"/\\""'
+    out, rc = node.exec_command(
+        cmd=f"sudo cephadm shell -- ceph orch device ls --hostname= {osd_node.vmshortname} --format json"
     )
-    log.info(f"root_disk_info:{root_disk_info}")
-    for line in disk_size_list:
-        (disk, size) = line.split()
-        if disk not in str(root_disk_info):
-            disk_path = f"/dev/{disk}"
-            disk_dict[disk_path] = size
-            if disk_path in disk_list:
+    data = json.loads(out)
+    disk_dict = {}
+    for entry in data:
+        devices = entry["devices"]
+        for device in devices:
+            size = device["sys_api"]["human_readable_size"]
+            path = device["path"]
+            if path in disk_list:
                 disk_size = size
+            if device["available"]:
+                disk_dict[path] = size
 
     for disk in disk_dict.keys():
         if (disk_size in disk_dict[disk]) and (disk not in disk_list):
