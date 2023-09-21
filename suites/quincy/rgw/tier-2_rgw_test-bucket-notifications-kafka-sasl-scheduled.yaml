@@ -83,7 +83,6 @@ tests:
       name: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT PLAIN
       desc: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT PLAIN
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -107,7 +106,6 @@ tests:
       desc: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT SCRAM-SHA-256
       module: sanity_rgw.py
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       config:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
@@ -130,7 +128,6 @@ tests:
       name: notify on multipart upload events with kafka_broker and SASL_SSL PLAIN
       desc: notify on multipart upload events with kafka_broker and SASL_SSL PLAIN
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -153,7 +150,6 @@ tests:
       name: notify on multipart upload events with kafka_broker and SASL_SSL SCRAM-SHA-256
       desc: notify on multipart upload events with kafka_broker and SASL_SSL SCRAM-SHA-256
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -179,7 +175,6 @@ tests:
       name: notify on multipart upload events with kafka_none and SASL_PLAINTEXT PLAIN
       desc: notify on multipart upload events with kafka_none and SASL_PLAINTEXT PLAIN
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -202,7 +197,6 @@ tests:
       name: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
       desc: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -225,7 +219,6 @@ tests:
       name: notify on multipart upload events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
       desc: notify on multipart upload events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -248,7 +241,6 @@ tests:
       name: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
       desc: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -272,7 +264,6 @@ tests:
       name: notify on multipart upload events with kafka_none and SASL_SSL PLAIN
       desc: notify on multipart upload events with kafka_none and SASL_SSL PLAIN
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -295,7 +286,6 @@ tests:
       name: notify on multipart upload events with kafka_none_persistent and SASL_SSL PLAIN
       desc: notify on multipart upload events with kafka_none_persistent and SASL_SSL PLAIN
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -318,7 +308,6 @@ tests:
       name: notify on multipart upload events with kafka_none and SASL_SSL SCRAM-SHA-256
       desc: notify on multipart upload events with kafka_none and SASL_SSL SCRAM-SHA-256
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -341,7 +330,6 @@ tests:
       name: notify on multipart upload events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
       desc: notify on multipart upload events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
       polarion-id: CEPH-83575407
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
