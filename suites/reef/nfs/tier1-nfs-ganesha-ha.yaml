@@ -1,0 +1,204 @@
+#===============================================================================================
+#----------------------------------------
+#---Test Suite for Nfs Ganesha with HA---
+#----------------------------------------
+# Note: NFS-Ganesha with HA support only baremetal cluster
+# test suite: suites/reef/nfs/tier1-nfs-ganesga-ha.yaml
+#    - Bootstrap RHCS 7.0 cluster
+#    - Deploy NFS-Ganesha with HA using spec file
+#    - Verify NFS-Ganesha HA scenarios
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node8
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node9
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: NFS-Ganesha cluster with HA using spec file
+      desc: Deploy nfs-ganesha cluster with HA using spec file
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-service
+                  placement:
+                    nodes:
+                      - node2
+                      - node3
+                  spec:
+                    port: 3333
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: nfs.nfs-service
+                  placement:
+                    count: 2
+                  spec:
+                    backend_service: nfs.nfs-service
+                    frontend_port: 2049
+                    monitor_port: 9000
+                    virtual_ip: 10.8.128.255/21
+
+  - test:
+      name: nfs-ganesha-ha readdir operations
+      desc: nfs-ganesha-ha with rm from c1, file creation from c2 and lookups from c3
+      module: nfs_ha_readdir_operation.py
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        servers: 2
+        file_count: 100
+        ha: true
+        vip: 10.8.128.255/21
+        operations:
+          client01 : create_files
+          client02 : remove_files
+          client03 : perform_lookups
+
+  - test:
+      name: nfs-ganesha-ha readdir operations
+      desc: nfs-ganesha-ha with create file from c1, linux untar from c2, lookups from c3 and du-sh from c4
+      module: nfs_ha_readdir_operation.py
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+        servers: 2
+        file_count: 100
+        ha: true
+        vip: 10.8.128.255/21
+        operations:
+          client01 : create_files
+          client02 : perfrom_linux_untar
+          client03 : perform_lookups
+          client04 : perfrom_du_sh
