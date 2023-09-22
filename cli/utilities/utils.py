@@ -722,3 +722,15 @@ def remove_files(client, mount_point, file_count):
             )
         except Exception:
             raise OperationFailedError(f"failed to remove file{i}")
+
+
+def get_ip_from_node(node):
+    """
+    Returns the list of ip addresses assigned to the given node
+    Args:
+        node (ceph): Ceph node
+    """
+    pattern = r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+    cmd = "ip addr"
+    out = node.exec_command(cmd=cmd, sudo=True)
+    return re.findall(pattern=pattern, string=out[0])
