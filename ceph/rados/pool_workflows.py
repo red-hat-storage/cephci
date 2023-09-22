@@ -583,7 +583,12 @@ class PoolFunctions:
         log.error("The cluster did not reach active + Clean state")
 
     def check_large_omap_warning(
-        self, pool, obj_num: int, check: bool, timeout: int = 240
+        self,
+        pool,
+        obj_num: int,
+        check: bool = True,
+        obj_check: bool = True,
+        timeout: int = 240,
     ) -> bool:
         """
         Perform deep-scrub on given pool and check if "Large omap object"
@@ -592,6 +597,8 @@ class PoolFunctions:
             pool: Name of the pool
             obj_num: number of objects which are expected to have
                     large omap entries
+            obj_check: boolean value to decide whether number of large omap
+                objects is to be matched in the health warning
             check: boolean value to decide whether warning should exist or not
             timeout: timeout in seconds for warning to show up
         Returns:
@@ -611,15 +618,15 @@ class PoolFunctions:
             return False
 
         self.rados_obj.run_deep_scrub(pool=pool)
-        timeout_time = datetime.datetime.now() + datetime.timedelta(
-            seconds=timeout
-        )  # Timeout to let health warning show up
+        # Timeout to let health warning show up
+        timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while datetime.datetime.now() < timeout_time:
             health_detail, _ = self.node.shell(["ceph health detail"])
             log.info(health_detail)
             if (
                 f"{obj_num} large omap objects" in health_detail
                 and f"{obj_num} large objects found in pool '{pool}'" in health_detail
+                or (not obj_check and "LARGE_OMAP_OBJECTS" in health_detail)
             ):
                 warn_found = True
                 break
