@@ -193,7 +193,7 @@ def run(ceph_cluster, **kw):
                 ceph_cluster, host=osd_host.hostname, device_path=dev_path
             )
             assert wait_for_device(
-                host=osd_host, osd_id=osd_id, action="remove", timeout=600
+                host=osd_host, osd_id=osd_id, action="remove", timeout=1000
             )
 
             out, _ = cephadm.shell(["ceph config set osd osd_crush_initial_weight 0"])
@@ -253,6 +253,7 @@ def run(ceph_cluster, **kw):
             log.exception(AE)
             return 1
         finally:
+            log.info("\n ************* Executing finally block **********\n")
             assert rados_obj.reweight_crush_items(
                 name=f"osd.{osd_id}", weight=org_weight
             )
