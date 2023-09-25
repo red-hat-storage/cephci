@@ -152,3 +152,21 @@ tests:
               pool_type: replicated
         delete_pools:
           - pool3
+
+  - test:
+      name: Verify add remove osd during PG split
+      module: test_pg_split.py
+      desc: Verify osd removal and addition when PG split in progress
+      polarion-id: CEPH-11677
+      config:
+        create_pools:
+          - create_pool:
+              remove_add_osd: true
+              pool_name: pool4
+              pg_num: 32
+              rados_put: true
+              num_objs: 200
+              byte_size: 1024
+              pool_type: replicated
+        delete_pools:
+          - pool4
