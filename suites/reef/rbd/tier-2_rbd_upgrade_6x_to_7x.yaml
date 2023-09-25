@@ -153,6 +153,7 @@ tests:
       desc: Multicluster upgrade with rbd mirror daemon
       module: test_cephadm_upgrade.py
       name: multi-cluster ceph upgrade
+      polarion-id: CEPH-83574829
       clusters:
         ceph-rbd1:
           config:

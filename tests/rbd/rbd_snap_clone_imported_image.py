@@ -48,6 +48,7 @@ def test_snap_clone(rbd, pool_type, **kw):
         snap_name = f"{pool}/{image}@{snap}"
         rbd.protect_snapshot(snap_name)
         rbd.create_clone(snap_name, pool, clone)
+        rbd.export_image(imagespec=f"{pool}/{image}", path=f"dummy_file_{image}")
         return 0
 
     except RbdBaseException as error:

@@ -43,70 +43,87 @@ def run(ceph_cluster, **kw):
         log.debug(
             f"Creating {entry['pool_type']} pool on the cluster with name {entry['pool_name']}"
         )
-    method_should_succeed(
-        rados_obj.create_pool,
-        **entry,
-    )
+        method_should_succeed(
+            rados_obj.create_pool,
+            **entry,
+        )
 
-    log.debug(
-        "Created the pool. beginning to create large number of omap entries on the pool"
-    )
+        log.info(
+            f"Created the pool {entry['pool_name']}. beginning to create large number of omap entries on the pool"
+        )
 
     # Creating omaps
     create_omap(pool_obj, pool_target_configs, omap_target_configs)
 
-    omap_thread = Thread(
-        target=create_omap, args=[pool_obj, pool_target_configs, omap_target_configs]
-    )
-
-    # Get the scrub and deep scrup time stamp before scrub and deep scrub execution
-    before_scrub_log = scrub_obj.get_pg_dump("pgid", "last_scrub_stamp")
-    before_deep_scrub_log = scrub_obj.get_pg_dump("pgid", "last_deep_scrub_stamp")
-
-    # performing scrub and deep-scrub
-    rados_obj.run_scrub()
-    rados_obj.run_deep_scrub()
-    scrub_status = 1
-    deep_scrub_status = 1
-
-    while scrub_status == 1 and deep_scrub_status == 1:
-        # Scrub check for every 20 seconds
-        time.sleep(20)
-        after_scrub_log = scrub_obj.get_pg_dump("pgid", "last_scrub_stamp")
-        after_deep_scrub_log = scrub_obj.get_pg_dump("pgid", "last_deep_scrub_stamp")
-        scrub_status = scrub_obj.verify_scrub_deepscrub(
-            before_scrub_log, after_scrub_log, "scrub"
-        )
-        deep_scrub_status = scrub_obj.verify_scrub_deepscrub(
-            before_deep_scrub_log, after_deep_scrub_log, "deepscrub"
-        )
-        log.info("scrubbing and deep-scrubbing are in progress")
-    log.info("scrubbing and deep-scrubbing completed")
-
-    # Check for large omap massage
-    ceph_status = rados_obj.run_ceph_command(cmd=" ceph health")
-    if "LARGE_OMAP_OBJECTS" in ceph_status["checks"]:
-        log.info(" Generated large omaps in the cluster")
-    else:
-        log.error(" Unable to generate the large omaps in the cluster")
+    # Check for large omap warning
+    if not pool_obj.check_large_omap_warning(
+        pool=entry["pool_name"],
+        obj_num=omap_target_configs["obj_end"],
+        obj_check=False,
+    ):
+        log.error("Failed to generate large omap warning on the cluster")
         return 1
+    log.info("Generated Large OMAP warning on the cluster")
+
+    scrub_thread = Thread(
+        target=perform_scrubbing, args=[rados_obj, scrub_obj, pool_target_configs]
+    )
 
     # verification of OSDs for 30 minutes
     verification_osd_thread = Thread(target=verification_osd, args=[rados_obj, 30])
-    omap_thread.daemon = True
-    omap_thread.start()
+    scrub_thread.daemon = True
+    log.info("Starting scrubbing thread")
+    scrub_thread.start()
+    log.info("Starting OSD state verification thread")
     verification_osd_thread.start()
     verification_osd_thread.join()
-    omap_thread._delete()
+    scrub_thread.join()
+
     if result == 0:
         return 0
     else:
         return 1
 
 
+def perform_scrubbing(rados_obj, scrub_obj, pool_configs):
+    for entry in pool_configs.values():
+        # Get the scrub and deep scrub time stamp before scrub and deep scrub execution
+        pool_pgid = rados_obj.get_pgid(pool_name=entry["pool_name"])[0]
+        pool_pg_dump = rados_obj.get_ceph_pg_dump(pg_id=pool_pgid)
+        before_scrub_log = pool_pg_dump["last_scrub_stamp"]
+        before_deep_scrub_log = pool_pg_dump["last_deep_scrub_stamp"]
+
+        log.info(f"last_scrub: {pool_pg_dump['last_scrub']}")
+        log.info(f"last_scrub_stamp: {pool_pg_dump['last_scrub_stamp']}")
+        log.info(f"last_deep_scrub: {pool_pg_dump['last_deep_scrub']}")
+        log.info(f"last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}")
+
+        # performing scrub and deep-scrub
+        rados_obj.run_scrub(pool=entry["pool_name"])
+        rados_obj.run_deep_scrub(pool=entry["pool_name"])
+        scrub_status = 1
+        deep_scrub_status = 1
+        log.info(f"Scrubbing has been triggered for the pool {entry['pool_name']}")
+
+        while scrub_status == 1 and deep_scrub_status == 1:
+            # Scrub check for every 30 seconds
+            time.sleep(30)
+            pool_pg_dump = rados_obj.get_ceph_pg_dump(pg_id=pool_pgid)
+            after_scrub_log = pool_pg_dump["last_scrub_stamp"]
+            after_deep_scrub_log = pool_pg_dump["last_deep_scrub_stamp"]
+            scrub_status = scrub_obj.verify_scrub_deepscrub(
+                before_scrub_log, after_scrub_log, "scrub"
+            )
+            deep_scrub_status = scrub_obj.verify_scrub_deepscrub(
+                before_deep_scrub_log, after_deep_scrub_log, "deepscrub"
+            )
+            log.info("scrubbing and deep-scrubbing are in progress")
+        log.info("scrubbing and deep-scrubbing completed")
+
+
 def create_omap(pool_fun, pool_configs, omap_configs):
     """
-    Used to create a omap entries.
+    Used to create omap entries.
     Args:
         pool_fun : PoolFunctions object imported from  pool_workflows
         pool_configs:  Pool configuration details
@@ -138,7 +155,7 @@ def verification_osd(rados_object, test_time):
     time_execution = datetime.datetime.now() + datetime.timedelta(minutes=test_time)
 
     while datetime.datetime.now() < time_execution:
-        time.sleep(10)
+        time.sleep(30)
         total_osds = osd_stats["num_osds"]
         log.info(f"The total number of osd are:{total_osds}")
         no_osd_up = osd_stats["num_up_osds"]

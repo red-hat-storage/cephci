@@ -32,7 +32,10 @@ def linux_untar(clients, mountpoint, dirs=(".")):
             # Start linux untar
             cmd = "cd {}/{};tar -xvf linux-5.4.54.tar.xz".format(mountpoint, directory)
             untar = Thread(
-                target=lambda: client.exec_command(cmd=cmd, sudo=True), args=()
+                target=lambda: client.exec_command(
+                    cmd=cmd, sudo=True, long_running=True
+                ),
+                args=(),
             )
             untar.start()
             threads.append(untar)

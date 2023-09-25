@@ -6,16 +6,20 @@ class Cluster(Cli):
         super(Cluster, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} cluster"
 
-    def create(self, name, nfs_server):
+    def create(self, name, nfs_server, ha=False, vip=None):
         """
         Perform create operation for nfs cluster
         Args:
             name (str): Name of the cluster
             nfs_server (list,tuple): Name of the server on which NFS Cluster to be created
+            ha (bool): Flag to check if HA is required
+            vip (str): Vip for the HA cluster
         """
         nfs_server = nfs_server if type(nfs_server) in (list, tuple) else [nfs_server]
         nfs_server = " ".join(nfs_server)
         cmd = f"{self.base_cmd} create {name} '{nfs_server}'"
+        if ha:
+            cmd += f" --ingress --virtual-ip {vip}"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()

@@ -82,4 +82,4 @@ tests:
            container_image_prometheus: registry.redhat.io/openshift4/ose-prometheus:latest
            container_image_alertmanager: registry.redhat.io/openshift4/ose-prometheus-alertmanager:latest
          registry_image:
-           docker_registry_image: docker.io/meadityaramteke/library
+           docker_registry_image: quay.io/aramteke/registry
