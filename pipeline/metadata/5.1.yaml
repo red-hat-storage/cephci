@@ -611,7 +611,7 @@ suites:
       - stage-2
   - name: "test-rados-stretch-cluster-upgrade"
     suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode-upgrade.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    global-conf: "conf/pacific/rados/stretch-mode-host-location-attrs.yaml"
     platform: "rhel-8"
     rhbuild: "5.1"
     inventory:

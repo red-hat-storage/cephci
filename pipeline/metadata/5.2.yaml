@@ -387,7 +387,7 @@ suites:
 
   - name: "Testing RADOS regression for Stretch mode upgrade"
     suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode-upgrade.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
+    global-conf: "conf/pacific/rados/stretch-mode-host-location-attrs.yaml"
     platform: "rhel-9"
     rhbuild: "5.2"
     inventory:
