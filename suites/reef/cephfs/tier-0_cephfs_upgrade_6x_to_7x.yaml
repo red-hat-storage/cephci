@@ -3,8 +3,8 @@
 #    conf/quincy/cephfs/tier-2_cephfs_upgrade.yaml
 #
 # Test Steps:
-#   (1) Bootstrap cluster using latest released ceph 5.x with below options,
-#       - rhcs-version: 5.2 in this suite, but it can be changed to 5.x for upgrade start version as needed
+#   (1) Bootstrap cluster using latest released ceph 6.x with below options,
+#       - rhcs-version: 6.1 in this suite, but it can be changed to 6.x for upgrade start version as needed
 #       - release: ga in this suite but it can be changed to  <ga | z1 | z1-async1>
 #       - registry-url: <registry-URL>
 #       - mon-ip: <monitor address, Required>
@@ -182,9 +182,15 @@ tests:
       name: "creation of Prerequisites for Upgrade"
       polarion-id: CEPH-83575313
   - test:
+      abort-on-fail: false
+      desc: Validates nfs after upgrade
+      module: cephfs_upgrade.cephfs_post_upgrade_validation.py
+      name: "Validates NFS after upgrade"
+      polarion-id: CEPH-83575098
+  - test:
       name: cephfs_volume_management
       module: cephfs_volume_management.py
-      polarion-id: CEPH-83573445
+      polarion-id: CEPH-83573446
       desc: cephfs volume management
       abort-on-fail: false
   - test:
@@ -196,7 +202,7 @@ tests:
   - test:
       name: cephfs_snapshot_management
       module: cephfs_snapshot_management.py
-      polarion-id: CEPH-83571366
+      polarion-id: CEPH-83573259
       desc: cephfs snapshot management
       abort-on-fail: false
   - test:
