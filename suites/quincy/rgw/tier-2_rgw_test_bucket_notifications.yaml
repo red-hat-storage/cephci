@@ -114,7 +114,6 @@ tests:
       name: notify on multipart upload events with kafka_none_persistent
       desc: notify on multipart upload events with kafka_none_persistent
       polarion-id: CEPH-83574070
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -150,7 +149,6 @@ tests:
       name: notify on multipart upload events with kafka_none and verify timestamp of event record
       desc: notify on multipart upload events with kafka_none and verify timestamp of event record
       polarion-id: CEPH-83574693
-      comments: known issue (bz-2149259)
       module: sanity_rgw.py
       config:
         run-on-rgw: true
