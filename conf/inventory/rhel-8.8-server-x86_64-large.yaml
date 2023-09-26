@@ -4,7 +4,7 @@ id: rhel
 instance:
   create:
     image-name: RHEL-8.8.0-x86_64-ga-latest
-    vm-size: ci.m1.large
+    vm-size: ci.standard.large
 
   setup: |
     #cloud-config
