@@ -151,7 +151,7 @@ suites:
     - cephfs
     - stage-2
 
-- name: "Basic Ceph-NVMeoF Testing - Non Containerized"
+- name: "Basic Ceph-NVMeoF Testing"
   suite: "suites/quincy/nvmeof/tier-0_nvmeof_sanity.yaml"
   global-conf: "conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml"
   platform: "rhel-9"
@@ -165,7 +165,7 @@ suites:
     - stage-3
 
 - name: "Ceph-NVMeoF - IO Perf testing LibRBD vs NVMeoTCP"
-  suite: "suites/quincy/nvmeof/tier-0_nvmeof_librbd_vs_nvmeof.yaml"
+  suite: "suites/quincy/nvmeof/tier-0_nvmeof_librbd_vs_nvmeof_4kbs_1vol.yaml"
   global-conf: "conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml"
   platform: "rhel-9"
   rhbuild: "6.0"

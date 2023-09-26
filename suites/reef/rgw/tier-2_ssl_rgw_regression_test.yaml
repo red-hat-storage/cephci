@@ -290,14 +290,15 @@ tests:
         timeout: 300
 
   - test:
-      name: NFS export delete
-      desc: NFS cluster and exports delete
-      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      name: Test NFS cluster and export create
+      desc: Test NFS cluster and export create
+      polarion-id: CEPH-83574597
       module: sanity_rgw.py
       config:
+        run-on-rgw: true
         script-name: ../nfs_ganesha/nfs_cluster.py
-        config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
-        timeout: 500
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+        timeout: 300
 
   - test:
       abort-on-fail: true
@@ -311,6 +312,16 @@ tests:
           - "mkdir /mnt/nfs1"
           - "mount -t nfs -o nfsvers=4,noauto,soft,sync,proto=tcp {node_ip:node5}:/ /mnt/nfs1"
       module: exec.py
+
+  - test:
+      name: NFS export delete
+      desc: NFS cluster and exports delete
+      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      module: sanity_rgw.py
+      config:
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
+        timeout: 500
 
   - test:
       name: Test no crash during deleting bucket with aborted multipart upload
