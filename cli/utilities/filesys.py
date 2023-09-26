@@ -22,6 +22,11 @@ class Mount(Cli):
             server (str): Nfs server hostname
             export (str): nfs export path)
         """
+        # Check if mount dir is present, else create
+        out = self.execute(cmd=f"ls {mount}", sudo=True)
+        if not out[0]:
+            self.execute(cmd=f"mkdir {mount}", sudo=True)
+
         # Create the mount point
         cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port} {server}:{export} {mount}"
         self.execute(sudo=True, long_running=True, cmd=cmd)

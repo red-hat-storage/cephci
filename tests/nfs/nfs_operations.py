@@ -1,7 +1,10 @@
+from threading import Thread
+
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
+from cli.utilities.utils import get_ip_from_node, reboot_node
 from utility.log import Log
 
 log = Log(__name__)
@@ -107,3 +110,35 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
     for i in range(len(clients)):
         Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
+
+
+def perform_failover(nfs_nodes, failover_node, vip):
+    # Trigger reboot on the failover node
+    th = Thread(target=reboot_node, args=(failover_node,))
+    th.start()
+
+    # Validate any of the other nodes has got the VIP
+    flag = False
+
+    # Remove the port from vip
+    if "/" in vip:
+        vip = vip.split("/")[0]
+
+    # Perform the check with a timeout of 60 seconds
+    for w in WaitUntil(timeout=60, interval=5):
+        for node in nfs_nodes:
+            if node != failover_node:
+                assigned_ips = get_ip_from_node(node)
+                log.info(f"IP addrs assigned to node : {assigned_ips}")
+                # If vip is assigned, set the flag and exit
+                if vip in assigned_ips:
+                    flag = True
+                    log.info(f"Failover success, VIP reassigned to {node.hostname}")
+        if flag:
+            break
+    if w.expired:
+        raise OperationFailedError(
+            "The failover process failed and vip is not assigned to the available nodes"
+        )
+    # Wait for the node to complete reboot
+    th.join()
