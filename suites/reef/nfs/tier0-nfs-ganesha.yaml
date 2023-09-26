@@ -258,3 +258,13 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
+
+  - test:
+      name: Nfs Verify locks over nfs mount with root_squash enabled
+      module: nfs_verify_file_lock_root_squash.py
+      desc: Perform lock on file with root_squash enabled
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4

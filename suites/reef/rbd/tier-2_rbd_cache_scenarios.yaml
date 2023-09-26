@@ -86,7 +86,6 @@ tests:
   - test:
       abort-on-fail: true
       config:
-        level: client
         client: node4
         rep-pool-only: True
         rep_pool_config:
@@ -102,3 +101,20 @@ tests:
       module: test_rbd_dm_cache.py
       name: DM cache and DM write cache creation
       polarion-id: CEPH-83575581
+
+  - test:
+      abort-on-fail: true
+      config:
+        client: node4
+        rep-pool-only: True
+        rep_pool_config:
+          pool: test_pool
+          image1: immutable_image
+          size: 10G
+        fio:
+          runtime: 120
+      desc: Configure and validate immutable object cache feature
+      destroy-cluster: false
+      module: test_rbd_immutable_cache.py
+      name: Immutable object cache creation
+      polarion-id: CEPH-83574134

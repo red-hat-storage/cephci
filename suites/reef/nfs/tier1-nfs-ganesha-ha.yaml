@@ -202,3 +202,17 @@ tests:
           client02 : perfrom_linux_untar
           client03 : perform_lookups
           client04 : perfrom_du_sh
+
+
+  - test:
+      name: Nfs Verify failover with IO
+      module: nfs_verify_failover_with_io.py
+      desc:  Verify failover and check the IO completes and VIP got failover to another node
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+        servers: 2
+        ha: true
+        vip: 10.8.128.255/21
