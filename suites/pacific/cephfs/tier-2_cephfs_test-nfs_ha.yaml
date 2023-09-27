@@ -137,3 +137,9 @@ tests:
       desc: nfs-ha-failover
       polarion-id: CEPH-83575196
       abort-on-fail: false
+  - test:
+      name: nfs-ha-deployment_on_non_default_port_and_perform_failover
+      module: cephfs_nfs.test_cephfs_nfs_ha_deployment_with_non_default_port.py
+      desc: Deploy NFS HA on non default port and perform failover.
+      polarion-id: CEPH-83575097
+      abort-on-fail: false
