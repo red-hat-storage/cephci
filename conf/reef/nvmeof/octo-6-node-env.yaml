@@ -1,20 +1,20 @@
 # Physical/Bare-metal environment required for Ceph Nvme-oF.
-# The below defined cluster has 5 nodes + 1 Ceph-Nvmeof node + 1 Client node.
+# The below defined cluster has 4 nodes + 1 Ceph-Nvmeof node + 1 Client node.
 # Cluster configuration:
 #      3 MONS, 2 MGR, 5 OSD nodes
 #      1 Ceph NVMeoF GW node
-#      4 NVMe initiator nodes
+#      1 NVMe initiator nodes
 globals:
   -
     ceph-cluster:
       name: ceph
       networks:
-        public: ['10.1.172.0/21']
+        public: ['10.8.130.0/21']
       nodes:
         -
-          hostname: folio01
+          hostname: cali001
           id: node1
-          ip: 10.1.172.221
+          ip: 10.8.130.1
           root_password: passwd
           role:
             - _admin
@@ -25,13 +25,15 @@ globals:
           volumes:
             - /dev/sda
             - /dev/sdb
+            - /dev/sdc
             - /dev/sdd
-            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: folio02
+          hostname: cali004
           id: node2
-          ip: 10.1.172.222
+          ip: 10.8.130.4
           root_password: passwd
           role:
             - mon
@@ -40,13 +42,16 @@ globals:
           volumes:
             - /dev/sda
             - /dev/sdb
+            - /dev/sdc
             - /dev/sdd
+            - /dev/sdf
             - /dev/sde
+            - /dev/sdh
             - /dev/nvme0n1
         -
-          hostname: folio03
+          hostname: cali005
           id: node3
-          ip: 10.1.172.223
+          ip: 10.8.130.5
           root_password: passwd
           role:
             - mon
@@ -54,26 +59,28 @@ globals:
           volumes:
             - /dev/sda
             - /dev/sdb
+            - /dev/sdc
             - /dev/sdd
+            - /dev/sdf
             - /dev/sde
             - /dev/nvme0n1
         -
-          hostname: folio04
+          hostname: cali008
           id: node4
-          ip: 10.1.172.224
+          ip: 10.8.130.8
           root_password: passwd
           role:
             - osd
           volumes:
-            - /dev/sda
             - /dev/sdb
+            - /dev/sdc
             - /dev/sdd
-            - /dev/sde
+            - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: folio05
+          hostname: cali010
           id: node5
-          ip: 10.1.172.225
+          ip: 10.8.130.10
           root_password: passwd
           role:
             - osd
@@ -81,35 +88,14 @@ globals:
           volumes:
             - /dev/sda
             - /dev/sdb
-            - /dev/sdd
+            - /dev/sdc
             - /dev/sde
+            - /dev/sdg
             - /dev/nvme0n1
         -
-          hostname: folio06
+          hostname: cali012
           id: node6
-          ip: 10.1.172.226
+          ip: 10.8.130.12
           root_password: passwd
           role:
             - client
-        -
-          hostname: folio07
-          id: node7
-          ip: 10.1.172.227
-          root_password: passwd
-          role:
-            - client
-        -
-          hostname: folio08
-          id: node8
-          ip: 10.1.172.228
-          root_password: passwd
-          role:
-            - client
-        -
-          hostname: folio09
-          id: node9
-          ip: 10.1.172.229
-          root_password: passwd
-          role:
-            - client
-

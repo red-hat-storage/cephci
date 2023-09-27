@@ -198,7 +198,7 @@ def run(**kw):
         install_start_kafka(secondary_rgw_node, cloud_type)
     if configure_kafka_broker_security:
         configure_kafka_security(primary_rgw_node, cloud_type)
-        install_start_kafka(secondary_rgw_node, cloud_type)
+        configure_kafka_security(secondary_rgw_node, cloud_type)
 
     if test_config["config"]:
         log.info("creating custom config")

@@ -1,5 +1,5 @@
 # Test module to scale Single GW components - scale factor being 1 subsystem and 256 namespaces
-# Test config at conf/reef/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml
+# Test config at conf/reef/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml or conf/reef/nvmeof/octo-6-node-env.yaml for baremetal
 # Test attributes
   #  Single ceph-nvmeof GW colocated with osd on node5, node 6 is nvmeof initiators
   #  nvmeof GW - at end of each scale step/ test below is the configuration

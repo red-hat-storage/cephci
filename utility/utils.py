@@ -1729,7 +1729,7 @@ def configure_kafka_security(rgw_node, cloud_type):
         cmd=f"yes | cp /tmp/kafka_server.properties {KAFKA_HOME}/config/server.properties",
     )
 
-    # download kafka_security.sh script, create certs and and store them in keystore and truststore
+    # download kafka_security.sh script, create certs and store them in keystore and truststore
     if cloud_type == "ibmc":
         curl_security_sh = (
             "curl -o /tmp/kafka-security.sh https://10.245.4.89/kafka-security.sh"
