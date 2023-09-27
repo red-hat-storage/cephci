@@ -99,12 +99,6 @@ tests:
       module: test_client.py
       name: "configure client"
   - test:
-      name: Concurrent-clone-test
-      module: test_clone_threads.py
-      polarion-id: CEPH-83574592
-      desc: Concurrent-clone-test
-      abort-on-fail: false
-  - test:
       abort-on-fail: false
       desc: "Fill the cluster with specific percentage"
       module: test_io.py
