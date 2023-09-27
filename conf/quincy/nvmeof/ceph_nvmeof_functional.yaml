@@ -11,7 +11,6 @@ globals:
         role:
           - mon
           - mgr
-          - client
           - nvmeof-gw
       node3:
         role:
@@ -30,11 +29,11 @@ globals:
           - mds
           - osd
           - rgw
+          - nvmeof-gw
         no-of-volumes: 4
         disk-size: 20
       node6:
         role:
-          - client
           - nvmeof-gw
           - osd
         no-of-volumes: 4
@@ -43,18 +42,5 @@ globals:
         role:
           - client
       node8:
-        role:
-          - client
-      node9:
-        role:
-          - client
-      node10:
-        role:
-          - client
-          - nvmeof-gw        # Multiple gateways in the cluster
-      node11:
-        role:
-          - client
-      node12:
         role:
           - client
