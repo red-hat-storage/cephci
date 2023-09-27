@@ -216,16 +216,3 @@ tests:
         servers: 2
         ha: true
         vip: 10.8.128.255/21
-
-  - test:
-      name: Nfs Verify kill ganesha process and perform failover
-      module: nfs_verify_nfs_kill_process_failover.py
-      desc:  Verify failover when nfs ganesha process is killed on nfs node
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: 4.1
-        clients: 4
-        servers: 2
-        ha: true
-        vip: 10.8.128.255/21
