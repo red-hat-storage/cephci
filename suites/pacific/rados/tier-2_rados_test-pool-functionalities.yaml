@@ -258,7 +258,7 @@ tests:
 #  - test:
 #      name: Migrate data bw pools.
 #      module: test_data_migration_bw_pools.py
-#      polarion-id: CEPH-83574768, CEPH-10326
+#      polarion-id: CEPH-83574768
 #      config:
 #        pool-1-type: replicated
 #        pool-2-type: erasure

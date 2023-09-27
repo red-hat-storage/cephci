@@ -114,12 +114,7 @@ tests:
   - test:
       name: Replicated pool LC
       module: rados_prep.py
-      # CEPH-83573626 is added here as it is
-      # a prerequistite for replicated pool
-      # creation
-      # CEPH-83573626: covers mons, OSDs in
-      # stretch cluster mode
-      polarion-id: CEPH-83571632, CEPH-83573626
+      polarion-id: CEPH-83571632
       config:
         replicated_pool:
           create: true
@@ -141,7 +136,7 @@ tests:
   - test:
       name: Deploy stretch Cluster
       module: stretch_cluster.py
-      polarion-id: CEPH-83573621, CEPH-83574968
+      polarion-id: CEPH-83573621
       config:
         site1: site-A
         site2: site-B
@@ -175,7 +170,7 @@ tests:
           size: 10G
         io-total: 100M
       desc: Perform export during read/write,resizing,flattening,lock operations
-      polarion-id: CEPH-9876, CEPH-83574972
+      polarion-id: CEPH-83574972
 
   - test:
       name: rgw sanity tests

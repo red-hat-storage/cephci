@@ -158,7 +158,7 @@ tests:
   - test:
       name: EC pool with Overwrites
       module: rados_prep.py
-      polarion-id: CEPH-83571730, CEPH-11684
+      polarion-id: CEPH-83571730
       config:
         ec_pool:
           create: true

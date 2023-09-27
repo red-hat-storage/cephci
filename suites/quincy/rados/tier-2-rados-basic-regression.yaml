@@ -115,9 +115,7 @@ tests:
   - test:
       name: Test configuration Assimilation
       module: test_config_assimilation.py
-      # CEPH-83573805 is generic polarion test
-      # for generic rados test with cephadm module
-      polarion-id: CEPH-83573480, CEPH-83573805
+      polarion-id: CEPH-83573480
       config:
         cluster_conf_path: "conf/quincy/rados/test-confs/cluster-configs"
         Verify_config_parameters:

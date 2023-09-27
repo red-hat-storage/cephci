@@ -182,7 +182,7 @@ tests:
   - test:
       name: Automatic trimming of Mon DB
       module: customer_scenarios.py
-      polarion-id: CEPH-83574095, CEPH-10311, CEPH-83574466
+      polarion-id: CEPH-83574466
       config:
         mondb_trim_config:
           paxos_service_trim_min: 10
