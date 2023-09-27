@@ -2125,6 +2125,20 @@ class CephNode(object):
             cmd = f"mkdir -p {dir_path}"
             self.exec_command(cmd=cmd, sudo=True)
 
+    def remove_file(self, file_path, sudo=False):
+        """Remove file from node
+        Args:
+            file_path (str): file path to delete
+            sudo (bool): use root access
+        """
+        client = self.rssh if sudo else self.ssh
+        try:
+            client().open_sftp().remove(file_path)
+        except Exception:
+            logger.info("rm failed, retrying with -rvf param")
+            cmd = f"rm -rvf {file_path}"
+            self.exec_command(cmd=cmd, sudo=True)
+
 
 class CephObject(object):
     def __init__(self, role, node):

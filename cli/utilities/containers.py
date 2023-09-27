@@ -136,3 +136,46 @@ class Container(Cli):
 
         if self.execute(sudo=True, long_running=True, cmd=cmd):
             raise ContainerRegistryError(f"Failed to pull container image '{image}'")
+
+    def rmi(self, image):
+        """Remove container image
+
+        Args:
+            image (str): Container image url
+        """
+        cmd = f"{self.base_cmd} rmi {image}"
+
+        if self.execute(sudo=True, long_running=True, cmd=cmd):
+            raise ContainerRegistryError(f"Failed to remove container image '{image}'")
+
+    def inspect(self, image, format=None):
+        """Inspect container image
+
+        Args:
+            image (str): Container image url
+            format (str): String to format
+        """
+        cmd = f"{self.base_cmd} inspect {image}"
+        if format:
+            cmd += f" --format={format}"
+
+        out = self.execute(sudo=True, cmd=cmd)
+        if not out:
+            raise ContainerRegistryError(f"Failed to inspect container image '{image}'")
+
+        return out
+
+    def compare(self, image, version):
+        """Compare container image version
+
+        Args:
+            image (str): Container image url
+            version (str): Container image expected version
+        """
+        _version = self.inspect(image, format="'{{.Config.Labels.version}}'")[0]
+        if _version < version:
+            return -1
+        elif _version == version:
+            return 0
+        else:
+            return 1
