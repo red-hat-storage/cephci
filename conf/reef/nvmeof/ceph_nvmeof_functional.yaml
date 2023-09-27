@@ -11,6 +11,7 @@ globals:
         role:
           - mon
           - mgr
+          - nvmeof-gw
       node3:
         role:
           - mon
@@ -28,11 +29,11 @@ globals:
           - mds
           - osd
           - rgw
+          - nvmeof-gw
         no-of-volumes: 4
         disk-size: 20
       node6:
         role:
-          - client
           - nvmeof-gw
           - osd
         no-of-volumes: 4
@@ -41,8 +42,5 @@ globals:
         role:
           - client
       node8:
-        role:
-          - client
-      node9:
         role:
           - client

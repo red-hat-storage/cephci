@@ -2,10 +2,11 @@ import json
 import time
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.gateway import Gateway, configure_spdk, delete_gateway
 from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from tests.cephadm import test_nvmeof, test_orch
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -18,7 +19,9 @@ def configure_subsystems(rbd, pool, gw, config):
     sub_nqn = config["nqn"]
     max_ns = config.get("max_ns", 32)
     gw.create_subsystem(sub_nqn, config["serial"], max_ns)
-    gw.create_listener(sub_nqn, config["listener_port"])
+
+    cfg = {"gateway-name": config.pop("gateway-name"), "traddr": gw.node.ip_address}
+    gw.create_listener(sub_nqn, config["listener_port"], **cfg)
     gw.add_host(sub_nqn, config["allow_host"])
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
@@ -126,25 +129,37 @@ def teardown(ceph_cluster, rbd_obj, config):
         rbd_obj: RBD object
         config: test config
     """
+    # Delete the multiple Initiators across multiple gateways
     if "initiators" in config["cleanup"]:
         for initiator_cfg in config["initiators"]:
-            node = get_node_by_id(ceph_cluster, initiator_cfg["node"])
-            initiator = Initiator(node)
-            LOG.info(
-                f"Disconnecting initiator {initiator_cfg['subnqn']} on node {initiator_cfg['node']}"
+            disconnect_initiator(
+                ceph_cluster, initiator_cfg["node"], initiator_cfg["subnqn"]
             )
-            initiator.disconnect(nqn=initiator_cfg["subnqn"])
 
+    # Delete the multiple subsystems across multiple gateways
     if "subsystems" in config["cleanup"]:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        gateway = Gateway(gw_node)
-        for sub_cfg in config["subsystems"]:
-            LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {gw_node}")
-            gateway.delete_subsystem(subnqn=sub_cfg["nqn"])
+        config_sub_node = config["subsystems"]
+        if not isinstance(config_sub_node, list):
+            config_sub_node = [config_sub_node]
+        for sub_cfg in config_sub_node:
+            node = config["gw_node"] if "node" not in sub_cfg else sub_cfg["node"]
+            sub_node = get_node_by_id(ceph_cluster, node)
+            sub_gw = NVMeCLI(sub_node)
+            LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {node}")
+            sub_gw.delete_subsystem(subnqn=sub_cfg["nqn"])
 
-        if "gateway" in config["cleanup"]:
-            delete_gateway(gw_node)
+    # Delete the gateway
+    if "gateway" in config["cleanup"]:
+        cfg = {
+            "config": {
+                "command": "remove",
+                "service": "nvmeof",
+                "args": {"service_name": f"nvmeof.{config['rbd_pool']}"},
+            }
+        }
+        test_orch.run(ceph_cluster, **cfg)
 
+    # Delete the pool
     if "pool" in config["cleanup"]:
         rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
@@ -164,9 +179,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     Returns:
         int - 0 when the execution is successful else 1 (for failure).
 
-    Example:
-
-
     """
     LOG.info("Starting Ceph Ceph NVMEoF deployment.")
 
@@ -182,13 +194,23 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     try:
         gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
 
-        gateway = Gateway(gw_node)
+        gateway = NVMeCLI(gw_node)
         if config.get("install"):
-            configure_spdk(gw_node, rbd_pool)
-
+            cfg = {
+                "config": {
+                    "command": "apply",
+                    "service": "nvmeof",
+                    "args": {"placement": {"nodes": [gw_node.hostname]}},
+                    "pos_args": [rbd_pool],
+                }
+            }
+            test_nvmeof.run(ceph_cluster, **cfg)
         if config.get("subsystems"):
             with parallel() as p:
                 for subsystem in config["subsystems"]:
+                    subsystem["gateway-name"] = find_client_daemon_id(
+                        ceph_cluster, rbd_pool
+                    )
                     p.spawn(configure_subsystems, rbd_obj, rbd_pool, gateway, subsystem)
 
         if config.get("initiator"):
