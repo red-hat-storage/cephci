@@ -458,33 +458,6 @@ tests:
       name: test LC from primary to secondary
       polarion-id: CEPH-11194
       comments: bug-1991808, test LC rules from primary to secondary
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.shared.sec rgw_sync_lease_period 10"
-              - "ceph orch restart rgw.shared.sec"
-            timeout: 120
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.shared.pri rgw_sync_lease_period 10"
-              - "ceph orch restart rgw.shared.pri"
-            timeout: 120
-        ceph-arc:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.shared.arc rgw_sync_lease_period 10"
-              - "ceph orch restart rgw.shared.arc"
-            timeout: 120
-      desc: Setting rgw_sync_lease_period to 10 on multisite archive
-      module: exec.py
-      name: Setting rgw_sync_lease_period to 10 on multisite archive
 
   - test:
       clusters:
