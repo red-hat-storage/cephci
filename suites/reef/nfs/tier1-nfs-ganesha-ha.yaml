@@ -203,7 +203,6 @@ tests:
           client03 : perform_lookups
           client04 : perfrom_du_sh
 
-
   - test:
       name: Nfs Verify failover with IO
       module: nfs_verify_failover_with_io.py
@@ -216,3 +215,42 @@ tests:
         servers: 2
         ha: true
         vip: 10.8.128.255/21
+
+  - test:
+      name: Nfs Verify pynfs with HA
+      module: nfs_verify_pynfs_ha.py
+      desc: Verify Pynfs tests with HA cluster
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+        servers: 2
+        ha: true
+        vip: 10.8.128.255/21
+
+  - test:
+      name: Nfs Verify file lock with HA
+      module: nfs_verify_file_lock_ha.py
+      desc: Verify file lock with HA cluster
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+        servers: 2
+        ha: true
+        vip: 10.8.128.255/21
+
+  - test:
+      name: Nfs Verify kill ganesha process and perform failover
+      module: nfs_verify_nfs_kill_process_failover.py
+      desc:  Verify failover when nfs ganesha process is killed on nfs node
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+        servers: 3
+        ha: true
+        vip: 10.8.130.50/21

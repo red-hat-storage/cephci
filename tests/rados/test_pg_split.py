@@ -3,9 +3,15 @@ import time
 import traceback
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
-from tests.rados.rados_test_util import create_pools, write_to_pools
+from tests.rados.rados_test_util import (
+    create_pools,
+    get_device_path,
+    wait_for_device,
+    write_to_pools,
+)
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed, should_not_be_empty
@@ -93,6 +99,39 @@ def run(ceph_cluster, **kw):
                     raise Exception(f"Unable to restart the OSD : {osd_id}")
             log.info("Completed reboots for OSDs during PG split scenarios")
 
+        if pool.get("remove_add_osd", False):
+            log.debug("Proceeding to add remove a OSD ")
+            log.info(
+                "---- Starting workflow ----\n---- Removal and addition of OSD daemons"
+            )
+            pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
+            log.debug(f"Acting set for removal and addition of OSDs {pg_set}")
+            target_osd = pg_set[0]
+            host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
+
+            dev_path = get_device_path(host, target_osd)
+            log.debug(
+                f"osd device path  : {dev_path}, osd_id : {target_osd}, host.hostname : {host.hostname}"
+            )
+
+            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
+            method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
+            time.sleep(20)
+            utils.osd_remove(ceph_cluster, target_osd)
+            time.sleep(20)
+            method_should_succeed(
+                utils.zap_device, ceph_cluster, host.hostname, dev_path
+            )
+            method_should_succeed(wait_for_device, host, target_osd, action="remove")
+            time.sleep(60)
+
+            # Adding the removed OSD back and checking the cluster status
+            utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
+            method_should_succeed(wait_for_device, host, target_osd, action="add")
+            time.sleep(20)
+
+            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
+
         if pool.get("del_obj", False):
             log.info(
                 f"Deleting objects from the pool when PG splits are in progress"
@@ -114,7 +153,7 @@ def run(ceph_cluster, **kw):
         )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
 
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=3000)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=5000)
         while datetime.datetime.now() < endtime:
             pool_pg_num = rados_obj.get_pool_property(
                 pool=pool["pool_name"], props="pg_num"
@@ -163,7 +202,7 @@ def run(ceph_cluster, **kw):
                 f"pg_num {pg_count_bulk_true} is expected to be greater than {pg_count_bulk_false} after bulk removal"
             )
 
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=3000)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=5000)
         while datetime.datetime.now() < endtime:
             pool_pg_num = rados_obj.get_pool_property(
                 pool=pool["pool_name"], props="pg_num"
@@ -185,6 +224,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "PGs decreased to desired levels after removal of bulk flag on the pool"
         )
+        # Checking cluster health after OSD removal
+        method_should_succeed(rados_obj.run_pool_sanity_check)
+        log.info("Sanity check post test execution, Test complete, Pass")
 
     except Exception as e:
         log.info(e)

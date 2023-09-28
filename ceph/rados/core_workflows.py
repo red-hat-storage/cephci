@@ -640,7 +640,7 @@ class RadosOrchestrator:
             cmd = "ceph osd deep-scrub all"
         self.client.exec_command(cmd=cmd, sudo=True)
 
-    def collect_osd_daemon_ids(self, osd_node) -> dict:
+    def collect_osd_daemon_ids(self, osd_node) -> list:
         """
         The method is used to collect the various OSD daemons present on a particular node
         :param osd_node: name of the OSD node on which osd daemon details are collected (ceph.ceph.CephNode): ceph node
@@ -985,6 +985,15 @@ class RadosOrchestrator:
                         return False
 
         return True
+
+    def list_pools_on_cluster(self) -> list:
+        """
+        Method fetches the list of pools from the cluster via ceph df command
+
+        Returns:
+            list of pools on the cluster
+        """
+        return self.run_ceph_command(cmd="ceph osd pool ls", client_exec=True)
 
     def detete_pool(self, pool: str) -> bool:
         """

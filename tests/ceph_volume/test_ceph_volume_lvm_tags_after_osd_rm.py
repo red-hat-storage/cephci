@@ -55,13 +55,13 @@ def run(ceph_cluster, **kw):
             raise RemoveOsdError("Failed to update the pool size")
 
     # Perform osd remove
-    conf = {"--zap": True} if config.get("operation") else {}
+    conf = {"zap": True} if config.get("operation") else {}
     osd_rm = CephAdm(osd_node).ceph.orch.osd.rm(osd_id=osd_id, **conf)
     if not osd_rm:
         raise RemoveOsdError("Failed to remove osd")
 
     # Wait until the rm operation is complete
-    timeout, interval = 60, 2
+    timeout, interval = 300, 6
     for w in WaitUntil(timeout=timeout, interval=interval):
         conf = {"format": "json"}
         out = CephAdm(osd_node).ceph.orch.osd.rm(status=True, **conf)
