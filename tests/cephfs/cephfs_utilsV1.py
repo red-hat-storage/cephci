@@ -358,8 +358,10 @@ class FsUtils(object):
         grep_pid_cmd = """sudo ceph tell mds.%d client ls | grep '"pid":'"""
         out, rc = client_node.exec_command(cmd=grep_pid_cmd % rank)
         client_pid = re.findall(r"\d+", out)
+        successful_clients = 0
         while True:
             for client in clients:
+                successful_clients += 1
                 try:
                     for pid in client_pid:
                         client.exec_command(
@@ -369,6 +371,10 @@ class FsUtils(object):
                 except Exception as e:
                     print(e)
                     pass
+            if successful_clients == len(clients):
+                raise CommandFailed(
+                    f"Not able to find the PID {client_pid} in any of the clients"
+                )
 
     @staticmethod
     def manual_evict(client_node, rank):
