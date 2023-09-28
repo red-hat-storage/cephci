@@ -254,3 +254,36 @@ tests:
         servers: 3
         ha: true
         vip: 10.8.130.50/21
+
+  - test:
+      name: Nfs-Ganesha-HA perform failover and delete the files
+      module: nfs_verify_failover_with_file_ops.py
+      desc:  Verify perform failover and delete the files from Client 2, Check files deleted
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 2
+        servers: 2
+        file_count: 3
+        ha: true
+        vip: 10.8.128.255/21
+        operations:
+          client01 : create_files
+          client02 : remove_files
+
+  - test:
+      name: Nfs-Ganesha-HA perform failover and modify the files
+      module: nfs_verify_failover_with_file_ops.py
+      desc:  Verify perform failover and modify the files from Client 2, Check files modify
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 2
+        servers: 2
+        file_count: 3
+        ha: true
+        vip: 10.8.128.255/21
+        operations:
+          client01 : create_files
