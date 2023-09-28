@@ -11,7 +11,9 @@ from utility.log import Log
 
 LOG = Log(__name__)
 
-CEPH_NVMECLI_IMAGE = "quay.io/ceph/nvmeof-cli:0.0.3"
+CEPH_NVMECLI_IMAGE = (
+    "registry-proxy.engineering.redhat.com/rh-osbs/ceph-nvmeof-cli:latest"
+)
 
 
 def find_client_daemon_id(cluster, pool_name):
