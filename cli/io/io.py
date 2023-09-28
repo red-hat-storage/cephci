@@ -5,7 +5,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def linux_untar(clients, mountpoint, dirs=(".")):
+def linux_untar(clients, mountpoint, dirs=("."), full_untar=False):
     """
     Performs Linux untar on the given clients
     Args:
@@ -14,6 +14,7 @@ def linux_untar(clients, mountpoint, dirs=(".")):
                        mounted.
         dirs(tuple): A tuple of dirs where untar has to
                     started. (Default:('.'))
+        full_untar(bool): Whether to perform a complete untar or not
     """
     threads = []
     if not isinstance(clients, list):
@@ -21,7 +22,7 @@ def linux_untar(clients, mountpoint, dirs=(".")):
 
     for client in clients:
         # Download linux untar to root
-        cmd = "wget https://cdn.kernel.org/pub/linux/kernel/" "v5.x/linux-5.4.54.tar.xz"
+        cmd = "wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.4.54.tar.xz"
         client.exec_command(cmd=cmd, sudo=True)
 
         for directory in dirs:
@@ -31,6 +32,11 @@ def linux_untar(clients, mountpoint, dirs=(".")):
 
             # Start linux untar
             cmd = "cd {}/{};tar -xvf linux-5.4.54.tar.xz".format(mountpoint, directory)
+            if not full_untar:
+                # If full untar is not required, perform untar of few directories alone
+                cmd += (
+                    f"{mountpoint}/{directory} linux-5.4.54/drivers linux-5.4.54/tools"
+                )
             untar = Thread(
                 target=lambda: client.exec_command(
                     cmd=cmd, sudo=True, long_running=True

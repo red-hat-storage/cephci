@@ -91,7 +91,9 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
         # the solution is to repeat the rm operation.
         for w in WaitUntil(timeout=timeout, interval=interval):
             try:
-                client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/*")
+                client.exec_command(
+                    sudo=True, cmd=f"rm -rf {nfs_mount}/*", long_running=True
+                )
                 break
             except Exception as e:
                 log.warning(f"rm operation failed, repeating!. Error {e}")
