@@ -1562,12 +1562,18 @@ class RadosOrchestrator:
             pool_id: pool id
             osd: osd id whose pgs are to be retrieved
             osd_primary: primary osd id whose pgs are to be retrieved
-            states:
+            states: available choices: stale/creating/active/activating/clean/recovery_wait/recovery_toofull/
+            recovering/forced_recovery/down/recovery_unfound/backfill_unfound/undersized/degraded/
+            remapped/premerge/scrubbing/deep/inconsistent/peering/repair/backfill_wait/backfilling/
+            forced_backfill/backfill_toofull/incomplete/peered/snaptrim/snaptrim_wait/snaptrim_error
         E.g:
             cph pg ls [<pool:int>] [<states>...]
             ceph pg ls-by-osd <id|osd.id> [<pool:int>] [<states>...]
             ceph pg ls-by-pool <poolstr> [<states>...]
             ceph pg ls-by-primary <id|osd.id> [<pool:int>] [<states>...]
+            ceph pg ls 6 remapped
+            ceph pg ls-by-pool repli_32 backfilling
+            ceph pg ls-by-pool repli_32 clean
         Returns:
             list having pgids in string format
         """
@@ -1576,7 +1582,6 @@ class RadosOrchestrator:
         cmd = "ceph pg "
         if pool_name:
             cmd += f"ls-by-pool {pool_name}"
-            cmd = f"{cmd} {pool_id}" if pool_id else cmd
         elif osd:
             cmd += f"ls-by-osd {osd}"
             cmd = f"{cmd} {pool_id}" if pool_id else cmd
@@ -1594,6 +1599,8 @@ class RadosOrchestrator:
 
         pgid_dict = self.run_ceph_command(cmd=cmd)
 
+        if not pgid_dict["pg_stats"]:
+            return []
         for pg_stats in pgid_dict["pg_stats"]:
             pgid_list.append(pg_stats["pgid"])
 
@@ -1755,15 +1762,12 @@ class RadosOrchestrator:
         Returns:
             (bool) True -> online | False -> offline
         """
-        host_cmd = f"ceph orch host ls --host_pattern {hostname} -f json"
-        out, _ = self.client.exec_command(cmd=host_cmd, sudo=True)
-        host_status = json.loads(out)[0]["status"].lower().strip()
-        log.debug(f"Status of the host is {host_status}")
+        host_cmd = f"ceph orch host ls --host_pattern {hostname}"
+        out = self.run_ceph_command(cmd=host_cmd, client_exec=True)
+        host_status = out[0]["status"].lower().strip()
+        log.info(f"Status of the host is {host_status}")
         if status:
-            if status.lower() == host_status:
-                return True
-            else:
-                return False
+            return True if status.lower() == host_status else False
         elif "offline" in host_status:
             return False
         return True
