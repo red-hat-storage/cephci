@@ -326,7 +326,6 @@ class BootstrapMixin:
 
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
-
         # The path to ssh public key mentioned in either output-pub-ssh-key or
         # ssh-public-key options will be considered for distributing the ssh public key,
         # if these are not specified, then the default ssh key path /etc/ceph/ceph.pub
@@ -356,6 +355,7 @@ class BootstrapMixin:
                 "promtail",
                 "snmp_gateway",
                 "loki",
+                "nvmeof",
             ]
 
             for image in supported_overrides:
