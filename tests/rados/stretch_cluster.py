@@ -94,7 +94,6 @@ def run(ceph_cluster, **kw):
         time.sleep(25)
 
         log.info("Stopped 2 OSD's from acting set, starting to wait for recovery")
-        rados_obj.change_recovery_threads(config=config, action="set")
 
         if not rados_obj.bench_write(pool_name=pool_name, **config):
             log.error("Failed to write objects into the Pool")
