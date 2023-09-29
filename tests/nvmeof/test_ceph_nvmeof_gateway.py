@@ -237,10 +237,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         - gateway
     """
     LOG.info("Starting Ceph Ceph NVMEoF deployment.")
-
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+
+    overrides = kwargs.get("test_data", {}).get("custom-config")
+    for key, value in dict(item.split("=") for item in overrides).items():
+        if key == "nvmeof_cli_image":
+            NVMeCLI.CEPH_NVMECLI_IMAGE = value
+            break
 
     if config.get("cleanup-only"):
         teardown(ceph_cluster, rbd_obj, config)

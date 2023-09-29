@@ -186,6 +186,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
     rbd_obj.ceph_client = get_node_by_id(ceph_cluster, config["initiator"]["node"])
+    overrides = kwargs.get("test_data", {}).get("custom-config")
+    for key, value in dict(item.split("=") for item in overrides).items():
+        if key == "nvmeof_cli_image":
+            NVMeCLI.CEPH_NVMECLI_IMAGE = value
+            break
 
     if config.get("cleanup-only"):
         teardown(ceph_cluster, rbd_obj, config)

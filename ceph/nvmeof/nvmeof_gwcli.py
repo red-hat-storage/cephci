@@ -11,8 +11,6 @@ from utility.log import Log
 
 LOG = Log(__name__)
 
-CEPH_NVMECLI_IMAGE = "quay.io/ceph/nvmeof-cli:0.0.3"
-
 
 def find_client_daemon_id(cluster, pool_name):
     """Find client daemon Id."""
@@ -27,6 +25,8 @@ def find_client_daemon_id(cluster, pool_name):
 
 class NVMeCLI:
     """NVMeCLI class for managing NVMeoF Gateway entities."""
+
+    CEPH_NVMECLI_IMAGE = "quay.io/ceph/nvmeof-cli:0.0.3"
 
     def __init__(self, node, port=5500):
         self.node = node
@@ -43,7 +43,7 @@ class NVMeCLI:
 
     def run_control_cli(self, action, **cmd_args):
         """Run CLI via control daemon."""
-        base_cmd = f"podman run {CEPH_NVMECLI_IMAGE}"
+        base_cmd = f"podman run {self.CEPH_NVMECLI_IMAGE}"
         base_cmd += (
             f" --server-address {self.node.ip_address} --server-port {self.port}"
         )

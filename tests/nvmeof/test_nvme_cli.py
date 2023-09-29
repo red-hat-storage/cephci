@@ -70,7 +70,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config = deepcopy(kwargs["config"])
     node = get_node_by_id(ceph_cluster, config["node"])
 
+    overrides = kwargs.get("test_data", {}).get("custom-config")
+    for key, value in dict(item.split("=") for item in overrides).items():
+        if key == "nvmeof_cli_image":
+            NVMeCLI.CEPH_NVMECLI_IMAGE = value
+            break
     nvme_cli = NVMeCLI(node, config.get("port", 5500))
+
     try:
         steps = config.get("steps", [])
         for step in steps:
