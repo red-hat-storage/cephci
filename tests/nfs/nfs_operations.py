@@ -144,3 +144,50 @@ def perform_failover(nfs_nodes, failover_node, vip):
         )
     # Wait for the node to complete reboot
     th.join()
+
+
+def Enable_nfs_coredump(nfs_nodes, conf_file="/etc/systemd/coredump.conf"):
+    """nfs_coredump
+    Args:
+        nfs_nodes(obj): nfs server node
+        conf_file: conf file path
+    """
+    if not isinstance(nfs_nodes, list):
+        nfs_nodes = [nfs_nodes]
+
+    for nfs_node in nfs_nodes:
+        try:
+            nfs_node.exec_command(
+                sudo=True, cmd=f"echo Storage=external >> {conf_file}"
+            )
+            nfs_node.exec_command(
+                sudo=True, cmd=f"echo DefaultLimitCORE=infinity >> {conf_file}"
+            )
+            nfs_node.exec_command(sudo=True, cmd="systemctl daemon-reexec")
+        except Exception:
+            raise OperationFailedError(f"failed enable coredump for {nfs_node}")
+
+
+def get_nfs_pid_and_memory(nfs_nodes):
+    """get nfs-ganesha pid and memory consumption(RSS)
+    Args:
+        nfs_nodes(obj): nfs server node
+    Returns:
+        nfs_server_info(dic): {"nfs server1": ["PID","RSS(MB)"], "nfs server2": ["PID","RSS(MB)"]}
+    """
+    nfs_server_info = {}
+    if not isinstance(nfs_nodes, list):
+        nfs_nodes = [nfs_nodes]
+
+    for nfs_node in nfs_nodes:
+        try:
+            pid = nfs_node.exec_command(sudo=True, cmd="pgrep ganesha")[0].strip()
+            rss = nfs_node.exec_command(sudo=True, cmd=f"ps -p {pid} -o rss=")[
+                0
+            ].strip()
+            nfs_server_info[nfs_node.hostname] = [pid, rss]
+        except Exception:
+            raise OperationFailedError(
+                f"failed get nfs process ID and rss for {nfs_node}"
+            )
+    return nfs_server_info
