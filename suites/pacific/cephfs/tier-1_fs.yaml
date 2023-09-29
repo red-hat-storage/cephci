@@ -168,13 +168,13 @@ tests:
   - test:
       name: cephfs_volume_management
       module: cephfs_volume_management.py
-      polarion-id: CEPH-83573445
+      polarion-id: CEPH-83573446
       desc: cephfs volume management
       abort-on-fail: false
   - test:
       name: cephfs_snapshot_management
       module: cephfs_snapshot_management.py
-      polarion-id: CEPH-83571366
+      polarion-id: CEPH-83573259
       desc: cephfs snapshot management
       abort-on-fail: false
   - test:

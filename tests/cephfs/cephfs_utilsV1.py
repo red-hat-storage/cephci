@@ -3039,3 +3039,45 @@ os.system('sudo systemctl start  network')
                     "count=100",
                 )
                 log.info(out)
+
+    def nfs_mount_and_io(self, nfs_client, nfs_server, export_name, mount_path):
+        """
+        To perform nfs mount and run smallfile IO
+
+        Args:
+            nfs_client: client where volume is mounted
+            nfs_server: nfs server name
+            export_name : export to be mounted
+            mount path : mount path
+        Returns:
+            None
+        Raises:
+            AssertionError
+        """
+        dirname_suffix = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(2))
+        )
+        dir_name = f"dir_{dirname_suffix}"
+        nfs_client.exec_command(sudo=True, cmd=f"mkdir -p {mount_path}")
+        assert self.wait_for_cmd_to_succeed(
+            nfs_client,
+            cmd=f"mount -t nfs -o port=2049 {nfs_server}:{export_name} {mount_path}",
+        )
+        out, rc = nfs_client.exec_command(cmd="mount")
+        mount_output = out.split()
+        log.info("Checking if nfs mount is is passed of failed:")
+        assert mount_path.rstrip("/") in mount_output
+
+        log.info("Creating Directory")
+        out, rc = nfs_client.exec_command(
+            sudo=True, cmd=f"mkdir {mount_path}/{dir_name}"
+        )
+        # Run IO on existing exports
+        nfs_client.exec_command(
+            sudo=True,
+            cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
+            f"--files 10 --files-per-dir 10 --dirs-per-dir 2 --top "
+            f"{mount_path}/{dir_name}",
+            long_running=True,
+        )
