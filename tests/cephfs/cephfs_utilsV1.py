@@ -2946,6 +2946,20 @@ os.system('sudo systemctl start  network')
         if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
             raise CommandFailed(f"All {service_name} are Not UP")
 
+    def validate_ports(self, client, service_name, port):
+        json_data, rc = client.exec_command(
+            sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
+        )
+        data = json.loads(json_data)
+        log.info(data)
+        spec_frontend_port = data[0]["spec"]["frontend_port"]
+        status_ports = data[0].get("status").get("ports", [])
+        log.info(f"Port specified for frontend_port is {spec_frontend_port}")
+        log.info(f"Port deployed for ingress is {status_ports}")
+
+        if spec_frontend_port not in status_ports:
+            raise CommandFailed(f"The frontend port{port} is not matching")
+
     def get_ceph_health_status(self, client, validate=True):
         """
         Validate if the Ceph Health is OK or in ERROR State.
@@ -2981,3 +2995,47 @@ os.system('sudo systemctl start  network')
         for service in services:
             if service["status"] != 1:
                 raise CommandFailed(f"service : {service['service_name']} is not UP")
+
+    def get_active_nfs(self, nfs_servers, virtual_ip):
+        for nfs in nfs_servers:
+            out, rc = nfs.exec_command(sudo=True, cmd="ip a")
+            if virtual_ip in out:
+                return nfs
+
+    def get_active_nfs_server(self, client, nfs_cluster, ceph_cluster):
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph nfs cluster info {nfs_cluster} -f json"
+        )
+        output = json.loads(out)
+        log.info(output)
+        backend_servers = [
+            server["hostname"] for server in output[nfs_cluster]["backend"]
+        ]
+        ceph_nodes = ceph_cluster.get_ceph_objects()
+        server_list = []
+        for node in ceph_nodes:
+            if node.node.hostname in backend_servers:
+                log.info(f"{node.node.hostname} is added to server list")
+                server_list.append(node)
+        return server_list
+
+    def get_daemon_status(self, client, daemon_name):
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph orch ps --daemon-type={daemon_name} --format json"
+        )
+        daemon_ls = json.loads(out)
+        log.info(daemon_ls)
+        return daemon_ls
+
+    def write_io(self, client1, mount_dir):
+        dir_name = "smallfile_dir"
+        end_time = datetime.datetime.now() + datetime.timedelta(minutes=10)
+        while datetime.datetime.now() < end_time:
+            for i, mount in enumerate(mount_dir):
+                log.info(f"Iteration : {i}")
+                out, rc = client1.exec_command(
+                    sudo=True,
+                    cmd=f"dd if=/dev/zero of={mount}{dir_name}_{i}/test_{i}.txt bs=100M "
+                    "count=100",
+                )
+                log.info(out)
