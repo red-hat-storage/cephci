@@ -102,6 +102,15 @@ tests:
                 - max_mds
                 - "2"
               command: shell
+          - config:
+              args:
+                - ceph
+                - config
+                - set
+                - mds
+                - defer_client_eviction_on_laggy_osds
+                - "false"
+              command: shell
         verify_cluster_health: true
       desc: "Execute the cluster deployment workflow."
       destroy-cluster: false
