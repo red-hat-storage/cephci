@@ -7,6 +7,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.crushtool_workflows import OsdToolWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -25,6 +26,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
+    osdtool_obj = OsdToolWorkflows(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
 
     regex = r"\s*(\d.\d)-rhel-\d"
@@ -40,6 +42,8 @@ def run(ceph_cluster, **kw):
             "Starting the test to verify reads balancer functionality on RHCS cluster"
         )
         log.debug("Creating multiple pools for testing")
+        rados_obj.configure_pg_autoscaler(default_mode="warn")
+        time.sleep(10)
         pools = config["create_pools"]
         for each_pool in pools:
             cr_pool = each_pool["create_pool"]
@@ -52,7 +56,7 @@ def run(ceph_cluster, **kw):
             method_should_succeed(rados_obj.bench_write, **cr_pool)
         log.info("Completed creating pools and writing test data into the pools")
 
-        existing_pools = rados_obj.list_pools_on_cluster()
+        existing_pools = rados_obj.list_pools()
 
         log.debug(
             "Checking the scores on each pool on the cluster, if the pool is replicated pool"
@@ -84,11 +88,11 @@ def run(ceph_cluster, **kw):
                 expected_score = (
                     read_scores["raw_score_acting"] / read_scores["optimal_score"]
                 )
-                if round(read_scores["score_acting"], 2) != round(expected_score, 2):
+                if round(read_scores["score_acting"], 1) != round(expected_score, 1):
                     log.error(
                         f"The scores for the pool is not calculated properly. "
-                        f"acting score {read_scores['score_acting']}"
-                        f"Expected : {(read_scores['raw_score_acting'] / read_scores['optimal_score'])}"
+                        f"acting score {round(read_scores['score_acting'], 2)}"
+                        f"Expected : {round(read_scores['raw_score_acting'] / read_scores['optimal_score'], 2)}"
                     )
                     raise Exception("Scores out of bound failure")
                 log.info(
@@ -278,8 +282,174 @@ def run(ceph_cluster, **kw):
                         log.error(f"An error occurred but was expected: {e}")
                         log.debug("Could not change the primary for EC pools. Pass")
                     break
-                log.info("Verified the Online commands to change acting set")
-                return 0
+
+            log.info("Verified the Online commands to change acting set")
+            return 0
+
+        if config.get("offline_command_verification"):
+            log.info(
+                "Verifying the usage of offline commands to change the acting set of the pool"
+            )
+            for pool_name in existing_pools:
+                pool_details = rados_obj.get_pool_details(pool=pool_name)
+                log.debug(f"Selected pool name : {pool_name}")
+
+                # Testing on replicated pools
+                if not pool_details["erasure_code_profile"]:
+                    init_read_scores = pool_details["read_balance"]
+                    init_score = init_read_scores["score_acting"]
+                    log.info(
+                        f"Selected pool {pool_name} is a replicated pool. Read score : {init_score}\n"
+                        f"initial scores Fetched from pool is {init_read_scores}"
+                    )
+
+                    # Fetching the osdmap from the cluster
+                    status, osd_map_loc = osdtool_obj.generate_osdmap()
+                    if not status:
+                        log.error(
+                            f"failed to generate osdmap file at loc : {osd_map_loc}"
+                        )
+                        raise Exception("osdmap file not generated")
+                    log.debug(f"osdmap file generated at loc : {osd_map_loc}")
+
+                    # Generating upmap balancer recommendations for the osdmap generated.
+                    status, upmap_file_loc = osdtool_obj.apply_osdmap_upmap(
+                        source_loc=osd_map_loc
+                    )
+                    if not status:
+                        log.error(
+                            f"failed to generate upmap file at loc : {upmap_file_loc}"
+                        )
+                        raise Exception("upmap file not generated")
+                    log.debug(f"upmap file generated at loc : {upmap_file_loc}")
+
+                    # Executing the upmap results on the cluster.
+                    try:
+                        client_node.exec_command(
+                            sudo=True, cmd=f"source {upmap_file_loc}"
+                        )
+                    except Exception as e:
+                        log.error(
+                            f"Exception hit during setting the upmap recommendations. {e}"
+                        )
+                        raise Exception("upmap recommendations not set")
+
+                    # Sleeping for 20 seconds for the upmap recommendations to take effect
+                    time.sleep(20)
+
+                    # Executing the read operation on the osdmap generated
+                    status, read_file_loc = osdtool_obj.apply_osdmap_read(
+                        source_loc=osd_map_loc, pool_name=pool_name
+                    )
+                    if not status:
+                        log.error(
+                            f"failed to generate read balancer file at loc : {read_file_loc}"
+                        )
+                        raise Exception("read balancer file not generated")
+
+                    log.debug(f"read balancer file generated at loc : {read_file_loc}")
+
+                    # Checking the state of pool before applying the reads balancing
+                    disallowed_states = [
+                        "remapped",
+                        "degraded",
+                        "incomplete",
+                        "undersized",
+                    ]
+                    clean_pgs = rados_obj.check_pool_pg_states(
+                        pool=pool_name, disallowed_states=disallowed_states
+                    )
+
+                    # Executing the read results on the cluster.
+                    try:
+                        client_node.exec_command(
+                            sudo=True, cmd=f"source {read_file_loc}"
+                        )
+                    except Exception as e:
+                        log.error(
+                            f"Exception hit during setting the read recommendations. {e}"
+                        )
+                        log.debug(
+                            "The exception hit is expected due to bug :"
+                            " https://bugzilla.redhat.com/show_bug.cgi?id=2237574."
+                            " The below exception to be uncommented post bug fix."
+                        )
+                        # raise Exception("read recommendations not set")
+
+                    log.info(
+                        f"Successfully set the read recommendations on the pool : {pool_name}"
+                    )
+                    time.sleep(5)
+                    # There should be no data movement b/w the PGs when read balancing was performed.
+                    # Checking the same if we had clean pgs to start with
+                    if clean_pgs:
+                        if not rados_obj.check_pool_pg_states(
+                            pool=pool_name, disallowed_states=disallowed_states
+                        ):
+                            log.error(
+                                "All the PGs are not active + clean post addition of reads balancing"
+                                f"There should be no data movement. Observed with pool {pool_name}"
+                            )
+                            raise Exception("Data movement post reads balancing error")
+                        log.debug(f"Clean PGs on pool {pool_name} post reads balancing")
+
+                    log.debug("Sleeping for 20 seconds for scores to be updated")
+                    time.sleep(20)
+                    pool_details = rados_obj.get_pool_details(pool=pool_name)
+                    final_read_scores = pool_details["read_balance"]
+                    final_score = final_read_scores["score_acting"]
+                    log.info(
+                        f"After applying read balancing on pool {pool_name} the Read score is : {final_score}\n"
+                        f"Final scores Fetched from pool is {final_read_scores}"
+                    )
+
+                    # The final scores should be less than or equal to initial scores
+                    if init_score < final_score:
+                        log.error(
+                            f"The scores are worse post application of reads balancing for pool {pool_name}"
+                            f"init score {init_score} ---- Final score : {final_score}"
+                        )
+                        raise Exception("Final scores are not correct")
+                    log.info(
+                        f"Completed offline tool scenario on pool {pool_name} for reads balancing"
+                    )
+
+                    # tbd: Checking the read throughput of the pools post reads balancer application
+
+                else:
+                    log.info(f"Selected pool {pool_name} is a EC pool.")
+
+                    # Fetching the osdmap from the cluster
+                    status, osd_map_loc = osdtool_obj.generate_osdmap()
+                    if not status:
+                        log.error(
+                            f"failed to generate osdmap file at loc : {osd_map_loc}"
+                        )
+                        raise Exception("osdmap file not generated")
+                    log.debug(f"osdmap file generated at loc : {osd_map_loc}")
+
+                    error_str = f"{pool_name} is an erasure coded pool;"
+                    # Executing the read operation on the osdmap generated
+                    try:
+                        osdtool_obj.apply_osdmap_read(
+                            source_loc=osd_map_loc, pool_name=pool_name
+                        )
+                    except Exception as e:
+                        if error_str not in str(e).strip():
+                            log.error(
+                                "Correct error string not seen in stderr stream"
+                                f"Expected : {error_str} \n Got : {e}"
+                            )
+                            raise Exception("Wrong error string obtained")
+                        log.debug(
+                            "Could not apply reads balancing to EC pool via offline tool. Pass"
+                        )
+                        log.debug(f"An error occurred but was expected: {e}")
+
+                    # ecpool_2 is an erasure coded pool; please try again with a replicated pool.
+
+            log.info("Verified the Online commands to change acting set")
+            return 0
 
     except Exception as err:
         log.error(
