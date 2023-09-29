@@ -177,8 +177,9 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd="ceph config set mgr mgr/volumes/max_concurrent_clones 2"
         )
-        for clone in clone_list:
-            fs_util.create_clone(client1, **clone)
+        with parallel() as p:
+            for clone in clone_list:
+                p.spawn(fs_util.create_clone, client1, **clone, validate=False)
         status_list = []
         iteration = 0
         while status_list.count("complete") < len(clone_list):
@@ -195,7 +196,7 @@ def run(ceph_cluster, **kw):
                 return 1
             else:
                 log.info(
-                    f"cloneing is in progress for {status_list.count('in-progress')} out of {len(clone_list)}"
+                    f"cloning is in progress for {status_list.count('in-progress')} out of {len(clone_list)}"
                 )
             log.info(f"Iteration {iteration} has been completed")
         return 0
