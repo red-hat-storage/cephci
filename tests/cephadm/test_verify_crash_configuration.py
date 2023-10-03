@@ -2,7 +2,10 @@ from json import loads
 
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError, ResourceNotFoundError
-from cli.utilities.utils import get_running_containers, start_container, stop_container
+from cli.utilities.utils import get_running_containers, stop_container
+from utility.log import Log
+
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -18,6 +21,7 @@ def run(ceph_cluster, **kw):
 
     # Get initial crash stats
     init_crash_stat = CephAdm(node).ceph.crash.stat()
+    log.info(f"Initial recorded crash stats are '{init_crash_stat}'")
 
     # Disable balancer module
     CephAdm(node).ceph.mgr.module(action="disable", module="balancer")
@@ -35,9 +39,10 @@ def run(ceph_cluster, **kw):
 
     # Get crash stats
     crash_stat = CephAdm(node).ceph.crash.stat()
+    log.info(f"Crash stats after stopping container are '{crash_stat}'")
 
     # Check for crash records
-    if crash_stat == "0 crashes recorded" or init_crash_stat == crash_stat:
+    if crash_stat in ("0 crashes recorded", init_crash_stat):
         raise OperationFailedError(
             "No new crash stats were recorded even after a crash happened"
         )
