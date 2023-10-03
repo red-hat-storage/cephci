@@ -390,7 +390,13 @@ def reboot_node(node):
     """
     reboot_cmd = "sleep 3; /sbin/shutdown -r now 'Reboot triggered by CephCI'"
     node.exec_command(sudo=True, cmd=reboot_cmd, check_ec=False)
+
+    # Add sleep for 5 seconds as node will be rebooted after 3 seconds
+    log.info("Sleeping for 5 sec to get reboot command executed ...")
+    sleep(5)
+
     # If service was removed, wait for a timeout to check whether its removed
+    log.info(f"Checking for node '{node.hostname}' connection")
     timeout, interval = 300, 10
     for w in WaitUntil(timeout=timeout, interval=interval):
         try:

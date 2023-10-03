@@ -1,4 +1,5 @@
 import re
+import time
 
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError, ResourceNotFoundError
@@ -43,9 +44,10 @@ def run(ceph_cluster, **kw):
     log.info("Dashboard URL does not bind to host.containers.internal")
 
     # Get container id for mgr daemon
-    container_id = get_running_containers(
+    container_ids, _ = get_running_containers(
         sudo=True, node=node, format="{{.ID}}", expr="name=mgr"
-    )[0]
+    )
+    container_id = container_ids.split("\n")[0]
 
     # Restart container for mgr daemon
     restart_container(node, container_id)
@@ -57,12 +59,26 @@ def run(ceph_cluster, **kw):
     # Refresh the ceph orch ps command
     CephAdm(node).ceph.orch.ps(refresh="True")
 
+    # Get all services available service
+    services = get_service_id(node, "mgr")
+
+    # Check for mgr service
+    regex, mgr_service = r"(?<=@mgr\.)[\w.-]+(?=\.service)", None
+    mgr_service = None
+    for service in services:
+        mgr_service = re.findall(regex, service)
+        if mgr_service:
+            break
+
+    if not mgr_service:
+        raise ResourceNotFoundError("mgr service not available")
+
     # Fail mgr service
-    regex = r"(?<=@mgr\.)[\w.-]+(?=\.service)"
-    out = get_service_id(node, "mgr")[0]
-    mgr_service = re.findall(regex, out)[0]
-    if CephAdm(node).ceph.mgr.fail(mgr=mgr_service):
-        raise OperationFailedError("Failed to execute `ceph mgr fail` command")
+    if CephAdm(node).ceph.mgr.fail(mgr=mgr_service[0]):
+        raise OperationFailedError("Failed to fail mgr service")
+
+    # Wait for 60 sec
+    time.sleep(60)
 
     # Check if dashboard URL does not bind to host.containers.internal
     check_dashboard_url(ceph_cluster)
