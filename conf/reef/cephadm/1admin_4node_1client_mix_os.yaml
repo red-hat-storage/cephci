@@ -7,10 +7,7 @@ globals:
       name: ceph
       node1:
         image-name:
-          openstack: RHEL-9.1.0-x86_64-ga-latest
-          ibmc: rhel-91-server-released
-        networks:
-          -  provider_net_cci_12
+          openstack: RHEL-9.2.0-x86_64-ga-latest
         role:
           - _admin
           - installer
@@ -28,9 +25,6 @@ globals:
       node2:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
-        networks:
-          -  provider_net_cci_12
         role:
           - osd
           - mon
@@ -43,9 +37,6 @@ globals:
       node3:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
-        networks:
-          -  provider_net_cci_12
         role:
           - mon
           - mgr
@@ -57,17 +48,11 @@ globals:
       node4:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
-        networks:
-          -  provider_net_cci_12
         role:
           - mds
           - rgw
       node5:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
-        networks:
-          -  provider_net_cci_7
         role:
           - client

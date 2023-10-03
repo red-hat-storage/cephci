@@ -6,8 +6,6 @@ globals:
   - ceph-cluster:
       name: ceph
       node1:
-        networks:
-          -  provider_net_cci_12
         role:
           - _admin
           - installer
@@ -23,8 +21,6 @@ globals:
         no-of-volumes: 6
         disk-size: 15
       node2:
-        networks:
-          -  provider_net_cci_12
         role:
           - osd
           - mon
@@ -35,8 +31,6 @@ globals:
         no-of-volumes: 6
         disk-size: 15
       node3:
-        networks:
-          -  provider_net_cci_12
         role:
           - mon
           - mgr
@@ -46,40 +40,26 @@ globals:
         no-of-volumes: 6
         disk-size: 15
       node4:
-        networks:
-          -  provider_net_cci_12
         role:
           - mds
           - rgw
       node5:
         image-name:
-          openstack: RHEL-9.1.0-x86_64-ga-latest
-          ibmc: rhel-91-server-released
-        networks:
-          -  provider_net_cci_7
+          openstack: RHEL-9.2.0-x86_64-ga-latest
         role:
           - client
       node6:
         image-name:
-          openstack: RHEL-9.1.0-x86_64-ga-latest
-          ibmc: rhel-91-server-released
-        networks:
-          -  provider_net_cci_8
+          openstack: RHEL-9.2.0-x86_64-ga-latest
         role:
           - client
       node7:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
-        networks:
-          -  provider_net_cci_8
         role:
           - client
       node8:
         image-name:
           openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
-        networks:
-          -  provider_net_cci_8
         role:
           - client
