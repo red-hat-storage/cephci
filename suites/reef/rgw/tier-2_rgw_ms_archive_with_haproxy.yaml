@@ -512,7 +512,7 @@ tests:
       desc: test LC transition on multisite, and bucket stats at archive
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite, and bucket stats at archive
-      polarion-id: CEPH-83575377
+      polarion-id: CEPH-83573372
       comments: known failure below rhcs-6.1 and old buckets[bug-2128421]
 
   - test:

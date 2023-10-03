@@ -208,7 +208,7 @@ tests:
   - test:
       name: Test suspension of versioning
       desc: test_versioning_suspend
-      polarion-id: CEPH-10209
+      polarion-id: CEPH-14263
       module: sanity_rgw.py
       config:
         script-name: test_versioning_with_objects.py

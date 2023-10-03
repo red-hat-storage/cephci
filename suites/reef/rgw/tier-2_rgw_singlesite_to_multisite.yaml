@@ -457,7 +457,7 @@ tests:
   - test:
       name: Test DBR reshard list and cancel command on secondary
       desc: Test DBR reshard list and cancel command on secondary
-      polarion-id: CEPH-83573590
+      polarion-id: CEPH-11474
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
