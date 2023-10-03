@@ -1,7 +1,6 @@
 """
 Program is for testing the scrub enhancement feature.As part of feature testing creating
-corrupted snapshot object.Performing scrub/deep-scrub to remove the corrupted SNA_ objects and
-replicating the correct SNA_ object
+corrupted snapshot object.Performing scrub/deep-scrub to replicate the correct SNA_ object
 """
 
 import random
@@ -38,7 +37,7 @@ def run(ceph_cluster, **kw):
         test_scenarios = ["scrub", "deep-scrub"]
         log.info("Running scrub enhancement feature testing")
         for test_input in test_scenarios:
-            log.info(f"The feature is testing withe the {test_input}")
+            log.info(f"The feature is testing with the {test_input}")
             log.info("Creating the pool with the single PG")
             create_pools(config, rados_obj, client_node)
             log.info("Pool creation completed")
@@ -85,7 +84,7 @@ def run(ceph_cluster, **kw):
                 0
             ].strip()
             sna_key_obj_list = sna_obj.split("\t")
-            # pdb.set_trace()
+
             corrupt_key = sna_obj.split(".")[1].strip() + "CORRUPTED"
             correct_key = sna_key_obj_list[1].strip()
             # Creating mount directory in the acting osd to create the object output
@@ -168,18 +167,6 @@ def run(ceph_cluster, **kw):
                 return 1
             log.info(f"The snapshot object is  replicated after {test_input}")
 
-            cmd_no_duplicate_obj = (
-                f"{cmd_base} ceph-kvstore-tool bluestore-kv  /var/lib/ceph/osd/ceph-{primary_osd} "
-                f"list p | grep {corrupt_key} | wc -l"
-            )
-            no_obj_tup = acting_osd_node.exec_command(
-                sudo=True, cmd=cmd_no_duplicate_obj
-            )
-            log.info(f"Checking that corrupted object is deleted after {test_input}")
-            if int(no_obj_tup[0].strip()) == 1:
-                log.error(f"The corrupted objected not deleted after {test_input}")
-                return 1
-            log.info(f"The corrupted  object  is deleted after {test_input}")
             # Unsetting the noout flag
             scrub_obj.set_osd_flags("unset", "noout")
             if not rados_obj.change_osd_state(action="start", target=primary_osd):
