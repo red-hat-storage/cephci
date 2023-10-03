@@ -392,7 +392,7 @@ tests:
   - test:
       name: enable bucket versioning on primary
       desc: test_versioning_enable on secondary
-      polarion-id: CEPH-9178
+      polarion-id: CEPH-9199
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
