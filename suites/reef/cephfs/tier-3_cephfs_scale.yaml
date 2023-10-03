@@ -1,0 +1,166 @@
+---
+#=======================================================================================================================
+# Tier-level: 3
+# Test-Suite: tier-3_cephfs_scale.yaml
+# Conf file : conf/pacific/cephfs/tier_0_fs.yaml
+# options : --cloud baremetal if required to run on baremetal
+# Test-Case Covered:
+#  CEPH-83573517 - Validate the max subvolumes that can be created under a FS volume.
+#  CEPH-83573518 - Validate the max subvolume groups that can be created under a FS volume.
+#  CEPH-83574957 - Validate the max snapshot that can be created under a root FS sub volume group.
+#  CEPH-83575405 - Include large number of smallfiles in a single subvolume and take
+#                  snapshots and capture the time taken
+#  CEPH-83575584 - Validate the max snapshot that can be created under a root FS sub volume.
+#  CEPH-83575629 - Validate the max clones can be created from single snapshot of subvolume.
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node7
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: false
+      config:
+        fill_data: 80
+        clean_up: true
+      desc: "Max subvolumess"
+      module: cephfs_scale.max_subvolumes.py
+      name: cephfs Scale test for max subvolumes
+      polarion-id: "CEPH-83573517"
+  - test:
+      abort-on-fail: false
+      config:
+        fill_data: 80
+        clean_up: true
+      desc: "Max sub volume groups"
+      module: cephfs_scale.max_svg_sv.py
+      name: cephfs Scale test for max subvolume groups
+      polarion-id: "CEPH-83573518"
+  - test:
+      abort-on-fail: false
+      desc: "Max snaps per volume"
+      module: cephfs_scale.max_smallfile_snap.py
+      name: cephfs Scale test for max Snapshots per volume
+      polarion-id: "CEPH-83574957"
+  - test:
+      abort-on-fail: false
+      config:
+        fill_data: 80
+        clean_up: true
+      desc: "Cephfs Scale test for max Snapshots under single subvolume until it reaches the default limit"
+      module: cephfs_scale.max_snapshots_single_volume.py
+      name: cephfs Scale test for max Snapshots under single subvolume to it's default limit
+      polarion-id: "CEPH-83575405"
+  - test:
+      abort-on-fail: false
+      config:
+        fill_data: 80
+        clean_up: true
+      desc: "Cephfs Scale test for max Snapshots under single subvolume"
+      module: cephfs_scale.max_snapshots.py
+      name: cephfs Scale test for max Snapshots under single subvolume
+      polarion-id: "CEPH-83575584"
+  - test:
+      abort-on-fail: false
+      config:
+        subvol_size: 5368706371
+        test_timeout: 7200
+        subvol_data_fill: 2
+      desc: "Validate max clones from single snapshot of subvolume"
+      module: cephfs_scale.max_clones_from_snap.py
+      name: "Clone scale testing"
+      polarion-id: "CEPH-83575629"
