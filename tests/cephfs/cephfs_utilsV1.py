@@ -2987,6 +2987,16 @@ os.system('sudo systemctl start  network')
                     raise CommandFailed("Host is in Offline state")
 
     @retry(CommandFailed, tries=5, delay=30)
+    def wait_for_host_offline(self, client1, node):
+        out, rc = client1.exec_command(sudo=True, cmd="ceph orch host ls -f json")
+        hosts = json.loads(out)
+        for host in hosts:
+            if host["hostname"] == node.node.hostname:
+                hostname_status = host["status"]
+                if hostname_status != "Offline":
+                    raise CommandFailed("Host is in online state")
+
+    @retry(CommandFailed, tries=5, delay=30)
     def wait_for_service_to_be_in_running(self, client1, node):
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph orch ps {node.node.hostname} -f json"

@@ -11,14 +11,15 @@ from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.baremetal_power_ops import IPMIPowerControl
 from utility.log import Log
+from utility.utils import get_cephci_config
 
 log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-83575196 - Configure NFS HA Cluster with more than 3 nodes(4Nodes) and validate the failover
-        - validate the nfs service is deployed in another node.
+    CEPH-83575195 - Power of active NFS node for more than 30 mins or bring down permanently and
+                    validate the behavior on IO's and existing Service
     Procedure
     Create default NFS HA Deployment and Reboot the node while IOs are going
     1. Log into the Cephadm shell:
@@ -47,7 +48,18 @@ def run(ceph_cluster, **kw):
         nfs_name = "cephfs-nfs"
         virtual_ip = "10.8.128.100"
         subnet = "21"
-
+        cephci_config = get_cephci_config()
+        baremetal_creds = cephci_config.get("baremetal", None)
+        if not baremetal_creds:
+            raise CommandFailed(
+                "This test requires baremetal credientials to perform power operations"
+            )
+        baremetal_username = baremetal_creds.get("username")
+        baremetal_password = baremetal_creds.get("password")
+        if not baremetal_username or not baremetal_password:
+            raise CommandFailed(
+                "The 'baremetal' section in the configuration should include both 'username' and 'password' fields."
+            )
         log.info("checking Pre-requisites")
         if not clients:
             log.info(
@@ -108,9 +120,6 @@ def run(ceph_cluster, **kw):
         active_nfs = get_active_nfs(nfs_servers, virtual_ip)
         backend_server = get_active_nfs_server(client1, nfs_name, ceph_cluster)
         log.info(backend_server)
-        import pdb
-
-        pdb.set_trace()
         for server in backend_server:
             log.info(f"Active backend servers {server.node.hostname}")
         dir_name = "smallfile_dir"
@@ -121,8 +130,8 @@ def run(ceph_cluster, **kw):
             for i in backend_server:
                 active_nfs_ipmi = IPMIPowerControl(
                     host=f"{i.node.hostname}.ipmi.ceph.redhat.com",
-                    username="inktank",
-                    password="ApGNXcA7",
+                    username=baremetal_username,
+                    password=baremetal_password,
                 )
                 log.info(f"Powering Off {i.node.hostname}")
                 active_nfs_ipmi.power_down()
