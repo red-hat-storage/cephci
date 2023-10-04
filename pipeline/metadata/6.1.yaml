@@ -50,16 +50,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rbd
-        - name: "Basic Ceph-NVMeoF testing"
-          execution_time: "36m 36s"
-          suite: "suites/quincy/nvmeof/tier-0_nvmeof_sanity.yaml"
-          global-conf: "conf/quincy/nvmeof/ceph_nvmeof_cluster.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - ceph-nvmeof
         - name: "Basic operation test suite for Cephfs"
           execution_time: "30m 13s"
           suite: "suites/pacific/cephfs/tier-0_fs.yaml"
