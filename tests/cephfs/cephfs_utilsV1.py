@@ -3021,7 +3021,7 @@ os.system('sudo systemctl start  network')
         backend_servers = [
             server["hostname"] for server in output[nfs_cluster]["backend"]
         ]
-        ceph_nodes = ceph_cluster.get_ceph_objects()
+        ceph_nodes = ceph_cluster.get_ceph_objects(role="nfs")
         server_list = []
         for node in ceph_nodes:
             if node.node.hostname in backend_servers:
