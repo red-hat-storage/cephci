@@ -1,7 +1,15 @@
 """Create xUnit result files."""
 from datetime import timedelta
 
-from junitparser import Failure, JUnitXml, Properties, Property, TestCase, TestSuite
+from junitparser import (
+    Failure,
+    JUnitXml,
+    Properties,
+    Property,
+    Skipped,
+    TestCase,
+    TestSuite,
+)
 
 from utility.log import Log
 
@@ -29,7 +37,11 @@ def generate_test_case(
     else:
         test_case.time = 0.0
 
-    if status != "Pass":
+    if status == "Pass":
+        pass  # Test passed, no need to add Failure or Skipped
+    elif status == "Skipped":
+        test_case.result = [Skipped()]
+    else:
         _result = Failure(err_msg, err_type)
         _result.text = err_text
         test_case.result = [_result]
