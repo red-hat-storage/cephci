@@ -125,7 +125,7 @@ def run(ceph_cluster, **kw):
         # Copy the files from the NFS mount to the local filesystem.
         for file in files:
             client1.exec_command(
-                sudo=True, cmd=f"cp {nfs_mounting_dir}nfs_{file} {local_fs_path}"
+                sudo=True, cmd=f"cp -p {nfs_mounting_dir}nfs_{file} {local_fs_path}"
             )
 
         # Get the file attributes from the NFS mount and the local filesystem.
@@ -146,7 +146,7 @@ def run(ceph_cluster, **kw):
                 nfs_file_attributes[i]["Octal_Permission"]
                 != local_file_attributes[i]["Octal_Permission"]
             ):
-                raise AssertionError("Permissions are not retained - BZ-2233749")
+                raise AssertionError("Permissions are not retained")
             else:
                 log.info("Permissions are retained")
 
