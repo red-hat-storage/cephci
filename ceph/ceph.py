@@ -1232,7 +1232,7 @@ class SSHConnectionManager(object):
         if look_for_keys:
             self.pkey = paramiko.RSAKey.from_private_key_file(private_key_file_path)
         self.__client = paramiko.SSHClient()
-        self.__client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
         self.__outage_start_time = None
         self.outage_timeout = datetime.timedelta(seconds=outage_timeout)

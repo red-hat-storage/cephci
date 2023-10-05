@@ -742,9 +742,12 @@ def run(args):
             )
 
             if custom_config:
-                ibm_build = [c for c in custom_config if "ibm-build=" in c]
-                if ibm_build:
-                    config["ibm_build"] = bool(ibm_build[0].split("=")[1])
+                for _config in custom_config:
+                    if "ibm-build=" in _config:
+                        config["ibm_build"] = bool(_config.split("=")[1])
+
+                    elif "enable-fips-mode=" in _config:
+                        config["enable_fips_mode"] = bool(_config.split("=")[1])
 
             config["ceph_docker_registry"] = docker_registry
             config["ceph_docker_image"] = docker_image
