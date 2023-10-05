@@ -212,9 +212,8 @@ tests:
 
 # Bucket generation verify
   - test:
-      name: Bucket generaion verification
-      desc: Bucket generaion verification
-      abort-on-fail: true
+      name: Bucket generation verification
+      desc: Bucket generation verification
       module: sanity_rgw_multisite.py
       polarion-id: CEPH-83574423
       clusters:
@@ -228,7 +227,6 @@ tests:
   - test:
       name: Disable DBR feature on zonegroup
       desc: Disable DBR feature on zonegroup
-      abort-on-fail: true
       module: sanity_rgw_multisite.py
       polarion-id: CEPH-83574626
       clusters:
@@ -241,7 +239,6 @@ tests:
   - test:
       name: Re-enable DBR feature on cluster and Verify
       desc: Re-enable DBR feature on cluster an verify
-      abort-on-fail: true
       module: sanity_rgw_multisite.py
       polarion-id: CEPH-83573596
       clusters:
