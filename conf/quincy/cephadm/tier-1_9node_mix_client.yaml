@@ -63,3 +63,9 @@ globals:
           openstack: RHEL-8.7.0-x86_64-ga-latest
         role:
           - client
+      node9:
+        image-name:
+          openstack: RHEL-8.7.0-x86_64-ga-latest
+        role:
+          - client
+

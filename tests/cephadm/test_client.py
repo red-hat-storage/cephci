@@ -78,11 +78,16 @@ def add(cls, config: Dict) -> None:
                 r"yum-config-manager --disable \*",
             ]
             cmd = 'subscription-manager repos --list-enabled | grep -i "Repo ID"'
+            # Added downstream test repos for RHEL 8 RHCS 6, Will add live repo once available.
             cdn_ceph_repo = {
                 "7": {"4": ["rhel-7-server-rhceph-4-tools-rpms"]},
                 "8": {
                     "4": ["rhceph-4-tools-for-rhel-8-x86_64-rpms"],
                     "5": ["rhceph-5-tools-for-rhel-8-x86_64-rpms"],
+                    "6": [
+                        "http://download.eng.bos.redhat.com/rhel-8/composes/raw/"
+                        "ceph-6.1-rhel-8/RHCEPH-6.1-RHEL-8-20231004.t.1/compose/Tools/x86_64/os/"
+                    ],
                 },
                 "9": {
                     "5": ["rhceph-5-tools-for-rhel-9-x86_64-rpms"],
@@ -122,7 +127,13 @@ def add(cls, config: Dict) -> None:
                     _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
                 for repos in cdn_ceph_repo[rhel_version][rhcs_version]:
-                    _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
+                    # This is workaround for  RHEL8 RHCS 6. Will remove once live repo available
+                    if rhel_version == "8" and rhcs_version == "6":
+                        _node.exec_command(
+                            sudo=True, cmd=f"yum-config-manager --add-repo={repos}"
+                        )
+                    else:
+                        _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
                 # Clearing the release preference set and cleaning all yum repos
                 # Observing selinux package dependency issues for ceph-base
