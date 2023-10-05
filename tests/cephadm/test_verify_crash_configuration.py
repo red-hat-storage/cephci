@@ -1,15 +1,11 @@
 from json import loads
 
 from cli.cephadm.cephadm import CephAdm
-from cli.utilities.utils import get_running_containers, start_container, stop_container
+from cli.exceptions import OperationFailedError, ResourceNotFoundError
+from cli.utilities.utils import get_running_containers, stop_container
+from utility.log import Log
 
-
-class SystemctlFailed(Exception):
-    pass
-
-
-class CrashConfigFailure(Exception):
-    pass
+log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
@@ -17,22 +13,38 @@ def run(ceph_cluster, **kw):
     Args:
         **kw: Key/value pairs of configuration information to be used in the test.
     """
+    # Check for mgr nodes
     mgr_nodes = ceph_cluster.get_nodes(role="mgr")
+    if not mgr_nodes:
+        raise ResourceNotFoundError("No mgr node available")
     node = mgr_nodes[0]
-    initial_crash_stat = None
+
+    # Get initial crash stats
+    init_crash_stat = CephAdm(node).ceph.crash.stat()
+    log.info(f"Initial recorded crash stats are '{init_crash_stat}'")
+
+    # Disable balancer module
     CephAdm(node).ceph.mgr.module(action="disable", module="balancer")
 
-    running_containers, _ = get_running_containers(
+    # Get running mgr containers
+    running_ctrs, _ = get_running_containers(
         node, format="json", expr="name=mgr", sudo=True
     )
-    container_ids = [item.get("Names")[0] for item in loads(running_containers)]
-    stop_container(node, container_ids[0])
+    if not running_ctrs:
+        raise ResourceNotFoundError("No running mgr containers")
+    ctr_id = [item.get("Names")[0] for item in loads(running_ctrs)][0]
 
-    crash_stat = CephAdm(mgr_nodes[1]).ceph.crash.stat()
+    # Stop mgr containers
+    stop_container(node, ctr_id)
 
-    start_container(node, container_ids[0])
-    if crash_stat == "0 crashes recorded" or initial_crash_stat == crash_stat:
-        raise CrashConfigFailure(
+    # Get crash stats
+    crash_stat = CephAdm(node).ceph.crash.stat()
+    log.info(f"Crash stats after stopping container are '{crash_stat}'")
+
+    # Check for crash records
+    if crash_stat in ("0 crashes recorded", init_crash_stat):
+        raise OperationFailedError(
             "No new crash stats were recorded even after a crash happened"
         )
+
     return 0

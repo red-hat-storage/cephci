@@ -68,7 +68,6 @@ tests:
       module: test_cephadm.py
       name: Deploy cluster using cephadm
 
-
   - test:
       name: Verify crash configuration
       desc: Verify Crash configuration and logs generation for any service crash in the cluster
