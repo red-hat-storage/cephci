@@ -33,7 +33,7 @@ def run(ceph_cluster, **kw):
     hostname = node[0].shortname
     log.info("Setting the memory target on host")
     cephadm.ceph.config.set(
-        key="osd_memory_target", value=value, daemon="osd/host:{hostname}"
+        key="osd_memory_target", value=value, daemon=f"osd/host:{hostname}"
     )
     log.info(f"Memory target is set on host '{hostname}' : '{value}'")
 
