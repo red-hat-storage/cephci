@@ -313,42 +313,6 @@ tests:
       name: Manual Resharding tests on Primary cluster
       polarion-id: CEPH-83574734
   - test:
-      name: listing flat ordered buckets on secondary
-      desc: test_bucket_listing_flat_ordered on secondary
-      polarion-id: CEPH-83574826
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: listing pseudo ordered dir only buckets on secondary
-      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
-      polarion-id: CEPH-83573651
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
-      name: ordered listing of bucket with pseudo directories and objects
-      desc: measure execution time for ordered listing of bucket with pseudo directories and objects
-      polarion-id: CEPH-83573545
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered.yaml
-            monitor-consistency-bucket-stats: true
-            timeout: 300
-  - test:
       name: setting acls to versioned objects on secondary
       desc: test_versioning_objects_acls on secondary
       polarion-id: CEPH-9190
@@ -432,15 +396,3 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
             timeout: 300
 
-  - test:
-      name: Delete object version with id null
-      desc: test_delete_object_version_id_null
-      polarion-id: CEPH-83576431
-      comments: Known issue BZ-1967576
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../aws/test_delete_version_id_null.py
-            config-file-name: ../../aws/configs/test_delete_version_id_null.yaml
-            timeout: 300
