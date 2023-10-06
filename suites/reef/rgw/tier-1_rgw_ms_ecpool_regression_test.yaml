@@ -435,3 +435,27 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
             timeout: 300
+  - test:
+      name: listing flat ordered buckets on secondary
+      desc: test_bucket_listing_flat_ordered on secondary
+      polarion-id: CEPH-83574826
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered.yaml
+            monitor-consistency-bucket-stats: true
+            timeout: 300
+  - test:
+      name: listing pseudo ordered dir only buckets on secondary
+      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
+      polarion-id: CEPH-83573651
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
+            monitor-consistency-bucket-stats: true
+            timeout: 300
