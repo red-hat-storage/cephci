@@ -27,7 +27,7 @@ def verify_osd_state(cephadm, osd_id, state):
         log.info(f"OSD '{osd_id}' is not in '{state}' state. Retrying")
     if w.expired:
         raise OsdOperationError(
-            f"Failed to get OSD osd '{osd_id}' in '{state}' state within '{interval}' sec"
+            f"Failed to get OSD osd '{osd_id}' in '{state}' state within '{timeout}' sec"
         )
 
 
@@ -39,7 +39,7 @@ def run(ceph_cluster, **kw):
 
     # Replace OSD
     osd_id_list = replace_config.get("pos_args", [])
-    kw = {"--replace": True}
+    kw = {"replace": True}
     node_name_list = replace_config.get("nodes", [])
     if not node_name_list or not osd_id_list or not osd_id_list[0]:
         raise OsdOperationError("Missing node or OSD ID for replace OSD test")

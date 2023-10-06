@@ -141,7 +141,7 @@ tests:
       module: test_osd_memory_target.py
       config:
         hosts:
-            - node2
+            - node3
         value: 8888888888
       polarion-id: CEPH-83575349
       abort-on-fail: true
