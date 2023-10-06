@@ -446,6 +446,18 @@ tests:
         config-file-name: test_acls_reset.yaml
         timeout: 300
 
+  - test:
+      name: test acls on all users
+      desc: Test acls on all users
+      polarion-id: CEPH-14240 # also applies to CEPH-14241
+      module: sanity_rgw.py
+      config:
+        test-version: v1
+        run-on-rgw: true
+        script-name: test_acls_all_usrs.py
+        config-file-name: test_acls_all_usrs.yaml
+        timeout: 300
+
   # multipart test
   - test:
       name: multipart upload cancel reupload
