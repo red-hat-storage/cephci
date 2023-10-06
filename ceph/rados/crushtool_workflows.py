@@ -667,3 +667,122 @@ class CrushToolWorkflows:
             return False
         log.info(f"Successfully set rules with name {rule_name} on the cluster")
         return True
+
+
+class OsdToolWorkflows:
+    """
+    Contains various functions that help to test osdmaptool
+    """
+
+    def __init__(self, node: CephAdmin):
+        """
+        initializes the env to run osdmaptool commands
+
+        Initializes the crush object with the cluster objects,along with installing necessary packages
+        required for executing osdmaptool commands
+        Args:
+            node: CephAdmin object
+        """
+        self.rados_obj = RadosOrchestrator(node=node)
+        self.cluster = node.cluster
+        self.config = node.config
+        self.client = node.cluster.get_nodes(role="client")[0]
+
+        # Checking and installing ceph-base package on Client
+        try:
+            out, rc = self.client.exec_command(
+                sudo=True, cmd="rpm -qa | grep ceph-base"
+            )
+        except Exception:
+            self.client.exec_command(sudo=True, cmd="yum install -y ceph-base")
+
+    def generate_osdmap(self, loc="/tmp") -> (bool, str):
+        """Module to generate the osdmap bin file
+
+         This method makes a getcrushmap call and saves the output the provided location.
+         Args::
+            loc: Location where the osdmap file needs to be generated
+        Examples::
+            status, file_loc = obj.generate_osdmap(loc="/tmp")
+        Returns::
+            Returns a tuple consisting of the execution status and the bin file location
+            (True, /tmp/osd_map)
+        """
+        # Extracting the ceush map from the cluster
+        cmd = f"ceph osd  getmap -o {loc}/osd_map"
+        self.client.exec_command(cmd=cmd, sudo=True)
+        return (
+            self.rados_obj.check_file_exists_on_client(loc=f"{loc}/osd_map"),
+            f"{loc}/osd_map",
+        )
+
+    def apply_osdmap_upmap(self, **kwargs) -> (bool, str):
+        """Module to generate the upmap recommendations from the osdmaptool
+
+         This method makes use of osdmaptool to get the PG - OSD placement recommendations
+         Args::
+            kwargs:
+                source_loc: Location from where the bin file should be sourced
+                target_loc: Location where the upmap file needs to be generated
+        Examples::
+            status, file_loc = obj.apply_osdmap_upmap(
+                source_loc="/tmp/osd_map",
+                target_loc="/tmp/upmap_res.txt",
+            )
+        Returns::
+            Returns a tuple consisting of the execution status and the bin file location
+            (True, /tmp/upmap_res.txt)
+        """
+        source_loc = kwargs.get("source_loc", "/tmp/osd_map")
+        target_loc = kwargs.get("target_loc", "/tmp")
+        if not self.rados_obj.check_file_exists_on_client(loc=source_loc):
+            log.error(f"file : {source_loc} not present on the Client")
+            return False, ""
+
+        # osdmaptool /tmp/osd_map --upmap /tmp/out.txt
+        # Generating text file for the bin file generated
+        cmd = f"osdmaptool {source_loc} --upmap {target_loc}/upmap_res.txt"
+        out, err = self.client.exec_command(cmd=cmd, sudo=True)
+        log.debug(f"output of command : {cmd} on cluster : \n\n {out}\n\n")
+        return (
+            self.rados_obj.check_file_exists_on_client(
+                loc=f"{target_loc}/upmap_res.txt"
+            ),
+            f"{target_loc}/upmap_res.txt",
+        )
+
+    def apply_osdmap_read(self, pool_name, **kwargs) -> (bool, str):
+        """Module to generate the read recommendations from the osdmaptool
+
+         This method makes use of osdmaptool to get the PG - OSD placement recommendations
+         Args::
+            kwargs:
+                pool_name: name of the pool on which the read balancing needs to be applied
+                source_loc: Location from where the bin file should be sourced
+                target_loc: Location where the upmap file needs to be generated
+        Examples::
+            status, file_loc = obj.apply_osdmap_read(
+                pool_name= "test-pool"
+                source_loc="/tmp/osd_map",
+                target_loc="/tmp/test-pool_res.txt",
+            )
+        Returns::
+            Returns a tuple consisting of the execution status and the bin file location
+            (True, /tmp/upmap_res.txt)
+        """
+        source_loc = kwargs.get("source_loc", "/tmp/osd_map")
+        target_loc = kwargs.get("target_loc", "/tmp")
+        if not self.rados_obj.check_file_exists_on_client(loc=source_loc):
+            log.error(f"file : {source_loc} not present on the Client")
+            return False, ""
+
+        # osdmaptool /tmp/osd_map --read /tmp/test1_read_op --read-pool test1
+        cmd = f"osdmaptool {source_loc} --read {target_loc}/{pool_name}_res.txt --read-pool {pool_name}"
+        out, err = self.client.exec_command(cmd=cmd, sudo=True)
+        log.debug(f"output of command : {cmd} on cluster : \n\n {out}\n\n")
+        return (
+            self.rados_obj.check_file_exists_on_client(
+                loc=f"{target_loc}/{pool_name}_res.txt"
+            ),
+            f"{target_loc}/{pool_name}_res.txt",
+        )

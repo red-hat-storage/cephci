@@ -305,11 +305,14 @@ class RadosOrchestrator:
         while iteration <= retry:
             iteration += 1
             cmd = f"ceph orch host maintenance enter {hostname} --force"
-            out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
-            log.debug(f"o/p of maintenance enter cmd : {out}")
+            try:
+                out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
+                log.debug(f"o/p of maintenance enter cmd : {out}")
+            except Exception as e:
+                log.debug(f"Exception hit, but was expected; {e}")
             time.sleep(20)
 
-            if not self.check_host_status(hostname=hostname, status="maintenance"):
+            if not self.check_host_status(hostname=hostname, status="Maintenance"):
                 log.error(
                     f"Host: {hostname}, not in maintenance mode. Retrying again in 15 seconds, Retry count :{iteration}"
                 )
@@ -334,15 +337,21 @@ class RadosOrchestrator:
         """
         log.debug(f"Passed host : {hostname} to be removed from maintenance mode")
         iteration = 0
+        if not self.check_host_status(hostname=hostname, status="Maintenance"):
+            log.info(f"Host: {hostname}, not in maintenance mode. Pass")
+            return True
 
         while iteration <= retry:
             iteration += 1
             cmd = f"ceph orch host maintenance exit {hostname} "
-            out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
-            log.debug(f"o/p of maintenance exit cmd : {out}")
+            try:
+                out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
+                log.debug(f"o/p of maintenance exit cmd : {out}")
+            except Exception as e:
+                log.debug(f"Exception hit, but was expected; {e}")
             time.sleep(20)
 
-            if not self.check_host_status(hostname=hostname):
+            if self.check_host_status(hostname=hostname, status="Maintenance"):
                 log.error(
                     f"Host:{hostname}, in maintenance mode. Retrying again in 15 seconds, Retry count :{iteration}"
                 )
@@ -985,15 +994,6 @@ class RadosOrchestrator:
                         return False
 
         return True
-
-    def list_pools_on_cluster(self) -> list:
-        """
-        Method fetches the list of pools from the cluster via ceph df command
-
-        Returns:
-            list of pools on the cluster
-        """
-        return self.run_ceph_command(cmd="ceph osd pool ls", client_exec=True)
 
     def detete_pool(self, pool: str) -> bool:
         """
@@ -1757,9 +1757,13 @@ class RadosOrchestrator:
         """
         host_cmd = f"ceph orch host ls --host_pattern {hostname} -f json"
         out, _ = self.client.exec_command(cmd=host_cmd, sudo=True)
-        host_status = json.loads(out)[0]["status"].lower()
-        if status and status.lower() in host_status:
-            return True
+        host_status = json.loads(out)[0]["status"].lower().strip()
+        log.debug(f"Status of the host is {host_status}")
+        if status:
+            if status.lower() == host_status:
+                return True
+            else:
+                return False
         elif "offline" in host_status:
             return False
         return True
@@ -1979,4 +1983,37 @@ class RadosOrchestrator:
                 return False
 
         log.info(f"Ceph Orch Service(s) {daemon_services} has been restarted")
+        return True
+
+    def check_pool_pg_states(self, pool: str, disallowed_states: list):
+        """
+        the method fetches the states for the pg belonging to particular pool.
+        If any of the PG in the pool, have states that are in the disallowed states list, returns fail
+
+        Args::
+            pool: Name of the pool whose pg states need to be checked
+            disallowed_states: list of pg states, that are not allowed, if found, module returns fail
+
+        Returns::
+            Pass -> True
+            Fail -> False
+        """
+        # fetching the pool ID
+        cmd = "ceph df"
+        out = self.run_ceph_command(cmd=cmd)
+        pool_names = [entry["name"] for entry in out.get("pools", [])]
+        pool_id = out["pools"][pool_names.index(pool)]["id"]
+
+        cmd = f" ceph pg ls {pool_id}"
+        out = self.run_ceph_command(cmd=cmd)
+        for ele in out["pg_stats"]:
+            if any(key in disallowed_states for key in ele["state"].split("+")):
+                log.error(
+                    f"PG : {ele['pgid']} is in state : {ele['state']}. "
+                    "PG expected to be active+clean"
+                )
+                return False
+            else:
+                log.info(f"PG : {ele['pgid']} is in expected state : {ele['state']}. ")
+        log.info("Completed checking PG states on all PGs of the pool. Pass")
         return True

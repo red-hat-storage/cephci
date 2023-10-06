@@ -114,6 +114,7 @@ def run(ceph_cluster, **kw):
                 time.sleep(10)
 
             # Moving host into maintenance mode
+            time.sleep(5)
             if not rados_obj.host_maintenance_enter(hostname=host, retry=15):
                 log.error(f"Failed to add host : {host} into maintenance mode")
                 raise Exception("Test execution Failed")
@@ -122,8 +123,8 @@ def run(ceph_cluster, **kw):
             f"Completed addition of all the hosts in data site {dc_1_name} into maintenance mode"
         )
 
-        # sleeping for 10 seconds for the DC to be identified as in maintenance mode and proceeding to next checks
-        time.sleep(10)
+        # sleeping for 120 seconds for the DC to be identified as in maintenance mode and proceeding to next checks
+        time.sleep(120)
 
         # Checking the health status of the cluster and the active alerts for maintenance mode
         # These should be generated on the cluster
@@ -164,11 +165,23 @@ def run(ceph_cluster, **kw):
     else:
         log.info("Moving host of arbiter mon site into maintenance mode")
         for host in tiebreaker_hosts:
+            mgr_dump = "ceph mgr dump"
+            active_mgr = rados_obj.run_ceph_command(cmd=mgr_dump, client_exec=True)
+            mgr_host = active_mgr["active_name"]
+            if host in mgr_host:
+                log.info(
+                    f"Active Mgr : {mgr_host} is running on host. Preparing to fail over"
+                )
+                cmd = "ceph mgr fail"
+                rados_obj.run_ceph_command(cmd=cmd, client_exec=True)
+                # sleeping for 10 seconds post mgr fail
+                time.sleep(10)
+
             log.debug(f"Proceeding to add host : {host} into maintenance mode")
             if not rados_obj.host_maintenance_enter(hostname=host, retry=10):
                 log.error(f"Failed to add host : {host} into maintenance mode")
                 raise Exception("Test execution Failed")
-        time.sleep(20)
+        time.sleep(120)
 
         # Installer node will be in maintenance mode this point. all operations need to be done at client nodes
         status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
@@ -193,7 +206,7 @@ def run(ceph_cluster, **kw):
     pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=200, timeout=50)
 
     log.debug("sleeping for 20 seconds for the objects to be displayed in ceph df")
-    time.sleep(20)
+    time.sleep(40)
 
     # Getting the number of objects post write, to check if writes were successful
     pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
@@ -229,7 +242,7 @@ def run(ceph_cluster, **kw):
             if not rados_obj.host_maintenance_exit(hostname=host, retry=15):
                 log.error(f"Failed to remove host : {host} from maintenance mode")
                 raise Exception("Test execution Failed")
-        time.sleep(20)
+        time.sleep(60)
         log.info(
             f"Completed Restart of all the hosts in site {affected_site}. Host names : {tiebreaker_hosts}"
         )

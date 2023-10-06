@@ -12,13 +12,13 @@ globals:
           - _admin
           - installer
           - mon
-          - mgr
           - alertmanager
           - grafana
           - prometheus
       node2:
         role:
           - mon
+          - mgr
           - _admin
           - mds
           - osd
@@ -49,6 +49,7 @@ globals:
       node6:
         role:
           - mon
+          - mgr
           - osd
           - rgw
         no-of-volumes: 4
