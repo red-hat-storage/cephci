@@ -287,3 +287,29 @@ tests:
         vip: 10.8.128.255/21
         operations:
           client01 : create_files
+
+  - test:
+      name: Nfs-Ganesha perform failover and modify the export file to make volume as RO
+      module: nfs_ha_failover_edit_export_config_with_ro.py
+      desc:  Verify perform failover and modify the export file to make volume as RO
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        servers: 3
+        ha: true
+        vip: 10.8.130.255/21
+
+  - test:
+      name: Nfs-Ganesha perform failover and modify client permission in export block
+      module: nfs_ha_failover_edit_export_config_client_permission.py
+      desc:  Verify perform failover and modify client permission in export block
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 2
+        servers: 3
+        ha: true
+        vip: 10.8.130.255/21
