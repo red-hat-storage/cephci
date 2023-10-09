@@ -225,3 +225,36 @@ tests:
       module: test_ceph_nvmeof_gateway.py
       name: Basic E2ETest Ceph NVMEoF GW sanity test
       polarion-id: CEPH-83575441
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - subsystems
+          - intiators
+          - pool
+          - gateway
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 5001
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 5001
+            node: node7
+      desc: E2E-Test NVMEoF Gateway collocated and Run IOs on targets
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway.py
+      name: Basic E2ETest Ceph NVMEoF GW sanity test
+      polarion-id: CEPH-83577610
