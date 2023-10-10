@@ -183,3 +183,9 @@ tests:
       polarion-id: CEPH-83575623
       desc: Run fsstress on kernel and fuse mounts
       abort-on-fail: false
+  - test:
+      name: Remove Contents of lost+found dir
+      module: cephfs_bugs.test_rm_on_lost_found_dir.py
+      polarion-id: CEPH-83575781
+      desc: Remove Contents of lost+found dir
+      abort-on-fail: false
