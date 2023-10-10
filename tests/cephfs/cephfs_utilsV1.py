@@ -2551,7 +2551,7 @@ os.system('sudo systemctl start  network')
             )
             client.exec_command(
                 sudo=True,
-                cmd="tar -xzf linux.tar.gz tardir/ ; sleep 10 ; rm -rf  tardir/ ; sleep 10 ; done",
+                cmd="tar -xzf linux.tar.gz tardir/ ; sleep 10 ; rm -rf  tardir/",
             )
 
         def wget():
@@ -3027,7 +3027,7 @@ os.system('sudo systemctl start  network')
         backend_servers = [
             server["hostname"] for server in output[nfs_cluster]["backend"]
         ]
-        ceph_nodes = ceph_cluster.get_ceph_objects()
+        ceph_nodes = ceph_cluster.get_ceph_objects(role="nfs")
         server_list = []
         for node in ceph_nodes:
             if node.node.hostname in backend_servers:
@@ -3043,9 +3043,9 @@ os.system('sudo systemctl start  network')
         log.info(daemon_ls)
         return daemon_ls
 
-    def write_io(self, client1, mount_dir):
+    def write_io(self, client1, mount_dir, timeout=600):
         dir_name = "smallfile_dir"
-        end_time = datetime.datetime.now() + datetime.timedelta(minutes=10)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while datetime.datetime.now() < end_time:
             for i, mount in enumerate(mount_dir):
                 log.info(f"Iteration : {i}")
@@ -3053,6 +3053,7 @@ os.system('sudo systemctl start  network')
                     sudo=True,
                     cmd=f"dd if=/dev/zero of={mount}{dir_name}_{i}/test_{i}.txt bs=100M "
                     "count=100",
+                    timeout=timeout + 300,
                 )
                 log.info(out)
 
@@ -3097,3 +3098,27 @@ os.system('sudo systemctl start  network')
             f"{mount_path}/{dir_name}",
             long_running=True,
         )
+
+    @retry(CommandFailed, tries=3, delay=60)
+    def cephfs_nfs_mount_ingress(
+        self,
+        client,
+        nfs_version,
+        virtual_ip,
+        psuedo_path,
+        nfs_mounting_dir,
+        port,
+        **kwargs,
+    ):
+        """
+        Mount cephfs nfs export
+        :param client:
+        :param nfs_version:
+        :param virtual_ip:
+        :param psuedo_path:
+        :param mounting_dir:
+        :param port:
+        """
+        client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
+        command = f"mount -t nfs -o port={port},nfsvers={nfs_version} {virtual_ip}:{psuedo_path} {nfs_mounting_dir}"
+        client.exec_command(sudo=True, cmd=command, check_ec=False)
