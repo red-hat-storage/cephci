@@ -31,7 +31,7 @@ tests:
           config:
             roles:
               - rgw
-            rule: root netem delay 30ms 6ms distribution normal
+            rule: root netem delay 30ms 1ms distribution normal
         ceph-sec:
           config:
             roles:
