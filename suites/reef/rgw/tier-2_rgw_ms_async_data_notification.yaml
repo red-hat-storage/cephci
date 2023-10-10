@@ -371,7 +371,7 @@ tests:
         config-file-name: test_sse_s3_per_object.yaml
         timeout: 300
       desc: test_sse_s3_per_object
-      module: sanity_rgw.py
+      module: sanity_rgw_multisite.py
       name: sse-s3 per object encryption test
       polarion-id: CEPH-83575153
 
@@ -394,7 +394,7 @@ tests:
         config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
         timeout: 300
       desc: sse_s3_per_bucket_enc_multipart_upload
-      module: sanity_rgw.py
+      module: sanity_rgw_multisite.py
       name: sse_s3_per_bucket_enc_multipart_upload
       polarion-id: CEPH-83575155
       comments: known issue (bz-2153452)
@@ -456,7 +456,7 @@ tests:
         config-file-name: test_sse_kms_per_object.yaml
         timeout: 300
       desc: test_sse_kms_per_object
-      module: sanity_rgw.py
+      module: sanity_rgw_multisite.py
       name: test_sse_kms_per_object
       polarion-id: CEPH-83574040
 
