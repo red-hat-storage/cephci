@@ -1,0 +1,36 @@
+#===============================================================================================
+#-------------------------------------
+#-----    Smoke Test suite     ------
+#-------------------------------------
+# Conf: conf/pacific/cephadm/tier-0.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+        spec:
+          mgr/cephadm/container_image_grafana = registry.redhat.io/rhceph/rhceph-5-dashboard-rhel8:latest
+          mgr/cephadm/container_image_alertmanager = openshift4/ose-prometheus-alertmanager:latest
+          mgr/cephadm/container_image_prometheus = registry.redhat.io/openshift4/ose-prometheus:latest
+          mgr/cephadm/container_image_node_exporter = openshift4/ose-prometheus-node-exporter:latest
+      desc: Bootstrap the cluster with monitoring stack images using --config
+      destroy-cluster: false
+      polarion-id: CEPH-83575411
+      module: test_cephadm.py
+      name: Deploy cluster using monitoring images
