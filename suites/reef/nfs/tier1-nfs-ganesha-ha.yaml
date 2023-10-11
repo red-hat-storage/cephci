@@ -313,3 +313,30 @@ tests:
         servers: 3
         ha: true
         vip: 10.8.130.255/21
+
+  - test:
+      name: Nfs-Ganesha perform failover when linux untar is running
+      module: nfs_ha_failover_with_untar.py
+      desc:  Nfs-Ganesha perform failover when linux untar is running
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        servers: 3
+        ha: true
+        vip: 10.8.129.133/21
+
+  - test:
+      name: Nfs-Ganesha perform failover and delete the export, check the export list
+      module: nfs_ha_failover_delete_export.py
+      desc:  Nfs-Ganesha perform failover and delete the export and when failback happens check the export list
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        no_export_per_client: 10
+        servers: 3
+        ha: true
+        vip: 10.8.129.133/21
