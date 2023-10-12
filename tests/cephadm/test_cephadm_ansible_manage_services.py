@@ -2,7 +2,7 @@ from os.path import basename
 
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.cephadm import CephAdm
-from cli.cephadm.exceptions import CephadmOpsExecutionError, ConfigNotFoundError
+from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.utils import put_cephadm_ansible_playbook
 from utility.log import Log
 
@@ -29,16 +29,16 @@ def run(ceph_cluster, **kwargs):
     config = kwargs.get("config")
     aw = config.get("ansible_wrapper")
     if not aw:
-        raise ConfigNotFoundError("Mandatory parameter 'ansible_wrapper' not found")
+        raise ConfigError("Mandatory parameter 'ansible_wrapper' not found")
 
     playbook = aw.get("playbook")
     if not playbook:
-        raise ConfigNotFoundError("Mandatory resource 'playbook' not found")
+        raise ConfigError("Mandatory resource 'playbook' not found")
 
     put_cephadm_ansible_playbook(installer, playbook)
     Ansible(installer).run_playbook(playbook=basename(playbook))
 
     if not CephAdm(installer).ceph.status():
-        raise CephadmOpsExecutionError("Failed to perform action via cephadm ansible")
+        raise OperationFailedError("Failed to perform action via cephadm ansible")
 
     return 0

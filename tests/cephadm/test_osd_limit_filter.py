@@ -2,8 +2,11 @@ from json import loads
 
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
-from cli.cephadm.exceptions import CephadmOpsExecutionError
-from cli.exceptions import ResourceNotFoundError, UnexpectedStateError
+from cli.exceptions import (
+    OperationFailedError,
+    ResourceNotFoundError,
+    UnexpectedStateError,
+)
 from cli.utilities.operations import wait_for_cluster_health
 from cli.utilities.utils import get_disk_list, get_service_id, get_service_state
 
@@ -45,7 +48,7 @@ def run(ceph_cluster, **kw):
         # Verify if OSD disks are being listed
         osd_disks, _ = get_disk_list(sudo=True, node=node, expr="osd")
         if not osd_disks:
-            raise CephadmOpsExecutionError("OSD disks not listed")
+            raise OperationFailedError("OSD disks not listed")
 
         # Verify that the OSD services are not inactive
         osd_id = get_service_id(node, "osd")

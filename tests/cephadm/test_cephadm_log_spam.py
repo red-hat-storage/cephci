@@ -2,7 +2,6 @@ from json import loads
 
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
-from cli.cephadm.exceptions import CephadmOpsExecutionError
 from cli.exceptions import OperationFailedError
 
 CEPHADM_LOG_PATH = "/var/log/ceph/cephadm.log"
@@ -43,11 +42,11 @@ def validate_spam_log_using_cmd(node, installer):
     spam = "Detected new or changed devices"
     fsid = CephAdm(node).ceph.fsid()
     if not fsid:
-        raise CephadmOpsExecutionError("Failed to get cluster FSID")
+        raise OperationFailedError("Failed to get cluster FSID")
 
     mgr_ps = loads(CephAdm(node).ceph.orch.ps(daemon_type="mgr", format="json"))
     if not mgr_ps:
-        raise CephadmOpsExecutionError("Failed to get mgr ps")
+        raise OperationFailedError("Failed to get mgr ps")
     daemon_name = [
         key["daemon_name"] for key in mgr_ps if "installer" in key["daemon_name"]
     ]
@@ -58,7 +57,7 @@ def validate_spam_log_using_cmd(node, installer):
     for w in WaitUntil(timeout=timeout, interval=interval):
         content = CephAdm(installer).logs(fsid, daemon_name[0])
         if not content:
-            raise CephadmOpsExecutionError("Failed to get cephadm logs")
+            raise OperationFailedError("Failed to get cephadm logs")
         if spam in content:
             raise OperationFailedError(
                 f"Failed: Spam log '{spam}' found in cephadm logs"
