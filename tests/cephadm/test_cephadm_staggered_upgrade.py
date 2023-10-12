@@ -57,7 +57,7 @@ def run(ceph_cluster, **kw):
         raise StaggeredUpgradeError("Cluster not in 'HEALTH_OK' state")
     # Set osd flags
     for flag in osd_flags:
-        if CephAdm(node).ceph._osd.set(flag):
+        if CephAdm(node).ceph.osd.set(flag):
             raise StaggeredUpgradeError("Unable to set osd flag")
     # Check target image
     if CephAdm(node).ceph.orch.upgrade.check(image=target_image):
@@ -115,7 +115,7 @@ def run(ceph_cluster, **kw):
     check_upgrade_status(node)
     # Unset osd flags
     for flag in osd_flags:
-        if CephAdm(node).ceph._osd.unset(flag):
+        if CephAdm(node).ceph.osd.unset(flag):
             raise StaggeredUpgradeError("Unable to set osd flag")
     # Check cluster health after upgrade
     if CephAdm(node).ceph.health() != "HEALTH_OK":

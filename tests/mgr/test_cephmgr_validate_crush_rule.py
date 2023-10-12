@@ -14,16 +14,16 @@ def run(ceph_cluster, **kw):
 
     # create a rule
     args = ["create-replicated", "fast", "default", "host", "ssd"]
-    CephAdm(node).ceph._osd.crush.rule(*args)
+    CephAdm(node).ceph.osd.crush.rule(*args)
 
     # set set_chooseleaf_vary_r 1 as per the bz : 1874866
-    CephAdm(node).ceph._osd.crush.set("set_chooseleaf_vary_r", "1")
+    CephAdm(node).ceph.osd.crush.set("set_chooseleaf_vary_r", "1")
 
     # Get all pools
-    pools = CephAdm(node).ceph._osd.lspools()
+    pools = CephAdm(node).ceph.osd.lspools()
 
     # Set pg_autoscale on for pool
-    CephAdm(node).ceph._osd.pool.set(
+    CephAdm(node).ceph.osd.pool.set(
         pools.split("\n")[1], key="pg_autoscale_mode", value="on"
     )
 

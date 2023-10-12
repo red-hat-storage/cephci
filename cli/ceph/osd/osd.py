@@ -15,9 +15,7 @@ class Osd(Cli):
         self.crush = Crush(nodes, self.base_cmd)
 
     def lspools(self):
-        """
-        To list cluster’s pools
-        """
+        """To list cluster pools"""
         cmd = f"{self.base_cmd} lspools"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
@@ -44,6 +42,7 @@ class Osd(Cli):
 
     def tree(self, epoch=None, states=None, **kw):
         """To list osd tree
+
         Args:
             epoch (int): state time
             states (str): osd state
@@ -55,4 +54,8 @@ class Osd(Cli):
         if states:
             cmd += f" {states}"
         cmd += build_cmd_from_args(**kw)
-        return self.execute(sudo=True, cmd=cmd)
+
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out

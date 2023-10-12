@@ -41,7 +41,7 @@ def run(ceph_cluster, **kw):
     osd_lvm = lvm_list.get(osd_id)[0].get("lv_path")
 
     # Change the replication to 2 / default is 3
-    out = CephAdm(osd_node).ceph.osd(command="pool ls detail", format="json")
+    out = CephAdm(osd_node).ceph.osd.pool.ls(format="json")
     if not out:
         raise RemoveOsdError("Failed to fetch the pools")
 
@@ -49,8 +49,7 @@ def run(ceph_cluster, **kw):
     pool_size = 2  # Update the pool size to 2
     for pool in pools:
         pool_name = pool.get("pool_name")
-        cmd = f"pool set {pool_name} size {pool_size}"
-        _, out = CephAdm(osd_node).ceph.osd(command=cmd)
+        out = CephAdm(osd_node).ceph.osd.pool.set(pool_name, "size", pool_size)
         if not out:
             raise RemoveOsdError("Failed to update the pool size")
 
@@ -91,8 +90,8 @@ def run(ceph_cluster, **kw):
             raise RemoveLvmError("LVM not removed after the osd remove")
     else:
         # Get osd tree and check whether the deleted osd is present or not
-        out = CephAdm(osd_node).ceph.osd(command="tree", format="json")
-        osd_tree = loads(out[0])
+        out = CephAdm(osd_node).ceph.osd.tree(format="json")
+        osd_tree = loads(out)
         for osd_ in osd_tree.get("nodes"):
             if osd_.get("id") == osd_id and osd_.get("status") == "up":
                 raise RemoveOsdError("The osd is up after rm operation")
