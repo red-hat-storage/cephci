@@ -35,7 +35,7 @@ instance:
       - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
       - hostnamectl set-hostname $(hostname -s)
       - curl -m 120 -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
-      - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://password.corp.redhat.com/RH-IT-Root-CA.crt
+      - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://certs.corp.redhat.com/certs/2015-IT-Root-CA.pem
       - update-ca-trust
       - yum-config-manager --add-repo http://magna002.ceph.redhat.com/cephci-jenkins/repos/8/lab-extras.repo
       - sudo yum clean metadata
