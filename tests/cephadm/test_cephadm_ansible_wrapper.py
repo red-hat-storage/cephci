@@ -5,7 +5,7 @@ import time
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.cephadm.ansible import Ansible
-from cli.cephadm.exceptions import ConfigNotFoundError
+from cli.exceptions import ConfigError
 from cli.utilities.packages import Package, Rpm
 from cli.utilities.utils import (
     get_node_by_id,
@@ -36,11 +36,11 @@ class UnsupportedOperation(Exception):
 def validate_configs(config):
     aw = config.get("ansible_wrapper")
     if not aw:
-        raise ConfigNotFoundError("Mandatory parameter 'ansible_wrapper' not found")
+        raise ConfigError("Mandatory parameter 'ansible_wrapper' not found")
 
     playbook = aw.get("playbook")
     if not playbook:
-        raise ConfigNotFoundError("Mandatory resource 'playbook' not found")
+        raise ConfigError("Mandatory resource 'playbook' not found")
 
     module_args = aw.get("module_args", {})
     module = aw.get("module")
@@ -53,24 +53,20 @@ def validate_configs(config):
     label = module_args.get("label")
 
     if module == "cephadm_bootstrap" and not mon_node:
-        raise ConfigNotFoundError(
-            "'cephadm_bootstrap' module requires 'mon_node' parameter"
-        )
+        raise ConfigError("'cephadm_bootstrap' module requires 'mon_node' parameter")
 
     elif module == "ceph_orch_apply" and not node and not label:
-        raise ConfigNotFoundError(
-            f"'{module}' module requires 'host' and 'label' parameter"
-        )
+        raise ConfigError(f"'{module}' module requires 'host' and 'label' parameter")
 
     elif module == "ceph_orch_daemon" and (
         not daemon_id or not daemon_type or not daemon_state
     ):
-        raise ConfigNotFoundError(
+        raise ConfigError(
             "'ceph_orch_daemon' module requires 'daemon_id' and 'daemon_type' and 'daemon_state' parameter"
         )
 
     elif module == "ceph_orch_host" and not node:
-        raise ConfigNotFoundError("'ceph_orch_host' module requires 'host' parameter")
+        raise ConfigError("'ceph_orch_host' module requires 'host' parameter")
 
 
 def setup_cluster(ceph_cluster, config):

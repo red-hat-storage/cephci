@@ -1,6 +1,6 @@
 from ceph.ceph import CommandFailed
 from cli.cephadm.cephadm import CephAdm
-from cli.cephadm.exceptions import CephadmOpsExecutionError
+from cli.exceptions import OperationFailedError
 from cli.utilities.utils import get_disk_list, get_running_containers
 from utility.log import Log
 
@@ -33,7 +33,7 @@ def validate_ceph_config_dir(nodes, dir_path, roles=[], ignore=[]):
 
         _dirs = node.get_dir_list(sudo=True, dir_path=CEPH_CONFIG_DIR)
         if _dirs or _dirs not in [ignore, None]:
-            raise CephadmOpsExecutionError(
+            raise OperationFailedError(
                 f"Failed to clean ceph directory '{dir_path}' on node '{node.ip_address}' -\n{_dirs} "
             )
 
@@ -58,7 +58,7 @@ def validate_running_ceph_containers(nodes, roles=[]):
 
         _ctrs, _ = get_running_containers(sudo=True, node=node, expr="name=ceph-*")
         if _ctrs:
-            raise CephadmOpsExecutionError(
+            raise OperationFailedError(
                 f"Failed to clean ceph containers on node '{node.ip_address}' -\n{_ctrs}"
             )
         log.info(f"Ceph containers are cleaned as expected on node '{node.ip_address}'")
@@ -73,7 +73,7 @@ def validate_ceph_disks(nodes):
     for node in nodes:
         try:
             _disks, _ = get_disk_list(sudo=True, node=node, expr="ceph-")
-            raise CephadmOpsExecutionError(
+            raise OperationFailedError(
                 f"Failed to clean ceph disks on node '{node.ip_address} -\n{_disks}'"
             )
         except CommandFailed:
@@ -89,12 +89,12 @@ def run(ceph_cluster, **kw):
     # Get cluster FSID
     fsid = CephAdm(installer).ceph.fsid()
     if not fsid:
-        raise CephadmOpsExecutionError("Failed to get cluster FSID")
+        raise OperationFailedError("Failed to get cluster FSID")
 
     # Disable cephadm module
     error, _ = CephAdm(installer).ceph.mgr.module(action="disable", module="cephadm")
     if error:
-        raise CephadmOpsExecutionError("Failed to disable cephadm module")
+        raise OperationFailedError("Failed to disable cephadm module")
 
     # Execute rm-cluster on all nodes
     log.info("Executed 'rm-cluster' command sucessfully on all cluster nodes")
@@ -103,7 +103,7 @@ def run(ceph_cluster, **kw):
             continue
 
         if CephAdm(node).rm_cluster(fsid):
-            raise CephadmOpsExecutionError(
+            raise OperationFailedError(
                 f"Failed to execute rm-cluster on node '{node.ip_address}'"
             )
 
@@ -127,6 +127,6 @@ def run(ceph_cluster, **kw):
 
     # Check ceph status to check if it cleaned cluster
     if CephAdm(installer).ceph.status():
-        raise CephadmOpsExecutionError("Failed to clean ceph cluster")
+        raise OperationFailedError("Failed to clean ceph cluster")
 
     return 0
