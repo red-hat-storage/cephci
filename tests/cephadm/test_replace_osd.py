@@ -16,7 +16,7 @@ def verify_osd_state(cephadm, osd_id, state):
     kw = {"format": "json-pretty"}
     timeout, interval = 60, 2
     for w in WaitUntil(timeout=timeout, interval=interval):
-        out = cephadm.ceph.osd("tree", **kw)
+        out = cephadm.ceph.osd.tree(**kw)
         data = json.loads(out[0])
         for node in data.get("nodes"):
             _id = node.get("id")

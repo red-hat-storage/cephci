@@ -55,7 +55,7 @@ def run(ceph_cluster, **kw):
     log.info("osd memory target is validated in ceph config")
 
     # Verify osd memory target for osd on the host matches the host level value
-    out = cephadm.ceph._osd.tree(**kw)
+    out = cephadm.ceph.osd.tree(**kw)
     data = json.loads(out[0])
     for item in data["nodes"]:
         if item.get("type") == "host" and item.get("name") == hostname:

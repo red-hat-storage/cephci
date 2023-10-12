@@ -29,8 +29,7 @@ class Ceph(Cli):
         self.crash = Crash(nodes, self.base_cmd)
         self.nfs = Nfs(nodes, self.base_cmd)
         self.fs = Fs(nodes, self.base_cmd)
-        # ToDo: Renaming as _osd due to conflicting method name. Fix in progress
-        self._osd = Osd(nodes, self.base_cmd)
+        self.osd = Osd(nodes, self.base_cmd)
 
     def version(self):
         """Get ceph version."""
