@@ -41,6 +41,11 @@ tests:
                 labels: apply-all-labels
           - config:
               command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
               service: mgr
               args:
                 placement:
@@ -77,22 +82,6 @@ tests:
               args:
                 placement:
                   label: rgw
-      destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: Configure OSD
-      desc: Deploy OSDs on specifc devices on the node.
-      module: osd_specific_device.py
-      abort-on-fail: true
-
-  - test:
-      name: Configure RBD
-      desc: Configure RBD with osd pool
-      module: test_cephadm.py
-      polarion-id: CEPH-83573713
-      config:
-        steps:
           - config:
               args:
                 - "ceph osd pool create rbd"
@@ -105,18 +94,32 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: configure client
-      desc: Configure the RGW,RBD client system
-      module: test_client.py
+      abort-on-fail: true
       config:
         command: add
+        copy_admin_keyring: true
         id: client.1
-        node: node4
         install_packages:
           - ceph-common
-        copy_admin_keyring: true
+        node: node10
+      desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
       abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: node11
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
 
   - test:
       name: Executes RGW, RBD and FS operations
@@ -190,3 +193,24 @@ tests:
       config:
         cmd: ceph -s
         sudo: True
+
+  - test:
+      name: Stopping mon and mgr service
+      desc: Test Ceph orch stop mon and mgr services
+      module: test_cluster_service_operations.py
+      polarion-id: CEPH-83574435
+      config:
+        operation: stop
+        service:
+          - "mon"
+          - "mgr"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: OSD service ops using systemctl
+      desc: Test stop and start OSD service using systemctl
+      module: test_osd_service_operations.py
+      polarion-id: CEPH-83573802
+      destroy-cluster: false
+      abort-on-fail: true
