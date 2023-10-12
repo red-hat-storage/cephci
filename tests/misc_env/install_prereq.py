@@ -109,7 +109,7 @@ def install_prereq(
     # Update certs
     update_ca_cert(
         node=ceph,
-        cert_url="https://password.corp.redhat.com/RH-IT-Root-CA.crt",
+        cert_url="https://certs.corp.redhat.com/certs/2015-IT-Root-CA.pem",
         out_file="RH-IT-Root-CA.crt",
         check_ec=False,
     )
