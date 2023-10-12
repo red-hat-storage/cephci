@@ -92,7 +92,7 @@ def run(ceph_cluster, **kw):
         raise OperationFailedError("Failed to get cluster FSID")
 
     # Disable cephadm module
-    error, _ = CephAdm(installer).ceph.mgr.module(action="disable", module="cephadm")
+    error, _ = CephAdm(installer).ceph.mgr.module.disable("cephadm")
     if error:
         raise OperationFailedError("Failed to disable cephadm module")
 

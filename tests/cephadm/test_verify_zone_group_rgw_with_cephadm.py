@@ -17,7 +17,7 @@ def run(ceph_cluster, **kw):
     zone_name = config.get("zone-name")
 
     # Enable MGR module
-    CephAdm(node).ceph.mgr.module(action="enable", module="rgw")
+    CephAdm(node).ceph.mgr.module.enable("rgw")
 
     # Create a new RGW realm entity, a new zonegroup, and a new zone anf deploy RGW daemon
     # using RGW module's bootstrap command

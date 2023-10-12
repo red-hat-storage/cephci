@@ -6,7 +6,7 @@ from .config import Config
 from .config_key import ConfigKey
 from .crash import Crash
 from .fs.fs import Fs
-from .mgr import Mgr
+from .mgr.mgr import Mgr
 from .nfs.nfs import Nfs
 from .orch.orch import Orch
 from .osd.osd import Osd

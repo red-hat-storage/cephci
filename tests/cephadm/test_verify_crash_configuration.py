@@ -24,7 +24,7 @@ def run(ceph_cluster, **kw):
     log.info(f"Initial recorded crash stats are '{init_crash_stat}'")
 
     # Disable balancer module
-    CephAdm(node).ceph.mgr.module(action="disable", module="balancer")
+    CephAdm(node).ceph.mgr.module.disable("balancer")
 
     # Get running mgr containers
     running_ctrs, _ = get_running_containers(
