@@ -1,6 +1,5 @@
 from cli import Cli
 from cli.ceph.ceph import Ceph
-from cli.utilities.utils import build_cmd_from_args
 
 
 class CephAdm(Cli):
@@ -42,17 +41,20 @@ class CephAdm(Cli):
 
         return self.execute(sudo=True, long_running=True, cmd=cmd)
 
-    def prepare_host(self, **kw):
+    def prepare_host(self, hostname=None):
         """Verify prepare host command
+
         Args:
-            kw (dict): Key/value pairs that needs to be provided to the installer.
-
-            Supported keys:
-                expect-hostname (str): hostname
+            hostname (str): hostname
         """
-        cmd = f"{self.base_cmd} prepare-host {build_cmd_from_args(**kw)}"
+        cmd = f"{self.base_cmd} prepare-host"
+        if hostname:
+            cmd += f" --expect-hostname {hostname}"
 
-        return self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
 
     def logs(self, fsid, name):
         """Run the cephadm logs command

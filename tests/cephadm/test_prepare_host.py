@@ -1,8 +1,5 @@
 from cli.cephadm.cephadm import CephAdm
-
-
-class PrepareHostError(Exception):
-    pass
+from cli.exceptions import OperationFailedError
 
 
 def run(ceph_cluster, **kw):
@@ -18,10 +15,18 @@ def run(ceph_cluster, **kw):
                 config:
                     result: Host looks OK
     """
+    # Get test configs
     config = kw.get("config")
+
+    # Get mon node
     node = ceph_cluster.get_nodes(role="mon")[0]
-    result = CephAdm(node).prepare_host()
-    out = result[1].split("\n")[-2]
+
+    # Prepare host
+    out, _ = CephAdm(node).prepare_host()
+    out = out.split("\n")[-2]
+
+    # Validate result
     if config.get("result") != out:
-        raise PrepareHostError("cephadm perpare-host command fail")
+        raise OperationFailedError("CephAdm perpare-host command failed")
+
     return 0
