@@ -16,7 +16,7 @@ def run(ceph_cluster, **kw):
     node = [node for node in nodes if not node.role == "mgr"][0]
 
     # Enable dashboard plug-in in non-active mgr
-    out = CephAdm(node).ceph.mgr.module(action="enable", module="dashboard")
+    out = CephAdm(node).ceph.mgr.module.enable("dashboard")
     exp_error = kw.get("config").get("error")
     if exp_error not in out:
         CephmgrDashboardPluginError("Dashboard plug-in enable in non-active mgr")

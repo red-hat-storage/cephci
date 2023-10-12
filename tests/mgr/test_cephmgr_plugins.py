@@ -23,16 +23,16 @@ def run(ceph_cluster, **kw):
 
     for plugin in plugins:
         # Enable ceph-mgr plugin
-        if CephAdm(node).ceph.mgr.module(action="enable", module=plugin, force=True):
+        if CephAdm(node).ceph.mgr.module.enable(plugin, force=True):
             OperationFailedError(f"Failed to enable {plugin} plugin")
 
         # Verify ceph-mgr plugin being listed under enabled modules
-        out = CephAdm(node).ceph.mgr.module(action="ls")
+        out = CephAdm(node).ceph.mgr.module.ls()
         if plugin not in out:
             OperationFailedError(f"{plugin} plug-in not listed under enabled_modules")
 
         # Disable ceph-mgr plugin
-        if CephAdm(node).ceph.mgr.module(action="disable", module=plugin):
+        if CephAdm(node).ceph.mgr.module.disable(plugin):
             OperationFailedError(f"Failed to disable {plugin} plugin")
 
     return 0

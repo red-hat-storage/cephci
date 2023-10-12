@@ -35,7 +35,7 @@ def run(ceph_cluster, **kw):
     if not value:
         CephmgrThrottlingError("value not present in config")
     # Enable balancer module
-    if CephAdm(node).ceph.mgr.module(action, module):
+    if getattr(CephAdm(node).ceph.mgr.module, action)(module):
         CephmgrThrottlingError(f"Failed to {action} module {module}")
     exp_out = '"active": true'
     # Balancer module status

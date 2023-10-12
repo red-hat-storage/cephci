@@ -1,6 +1,8 @@
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 
+from .module import Module
+
 
 class Mgr(Cli):
     """This module provides CLI interface to manage the MGR service."""
@@ -9,22 +11,7 @@ class Mgr(Cli):
         super(Mgr, self).__init__(nodes)
 
         self.base_cmd = f"{base_cmd} mgr"
-
-    def module(self, action, module=None, force=False, **kw):
-        """Disable MGR module.
-
-        Args:
-            action (str): module action (disable|enable)
-            module (str): ceph module to be disabled
-            force (bool): use `--force`
-            kw: Key/value pairs of configuration information to be used in the test.
-        """
-        cmd = f"{self.base_cmd} module {action}"
-        if module:
-            cmd += f" {module}"
-        if force:
-            cmd += " --force"
-        return self.execute(sudo=True, cmd=cmd, **kw)
+        self.module = Module(nodes, self.base_cmd)
 
     def fail(self, mgr):
         """

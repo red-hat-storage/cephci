@@ -110,7 +110,7 @@ def run(ceph_cluster, **kw):
     step_to_validate = kw.get("config").get("operation")
 
     if step_to_validate in ["enable", "disable"]:
-        if CephAdm(node).ceph.mgr.module(action=step_to_validate, module="insights"):
+        if getattr(CephAdm(node).ceph.mgr.module, step_to_validate)("insights"):
             CephInsightOpsFailure(f"Failed to {step_to_validate} ceph insights")
 
     else:

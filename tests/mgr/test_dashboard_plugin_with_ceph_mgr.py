@@ -14,13 +14,13 @@ def run(ceph_cluster, **kw):
     node = ceph_cluster.get_nodes(role="mgr")[0]
 
     # Enable dashboard plug-in in non-active mgr
-    out = CephAdm(node).ceph.mgr.module(action="enable", module="dashboard")
+    out = CephAdm(node).ceph.mgr.module.enable("dashboard")
     exp_out = "enabled"
     if exp_out not in out:
         DashboardPluginWithCephMgr("Dashboard plug-in not enable")
 
     # Verification dashboard plug-in
-    out = CephAdm(node).ceph.mgr.module(action="ls")
+    out = CephAdm(node).ceph.mgr.module.ls()
     exp_out = "dashboard"
     if exp_out not in out:
         DashboardPluginWithCephMgr("Dashboard plug-in not listed under enabled_modules")
