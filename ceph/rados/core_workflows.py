@@ -2021,3 +2021,159 @@ class RadosOrchestrator:
                 log.info(f"PG : {ele['pgid']} is in expected state : {ele['state']}. ")
         log.info("Completed checking PG states on all PGs of the pool. Pass")
         return True
+
+    def get_object_list(self, pool_name) -> list:
+        """
+        Method retrives the objects form the pool
+        Args:
+            pool_name: pool name that the objects are created
+
+        Returns: List of objects that exists in the pool
+        """
+        cmd_get_obj_list = f"rados -p {pool_name} ls"
+        out_put = self.run_ceph_command(cmd=cmd_get_obj_list)
+
+        obj_list = []
+        if not out_put:
+            log.info(f"Objects not exists in the provided {pool_name} pool")
+        else:
+            for omap_obj in out_put:
+                obj_list.append(omap_obj["name"])
+        return obj_list
+
+    def get_object_key_list(self, osd_id, pg_id, object_name):
+        """
+        Method returns the key list of an object
+        Args:
+            osd: osd id number
+            pg_id: pg id number
+            object_name: object name
+
+        Returns: List of keys mapped to that object
+
+        """
+        cmd_base = f"cephadm shell --name osd.{osd_id} --"
+        acting_osd_node = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+        cmd_get_obj_key = (
+            f"{cmd_base} ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-"
+            f"{osd_id} --pgid {pg_id} {object_name}  list-omap"
+        )
+        out_put = acting_osd_node.exec_command(sudo=True, cmd=cmd_get_obj_key)
+        key_list = list(filter(None, out_put[0].split("\n")))
+        return key_list
+
+    def rm_object_key(self, osd_id, pg_id, object_name, object_key):
+        """
+        Method removes the object key
+        Args:
+            osd_id: osd id number
+            pg_id: pg id number
+            object_name: object name
+            object_key: object key to remove that mapped to the object
+
+        Returns: True -> Key deleted False -> Key not deleted
+        """
+        cmd_base = f"cephadm shell --name osd.{osd_id} --"
+        acting_osd_node = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+        cmd_rm_obj_key = (
+            f"{cmd_base} ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-"
+            f"{osd_id} --pgid {pg_id} {object_name}  rm-omap {object_key}"
+        )
+        try:
+            acting_osd_node.exec_command(sudo=True, cmd=cmd_rm_obj_key)
+        except Exception:
+            log.error(
+                f"{object_key} object key is not removed for the {object_name} object"
+            )
+            return False
+        log.info(f"{object_key} object key is removed for the {object_name} object")
+        return True
+
+    def get_inconsistent_pg_list(self, pool_name):
+        """
+        Method returns the inconsistent pg list
+        Args:
+            pool_name:  pool name
+
+        Returns: Inconsistent pg list
+        """
+        cmd_inconsist_pg = f"rados list-inconsistent-pg  {pool_name}"
+        inconsistent_pg_list = self.run_ceph_command(cmd_inconsist_pg)
+        if not inconsistent_pg_list:
+            log.info(f"The inconsistent pg list is empty in the pool {pool_name}")
+        return inconsistent_pg_list
+
+    def get_inconsistent_object_details(self, pg_id):
+        """
+        Method returns the inconsistent object list from a PG
+        Args:
+            pg_id: pg id
+
+        Returns: Return the inconsistent object list
+        """
+        cmd_inconsistent_object = f"rados  list-inconsistent-obj  {pg_id}"
+        object_details = self.run_ceph_command(cmd_inconsistent_object)
+        if not object_details:
+            log.info(f"The inconsistent objects list is empty in the PG {pg_id}")
+        return object_details
+
+    def check_inconsistent_health(self):
+        """
+        Method perform the health check for the inconsistent objects
+        Returns: True -> Contain inconsistent objects
+                 False -> Not contain inconsistent objects
+        """
+        health_detail, _ = self.node.shell(args=["ceph health detail"])
+        log.info(f"Health warning: \n {health_detail}")
+        if "inconsistent" not in health_detail:
+            log.info("pg inconsistent not generated in the cluster")
+            return False
+        else:
+            log.info("pg inconsistent generated in the cluster")
+            return True
+
+    def create_inconsistent_object(self, pool_name, object_name):
+        """
+        The method converts the object into inconsistent object
+        The logic implemented in the code is-
+        1. Get the primary osd and pg_id
+        2. Stopping the OSD
+        3. Get the key list of the object
+        4. Remove few keys that is mapped to the object
+        5. Start the OSD and perform deep-scrub on that pg id
+        6. Check the status
+        Args:
+            pool_name: pool name
+            object_name: object name in the pool
+        Returns: After converting the object in to inconsistent,method returns the pg id
+        """
+        osd_map_output = self.get_osd_map(pool=pool_name, obj=object_name)
+        primary_osd = osd_map_output["acting_primary"]
+        log.info(f"The object stored in the primary osd number-{primary_osd}")
+        pg_id = osd_map_output["pgid"]
+        log.info(f"The object {object_name} is created in the pg-{pg_id}")
+
+        # stoping the OSD
+        if not self.change_osd_state(action="stop", target=primary_osd):
+            log.error(f"Unable to stop the OSD : {primary_osd}")
+            raise Exception("Execution error")
+        # Getting the key list
+        key_list = self.get_object_key_list(primary_osd, pg_id, object_name)
+        rm_key_count = 0
+        for obj_key in key_list:
+            log.info(f" Deleting the {obj_key} for the {object_name} object")
+            obj_del_check = self.rm_object_key(primary_osd, pg_id, object_name, obj_key)
+            rm_key_count = rm_key_count + 1
+            if rm_key_count == 3 or not obj_del_check:
+                break
+        if not self.change_osd_state(action="start", target=primary_osd):
+            log.error(f"Unable to start the OSD : {primary_osd}")
+            raise Exception("Execution error")
+        log.info(f"Performing the deep-scrub on the pg-{pg_id}")
+        self.run_deep_scrub(pgid=pg_id)
+        # sleeping for 10 seconds, waiting for scrubbing to be over
+        time.sleep(10)
+        health_check = self.check_inconsistent_health()
+        assert health_check
+        log.info(f"The inconsistent object is created in the pg{pg_id}")
+        return pg_id

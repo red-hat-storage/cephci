@@ -104,7 +104,23 @@ tests:
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
-
+  - test:
+      name: Inconsistent object pg check
+      desc: Inconsistent object pg check
+      module: test_osd_inconsistency_pg.py
+      polarion-id: CEPH-9924
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_pool
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
   - test:
       name: OMAP feature
       desc: Testing omap features
