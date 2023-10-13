@@ -72,6 +72,7 @@ tests:
       name: libRBD-VS-NVMeoF WRITE-READ-IOtype 4kblocksize single-10G-vol
       description: Write and Read IO comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
+      polarion-id: CEPH-83576113
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
@@ -97,6 +98,7 @@ tests:
       name: libRBD-VS-NVMeoF ReadWrite-IOType 4k-block-size single-10G-vol
       description: Read-Write IOType comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
+      polarion-id: CEPH-83576113
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
@@ -120,6 +122,7 @@ tests:
       name: libRBD VS NVMeoF Random-WRITE-READ-IOType 4kblocksize single-10G-vol
       description: Random Read and Write IOType comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
+      polarion-id: CEPH-83576113
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
@@ -144,6 +147,7 @@ tests:
       name: libRBD VS NVMeoF Random-READWRITE-IOType 4kblocksize single-10G-vol
       description: Random Read-Write IOType comparison on 10G image with 4kb-block-size
       module: test_io_perf.py
+      polarion-id: CEPH-83576113
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
