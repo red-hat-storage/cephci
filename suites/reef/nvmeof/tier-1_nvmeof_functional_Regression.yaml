@@ -164,8 +164,6 @@ tests:
       name: Basic E2E-Test Ceph NVMEoF GW sanity test collocated with MON-MGR node
       polarion-id: CEPH-83575443
 
-
-
 # Run IOs using multiple-initiators against multi-subsystems based NVMe-OF targets using fio tool
   - test:
       abort-on-fail: true
@@ -283,8 +281,25 @@ tests:
           pool: rbd
         initiator_node: node7
         operation: remove
-      desc: Test to remove image while RBD image is used as NVMe namespace
+      desc: Test remove RBD image used as NVMe namespace
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
-      name: Remove Image while image is used as NVMe Namespace
+      name: Remove-image ops on NVMe Namespace
       polarion-id: CEPH-83575812
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node7
+        operation: CEPH-83576084
+      desc: Delete-recreate bdev in loop and rediscover namespace
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: Delete-recreate bdev namespace
+      polarion-id: CEPH-83576084

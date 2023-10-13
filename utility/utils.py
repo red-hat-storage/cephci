@@ -2300,3 +2300,26 @@ def get_bucket_sync_status(node, bucket_name):
     )
     log.info(out)
     return out
+
+
+def find_free_port(host):
+    find_port = """
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((\'localhost\', {PORT_NUMBER}))
+try:
+    _, port = s.getsockname()
+except:
+    port = None
+finally:
+    s.close()
+print(port)
+"""
+    for port in range(6000, 10000):
+        out, _ = host.exec_command(
+            cmd=f'python3 -c "{find_port.format(PORT_NUMBER=port)}"',
+            sudo=True,
+        )
+        if not out or out == "None":
+            continue
+        return out.strip()
