@@ -287,6 +287,17 @@ tests:
         timeout: 300
 
   - test:
+      name: Get object and its version from same and different tenant users
+      desc: test get object and its version from same and different tenant users
+      polarion-id: CEPH-11516
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: get_object_and_its_versions_tenat_user.yaml
+        timeout: 500
+
+  - test:
       name: test bucket policy with multiple statements
       desc: test bucket policy with multiple statements
       polarion-id: CEPH-11216
