@@ -155,3 +155,9 @@ tests:
       desc: nfs-ha-node-replacement
       polarion-id: CEPH-83575096
       abort-on-fail: false
+  - test:
+      name: nfs-ha-node-services
+      module: cephfs_nfs.test_cephfs_nfs_ha_keeplive_services.py
+      desc: nfs-ha-node-services
+      polarion-id: CEPH-83575091
+      abort-on-fail: false
