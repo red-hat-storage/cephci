@@ -50,7 +50,7 @@ def run(ceph_cluster, **kw):
         cmd = (
             f"python3 -m pip install ply;cd {nfs_mount};git clone git://linux-nfs.org/~bfields/pynfs.git;cd pynfs;-- "
             f"yes |"
-            f"python setup.py build;cd nfs{version};./testserver.py {nfs_server_name}:{nfs_export} -v --outfile "
+            f"python setup.py build;cd nfs{version};./testserver.py {nfs_server_name}:{nfs_export}_0 -v --outfile "
             f"~/pynfs.run --maketree --showomit --rundep all"
         )
 
