@@ -336,4 +336,11 @@ tests:
       module: clients.multiple_clients_permission_mounted_directories.py
       name: multiple clients permission in mounted directory
       polarion-id: "CEPH-11340"
+  - test:
+      abort-on-fail: false
+      desc: "mds journal value conf verification"
+      module: clients.mds_journal_value_conf_verification.py
+      name: mds journal value conf verification
+      polarion-id: "CEPH-11331"
+
 
