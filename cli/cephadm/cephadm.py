@@ -1,9 +1,10 @@
 from cli import Cli
 from cli.ceph.ceph import Ceph
+from cli.utilities.utils import build_cmd_from_args
 
 
 class CephAdm(Cli):
-    """This module provides CLI interface to manage the CephAdm operations."""
+    """This module provides CLI interface to manage the CephAdm operations"""
 
     def __init__(self, nodes, mount=None, base_cmd="cephadm"):
         super(CephAdm, self).__init__(nodes)
@@ -22,6 +23,38 @@ class CephAdm(Cli):
             cmd (str): command to be executed
         """
         cmd = f"{self.base_shell_cmd} {cmd}"
+        return self.execute(sudo=True, long_running=True, cmd=cmd)
+
+    def bootstrap(self, image=None, yes_i_know=False, **kw):
+        """Bootstrap cluster with options
+
+        Args:
+            image (str): Ceph container image URL
+            yes_i_know (bool): Flag to set option `yes-i-know`
+            kw (dict): Key/Value pairs to be provided to bootstrap command
+                Supported keys:
+                    fsid (str): Cluster FSID
+                    image (str): Container image
+                    registry-url (str): URL for custom registry
+                    registry-username (str): Username for custom registry
+                    registry-password (str): Password for custom registry
+                    registry-json (str): json file with custom registry login info
+                    mon-ip (str): Mon IP address
+                    config (str): Ceph conf file to incorporate
+                    skip-dashboard (str): Do not enable the Ceph Dashboard
+                    initial-dashboard-user (str): Initial user for the dashboard
+                    initial-dashboard-password (str): Initial password for the initial dashboard user
+                    allow-overwrite (str): Allow overwrite of existing --output-* config/keyring/ssh files
+                    allow-fqdn-hostname (str): Allow hostname that is fully-qualified
+                    output-dir (str): Directory to write config, keyring, and pub key files
+                    apply-spec (str): Apply cluster spec after bootstrap
+                    cluster-network (str): Subnet to use for cluster replication, recovery and heartbeats
+        """
+        cmd = self.base_cmd
+        cmd += f" --image {image} " if image else ""
+        cmd += f" bootstrap{build_cmd_from_args(**kw)}"
+        cmd += " --yes-i-know" if yes_i_know else ""
+
         return self.execute(sudo=True, long_running=True, cmd=cmd)
 
     def rm_cluster(self, fsid, zap_osds=True, force=True):
