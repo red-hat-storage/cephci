@@ -1,0 +1,129 @@
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 10.8.128.0/21
+      nodes:
+        - hostname: mero006
+          id: node1
+          ip: 10.8.129.226
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - rgw
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: mero008
+          id: node2
+          ip: 10.8.129.228
+          role:
+            - mgr
+            - rgw
+            - mon
+            - osd
+            - _admin
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: mero010
+          id: node3
+          ip: 10.8.129.230
+          role:
+            - mds
+            - mon
+            - mgr
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: mero012
+          id: node4
+          ip: 10.8.129.232
+          role:
+            - osd
+            - mds
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: magna008
+          id: node5
+          ip: 10.8.128.8
+          role:
+            - client
+          root_password: passwd
+        - hostname: magna010
+          id: node6
+          ip: 10.8.128.10
+          role:
+            - client
+          root_password: passwd
+        - hostname: magna012
+          id: node7
+          ip: 10.8.128.12
+          role:
+            - client
+          root_password: passwd
+        - hostname: magna060
+          id: node8
+          ip: 10.8.128.60
+          role:
+            - client
+          root_password: passwd
