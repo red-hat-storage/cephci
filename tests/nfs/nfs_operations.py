@@ -28,7 +28,7 @@ def setup_nfs_cluster(
     vip=None,
 ):
     # Step 1: Enable nfs
-    Ceph(clients[0]).mgr.module(action="enable", module="nfs", force=True)
+    Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
 
     # Step 2: Create an NFS cluster
     Ceph(clients[0]).nfs.cluster.create(

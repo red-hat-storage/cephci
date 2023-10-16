@@ -66,7 +66,7 @@ def run(ceph_cluster, **kw):
     threads = []
     try:
         # Step 1: Enable nfs
-        Ceph(clients[0]).mgr.module(action="enable", module="nfs", force=True)
+        Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
 
         # Step 2: Create an NFS cluster
         nfs_servers = []
