@@ -203,3 +203,25 @@ tests:
      config:
        nfs_version: 4.1
        clients: 4
+
+  - test:
+      name: Nfs Verify read write operation permissions
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write without permissions on nfs share
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_permission
+
+  - test:
+      name: Nfs verify read and write non existing file
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write of no existing file on nfs share
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_non_existing_file
