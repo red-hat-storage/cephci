@@ -52,7 +52,7 @@ def run(ceph_cluster, **kw):
 
     try:
         # Setup nfs cluster
-        Ceph(clients[0]).mgr.module(action="enable", module="nfs", force=True)
+        Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
         Ceph(clients[0]).nfs.cluster.create(
             name=nfs_name, nfs_server=nfs_server_name, ha=ha, vip=vip
         )
