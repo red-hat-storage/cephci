@@ -1,4 +1,6 @@
 # Suite contains tests related to verify slow op requests
+# Keeping this suite Openstack only as generating slow-ops in BM env is difficult
+
 tests:
   - test:
       name: setup install pre-requisistes

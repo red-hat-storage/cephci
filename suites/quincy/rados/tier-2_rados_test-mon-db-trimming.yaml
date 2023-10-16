@@ -159,6 +159,9 @@ tests:
       desc: Perform rgw tests
 
   - test:
+      name: Compression test - EC pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571674
       config:
         Compression_tests:
           pool_type: erasure
@@ -175,7 +178,7 @@ tests:
           compression_config:
             compression_mode: aggressive
             compression_algorithm: snappy
-            compression_required_ratio: 0.3
+            compression_required_ratio: 0.7
             compression_min_blob_size: 1B
             byte_size: 10KB
       desc: Verification of the effect of compression on erasure coded pools

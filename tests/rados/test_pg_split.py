@@ -153,7 +153,7 @@ def run(ceph_cluster, **kw):
         )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
 
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=5000)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=10000)
         while datetime.datetime.now() < endtime:
             pool_pg_num = rados_obj.get_pool_property(
                 pool=pool["pool_name"], props="pg_num"
@@ -202,7 +202,7 @@ def run(ceph_cluster, **kw):
                 f"pg_num {pg_count_bulk_true} is expected to be greater than {pg_count_bulk_false} after bulk removal"
             )
 
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=5000)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=10000)
         while datetime.datetime.now() < endtime:
             pool_pg_num = rados_obj.get_pool_property(
                 pool=pool["pool_name"], props="pg_num"

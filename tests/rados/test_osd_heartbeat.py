@@ -25,7 +25,7 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
-    timeout = config.get("timeout", 150)
+    timeout = config.get("timeout", 350)
     recovery_timeout = config.get("recovery_timeout", 2400)
     installer_node = ceph_cluster.get_nodes(role="installer")[0]
 

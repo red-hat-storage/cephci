@@ -125,7 +125,7 @@ tests:
               pool_type: replicated
           - create_pool:
               create: true
-              pool_name: ecpool_2
+              pool_name: ecpool_test_1
               pool_type: erasure
               pg_num: 32
               k: 2
@@ -137,7 +137,7 @@ tests:
           - rpool_1
           - rpool_2
           - rpool_3
-          - ecpool_2
+          - ecpool_test_1
 
   - test:
       name: Test Reads Balancer
@@ -170,7 +170,7 @@ tests:
               pool_type: replicated
           - create_pool:
               create: true
-              pool_name: ecpool_2
+              pool_name: ecpool_test_2
               pool_type: erasure
               pg_num: 32
               k: 2
@@ -182,8 +182,10 @@ tests:
           - rpool_1
           - rpool_2
           - rpool_3
-          - ecpool_2
+          - ecpool_test_2
 
+# The below test is openstack only, and would need modifications to run on BM.
+# commenting the run of below test in BM pipeline
   - test:
       name: verify mon parameter 'mon_pg_warn_max_object_skew'
       polarion-id: CEPH-83575440

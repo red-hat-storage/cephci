@@ -24,6 +24,7 @@
 #       - site3:
 #              name: "DC3"                           # Name of the Arbiter location to be added in crush map
 #              hosts: ["<host5-shortname>"]          # List of hostname present in Arbiter
+# Added to BM pipeline
 
 tests:
   - test:
@@ -45,7 +46,7 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                mon-ip: <bootstrap-mon-shortname>
+                mon-ip: mero001
                 orphan-initial-daemons: true
                 allow-fqdn-hostname: true
           - config:
@@ -86,12 +87,28 @@ tests:
                   encrypted: "true"                     # boolean as string
                   placement:
                     nodes:
-                      - <host3-shortname>
-                      - <host4-shortname>
+                      - mero005
+                      - mero007
+                      - mero009
+                      - mero011
+                      - mero013
+                      - mero014
+                      - mero017
+                      - mero018
+                      - mero019
+                      - mero020
                   spec:
                     data_devices:
-                      all: "true"                         # boolean as string
-
+                      paths:
+                        - /dev/sdc
+                        - /dev/sdd
+                        - /dev/sde
+                        - /dev/sdf
+                        - /dev/sdg
+                        - /dev/sdh
+                    db_devices:
+                      paths:
+                        - /dev/nvme0n1
   - test:
       name: MDS Service deployment with spec
       desc: Add MDS services using spec file
@@ -134,23 +151,31 @@ tests:
                   label: rgw
 
   - test:
-      name: Configure client admin
-      desc: Configures client admin node on cluster
-      module: test_client.py
-      polarion-id:
-      config:
-        command: add
-        id: client.1                      # client Id (<type>.<Id>)
-        node: <client-host-shortname>                     # client node
-        install_packages:
-          - ceph-common
-          - ceph-base
-        copy_admin_keyring: true          # Copy admin keyring to node
-        caps:                             # authorize client capabilities
-          mon: "allow *"
-          osd: "allow *"
-          mds: "allow *"
-          mgr: "allow *"
+      name: Configure clients
+      desc: Configures multiple client nodes on cluster
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: Configure client 1
+            desc: Configures client.1 admin node on cluster
+            module: test_client.py
+            polarion-id:
+            config:
+              command: add
+              id: client.1                      # client Id (<type>.<Id>)
+              nodes:
+                  - node10:
+                      release: 6
+                  - node11:
+                      release: 6
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true          # Copy admin keyring to node
+              caps:                             # authorize client capabilities
+                mon: "allow *"
+                osd: "allow *"
+                mds: "allow *"
+                mgr: "allow *"
 
   - test:
       name: Deploy stretch Cluster
@@ -160,12 +185,12 @@ tests:
         stretch_rule_name: "stretch_rule"
         site1:
           name: "DC1"
-          hosts: ["<host1-shortname>", "<host2-shortname>", ... ]
+          hosts: ["mero001"]
         site2:
           name: "DC2"
-          hosts: ["<host3-shortname>", "<host4-shortname>", ... ]
+          hosts: ["mero003", "mero004", "mero013", "mero011", "mero009", "mero007", "mero005" ]
         site3:
           name: "DC3"
-          hosts: ["<host5-shortname>"]
+          hosts: ["mero017", "mero018", "mero014", "mero019", "mero020"]
       desc: Enables connectivity mode, deploys cluster with Stretch rule with arbiter node
       abort-on-fail: true

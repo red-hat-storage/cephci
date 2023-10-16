@@ -135,6 +135,8 @@ tests:
 #        write_iteration: 3
 #        delete_pool: true
 
+# The below test is openstack only, and would need modifications to run on BM.
+# commenting the run of below test in BM pipeline
   - test:
       name: Cluster behaviour when OSDs are full
       desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full

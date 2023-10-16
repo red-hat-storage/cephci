@@ -2,6 +2,9 @@
 # Use cluster-conf file: conf/quincy/rados/stretch-mode-host-location-attrs.yaml
 # Stretch mode tests performing upgrade
 
+# This test case is Openstack only and cannot be run in Baremetal env due to test constrains.
+# Stretch mode deployment in BM is run by suite : suites/reef/rados/deploy-stretch-cluster-mode.yaml
+
 tests:
   - test:
       name: Install ceph pre-requisites
