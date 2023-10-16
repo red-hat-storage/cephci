@@ -168,7 +168,13 @@ tests:
                 duration: 10
               verify_cluster_health: true
             destroy-cluster: false
-      desc: Running upgrade and i/o's parallelly
+        - test:
+            abort-on-fail: false
+            desc: Fail MDS while Upgrade is going on
+            module: cephfs_upgrade.cephfs_mds_failover.py
+            name: "Fail MDS while Upgrade is in Progress"
+            polarion-id: CEPH-83575628
+      desc: Running upgrade, mds Failure and i/o's parallelly
       abort-on-fail: true
   - test:
       abort-on-fail: false
