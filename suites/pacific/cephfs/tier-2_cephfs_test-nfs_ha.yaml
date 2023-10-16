@@ -179,3 +179,9 @@ tests:
       desc: Update the NFS Configuraion by adding an additional host on the fly.
       polarion-id: CEPH-83575090
       abort-on-fail: false
+  - test:
+      name: upgrade_standalone_NFS_Cluster_to_NFS_HA_Cluster
+      module: cephfs_nfs.test_cephfs_upgrade_nfs_standalone_to_nfs_ha_cluster.py
+      desc: Upgrade a Standalone NFS Cluster to a NFS HA Configuration
+      polarion-id: CEPH-83575095
+      abort-on-fail: false

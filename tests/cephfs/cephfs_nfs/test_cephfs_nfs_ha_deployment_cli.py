@@ -13,7 +13,8 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-83575000 - Configure CephFS NFA HA using cephadm - BZ-1997996
+    CEPH-83575092 - Create a 2 Node - CephFS NFS HA Cluster from the Cephadm shell and
+                    check if the cluster has come up as expected and validate all the cluster information
     Procedure
     Scenario 1 - Create default NFS HA Deployment.
     1. Log into the Cephadm shell:
@@ -28,7 +29,7 @@ def run(ceph_cluster, **kw):
     6. Cleanup
     """
     try:
-        tc = "CEPH-83575000"
+        tc = "CEPH-83575092"
         log.info(f"Running cephfs {tc} test case")
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
