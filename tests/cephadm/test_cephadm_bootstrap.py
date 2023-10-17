@@ -1,5 +1,6 @@
 from cli.exceptions import ConfigError
 from cli.ops.cephadm import bootstrap, set_container_image_config
+from cli.utilities.configs import get_registry_details
 from cli.utilities.configure import (
     add_ceph_repo,
     enable_ceph_tools_repo,
@@ -63,6 +64,10 @@ def run(ceph_cluster, **kwargs):
         bootstrap_config["config"] = generate_bootstrap_config(
             installer, bootstrap_config.pop("config")
         )
+
+    # Check for registry details
+    if not bootstrap_config.get("registry-url") and ibm_build:
+        bootstrap_config.update(get_registry_details(ibm_build))
 
     # Bootstrap cluster
     bootstrap(node=installer, **bootstrap_config)
