@@ -288,3 +288,13 @@ tests:
       config:
         nfs_version: 4.1
         clients: 2
+
+  - test:
+      name: Nfs access file from  with root-squash enabled
+      module: nfs_verify_file_access_with_rootsquash.py
+      desc: Test NFS file access with root-squash enabled
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
