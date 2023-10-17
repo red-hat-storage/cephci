@@ -1,0 +1,76 @@
+# Name: Cluster deployment with Non-collocated OSD
+# Conf:  conf/quincy/ceph_volume/1admin-1clinet-5node-single-volume.yaml
+#    - Bootstrap
+#    - Host management
+#    - Re-deploy non-collocated OSDs
+#------------------------------------------------------------------------------
+
+tests:
+  - test:
+      name: Setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster
+      desc: Bootstrap cluster for ceph-volume
+      module: test_cephadm_bootstrap.py
+      config:
+        ansible_preflight: true
+        bootstrap:
+          mon-ip: node1
+          apply-spec:
+            file_type: yaml
+            spec:
+              - service_type: host
+                hostname: node1
+                addr: node1
+                labels:
+                 - osd
+              - service_type: host
+                hostname: node2
+                addr: node2
+                labels:
+                 - osd
+              - service_type: host
+                hostname: node3
+                labels:
+                 - osd
+              - service_type: mon
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: mgr
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: mds
+                service_id: test_mds
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+        client:
+          ansible_clients: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Redeploy non-collocated OSD
+      desc: Verify redeployment of non-collocated OSD with wrong dedicated DB size
+      polarion-id: CEPH-83575600
+      module: test_ceph_volume_redeploy.py
+      config:
+        spec:
+          service_type: osd
+          service_name: osd_hdd
+          placement:
+            label: "osd"
+          spec:
+            data_devices:
+              size: 16GB
+            db_devices:
+              size: 32GB
