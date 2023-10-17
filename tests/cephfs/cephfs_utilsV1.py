@@ -3122,3 +3122,65 @@ os.system('sudo systemctl start  network')
         client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
         command = f"mount -t nfs -o port={port},nfsvers={nfs_version} {virtual_ip}:{psuedo_path} {nfs_mounting_dir}"
         client.exec_command(sudo=True, cmd=command, check_ec=False)
+
+    def mount_ceph(self, mnt_type, mount_params):
+        """
+        To perform cephfs mount of path "/" with specified mount type
+        Args:
+            mnt_type: one of mount types- nfs, kernel or fuse
+            mount_params : a dict type input for mount details including,
+            fs_util : a fs_util testlib object created in test script
+            client : client to perform mount
+            fs_name : a cephfs volume name
+            nfs_name : a nfs cluster name for nfs mount type
+            nfs_export_name : an export name to be created for nfs mount
+            Ex:
+              path : /mnt/cephfs_kernel/ for snap-schedule path "/"
+              sched_val : 1M , for a snapshot every 1 minute on path
+        Returns: mount_path,export_created
+                 export_created : 1, if export was created in module else 0
+        """
+        client = mount_params["client"]
+        fs_vol_path = "/"
+        mount_suffix = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        fs_util = mount_params["fs_util"]
+
+        if mnt_type == "kernel":
+            mounting_dir = f"/mnt/cephfs_kernel_{mount_suffix}/"
+            client.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}")
+            mon_node_ips = fs_util.get_mon_node_ips()
+            retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.kernel_mount)
+            retry_mount(
+                [client],
+                mounting_dir,
+                ",".join(mon_node_ips),
+                sub_dir=f"{fs_vol_path}",
+                extra_params=f",fs={mount_params['fs_name']}",
+            )
+        if mnt_type == "fuse":
+            mounting_dir = f"/mnt/cephfs_fuse_{mount_suffix}/"
+            client.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}")
+            fs_util.fuse_mount(
+                [client],
+                mounting_dir,
+                extra_params=f" -r {fs_vol_path} --client_fs {mount_params['fs_name']}",
+            )
+        if mnt_type == "nfs":
+            mounting_dir = f"/mnt/cephfs_nfs_{mount_suffix}/"
+            if mount_params["export_created"] == 0:
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph nfs export create cephfs {mount_params['nfs_name']} "
+                    f"{mount_params['nfs_export_name']} {mount_params['fs_name']} path={fs_vol_path}",
+                )
+                mount_params["export_created"] = 1
+            fs_util.cephfs_nfs_mount(
+                client,
+                mount_params["nfs_server"],
+                mount_params["nfs_export_name"],
+                mounting_dir,
+            )
+        return mounting_dir, mount_params["export_created"]
