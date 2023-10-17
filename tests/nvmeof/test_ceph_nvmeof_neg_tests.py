@@ -12,7 +12,7 @@ from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.cephadm import test_nvmeof
+from tests.cephadm import test_nvmeof, test_orch
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
     initiators,
@@ -82,8 +82,8 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:cnode_negative",
-            "serial": 111,
+            "nqn": "nqn.2016-06.io.spdk:ceph_83576084",
+            "serial": 112,
             "listener_port": listener_port,
             "allow_host": "*",
         }
@@ -100,7 +100,7 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     gateway.add_namespace(subsystem["nqn"], img)
 
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:cnode_negative",
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83576084",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
@@ -162,6 +162,71 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
+def test_ceph_83575467(ceph_cluster, rbd, pool, config):
+    """Validate test case CEPH-83575467."""
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83575467",
+            "serial": 111,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+
+    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+    configure_subsystems(rbd, pool, gateway, subsystem)
+    name = generate_unique_id(length=4)
+
+    # Create images
+    for i in range(5):
+        img = f"{name}-image{i}"
+        rbd.create_image(pool, img, "500M")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
+
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575467",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+    config.update(initiator_cfg)
+    initiators(ceph_cluster, gateway, initiator_cfg)
+    _, gw_info_bkp = gateway.get_subsystems()
+    gw_info_bkp = json.loads(gw_info_bkp.split("\n", 1)[1])
+
+    # restart nvmeof service
+    restart_cfg = {
+        "config": {
+            "service": f"nvmeof.{pool}",
+            "command": "restart",
+            "args": {"verify": True},
+            "pos_args": [f"nvmeof.{pool}"],
+        }
+    }
+    test_orch.run(ceph_cluster, **restart_cfg)
+    _, gw_info = gateway.get_subsystems()
+    gw_info = json.loads(gw_info.split("\n", 1)[1])
+
+    if gw_info != gw_info_bkp:
+        raise Exception(
+            f"GW Entities aren't same. Actual: {gw_info_bkp} Current: {gw_info}"
+        )
+    LOG.info("Validation of Ceph-83575467 is successful.")
+
+    cleanup_cfg = {
+        "gw_node": config["gw_node"],
+        "initiators": [initiator_cfg],
+        "cleanup": ["initiators", "gateway", "pool"],
+        "rbd_pool": pool,
+    }
+    teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
@@ -190,7 +255,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     LOG.info("Running Ceph Ceph NVMEoF Negative tests.")
     config = kwargs["config"]
-    rbd_pool = "rbd"
+    rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
@@ -212,9 +277,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         test_nvmeof.run(ceph_cluster, **cfg)
         if config["operation"] == "remove":
             remove(ceph_cluster, rbd_obj, rbd_pool, config)
-
         if config["operation"] == "CEPH-83576084":
             test_ceph_83576084(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83575467":
+            test_ceph_83575467(ceph_cluster, rbd_obj, rbd_pool, config)
 
         return 0
     except Exception as err:
