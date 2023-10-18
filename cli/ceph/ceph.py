@@ -1,5 +1,4 @@
 from cli import Cli
-from cli.utilities.utils import build_cmd_from_args
 
 from .balancer import Balancer
 from .config import Config
@@ -81,9 +80,3 @@ class Ceph(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
-
-    def osd(self, command, **kw):
-        """Executes ceph osd specific commands"""
-        cmd = f"{self.base_cmd} osd {command}"
-        cmd += build_cmd_from_args(**kw)
-        return self.execute(sudo=True, check_ec=False, long_running=False, cmd=cmd)
