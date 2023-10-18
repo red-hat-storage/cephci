@@ -1628,17 +1628,13 @@ class RadosOrchestrator:
                 "PG_AVAILABILITY",
                 "PG_DEGRADED",
                 "PG_RECOVERY_FULL",
-                "TOO_FEW_OSDS",
                 "PG_BACKFILL_FULL",
                 "PG_DAMAGED",
                 "OSD_SCRUB_ERRORS",
                 "OSD_TOO_MANY_REPAIRS",
                 "CACHE_POOL_NEAR_FULL",
-                "SMALLER_PGP_NUM",
-                "MANY_OBJECTS_PER_PG",
                 "OBJECT_MISPLACED",
                 "OBJECT_UNFOUND",
-                "SLOW_OPS",
                 "RECENT_CRASH",
             )
 
@@ -1665,6 +1661,28 @@ class RadosOrchestrator:
             return False
 
         log.info("Completed check on the cluster. Pass!")
+        return True
+
+    def check_inactive_pgs_on_pool(self, pool_name) -> bool:
+        """
+        Method to check if the provided pool has any PGs in inactive state
+
+        Args:
+            pool_name: Name of the pool, on which inactive PGs should be checked
+
+        Returns: True-> Pass,  false -> Fail
+        """
+        log.debug(f"Checking for inactive PGs on pool : {pool_name}")
+        pool_pgids = self.get_pgid(pool_name=pool_name)
+        for pgid in pool_pgids:
+            # Checking the PG state. There Should not be inactive state
+            pg_state = self.get_pg_state(pg_id=pgid)
+            if any("inactive" in key for key in pg_state.split("+")):
+                log.error(f"PG: {pgid} in inactive state)")
+                return False
+        log.info(
+            f"Completed checking for inactive PGs on Pool : {pool_name}. No inactive PGs found"
+        )
         return True
 
     def get_osd_hosts(self):
