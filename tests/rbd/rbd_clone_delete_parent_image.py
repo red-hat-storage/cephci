@@ -75,7 +75,7 @@ def rbd_clone_delete_parent_image(rbd, pool_type, **kw):
             return 0
 
     except RbdBaseException as error:
-        log.error(error.message)
+        log.error(error)
         return 1
 
     finally:
