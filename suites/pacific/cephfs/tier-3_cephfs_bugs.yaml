@@ -189,3 +189,9 @@ tests:
       polarion-id: CEPH-83575781
       desc: Remove Contents of lost+found dir
       abort-on-fail: false
+  - test:
+      name: Run create and unlink operations concurrently.
+      module: cephfs_bugs.test_create_unlink_ops_concorrently.py
+      polarion-id: CEPH-83575762
+      desc: Run create and unlink operations concurrently
+      abort-on-fail: false
