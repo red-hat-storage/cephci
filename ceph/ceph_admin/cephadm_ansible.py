@@ -41,7 +41,9 @@ class CephadmAnsible:
 
     def install_cephadm_ansible(self):
         """Enable ansible rpm repos and install cephadm-ansible."""
-        rhcs_version = re.match(r"(\d)\.(.?)(.*)", self.cluster._Ceph__rhcs_version)
+        rhcs_version = re.match(
+            r"(\d)\.(.?)(.*)", str(self.cluster._Ceph__rhcs_version)
+        )
         if not rhcs_version:
             raise CephadmAnsibleError(
                 f"Invalid string for RHCS version - '{self.cluster.__Ceph_rhcs_version}'"
@@ -122,4 +124,4 @@ class CephadmAnsible:
         )
 
         if rc != 0:
-            raise CephadmAnsibleError("Playbook {playbook} failed....")
+            raise CephadmAnsibleError(f"Playbook {playbook} failed....")
