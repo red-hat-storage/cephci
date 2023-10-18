@@ -31,15 +31,6 @@ tests:
   -
     test:
       config:
-        script: luks-encryption.sh
-        script_path: qa/workunits/rbd
-      desc: "Executing upstream RBD LUKS Encryption scenarios"
-      module: test_rbd.py
-      name: "Evaluate LUKS encryption"
-      polarion-id: CEPH-83574242
-  -
-    test:
-      config:
         script: cli_migration.sh
         script_path: qa/workunits/rbd
       desc: "Executing upstream RBD CLI Migration scenarios"
