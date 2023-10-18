@@ -112,7 +112,7 @@ def wait_for_daemon_state(client, type, id, state):
     timeout, interval = 300, 20
     for w in WaitUntil(timeout=timeout, interval=interval):
         # Get osd tree and check whether the deleted osd is present or not
-        tree, _ = Ceph(client).osd(command=f"tree {state}", format="json")
+        tree, _ = Ceph(client).osd.tree(states=state, format="json")
         for daemon in json.loads(tree).get("nodes"):
             _type = daemon.get("type")
             _id = daemon.get("id")
