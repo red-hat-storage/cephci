@@ -256,3 +256,9 @@ tests:
       config:
         osd_host_fail: True
       desc: Replacement of a failed OSD host with a healthy host
+
+  - test:
+      name: mon replacement test
+      polarion-id: CEPH-9407
+      module: test_mon_addition_removal.py
+      desc: Replace a Healthy Mon with a new MON
