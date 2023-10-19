@@ -80,6 +80,12 @@ def krbd_io_handler(**kw):
                 device_names.append(rbd.map(pool=pool_name, image=image_name)[:-1])
 
             if operations.get("device_map"):
+                out = exec_cmd(
+                    cmd="rpm -qa|grep rbd-nbd", node=client, sudo=True, output=True
+                )
+                if not out or out == 1:
+                    exec_cmd(cmd="dnf install rbd-nbd -y", node=client, sudo=True)
+
                 map_config = {
                     "pool": pool_name,
                     "image": image_name,
