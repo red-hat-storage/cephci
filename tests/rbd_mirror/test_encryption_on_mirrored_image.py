@@ -3,7 +3,7 @@ from time import sleep
 
 from ceph.rbd.initial_config import initial_mirror_config, random_string
 from ceph.rbd.utils import getdict
-from ceph.rbd.workflows.cleanup import device_cleanup, pool_cleanup
+from ceph.rbd.workflows.cleanup import cleanup, device_cleanup
 from ceph.rbd.workflows.encryption import (
     create_and_encrypt_clone,
     execute_neg_encryption_scenarios,
@@ -457,27 +457,5 @@ def run(**kw):
         log.error(f"Testing mirrored encryption failed with error {str(e)}")
         ret_val = 1
     finally:
-        pools = list()
-        for pool_type in pool_types:
-            multi_pool_config = kw.get("config").get(pool_type)
-            pools.extend(
-                [
-                    key
-                    for key in getdict(multi_pool_config).keys()
-                    if key != "test_config"
-                ]
-            )
-            pools.extend(
-                [
-                    val["data_pool"]
-                    for val in getdict(multi_pool_config).values()
-                    if val.get("data_pool")
-                ]
-            )
-        for cluster_config in mirror_obj.values():
-            pool_cleanup(
-                cluster_config.get("client"),
-                pools,
-                ceph_version=int(kw["config"].get("rhbuild")[0]),
-            )
+        cleanup(pool_types=pool_types, mirror_obj=mirror_obj, **kw)
     return ret_val

@@ -549,12 +549,21 @@ def initial_mirror_config(**kw):
     kw["ceph_cluster"] = ceph_cluster
     config = kw.get("config")
 
+    ret_config["output"] = list()
     for pool_type in primary_config.get("pool_types"):
         pool_config = getdict(config.get(pool_type))
         kw["do_not_enable_mirror_on_image"] = config.get(pool_type).get(
             "do_not_enable_mirror_on_image"
         )
-        config_mirror_multi_pool(primary_config, secondary_config, pool_config, **kw)
+
+        out = config_mirror_multi_pool(
+            primary_config, secondary_config, pool_config, **kw
+        )
+
+        if "Snapshot based mirroring cannot be enabled in pool mode" in out:
+            ret_config["output"].append(f"{out} for {pool_type}")
+            continue
+
         config_mirror_multi_pool(
             secondary_config, primary_config, pool_config, is_secondary=True, **kw
         )

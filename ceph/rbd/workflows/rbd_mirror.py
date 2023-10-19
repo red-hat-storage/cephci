@@ -377,7 +377,11 @@ def enable_image_mirroring(primary_config, secondary_config, **kw):
     mirrormode = kw.get("mirrormode")
     io_total = kw.get("io_total")
 
-    rbd_primary.mirror.image.enable(pool=pool, image=image, mode=mirrormode)
+    out = rbd_primary.mirror.image.enable(pool=pool, image=image, mode=mirrormode)
+
+    if "cannot enable mirroring: pool is not in image mirror mode" in out[1].strip():
+        return out[1]
+
     wait_for_status(
         rbd=rbd_primary,
         cluster_name=primary_cluster.name,
@@ -438,6 +442,9 @@ def config_mirror_multi_pool(
 
     config = kw.get("config")
     pool_test_config = multi_pool_config.pop("test_config", None)
+
+    output = ""
+
     for pool, pool_config in multi_pool_config.items():
         # If any pool level test config is present, pop it out
         # so that it does not get mistaken as another image configuration
@@ -463,6 +470,9 @@ def config_mirror_multi_pool(
             if (
                 not kw.get("do_not_enable_mirror_on_image")
                 and pool_config.get("mode") == "image"
+            ) or (
+                pool_config.get("mode") == "pool"
+                and pool_config.get("mirrormode") == "snapshot"
             ):
                 mirrormode = pool_config.get("mirrormode", "")
                 multi_image_config = getdict(pool_config)
@@ -479,10 +489,27 @@ def config_mirror_multi_pool(
                         "mirrormode": mirrormode,
                         "io_total": image_config_val.get("io_total", None),
                     }
-                    enable_image_mirroring(
+                    out = enable_image_mirroring(
                         primary_config, secondary_config, **image_enable_config
                     )
+
+                    if (
+                        pool_config.get("mode") == "pool"
+                        and pool_config.get("mirrormode") == "snapshot"
+                    ):
+                        if (
+                            out
+                            and "cannot enable mirroring: pool is not in image mirror mode"
+                            in out.strip()
+                        ):
+                            output = "Snapshot based mirroring cannot be enabled in pool mode"
+                        elif not is_secondary:
+                            output = (
+                                "Snapshot based mirroring did not fail in pool mode"
+                            )
 
     # Add back the popped pool test config once configuration is complete
     if pool_test_config:
         pool_config["test_config"] = pool_test_config
+
+    return output
