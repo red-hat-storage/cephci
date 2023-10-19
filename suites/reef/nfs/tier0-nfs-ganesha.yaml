@@ -298,3 +298,18 @@ tests:
       config:
         nfs_version: 4.1
         clients: 4
+
+  - test:
+      name: Nfs Verify setuid bit set on a file
+      module: nfs_verify_setuid_bit.py
+      desc: Verify setuid bit set on a file
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : setuid_bit
+          client03 : perform_lookups
