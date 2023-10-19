@@ -1,12 +1,9 @@
 from cli import Cli
+from cli.exceptions import AnsiblePlaybookExecutionError
 from cli.utilities.utils import config_dict_to_string
 
 CEPHADM_ANSIBLE_PATH = "/usr/share/cephadm-ansible"
 CEPHADM_INVENTORY_PATH = f"{CEPHADM_ANSIBLE_PATH}/hosts"
-
-
-class CephAdmAnsibleError(Exception):
-    pass
 
 
 class Ansible(Cli):
@@ -32,14 +29,20 @@ class Ansible(Cli):
             extra_vars (str): extra ansible CLI variables (ex., -e 'key=value')
             extra_args (str): extra ansible CLI arguments (ex., --limit osds)
         """
+        # Set ansible playbook command
         cmd = f"{self.base_cmd} -i {inventory_path} {playbook}"
+
+        # Set extra vars parameters
         if extra_vars:
             for k, v in extra_vars.items():
                 cmd += f" -e '{k}={v}'"
+
+        # Set extra arguments
         if extra_args:
             cmd += config_dict_to_string(extra_args)
 
+        # Execute ansible playbook
         if self.execute(long_running=True, cmd=cmd):
-            raise CephAdmAnsibleError(
+            raise AnsiblePlaybookExecutionError(
                 f"Failed to execute cephadm ansible playbook '{playbook}'"
             )
