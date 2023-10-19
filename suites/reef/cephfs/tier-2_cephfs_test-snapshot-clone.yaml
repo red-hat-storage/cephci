@@ -228,3 +228,11 @@ tests:
       polarion-id: CEPH-83575569
       desc: snap_schedule_test
       abort-on-fail: false
+  - test:
+      name: snap_schedule_retention_vol_subvol
+      module: snapshot_clone.snap_schedule_retention_vol_subvol.py
+      polarion-id: CEPH-83579271
+      desc: snap schedule and retention functional test on vol and subvol
+      abort-on-fail: false
+      config:
+        test_name : functional
