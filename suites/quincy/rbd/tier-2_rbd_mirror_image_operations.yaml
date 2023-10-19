@@ -336,3 +336,22 @@ tests:
                   pool: rbd_RepPool2
       polarion-id: CEPH-83573320
       desc: Image migration of mirrored image
+
+  - test:
+      name: Testing snapshot based mirroring of cloned images
+      module: test_rbd_mirror_cloned_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              mode: image
+              mirrormode: snapshot
+              imagesize: 2G
+              io_total: 200M
+            ec_pool_config:
+              mode: image
+              mirrormode: snapshot
+              imagesize: 2G
+              io_total: 200M
+      polarion-id: CEPH-83576099
+      desc: Verify enabling snapshot based mirroring of cloned image is not supported
