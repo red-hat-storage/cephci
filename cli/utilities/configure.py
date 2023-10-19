@@ -1,7 +1,7 @@
 import json
 import tempfile
 
-from cli.exceptions import OperationFailedError
+from cli.exceptions import OperationFailedError, ResourceNotFoundError
 from cli.utilities.packages import Package, Repos
 
 from .configs import get_registry_details
@@ -65,30 +65,6 @@ def generate_mgr_ssl_certificate(node, key, crt):
         raise OperationFailedError("Failed to generate dashboard certificates")
 
     return True
-
-
-def generate_bootstrap_config(node, config):
-    """Create json with bootsrap config
-
-    Args:
-        node (CephInstallerNode): Ceph installer node
-        config (str): Bootstrap config
-    """
-    # Create temporory file path
-    temp_file = tempfile.NamedTemporaryFile(suffix=".conf")
-
-    # Generate config
-    _config = ""
-    for k in config.keys():
-        _config += f"[{k}]\n"
-        _config += "\n".join(config.get(k).split(" "))
-
-    # Create temporary file and dump data
-    with node.remote_file(sudo=True, file_name=temp_file.name, file_mode="w") as _f:
-        _f.write(f"{_config}\n")
-        _f.flush()
-
-    return temp_file.name
 
 
 def setup_ssh_keys(installer, nodes):
@@ -245,14 +221,31 @@ def add_ceph_repo(node, repo):
     return True
 
 
-def install_cephadm(node, build_type, ibm_build):
+def install_cephadm(node, ceph_version, platform, tools_repo, build_type, ibm_build):
     """Configure CephAdm utility
 
     Args:
         node (CephInstallerNode): Ceph installer node object
+        ceph_version (str): Ceph major.minor version
+        platform (str): OS version
+        tools_repo (str): Ceph tools repository repo url
         build_type (str): Build type
         ibm_build (bool): IBM build flag
     """
+    # Check for build type
+    if build_type in ("live", "cdn", "released"):
+        enable_ceph_tools_repo(node, ceph_version, platform)
+
+    # Check if tools repo is provided
+    elif tools_repo:
+        add_ceph_repo(node, tools_repo)
+
+    # Raise exception for insufficient resources
+    else:
+        raise ResourceNotFoundError(
+            "Ceph tools repo is required for installing CephAdm"
+        )
+
     # Check for build type
     nogpgcheck = False if build_type in ("live", "cdn", "released") else True
 
