@@ -195,3 +195,10 @@ tests:
       polarion-id: CEPH-83575762
       desc: Run create and unlink operations concurrently
       abort-on-fail: false
+  - test:
+      name: Check for large omaps with files and snapshots
+      module: cephfs_bugs.test_large_omap.py
+      polarion-id: CEPH-83575630
+      desc: Check for large omaps with files and snapshots
+      abort-on-fail: false
+
