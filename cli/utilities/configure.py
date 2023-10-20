@@ -2,6 +2,11 @@ import json
 import tempfile
 
 from cli.exceptions import OperationFailedError, ResourceNotFoundError
+from cli.ops.cephadm_ansible import (
+    configure_cephadm_ansible_inventory,
+    exec_cephadm_clients,
+    exec_cephadm_preflight,
+)
 from cli.utilities.packages import Package, Repos
 
 from .configs import get_registry_details
@@ -209,7 +214,7 @@ def add_ceph_repo(node, repo):
         repo (str): Repo URL
     """
     # Update repo based on repo url
-    repo = repo if repo.endswith(".repo") else f"{repo}/compose/Tools/x86_64/os"
+    repo = repo if repo.endswith("repo") else f"{repo}/compose/Tools/x86_64/os"
 
     # yum-config-manager add repo
     out = Package(node).add_repo(repo)
@@ -219,6 +224,44 @@ def add_ceph_repo(node, repo):
         )
 
     return True
+
+
+def install_cephadm_ansible(
+    installer, ceph_version, platform, tools_repo, build_type, ibm_build
+):
+    """Configure CephAdm ansible
+
+    Args:
+        installer (CephInstallerNode): Ceph installer node object
+        ceph_version (str): Ceph major.minor version
+        platform (str): OS version
+        tools_repo (str): Ceph tools repository repo url
+        build_type (str): Build type
+        ibm_build (bool): IBM build flag
+    """
+    # Check for build type
+    if build_type in ("live", "cdn", "released"):
+        enable_ceph_tools_repo(installer, ceph_version, platform)
+
+    # Check if tools repo is provided
+    elif tools_repo:
+        add_ceph_repo(installer, tools_repo)
+
+    # Raise exception for insufficient resources
+    else:
+        raise ResourceNotFoundError(
+            "Ceph tools repo is required for installing CephAdm"
+        )
+
+    # Check for build type
+    nogpgcheck = False if build_type in ("live", "cdn", "released") else True
+
+    # Install license for IBM builds
+    if ibm_build:
+        setup_ibm_licence(installer)
+
+    # Install cephadm ansible package
+    Package(installer).install("cephadm-ansible", nogpgcheck=nogpgcheck)
 
 
 def install_cephadm(node, ceph_version, platform, tools_repo, build_type, ibm_build):
@@ -257,3 +300,57 @@ def install_cephadm(node, ceph_version, platform, tools_repo, build_type, ibm_bu
     Package(node).install("cephadm", nogpgcheck=nogpgcheck)
 
     return True
+
+
+def setup_installer_node(
+    installer, nodes, rhbuild, tools_repo, build_type, ibm_build, ansible_preflight
+):
+    """Configure installer node
+
+    Args:
+        installer (CephInstallerNode): Ceph installer node object
+        nodes (List): Ceph node object list
+        rhbuild (str): Ceph build details
+        tools_repo (str): Ceph tools repository repo url
+        build_type (str): Build type
+        ibm_build (bool): IBM build flag
+        ansible_preflight (bool): Cephadm ansible preflight playbook
+    """
+    # Get cephversion and platform
+    ceph_version, platform = rhbuild.split("-", 1)
+
+    # Setup ssh keys
+    setup_ssh_keys(installer, nodes)
+
+    # Check for ansible preflight
+    if not ansible_preflight:
+        # Install cephadm package
+        install_cephadm(
+            installer, ceph_version, platform, tools_repo, build_type, ibm_build
+        )
+
+        return
+
+    # Install cephadm ansible preflight
+    install_cephadm_ansible(
+        installer, ceph_version, platform, tools_repo, build_type, ibm_build
+    )
+
+    # Configure cephadm ansible inventory hosts
+    configure_cephadm_ansible_inventory(nodes)
+
+    # Execute cephadm ansible preflight playbook
+    exec_cephadm_preflight(installer, build_type, tools_repo)
+
+
+def setup_client_node(installer, ansible_clients):
+    """Setup client node
+
+    Args:
+        installer (CephInstallerNode): Ceph installer node object
+        ansible_clients (bool): Cephadm ansible playbook
+    """
+    # Check for client playbook
+    if ansible_clients:
+        # Configure cephadm ansible install clients
+        exec_cephadm_clients(installer)

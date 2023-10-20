@@ -1,6 +1,6 @@
-from cli.exceptions import ConfigError
+from cli.exceptions import ConfigError, ResourceNotFoundError
 from cli.ops.cephadm import bootstrap, set_container_image_config
-from cli.utilities.configure import install_cephadm, setup_ssh_keys
+from cli.utilities.configure import setup_client_node, setup_installer_node
 
 
 def run(ceph_cluster, **kwargs):
@@ -30,14 +30,13 @@ def run(ceph_cluster, **kwargs):
         config.get("container_image"),
     )
 
-    # Get cephversion and platform
-    ceph_version, platform = rhbuild.split("-", 1)
+    # Get ansible preflight tag
+    ansible_preflight = config.get("ansible_preflight")
 
-    # Setup ssh keys
-    setup_ssh_keys(installer, nodes)
-
-    # Install cephadm package
-    install_cephadm(installer, build_type, ibm_build)
+    # Configure installer node
+    setup_installer_node(
+        installer, nodes, rhbuild, tools_repo, build_type, ibm_build, ansible_preflight
+    )
 
     # Get bootstrap config
     bootstrap_config = config.get("bootstrap")
@@ -46,16 +45,30 @@ def run(ceph_cluster, **kwargs):
     bootstrap(
         installer=installer,
         nodes=nodes,
-        ceph_version=ceph_version,
-        platform=platform,
-        build_type=build_type,
         ibm_build=ibm_build,
-        tools_repo=tools_repo,
         image=image,
         **bootstrap_config
     )
 
     # Set container configs
     set_container_image_config(installer, custom_config)
+
+    # Get client configuration
+    client_config = config.get("client")
+    if not client_config:
+        return 0
+
+    # Get client node
+    client = ceph_cluster.get_nodes("client")
+    if not client:
+        raise ResourceNotFoundError("No client node available")
+
+    # Get ansible clients tag
+    ansible_clients = client_config.get("ansible_clients")
+    if ansible_clients and not ansible_preflight:
+        raise ConfigError("Execute ansible preflight to use clients playbook")
+
+    # Setup client node
+    setup_client_node(installer, ansible_clients)
 
     return 0

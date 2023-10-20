@@ -17,6 +17,7 @@ tests:
       polarion-id: CEPH-83575411
       module: test_cephadm_bootstrap.py
       config:
+        ansible_preflight: true
         bootstrap:
           mon-ip: node1
           config:
@@ -25,5 +26,7 @@ tests:
               mgr/cephadm/container_image_alertmanager=registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.12
               mgr/cephadm/container_image_prometheus=registry.redhat.io/openshift4/ose-prometheus:v4.12
               mgr/cephadm/container_image_node_exporter=registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.12
+        client:
+          ansible_clients: true
       destroy-cluster: false
       abort-on-fail: true
