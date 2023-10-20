@@ -3,7 +3,8 @@ import secrets
 import string
 import time
 import traceback
-from datetime import datetime
+
+import dateutil.parser as parser
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
@@ -253,8 +254,7 @@ def snap_sched_test(snap_test_params):
             f"Running snapshot schedule test workflow for schedule value {sched_val}"
         )
         snap_test_params["sched"] = sched_val
-        time_now = datetime.now()
-        snap_test_params["start_time"] = time_now.isoformat()
+        snap_test_params["start_time"] = get_iso_time(client)
         if snap_util.create_snap_schedule(snap_test_params) == 1:
             log.info("Snapshot schedule creation/verification failed")
             test_fail = 1
@@ -357,6 +357,7 @@ def snap_retention_test(snap_test_params):
         if "M" in sched_val:
             sched_val_ret = sched_val
         snap_test_params["sched"] = sched_val
+        snap_test_params["start_time"] = get_iso_time(client)
         snap_util.create_snap_schedule(snap_test_params)
     snap_util.create_snap_retention(snap_test_params)
     ret_list = re.split(r"([0-9]+[ A-Za-z]?)", snap_test_params["retention"])
@@ -428,3 +429,10 @@ def umount_all(mnt_paths, umount_params):
         umount_params["client"].exec_command(
             sudo=True, cmd=f"umount {mnt_paths[mnt_type]}"
         )
+
+
+def get_iso_time(client):
+    date_utc = client.exec_command(sudo=True, cmd="date")
+    log.info(date_utc[0])
+    date_utc_parsed = parser.parse(date_utc[0])
+    return date_utc_parsed.isoformat()
