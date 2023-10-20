@@ -1,0 +1,83 @@
+"""
+Module to test addition and removal of mon daemons
+
+"""
+import random
+
+from ceph.ceph_admin import CephAdmin
+from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.monitor_workflows import MonitorWorkflows
+from utility.log import Log
+
+log = Log(__name__)
+
+
+def run(ceph_cluster, **kw):
+    """
+    Module to test Removal and addition of Mon daemons on RHCS clusters
+    Returns:
+        1 -> Fail, 0 -> Pass
+    """
+    log.info(run.__doc__)
+    config = kw["config"]
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
+    mon_obj = MonitorWorkflows(node=cephadm)
+
+    log.info("Beginning tests to replace mon daemons on RHCS cluster")
+
+    mon_nodes = ceph_cluster.get_nodes(role="mon")
+    mon_host = random.choice(mon_nodes)
+
+    log.info(
+        f"Selected host : {mon_host.hostname} with IP {mon_host.ip_address} to test replacement"
+    )
+
+    # Checking if the selected mon is part of Mon Quorum
+    quorum = mon_obj.get_mon_quorum_hosts()
+    if mon_host.hostname not in quorum:
+        log.error(
+            f"selected host : {mon_host.hostname} does not have mon as part of Quorum"
+        )
+        raise Exception("Mon not in quorum error")
+
+    # Setting the mon service as unmanaged
+    if not mon_obj.set_mon_service_managed_type(unmanaged=True):
+        log.error("Could not set the mon service to unmanaged")
+        raise Exception("mon service not unmanaged error")
+
+    # Removing mon service
+    if not mon_obj.remove_mon_service(host=mon_host.hostname):
+        log.error("Could not set the mon service to unmanaged")
+        raise Exception("mon service not removed error")
+
+    quorum = mon_obj.get_mon_quorum_hosts()
+    if mon_host.hostname in quorum:
+        log.error(f"selected host : {mon_host.hostname} is present as part of Quorum")
+        raise Exception("Mon in quorum error post removal")
+
+    # Adding the mon back to the cluster
+    if not mon_obj.add_mon_service(host=mon_host):
+        log.error("Could not add mon service")
+        raise Exception("mon service not added error")
+
+    quorum = mon_obj.get_mon_quorum_hosts()
+    if mon_host.hostname not in quorum:
+        log.error(
+            f"selected host : {mon_host.hostname} is not present as part of Quorum post addition"
+        )
+        raise Exception("Mon not in quorum error post addition")
+
+    # Setting the mon service as managed by cephadm
+    if not mon_obj.set_mon_service_managed_type(unmanaged=False):
+        log.error("Could not set the mon service to managed")
+        raise Exception("mon service not managed error")
+
+    if not rados_obj.run_pool_sanity_check():
+        log.error("Checks failed post mon removal and addition")
+        raise Exception("Post execution checks failed on the Stretch cluster")
+
+    log.info(
+        f"Successfully removed and added back the mon on host : {mon_host.hostname}"
+    )
+    return 0

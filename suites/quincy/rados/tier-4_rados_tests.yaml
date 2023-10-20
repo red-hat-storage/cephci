@@ -149,6 +149,12 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: mon replacement test
+      polarion-id: CEPH-9407
+      module: test_mon_addition_removal.py
+      desc: Replace a Healthy Mon with a new MON
+
+  - test:
       name: Test ceph osd command arguments
       desc: Provide invalid values as argument to different ceph osd commands
       module: test_osd_args.py
