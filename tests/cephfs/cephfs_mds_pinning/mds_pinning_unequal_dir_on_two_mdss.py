@@ -212,7 +212,7 @@ def run(ceph_cluster, **kw):
                     num_of_dirs / 2,
                     1,
                     fs_util.mds_fail_over,
-                    client_info["mds_nodes"],
+                    client_info["clients"][0:],
                 )
             with parallel() as p:
                 p.spawn(
@@ -224,7 +224,7 @@ def run(ceph_cluster, **kw):
                     num_of_dirs,
                     2,
                     fs_util.mds_fail_over,
-                    client_info["mds_nodes"],
+                    client_info["clients"][0:],
                 )
             with parallel() as p:
                 p.spawn(
@@ -236,7 +236,7 @@ def run(ceph_cluster, **kw):
                     num_of_dirs * 5,
                     1,
                     fs_util.mds_fail_over,
-                    client_info["mds_nodes"],
+                    client_info["clients"][0:],
                 )
                 for op in p:
                     return_counts, rc = op
