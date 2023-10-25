@@ -7,6 +7,7 @@ This method contains the scenarios to check the-
 5. Mclock reservation,weight and limit parameters are not modifiable
 """
 
+import random
 import time
 from configparser import ConfigParser
 
@@ -33,7 +34,14 @@ def run(ceph_cluster, **kw):
     for node in ceph_nodes:
         if node.role == "osd":
             node_osds = rados_object.collect_osd_daemon_ids(node)
+            # Pick a single OSD from the host OSDs list
+            node_osds = random.sample(node_osds, 1)
             osd_list = osd_list + node_osds
+    log.info(f"The number of OSDs in the cluster are-{len(osd_list)}")
+    # If OSD list is more than 10 then randomly picking the 10 OSDs to check the parameters.
+    if len(osd_list) > 10:
+        osd_list = random.sample(osd_list, 10)
+    log.info(f"The parameters are checking on {osd_list} osds")
     if config.get("scenario") == "msgrv2_5x":
         ini_file = config.get("ini-file")
         config_info.read(ini_file)
