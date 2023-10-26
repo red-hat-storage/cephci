@@ -111,6 +111,65 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(
                     "Unexpected: Write on non existing file passed"
                 )
+        elif operation == "mv_file":
+            cmd = f"touch {nfs_mount}/test_file"
+            clients[0].exec_command(cmd=cmd, sudo=True)
+
+            # Now modify the permission of the file to root user only
+            cmd = f"chown -R root {nfs_mount}/test_file"
+            clients[0].exec_command(cmd=cmd, sudo=True)
+
+            # Set the permissions to be read only for just the user
+            cmd = f"chmod -R 400 {nfs_mount}/test_file"
+            clients[0].exec_command(cmd=cmd, sudo=True)
+
+            # Now create a new user and try reading the file
+            try:
+                cmd = "useradd test_non_root_user"
+                clients[0].exec_command(cmd=cmd, sudo=True)
+            except Exception as e:
+                log.error(f"User creation failed with {str(e)}")
+
+            # Try accessing the file using the new user
+            flag = False
+            try:
+                cmd = f"su test_non_root_user -c 'mv {nfs_mount}/test_file /mnt'"
+                clients[0].exec_command(cmd=cmd, sudo=True)
+                flag = True
+            except Exception as e:
+                if "Permission denied" in str(e):
+                    log.info(
+                        f"Expected! Permission denied error for user without access: {e}"
+                    )
+                else:
+                    raise OperationFailedError(
+                        f"Failed with an error other than permission denied: {e}"
+                    )
+            if flag:
+                raise OperationFailedError(
+                    "Unexpected! User without permission able to access the file"
+                )
+
+        elif operation == "mv_file_overwrite":
+            # Create two files
+            cmd = f"echo test1 > {nfs_mount}/file1"
+            clients[0].exec_command(cmd=cmd, sudo=True)
+
+            cmd = "echo test2 > /mnt/file1"
+            clients[0].exec_command(cmd=cmd, sudo=True)
+
+            # Now use mv to replace test1 with test2
+            cmd = f"mv /mnt/file1 {nfs_mount}/file1"
+            clients[0].exec_command(cmd=cmd, sudo=True)
+
+            # Verify the file1 inside nfs share has content of the moved file
+            cmd = f"cat {nfs_mount}/file1"
+            out, _ = clients[0].exec_command(cmd=cmd, sudo=True)
+            if "test2" not in out:
+                raise OperationFailedError(
+                    "Mv operation doesn't overwrite the content of existing file"
+                )
+            log.info("Expected: mv operation has overwritten the file")
 
     except Exception as e:
         log.error(f"Failed to validate read write operations : {e}")
