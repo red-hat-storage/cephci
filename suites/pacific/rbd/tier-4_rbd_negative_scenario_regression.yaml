@@ -1,0 +1,96 @@
+# Tier4: RBD negative scenario testing
+#
+# This test suite runs test scripts to evaluate negative scenarios of
+# Ceph RBD component.
+#
+# Cluster Configuration:
+#    Conf file - conf/pacific/rbd/tier-0_rbd.yaml
+#    Node 2 must to be a client node
+#
+# The following tests are covered
+#   - CEPH-9831 - Test parent snapshot deletion on an image where deep-flatten is disabled
+
+tests:
+
+   #Setup the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+# Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: Test parent snapshot deletion on an image where deep-flatten is disabled
+      destroy-cluster: false
+      module: test_rbd_deep_flatten_negative.py
+      name: Test deep-flatten feature negative
+      polarion-id: CEPH-9831
+      config:
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+        ec_pool_config:
+          num_pools: 1
+          num_images: 1

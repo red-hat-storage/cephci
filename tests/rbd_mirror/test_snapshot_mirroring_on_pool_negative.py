@@ -54,5 +54,5 @@ def run(**kw):
         )
         ret_val = 1
     finally:
-        cleanup(pool_types=pool_types, mirror_obj=mirror_obj, **kw)
+        cleanup(pool_types=pool_types, multi_cluster_obj=mirror_obj, **kw)
     return ret_val
