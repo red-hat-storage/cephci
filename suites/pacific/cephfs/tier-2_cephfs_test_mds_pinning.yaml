@@ -195,10 +195,10 @@ tests:
       desc: Directory pinning on two MDS with node reboots
       abort-on-fail: false
   - test:
-      name: Subtree Split and Subtree merging by pinning Subtrees/directories to MDS.
+      name: Subtree Split and Subtree merging by pinning Subtrees directories to MDS.
       module: cephfs_mds_pinning.mds_pinning_split_merge.py
       polarion-id: CEPH-11233
-      desc: Subtree Split and Subtree merging by pinning Subtrees/directories to MDS.
+      desc: Subtree Split and Subtree merging by pinning Subtrees directories to MDS.
       abort-on-fail: false
   - test:
       name: map and unmap directory trees to a mds rank
