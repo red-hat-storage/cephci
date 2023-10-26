@@ -149,6 +149,12 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: OSD addition on an unavailable disk
+      desc: Add new OSD on an pre-occupied OSD disk
+      module: test_add_new_osd.py
+      polarion-id: CEPH-83574780
+
+  - test:
       name: mon replacement test
       polarion-id: CEPH-9407
       module: test_mon_addition_removal.py

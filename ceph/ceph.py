@@ -577,9 +577,8 @@ class Ceph(object):
             )
 
         out, err = client.exec_command(
-            "sudo ceph {role} metadata -f json-pretty".format(role=role)
+            cmd=f"ceph {role} metadata -f json-pretty", sudo=True
         )
-
         return json.loads(out)
 
     def get_osd_metadata(self, osd_id, client=None):
