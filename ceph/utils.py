@@ -529,6 +529,9 @@ def setup_repos(
     if base_url.endswith(".repo"):
         cmd = f"yum-config-manager --add-repo {base_url}"
         ceph.exec_command(sudo=True, cmd=cmd)
+    elif base_url.endswith("/repo"):
+        cmd = f"curl -L -o /etc/yum.repos.d/upstream.repo {base_url}"
+        ceph.exec_command(sudo=True, cmd=cmd)
     else:
         if not repos:
             repos = ["MON", "OSD", "Tools"]
