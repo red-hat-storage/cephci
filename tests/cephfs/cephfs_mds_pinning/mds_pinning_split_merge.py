@@ -111,7 +111,7 @@ def run(ceph_cluster, **kw):
             print("Data validation success")
             tc = "11233"
             log.info("Execution of Test cases %s started:" % (tc))
-            fs_util_v1.allow_dir_fragmentation(client_info["clients"][0:])
+            fs_util.allow_dir_fragmentation(client_info["clients"][0:])
             log.info("Creating directory:")
             for node in client_info["fuse_clients"]:
                 out, rc = node.exec_command(

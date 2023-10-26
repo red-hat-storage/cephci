@@ -223,7 +223,7 @@ def run(ceph_cluster, **kw):
                     num_of_dirs * 5,
                     10,
                     fs_util.mds_fail_over,
-                    client_info["mds_nodes"],
+                    client_info["clients"][0:],
                 )
                 for op in p:
                     return_counts, rc = op
@@ -238,7 +238,7 @@ def run(ceph_cluster, **kw):
                     num_of_dirs * 8,
                     20,
                     fs_util.mds_fail_over,
-                    client_info["mds_nodes"],
+                    client_info["clients"][0:],
                 )
                 for op in p:
                     return_counts, rc = op

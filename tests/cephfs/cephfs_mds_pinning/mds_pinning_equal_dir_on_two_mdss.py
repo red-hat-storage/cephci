@@ -165,7 +165,7 @@ def run(ceph_cluster, **kw):
                     25,
                     10,
                     fs_util.mds_fail_over,
-                    client_info["mds_nodes"],
+                    client_info["clients"][0:],
                 )
                 for op in p:
                     return_counts, rc = op
@@ -179,7 +179,7 @@ def run(ceph_cluster, **kw):
                     50,
                     20,
                     fs_util.mds_fail_over,
-                    client_info["mds_nodes"],
+                    client_info["clients"][0:],
                 )
                 for op in p:
                     return_counts, rc = op

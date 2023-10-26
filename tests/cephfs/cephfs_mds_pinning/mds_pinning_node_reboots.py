@@ -264,7 +264,7 @@ def run(ceph_cluster, **kw):
                     iotype="touch",
                 )
                 for node in client_info["mon_node"]:
-                    fs_util.pid_kill(node, "mon")
+                    fs_util_v1.pid_kill(node, "mon")
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -354,7 +354,7 @@ def run(ceph_cluster, **kw):
                     iotype="touch",
                 )
                 for node in client_info["osd_nodes"]:
-                    fs_util.pid_kill(node, "osd")
+                    fs_util_v1.pid_kill(node, "osd")
             with parallel() as p:
                 p.spawn(
                     fs_util.stress_io,
@@ -414,7 +414,7 @@ def run(ceph_cluster, **kw):
                     iotype="touch",
                 )
                 for mon in fs_util_v1.mons:
-                    FsUtilsV1.deamon_op(mon, "mon", "restart")
+                    FsUtilsV1.deamon_op(mon, "mon.ceph", "restart")
             log.info("Execution of Test case CEPH-%s ended:" % (tc))
             log.info("Cleaning up!-----")
             if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
