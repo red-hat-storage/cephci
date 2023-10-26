@@ -1,6 +1,10 @@
 from cli.exceptions import ConfigError, ResourceNotFoundError
 from cli.ops.cephadm import bootstrap, set_container_image_config
-from cli.utilities.configure import setup_client_node, setup_installer_node
+from cli.utilities.configure import (
+    get_tools_repo,
+    setup_client_node,
+    setup_installer_node,
+)
 
 
 def run(ceph_cluster, **kwargs):
@@ -29,6 +33,9 @@ def run(ceph_cluster, **kwargs):
         config.get("base_url"),
         config.get("container_image"),
     )
+
+    # Get tools repo url
+    tools_repo = get_tools_repo(tools_repo, ibm_build)
 
     # Get ansible preflight tag
     ansible_preflight = config.get("ansible_preflight")

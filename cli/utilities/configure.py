@@ -158,20 +158,32 @@ def setup_ssh_keys(installer, nodes):
         )
 
 
-def setup_ibm_licence(node, accept_eula={"ACCEPT_EULA": "Y"}):
+def setup_ibm_licence(nodes, build_type, accept_eula={"ACCEPT_EULA": "Y"}):
     """Accepts the eula for IBM Storage Ceph license
 
     Args:
-        node(CephInstallerNode): Ceph installer node object
+        nodes(CephInstallerNode | List): Ceph installer node object or list
+        build_type (str): Build type
+        accept_eula (dict): Accept license environment
     """
+    # Check for node list
+    nodes = nodes if isinstance(nodes, list) else [nodes]
+
+    # Check for build type
+    nogpgcheck = False if build_type in ("live", "cdn", "released") else True
+
     # Install IBM licence
-    Package(node).install("ibm-storage-ceph-license", env_vars=accept_eula)
+    Package(nodes).install(
+        "ibm-storage-ceph-license", env_vars=accept_eula, nogpgcheck=nogpgcheck
+    )
 
     # Accept IBM licence
     cmd = "cat" if accept_eula else "touch"
     cmd += " /usr/share/ibm-storage-ceph-license/accept"
 
-    return node.exec_command(sudo=True, cmd=cmd, check_ec=True)
+    # Accept license
+    for node in nodes:
+        node.exec_command(sudo=True, cmd=cmd, check_ec=True)
 
 
 def enable_ceph_tools_repo(node, ceph_version, platform):
@@ -213,9 +225,6 @@ def add_ceph_repo(node, repo):
         node (CephInstallerNode): Ceph installer node object
         repo (str): Repo URL
     """
-    # Update repo based on repo url
-    repo = repo if repo.endswith("repo") else f"{repo}/compose/Tools/x86_64/os"
-
     # yum-config-manager add repo
     out = Package(node).add_repo(repo)
     if "Adding repo from" not in out:
@@ -226,9 +235,7 @@ def add_ceph_repo(node, repo):
     return True
 
 
-def install_cephadm_ansible(
-    installer, ceph_version, platform, tools_repo, build_type, ibm_build
-):
+def install_cephadm_ansible(installer, ceph_version, platform, tools_repo, build_type):
     """Configure CephAdm ansible
 
     Args:
@@ -237,7 +244,6 @@ def install_cephadm_ansible(
         platform (str): OS version
         tools_repo (str): Ceph tools repository repo url
         build_type (str): Build type
-        ibm_build (bool): IBM build flag
     """
     # Check for build type
     if build_type in ("live", "cdn", "released"):
@@ -256,45 +262,19 @@ def install_cephadm_ansible(
     # Check for build type
     nogpgcheck = False if build_type in ("live", "cdn", "released") else True
 
-    # Install license for IBM builds
-    if ibm_build:
-        setup_ibm_licence(installer)
-
     # Install cephadm ansible package
     Package(installer).install("cephadm-ansible", nogpgcheck=nogpgcheck)
 
 
-def install_cephadm(node, ceph_version, platform, tools_repo, build_type, ibm_build):
+def install_cephadm(node, build_type):
     """Configure CephAdm utility
 
     Args:
         node (CephInstallerNode): Ceph installer node object
-        ceph_version (str): Ceph major.minor version
-        platform (str): OS version
-        tools_repo (str): Ceph tools repository repo url
         build_type (str): Build type
-        ibm_build (bool): IBM build flag
     """
     # Check for build type
-    if build_type in ("live", "cdn", "released"):
-        enable_ceph_tools_repo(node, ceph_version, platform)
-
-    # Check if tools repo is provided
-    elif tools_repo:
-        add_ceph_repo(node, tools_repo)
-
-    # Raise exception for insufficient resources
-    else:
-        raise ResourceNotFoundError(
-            "Ceph tools repo is required for installing CephAdm"
-        )
-
-    # Check for build type
     nogpgcheck = False if build_type in ("live", "cdn", "released") else True
-
-    # Install license for IBM builds
-    if ibm_build:
-        setup_ibm_licence(node)
 
     # Install cephadm package
     Package(node).install("cephadm", nogpgcheck=nogpgcheck)
@@ -319,6 +299,24 @@ def setup_installer_node(
     # Get cephversion and platform
     ceph_version, platform = rhbuild.split("-", 1)
 
+    # Check for build type
+    if build_type in ("live", "cdn", "released"):
+        [enable_ceph_tools_repo(n, ceph_version, platform) for n in nodes]
+
+    # Check if tools repo is provided
+    elif tools_repo:
+        [add_ceph_repo(n, tools_repo) for n in nodes]
+
+    # Raise exception for insufficient resources
+    else:
+        raise ResourceNotFoundError(
+            "Ceph tools repo is required for installing CephAdm"
+        )
+
+    # Install license for IBM builds
+    if ibm_build:
+        setup_ibm_licence(nodes, build_type)
+
     # Setup ssh keys
     setup_ssh_keys(installer, nodes)
 
@@ -332,9 +330,7 @@ def setup_installer_node(
         return
 
     # Install cephadm ansible preflight
-    install_cephadm_ansible(
-        installer, ceph_version, platform, tools_repo, build_type, ibm_build
-    )
+    install_cephadm_ansible(installer, ceph_version, platform, tools_repo, build_type)
 
     # Configure cephadm ansible inventory hosts
     configure_cephadm_ansible_inventory(nodes)
@@ -354,3 +350,20 @@ def setup_client_node(installer, ansible_clients):
     if ansible_clients:
         # Configure cephadm ansible install clients
         exec_cephadm_clients(installer)
+
+
+def get_tools_repo(repo, ibm_build=False):
+    """Get tools repo based on repo and build type
+
+    Args:
+        repo (str): Ceph tools repo URL
+        ibm_build (bool): IBM build tag
+    """
+    if ibm_build:
+        return repo
+
+    elif repo.endswith("repo"):
+        return repo
+
+    else:
+        return f"{repo}/compose/Tools/x86_64/os"

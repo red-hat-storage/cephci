@@ -72,7 +72,6 @@ def exec_cephadm_preflight(node, build_type, repo=None):
 
     # Set custom repository
     if repo:
-        repo = repo if repo.endswith("repo") else f"{repo}/compose/Tools/x86_64/os"
         extra_vars = {
             "ceph_origin": "custom",
             "gpgcheck": "no",
