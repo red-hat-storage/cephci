@@ -2195,3 +2195,142 @@ class RadosOrchestrator:
         assert health_check
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
+
+    def crash_ceph_daemon(self, daemon: str, id, manual_inject: bool = False):
+        """
+        Module to crash any existing daemon on the cluster
+        Args:
+            daemon: daemon type | ex - mon, mgr, osd
+            id: daemon ID | ex - 12, mon/mgr hostname
+            manual_inject: flag to control manual injection of crash meta, waits
+            for automatic detection of crash if not enabled
+        Returns: True if crash was successfully generated | False otherwise
+        """
+
+        def warning_check(timeout):
+            # wait for input timeout secs for crash to be reported in ceph health
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+            while datetime.datetime.now() < end_time:
+                try:
+                    health, _ = self.node.shell(args=["ceph health detail"])
+                    log.info(f"Health warning: \n {health}")
+                    assert "daemons have recently crashed" in health
+                    assert f"{daemon}.{id} crashed" in health
+                    return True
+                except AssertionError:
+                    log.error(
+                        "Crash error is yet to appear in ceph health. Sleeping for 30 secs"
+                    )
+                    time.sleep(30)
+                    if datetime.datetime.now() >= end_time:
+                        log.error("daemon crash warning not found within timeout")
+                        return False
+
+        # check if input daemon exists on the cluster
+        status, desc = self.get_daemon_status(daemon_type=daemon, daemon_id=id)
+        if int(status) != 1 or "running" not in desc:
+            log.error(
+                f"Input daemon {daemon}.{id} either does not exist or "
+                f"currently not running."
+            )
+            return False
+
+        # fetch daemon host
+        daemon_host = self.fetch_host_node(daemon_type=daemon, daemon_id=id)
+
+        # ensure crash module is enabled and always on
+        always_on_list = self.run_ceph_command("ceph mgr module ls")[
+            "always_on_modules"
+        ]
+        log.debug(f"MGR always ON modules: \n {always_on_list}")
+        if "crash" not in always_on_list:
+            log.error("Crash module found in MGR always on module list")
+            return False
+
+        # capture initial number of crash reports in the /var/lib/ceph/crash directory
+        _cmd = "cephadm shell -- ls /var/lib/ceph/crash/ | wc -l"
+        init_crash_reports, err = daemon_host.exec_command(cmd=_cmd, sudo=True)
+        # capture initial number of crash list from crash ls-new
+        init_crash_ls = len(self.run_ceph_command("ceph crash ls-new"))
+        log.debug(f"Output of crash ls-new: {init_crash_ls}")
+        # generate crash using ceph daemon command
+        asok_cmd = (
+            f"cephadm shell -- ceph daemon /var/run/ceph/ceph-{daemon}.{id}.asok assert"
+        )
+        try:
+            out, err = daemon_host.exec_command(cmd=asok_cmd, sudo=True)
+        except Exception as err_exec:
+            if "exception" not in str(err_exec):
+                log.error(f"STDERR: {err_exec}")
+                log.error("Could not crash the daemon with ceph daemon utility")
+                return False
+
+        crash_report_post, err = daemon_host.exec_command(cmd=_cmd, sudo=True)
+        if not crash_report_post > init_crash_reports:
+            log.error("New crash report directory not generated in /var/lib/ceph/crash")
+            return False
+        log.info("New crash report generated successfully")
+
+        # get the crash report directory
+        _cmd = "cephadm shell -- ls -rt /var/lib/ceph/crash/ | tail -1"
+        dir, err = daemon_host.exec_command(cmd=_cmd, sudo=True)
+        dir = str(dir).strip()
+
+        # copy the crash directory to tmp
+        fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        _cmd = f"cp -r /var/lib/ceph/{fsid}/crash/'{dir}' /tmp/"
+        daemon_host.exec_command(cmd=_cmd, sudo=True)
+
+        if manual_inject:
+            # inject the crash into the cluster manually
+            self.configure_host_as_client(daemon_host)
+            inject_cmd = f"ceph crash post -i /tmp/{dir}/meta"
+            daemon_host.exec_command(sudo=True, cmd=inject_cmd)
+            if not warning_check(timeout=100):
+                log.error("Crash warning not found even after manual injection")
+                return False
+        else:
+            # wait for 500 secs for crash to be reported in ceph health
+            if not warning_check(timeout=500):
+                log.error("Crash warning was not generated automatically")
+
+        # ensure crash detail is populated in crash ls-new
+        crash_ls_post = self.run_ceph_command("ceph crash ls-new")
+        if not len(crash_ls_post) > init_crash_ls:
+            log.error("New crash not listed in crash ls-new output")
+            return False
+        log.debug(f"Output of crash ls-new: {init_crash_ls}")
+
+        log.info("Daemon crash warning found in ceph health")
+        return True
+
+    def configure_host_as_client(self, host_node):
+        """
+        Purpose of this module is to configure the ceph keyring and conf
+        on a cluster host which is not installer to run ceph commands from
+        it
+        Args:
+            host_node: node object of the host which needs to be converted
+        Returns: None
+        """
+        # copy /etc/ceph/ files to input host
+        ceph_conf, _ = self.node.shell(["cat /etc/ceph/ceph.conf"])
+        ceph_keyring, _ = self.node.shell(["cat /etc/ceph/ceph.keyring"])
+        host_node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+
+        for cont in [ceph_conf, ceph_keyring]:
+            file_name = (
+                "/etc/ceph/ceph.conf" if cont == ceph_conf else "/etc/ceph/ceph.keyring"
+            )
+            file_ = host_node.remote_file(sudo=True, file_name=file_name, file_mode="w")
+            file_.write(cont)
+            file_.flush()
+            file_.close()
+
+        # Checking and installing ceph-common package on host
+        try:
+            out, rc = host_node.exec_command(
+                sudo=True, cmd="rpm -qa | grep ceph-common"
+            )
+        except Exception:
+            host_node.exec_command(sudo=True, cmd="yum install -y ceph-common")
