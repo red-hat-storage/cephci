@@ -1,3 +1,4 @@
+import json
 import tempfile
 
 from cli.cephadm.cephadm import CephAdm
@@ -27,18 +28,28 @@ def generate_bootstrap_config(node, config):
         node (CephInstallerNode): Ceph installer node
         config (str): Bootstrap config
     """
+    # Get file type
+    file_type, _config = config.pop("file_type"), ""
+
+    # Generate config
+    if file_type == "ini":
+        for k in config.keys():
+            _config += f"[{k}]\n"
+            _config += "\n".join(config.get(k).split(" "))
+        _config += "\n"
+
+    elif file_type == "json":
+        _config = json.loads(config)
+
+    else:
+        return None
+
     # Create temporory file path
     temp_file = tempfile.NamedTemporaryFile(suffix=".conf")
 
-    # Generate config
-    _config = ""
-    for k in config.keys():
-        _config += f"[{k}]\n"
-        _config += "\n".join(config.get(k).split(" "))
-
     # Create temporary file and dump data
     with node.remote_file(sudo=True, file_name=temp_file.name, file_mode="w") as _f:
-        _f.write(f"{_config}\n")
+        _f.write(_config)
         _f.flush()
 
     return temp_file.name
@@ -108,7 +119,6 @@ def bootstrap(
                 registry-password (str): Password for custom registry
                 registry-json (str): json file with custom registry login info
                 mon-ip (str): Mon node id
-                config (str): Ceph conf file to incorporate
                 skip-dashboard (str): Do not enable the Ceph Dashboard
                 initial-dashboard-user (str): Initial user for the dashboard
                 initial-dashboard-password (str): Initial password for the initial dashboard user
@@ -117,6 +127,9 @@ def bootstrap(
                 output-dir (str): Directory to write config, keyring, and pub key files
                 apply-spec (str): Apply cluster spec after bootstrap
                 cluster-network (str): Subnet to use for cluster replication, recovery and heartbeats
+                dict:
+                    file_type (str): File type
+                    <key,val> (dict): Dict with key, val
     """
     # Check for mon IP
     if kw.get("mon-ip"):
@@ -125,9 +138,10 @@ def bootstrap(
 
         kw["mon-ip"] = get_node_ip(nodes, kw.pop("mon-ip"))
 
-    # Check for config
-    if kw.get("config"):
-        kw["config"] = generate_bootstrap_config(installer, kw.pop("config"))
+    # Check for bootstrap configs
+    for k in kw.keys():
+        if isinstance(kw.get(k), dict):
+            kw[k] = generate_bootstrap_config(installer, kw.get(k))
 
     # Check for registry details
     if not kw.get("registry-url") and ibm_build:
