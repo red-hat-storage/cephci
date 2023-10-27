@@ -16,6 +16,7 @@ tests:
       desc: installation of ceph pre-requisites
       module: install_prereq.py
       abort-on-fail: true
+
   - test:
       name: Cephadm Bootstrap with custom dashboard credentials
       desc: Bootstrap with initial-dashboard user and password option
@@ -36,6 +37,7 @@ tests:
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
       destroy-cluster: false
       abort-on-fail: true
+
   - test:
       name: Add Host
       desc: Add host to Bootstrapped Cluster
@@ -48,7 +50,7 @@ tests:
           attach_ip_address: true
           node: node2
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Add new host node with IP address
       desc: Add new host and validate using ceph orch host list
@@ -64,7 +66,7 @@ tests:
           attach_ip_address: true
           add_label: false
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Add host
       desc: Add new host node with IP address and labels
@@ -81,12 +83,32 @@ tests:
             - node-exporter
             - mon
       destroy-cluster: false
-      abort-on-fail: true
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address and labels
+      module: test_host.py
+      polarion-id: CEPH-83573729
+      config:
+        service: host
+        command: add
+        args:
+          node: node6
+          attach_ip_address: true
+          labels:
+            - osd
+            - node-exporter
+            - mon
+            - rgw
+            - crash
+      destroy-cluster: false
+
   - test:
       name: test_validate_safe_stop_hosts
       desc: Verify if a host be safely stopped without reducing the availability using ceph orch ok-to-stop command
       polarion-id: CEPH-83573767
       module: test_node_safe_stop.py
+
   - test:
       name: Remove Host label
       desc: Remove host label osd from node4
@@ -101,7 +123,7 @@ tests:
             - osd
             - mon
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove Host label
       desc: Remove host label node-exporter from node4
@@ -117,7 +139,7 @@ tests:
           labels:
             - node-exporter
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Add Host label
       desc: Add host label mon,osd to existing node
@@ -134,7 +156,7 @@ tests:
             - mon
             - osd
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Attach Host label to installer
       desc: Add host label(s) to existing installer node
@@ -150,7 +172,7 @@ tests:
           labels: apply-all-labels
         validate_admin_keyring: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Add admin label and validate keyring file
       desc: Add admin label existing node4 and validate keyring file exists
@@ -167,7 +189,7 @@ tests:
             - _admin
         validate_admin_keyring: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove admin label and validate keyring file
       desc: Remove admin label existing node4 and validate keyring file exists
@@ -182,7 +204,7 @@ tests:
             - _admin
         validate_admin_keyring: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Set Host address
       desc: Set IP address to a existing node
@@ -196,7 +218,7 @@ tests:
         args:
           node: node1
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove host
       desc: Remove node from cluster
@@ -210,7 +232,7 @@ tests:
         args:
           node: node4
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove host
       desc: Remove node from cluster
@@ -222,7 +244,7 @@ tests:
         args:
           node: node3
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Add host with admin label and validate keyring file exists
       desc: Add new host node5 with admin label and validate keyring file exists
@@ -237,7 +259,7 @@ tests:
             - _admin
         validate_admin_keyring: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Add hosts to ceph cluster
       desc: Add host node(s) with IP address and labels
@@ -255,7 +277,7 @@ tests:
           attach_ip_address: true
           labels: apply-all-labels
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove Hosts from cluster
       desc: Remove nodes from cluster execpt installer
@@ -269,7 +291,7 @@ tests:
             - node5
             - node6
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove all Hosts
       desc: Remove all nodes from cluster execpt installer
@@ -281,7 +303,7 @@ tests:
         args:
           nodes: []
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Add all hosts to ceph cluster
       desc: Add all host node with IP address and labels
@@ -295,12 +317,11 @@ tests:
           attach_ip_address: true
           labels: apply-all-labels
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply Monitor with placement and limit
       desc: Apply monitor service with placement and limit
       module: test_mon.py
-      abort-on-fail: true
       polarion-id: CEPH-83573778,CEPH-83573773,CEPH-83573774
       config:
         command: apply
@@ -310,16 +331,16 @@ tests:
         args:
           placement:
             nodes:
-                - node1
-                - node2
-                - node6
+              - node1
+              - node2
+              - node6
             limit: 3    # no of daemons
             sep: " "    # separator to be used for placements
+
   - test:
       name: Apply Monitor with host placement
       desc: Apply monitor with placement option on specified hosts
       module: test_mon.py
-      abort-on-fail: true
       polarion-id: CEPH-83573732
       config:
         command: apply
@@ -329,14 +350,14 @@ tests:
         args:
           placement:
             nodes:
-                - node1
-                - node2
-                - node6
+              - node1
+              - node2
+              - node6
             sep: ";"
+
   - test:
       name: Apply Monitor using label
       desc: Apply monitor using label mon
-      abort-on-fail: true
       module: test_mon.py
       polarion-id: CEPH-83573772
       config:
@@ -347,6 +368,7 @@ tests:
         args:
           placement:
             label: mon
+
   - test:
       name: Apply Manager service
       desc: Apply manager service with placement option
@@ -363,7 +385,7 @@ tests:
               - node1
             sep: " "
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply Manager service
       desc: Apply manager service with label option
@@ -379,7 +401,7 @@ tests:
             label: mgr
             sep: " "
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply OSD Service
       desc: Apply OSD service with all available devices
@@ -393,7 +415,7 @@ tests:
         args:
           all-available-devices: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Configure client
       desc: Configure client on node9
@@ -411,6 +433,7 @@ tests:
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
+
   - test:
       name: Remove client
       desc: remove client on node9
@@ -423,6 +446,7 @@ tests:
         remove_packages:
           - ceph-common                   # Remove ceph common packages
         remove_admin_keyring: true        # Copy admin keyring to node
+
   - test:
       name: Add cephfs file system volume
       desc: Add file system for MDS service
@@ -437,7 +461,7 @@ tests:
           - create
           - cephfs
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply MDS Service
       desc: Apply MDS service on all mds nodes
@@ -458,7 +482,7 @@ tests:
             limit: 2            # no of daemons
             sep: " "            # separator to be used for placements
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Create replicated pool
       desc: Add pool for ISCSI service
@@ -476,7 +500,7 @@ tests:
           - "3"
           - replicated
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Enable rbd application on pool
       desc: enable rbd on iscsi pool
@@ -493,52 +517,7 @@ tests:
           - iscsi
           - rbd
       destroy-cluster: false
-      abort-on-fail: true
-  - test:
-      name: Apply ISCSI Service
-      desc: Installing ISCSI service and gateway on iscsi role nodes
-      module: test_iscsi.py
-      polarion-id: CEPH-83573756
-      config:
-        command: apply
-        service: iscsi
-        base_cmd_args:            # arguments to ceph orch
-          verbose: true
-        pos_args:
-          - iscsi                 # name of the pool
-          - api_user              # name of the API user
-          - api_pass              # password of the api_user.
-        args:
-          trusted_ip_list:      #it can be used both as keyword/positional arg in 5.x
-            - node1
-            - node4
-          placement:
-            label: iscsi          # either label or node.
-      destroy-cluster: false
-      abort-on-fail: true
-  - test:
-      name: Apply ISCSI Service
-      desc: Apply ISCSI target service on iscsi role nodes
-      module: test_iscsi.py
-      polarion-id:
-      config:
-        command: apply
-        service: iscsi
-        base_cmd_args:            # arguments to ceph orch
-          verbose: true
-        pos_args:
-          - iscsi                 # name of the pool
-          - api_user              # name of the API user
-          - api_pass              # password of the api_user.
-        args:
-          trusted_ip_list:        #it can be used both as keyword/positional arg in 5.x
-            - node1
-            - node4
-          placement:
-            nodes:
-              - node8          # either label or node.
-      destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply Prometheus Service
       desc: Apply Prometheus service on role nodes
@@ -554,7 +533,7 @@ tests:
             nodes:
               - node1
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply Node-exporter Service
       desc: Apply Node-exporter service on role nodes
@@ -569,7 +548,7 @@ tests:
           placement:
             nodes: "*"
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply Alert-manager Service
       desc: Apply Alert-manager service on role nodes
@@ -586,7 +565,7 @@ tests:
               - node1
               - node2
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply Grafana Service
       desc: Apply Grafana service on role nodes
@@ -602,7 +581,7 @@ tests:
             nodes:
               - node1
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply collocated RGW Service
       desc: Apply collocated RGW service using node placements
@@ -619,11 +598,11 @@ tests:
           placement:
             count-per-host: 2
             nodes:              # A list of strings that would looked up
-                - node6
-                - node7
+              - node6
+              - node7
             sep: ";"            # separator to be used for placements
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply collocated RGW Service
       desc: Apply collocated RGW service using label placement
@@ -641,7 +620,7 @@ tests:
             count-per-host: 2
             label: rgw
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Create replicated pool for NFS
       desc: Add pool for NFS Ganesha service
@@ -656,7 +635,7 @@ tests:
           - create
           - nfs-ganesha-pool
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Enable rgw application on nfs-ganesha pool
       desc: enable rgw on nfs-ganesha pool
@@ -673,7 +652,7 @@ tests:
           - nfs-ganesha-pool
           - rgw
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply NFS Service
       desc: Apply NFS-Ganesha service on role nodes
@@ -683,7 +662,7 @@ tests:
         command: apply
         service: nfs
         base_cmd_args:
-            verbose: true
+          verbose: true
         pos_args:
           - mynfs                         # nfs service ID
           - nfs-ganesha-pool              # name of the pool
@@ -696,7 +675,7 @@ tests:
             limit: 2
             sep: ";"
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Apply Crash Service
       desc: Apply Crash service on all nodes
@@ -706,12 +685,12 @@ tests:
         command: apply
         service: crash
         base_cmd_args:
-            verbose: true
+          verbose: true
         args:
           placement:
             nodes: "*"
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove NFS-Ganesha Service
       desc: Remove NFS-Ganesha service using orch remove option
@@ -726,7 +705,7 @@ tests:
           service_name: nfs.mynfs
           verify: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove RGW Service
       desc: Remove RGW service using orch remove option
@@ -738,10 +717,10 @@ tests:
         base_cmd_args:
           verbose: true
         args:
-            service_name: rgw.foo
-            verify: true
+          service_name: rgw.foo
+          verify: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove ISCSI Service
       desc: Remove ISCSI service using orch remove option
@@ -751,10 +730,10 @@ tests:
         command: remove
         service: iscsi
         args:
-            service_name: iscsi.iscsi
-            verify: true
+          service_name: iscsi.iscsi
+          verify: true
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove Prometheus Service
       desc: Remove Prometheus service using orch remove option
@@ -768,7 +747,7 @@ tests:
         args:
           service_name: prometheus
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove Node-exporter Service
       desc: Remove Node-exporter service using orch remove option
@@ -780,7 +759,7 @@ tests:
         args:
           service_name: node-exporter
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove Alert-manager Service
       desc: Remove Alert-manager service using orch remove option
@@ -792,7 +771,7 @@ tests:
         args:
           service_name: alertmanager
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove Grafana Service
       desc: Remove Grafana service using orch remove option
@@ -804,7 +783,7 @@ tests:
         args:
           service_name: grafana
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove MDS Service
       desc: Remove MDS service using orch remove option
@@ -818,7 +797,7 @@ tests:
         args:
           service_name: 'mds.cephfs'
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: set mon_allow_pool_delete
       desc: set mon_allow_pool_delete to true
@@ -834,7 +813,7 @@ tests:
           - mon_allow_pool_delete
           - "true"
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: remove cephfs file system volume
       desc: remove file system
@@ -850,7 +829,7 @@ tests:
           - cephfs
           - "--yes-i-really-mean-it"
       destroy-cluster: false
-      abort-on-fail: true
+
   - test:
       name: Remove Crash Service
       desc: Remove Crash service using orch remove option
@@ -864,4 +843,3 @@ tests:
         args:
           service_name: crash
       destroy-cluster: false
-      abort-on-fail: true

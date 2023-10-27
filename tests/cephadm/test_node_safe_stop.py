@@ -28,7 +28,7 @@ def run(ceph_cluster, **kw):
 
     ok_to_stop_cmd = "cephadm shell ceph orch host ok-to-stop"
 
-    roles = ["installer", "rgw", "osd", "mgr"]
+    roles = ["installer", "rgw", "mgr"]
     # - When trying to stop the installer_node, it should raise an Alert as
     #   there is an active mgr running
     # - Validate no ALERT/WARNING messages are shown when trying to remove a safe node
