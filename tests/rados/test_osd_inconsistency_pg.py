@@ -10,6 +10,7 @@ import random
 import traceback
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados.bluestoretool_workflows import BluestoreToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from utility.log import Log
@@ -30,6 +31,8 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
+    bluestore_obj = BluestoreToolWorkflows(node=cephadm)
     pool_target_configs = config["verify_osd_omap_entries"]["configurations"]
     omap_target_configs = config["verify_osd_omap_entries"]["omap_config"]
     try:
@@ -54,6 +57,13 @@ def run(ceph_cluster, **kw):
         oname = random.choice(obj_list)
         # Create inconsistency objects
         pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
+        # Restarting the mon
+        log.info("Restarting the mon services")
+        mon_service = client_node.exec_command(cmd="ceph orch ls | grep mon")
+        mon_service_name = mon_service[0].split()[0]
+        client_node.exec_command(cmd=f"ceph orch restart {mon_service_name}")
+        log.info("Restarted the mon services")
+
         inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)
         if any(pg_id in search for search in inconsistent_pg_list):
             log.info(f"Inconsistent PG is{pg_id}  ")
@@ -70,6 +80,27 @@ def run(ceph_cluster, **kw):
             else:
                 log.error("Inconsistent object is not exists in the objects list")
                 return 1
+        osd_map_output = rados_obj.get_osd_map(pool=pool_name, obj=oname)
+        primary_osd = osd_map_output["acting_primary"]
+        # Executing the fsck on the OSD
+        log.info(f" Performing the ceph-bluestore-ttol fsck on the OSD-{primary_osd}")
+        fsck_output = bluestore_obj.run_consistency_check(primary_osd)
+        log.info(f"The fsck output is ::{fsck_output}")
+        # Reparing the OSD using the bluestore tool
+        log.info(f"Performing the repair on the osd-{primary_osd}")
+        repair_output = bluestore_obj.repair(primary_osd)
+        log.info(f"The repair status is:{repair_output}")
+        health_check = rados_obj.check_inconsistent_health()
+        log.info(f"The health status after the repair is ::{health_check}")
+        assert not health_check
+        log.info("The inconsistent objects are repaired")
+        # Checking for the inconsistent pg's
+        inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)
+        if any(pg_id in search for search in inconsistent_pg_list):
+            log.info("After repair the inconsistent pg exists in the list ")
+            return 1
+        else:
+            log.error("After repair the inconsistent pg not exists in the list")
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
