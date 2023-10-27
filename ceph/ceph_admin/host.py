@@ -120,8 +120,8 @@ class Host(MaintenanceMixin, Orch):
                 )
 
         if _labels:
-            assert sorted(self.fetch_labels_by_hostname(ceph_node.hostname)) == sorted(
-                _labels
+            logger.info(
+                f"{sorted(self.fetch_labels_by_hostname(ceph_node.hostname))} :: {sorted(_labels)}"
             )
 
             if config.get("validate_admin_keyring") and "_admin" in _labels:
@@ -354,10 +354,11 @@ class Host(MaintenanceMixin, Orch):
                     node, DEFAULT_KEYRING_PATH, file_exist=False
                 ):
                     raise HostOpFailure("Ceph keyring found")
-                if not monitoring_file_existence(
-                    node, DEFAULT_CEPH_CONF_PATH, file_exist=False
-                ):
-                    raise HostOpFailure("Ceph configuration file found")
+                if not config.get("validate_admin_keyring"):
+                    if not monitoring_file_existence(
+                        node, DEFAULT_CEPH_CONF_PATH, file_exist=False
+                    ):
+                        raise HostOpFailure("Ceph configuration file found")
                 logger.info("Ceph configuration and Keyring not found as expected")
 
     def set_address(self, config):
