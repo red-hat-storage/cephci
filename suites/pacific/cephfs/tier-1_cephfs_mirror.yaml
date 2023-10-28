@@ -172,3 +172,10 @@ tests:
         destroy-cluster: false
         module: test_client.py
         name: "configure client"
+  - test:
+      abort-on-fail: false
+      desc: "Configure CephFS Mirroring"
+      module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring.py
+      name: Validate the Synchronisation is successful upon enabling fs mirroring.
+      polarion-id: "CEPH-83574099"
+
