@@ -21,6 +21,7 @@ tests:
         bootstrap:
           mon-ip: node1
           config:
+            file_type: ini
             mgr:
               mgr/cephadm/container_image_grafana=registry-proxy.engineering.redhat.com/rh-osbs/grafana:9.4.7-1
               mgr/cephadm/container_image_alertmanager=registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.12
