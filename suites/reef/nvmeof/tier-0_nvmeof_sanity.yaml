@@ -99,7 +99,7 @@ tests:
       name: deploy nvmeof gateway
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         node: node6
         steps:
@@ -220,10 +220,10 @@ tests:
           - subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
             node: node7
-      desc: E2E-Test NVMEoF Gateway collocated and Run IOs on targets
+      desc: E2E-Test NVMEoF Gateway on dedicated node and Run IOs on targets
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
-      name: Basic E2ETest Ceph NVMEoF GW sanity test
+      name: Basic E2ETest Ceph NVMEoF GW sanity test on dedicated node
       polarion-id: CEPH-83575441
 
   - test:
@@ -256,5 +256,5 @@ tests:
       desc: E2E-Test NVMEoF Gateway collocated and Run IOs on targets
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
-      name: Basic E2ETest Ceph NVMEoF GW sanity test
+      name: Basic E2ETest Ceph NVMEoF GW sanity test with collocation-FIPS
       polarion-id: CEPH-83577610

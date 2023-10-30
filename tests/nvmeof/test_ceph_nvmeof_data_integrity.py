@@ -90,12 +90,12 @@ def initiators(ceph_cluster, gateway, config):
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,
-        "trsvcid": config["listener_port"],
     }
     json_format = {"output-format": "json"}
 
     # Discover the subsystems
-    _disc_cmd = {**cmd_args, **json_format}
+    disc_port = {"trsvcid": 8009}
+    _disc_cmd = {**cmd_args, **disc_port, **json_format}
     sub_nqns, _ = initiator.discover(**_disc_cmd)
     LOG.debug(sub_nqns)
     for nqn in json.loads(sub_nqns)["records"]:
@@ -106,7 +106,9 @@ def initiators(ceph_cluster, gateway, config):
         raise Exception(f"Subsystem not found -- {cmd_args}")
 
     # Connect to the subsystem
-    LOG.debug(initiator.connect(**cmd_args))
+    conn_port = {"trsvcid": config["listener_port"]}
+    _conn_cmd = {**cmd_args, **conn_port}
+    LOG.debug(initiator.connect(**_conn_cmd))
 
     # List NVMe targets
     targets, _ = initiator.list(**json_format)

@@ -110,7 +110,6 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,
-        "trsvcid": listener_port,
     }
 
     json_format = {"output-format": "json"}
@@ -118,20 +117,23 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     def check_client(verify=False):
-        _disc_cmd = {**cmd_args, **json_format}
+        disc_port = {"trsvcid": 8009}
+        _disc_cmd = {**cmd_args, **disc_port, **json_format}
         initiator.disconnect_all()
         sub_nqns, _ = initiator.discover(**_disc_cmd)
         LOG.debug(sub_nqns)
         _cmd_args = deepcopy(cmd_args)
         for nqn in json.loads(sub_nqns)["records"]:
-            if nqn["trsvcid"] == str(config["listener_port"]):
+            if nqn["trsvcid"] == listener_port:
                 _cmd_args["nqn"] = nqn["subnqn"]
                 break
         else:
             raise Exception(f"Subsystem not found -- {cmd_args}")
 
         # Connect to the subsystem
-        LOG.debug(initiator.connect(**_cmd_args))
+        conn_port = {"trsvcid": listener_port}
+        _conn_cmd = {**_cmd_args, **conn_port}
+        LOG.debug(initiator.connect(**_conn_cmd))
         targets, _ = initiator.list(**json_format)
         _target = json.loads(targets)["Devices"][0]["DevicePath"]
         if not verify:
@@ -271,20 +273,23 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     _dir = f"/tmp/dir_{generate_unique_id(4)}"
     _file = f"{_dir}/test.log"
 
-    _disc_cmd = {**cmd_args, **json_format}
+    disc_port = {"trsvcid": 8009}
+    _disc_cmd = {**cmd_args, **disc_port, **json_format}
     initiator.disconnect_all()
     sub_nqns, _ = initiator.discover(**_disc_cmd)
     LOG.debug(sub_nqns)
     _cmd_args = deepcopy(cmd_args)
     for nqn in json.loads(sub_nqns)["records"]:
-        if nqn["trsvcid"] == str(config["listener_port"]):
+        if nqn["trsvcid"] == listener_port:
             _cmd_args["nqn"] = nqn["subnqn"]
             break
     else:
         raise Exception(f"Subsystem not found -- {cmd_args}")
 
     # Connect to the subsystem
-    LOG.debug(initiator.connect(**_cmd_args))
+    conn_port = {"trsvcid": listener_port}
+    _conn_cmd = {**_cmd_args, **conn_port}
+    LOG.debug(initiator.connect(**_conn_cmd))
     targets, _ = initiator.list(**json_format)
     _target = json.loads(targets)["Devices"][0]["DevicePath"]
 
