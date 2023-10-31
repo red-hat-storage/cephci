@@ -1,0 +1,15 @@
+- name: Get ceph config
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Validate ceph config value
+      ceph_config:
+        action: get
+        who: "{{ who }}"
+        option: "{{ option }}"
+      register: result
+    - name: DEBUG.
+      debug:
+        msg: "{{ result.stdout }}"

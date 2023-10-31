@@ -1,0 +1,16 @@
+- name: Deploy OSD service
+  hosts: installer
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Apply OSD spec
+      ceph_orch_apply:
+        spec: |
+          service_type: osd
+          service_id: osd
+          placement:
+            host_pattern: '*'
+            label: "{{ label }}"
+          spec:
+            data_devices:
+              all: true
