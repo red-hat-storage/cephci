@@ -342,5 +342,12 @@ tests:
       module: clients.mds_journal_value_conf_verification.py
       name: mds journal value conf verification
       polarion-id: "CEPH-11331"
+  - test:
+      abort-on-fail: false
+      desc: "mds scrub only with one mds after failover"
+      module: clients.mds_scrub_after_failover.py
+      name: mds scrub only with one mds after failover
+      polarion-id: "CEPH-83573489"
+
 
 
