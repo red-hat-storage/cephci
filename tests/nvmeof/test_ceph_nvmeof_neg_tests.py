@@ -12,6 +12,7 @@ from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from cli.utilities.utils import reboot_node
 from tests.cephadm import test_nvmeof, test_orch
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
@@ -308,6 +309,91 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
+def test_ceph_83576087(ceph_cluster, rbd, pool, config):
+    """Validate test case CEPH-83576087."""
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83576087",
+            "serial": 113,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+
+    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+    configure_subsystems(rbd, pool, gateway, subsystem)
+    name = generate_unique_id(length=4)
+
+    # Create image
+    img = f"{name}-image"
+    rbd.create_image(pool, img, "1G")
+    gateway.create_block_device(img, img, pool)
+    gateway.add_namespace(subsystem["nqn"], img)
+
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83576087",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+    config.update(initiator_cfg)
+    client = get_node_by_id(ceph_cluster, config["node"])
+    initiator = Initiator(client)
+    cmd_args = {
+        "transport": "tcp",
+        "traddr": gateway.node.ip_address,
+        "trsvcid": listener_port,
+    }
+
+    json_format = {"output-format": "json"}
+    _dir = f"/tmp/dir_{generate_unique_id(4)}"
+    _file = f"{_dir}/test.log"
+
+    _disc_cmd = {**cmd_args, **json_format}
+    initiator.disconnect_all()
+    sub_nqns, _ = initiator.discover(**_disc_cmd)
+    LOG.debug(sub_nqns)
+    _cmd_args = deepcopy(cmd_args)
+    for nqn in json.loads(sub_nqns)["records"]:
+        if nqn["trsvcid"] == str(config["listener_port"]):
+            _cmd_args["nqn"] = nqn["subnqn"]
+            break
+    else:
+        raise Exception(f"Subsystem not found -- {cmd_args}")
+
+    # Connect to the subsystem
+    LOG.debug(initiator.connect(**_cmd_args))
+    targets, _ = initiator.list(**json_format)
+    _target = json.loads(targets)["Devices"][0]["DevicePath"]
+
+    client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
+    client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
+    client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
+    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+
+    # Reboot client node and re-mount the namespaces.
+    # Discover and reconnect to subsystem and validate the files on the mount-points.
+    reboot_node(client)
+    initiator.configure()
+    LOG.debug(initiator.connect(**_cmd_args))
+    client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+    LOG.info("Validation of CEPH-83576087 is successful.")
+
+    cleanup_cfg = {
+        "gw_node": config["gw_node"],
+        "initiators": [initiator_cfg],
+        "cleanup": ["initiators", "gateway", "pool"],
+        "rbd_pool": pool,
+    }
+    teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
@@ -364,6 +450,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83575467(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83576085":
             test_ceph_83576085(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83576087":
+            test_ceph_83576087(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
         LOG.error(err)
