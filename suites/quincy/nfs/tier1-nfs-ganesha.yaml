@@ -141,3 +141,25 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
+
+  - test:
+      name: Nfs Verify file mv operation
+      module: nfs_verify_read_write_operations.py
+      desc: Verify mv is denied with a permission error when tried on readonly nfs share
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        operation: mv_file
+
+  - test:
+      name: Nfs Verify file mv and replace opertaion
+      module: nfs_verify_read_write_operations.py
+      desc: Verify mv is overwrites the content of the existing file with same name
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        operation: mv_file_overwrite
