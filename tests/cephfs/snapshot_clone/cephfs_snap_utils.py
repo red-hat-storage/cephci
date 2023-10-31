@@ -239,31 +239,58 @@ class SnapUtils(object):
 
     def create_snap_retention(self, snap_params):
         """
-        Installs all the required rpms and clones the tools required for running Tests on clients
+        Create Snap Retention policy and verify its set.
         Args:
             client: ceph client to run cmd
-        Returns: None
+            snap_params : a dict data type with below key-value pairs,
+                Required:
+                    path : a path for retention policy to be created upon, type - str
+                    retention policy : a policy defining retention of scheduled snaps in path, type - str, for eg., 5M2h
+                    fs_name : cephfs volume name
+        Returns: 0 : success, 1 : failure
         """
         client = snap_params["client"]
         sched_cmd = f"ceph fs snap-schedule retention add {snap_params['path']} {snap_params['retention']}"
         out, rc = client.exec_command(sudo=True, cmd=sched_cmd)
         log.info(out)
         if snap_params["validate"] is True:
-            cmd = f"ceph fs snap-schedule status {snap_params['path']} --fs {snap_params['fs_name']} -f json"
-            out, rc = client.exec_command(sudo=True, cmd=cmd)
-            sched_status = json.loads(out)
-            for sched_item in sched_status:
-                if sched_item["path"] == snap_params["path"] and sched_item.get(
-                    "retention"
-                ):
-                    for key, value in sched_item["retention"].items():
-                        if (f"{key} {value}" in snap_params["retention"]) or (
-                            f"{value}{key}" in snap_params["retention"]
-                        ):
-                            log.info("Snap Retention is verified.")
-                    return 0
-            log.error("Snap retention verification failed : {out}")
+            ret_verify = self.verify_snap_retention(
+                client=snap_params["client"],
+                sched_path=snap_params["path"],
+                ret_val=snap_params["retention"],
+            )
+            return ret_verify
         return 0
+
+    def verify_snap_retention(self, **kw_args):
+        """
+        Verify Retention is active and values are as expected
+        Args:
+            client: ceph client to run cmd
+            snap_params : a dict data type with below key-value pairs,
+                Required:
+                    path : a path for retention policy to be created upon, type - str
+                    retention policy : a retention policy to verify, type - str, for eg., 5M2h
+                    fs_name : cephfs volume name
+        Returns: 0 : success, 1 : failure
+        """
+        fs_name = kw_args.get("fs_name", "cephfs")
+        client = kw_args.get("client")
+        cmd = f"ceph fs snap-schedule status {kw_args.get('sched_path')} --fs {fs_name} -f json"
+        out, rc = client.exec_command(sudo=True, cmd=cmd)
+        sched_status = json.loads(out)
+        for sched_item in sched_status:
+            if sched_item["path"] == kw_args.get("sched_path") and sched_item.get(
+                "retention"
+            ):
+                for key, value in sched_item["retention"].items():
+                    if (f"{key} {value}" in {kw_args.get("ret_val")}) or (
+                        f"{value}{key}" in {kw_args.get("ret_val")}
+                    ):
+                        log.info("Snap Retention is verified.")
+                return 0
+        log.error(f"Snap retention verification failed : {out}")
+        return 1
 
     def remove_snap_retention(self, client, path, **kw_args):
         """

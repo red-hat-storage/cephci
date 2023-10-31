@@ -245,7 +245,7 @@ class FsUtils(object):
             sudo=True,
             cmd=f"systemctl list-units --type=service | grep {service} | awk {{'print $1'}}",
         )
-        service_deamon = out.strip()
+        service_deamon = out.strip().split()[0]
         return service_deamon
 
     @staticmethod

@@ -1,3 +1,4 @@
+import json
 import re
 import secrets
 import string
@@ -211,6 +212,8 @@ def run_snap_test(snap_test_params):
         or "snap_retention_subvol" in test_case_name
     ):
         post_test_params = snap_retention_test(snap_test_params)
+    elif "snap_retention_service_restart" in test_case_name:
+        post_test_params = snap_retention_service_restart(snap_test_params)
     # Cleanup subvolume and group
     if "subvol" in snap_test_params.get("test_case"):
         cmd = f"ceph fs subvolume rm {snap_test_params['fs_name']} {snap_test_params['subvol_name']} "
@@ -414,6 +417,70 @@ def snap_retention_test(snap_test_params):
                 cmd=f"rmdir {mnt_paths['fuse']}/.snap/{snap}",
             )
     umount_all(mnt_paths, snap_test_params)
+    return post_test_params
+
+
+def snap_retention_service_restart(snap_test_params):
+    client = snap_test_params["client"]
+    snap_util = snap_test_params["snap_util"]
+    fs_util = snap_test_params["fs_util"]
+    snap_util.enable_snap_schedule(client)
+    snap_test_params["validate"] = True
+    snap_test_params["path"] = "/"
+    sched_list = ["1M"]
+    snap_test_params["retention"] = "3M"
+    svc_list = ["mgr", "mds", "mon"]
+    test_fail = 0
+    post_test_params = {}
+    snap_test_params["sched"] = sched_list[0]
+    snap_test_params["start_time"] = get_iso_time(client)
+    snap_util.create_snap_schedule(snap_test_params)
+    snap_util.create_snap_retention(snap_test_params)
+    snap_path, post_test_params["export_created"] = fs_util.mount_ceph(
+        "fuse", snap_test_params
+    )
+    log.info("Perform service restart and verify Snapshot Retention policy is active")
+    for svc_name in svc_list:
+        for node in fs_util.ceph_cluster.get_nodes(role=svc_name):
+            fs_util.deamon_op(node, svc_name, "restart")
+            if svc_name in ["mon", "mgr"]:
+                fs_util.validate_services(client, svc_name)
+            else:
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph orch ls --service_type={svc_name} --format json",
+                )
+                service_ls = json.loads(out)
+                log.info(service_ls)
+                if (
+                    service_ls[0]["status"]["running"]
+                    != service_ls[0]["status"]["size"]
+                ):
+                    raise CommandFailed(f"All {svc_name} are Not UP")
+            if snap_util.verify_snap_retention(
+                client=client,
+                sched_path=snap_test_params["path"],
+                ret_val=snap_test_params["retention"],
+            ):
+                test_fail = 1
+            time.sleep(10)
+    time.sleep(60)
+    if snap_util.validate_snap_retention(client, snap_path, snap_test_params["path"]):
+        test_fail = 1
+    log.info(f"Performing test{snap_test_params['test_case']} cleanup")
+    snap_list = snap_util.get_scheduled_snapshots(client, snap_path)
+    post_test_params["test_status"] = test_fail
+    schedule_path = snap_test_params["path"]
+    snap_util.remove_snap_retention(
+        client, snap_test_params["path"], ret_val=snap_test_params["retention"]
+    )
+    snap_util.remove_snap_schedule(client, schedule_path)
+    for snap in snap_list:
+        client.exec_command(
+            sudo=True,
+            cmd=f"rmdir {snap_path}/.snap/{snap}",
+        )
+    client.exec_command(sudo=True, cmd=f"umount {snap_path}")
     return post_test_params
 
 
