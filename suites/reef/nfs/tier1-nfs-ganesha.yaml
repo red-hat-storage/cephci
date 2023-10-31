@@ -173,3 +173,23 @@ tests:
         nfs_version: 4.1
         clients: 1
         operation: mv_file_overwrite
+
+  - test:
+    name: Nfs Verify symbolic links create to file on other file system
+    module: nfs_verify_symbolic_links_file_other_file_system.py
+    desc: Verify NFS behavior when attempting to create symbolic links to files residing on other file systems with different protocols (e.g., NFS to local filesystem)
+    polarion-id:
+    abort-on-fail: false
+    config:
+      nfs_version: 4.1
+      clients: 1
+
+  - test:
+      name: Nfs Verify hard links correctly reference the same inode as the original file.
+      module: nfs_verify_hard_links_inode.py
+      desc: Verify creation of hard links within an NFS share and verify that they correctly reference the same inode as the original file.
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
