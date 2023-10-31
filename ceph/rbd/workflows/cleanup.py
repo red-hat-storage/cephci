@@ -7,7 +7,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def cleanup(pool_types, mirror_obj, **kw):
+def cleanup(pool_types, multi_cluster_obj, **kw):
     """ """
     pools = list()
     for pool_type in pool_types:
@@ -22,8 +22,8 @@ def cleanup(pool_types, mirror_obj, **kw):
                 if val.get("data_pool")
             ]
         )
-    mirror_obj.pop("output", {})
-    for cluster_config in mirror_obj.values():
+    multi_cluster_obj.pop("output", {})
+    for cluster_config in multi_cluster_obj.values():
         pool_cleanup(
             cluster_config.get("client"),
             pools,

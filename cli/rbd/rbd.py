@@ -4,6 +4,7 @@ from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 
 from .device import Device
+from .feature import Feature
 from .mirror.mirror import Mirror
 from .pool import Pool
 from .snap import Snap
@@ -17,6 +18,7 @@ class Rbd(Cli):
         self.mirror = Mirror(nodes, self.base_cmd)
         self.device = Device(nodes, self.base_cmd)
         self.snap = Snap(nodes, self.base_cmd)
+        self.feature = Feature(nodes, self.base_cmd)
 
     def create(self, **kw):
         """

@@ -138,7 +138,10 @@ def update_config(**kw):
                                 {"io_total": rep_pool_config.get("io_total", "1G")}
                             )
 
-                        if rep_pool_config.get("mirrormode") != "snapshot":
+                        if (
+                            kw.get("is_mirror")
+                            and rep_pool_config.get("mirrormode") != "snapshot"
+                        ):
                             image_config[image].update({"image-feature": "journaling"})
 
                         if is_secondary:
@@ -220,7 +223,10 @@ def update_config(**kw):
                                 {"io_total": ec_pool_config.get("io_total", "1G")}
                             )
 
-                        if ec_pool_config.get("mirrormode") != "snapshot":
+                        if (
+                            kw.get("is_mirror")
+                            and ec_pool_config.get("mirrormode") != "snapshot"
+                        ):
                             image_config[image].update({"image-feature": "journaling"})
 
                         if is_secondary:
@@ -371,7 +377,7 @@ def initial_rbd_config(ceph_cluster, **kw):  # ,
             ceph_version=ceph_version,
             config=config,
             client=client,
-            is_secondary=kw.get("is_secondary"),
+            is_secondary=kw.get("is_secondary", False),
         ):
             log.error(f"RBD configuration failed for {pool_type}")
             return None
@@ -534,13 +540,13 @@ def initial_mirror_config(**kw):
         kw["ceph_cluster"] = cluster
         if cluster_name == ceph_cluster.name:
             primary_config = ret_config[cluster_name] = initial_rbd_config(
-                is_secondary=False, **kw
+                is_secondary=False, is_mirror=True, **kw
             )
             ret_config[cluster_name]["is_secondary"] = False
             primary_config["cluster"] = cluster
         else:
             secondary_config = ret_config[cluster_name] = initial_rbd_config(
-                is_secondary=True, **kw
+                is_secondary=True, is_mirror=True, **kw
             )
             ret_config[cluster_name]["is_secondary"] = True
             secondary_config["cluster"] = cluster

@@ -14,20 +14,20 @@ def create_snap_and_clone(rbd, snap_spec, clone_spec):
     """
     snap_config = {"snap-spec": snap_spec}
 
-    out, _ = rbd.snap.create(**snap_config)
-    if out:
+    out, err = rbd.snap.create(**snap_config)
+    if out or err and "100% complete" not in err:
         log.error(f"Snapshot creation failed for {snap_spec}")
         return 1
 
-    out, _ = rbd.snap.protect(**snap_config)
-    if out:
+    out, err = rbd.snap.protect(**snap_config)
+    if out or err:
         log.error(f"Snapshot protect failed for {snap_spec}")
         return 1
 
     clone_config = {"source-snap-spec": snap_spec, "dest-image-spec": clone_spec}
 
-    out, _ = rbd.clone(**clone_config)
-    if out:
+    out, err = rbd.clone(**clone_config)
+    if out or err:
         log.error(f"Clone creation failed for {clone_spec}")
         return 1
 
