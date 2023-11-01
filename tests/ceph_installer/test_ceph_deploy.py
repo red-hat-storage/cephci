@@ -72,7 +72,7 @@ def run(**kw):
                 # install python2 on xenial
                 ceph.exec_command(cmd="sudo apt-get install -y python")
             else:
-                setup_repos(ceph, base_url, installer_url)
+                setup_repos(ceph=ceph, base_url=base_url, installer_url=installer_url)
         else:
             log.info("Using the cdn repo for the test")
         log.info("Updating metadata")

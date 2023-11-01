@@ -238,8 +238,15 @@ class BootstrapMixin:
             self.set_tool_repo(repo=custom_repo)
         else:
             repos = ["Tools"]
+            _platform = "-".join(rhbuild.split("-")[1:])
             for node in self.cluster.get_nodes():
-                setup_repos(node, base_url=base_url, repos=repos, cloud_type=cloud_type)
+                setup_repos(
+                    ceph=node,
+                    base_url=base_url,
+                    platform=_platform,
+                    repos=repos,
+                    cloud_type=cloud_type,
+                )
 
         ansible_run = config.get("cephadm-ansible", None)
         if ansible_run:

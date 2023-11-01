@@ -24,6 +24,12 @@ SSH_KEYSCAN = "ssh-keyscan {}"
 SSHPASS = "sshpass -p {}"
 CHMOD_CONFIG = f"chmod 600 {SSH_CONFIG}"
 
+EPEL_REPOS = {
+    "rhel-7": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
+    "rhel-8": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+    "rhel-9": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+}
+
 
 def generate_registry_json_config(node, ibm_build=False):
     """Create json with registry credential details
@@ -367,3 +373,17 @@ def get_tools_repo(repo, ibm_build=False):
 
     else:
         return f"{repo}/compose/Tools/x86_64/os"
+
+
+def add_centos_epel_repo(nodes, platform):
+    """Add centos epel repo to nodes
+
+    Args:
+        nodes (List): List of CephNode objects
+        platform (str): OS Platform
+    """
+    # Check for node list
+    nodes = nodes if isinstance(nodes, list) else [nodes]
+
+    # install centos epel package
+    [Package(n).install(EPEL_REPOS.get(platform)) for n in nodes]
