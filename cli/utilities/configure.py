@@ -1,7 +1,7 @@
 import json
 import tempfile
 
-from cli.exceptions import OperationFailedError, ResourceNotFoundError
+from cli.exceptions import ConfigError, OperationFailedError, ResourceNotFoundError
 from cli.ops.cephadm_ansible import (
     configure_cephadm_ansible_inventory,
     exec_cephadm_clients,
@@ -387,3 +387,33 @@ def add_centos_epel_repo(nodes, platform):
 
     # install centos epel package
     [Package(n).install(EPEL_REPOS.get(platform)) for n in nodes]
+
+
+def set_selinux_mode(nodes, mode):
+    """Sets the selinux mode to the specified value and validate whether
+    the selinux mode is set.
+    Args:
+        nodes (list): List of CephNode objects
+        mode (str): enforcing / permissive
+    """
+    # Set enforce command
+    cmd = "setenforce "
+    if mode == "permissive":
+        cmd += "0"
+    elif mode == "enforcing":
+        cmd += "1"
+    else:
+        raise ConfigError(f"Supported modes are permissive and enforcing, given {mode}")
+
+    for node in nodes:
+        # Set selinux mode on node
+        _, err = node.exec_command(cmd=cmd, sudo=True)
+        if err:
+            return False
+
+        # Verify the selinux mode is as expected
+        out, _ = node.exec_command(cmd="getenforce")
+        if str(out.strip()).lower() != mode:
+            return False
+
+    return True
