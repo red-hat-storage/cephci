@@ -1,6 +1,6 @@
 from cli.exceptions import ConfigError, OperationFailedError, ResourceNotFoundError
 from cli.ops.cephadm import set_container_image_config
-from cli.ops.cephadm_ansible import exec_cephadm_bootstrap
+from cli.ops.cephadm_ansible import autoload_registry_details, exec_cephadm_bootstrap
 from cli.utilities.configure import (
     get_tools_repo,
     set_selinux_mode,
@@ -59,6 +59,10 @@ def run(ceph_cluster, **kwargs):
     if bootstrap_config.get("set_selinux"):
         if not set_selinux_mode(nodes, bootstrap_config.get("set_selinux")):
             raise OperationFailedError("Failed to set selinux mode")
+
+    # Get registry details
+    if bootstrap_config.get("autoload_registry_details"):
+        module_args.update(autoload_registry_details(ibm_build))
 
     # Execute cephadm bootstrap playbook
     exec_cephadm_bootstrap(installer, nodes, playbook, **module_args)

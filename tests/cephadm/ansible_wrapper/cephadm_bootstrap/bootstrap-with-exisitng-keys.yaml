@@ -1,0 +1,11 @@
+- name: Test 'cephadm_bootstrap' module
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Bootstrap cluster overriding existing keys
+      cephadm_bootstrap:
+        mon_ip: "{{ mon_ip }}"
+        dashboard: "{{ dashboard | default(True) }}"
+        allow_overwrite: "{{ allow_overwrite | default(False) }}"

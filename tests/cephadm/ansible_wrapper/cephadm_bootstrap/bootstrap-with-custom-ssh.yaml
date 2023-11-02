@@ -1,0 +1,14 @@
+- name: Test 'cephadm_bootstrap' module
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Bootstrap with dashboard set to `true` without credenatials
+      cephadm_bootstrap:
+        mon_ip: "{{ mon_ip }}"
+        image: "{{ image | default(False) }}"
+        dashboard: "{{ dashboard | default(True) }}"
+        monitoring: "{{ monitoring | default(False) }}"
+        firewalld: "{{ firewalld | default(False) }}"
+        ssh_user: "{{ ssh_user }}"

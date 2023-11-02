@@ -1,0 +1,40 @@
+# Test-Case: Perform cephadm bootstrap operation with docker
+#
+# Cluster Configuration:
+#    conf/quincy/cephadm/tier-0.yaml
+#
+# Note (vamahaja): Skipping these TCs due to bz #2184673
+#
+#------------------------------------------------------------------------------
+
+tests:
+  #- test:
+  #    name: setup install pre-requisistes
+  #    desc: Setup phase to deploy the required pre-requisites for running the tests.
+  #    module: install_prereq.py
+  #    abort-on-fail: true
+
+  - test:
+      name: Bootstrap a cluster using cephadm-ansible module 'cephadm_bootstrap' with docker
+      desc: Execute 'cephadm-bootstrap.yaml' playbook
+      polarion-id: CEPH-83575202
+      module: test_cephadm_ansible_bootstrap.py
+      config:
+        bootstrap:
+          playbook: cephadm-bootstrap.yaml
+          autoload_registry_details: true
+          module_args:
+            mon_ip: node1
+            docker: true
+
+  - test:
+      name: Login to docker registry using cephadm-ansible module 'cephadm_registry_login'
+      desc: Execute 'login-to-registry.yaml' playbook
+      polarion-id: CEPH-83575217
+      module: test_cephadm_ansible_operations.py
+      config:
+        cephadm_registry_login:
+          playbook: login-to-registry.yaml
+          autoload_registry_details: true
+          module_args:
+            docker: true

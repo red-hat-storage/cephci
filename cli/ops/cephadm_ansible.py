@@ -3,6 +3,7 @@ import os
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import CephadmOpsExecutionError, ConfigError, ResourceNotFoundError
+from cli.utilities.configs import get_registry_details
 from cli.utilities.utils import copy_ceph_sshkey_to_host, get_node_by_id, get_node_ip
 from utility.log import Log
 
@@ -21,6 +22,24 @@ CEPHADM_INVENTORY_CLIENT_GROUP = "client"
 # Ceph configs
 CEPH_CONF_PATH = "/etc/ceph/ceph.conf"
 CEPH_CLIENT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
+
+
+def autoload_registry_details(ibm_build=False):
+    """Get registry details
+
+    Args:
+        ibm_build (bool): Tag for IBM build
+    """
+    # Get registry details
+    registry_details = get_registry_details(ibm_build)
+
+    # Update module arguments
+    args = {}
+    args["registry_url"] = registry_details.get("registry-url")
+    args["registry_username"] = registry_details.get("registry-username")
+    args["registry_password"] = registry_details.get("registry-password")
+
+    return args
 
 
 def put_cephadm_ansible_playbook(
@@ -260,4 +279,20 @@ def exec_ceph_orch_daemon(installer, playbook, **args):
     # Execute cephadm ansible playbook
     return exec_cephadm_ansible_playbook(
         installer, "ceph_orch_daemon", playbook, **args
+    )
+
+
+def exec_cephadm_registry_login(installer, playbook, **args):
+    """Executes playbook with cephadm_registry_login module
+
+    Args:
+        installer (CephInstallerNode): Ceph installer node object
+        playbook (str): Cephadm ansible playbook
+        args (dict):
+            Supported Keys:
+                labels (str): Node labels
+    """
+    # Execute cephadm ansible playbook
+    return exec_cephadm_ansible_playbook(
+        installer, "cephadm_registry_login", playbook, **args
     )
