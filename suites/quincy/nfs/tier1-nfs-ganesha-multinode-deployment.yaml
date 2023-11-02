@@ -189,8 +189,8 @@ tests:
       polarion-id:
       abort-on-fail: false
       config:
-        nfs_version: 4.2
-        clients: 3
+        nfs_version: 4.1
+        clients: 4
         nfs_cluster_nodes: 4
 
   - test:
@@ -200,6 +200,6 @@ tests:
       polarion-id:
       abort-on-fail: false
       config:
-        nfs_version: 4.2
-        clients: 3
+        nfs_version: 4.1
+        clients: 4
         nfs_cluster_nodes: 7
