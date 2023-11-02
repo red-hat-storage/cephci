@@ -291,6 +291,27 @@ class FsUtils(object):
         ]
         return active_mds
 
+    @staticmethod
+    def get_standby_replay_mdss(client, fs_name="cephfs"):
+        """
+        Get standby-replay MDS service names
+        Args:
+            client:
+            fs_name:
+
+        Returns:
+            List of standby-replay mds daemon list
+
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph fs status {fs_name} --format json"
+        )
+        output = json.loads(out)
+        standby_reply_mds = [
+            mds["name"] for mds in output["mdsmap"] if mds["state"] == "standby-replay"
+        ]
+        return standby_reply_mds
+
     def get_mds_info(self, active_mds_node_1, active_mds_node_2, **kwargs):
         """
         Collects info from mds nodes by executing on respective mds nodes cephadm shell
