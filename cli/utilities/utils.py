@@ -14,8 +14,12 @@ from utility.log import Log
 
 log = Log(__name__)
 
+SSH_COPYID = "ssh-copy-id -f -i {} {}@{}"
+
 CEPHADM_ANSIBLE_PATH = "/usr/share/cephadm-ansible"
 RHBUILD_PATTERN = r"(\d\.\d)-(rhel-\d)"
+
+CEPH_PUB_KEY = "/etc/ceph/ceph.pub"
 
 
 def get_disk_list(node, expr=None, **kw):
@@ -783,3 +787,16 @@ def get_ip_from_node(node):
     cmd = "ip addr"
     out = node.exec_command(cmd=cmd, sudo=True)
     return re.findall(pattern=pattern, string=out[0])
+
+
+def copy_ceph_sshkey_to_host(installer, node, user="root", key=CEPH_PUB_KEY):
+    """Copy ceph ssh key to host
+
+    Args:
+        installer (CephInstallerNode): Ceph installer node object
+        node (CephNode): Ceph Node object to copy ceph key
+        user (str): User name
+        key (str): Ceph key path
+    """
+    # Copy ceph key to host
+    installer.exec_command(sudo=True, cmd=SSH_COPYID.format(key, user, node.hostname))

@@ -1,0 +1,14 @@
+- name: Test 'cephadm_bootstrap' module
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Bootstrap cluster
+      cephadm_bootstrap:
+        docker: "{{ docker | default(False) }}"
+        image: "{{ image | default(False) }}"
+        mon_ip: "{{ mon_ip }}"
+        dashboard: "{{ dashboard | default(True) }}"
+        monitoring: "{{ monitoring | default(False) }}"
+        firewalld: "{{ firewalld | default(False) }}"
