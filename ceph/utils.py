@@ -6,7 +6,6 @@ import time
 import traceback
 from json import loads
 from time import mktime
-from typing import List
 
 import requests
 import yaml
@@ -16,6 +15,7 @@ from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
+from cli.utilities.configure import add_centos_epel_repo
 from compute.baremetal import CephBaremetalNode
 from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
@@ -522,9 +522,10 @@ def keep_alive(ceph_nodes):
 def setup_repos(
     ceph,
     base_url,
+    platform=None,
     installer_url=None,
-    repos: List[str] = None,
-    cloud_type: str = "openstack",
+    repos=None,
+    cloud_type="openstack",
 ):
     if base_url.endswith(".repo"):
         cmd = f"yum-config-manager --add-repo {base_url}"
@@ -532,6 +533,9 @@ def setup_repos(
     elif base_url.endswith("/repo"):
         cmd = f"curl -L -o /etc/yum.repos.d/upstream.repo {base_url}"
         ceph.exec_command(sudo=True, cmd=cmd)
+
+        if "centos" in base_url:
+            add_centos_epel_repo(ceph, platform)
     else:
         if not repos:
             repos = ["MON", "OSD", "Tools"]
