@@ -348,6 +348,12 @@ tests:
       module: clients.mds_scrub_after_failover.py
       name: mds scrub only with one mds after failover
       polarion-id: "CEPH-83573489"
+  - test:
+      abort-on-fail: false
+      desc: "Verify root_squash cap works in multiFS"
+      module: clients.verify_root_squash_in_caps.py
+      name: verify root_squash cap works in multiFS
+      polarion-id: "CEPH-83573868"
 
 
 
