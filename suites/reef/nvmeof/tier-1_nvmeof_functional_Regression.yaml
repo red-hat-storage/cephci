@@ -326,3 +326,48 @@ tests:
       module: test_ceph_nvmeof_neg_tests.py
       name: Reboot client node and check NVMe namespaces
       polarion-id: CEPH-83576087
+
+# Reboot GW node
+  - test:
+      name: Add Host
+      desc: Add host to Bootstrapped Cluster
+      module: test_host.py
+      polarion-id: CEPH-83573729
+      config:
+        service: host
+        command: add
+        args:                     # arguments to ceph orch
+          attach_ip_address: true
+          node: node7
+      destroy-cluster: false
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node8
+        operation: CEPH-83576093
+      desc: Perform reboot on GW node and validate the namespaces.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: Reboot GW node and check NVMe namespaces
+      polarion-id: CEPH-83576093
+
+  - test:
+      name: Remove host
+      desc: Remove node from cluster
+      module: test_host.py
+      polarion-id: CEPH-83573747
+      config:
+        service: host
+        command: remove
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node7
+      destroy-cluster: false
