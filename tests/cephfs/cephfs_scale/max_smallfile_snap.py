@@ -6,18 +6,29 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.utils import convert_bytes, get_storage_stats
 
 log = Log(__name__)
 
 
-def get_available_space(client, fs_name="cephfs"):
-    out, rc = client.exec_command(
-        sudo=True, cmd=f"ceph fs status {fs_name} --format json"
-    )
-    output = json.loads(out)
-    return next(
-        (pool["avail"] for pool in output["pools"] if pool["type"] == "data"), None
-    )
+def get_data_to_fill_for_each_iteration(client, pool_name):
+    """
+    Calculate the amount of data to fill for each iteration in order to reach 50% of
+    available space in a storage pool.
+    Args:
+        client : Client node.
+        pool_name (str): The name of the storage pool .
+
+    Returns:
+        int: The amount of data to fill in each iteration, considering the available space in the pool.
+
+    Note:
+        This function requires the 'get_storage_stats' function to retrieve storage pool statistics.
+    """
+    pool_stats = get_storage_stats(client, pool_name)
+    bytes_to_fill = pool_stats["max_avail"] - pool_stats["bytes_used"]
+    total_mb_to_fill = convert_bytes(bytes_to_fill, "mb") * 0.5
+    return int(total_mb_to_fill / 4096)
 
 
 def collect_ceph_details(client, cmd):
@@ -73,6 +84,7 @@ def run(ceph_cluster, **kw):
         fs_details = fs_util.get_fs_info(client1)
         if not fs_details:
             fs_util.create_fs(client1, "cephfs")
+        count_size = get_data_to_fill_for_each_iteration(client1, "cephfs.cephfs.data")
         subvolume = {
             "vol_name": default_fs,
             "subvol_name": "subvol_max_snap",
@@ -95,16 +107,14 @@ def run(ceph_cluster, **kw):
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
         )
-        available_space = int(get_available_space(client1, default_fs))
-        log.info(available_space)
-        data_size_iter = int(available_space / 1024000000)
+
         snapshot_list = [
             {
                 "vol_name": default_fs,
                 "subvol_name": "subvol_max_snap",
                 "snap_name": f"snap_limit_{x}",
             }
-            for x in range(0, data_size_iter)
+            for x in range(0, 4096)
         ]
         for snapshot in snapshot_list:
             try:
@@ -115,10 +125,8 @@ def run(ceph_cluster, **kw):
 
                 clients[0].exec_command(
                     sudo=True,
-                    cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 "
-                    f"--file-size 512 "
-                    f"--files 20480 --top "
-                    f"{kernel_mounting_dir_1}/{snapshot['snap_name']}",
+                    cmd=f"dd if=/dev/zero of={kernel_mounting_dir_1}/{snapshot['snap_name']}/file.txt "
+                    f"bs=1M count={count_size}",
                     long_running=True,
                 )
                 fs_util.create_snapshot(clients[0], **snapshot, validate=False)
