@@ -358,8 +358,9 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     _dir = f"/tmp/dir_{generate_unique_id(4)}"
     _file = f"{_dir}/test.log"
 
-    _disc_cmd = {**cmd_args, **json_format}
     initiator.disconnect_all()
+    disc_port = {"trsvcid": 8009}
+    _disc_cmd = {**cmd_args, **disc_port, **json_format}
     sub_nqns, _ = initiator.discover(**_disc_cmd)
     LOG.debug(sub_nqns)
     _cmd_args = deepcopy(cmd_args)
@@ -371,7 +372,9 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         raise Exception(f"Subsystem not found -- {cmd_args}")
 
     # Connect to the subsystem
-    LOG.debug(initiator.connect(**_cmd_args))
+    conn_port = {"trsvcid": listener_port}
+    _conn_cmd = {**_cmd_args, **conn_port}
+    LOG.debug(initiator.connect(**_conn_cmd))
     targets, _ = initiator.list(**json_format)
     _target = json.loads(targets)["Devices"][0]["DevicePath"]
 
@@ -386,6 +389,8 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     reboot_node(client)
     initiator.configure()
     LOG.debug(initiator.connect(**_cmd_args))
+    targets, _ = initiator.list(**json_format)
+    _target = json.loads(targets)["Devices"][0]["DevicePath"]
     client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
     client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
     LOG.info("Validation of CEPH-83576087 is successful.")
