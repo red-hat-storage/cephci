@@ -193,3 +193,26 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
+
+  - test:
+      name: Nfs Verify multi depth dir creations
+      module: nfs_verify_multi_depth_dir_and_permissions.py
+      desc: Verify creating nested mutli depth directories on nfs share
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        dir_depth: 10
+        dirs_per_depth: 5
+
+  - test:
+      name: Nfs Verify default permissions
+      module: nfs_verify_multi_depth_dir_and_permissions.py
+      desc: Verify newly created files and dirs on an NFS share inherit default permissions.
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        operation: default_permissions
