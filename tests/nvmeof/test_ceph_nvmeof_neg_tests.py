@@ -8,6 +8,7 @@ from copy import deepcopy
 from time import sleep
 
 from ceph.ceph import Ceph
+from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
@@ -316,6 +317,9 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
 
 def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     """Validate test case CEPH-83576087."""
+    import pdb
+
+    pdb.set_trace()
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
 
@@ -395,6 +399,102 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
     LOG.info("Validation of CEPH-83576087 is successful.")
 
+    cleanup_cfg = {
+        "gw_node": config["gw_node"],
+        "initiators": [initiator_cfg],
+        "cleanup": ["initiators", "gateway", "pool"],
+        "rbd_pool": pool,
+    }
+    teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
+def test_ceph_83576093(ceph_cluster, rbd, pool, config):
+    """Validate test case CEPH-83576093."""
+    import pdb
+
+    pdb.set_trace()
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83576093",
+            "serial": 113,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+
+    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+    configure_subsystems(rbd, pool, gateway, subsystem)
+    name = generate_unique_id(length=4)
+
+    # Create image
+    img = f"{name}-image"
+    rbd.create_image(pool, img, "1G")
+    gateway.create_block_device(img, img, pool)
+    gateway.add_namespace(subsystem["nqn"], img)
+
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83576093",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+    config.update(initiator_cfg)
+    client = get_node_by_id(ceph_cluster, config["node"])
+    initiator = Initiator(client)
+    cmd_args = {
+        "transport": "tcp",
+        "traddr": gateway.node.ip_address,
+        "trsvcid": listener_port,
+    }
+
+    json_format = {"output-format": "json"}
+    _dir = f"/tmp/dir_{generate_unique_id(4)}"
+    _file = f"{_dir}/test.log"
+
+    disc_port = {"trsvcid": 8009}
+    _disc_cmd = {**cmd_args, **disc_port, **json_format}
+    initiator.disconnect_all()
+    sub_nqns, _ = initiator.discover(**_disc_cmd)
+    LOG.debug(sub_nqns)
+    _cmd_args = deepcopy(cmd_args)
+    for nqn in json.loads(sub_nqns)["records"]:
+        if nqn["trsvcid"] == listener_port:
+            _cmd_args["nqn"] = nqn["subnqn"]
+            break
+    else:
+        raise Exception(f"Subsystem not found -- {cmd_args}")
+
+    # Connect to the subsystem
+    conn_port = {"trsvcid": listener_port}
+    _conn_cmd = {**_cmd_args, **conn_port}
+    LOG.debug(initiator.connect(**_conn_cmd))
+    targets, _ = initiator.list(**json_format)
+    _target = json.loads(targets)["Devices"][0]["DevicePath"]
+
+    client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
+    client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
+    client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
+    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+
+    # Reboot NVMeoF GW node and wait for the node recovery.
+    # Wait for the GW service to be up and running.
+    reboot_node(gw_node)
+    check_service_exists(
+        ceph_cluster.get_nodes(role="installer")[0],
+        service_name=f"nvmeof.{pool}",
+        service_type="nvmeof",
+    )
+    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}_test")
+    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}_test")
+    LOG.info("Validation of CEPH-83576093 is successful.")
+
+    client.exec_command(sudo=True, cmd=f"umount {_dir}")
     cleanup_cfg = {
         "gw_node": config["gw_node"],
         "initiators": [initiator_cfg],
