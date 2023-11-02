@@ -105,8 +105,9 @@ def config_rbd_multi_pool(
                     }
                 )
                 create_config.update({"cluster": cluster})
-                if rbd.create(**create_config)[0]:
-                    log.error(f"Image {image} creation failed")
+                out, err = rbd.create(**create_config)
+                if out or err:
+                    log.error(f"Image {image} creation failed with err {out} {err}")
                     return 1
 
     # Add back the popped pool test config once configuration is complete

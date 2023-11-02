@@ -142,7 +142,9 @@ def update_config(**kw):
                             kw.get("is_mirror")
                             and rep_pool_config.get("mirrormode") != "snapshot"
                         ):
-                            image_config[image].update({"image-feature": "journaling"})
+                            image_config[image].update(
+                                {"image-feature": "exclusive-lock,journaling"}
+                            )
 
                         if is_secondary:
                             image_config[image].update({"is_secondary": True})
@@ -227,7 +229,9 @@ def update_config(**kw):
                             kw.get("is_mirror")
                             and ec_pool_config.get("mirrormode") != "snapshot"
                         ):
-                            image_config[image].update({"image-feature": "journaling"})
+                            image_config[image].update(
+                                {"image-feature": "exclusive-lock,journaling"}
+                            )
 
                         if is_secondary:
                             image_config[image].update({"is_secondary": True})

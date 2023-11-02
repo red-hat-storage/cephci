@@ -13,7 +13,7 @@ log = Log(__name__)
 # Get Position
 def get_position(rbd, imagespec, pattern=None):
     status_config = {"image-spec": imagespec, "format": "json"}
-    image_status = rbd.mirror.image.status(**status_config)
+    image_status, _ = rbd.mirror.image.status(**status_config)
     out = value(
         "description",
         json.loads(image_status),
@@ -159,6 +159,29 @@ def wait_for_status(rbd, cluster_name, **kw):
             time.sleep(kw.get("retry_interval", 20))
         else:
             raise Exception("Required status can not be attained")
+
+
+def wait_for_replay_complete(rbd, cluster_name, imagespec):
+    """Waits till image replay to complete in journal based mirroring.
+
+    Args:
+        imagespec: image specification.
+    """
+    log.info(f"Waiting for {imagespec} to complete replay")
+    while True:
+        time.sleep(30)
+        out = wait_for_status(
+            rbd=rbd,
+            imagespec=imagespec,
+            cluster_name=cluster_name,
+            description_pattern="entries",
+        )
+        out1 = out.split('entries_behind_primary":')
+        out2 = out1[1].split(",")
+        log.debug(f"entries_behind_primary : {out2[0]}")
+        if int(out2[0]) == 0:
+            time.sleep(30)
+            return out2[0]
 
 
 def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
