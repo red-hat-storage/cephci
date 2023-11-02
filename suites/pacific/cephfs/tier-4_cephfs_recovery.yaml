@@ -6,6 +6,10 @@
 # options : --cloud baremetal if required to run on baremetal
 # Test-Case Covered:
 #	CEPH-83573264 - [Cephfs]Taking the cephfs down with down flag.
+#   CEPH-11267 - Execute FS Scrub Commands on cephfs
+#   CEPH-83575627 : Verify Snapshot retention works even after service restarts
+#   CEPH-11264 - Move data and meta_data pool to different root level bucket in OSD tree.
+
 #=======================================================================================================================---
 tests:
   -
@@ -203,4 +207,9 @@ tests:
       abort-on-fail: false
       config:
         test_name : snap_retention_service_restart
-
+  - test:
+      name: Move data and meta_data pool to different root level bucket in OSD tree.
+      module: cephfs_generic.test_data_migrate_bw_buckets.py
+      polarion-id: CEPH-11264
+      desc: Move data and meta_data pool to different root level bucket in OSD tree.
+      abort-on-fail: false
