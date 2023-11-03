@@ -277,8 +277,8 @@ def snap_sched_test(snap_test_params):
                 io_path = f"{mnt_paths['kernel']}{subvol_path.strip()}/"
                 deactivate_path = f"{subvol_path.strip()}/.."
             log.info(f"add sched data params : {client} {io_path} {duration_min}")
-            snap_util.add_snap_sched_data(
-                snap_test_params["client"], io_path, duration_min
+            fs_util.run_ios_V1(
+                snap_test_params["client"], io_path, run_time=duration_min
             )
             if snap_util.validate_snap_schedule(client, snap_path, sched_val):
                 log.info("Snapshot schedule validation failed")
@@ -381,7 +381,7 @@ def snap_retention_test(snap_test_params):
                 snap_path = f"{mnt_paths['nfs']}{snap_test_params['path']}"
                 io_path = f"{mnt_paths['kernel']}{subvol_path.strip()}/"
             log.info(f"add sched data params : {client} {io_path} {duration_min}")
-            snap_util.add_snap_sched_data(client, io_path, duration_min)
+            fs_util.run_ios_V1(client, io_path, run_time=duration_min)
             temp_list = re.split(r"(\d+)", sched_val_ret)
             wait_retention_check = int(temp_list[1]) * 60
             log.info(

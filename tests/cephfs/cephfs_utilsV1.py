@@ -16,6 +16,7 @@ import time
 from time import sleep
 
 from ceph.ceph import CommandFailed
+from ceph.parallel import parallel
 from mita.v2 import get_openstack_driver
 from utility.log import Log
 from utility.retry import retry
@@ -2599,6 +2600,160 @@ os.system('sudo systemctl start  network')
         f = random.choice(io_tools)
         f()
         return f
+
+    def run_ios_V1(self, client, mounting_dir, io_tools=["dd", "smallfile"], **kwargs):
+        """
+        Run the IO module, one of IO modules dd,small_file,wget and file_extract or all for given duration
+        Args:
+            client: client node , type - client object
+            mounting_dir: mount path in client to run IO, type - str
+            io_tools : List of IO tools to run, default : dd,smallfile, type - list
+            run_time : run duration in minutes till when the IO would run, default - 1min
+            **kwargs:
+                run_time : duration in mins for test execution time, default - 1, type - int
+                smallfile_params : A dict type io_params data to define small file io_tool params as below,
+                    smallfile_params = {
+                    "testdir_prefix": "smallfile_io_dir",
+                    "threads": 8,
+                    "file-size": 10240,
+                    "files": 10,
+                    }
+                dd_params : A dict type io_params data to define dd io_tool params as below,
+                dd_params = {
+                    "file_name": "dd_test_file",
+                    "input_type": "random",
+                    "bs": "10M",
+                    "count": 10,
+                    }
+                NOTE: If default prams are being over-ridden,
+                    smallfile params : Both file-size and files params SHOULD to be passed
+                    dd_params : Both bs and count SHOULD be passed
+                for a logically correct combination of params in IO.
+
+                example on method usage: fs_util.run_ios_V1(test_params["client"],io_path,io_tools=["dd"],
+                run_time=duration_min,dd_params=test_io_params)
+                    test_io_params = {
+                        "file_name": "test_file",
+                        "input_type": "zero",
+                        "bs": "1M",
+                        "count": 100,
+                    }
+        Return: None
+
+        """
+
+        def smallfile():
+            log.info("IO tool scheduled : SMALLFILE")
+            io_params = {
+                "testdir_prefix": "smallfile_io_dir",
+                "threads": 8,
+                "file-size": 10240,
+                "files": 10,
+            }
+            if kwargs.get("smallfile_params"):
+                smallfile_params = kwargs.get("smallfile_params")
+                for io_param in io_params:
+                    if smallfile_params.get(io_param):
+                        io_params[io_param] = smallfile_params[io_param]
+            dir_suffix = "".join(
+                [random.choice(string.ascii_letters) for _ in range(2)]
+            )
+            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
+            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
+            client.exec_command(
+                sudo=True,
+                cmd=f"for i in create read append read delete create overwrite rename delete-renamed mkdir rmdir "
+                f"create symlink stat chmod ls-l delete cleanup  ; "
+                f"do python3 /home/cephuser/smallfile/smallfile_cli.py "
+                f"--operation $i --threads {io_params['threads']} --file-size {io_params['file-size']} "
+                f"--files {io_params['files']} --top {io_path} ; done",
+                long_running=True,
+            )
+
+        def file_extract():
+            log.info("IO tool scheduled : FILE_EXTRACT")
+            io_params = {"testdir_prefix": "file_extract_dir"}
+            if kwargs.get("file_extract_params"):
+                file_extract_params = kwargs.get("file_extract_params")
+                for io_param in io_params:
+                    if file_extract_params.get(io_param):
+                        io_params[io_param] = file_extract_params[io_param]
+
+            dir_suffix = "".join(
+                [random.choice(string.ascii_letters) for _ in range(2)]
+            )
+            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
+            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
+            client.exec_command(
+                sudo=True,
+                cmd=f"cd {io_path};wget -O linux.tar.gz http://download.ceph.com/qa/linux-5.4.tar.gz",
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=f"cd {io_path};tar -xzf linux.tar.gz tardir/ ; sleep 10 ; rm -rf  tardir/",
+            )
+
+        def wget():
+            log.info("IO tool scheduled : WGET")
+            io_params = {"testdir_prefix": "wget_dir"}
+            if kwargs.get("wget_params"):
+                wget_params = kwargs.get("wget_params")
+                for io_param in io_params:
+                    if wget_params.get(io_param):
+                        io_params[io_param] = wget_params[io_param]
+            dir_suffix = "".join(
+                [random.choice(string.ascii_letters) for _ in range(2)]
+            )
+            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
+            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
+            client.exec_command(
+                sudo=True,
+                cmd=f"cd {io_path};wget -O linux.tar.gz http://download.ceph.com/qa/linux-5.4.tar.gz",
+            )
+
+        def dd():
+            log.info("IO tool scheduled : DD")
+            io_params = {
+                "file_name": "dd_test_file",
+                "input_type": "random",
+                "bs": "10M",
+                "count": 10,
+            }
+            if kwargs.get("dd_params"):
+                dd_params = kwargs.get("dd_params")
+                for io_param in io_params:
+                    if dd_params.get(io_param):
+                        io_params[io_param] = dd_params[io_param]
+            suffix = "".join([random.choice(string.ascii_letters) for _ in range(2)])
+            file_path = f"{mounting_dir}/{io_params['file_name']}_{suffix}"
+            client.exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/{io_params['input_type']} of={file_path} bs={io_params['bs']} "
+                f"count={io_params['count']}",
+                long_running=True,
+            )
+
+        io_tool_map = {
+            "dd": dd,
+            "smallfile": smallfile,
+            "wget": wget,
+            "file_extract": file_extract,
+        }
+
+        log.info(f"IO tools planned to run : {io_tools}")
+
+        io_tools = [io_tool_map.get(i) for i in io_tools if io_tool_map.get(i)]
+
+        run_time = kwargs.get("run_time", 1)
+        end_time = datetime.datetime.now() + datetime.timedelta(minutes=run_time)
+        i = 0
+        while datetime.datetime.now() < end_time:
+            log.info(f"Iteration : {i}")
+            with parallel() as p:
+                for io_tool in io_tools:
+                    p.spawn(io_tool)
+            i += 1
+            time.sleep(30)
 
     @retry(CommandFailed, tries=3, delay=60)
     def cephfs_nfs_mount(self, client, nfs_server, nfs_export, nfs_mount_dir, **kwargs):
