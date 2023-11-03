@@ -355,3 +355,22 @@ tests:
               io_total: 200M
       polarion-id: CEPH-83576099
       desc: Verify enabling snapshot based mirroring of cloned image is not supported
+
+  - test:
+      desc: Disable and enable Journalling while snapshots are being created/deleted
+      name: Test to toggle journaling feature during snapshot creation and deletion
+      module: test_mirroring_toggle_journaling_feature.py
+      polarion-id: CEPH-10469
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: pool
+              mirrormode: journal
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: pool
+              mirrormode: journal
