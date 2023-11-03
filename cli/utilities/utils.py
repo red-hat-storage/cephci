@@ -549,7 +549,7 @@ def is_node_online(node):
     Returns (bool): Based on if the node is online or not
 
     """
-    cmd = ["ping", node.ip_address, "-c1", "-t1 "]
+    cmd = ["ping", node.ip_address, "-c1"]
     ping_proc = Popen(cmd, stdout=PIPE)
     _, _ = ping_proc.communicate()
     if not ping_proc.returncode:

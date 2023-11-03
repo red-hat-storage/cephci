@@ -55,10 +55,12 @@ def run(ceph_cluster, **kw):
     # Wait for the thread to complete and bring the n/w interface up
     out.join()
 
-    # Check whether the node is up
-    if not is_node_online(mon_node):
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        # Check whether the node is up
+        if is_node_online(mon_node):
+            break
+    if w.expired:
         raise UnexpectedNodeStatusError(
-            f"{mon_node.hostame} is not up after the n/w interface is up"
+            f"{mon_node.hostname} is not up after the n/w interface is up"
         )
-
     return 0
