@@ -1,0 +1,13 @@
+- name: Bootstrap a cluster with registry details
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Initialize bootstrap node using registry details
+      cephadm_bootstrap:
+        image: "{{ image | default(False) }}"
+        mon_ip: "{{ mon_ip }}"
+        registry_url: "{{ registry_url }}"
+        registry_username: "{{ registry_username }}"
+        registry_password: "{{ registry_password }}"

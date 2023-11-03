@@ -1,0 +1,36 @@
+# Test-Case: Perform cephadm bootstrap operation using ssh config
+#
+# Cluster Configuration:
+#    conf/quincy/cephadm/tier-0.yaml
+#------------------------------------------------------------------------------
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster using cephadm-ansible wrapper modules
+      desc: Execute 'bootstrap-with-custom-ssh.yaml' playbook
+      polarion-id: CEPH-83575204
+      module: test_cephadm_ansible_bootstrap.py
+      config:
+        bootstrap:
+          playbook: bootstrap-with-custom-ssh.yaml
+          module_args:
+            mon_ip: node1
+            ssh_user: cephuser
+
+  - test:
+      name: Bootstrap cluster using cephadm-ansible wrapper modules
+      desc: Execute 'bootstrap-with-exisitng-keys.yaml' playbook
+      polarion-id: CEPH-83575205
+      module: test_cephadm_ansible_bootstrap.py
+      config:
+        bootstrap:
+          playbook: bootstrap-with-exisitng-keys.yaml
+          module_args:
+            mon_ip: node1
+            allow_overwrite: true

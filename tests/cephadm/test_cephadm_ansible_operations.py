@@ -2,10 +2,12 @@ import time
 
 from cli.exceptions import ConfigError
 from cli.ops.cephadm_ansible import (
+    autoload_registry_details,
     exec_ceph_config,
     exec_ceph_orch_apply,
     exec_ceph_orch_daemon,
     exec_ceph_orch_host,
+    exec_cephadm_registry_login,
 )
 from cli.utilities.operations import wait_for_osd_daemon_state
 
@@ -21,6 +23,12 @@ def run(ceph_cluster, **kwargs):
     # Get config specs
     config = kwargs.get("config")
 
+    # Get build details
+    ibm_build = config.get("ibm_build", False)
+
+    # Get config specs
+    config = kwargs.get("config")
+
     for module in config.keys():
         # Check for module
         if module not in [
@@ -28,6 +36,7 @@ def run(ceph_cluster, **kwargs):
             "ceph_orch_apply",
             "ceph_config",
             "ceph_orch_daemon",
+            "cephadm_registry_login",
         ]:
             continue
 
@@ -69,5 +78,12 @@ def run(ceph_cluster, **kwargs):
 
             # Eexecute `ceph_orch_daemon` module playbook
             exec_ceph_orch_daemon(installer, playbook, **module_args)
+
+        elif module == "cephadm_registry_login":
+            # Check for registry details
+            if module_config.get("autoload_registry_details"):
+                module_args.update(autoload_registry_details(ibm_build))
+
+            exec_cephadm_registry_login(installer, playbook, **module_args)
 
     return 0
