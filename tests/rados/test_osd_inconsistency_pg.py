@@ -5,7 +5,6 @@ AS part of verification the script  perform the following tasks-
    2. Convert the object in to inconsistent object
 """
 
-
 import random
 import traceback
 
@@ -77,9 +76,22 @@ def run(ceph_cluster, **kw):
             obj_id = object_list["inconsistents"][obj_count]["object"]["name"]
             if obj_id == oname:
                 log.info(f"Inconsistent object {obj_id} is exists in the objects list.")
+                errors_list = object_list["inconsistents"][obj_count]["errors"]
+                log.info(
+                    f"Checking the error messages of the inconsistent object {obj_id} "
+                )
+                if "omap_digest_mismatch" not in errors_list:
+                    log.error(
+                        f"The inconsistent object {obj_id} is not reported with the omap_digest_mismatch error"
+                    )
+                    return 1
+                log.info(
+                    f"The inconsistent object {obj_id} is reported with the omap_digest_mismatch error"
+                )
             else:
                 log.error("Inconsistent object is not exists in the objects list")
                 return 1
+
         osd_map_output = rados_obj.get_osd_map(pool=pool_name, obj=oname)
         primary_osd = osd_map_output["acting_primary"]
         # Executing the fsck on the OSD
