@@ -209,3 +209,23 @@ tests:
               num_images: 1
               mode: pool
               mirrormode: snapshot
+
+  - test:
+      abort-on-fail: True
+      desc: Verify image expand/shrink/remove from mirroring cluster
+      name: Verify image operations from primary and secondary cluster
+      module: test_image_operations_on_snap_mirroring.py
+      polarion-id: CEPH-83574857
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 10
+              mode: image
+              mirrormode: snapshot
+            ec_pool_config:
+              num_pools: 1
+              num_images: 10
+              mode: image
+              mirrormode: snapshot
