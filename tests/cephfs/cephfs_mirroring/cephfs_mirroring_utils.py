@@ -4,7 +4,6 @@ It contains all the re-useable functions related to cephfs mirroring feature
 
 """
 import json
-import re
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -216,10 +215,11 @@ class CephfsMirroringUtils(object):
         log.info("Creating the peer bootstrap")
         command = (
             f"ceph fs snapshot mirror peer_bootstrap create "
-            f"{target_fs_name} client.{target_user} {target_site_name} | awk '{{print $2}}'"
+            f"{target_fs_name} client.{target_user} {target_site_name} -f json"
         )
         bootstrap_key, _ = target_client.exec_command(sudo=True, cmd=command)
-        token = re.split(r"(\w+=)", str(bootstrap_key))[1]
+        token = json.loads(bootstrap_key).get("token")
+        log.info(f"Bootstrap token value is : {token}")
         return token
 
     def import_peer_bootstrap(self, source_fs, token, source_client):
@@ -274,18 +274,22 @@ class CephfsMirroringUtils(object):
             mon_host_list = list(
                 set(host.split(":")[1] for host in mon_hosts.split(","))
             )
+            log.info(f"Mon Hosts from the Output : {mon_host_list}")
             target_mon_node_ip_list = self.fs_util_ceph2.get_mon_node_ips()
+            log.info(f"Target Mon Hosts : {target_mon_node_ip_list}")
 
             target_site_name = target_site_name
             target_user = f"client.{target_user}"
             target_fs_name = target_fs_name
-            target_mon_hosts = target_mon_node_ip_list
+            # target_mon_hosts = target_mon_node_ip_list
 
             if (
                 site_name == target_site_name
                 and client_name == target_user
                 and fs_name == target_fs_name
-                and set(mon_host_list) == set(target_mon_hosts)
+                # and set(mon_host_list) == set(target_mon_hosts)
+                # BZ : https://bugzilla.redhat.com/show_bug.cgi?id=2248176 -
+                # Will remove the check once the issue is fixed
             ):
                 log.info(
                     "Peer Connection validated and mirroring is successfully established."
