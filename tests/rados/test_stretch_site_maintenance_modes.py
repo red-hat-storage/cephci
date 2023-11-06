@@ -181,7 +181,9 @@ def run(ceph_cluster, **kw):
             if not rados_obj.host_maintenance_enter(hostname=host, retry=10):
                 log.error(f"Failed to add host : {host} into maintenance mode")
                 raise Exception("Test execution Failed")
-        time.sleep(120)
+
+        # Sleeping for 4 minutes. Observed that sometimes warning gets generated post 2 minutes.
+        time.sleep(240)
 
         # Installer node will be in maintenance mode this point. all operations need to be done at client nodes
         status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
