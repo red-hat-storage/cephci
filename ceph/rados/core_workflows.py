@@ -2304,33 +2304,114 @@ class RadosOrchestrator:
         log.info("Daemon crash warning found in ceph health")
         return True
 
-    def configure_host_as_client(self, host_node):
+    def add_network_delay_on_host(
+        self, hostname, delay="20ms", packet_loss="0.1", set_delay=True
+    ) -> bool:
         """
-        Purpose of this module is to configure the ceph keyring and conf
-        on a cluster host which is not installer to run ceph commands from
-        it
-        Args:
-            host_node: node object of the host which needs to be converted
-        Returns: None
+        This method makes use of tc utility to introduce network delays and packet drops on the nodes.
+
+        Args::
+            hostname: Name of the host
+            delay: delay to be added on the host
+            packet_loss: percentage of packets to be dropped
+            set_delay: If true, sets the network delay, otherwise removes the delay added on the host
+
+        Return:
+            Pass -> True
+            Fail -> False
         """
-        # copy /etc/ceph/ files to input host
-        ceph_conf, _ = self.node.shell(["cat /etc/ceph/ceph.conf"])
-        ceph_keyring, _ = self.node.shell(["cat /etc/ceph/ceph.keyring"])
-        host_node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+        host_nodes = self.ceph_cluster.get_nodes()
+        host_obj = None
+        for node in host_nodes:
+            if (
+                re.search(hostname, node.hostname)
+                or re.search(hostname, node.vmname)
+                or re.search(hostname, node.shortname)
+            ):
+                host_obj = node
+        if not host_obj:
+            log.error(f"Host object for host {hostname} could not be found")
+            return False
 
-        for cont in [ceph_conf, ceph_keyring]:
-            file_name = (
-                "/etc/ceph/ceph.conf" if cont == ceph_conf else "/etc/ceph/ceph.keyring"
-            )
-            file_ = host_node.remote_file(sudo=True, file_name=file_name, file_mode="w")
-            file_.write(cont)
-            file_.flush()
-            file_.close()
-
-        # Checking and installing ceph-common package on host
+        # Checking and installing iproute package on node
         try:
-            out, rc = host_node.exec_command(
-                sudo=True, cmd="rpm -qa | grep ceph-common"
-            )
+            host_obj.exec_command(sudo=True, cmd="rpm -qa | grep iproute")
         except Exception:
-            host_node.exec_command(sudo=True, cmd="yum install -y ceph-common")
+            host_obj.exec_command(sudo=True, cmd="yum install iproute -y")
+        log.debug("IProute package is present on the host")
+
+        log.info(
+            "Getting the network interface on the host to add network delay & packet loss"
+        )
+        interface = host_obj.search_ethernet_interface(host_nodes)
+        log.debug(f"Fetched interface for host is : {interface}")
+
+        if set_delay:
+            log.debug(
+                "Removing any netem configurations if already present on host before setting new configs"
+            )
+            rm_cmd = f"sudo tc qdisc del dev {interface} root netem"
+            try:
+                host_obj.exec_command(sudo=True, cmd=rm_cmd)
+                time.sleep(2)
+            except Exception:
+                log.debug(
+                    "No configs already present on the host. Proceeding to set the rules"
+                )
+
+            log.debug(
+                f"Adding the network delay on the host : {hostname} on interface : {interface}."
+                f" delay : {delay}, Packet loss: {packet_loss}%"
+            )
+            delay_cmd = f"tc qdisc add dev {interface} root netem delay {delay} loss {packet_loss}%"
+
+        if not set_delay:
+            log.debug(
+                f"Removing the network delay & packet loss on the host : {hostname} on interface : {interface}."
+            )
+            delay_cmd = f"sudo tc qdisc del dev {interface} root netem"
+
+        try:
+            host_obj.exec_command(sudo=True, cmd=delay_cmd)
+            time.sleep(2)
+        except Exception as err:
+            log.error(
+                f"Hit Exception while running the tc utility commands. Error : {err}"
+            )
+            return False
+
+        display_cmd = f"tc qdisc show dev {interface}"
+        out, err = host_obj.exec_command(sudo=True, cmd=display_cmd)
+        log.debug(f"configured network delay & drop settings are : {out} ")
+        log.info("Completed setting/unsetting the network delay and packet drops")
+        return True
+
+
+def configure_host_as_client(self, host_node):
+    """
+    Purpose of this module is to configure the ceph keyring and conf
+    on a cluster host which is not installer to run ceph commands from
+    it
+    Args:
+        host_node: node object of the host which needs to be converted
+    Returns: None
+    """
+    # copy /etc/ceph/ files to input host
+    ceph_conf, _ = self.node.shell(["cat /etc/ceph/ceph.conf"])
+    ceph_keyring, _ = self.node.shell(["cat /etc/ceph/ceph.keyring"])
+    host_node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+
+    for cont in [ceph_conf, ceph_keyring]:
+        file_name = (
+            "/etc/ceph/ceph.conf" if cont == ceph_conf else "/etc/ceph/ceph.keyring"
+        )
+        file_ = host_node.remote_file(sudo=True, file_name=file_name, file_mode="w")
+        file_.write(cont)
+        file_.flush()
+        file_.close()
+
+    # Checking and installing ceph-common package on host
+    try:
+        out, rc = host_node.exec_command(sudo=True, cmd="rpm -qa | grep ceph-common")
+    except Exception:
+        host_node.exec_command(sudo=True, cmd="yum install -y ceph-common")

@@ -39,6 +39,7 @@ def run(ceph_cluster, **kw):
     osp_cred = config.get("osp_cred")
     shutdown_site = config.get("shutdown_site", "DC1")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "Arbiter")
+    add_network_delay = config.get("add_network_delay", False)
 
     if not stretch_enabled_checks(rados_obj=rados_obj):
         log.error(
@@ -68,6 +69,21 @@ def run(ceph_cluster, **kw):
     log.debug(
         f"Hosts present in Datacenter : {tiebreaker_mon_site_name} : {tiebreaker_hosts}"
     )
+    if add_network_delay:
+        for host in dc_1_hosts:
+            rados_obj.add_network_delay_on_host(
+                hostname=host, delay="10ms", set_delay=True
+            )
+        for host in dc_2_hosts:
+            rados_obj.add_network_delay_on_host(
+                hostname=host, delay="10ms", set_delay=True
+            )
+        for host in tiebreaker_hosts:
+            rados_obj.add_network_delay_on_host(
+                hostname=host, delay="100ms", set_delay=True
+            )
+
+        log.info("Successfully set network delays on the Stretch cluster nodes")
 
     # Checking if the site passed to shut down is present in the Cluster CRUSH
     if shutdown_site not in [tiebreaker_mon_site_name, dc_1_name, dc_2_name]:
@@ -220,6 +236,19 @@ def run(ceph_cluster, **kw):
     if not rados_obj.run_pool_sanity_check():
         log.error(f"Checks failed post Site {shutdown_site} Down and Up scenarios")
         raise Exception("Post execution checks failed on the Stretch cluster")
+
+    if add_network_delay:
+        # The tc configs are removed post reboots.
+        # for host in dc_1_hosts:
+        #     rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
+        for host in dc_2_hosts:
+            rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
+        for host in tiebreaker_hosts:
+            rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
+
+        log.info(
+            "Successfully removed the network delays added on the Stretch cluster nodes"
+        )
 
     if config.get("delete_pool"):
         rados_obj.detete_pool(pool=pool_name)
