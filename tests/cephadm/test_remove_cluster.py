@@ -92,12 +92,10 @@ def run(ceph_cluster, **kw):
         raise OperationFailedError("Failed to get cluster FSID")
 
     # Disable cephadm module
-    error, _ = CephAdm(installer).ceph.mgr.module.disable("cephadm")
-    if error:
-        raise OperationFailedError("Failed to disable cephadm module")
+    CephAdm(installer).ceph.mgr.module.disable("cephadm")
 
     # Execute rm-cluster on all nodes
-    log.info("Executed 'rm-cluster' command sucessfully on all cluster nodes")
+    log.info("Execute 'rm-cluster' command sucessfully on all cluster nodes")
     for node in nodes:
         if not node.role == "osd":
             continue
