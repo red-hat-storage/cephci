@@ -90,7 +90,6 @@ def run(ceph_cluster, **kw):
         bootstrap_token = fs_mirroring_utils.create_peer_bootstrap(
             target_fs, target_user, target_site_name, target_clients[0]
         )
-        log.info(f"Token generated after peer bootstrap : {bootstrap_token}")
 
         log.info("Import the bootstrap on source")
         fs_mirroring_utils.import_peer_bootstrap(
