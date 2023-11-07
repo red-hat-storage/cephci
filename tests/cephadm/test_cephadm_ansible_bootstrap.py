@@ -61,7 +61,7 @@ def run(ceph_cluster, **kwargs):
             raise OperationFailedError("Failed to set selinux mode")
 
     # Get registry details
-    if bootstrap_config.get("autoload_registry_details"):
+    if bootstrap_config.get("autoload_registry_details") or ibm_build:
         module_args.update(autoload_registry_details(ibm_build))
 
     # Execute cephadm bootstrap playbook
