@@ -1,6 +1,7 @@
 globals:
   - ceph-cluster:
       name: ceph
+      vm-size: ci.standard.large
       node1:
         role:
           - _admin
