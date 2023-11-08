@@ -216,3 +216,33 @@ tests:
         nfs_version: 4.1
         clients: 1
         operation: default_permissions
+
+  - test:
+      name: Verify that hard links remain valid after an NFS server reboot.
+      module: nfs_hard_links_server_reboot.py
+      desc: Verify that hard links remain valid after an NFS server reboot.
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Verify renaming a file that has one or more hard or symbolic links associated with it.
+      module: nfs_hard_symbolic_links_rename.py
+      desc: Test NFS behavior when renaming a file that has one or more hard or symbolic links associated with it.
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Verify when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+      module: nfs_hard_links_delete_file.py
+      desc: Test NFS behavior when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
