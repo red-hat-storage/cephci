@@ -198,3 +198,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_validate_cephfs-mirroring_on_multifs_setup.py
       name: Validate the Mirroring is successful upon enabling fs mirroring on multiple FS from source to same destination
       polarion-id: "CEPH-83574107"
+  - test:
+      abort-on-fail: false
+      desc: "modify User caps and validate the mirroring sync."
+      clusters:
+        ceph1:
+          config:
+            name: "modify User caps and validate the mirroring sync."
+      module: cephfs_mirroring.test_cephfs_mirror_auth_caps.py
+      name: modify User caps and validate the mirroring sync.
+      polarion-id: "CEPH-83574109"
