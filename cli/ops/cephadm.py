@@ -31,25 +31,26 @@ def generate_bootstrap_config(node, config):
     # Get file type
     file_type, _config = config.pop("file_type"), ""
 
-    # Generate config
-    if file_type == "ini":
-        for k in config.keys():
-            _config += f"[{k}]\n"
-            _config += "\n".join(config.get(k).split(" "))
-        _config += "\n"
-
-    elif file_type == "json":
-        _config = json.loads(config)
-
-    else:
-        return None
-
     # Create temporory file path
     temp_file = tempfile.NamedTemporaryFile(suffix=".conf")
 
     # Create temporary file and dump data
     with node.remote_file(sudo=True, file_name=temp_file.name, file_mode="w") as _f:
-        _f.write(_config)
+        # Generate config
+        if file_type == "ini":
+            for k in config.keys():
+                _config += f"[{k}]\n"
+                _config += "\n".join(config.get(k).split(" "))
+            _config += "\n"
+
+            _f.write(_config)
+
+        elif file_type == "json":
+            json.dump(config, _f)
+
+        else:
+            return None
+
         _f.flush()
 
     return temp_file.name
