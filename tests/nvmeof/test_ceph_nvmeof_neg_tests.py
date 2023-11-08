@@ -119,7 +119,7 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     def check_client(verify=False):
-        disc_port = {"trsvcid": 8009}
+        disc_port = {"trsvcid": listener_port}
         _disc_cmd = {**cmd_args, **disc_port, **json_format}
         initiator.disconnect_all()
         sub_nqns, _ = initiator.discover(**_disc_cmd)
@@ -275,7 +275,7 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     _dir = f"/tmp/dir_{generate_unique_id(4)}"
     _file = f"{_dir}/test.log"
 
-    disc_port = {"trsvcid": 8009}
+    disc_port = {"trsvcid": listener_port}
     _disc_cmd = {**cmd_args, **disc_port, **json_format}
     initiator.disconnect_all()
     sub_nqns, _ = initiator.discover(**_disc_cmd)
@@ -317,9 +317,6 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
 
 def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     """Validate test case CEPH-83576087."""
-    import pdb
-
-    pdb.set_trace()
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
 
@@ -363,7 +360,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     initiator.disconnect_all()
-    disc_port = {"trsvcid": 8009}
+    disc_port = {"trsvcid": listener_port}
     _disc_cmd = {**cmd_args, **disc_port, **json_format}
     sub_nqns, _ = initiator.discover(**_disc_cmd)
     LOG.debug(sub_nqns)
@@ -410,9 +407,6 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
 
 def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     """Validate test case CEPH-83576093."""
-    import pdb
-
-    pdb.set_trace()
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
 
@@ -455,7 +449,7 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     _dir = f"/tmp/dir_{generate_unique_id(4)}"
     _file = f"{_dir}/test.log"
 
-    disc_port = {"trsvcid": 8009}
+    disc_port = {"trsvcid": listener_port}
     _disc_cmd = {**cmd_args, **disc_port, **json_format}
     initiator.disconnect_all()
     sub_nqns, _ = initiator.discover(**_disc_cmd)
