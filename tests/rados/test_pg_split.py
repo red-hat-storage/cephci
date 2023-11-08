@@ -29,7 +29,7 @@ def run(ceph_cluster, **kw):
     5. Verify new pg_num has increased and greater that initial pg_num
     6. Set bulk flag to false
     7. Wait for pg to be active+clean
-    8. Verify latest pg_num has decreased.
+    8. Verify the latest pg_num has decreased.
     9. Verify restart osd when split is in progress.
     10. Verify delete object when split is in progress.
     """
@@ -40,7 +40,16 @@ def run(ceph_cluster, **kw):
         rados_obj = RadosOrchestrator(node=cephadm)
         pool_obj = PoolFunctions(node=cephadm)
         client_node = ceph_cluster.get_nodes(role="client")[0]
+        cluster_nodes = ceph_cluster.get_nodes()
         timeout = config.get("timeout", 10800)
+        add_network_delay = config.get("add_network_delay", False)
+
+        if add_network_delay:
+            for host in cluster_nodes:
+                rados_obj.add_network_delay_on_host(
+                    hostname=host.hostname, delay="5ms", set_delay=True
+                )
+            log.info("Added network delays on the cluster")
 
         log.info("Running PG split merge scenarios")
         pool = create_pools(config, rados_obj, client_node)
@@ -227,6 +236,13 @@ def run(ceph_cluster, **kw):
         # Checking cluster health after OSD removal
         method_should_succeed(rados_obj.run_pool_sanity_check)
         log.info("Sanity check post test execution, Test complete, Pass")
+
+        if add_network_delay:
+            for host in cluster_nodes:
+                rados_obj.add_network_delay_on_host(
+                    hostname=host.hostname, set_delay=False
+                )
+            log.info("Removed the network delays on the cluster")
 
     except Exception as e:
         log.info(e)
