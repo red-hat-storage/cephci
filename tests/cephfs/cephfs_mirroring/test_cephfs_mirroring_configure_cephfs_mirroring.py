@@ -1,5 +1,7 @@
+import json
 import random
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -49,12 +51,76 @@ def run(ceph_cluster, **kw):
                 "This test requires a minimum of 1 client node on both ceph1 and ceph2."
             )
             return 1
+        log.info("Preparing Clients...")
         fs_util_ceph1.prepare_clients(source_clients, build)
         fs_util_ceph2.prepare_clients(target_clients, build)
         fs_util_ceph1.auth_list(source_clients)
         fs_util_ceph2.auth_list(target_clients)
-        source_fs = "cephfs"
-        target_fs = "cephfs"
+        log.info("Delete all the FileSystems created on both source and target ")
+        log.info("Delete filesystem on Source Cluster")
+        rc, ec = source_clients[0].exec_command(
+            sudo=True, cmd="ceph fs ls --format json-pretty"
+        )
+        result = json.loads(rc)
+        source_clients[0].exec_command(
+            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+        )
+        for fs in result:
+            fs_name = fs["name"]
+            source_clients[0].exec_command(
+                sudo=True, cmd=f"ceph fs volume rm {fs_name} --yes-i-really-mean-it"
+            )
+        time.sleep(30)
+
+        log.info("Delete filesystem on Target Cluster")
+        rc, ec = target_clients[0].exec_command(
+            sudo=True, cmd="ceph fs ls --format json-pretty"
+        )
+        result = json.loads(rc)
+        target_clients[0].exec_command(
+            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+        )
+        for fs in result:
+            fs_name = fs["name"]
+            target_clients[0].exec_command(
+                sudo=True, cmd=f"ceph fs volume rm {fs_name} --yes-i-really-mean-it"
+            )
+        time.sleep(30)
+
+        log.info("Create required filesystem on Source Cluster...")
+        mds_nodes = ceph_cluster_dict.get("ceph1").get_ceph_objects("mds")
+        log.info(f"Available MDS Nodes {mds_nodes[0]}")
+        log.info(len(mds_nodes))
+        source_fs = "cephfs1"
+        mds_names = []
+        for mds in mds_nodes:
+            mds_names.append(mds.node.hostname)
+        hosts_list1 = mds_names[-6:-4]
+        mds_hosts_1 = " ".join(hosts_list1) + " "
+        log.info(f"MDS host list 1 {mds_hosts_1}")
+        source_clients[0].exec_command(
+            sudo=True,
+            cmd=f'ceph fs volume create {source_fs} --placement="2 {mds_hosts_1}"',
+        )
+        fs_util_ceph1.wait_for_mds_process(source_clients[0], source_fs)
+
+        log.info("Create required filesystem on Target Cluster...")
+        mds_nodes = ceph_cluster_dict.get("ceph2").get_ceph_objects("mds")
+        log.info(f"Available MDS Nodes {mds_nodes[0]}")
+        log.info(len(mds_nodes))
+        target_fs = "cephfs-rem1"
+        mds_names = []
+        for mds in mds_nodes:
+            mds_names.append(mds.node.hostname)
+        hosts_list1 = mds_names[-4:-2]
+        mds_hosts_1 = " ".join(hosts_list1) + " "
+        log.info(f"MDS host list 1 {mds_hosts_1}")
+        target_clients[0].exec_command(
+            sudo=True,
+            cmd=f'ceph fs volume create {target_fs} --placement="2 {mds_hosts_1}"',
+        )
+        fs_util_ceph1.wait_for_mds_process(target_clients[0], target_fs)
+
         target_user = "mirror_remote"
         target_site_name = "remote_site"
 
@@ -197,15 +263,35 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Validate the Snapshot Synchronisation on Target Cluster")
-        (
-            fsid,
-            asok_file,
-            filesystem_id,
-            peer_uuid,
-        ) = fs_mirroring_utils.validate_synchronization(
-            cephfs_mirror_node[0], source_clients[0], source_fs, 2
+        snap_count = 2
+        validate_syncronisation = fs_mirroring_utils.validate_synchronization(
+            cephfs_mirror_node[0], source_clients[0], source_fs, snap_count
         )
+        if validate_syncronisation:
+            log.error("Snapshot Synchronisation failed..")
+            raise CommandFailed("Snapshot Synchronisation failed")
 
+        log.info(
+            "Fetch the daemon_name, fsid, asok_file, filesystem_id and peer_id to validate the synchronisation"
+        )
+        fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
+        log.info(f"fsid on ceph cluster : {fsid}")
+        daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
+        log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
+        asok_file = fs_mirroring_utils.get_asok_file(
+            cephfs_mirror_node[0], fsid, daemon_name
+        )
+        log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_file}")
+        filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
+            source_clients[0], source_fs
+        )
+        log.info(f"filesystem id of {source_fs} is : {filesystem_id}")
+        peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
+            source_clients[0], source_fs
+        )
+        log.info(f"peer uuid of {source_fs} is : {peer_uuid}")
+
+        log.info("Validate if the Snapshots are syned to Target Cluster")
         result_snap_k1 = fs_mirroring_utils.validate_snapshot_sync_status(
             cephfs_mirror_node[0],
             source_fs,
@@ -251,7 +337,9 @@ def run(ceph_cluster, **kw):
         else:
             log.error("One or both snapshots not found or not synced.")
 
-        log.info("Validate the snapshots and data synced to the target cluster")
+        log.info(
+            "Validate the synced snapshots and data available on the target cluster"
+        )
         target_mount_path1 = "/mnt/remote_dir1"
         target_mount_path2 = "/mnt/remote_dir2"
         target_client_user = "client.admin"
@@ -272,6 +360,7 @@ def run(ceph_cluster, **kw):
             source_path1,
             snapshot_name1,
             expected_files1,
+            target_fs,
         )
         (
             success2,
@@ -283,6 +372,7 @@ def run(ceph_cluster, **kw):
             source_path2,
             snapshot_name2,
             expected_files2,
+            target_fs,
         )
 
         if success1 and success2:
@@ -354,6 +444,74 @@ def run(ceph_cluster, **kw):
         fs_mirroring_utils.disable_mirroring_module(source_clients[0])
         fs_mirroring_utils.disable_mirroring_module(target_clients[0])
 
+        log.info("Delete the user used for creating peer bootstrap")
+        fs_mirroring_utils.remove_user_used_for_peer_connection(
+            f"client.{target_user}", target_clients[0]
+        )
+
         log.info("Cleanup Target Client")
         fs_mirroring_utils.cleanup_target_client(target_clients[0], target_mount_path1)
         fs_mirroring_utils.cleanup_target_client(target_clients[0], target_mount_path2)
+
+        log.info("Delete all the FileSystems created on both source and target ")
+        log.info("Delete filesystem on Source Cluster")
+        rc, ec = source_clients[0].exec_command(
+            sudo=True, cmd="ceph fs ls --format json-pretty"
+        )
+        result = json.loads(rc)
+        source_clients[0].exec_command(
+            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+        )
+        for fs in result:
+            fs_name = fs["name"]
+            source_clients[0].exec_command(
+                sudo=True, cmd=f"ceph fs volume rm {fs_name} --yes-i-really-mean-it"
+            )
+        time.sleep(30)
+
+        log.info("Delete filesystem on Target Cluster")
+        rc, ec = target_clients[0].exec_command(
+            sudo=True, cmd="ceph fs ls --format json-pretty"
+        )
+        result = json.loads(rc)
+        target_clients[0].exec_command(
+            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
+        )
+        for fs in result:
+            fs_name = fs["name"]
+            target_clients[0].exec_command(
+                sudo=True, cmd=f"ceph fs volume rm {fs_name} --yes-i-really-mean-it"
+            )
+        time.sleep(30)
+
+        mds_nodes = ceph_cluster_dict.get("ceph1").get_ceph_objects("mds")
+        log.info(f"Available MDS Nodes {mds_nodes[0]}")
+        log.info(len(mds_nodes))
+        source_fs = "cephfs"
+        mds_names = []
+        for mds in mds_nodes:
+            mds_names.append(mds.node.hostname)
+        hosts_list1 = mds_names[-6:-4]
+        mds_hosts_1 = " ".join(hosts_list1) + " "
+        log.info(f"MDS host list 1 {mds_hosts_1}")
+        source_clients[0].exec_command(
+            sudo=True,
+            cmd=f'ceph fs volume create {source_fs} --placement="2 {mds_hosts_1}"',
+        )
+        fs_util_ceph1.wait_for_mds_process(source_clients[0], source_fs)
+
+        mds_nodes = ceph_cluster_dict.get("ceph2").get_ceph_objects("mds")
+        log.info(f"Available MDS Nodes {mds_nodes[0]}")
+        log.info(len(mds_nodes))
+        target_fs = "cephfs"
+        mds_names = []
+        for mds in mds_nodes:
+            mds_names.append(mds.node.hostname)
+        hosts_list1 = mds_names[-4:-2]
+        mds_hosts_1 = " ".join(hosts_list1) + " "
+        log.info(f"MDS host list 1 {mds_hosts_1}")
+        target_clients[0].exec_command(
+            sudo=True,
+            cmd=f'ceph fs volume create {target_fs} --placement="2 {mds_hosts_1}"',
+        )
+        fs_util_ceph1.wait_for_mds_process(target_clients[0], target_fs)
