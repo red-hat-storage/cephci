@@ -327,6 +327,23 @@ tests:
       name: Reboot client node and check NVMe namespaces
       polarion-id: CEPH-83576087
 
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node7
+        operation: CEPH-83575813
+      desc: Perform RBD operations shrink and expand on images.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: RBD operations shrink and expand on images
+      polarion-id: CEPH-83575813
+
 # Reboot GW node
   - test:
       name: Add Host

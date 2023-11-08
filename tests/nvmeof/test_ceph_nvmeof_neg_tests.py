@@ -498,6 +498,88 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
+def test_ceph_83575813(ceph_cluster, rbd, pool, config):
+    """Validate test case CEPH-83575813."""
+    # Todo: This Test case has to be re-visited,
+    #       since this issue at RBD operations are considered
+    #       for GA release. This test case will fail at Tech Preview.
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83575813",
+            "serial": 83575813,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575813",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+    client = get_node_by_id(ceph_cluster, config["initiator_node"])
+    initiator = Initiator(client)
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img1 = f"{name}-image1"
+        img2 = f"{name}-image2"
+        rbd.create_image(pool, img1, "10G")
+        rbd.create_image(pool, img2, "5G")
+
+        for img in [img1, img2]:
+            gateway.create_block_device(img, img, pool)
+            gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+        # Run IOS on nvme namespaces
+        initiators(ceph_cluster, gateway, initiator_cfg)
+
+        def check(_node, size):
+            out, _ = _node.exec_command(sudo=True, cmd="lsblk -J")
+            for _img in json.loads(out)["blockdevices"]:
+                if _img["name"].startswith("nvme") and _img["size"] == size:
+                    return True
+            raise Exception(f"Did not find NVMe disk with Size {size}")
+
+        for _size in ["10G", "5G"]:
+            check(client, _size)
+
+        # shrink and expand the images
+        # validate the sizes at the client side
+        rbd.image_resize(pool, img1, "11G")
+        rbd.image_resize(pool, img2, "4G")
+        initiator.disconnect_all()
+        cmd_args = {
+            "transport": "tcp",
+            "traddr": gateway.node.ip_address,
+            "nqn": "nqn.2016-06.io.spdk:ceph_83575813",
+        }
+        conn_port = {"trsvcid": config["listener_port"]}
+        _conn_cmd = {**cmd_args, **conn_port}
+        LOG.debug(initiator.connect(**_conn_cmd))
+        for _size in ["11G", "4G"]:
+            check(client, _size)
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
@@ -556,6 +638,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83576085(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83576087":
             test_ceph_83576087(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83575813":
+            test_ceph_83575813(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
         LOG.error(err)
