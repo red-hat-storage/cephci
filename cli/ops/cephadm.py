@@ -1,6 +1,8 @@
 import json
 import tempfile
 
+import yaml
+
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError, ResourceNotFoundError
 from cli.utilities.configs import get_registry_details
@@ -19,6 +21,24 @@ CONTAINER_IMAGES = [
     "loki",
     "nvmeof",
 ]
+
+
+def generate_bootstrap_spec(nodes, **kw):
+    """Create bootstrap spec
+
+    Args:
+        nodes (list): List of CephNode objects
+        config (str): Bootstrap config
+    """
+    for spec in kw["apply-spec"]["spec"]:
+        if spec["service_type"] == "host":
+            hostname = spec["hostname"][-1]
+            spec["addr"] = nodes[int(hostname) - 1].ip_address
+            spec["hostname"] = nodes[int(hostname) - 1].hostname
+        else:
+            spec["placement"]["hosts"] = [
+                nodes[int(node[-1]) - 1].hostname for node in spec["placement"]["hosts"]
+            ]
 
 
 def generate_bootstrap_config(node, config):
@@ -48,6 +68,10 @@ def generate_bootstrap_config(node, config):
         elif file_type == "json":
             json.dump(config, _f)
 
+        elif file_type == "yaml":
+            for spec in config["spec"]:
+                yaml.dump(spec, _f, default_flow_style=False)
+                _f.write("---\n")
         else:
             return None
 
@@ -142,6 +166,8 @@ def bootstrap(
     # Check for bootstrap configs
     for k in kw.keys():
         if isinstance(kw.get(k), dict):
+            if k == "apply-spec":
+                generate_bootstrap_spec(nodes, **kw)
             kw[k] = generate_bootstrap_config(installer, kw.get(k))
 
     # Check for registry details
