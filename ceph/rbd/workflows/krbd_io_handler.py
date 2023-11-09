@@ -1,3 +1,4 @@
+from ceph.rbd.initial_config import random_string
 from ceph.rbd.utils import create_map_options, exec_cmd
 from ceph.rbd.workflows.cleanup import device_cleanup
 from cli.rbd.rbd import Rbd
@@ -44,6 +45,7 @@ def krbd_io_handler(**kw):
         3) Run time is per image
     """
     client = kw.get("client")
+    raise_exception = kw.get("raise_exception")
     if kw.get("rbd_obj"):
         rbd = kw.get("rbd")
     else:
@@ -54,6 +56,7 @@ def krbd_io_handler(**kw):
     operations = config["operations"]
     device_names = []
     mount_points = []
+    file_path = []
     return_flag = 0
 
     for image_spec in config["image_spec"]:
@@ -74,7 +77,10 @@ def krbd_io_handler(**kw):
                     )
                 if rbd.create(**create_config)[0]:
                     log.error(f"Image {image_name} creation failed")
-                    return 1, "Image creation failed"
+                    if raise_exception:
+                        raise Exception("Image creation failed")
+                    else:
+                        return 1, "Image creation failed"
 
             if operations.get("map"):
                 device_names.append(rbd.map(pool=pool_name, image=image_name)[:-1])
@@ -107,7 +113,10 @@ def krbd_io_handler(**kw):
                         f"RBD device map failed for {image_spec} and "
                         f"encryption_config: {config.get('encryption_config')}"
                     )
-                    return 1, err
+                    if raise_exception:
+                        raise Exception(err)
+                    else:
+                        return 1, err
                 device_names.append(out.strip())
 
             image_index = config["image_spec"].index(image_spec)
@@ -120,11 +129,17 @@ def krbd_io_handler(**kw):
                         type=operations.get("fs"),
                     )
                 # Creating mount directory and mouting device
-                mount_point = (
-                    config.get("file_path")[image_index].rsplit("/", 1)[0]
-                    if config.get("file_path")
-                    else f"/tmp/mp_{device_names[-1].split('/')[-1]}"
-                )
+                if config.get("file_path") == "create_rand_path":
+                    file_path.append(
+                        f"/tmp/{random_string(len=5)}_dir/{random_string(len=5)}_file"
+                    )
+                    mount_point = file_path[image_index].rsplit("/", 1)[0]
+                else:
+                    mount_point = (
+                        config.get("file_path")[image_index].rsplit("/", 1)[0]
+                        if config.get("file_path")
+                        else f"/tmp/mp_{device_names[-1].split('/')[-1]}"
+                    )
                 mount_points.append(mount_point)
                 mount_cmd = (
                     f"mkdir {mount_point}; mount {device_names[-1]} {mount_point}"
@@ -134,15 +149,21 @@ def krbd_io_handler(**kw):
                 out, err = exec_cmd(cmd=mount_cmd, node=client, all=True)
                 if err:
                     log.error(f"Mount failed for device: {device_names[-1]}")
-                    return 1, err
+                    if raise_exception:
+                        raise Exception(err)
+                    else:
+                        return 1, err
 
             if operations.get("io"):
                 if operations.get("mount"):
-                    file_name = (
-                        config.get("file_path")[image_index]
-                        if config.get("file_path")
-                        else f"{mount_point}/{image_name}"
-                    )
+                    if config.get("file_path") == "create_rand_path":
+                        file_name = file_path[image_index]
+                    else:
+                        file_name = (
+                            config.get("file_path")[image_index]
+                            if config.get("file_path")
+                            else f"{mount_point}/{image_name}"
+                        )
                     run_fio(
                         client_node=client,
                         filename=file_name,

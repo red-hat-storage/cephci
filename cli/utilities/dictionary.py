@@ -48,3 +48,31 @@ def get_first_value(key, dictionary):
         The first value for the given key from a nested dictionary
     """
     return str(list(get_values(key, dictionary))[0])
+
+
+def deep_update(dictionary, *update_dictionary):
+    """
+    Update nested dictionary.
+
+    Args:
+        dictionary: input nested dictionary
+        update_dictionary: nested dictionary to be updated
+
+    Returns:
+        Updated dictionary
+
+    Note: Works only in the case of dictionary of dictionaries.
+    Does not work when there is a dictionary of list of dictionaries.
+    """
+    updated_mapping = dictionary.copy()
+    for updating_mapping in update_dictionary:
+        for k, v in updating_mapping.items():
+            if (
+                k in updated_mapping
+                and isinstance(updated_mapping[k], dict)
+                and isinstance(v, dict)
+            ):
+                updated_mapping[k] = deep_update(updated_mapping[k], v)
+            else:
+                updated_mapping[k] = v
+    return updated_mapping

@@ -98,3 +98,31 @@ tests:
       module: test_rbd_encryption.py
       name: Encrypt image and clone using combinations of encryption type
       polarion-id: CEPH-83575251
+
+  - test:
+      desc: Have multiple clients and start IOs to the encrypted images and verify
+      config:
+        rep_pool_config:
+          num_pools: 1
+          num_images: 2
+          test_config:
+            encryption_type:
+              - luks1
+              - luks2
+            client:
+              - node3
+              - node4
+        ec_pool_config:
+          num_pools: 1
+          num_images: 2
+          test_config:
+            encryption_type:
+              - luks1
+              - luks2
+            client:
+              - node3
+              - node4
+      destroy-cluster: false
+      module: test_rbd_encryption_multi_client.py
+      name: test multiclient scenario for encrypted images
+      polarion-id: CEPH-83575259
