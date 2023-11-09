@@ -274,3 +274,9 @@ tests:
       polarion-id: CEPH-9407
       module: test_mon_addition_removal.py
       desc: Replace a Healthy Mon with a new MON
+
+  - test:
+      name: mon system tests
+      polarion-id: CEPH-9388
+      module: test_mon_system_operations.py
+      desc: Performing system tests with mon daemons

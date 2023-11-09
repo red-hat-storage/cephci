@@ -274,3 +274,10 @@ tests:
       config:
         osd_host_fail: True
       desc: Replacement of a failed OSD host with a healthy host
+
+
+  - test:
+      name: mon system tests
+      polarion-id: CEPH-9388
+      module: test_mon_system_operations.py
+      desc: Performing system tests with mon daemons

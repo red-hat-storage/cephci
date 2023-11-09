@@ -12,6 +12,7 @@ Module to perform tier-4 tests on pools WRT OSD daemons.
 """
 import datetime
 import json
+import random
 import time
 
 import yaml
@@ -19,6 +20,7 @@ import yaml
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.utils import get_node_by_id
 from tests.ceph_installer.test_cephadm import run as add_osd
 from tests.cephadm.test_host import run as deploy_host
@@ -394,6 +396,30 @@ def run(ceph_cluster, **kw) -> int:
         log.info(
             "---- Starting workflow ----\n---- 5. Removal and addition of OSD daemons"
         )
+
+        # Removing a mon daemon and adding it back post OSD addition.
+        mon_obj = MonitorWorkflows(node=cephadm)
+        # Setting the mon service as unmanaged by cephadm
+        if not mon_obj.set_mon_service_managed_type(unmanaged=True):
+            log.error("Could not set the mon service to managed")
+            raise Exception("mon service not managed error")
+
+        init_mon_nodes = ceph_cluster.get_nodes(role="mon")
+        # Selecting one mon host to be removed at random during OSD down
+        test_mon_host = random.choice(init_mon_nodes)
+
+        # Removing mon service
+        if not mon_obj.remove_mon_service(host=test_mon_host.hostname):
+            log.error("Could not remove the new mon added previously")
+            raise Exception("mon service not removed error")
+
+        quorum = mon_obj.get_mon_quorum_hosts()
+        if test_mon_host.hostname in quorum:
+            log.error(
+                f"selected host : {test_mon_host.hostname} is present as part of Quorum post removal"
+            )
+            raise Exception("Mon in quorum error post removal error")
+
         for pool in pools:
             pg_set = rados_obj.get_pg_acting_set(pool_name=pool)
             log.debug(f"Acting set for removal and addition of OSDs {pg_set}")
@@ -434,6 +460,23 @@ def run(ceph_cluster, **kw) -> int:
 
             utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
 
+        # Adding the mon back to the cluster
+        if not mon_obj.add_mon_service(host=test_mon_host):
+            log.error(f"Could not add mon service on host {test_mon_host}")
+            raise Exception("mon service not added error")
+
+        # Setting the mon service as managed by cephadm
+        if not mon_obj.set_mon_service_managed_type(unmanaged=False):
+            log.error("Could not set the mon service to managed")
+            raise Exception("mon service not managed error")
+
+        # Checking if the mon added is part of Mon Quorum
+        quorum = mon_obj.get_mon_quorum_hosts()
+        if test_mon_host.hostname not in quorum:
+            log.error(
+                f"selected host : {test_mon_host.hostname} does not have mon as part of Quorum post addition "
+            )
+            raise Exception("Mon not in quorum error")
         log.info("---- Completed workflows 5. Removal and addition of OSD daemons ----")
 
         log.info(
