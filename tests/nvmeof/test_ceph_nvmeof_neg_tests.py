@@ -27,8 +27,8 @@ from utility.utils import find_free_port, generate_unique_id
 LOG = Log(__name__)
 
 
-def remove(ceph_cluster, rbd, pool, config):
-    """Remove the image during NVMe images are in use."""
+def test_ceph_83575812(ceph_cluster, rbd, pool, config):
+    """CEPH-83575812 Remove the image during NVMe images are in use."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
     listener_port = find_free_port(gw_node)
@@ -42,41 +42,44 @@ def remove(ceph_cluster, rbd, pool, config):
         }
     )
 
-    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
-    configure_subsystems(rbd, pool, gateway, subsystem)
-    name = generate_unique_id(length=4)
-
-    # Create image
-    img = f"{name}-image"
-    rbd.create_image(pool, img, "1G")
-    gateway.create_block_device(img, img, pool)
-    gateway.add_namespace(subsystem["nqn"], img)
-
     initiator_cfg = {
         "subnqn": "nqn.2016-06.io.spdk:cnode_negative",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
-    config.update(initiator_cfg)
-    with parallel() as p:
-        p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
-        sleep(20)
-        out, err = rbd.remove_image(pool, img, **{"all": True, "check_ec": False})
-        if "rbd: error: image still has watchers" not in out + err:
-            raise Exception("RBD image removed when its in use.")
-        LOG.info("RBD image removal failed as expected when its in use....")
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
 
-    cleanup_cfg = {
-        "gw_node": config["gw_node"],
-        "initiators": [initiator_cfg],
-        "cleanup": ["initiators", "gateway", "pool"],
-        "rbd_pool": pool,
-    }
-    teardown(ceph_cluster, rbd, cleanup_cfg)
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "1G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+        with parallel() as p:
+            p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
+            sleep(20)
+            out, err = rbd.remove_image(pool, img, **{"all": True, "check_ec": False})
+            if "rbd: error: image still has watchers" not in out + err:
+                raise Exception("RBD image removed when its in use.")
+            LOG.info("RBD image removal failed as expected when its in use....")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
 def test_ceph_83576084(ceph_cluster, rbd, pool, config):
-    """Validate test case CEPH-83576084."""
+    """CEPH-83576084: Delete-recreate bdev in loop and rediscover namespace."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
 
@@ -90,35 +93,198 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
             "allow_host": "*",
         }
     )
-
-    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
-    configure_subsystems(rbd, pool, gateway, subsystem)
-    name = generate_unique_id(length=4)
-
-    # Create image
-    img = f"{name}-image"
-    rbd.create_image(pool, img, "1G")
-    gateway.create_block_device(img, img, pool)
-    gateway.add_namespace(subsystem["nqn"], img)
-
     initiator_cfg = {
         "subnqn": "nqn.2016-06.io.spdk:ceph_83576084",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
-    config.update(initiator_cfg)
-    client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "1G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+        client = get_node_by_id(ceph_cluster, config["node"])
+        initiator = Initiator(client)
+        cmd_args = {
+            "transport": "tcp",
+            "traddr": gateway.node.ip_address,
+        }
+
+        json_format = {"output-format": "json"}
+        _dir = f"/tmp/dir_{generate_unique_id(4)}"
+        _file = f"{_dir}/test.log"
+
+        def check_client(verify=False):
+            disc_port = {"trsvcid": listener_port}
+            _disc_cmd = {**cmd_args, **disc_port, **json_format}
+            initiator.disconnect_all()
+            sub_nqns, _ = initiator.discover(**_disc_cmd)
+            LOG.debug(sub_nqns)
+            _cmd_args = deepcopy(cmd_args)
+            for nqn in json.loads(sub_nqns)["records"]:
+                if nqn["trsvcid"] == listener_port:
+                    _cmd_args["nqn"] = nqn["subnqn"]
+                    break
+            else:
+                raise Exception(f"Subsystem not found -- {cmd_args}")
+
+            # Connect to the subsystem
+            conn_port = {"trsvcid": listener_port}
+            _conn_cmd = {**_cmd_args, **conn_port}
+            LOG.debug(initiator.connect(**_conn_cmd))
+            targets, _ = initiator.list(**json_format)
+            _target = json.loads(targets)["Devices"][0]["DevicePath"]
+            if not verify:
+                return _target
+            client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+            client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+
+        target = check_client()
+        client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {target}")
+        client.exec_command(sudo=True, cmd=f"mount {target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
+
+        for _ in "check":
+            client.exec_command(sudo=True, cmd=f"umount {_dir}")
+            gateway.remove_namespace(subsystem["nqn"], img)
+            gateway.add_namespace(subsystem["nqn"], img)
+            check_client(verify=True)
+
+        LOG.info("Validation of CEPH-83576084 is successful.")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
+def test_ceph_83575467(ceph_cluster, rbd, pool, config):
+    """CEPH-83575467: Perform restart and validate the gateway entities"""
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83575467",
+            "serial": 111,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575467",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
+
+        # Create images
+        for i in range(5):
+            img = f"{name}-image{i}"
+            rbd.create_image(pool, img, "500M")
+            gateway.create_block_device(img, img, pool)
+            gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+        initiators(ceph_cluster, gateway, initiator_cfg)
+        _, gw_info_bkp = gateway.get_subsystems()
+        gw_info_bkp = json.loads(gw_info_bkp.split("\n", 1)[1])
+
+        # restart nvmeof service
+        restart_cfg = {
+            "config": {
+                "service": f"nvmeof.{pool}",
+                "command": "restart",
+                "args": {"verify": True},
+                "pos_args": [f"nvmeof.{pool}"],
+            }
+        }
+        test_orch.run(ceph_cluster, **restart_cfg)
+        _, gw_info = gateway.get_subsystems()
+        gw_info = json.loads(gw_info.split("\n", 1)[1])
+
+        if gw_info != gw_info_bkp:
+            raise Exception(
+                f"GW Entities aren't same. Actual: {gw_info_bkp} Current: {gw_info}"
+            )
+        LOG.info("Validation of Ceph-83575467 is successful.")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
+def test_ceph_83576085(ceph_cluster, rbd, pool, config):
+    """CEPH-83576085: Perform map and unmap NVMe namespaces in loop."""
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83576085",
+            "serial": 113,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83576085",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,
+        "trsvcid": listener_port,
     }
 
     json_format = {"output-format": "json"}
     _dir = f"/tmp/dir_{generate_unique_id(4)}"
     _file = f"{_dir}/test.log"
 
-    def check_client(verify=False):
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "1G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+        client = get_node_by_id(ceph_cluster, config["node"])
+        initiator = Initiator(client)
+
         disc_port = {"trsvcid": listener_port}
         _disc_cmd = {**cmd_args, **disc_port, **json_format}
         initiator.disconnect_all()
@@ -138,185 +304,31 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         LOG.debug(initiator.connect(**_conn_cmd))
         targets, _ = initiator.list(**json_format)
         _target = json.loads(targets)["Devices"][0]["DevicePath"]
-        if not verify:
-            return _target
+
+        client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
         client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
-        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+        client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
 
-    target = check_client()
-    client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-    client.exec_command(sudo=True, cmd=f"mkfs.ext4 {target}")
-    client.exec_command(sudo=True, cmd=f"mount {target} {_dir}")
-    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
-
-    for _ in "check":
-        client.exec_command(sudo=True, cmd=f"umount {_dir}")
-        gateway.remove_namespace(subsystem["nqn"], img)
-        gateway.add_namespace(subsystem["nqn"], img)
-        check_client(verify=True)
-
-    LOG.info("Validation of CEPH-83576084 is successful.")
-
-    cleanup_cfg = {
-        "gw_node": config["gw_node"],
-        "initiators": [initiator_cfg],
-        "cleanup": ["initiators", "gateway", "pool"],
-        "rbd_pool": pool,
-    }
-    teardown(ceph_cluster, rbd, cleanup_cfg)
-
-
-def test_ceph_83575467(ceph_cluster, rbd, pool, config):
-    """Validate test case CEPH-83575467."""
-    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
-
-    subsystem = dict()
-    listener_port = find_free_port(gw_node)
-    subsystem.update(
-        {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83575467",
-            "serial": 111,
-            "listener_port": listener_port,
-            "allow_host": "*",
+        for _ in "check":
+            client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+            client.exec_command(sudo=True, cmd=f"umount {_dir}")
+            client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        LOG.info("Validation of CEPH-83576085 is successful.")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
         }
-    )
-
-    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
-    configure_subsystems(rbd, pool, gateway, subsystem)
-    name = generate_unique_id(length=4)
-
-    # Create images
-    for i in range(5):
-        img = f"{name}-image{i}"
-        rbd.create_image(pool, img, "500M")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
-
-    initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83575467",
-        "listener_port": listener_port,
-        "node": config["initiator_node"],
-    }
-    config.update(initiator_cfg)
-    initiators(ceph_cluster, gateway, initiator_cfg)
-    _, gw_info_bkp = gateway.get_subsystems()
-    gw_info_bkp = json.loads(gw_info_bkp.split("\n", 1)[1])
-
-    # restart nvmeof service
-    restart_cfg = {
-        "config": {
-            "service": f"nvmeof.{pool}",
-            "command": "restart",
-            "args": {"verify": True},
-            "pos_args": [f"nvmeof.{pool}"],
-        }
-    }
-    test_orch.run(ceph_cluster, **restart_cfg)
-    _, gw_info = gateway.get_subsystems()
-    gw_info = json.loads(gw_info.split("\n", 1)[1])
-
-    if gw_info != gw_info_bkp:
-        raise Exception(
-            f"GW Entities aren't same. Actual: {gw_info_bkp} Current: {gw_info}"
-        )
-    LOG.info("Validation of Ceph-83575467 is successful.")
-
-    cleanup_cfg = {
-        "gw_node": config["gw_node"],
-        "initiators": [initiator_cfg],
-        "cleanup": ["initiators", "gateway", "pool"],
-        "rbd_pool": pool,
-    }
-    teardown(ceph_cluster, rbd, cleanup_cfg)
-
-
-def test_ceph_83576085(ceph_cluster, rbd, pool, config):
-    """Validate test case CEPH-83576085."""
-    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
-
-    subsystem = dict()
-    listener_port = find_free_port(gw_node)
-    subsystem.update(
-        {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83576085",
-            "serial": 113,
-            "listener_port": listener_port,
-            "allow_host": "*",
-        }
-    )
-
-    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
-    configure_subsystems(rbd, pool, gateway, subsystem)
-    name = generate_unique_id(length=4)
-
-    # Create image
-    img = f"{name}-image"
-    rbd.create_image(pool, img, "1G")
-    gateway.create_block_device(img, img, pool)
-    gateway.add_namespace(subsystem["nqn"], img)
-
-    initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83576085",
-        "listener_port": listener_port,
-        "node": config["initiator_node"],
-    }
-    config.update(initiator_cfg)
-    client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
-    cmd_args = {
-        "transport": "tcp",
-        "traddr": gateway.node.ip_address,
-        "trsvcid": listener_port,
-    }
-
-    json_format = {"output-format": "json"}
-    _dir = f"/tmp/dir_{generate_unique_id(4)}"
-    _file = f"{_dir}/test.log"
-
-    disc_port = {"trsvcid": listener_port}
-    _disc_cmd = {**cmd_args, **disc_port, **json_format}
-    initiator.disconnect_all()
-    sub_nqns, _ = initiator.discover(**_disc_cmd)
-    LOG.debug(sub_nqns)
-    _cmd_args = deepcopy(cmd_args)
-    for nqn in json.loads(sub_nqns)["records"]:
-        if nqn["trsvcid"] == listener_port:
-            _cmd_args["nqn"] = nqn["subnqn"]
-            break
-    else:
-        raise Exception(f"Subsystem not found -- {cmd_args}")
-
-    # Connect to the subsystem
-    conn_port = {"trsvcid": listener_port}
-    _conn_cmd = {**_cmd_args, **conn_port}
-    LOG.debug(initiator.connect(**_conn_cmd))
-    targets, _ = initiator.list(**json_format)
-    _target = json.loads(targets)["Devices"][0]["DevicePath"]
-
-    client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-    client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
-    client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
-    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
-
-    for _ in "check":
-        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
-        client.exec_command(sudo=True, cmd=f"umount {_dir}")
-        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
-    LOG.info("Validation of CEPH-83576085 is successful.")
-
-    cleanup_cfg = {
-        "gw_node": config["gw_node"],
-        "initiators": [initiator_cfg],
-        "cleanup": ["initiators", "gateway", "pool"],
-        "rbd_pool": pool,
-    }
-    teardown(ceph_cluster, rbd, cleanup_cfg)
+        teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
 def test_ceph_83576087(ceph_cluster, rbd, pool, config):
-    """Validate test case CEPH-83576087."""
+    """CEPH-83576087: Reboot client node and validate NVMe namespaces"""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
 
@@ -331,24 +343,12 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         }
     )
 
-    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
-    configure_subsystems(rbd, pool, gateway, subsystem)
-    name = generate_unique_id(length=4)
-
-    # Create image
-    img = f"{name}-image"
-    rbd.create_image(pool, img, "1G")
-    gateway.create_block_device(img, img, pool)
-    gateway.add_namespace(subsystem["nqn"], img)
-
     initiator_cfg = {
         "subnqn": "nqn.2016-06.io.spdk:ceph_83576087",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
-    config.update(initiator_cfg)
-    client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
+
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,
@@ -359,54 +359,71 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     _dir = f"/tmp/dir_{generate_unique_id(4)}"
     _file = f"{_dir}/test.log"
 
-    initiator.disconnect_all()
-    disc_port = {"trsvcid": listener_port}
-    _disc_cmd = {**cmd_args, **disc_port, **json_format}
-    sub_nqns, _ = initiator.discover(**_disc_cmd)
-    LOG.debug(sub_nqns)
-    _cmd_args = deepcopy(cmd_args)
-    for nqn in json.loads(sub_nqns)["records"]:
-        if nqn["trsvcid"] == str(config["listener_port"]):
-            _cmd_args["nqn"] = nqn["subnqn"]
-            break
-    else:
-        raise Exception(f"Subsystem not found -- {cmd_args}")
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
 
-    # Connect to the subsystem
-    conn_port = {"trsvcid": listener_port}
-    _conn_cmd = {**_cmd_args, **conn_port}
-    LOG.debug(initiator.connect(**_conn_cmd))
-    targets, _ = initiator.list(**json_format)
-    _target = json.loads(targets)["Devices"][0]["DevicePath"]
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "1G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
 
-    client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-    client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
-    client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
-    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
-    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+        config.update(initiator_cfg)
+        client = get_node_by_id(ceph_cluster, config["node"])
+        initiator = Initiator(client)
 
-    # Reboot client node and re-mount the namespaces.
-    # Discover and reconnect to subsystem and validate the files on the mount-points.
-    reboot_node(client)
-    initiator.configure()
-    LOG.debug(initiator.connect(**_cmd_args))
-    targets, _ = initiator.list(**json_format)
-    _target = json.loads(targets)["Devices"][0]["DevicePath"]
-    client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
-    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
-    LOG.info("Validation of CEPH-83576087 is successful.")
+        initiator.disconnect_all()
+        disc_port = {"trsvcid": listener_port}
+        _disc_cmd = {**cmd_args, **disc_port, **json_format}
+        sub_nqns, _ = initiator.discover(**_disc_cmd)
+        LOG.debug(sub_nqns)
+        _cmd_args = deepcopy(cmd_args)
+        for nqn in json.loads(sub_nqns)["records"]:
+            if nqn["trsvcid"] == str(config["listener_port"]):
+                _cmd_args["nqn"] = nqn["subnqn"]
+                break
+        else:
+            raise Exception(f"Subsystem not found -- {cmd_args}")
 
-    cleanup_cfg = {
-        "gw_node": config["gw_node"],
-        "initiators": [initiator_cfg],
-        "cleanup": ["initiators", "gateway", "pool"],
-        "rbd_pool": pool,
-    }
-    teardown(ceph_cluster, rbd, cleanup_cfg)
+        # Connect to the subsystem
+        conn_port = {"trsvcid": listener_port}
+        _conn_cmd = {**_cmd_args, **conn_port}
+        LOG.debug(initiator.connect(**_conn_cmd))
+        targets, _ = initiator.list(**json_format)
+        _target = json.loads(targets)["Devices"][0]["DevicePath"]
+
+        client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
+        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
+        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+
+        # Reboot client node and re-mount the namespaces.
+        # Discover and reconnect to subsystem and validate the files on the mount-points.
+        reboot_node(client)
+        initiator.configure()
+        LOG.debug(initiator.connect(**_cmd_args))
+        targets, _ = initiator.list(**json_format)
+        _target = json.loads(targets)["Devices"][0]["DevicePath"]
+        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+        LOG.info("Validation of CEPH-83576087 is successful.")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
 def test_ceph_83576093(ceph_cluster, rbd, pool, config):
-    """Validate test case CEPH-83576093."""
+    """CEPH-83576093: Perform reboot on GW node and validate the namespaces."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
 
@@ -420,86 +437,89 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
             "allow_host": "*",
         }
     )
-
-    subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
-    configure_subsystems(rbd, pool, gateway, subsystem)
-    name = generate_unique_id(length=4)
-
-    # Create image
-    img = f"{name}-image"
-    rbd.create_image(pool, img, "1G")
-    gateway.create_block_device(img, img, pool)
-    gateway.add_namespace(subsystem["nqn"], img)
-
     initiator_cfg = {
         "subnqn": "nqn.2016-06.io.spdk:ceph_83576093",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
-    config.update(initiator_cfg)
-    client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
-    cmd_args = {
-        "transport": "tcp",
-        "traddr": gateway.node.ip_address,
-        "trsvcid": listener_port,
-    }
 
-    json_format = {"output-format": "json"}
-    _dir = f"/tmp/dir_{generate_unique_id(4)}"
-    _file = f"{_dir}/test.log"
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
 
-    disc_port = {"trsvcid": listener_port}
-    _disc_cmd = {**cmd_args, **disc_port, **json_format}
-    initiator.disconnect_all()
-    sub_nqns, _ = initiator.discover(**_disc_cmd)
-    LOG.debug(sub_nqns)
-    _cmd_args = deepcopy(cmd_args)
-    for nqn in json.loads(sub_nqns)["records"]:
-        if nqn["trsvcid"] == listener_port:
-            _cmd_args["nqn"] = nqn["subnqn"]
-            break
-    else:
-        raise Exception(f"Subsystem not found -- {cmd_args}")
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "1G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
 
-    # Connect to the subsystem
-    conn_port = {"trsvcid": listener_port}
-    _conn_cmd = {**_cmd_args, **conn_port}
-    LOG.debug(initiator.connect(**_conn_cmd))
-    targets, _ = initiator.list(**json_format)
-    _target = json.loads(targets)["Devices"][0]["DevicePath"]
+        config.update(initiator_cfg)
+        client = get_node_by_id(ceph_cluster, config["node"])
+        initiator = Initiator(client)
+        cmd_args = {
+            "transport": "tcp",
+            "traddr": gateway.node.ip_address,
+            "trsvcid": listener_port,
+        }
 
-    client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-    client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
-    client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
-    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
-    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+        json_format = {"output-format": "json"}
+        _dir = f"/tmp/dir_{generate_unique_id(4)}"
+        _file = f"{_dir}/test.log"
 
-    # Reboot NVMeoF GW node and wait for the node recovery.
-    # Wait for the GW service to be up and running.
-    reboot_node(gw_node)
-    check_service_exists(
-        ceph_cluster.get_nodes(role="installer")[0],
-        service_name=f"nvmeof.{pool}",
-        service_type="nvmeof",
-    )
-    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
-    client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}_test")
-    client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}_test")
-    LOG.info("Validation of CEPH-83576093 is successful.")
+        disc_port = {"trsvcid": listener_port}
+        _disc_cmd = {**cmd_args, **disc_port, **json_format}
+        initiator.disconnect_all()
+        sub_nqns, _ = initiator.discover(**_disc_cmd)
+        LOG.debug(sub_nqns)
+        _cmd_args = deepcopy(cmd_args)
+        for nqn in json.loads(sub_nqns)["records"]:
+            if nqn["trsvcid"] == listener_port:
+                _cmd_args["nqn"] = nqn["subnqn"]
+                break
+        else:
+            raise Exception(f"Subsystem not found -- {cmd_args}")
 
-    client.exec_command(sudo=True, cmd=f"umount {_dir}")
-    cleanup_cfg = {
-        "gw_node": config["gw_node"],
-        "initiators": [initiator_cfg],
-        "cleanup": ["initiators", "gateway", "pool"],
-        "rbd_pool": pool,
-    }
-    teardown(ceph_cluster, rbd, cleanup_cfg)
+        # Connect to the subsystem
+        conn_port = {"trsvcid": listener_port}
+        _conn_cmd = {**_cmd_args, **conn_port}
+        LOG.debug(initiator.connect(**_conn_cmd))
+        targets, _ = initiator.list(**json_format)
+        _target = json.loads(targets)["Devices"][0]["DevicePath"]
+
+        client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
+        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
+        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+
+        # Reboot NVMeoF GW node and wait for the node recovery.
+        # Wait for the GW service to be up and running.
+        reboot_node(gw_node)
+        check_service_exists(
+            ceph_cluster.get_nodes(role="installer")[0],
+            service_name=f"nvmeof.{pool}",
+            service_type="nvmeof",
+        )
+        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+        client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}_test")
+        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}_test")
+        client.exec_command(sudo=True, cmd=f"umount {_dir}")
+        LOG.info("Validation of CEPH-83576093 is successful.")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
 def test_ceph_83575813(ceph_cluster, rbd, pool, config):
-    """Validate test case CEPH-83575813."""
+    """CEPH-83575813: Perform RBD operations shrink and expand on images."""
     # Todo: This Test case has to be re-visited,
     #       since this issue at RBD operations are considered
     #       for GA release. This test case will fail at Tech Preview.
@@ -568,6 +588,7 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
         LOG.debug(initiator.connect(**_conn_cmd))
         for _size in ["11G", "4G"]:
             check(client, _size)
+        LOG.info("Validation of CEPH-83575813 is successful.")
     except Exception as err:
         raise Exception(err)
     finally:
@@ -628,8 +649,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             }
         }
         test_nvmeof.run(ceph_cluster, **cfg)
-        if config["operation"] == "remove":
-            remove(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83575812":
+            test_ceph_83575812(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83576084":
             test_ceph_83576084(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83575467":
@@ -640,6 +661,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83576087(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83575813":
             test_ceph_83575813(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83575813":
+            test_ceph_83576093(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
         LOG.error(err)

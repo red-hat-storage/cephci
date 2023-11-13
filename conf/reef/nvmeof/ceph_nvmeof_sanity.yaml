@@ -36,5 +36,6 @@ globals:
           - client
           - nvmeof-gw
       node7:
+        id: node10
         role:
           - client

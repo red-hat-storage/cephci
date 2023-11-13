@@ -76,6 +76,7 @@ globals:
             - osd
             - rgw
             - nfs
+            - nvmeof
           root_password: passwd
           volumes:
             - /dev/sda

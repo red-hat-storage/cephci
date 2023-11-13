@@ -131,9 +131,9 @@ tests:
         initiators:
             subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
-            node: node6
+            node: node10
         run_io:
-          - node: node6
+          - node: node10
             io_type: write
       desc: test with 1 subsystem and 256 namespaces in Single GW
       destroy-cluster: false
