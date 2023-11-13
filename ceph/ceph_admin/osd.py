@@ -205,15 +205,16 @@ class OSD(ApplyMixin, Orch):
             except json.decoder.JSONDecodeError:
                 break
 
-        # validate OSD removal
-        out, verify = self.shell(
-            args=["ceph", "osd", "tree", "-f", "json"],
-        )
-        out = json.loads(out)
-        for id_ in out["nodes"]:
-            if id_["id"] == osd_id:
-                LOG.error("OSD Removed ID found")
-                raise AssertionError("fail, OSD is present still after removing")
+        if config.get("validate", True):
+            # validate OSD removal
+            out, verify = self.shell(
+                args=["ceph", "osd", "tree", "-f", "json"],
+            )
+            out = json.loads(out)
+            for id_ in out["nodes"]:
+                if int(id_["id"]) == int(osd_id):
+                    LOG.error("OSD Removed ID found")
+                    raise AssertionError("fail, OSD is present still after removing")
         LOG.info(f" OSD {osd_id} Removal is successful")
 
     def out(self, config: Dict):

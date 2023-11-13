@@ -2386,32 +2386,56 @@ class RadosOrchestrator:
         log.info("Completed setting/unsetting the network delay and packet drops")
         return True
 
+    def configure_host_as_client(self, host_node):
+        """
+        Purpose of this module is to configure the ceph keyring and conf
+        on a cluster host which is not installer to run ceph commands from
+        it
+        Args:
+            host_node: node object of the host which needs to be converted
+        Returns: None
+        """
+        # copy /etc/ceph/ files to input host
+        ceph_conf, _ = self.node.shell(["cat /etc/ceph/ceph.conf"])
+        ceph_keyring, _ = self.node.shell(["cat /etc/ceph/ceph.keyring"])
+        host_node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
 
-def configure_host_as_client(self, host_node):
-    """
-    Purpose of this module is to configure the ceph keyring and conf
-    on a cluster host which is not installer to run ceph commands from
-    it
-    Args:
-        host_node: node object of the host which needs to be converted
-    Returns: None
-    """
-    # copy /etc/ceph/ files to input host
-    ceph_conf, _ = self.node.shell(["cat /etc/ceph/ceph.conf"])
-    ceph_keyring, _ = self.node.shell(["cat /etc/ceph/ceph.keyring"])
-    host_node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+        for cont in [ceph_conf, ceph_keyring]:
+            file_name = (
+                "/etc/ceph/ceph.conf" if cont == ceph_conf else "/etc/ceph/ceph.keyring"
+            )
+            file_ = host_node.remote_file(sudo=True, file_name=file_name, file_mode="w")
+            file_.write(cont)
+            file_.flush()
+            file_.close()
 
-    for cont in [ceph_conf, ceph_keyring]:
-        file_name = (
-            "/etc/ceph/ceph.conf" if cont == ceph_conf else "/etc/ceph/ceph.keyring"
-        )
-        file_ = host_node.remote_file(sudo=True, file_name=file_name, file_mode="w")
-        file_.write(cont)
-        file_.flush()
-        file_.close()
+        # Checking and installing ceph-common package on host
+        try:
+            out, rc = host_node.exec_command(
+                sudo=True, cmd="rpm -qa | grep ceph-common"
+            )
+        except Exception:
+            host_node.exec_command(sudo=True, cmd="yum install -y ceph-common")
 
-    # Checking and installing ceph-common package on host
-    try:
-        out, rc = host_node.exec_command(sudo=True, cmd="rpm -qa | grep ceph-common")
-    except Exception:
-        host_node.exec_command(sudo=True, cmd="yum install -y ceph-common")
+    def fetch_osd_status(self, _osd_id) -> str:
+        """
+        Return the status of input osd from ceph osd tree output
+        Args:
+            _osd_id: ID of OSD for which status if to be fetched
+        Returns:
+            status of the input OSD in string format
+        """
+        osd_found = False
+        # check flag value in ceph osd tree output for chosen OSD
+        try:
+            osd_tree_out = self.run_ceph_command(cmd="ceph osd tree")["nodes"]
+            for value in osd_tree_out:
+                if int(value["id"]) == int(_osd_id):
+                    osd_found = True
+                    break
+            if not osd_found:
+                log.error("Input OSD not found in ceph osd tree output")
+                raise Exception("Input OSD not found in ceph osd tree output")
+            return value["status"]
+        except Exception:
+            raise
