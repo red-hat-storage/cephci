@@ -178,4 +178,9 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring.py
       name: Validate the Synchronisation is successful upon enabling fs mirroring.
       polarion-id: "CEPH-83574099"
-
+  - test:
+      abort-on-fail: false
+      desc: "Configure CephFS Mirroring modification of source and target cluster"
+      module: cephfs_mirroring.validate_file_dir_stats_modification_on_mirrored_cluster.py
+      name: validate_file_dir_stats_modification_on_mirrored_cluster
+      polarion-id: "CEPH-83575625"
