@@ -588,7 +588,7 @@ class PoolFunctions:
         obj_num: int,
         check: bool = True,
         obj_check: bool = True,
-        timeout: int = 240,
+        timeout: int = 600,
     ) -> bool:
         """
         Perform deep-scrub on given pool and check if "Large omap object"
@@ -639,3 +639,63 @@ class PoolFunctions:
             return True
         log.error("Large omap warning did not appear as per expectation")
         return False
+
+    def perform_omap_operation(self, pool: str, obj: str, ops: str, **kwargs):
+        """
+        Module to perform specific operations on OMAP entries in an Object
+        Args:
+            pool: pool name which has objects with omap
+            obj: object name having omap entries
+            ops: any of the following operations :
+
+                - listomapkeys <obj-name>          list the keys in the object map
+                - listomapvals <obj-name>          list the keys and vals in the object map
+                - getomapval <obj-name> <key> [file] show the value for the specified key in the object's object map
+                - setomapval <obj-name> <key> <val | --input-file file>
+                - rmomapkey <obj-name> <key>       Remove key from the object map of <obj-name>
+                - clearomap <obj-name> [obj-name2 obj-name3...] clear all the omap keys for the specified objects
+                - getomapheader <obj-name> [file]  Dump the hexadecimal value of the object map header of <obj-name>
+                - setomapheader <obj-name> <val>   Set the value of the object map header of <obj-name>
+            kwargs: any additional input needed for a particular operation
+
+                - key is required for getomapval (kwargs['key'])
+                - key and value are required for setomapval (kwargs['key']) | (kwargs['val'])
+                - list of objects may be provided to clearomap (kwargs['obj_list'])
+        Returns: output of the rados command
+        """
+        log.debug(
+            f"Inputs provided: \n"
+            f"Pool name: {pool} \n"
+            f"Object name: {obj} \n"
+            f"Operation selected: {ops}"
+        )
+        base_cmd = f"rados -p {pool} {ops} {obj}"
+        if ops in ["listomapkeys", "listomapvals", "getomapheader"]:
+            _cmd = base_cmd
+        elif ops in ["getomapval", "rmomapkey"]:
+            if not kwargs.get("key"):
+                log.error(f"Need key to perform {ops} operation")
+                return
+            _cmd = f"{base_cmd} {kwargs['key']}"
+        elif ops == "setomapval":
+            if not kwargs.get("key") or not kwargs.get("val"):
+                log.error("Need both key and value to perform setomapval operation")
+                return
+            _cmd = f"{base_cmd} {kwargs['key']} {kwargs['val']}"
+        elif ops == "clearomap":
+            _cmd = (
+                f"{base_cmd} {kwargs['obj_list']}"
+                if kwargs.get("obj_list")
+                else base_cmd
+            )
+        elif ops == "setomapheader":
+            if not kwargs.get("val"):
+                log.error(f"Need value to perform {ops} operation")
+                return
+            _cmd = f"{base_cmd} {kwargs['val']}"
+        else:
+            log.error("Invalid operation, try again")
+            return
+
+        log.info(f"Executing command: {_cmd}")
+        return self.node.shell([_cmd])

@@ -404,14 +404,14 @@ class RadosOrchestrator:
         Args:
             pool_name: pool on which the operation will be performed
             kwargs: Any other param that needs to passed
-            1. rados_write_duration -> duration of write operation (int)
-            2. byte_size -> size of objects to be written (str)
-                eg : 10KB, 4096
-            3. max_objs -> max number of objects to be written (int)
-            4. verify_stats -> arg to control whether obj stats need to
-            be verified after write (bool) | default: True
-            5. rados_write_duration -> Duration for which the bench should be written on pool
-            6. check_ec -> If true, the method will wait to collect the exit status of the run, else will return
+                - rados_write_duration -> duration of write operation (int)
+                - byte_size -> size of objects to be written (str)
+                    eg : 10KB, 4096
+                - max_objs -> max number of objects to be written (int)
+                - verify_stats -> arg to control whether obj stats need to
+                  be verified after write (bool) | default: True
+                - check_ec (bool) -> boolean to control exit code check
+                - background (bool) -> run rados bench as background process and continue with test execution
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
@@ -423,6 +423,10 @@ class RadosOrchestrator:
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
+        log.info(f"check_ec: {check_ec}")
+        if kwargs.get("background"):
+            check_ec = False
+            cmd = f"{cmd} &> /dev/null &"
 
         try:
             self.node.shell([cmd], check_status=check_ec)
