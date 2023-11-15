@@ -79,7 +79,7 @@ def initiators(ceph_cluster, gateway, config):
     json_format = {"output-format": "json"}
 
     # Discover the subsystems
-    discovery_port = {"trsvcid": 8009}
+    discovery_port = {"trsvcid": config["listener_port"]}
     _disc_cmd = {**cmd_args, **discovery_port, **json_format}
     sub_nqns, _ = initiator.discover(**_disc_cmd)
     LOG.debug(sub_nqns)

@@ -83,7 +83,7 @@ tests:
             cache_file_size: 1073741824          # 1 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdb
+            drive: /dev/nvme0n1
             cleanup: true
             rep-pool-only: True
             rep_pool_config:
@@ -104,7 +104,7 @@ tests:
             cache_file_size: 2147483648          # 2 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdc
+            drive: /dev/nvme0n1
             cleanup: true
             rep-pool-only: True
             rep_pool_config:
@@ -125,7 +125,7 @@ tests:
             cache_file_size: 4294967296          # 4 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdd
+            drive: /dev/nvme0n1
             cleanup: true
             rep-pool-only: True
             rep_pool_config:
@@ -154,7 +154,7 @@ tests:
             cache_file_size: 1073741824          # 1 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdb
+            drive: /dev/nvme0n1
             cleanup: true
             validate_cache_size: true
             rep-pool-only: True
@@ -176,7 +176,7 @@ tests:
             cache_file_size: 2147483648          # 2 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdc
+            drive: /dev/nvme0n1
             cleanup: true
             validate_cache_size: true
             rep-pool-only: True
@@ -198,7 +198,7 @@ tests:
             cache_file_size: 4294967296          # 4 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdd
+            drive: /dev/nvme0n1
             cleanup: true
             validate_cache_size: true
             rep-pool-only: True
@@ -228,7 +228,7 @@ tests:
             cache_file_size: 1073741824          # 1 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdb
+            drive: /dev/nvme0n1
             cleanup: true
             validate_cache_path: true
             rep-pool-only: True
@@ -250,7 +250,7 @@ tests:
             cache_file_size: 2147483648          # 2 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdc
+            drive: /dev/nvme0n1
             cleanup: true
             validate_cache_path: true
             rep-pool-only: True
@@ -272,7 +272,7 @@ tests:
             cache_file_size: 4294967296          # 4 GB
             rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
             client: node6
-            drive: /dev/sdd
+            drive: /dev/nvme0n1
             cleanup: true
             validate_cache_path: true
             rep-pool-only: True
@@ -296,7 +296,7 @@ tests:
         cache_file_size: 1073741824          # 1 GB
         rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
         client: node6
-        drive: /dev/sdb
+        drive: /dev/nvme0n1
         cleanup: true
         validate_exclusive_lock: true
         rep-pool-only: True

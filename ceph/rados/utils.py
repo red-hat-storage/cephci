@@ -201,6 +201,26 @@ def osd_remove(ceph_cluster, osd_id):
     osd.rm(config)
 
 
+def osd_replace(ceph_cluster, osd_id):
+    """
+    same as osd_remove, with one exception: the OSD is not permanently
+    removed from the CRUSH hierarchy, but is instead assigned a ‘destroyed’ flag.
+    Args:
+        ceph_cluster: ceph cluster
+        osd_id: osd id
+    """
+    config = {
+        "command": "rm",
+        "service": "osd",
+        "pos_args": [osd_id],
+        "base_cmd_args": {"zap": True, "replace": True},
+        "validate": False,
+    }
+    log.info(f"Executing OSD {config.pop('command')} service")
+    osd = OSD(cluster=ceph_cluster, **config)
+    osd.rm(config)
+
+
 def zap_device(ceph_cluster, host, device_path):
     """
     Zap device
