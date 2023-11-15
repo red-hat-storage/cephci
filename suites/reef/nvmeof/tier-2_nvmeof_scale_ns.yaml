@@ -3,7 +3,7 @@
 # Test attributes
   #  Single ceph-nvmeof GW colocated with osd on node5, node 6 is nvmeof initiators
   #  nvmeof GW - at end of each scale step/ test below is the configuration
-     # Scale-1 : 1 subsystem, 256 namespaces,  256 RBD images of 500M size each
+     # Scale-1 : 1 subsystem, 500 namespaces,  500 RBD images of 1TB size each
   #  nvmeof initiator - Each initiator/ client connects to a subsystem ( 1 initiator : 1 subsystem)
   #  io test (no performance tests)
      # Tool : fio
@@ -53,14 +53,26 @@ tests:
               service: osd
               args:
                 all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Configure Initiators
+#  Run IO on NVMe Targets
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
           - config:
               command: shell
               args:
-                - ceph osd pool create rbd
+                - ceph osd pool create nvmeof_pool
           - config:
               command: shell
               args:
-                - ceph osd pool application enable rbd rbd
+                - rbd pool init nvmeof_pool
           - config:
               command: apply
               service: nvmeof
@@ -68,11 +80,20 @@ tests:
                 placement:
                   label: nvmeof-gw
               pos_args:
-                - rbd
-      desc: RHCS cluster deployment along with nvmeof gateway using cephadm
+                - nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd
+      desc: deploy NVMeoF service on GW node
       destroy-clster: false
+      do-not-skip-tc: true
       module: test_cephadm.py
-      name: deploy cluster with NVMeOF GW
+      name: deploy NVMeoF service on GW node
 
 ##  Test cases to be executed
   - test:
@@ -81,7 +102,7 @@ tests:
         command: add
         id: client.1
         nodes:
-          - node6
+          - node10
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -91,8 +112,6 @@ tests:
       name: configure Ceph client for NVMe tests
       polarion-id: CEPH-83573758
 
-#  Configure Initiators
-#  Run IO on NVMe Targets
   - test:
       abort-on-fail: true
       config:
@@ -106,13 +125,13 @@ tests:
               args:
                 subnqn: nqn.2016-06.io.spdk:cnode1
                 serial_num: 1
-                max_ns: 256
+                max_ns: 500
           - config:
               command: create_listener
               args:
                 subnqn: nqn.2016-06.io.spdk:cnode1
-                port: 5001
-                pool: rbd
+                port: 4420
+                pool: nvmeof_pool
           - config:
               command: add_host
               args:
@@ -122,21 +141,71 @@ tests:
               command: add_namespace
               args:
                 start_count: 1
-                end_count: 256
-                image_size: 500M
+                end_count: 500
+                image_size: 1T
                 pool: rbd
                 subnqn: nqn.2016-06.io.spdk:cnode1
           - config:
               command: get_subsystems
         initiators:
             subnqn: nqn.2016-06.io.spdk:cnode1
-            listener_port: 5001
+            listener_port: 4420
             node: node10
         run_io:
           - node: node10
             io_type: write
-      desc: test with 1 subsystem and 256 namespaces in Single GW
+      desc: test with 1 subsystem and 500 namespaces in Single GW
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_scale.py
-      name: Scale to 256 namespaces in single subsystem on NVMeOF GW
+      name: Scale to 500 namespaces in single subsystem on NVMeOF GW
       polarion-id: CEPH-83576686
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node5
+        steps:
+          - config:
+              command: delete_subsystem
+              args:
+                subnqn: nqn.2016-06.io.spdk:cnode1
+      desc: Manage NVMeoF Subsystem entities
+      destroy-clster: false
+      module: test_nvme_cli.py
+      name: Delete NVMeOF targets
+      polarion-id: CEPH-83575783
+
+  - test:
+      abort-on-fail: false
+      config:
+         command: remove
+         service: nvmeof
+         args:
+           service_name: nvmeof.nvmeof_pool
+           verify: true
+      desc: Remove nvmeof service on GW node
+      destroy-clster: false
+      module: test_orch.py
+      name: Delete nvmeof gateway
+
+  - test:
+      abort-on-fail: false
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph config set mon mon_allow_pool_delete true
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm nvmeof_pool nvmeof_pool --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
+      desc: Delete nvmeof and rbd pool from ceph cluster
+      destroy-clster: false
+      module: test_cephadm.py
+      name: Delete NVMeOF pools
