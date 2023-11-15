@@ -51,8 +51,8 @@ tests:
         command: add
         id: client.1
         nodes:
-          - node7
-          - node8
+          - node10
+          - node11
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -89,7 +89,7 @@ tests:
         initiator:                              # Configure Initiators with all pre-req
             subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
-            node: node7
+            node: node10
       desc: Perform Data integrity test over NVMEoF targets
       destroy-cluster: false
       module: test_ceph_nvmeof_data_integrity.py
@@ -123,7 +123,7 @@ tests:
         initiators:                            # Configure Initiators with all pre-req
           - subnqn: nqn.2016-06.io.spdk:cnode2
             listener_port: 5002
-            node: node7
+            node: node10
       desc: E2E-Test NVMEoF Gateway collocated with OSD node and Run IOs on targets
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
@@ -157,7 +157,7 @@ tests:
         initiators:                             # Configure Initiators with all pre-req
           - subnqn: nqn.2016-06.io.spdk:cnode6
             listener_port: 5006
-            node: node7
+            node: node10
       desc: E2E-Test NVMEoF Gateway collocated with MON-MGR node and Run IOs on targets
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
@@ -198,10 +198,10 @@ tests:
         initiators:                             # Configure Initiators with all pre-req
           - subnqn: nqn.2016-06.io.spdk:cnode3
             listener_port: 5003
-            node: node7
+            node: node10
           - subnqn: nqn.2016-06.io.spdk:cnode4
             listener_port: 5004
-            node: node8
+            node: node11
       desc: Perform IOs on multi-subsystems with Multiple-Initiators
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
@@ -235,7 +235,7 @@ tests:
         initiators: # Configure Initiators with all pre-req
           - subnqn: nqn.2016-06.io.spdk:cnode5
             listener_port: 5005
-            node: node8
+            node: node10
       desc: Deploy multiple NVMEoF Gateway on the cluster
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py
@@ -251,8 +251,8 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        initiator_node: node7
-        operation: remove
+        initiator_node: node10
+        operation: CEPH-83575812
       desc: Test remove RBD image used as NVMe namespace
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
@@ -268,7 +268,7 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        initiator_node: node7
+        initiator_node: node10
         operation: CEPH-83576084
       desc: Delete-recreate bdev in loop and rediscover namespace
       destroy-cluster: false
@@ -285,7 +285,7 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        initiator_node: node7
+        initiator_node: node10
         operation: CEPH-83575467
       desc: Perform restart and validate the gateway entities
       destroy-cluster: false
@@ -302,7 +302,7 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        initiator_node: node7
+        initiator_node: node10
         operation: CEPH-83576085
       desc: Perform map and unmap NVMe namespaces in loop
       destroy-cluster: false
@@ -319,7 +319,7 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        initiator_node: node7
+        initiator_node: node10
         operation: CEPH-83576087
       desc: Perform reboot on initiator node and validate the namespaces.
       destroy-cluster: false
@@ -336,7 +336,7 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        initiator_node: node7
+        initiator_node: node10
         operation: CEPH-83575813
       desc: Perform RBD operations shrink and expand on images.
       destroy-cluster: false
@@ -346,19 +346,6 @@ tests:
 
 # Reboot GW node
   - test:
-      name: Add Host
-      desc: Add host to Bootstrapped Cluster
-      module: test_host.py
-      polarion-id: CEPH-83573729
-      config:
-        service: host
-        command: add
-        args:                     # arguments to ceph orch
-          attach_ip_address: true
-          node: node7
-      destroy-cluster: false
-
-  - test:
       abort-on-fail: true
       config:
         gw_node: node6
@@ -367,24 +354,10 @@ tests:
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        initiator_node: node8
+        initiator_node: node10
         operation: CEPH-83576093
       desc: Perform reboot on GW node and validate the namespaces.
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
       name: Reboot GW node and check NVMe namespaces
       polarion-id: CEPH-83576093
-
-  - test:
-      name: Remove host
-      desc: Remove node from cluster
-      module: test_host.py
-      polarion-id: CEPH-83573747
-      config:
-        service: host
-        command: remove
-        base_cmd_args:
-          verbose: true
-        args:
-          node: node7
-      destroy-cluster: false

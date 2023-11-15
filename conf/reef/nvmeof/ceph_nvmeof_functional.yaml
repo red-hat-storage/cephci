@@ -40,8 +40,10 @@ globals:
         no-of-volumes: 4
         disk-size: 20
       node7:
+        id: node10
         role:
           - client
       node8:
+        id: node11
         role:
           - client

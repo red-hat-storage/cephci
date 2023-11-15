@@ -56,7 +56,7 @@ tests:
         id: client.1
         nodes:
           - node6
-          - node7
+          - node10
         install_packages:
           - ceph-common
           - fio
@@ -87,13 +87,13 @@ tests:
                 image:
                     size: 5G
                     count: 10
-                node: node7             # client node
+                node: node10             # client node
             -   proto: nvmeof
                 image:
                     size: 5G
                     count: 10
                 gw_node: node6          # gateway node
-                initiator_node: node7   # client node
+                initiator_node: node10   # client node
                 install_gw: true
 
   - test:
@@ -114,13 +114,13 @@ tests:
               image:
                 size: 5G
                 count: 10
-              node: node7             # client node
+              node: node10             # client node
           -   proto: nvmeof
               image:
                 size: 5G
                 count: 10
               gw_node: node6          # gateway node
-              initiator_node: node7   # client node
+              initiator_node: node10   # client node
 
   - test:
       name: libRBD VS NVMeoF Random ReadNWrite IOType 128kb-bs multi volumes
@@ -141,13 +141,13 @@ tests:
               image:
                 size: 5G
                 count: 10
-              node: node7             # client node
+              node: node10             # client node
           -   proto: nvmeof
               image:
                 size: 5G
                 count: 10
               gw_node: node6          # gateway node
-              initiator_node: node7   # client node
+              initiator_node: node10   # client node
 
   - test:
       name: libRBD VS NVMeoF Random-ReadWrite IOType 128k-bs multi-volumes
@@ -168,10 +168,10 @@ tests:
               image:
                 size: 5G
                 count: 10
-              node: node7             # client node
+              node: node10             # client node
           -   proto: nvmeof
               image:
                 size: 5G
                 count: 10
               gw_node: node6          # gateway node
-              initiator_node: node7   # client node
+              initiator_node: node10   # client node

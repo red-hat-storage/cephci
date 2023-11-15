@@ -33,5 +33,6 @@ globals:
         no-of-volumes: 4
         disk-size: 20
       node6:
+        id: node10
         role:
           - client

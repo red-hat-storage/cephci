@@ -81,8 +81,8 @@ tests:
         command: add
         id: client.1
         nodes:
-          - node6
-          - node7
+          - node10
+          - node11
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -132,9 +132,9 @@ tests:
         initiators:
             subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
-            node: node6
+            node: node10
         run_io:
-          - node: node6
+          - node: node10
             io_type: write
       desc: test namespace limitations with 1K namespaces
       destroy-cluster: false
@@ -163,9 +163,9 @@ tests:
         initiators:
             subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
-            node: node7
+            node: node11
         run_io:
-          - node: node7
+          - node: node11
             io_type: write
       desc: test namespace limitations with 2K namespaces
       destroy-cluster: false

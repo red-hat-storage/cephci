@@ -79,7 +79,7 @@ tests:
         command: add
         id: client.1
         nodes:
-          - node6
+          - node10
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -105,9 +105,9 @@ tests:
           - config:
               command: get_subsystems
         initiators:
-          node: node6
+          node: node10
         run_io:
-          - node: node6
+          - node: node10
             io_type: write
       desc: test subsystem limitations
       destroy-cluster: false
