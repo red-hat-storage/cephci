@@ -73,3 +73,9 @@ tests:
       desc: Verify Crash configuration and logs generation for any service crash in the cluster
       module: test_verify_crash_configuration.py
       polarion-id: CEPH-83573797
+
+  - test:
+      name: Verify crash report generation
+      desc: Verify Crash reports are created
+      module: test_verify_crash_reports.py
+      polarion-id: CEPH-83575586

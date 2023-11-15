@@ -800,3 +800,29 @@ def copy_ceph_sshkey_to_host(installer, node, user="root", key=CEPH_PUB_KEY):
     """
     # Copy ceph key to host
     installer.exec_command(sudo=True, cmd=SSH_COPYID.format(key, user, node.hostname))
+
+
+def kill_process(node, pid_to_kill):
+    """
+    Kills the process using process id
+    Args:
+        node (ceph): Ceph node
+        pid_to_kill (str/list): Pid to kill
+    """
+    pids = pid_to_kill if isinstance(pid_to_kill, list) else [pid_to_kill]
+    pids = " ".join(pids)
+    cmd = f"kill -s SIGSEGV {pids}"
+    node.exec_command(cmd=cmd, sudo=True)
+
+
+def get_all_running_pids(node, process):
+    """
+    Returns the pid(s) of the given process
+    Args:
+        node (ceph): Ceph node
+        process (str): Process name (rgw, mon, mds)
+    """
+    cmd = f"pgrep {process}"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    pids = [s.strip() for s in out.split("\n") if s]
+    return pids
