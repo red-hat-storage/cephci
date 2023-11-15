@@ -410,19 +410,22 @@ class RadosOrchestrator:
             3. max_objs -> max number of objects to be written (int)
             4. verify_stats -> arg to control whether obj stats need to
             be verified after write (bool) | default: True
+            5. rados_write_duration -> Duration for which the bench should be written on pool
+            6. check_ec -> If true, the method will wait to collect the exit status of the run, else will return
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
         byte_size = kwargs.get("byte_size", 4096)
         max_objs = kwargs.get("max_objs")
         verify_stats = kwargs.get("verify_stats", True)
+        check_ec = kwargs.get("check_ec", True)
         cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write --no-cleanup"
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
 
         try:
-            self.node.shell([cmd])
+            self.node.shell([cmd], check_status=check_ec)
             if max_objs and verify_stats:
                 time.sleep(90)
                 new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
@@ -1619,7 +1622,7 @@ class RadosOrchestrator:
         self.run_deep_scrub()
         time.sleep(10)
 
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=1000)
         flag = False
         while end_time > datetime.datetime.now():
             status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
@@ -2439,3 +2442,122 @@ class RadosOrchestrator:
             return value["status"]
         except Exception:
             raise
+
+    def change_daemon_systemctl_state(
+        self, action, daemon_type: str, daemon_id: str, timeout=6000
+    ):
+        """
+        Method to Start, stop & Restart any ceph daemons using systemctl commands
+        Args:
+            action: operation to be performed on the service, i.e. start, stop, restart
+            daemon_type: name of ceph service type (mon, mgr,osd ...)
+            daemon_id: Name of the daemon
+            timeout: time for which the method would wait for state change
+
+        Note: A separate method exists if the daemon is an OSD.
+        Returns:  Pass -> True, Fail -> False
+        """
+        fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        host = self.fetch_host_node(daemon_type=daemon_type, daemon_id=daemon_id)
+        if daemon_type == "osd":
+            return self.change_osd_state(action=action, target=int(daemon_id))
+        elif daemon_type == "mgr":
+            systemctl_name = (
+                f"ceph-{fsid}@{daemon_type}.{host.hostname}.{daemon_id}.service"
+            )
+        elif daemon_type == "mon":
+            systemctl_name = f"ceph-{fsid}@{daemon_type}.{host.hostname}.service"
+        else:
+            systemctl_name = f"ceph-{fsid}@{daemon_type}.{host.shortname}.service"
+
+        if not host:
+            log.error(f"failed to find host for the {daemon_type} daemon {daemon_id} ")
+            return False
+
+        log.debug(f"Hostname of target host : {host.hostname}")
+
+        # Collecting start time in case of failures
+        init_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        pass_status = True
+        daemon_status, status_desc = self.get_daemon_status(
+            daemon_type=daemon_type, daemon_id=daemon_id
+        )
+
+        if ((daemon_status == 0 or status_desc == "stopped") and action == "stop") or (
+            (daemon_status == 1 or status_desc == "running") and action == "start"
+        ):
+            log.info(
+                f"{daemon_type} daemon {daemon_id} already in desired state: {action}"
+            )
+            return True
+
+        # Executing command to reset the fail count on the host and sleeping for 5 seconds
+        cmd = "systemctl reset-failed"
+        host.exec_command(sudo=True, cmd=cmd)
+        time.sleep(5)
+
+        # Executing command to perform desired action.
+        systemctl_cmd = f"systemctl {action} {systemctl_name}"
+        log.info(
+            f"Performing {action} on {daemon_type}.{daemon_id} on host {host.hostname}. Command {systemctl_cmd}"
+        )
+        host.exec_command(sudo=True, cmd=systemctl_cmd)
+        time.sleep(5)
+
+        # verifying the daemon state
+        if action in ["start", "stop"]:
+            start_time = datetime.datetime.now()
+            timeout_time = start_time + datetime.timedelta(seconds=timeout)
+
+            while datetime.datetime.now() <= timeout_time:
+                daemon_status, status_desc = self.get_daemon_status(
+                    daemon_type=daemon_type, daemon_id=daemon_id
+                )
+                log.info(f"osd_status: {daemon_status}, status_desc: {status_desc}")
+                if (
+                    daemon_status == 0 or status_desc == "stopped"
+                ) and action == "stop":
+                    break
+                elif (
+                    daemon_status == 1 or status_desc == "running"
+                ) and action == "start":
+                    break
+                time.sleep(20)
+
+            if action == "stop" and daemon_status != 0:
+                log.error(
+                    f"Failed to stop daemon {daemon_type}.{daemon_id} service on {host.hostname}"
+                )
+                pass_status = False
+            if action == "start" and daemon_status != 1:
+                log.error(
+                    f"Failed to start daemon {daemon_type}.{daemon_id}  service on {host.hostname}"
+                )
+                pass_status = False
+            if not pass_status:
+                log.error(
+                    f"Collecting the journalctl logs for daemon  {daemon_type}.{daemon_id} "
+                    f"service on {host.hostname} for the failure"
+                )
+                end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+                daemon_log_lines = self.get_journalctl_log(
+                    start_time=init_time,
+                    end_time=end_time,
+                    daemon_type=daemon_type,
+                    daemon_id=daemon_id,
+                )
+                log.error(
+                    f"\n\n ------------ Log lines from journalctl ---------------- \n"
+                    f"{daemon_log_lines}\n\n"
+                )
+                return False
+        else:
+            # Baremetal systems take some time for daemon restarts. changing sleep accordingly
+            time.sleep(60)
+            daemon_status, status_desc = self.get_daemon_status(
+                daemon_type=daemon_type, daemon_id=daemon_id
+            )
+            if (daemon_status == 1 or status_desc == "running") and action == "restart":
+                log.info(f"{daemon_type} daemon {daemon_id} is rebooted successfully")
+                return True
+        return True
