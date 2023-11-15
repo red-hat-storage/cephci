@@ -94,6 +94,7 @@ tests:
                 - rbd
       desc: NVMeoF Gateway deployment using cephadm
       destroy-clster: false
+      do-not-skip-tc: true
       module: test_cephadm.py
       name: deploy nvmeof gateway
 
@@ -188,6 +189,7 @@ tests:
               args:
                 - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
       desc: NVMeoF Gateway deployment using cephadm
+      do-not-skip-tc: true
       destroy-clster: false
       module: test_cephadm.py
       name: deploy nvmeof gateway
