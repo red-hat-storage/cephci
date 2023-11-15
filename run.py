@@ -684,6 +684,7 @@ def run(args):
     for test in tests:
         test = test.get("test")
         tc = fetch_test_details(test)
+        do_not_skip_test = test.get("do-not-skip-tc", False)
         test_file = tc["file"]
         unique_test_name = create_unique_test_name(tc["name"], test_names)
         test_names.append(unique_test_name)
@@ -780,7 +781,7 @@ def run(args):
 
                 # Initialize the cluster with the expected rhcs_version
                 ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
-                if mod_file_name not in skip_tc_list:
+                if mod_file_name not in skip_tc_list or do_not_skip_test:
                     rc = test_mod.run(
                         ceph_cluster=ceph_cluster_dict[cluster_name],
                         ceph_nodes=ceph_cluster_dict[cluster_name],
