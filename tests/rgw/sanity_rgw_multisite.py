@@ -254,6 +254,7 @@ def run(**kw):
             log.info(
                 "Test no duplicate objects created at archive site via bucket stats"
             )
+            time.sleep(1200)
             test_bucket_stats_with_archive(
                 primary_client_node, secondary_client_node, archive_client_node
             )
