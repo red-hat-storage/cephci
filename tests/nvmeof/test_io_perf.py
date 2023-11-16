@@ -13,7 +13,7 @@ from ceph.nvmeof.gateway import delete_gateway
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.cephadm import test_nvmeof
+from tests.cephadm import test_nvmeof, test_orch
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
     disconnect_initiator,
@@ -595,51 +595,69 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             NVMeCLI.CEPH_NVMECLI_IMAGE = value
             break
 
-    io_profiles = config["io_profiles"]
-    iterations = config.get("iterations", 1)
-    for io in config["io_exec"]:
-        io.update({"io_overrides": config.get("io_overrides", {})})
-        IO_PROTO[io["proto"]](
-            ceph_cluster=ceph_cluster,
-            rbd=rbd_obj,
-            pool=rbd_pool,
-            iterations=iterations,
-            io_profiles=io_profiles,
-            **io,
+    try:
+        io_profiles = config["io_profiles"]
+        iterations = config.get("iterations", 1)
+        for io in config["io_exec"]:
+            io.update({"io_overrides": config.get("io_overrides", {})})
+            IO_PROTO[io["proto"]](
+                ceph_cluster=ceph_cluster,
+                rbd=rbd_obj,
+                pool=rbd_pool,
+                iterations=iterations,
+                io_profiles=io_profiles,
+                **io,
+            )
+
+        # cleanup pool
+        if not config.get("do_not_delete_pool"):
+            rbd_obj.clean_up(pools=[rbd_pool])
+
+        # delete NVMe Gateway
+        if config.get("delete_gateway"):
+            delete_gateway(get_node_by_id(ceph_cluster, config["delete_gateway"]))
+
+        # Build artifacts, Create CSV and Json file
+        run_cfg = kwargs["run_config"]
+        test_dir = create_run_dir(
+            run_cfg.get("run_id"),
+            log_dir=f"{run_cfg['log_dir']}/{run_cfg['test_name']}",
         )
+        run_cfg["test_dir"] = test_dir
+        kwargs["config"][
+            "artifacts"
+        ] = f"Artifacts - {run_cfg['log_link'].rsplit('.', 1)[0]}"
 
-    # cleanup pool
-    if not config.get("do_not_delete_pool"):
-        rbd_obj.clean_up(pools=[rbd_pool])
+        csv_file = f"{test_dir}/run.csv"
+        json_file = f"{test_dir}/run.json"
+        with open(csv_file, "w+") as _csv, open(json_file, "w+") as _json:
+            _csv.write("\n".join(csv_op))
+            LOG.info(f"CSV file located here: {csv_file}")
+            _json.write(json.dumps(results, indent=2))
+            LOG.info(f"Json file located here: {json_file}")
 
-    # delete NVMe Gateway
-    if config.get("delete_gateway"):
-        delete_gateway(get_node_by_id(ceph_cluster, config["delete_gateway"]))
+        # Plot charts
+        test_config = {
+            "io_exec": config["io_exec"],
+            "iterations": config["iterations"],
+        }
+        for io_type, data in results.items():
+            build_charts(io_type, data, test_config, run_cfg)
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        # cleanup pool
+        if not config.get("do_not_delete_pool"):
+            rbd_obj.clean_up(pools=[rbd_pool])
 
-    # Build artifacts, Create CSV and Json file
-    run_cfg = kwargs["run_config"]
-    test_dir = create_run_dir(
-        run_cfg.get("run_id"), log_dir=f"{run_cfg['log_dir']}/{run_cfg['test_name']}"
-    )
-    run_cfg["test_dir"] = test_dir
-    kwargs["config"][
-        "artifacts"
-    ] = f"Artifacts - {run_cfg['log_link'].rsplit('.', 1)[0]}"
-
-    csv_file = f"{test_dir}/run.csv"
-    json_file = f"{test_dir}/run.json"
-    with open(csv_file, "w+") as _csv, open(json_file, "w+") as _json:
-        _csv.write("\n".join(csv_op))
-        LOG.info(f"CSV file located here: {csv_file}")
-        _json.write(json.dumps(results, indent=2))
-        LOG.info(f"Json file located here: {json_file}")
-
-    # Plot charts
-    test_config = {
-        "io_exec": config["io_exec"],
-        "iterations": config["iterations"],
-    }
-    for io_type, data in results.items():
-        build_charts(io_type, data, test_config, run_cfg)
-
+        # delete NVMe Gateway
+        if config.get("delete_gateway"):
+            cfg = {
+                "config": {
+                    "command": "remove",
+                    "service": "nvmeof",
+                    "args": {"service_name": f"nvmeof.{rbd_pool}"},
+                }
+            }
+            test_orch.run(ceph_cluster, **cfg)
     return 0

@@ -1,3 +1,5 @@
+import json
+
 from ceph.ceph_admin.common import config_dict_to_string
 from cli import Cli
 
@@ -59,6 +61,17 @@ class NVMeCLI(Cli):
                 output-format: json             # output format
         """
         return self.execute(cmd=f"nvme list {config_dict_to_string(kwargs)}", sudo=True)
+
+    def list_spdk_drives(self):
+        """List the NVMe Targets only SPDK drives.
+
+        Return:
+            Dict: Dict of SPDK drives else empty list
+        """
+        json_kwargs = {"output-format": "json"}
+        out, _ = self.list(**json_kwargs)
+        devs = json.loads(out)["Devices"]
+        return [dev for dev in devs if dev["ModelNumber"].startswith("SPDK")]
 
     def disconnect(self, **kwargs):
         """Disconnect controller connected to the subsystem.

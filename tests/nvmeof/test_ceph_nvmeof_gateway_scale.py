@@ -67,19 +67,15 @@ def run_io(ceph_cluster, num, io):
         num: Current Namespace number
         ceph_cluster: Ceph cluster
     """
-    json_format = {"output-format": "json"}
     LOG.info(io)
     client = get_node_by_id(ceph_cluster, io["node"])
     initiator = Initiator(client)
     # List NVMe targets.
-    targets, _ = initiator.list(**json_format)
-    data = json.loads(targets)
+    targets = initiator.list_spdk_drives()
+    if not targets:
+        raise Exception(f"NVMe Targets not found on {client.hostname}")
     device_path = next(
-        (
-            device["DevicePath"]
-            for device in data["Devices"]
-            if device["NameSpace"] == num
-        ),
+        (device["DevicePath"] for device in targets if device["NameSpace"] == num),
         None,
     )
     LOG.debug(device_path)

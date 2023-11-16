@@ -192,7 +192,7 @@ tests:
       do-not-skip-tc: true
       destroy-clster: false
       module: test_cephadm.py
-      name: deploy nvmeof gateway
+      name: Delete nvmeof gateway pre-reqs
 
   - test:
       abort-on-fail: true
@@ -206,7 +206,7 @@ tests:
         install: true                           # Run SPDK with all pre-requisites
         cleanup:
           - subsystems
-          - intiators
+          - initiators
           - pool
           - gateway
         subsystems:                             # Configure subsystems with all sub-entities
@@ -239,7 +239,7 @@ tests:
         install: true                           # Run SPDK with all pre-requisites
         cleanup:
           - subsystems
-          - intiators
+          - initiators
           - pool
           - gateway
         subsystems:                             # Configure subsystems with all sub-entities

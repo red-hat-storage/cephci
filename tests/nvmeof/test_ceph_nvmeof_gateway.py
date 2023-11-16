@@ -96,14 +96,16 @@ def initiators(ceph_cluster, gateway, config):
     LOG.debug(initiator.connect(**_conn_cmd))
 
     # List NVMe targets
-    targets, _ = initiator.list(**json_format)
+    targets = initiator.list_spdk_drives()
+    if not targets:
+        raise Exception(f"NVMe Targets not found on {client.hostname}")
     LOG.debug(targets)
     results = []
     io_args = {"size": "100%"}
     if config.get("io_args"):
         io_args = config["io_args"]
     with parallel() as p:
-        for target in json.loads(targets)["Devices"]:
+        for target in targets:
             _io_args = {}
             if io_args.get("test_name"):
                 test_name = (
