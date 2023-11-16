@@ -204,7 +204,7 @@ tests:
   - test:
       name: Test deletlifecycle rule via s3cmd
       desc: Test deletlifecycle rule via s3cmd
-      polarion-id: CEPH-83575469
+      polarion-id: CEPH-83580364
       module: sanity_rgw.py
       config:
         script-name: ../s3cmd/test_s3cmd.py
