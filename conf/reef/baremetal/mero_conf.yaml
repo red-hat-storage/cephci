@@ -55,6 +55,7 @@ globals:
           ip: 10.8.129.227
           role:
             - osd
+            - rgw
           root_password: passwd
           volumes:
             - /dev/sda
