@@ -638,6 +638,9 @@ class CephfsMirroringUtils(object):
                 )
         except Exception as e:
             return False, f"Error: {str(e)}"
+        finally:
+            target_clients.exec_command(sudo=True, cmd=f"umount {target_mount_path}")
+            target_clients.exec_command(sudo=True, cmd=f"rm -rf {target_mount_path}")
 
     def cleanup_target_client(self, target_clients, target_mount_path):
         """

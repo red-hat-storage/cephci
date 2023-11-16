@@ -240,3 +240,13 @@ tests:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
         timeout: 300
+
+  - test:
+      name: Test deletlifecycle rule via s3cmd
+      desc: Test deletlifecycle rule via s3cmd
+      polarion-id: CEPH-83575469
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
+        timeout: 300

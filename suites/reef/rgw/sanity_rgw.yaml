@@ -242,17 +242,6 @@ tests:
       name: test bucket quota max objects
       polarion-id: CEPH-83575330
   - test:
-      name: Indexless buckets
-      desc: Indexless (blind) buckets
-      comments: Known issue BZ-2043366
-      polarion-id: CEPH-10354 # also applies to CEPH-10357
-      module: sanity_rgw.py
-      config:
-        test-version: v2
-        script-name: test_indexless_buckets.py
-        config-file-name: test_indexless_buckets_s3.yaml
-        timeout: 500
-  - test:
       abort-on-fail: false
       config:
         branch: ceph-reef
@@ -311,6 +300,19 @@ tests:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_radoslist.yaml
         timeout: 300
+
+  - test:
+      name: Indexless buckets
+      desc: Indexless (blind) buckets
+      comments: Known issue BZ-2043366
+      polarion-id: CEPH-10354 # also applies to CEPH-10357
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_indexless_buckets.py
+        config-file-name: test_indexless_buckets_s3.yaml
+        timeout: 500
+
   - test:
       name: bucket request payer with object download
       desc: Basic test for bucket request payer with object download

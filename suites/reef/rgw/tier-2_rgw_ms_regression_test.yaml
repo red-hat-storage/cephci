@@ -223,7 +223,7 @@ tests:
             config-file-name: test_bucket_generation.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
 
-    #  Dynamic resharding tests
+#  Dynamic resharding tests
   - test:
       name: Disable DBR feature on zonegroup
       desc: Disable DBR feature on zonegroup
@@ -246,6 +246,7 @@ tests:
           config:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_check_sharding_enabled_brownfield.yaml
+            timeout: 1200
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
   - test:
       clusters:
