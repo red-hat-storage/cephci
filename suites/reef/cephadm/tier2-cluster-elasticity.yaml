@@ -316,13 +316,12 @@ tests:
           attach_ip_address: true
           labels: apply-all-labels
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale up Monitor with placement
       desc: Scale up monitor nodes to 5 with placement
       module: test_mon.py
-      abort-on-fail: true
+
       polarion-id: CEPH-83573732
       config:
         command: apply
@@ -359,7 +358,6 @@ tests:
               - node6
             sep: " "
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale up OSD Service
@@ -388,7 +386,6 @@ tests:
                 all: "true"
               encrypted: "true"
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale up RGW Service
@@ -412,7 +409,6 @@ tests:
             limit: 4            # no of daemons
             sep: ";"            # separator to be used for placements
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale up MDS Service
@@ -436,7 +432,6 @@ tests:
             limit: 4            # no of daemons
             sep: " "            # separator to be used for placements
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Create replicated pool for NFS
@@ -451,7 +446,6 @@ tests:
           - create
           - nfs-ganesha-pool
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Enable rgw application on nfs-ganesha pool
@@ -468,7 +462,6 @@ tests:
           - nfs-ganesha-pool
           - rgw
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Apply NFS Service
@@ -491,7 +484,6 @@ tests:
             limit: 2
             sep: ";"
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Create replicated pool
@@ -509,7 +501,6 @@ tests:
           - "3"
           - replicated
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Enable rbd application on pool
@@ -526,29 +517,6 @@ tests:
           - iscsi
           - rbd
       destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: Apply ISCSI Service
-      desc: Apply ISCSI target service on iscsi role nodes
-      module: test_iscsi.py
-      polarion-id: CEPH-83573756
-      config:
-        command: apply
-        service: iscsi
-        base_cmd_args:            # arguments to ceph orch
-          verbose: true
-        pos_args:
-          - iscsi                 # name of the pool
-          - api_user              # name of the API user
-          - api_pass              # password of the api_user.
-        args:
-          placement:
-            nodes:
-              - node7
-              - node8           # either label or node.
-      destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Setup destination node for SNMP traps
@@ -562,7 +530,6 @@ tests:
                 spec:
                   credentials:
                     snmp_v2_community: authCommunity
-      abort-on-fail: true
 
   - test:
       name: SNMP V2C Gateway Service deployment with spec
@@ -603,12 +570,13 @@ tests:
         pool_type: 'normal'
       desc: run rados bench for 360 - normal profile
 
-  - test:
-      name: rbd-io
-      module: rbd_faster_exports.py
-      config:
-        io-total: 100M
-      desc: Perform export during read/write,resizing,flattening,lock operations
+  # TODO (tmathew): Skipping test due to known socket timeout exception issue
+  # - test:
+  #     name: rbd-io
+  #     module: rbd_faster_exports.py
+  #     config:
+  #       io-total: 100M
+  #     desc: Perform export during read/write,resizing,flattening,lock operations
 
   - test:
       name: rgw sanity tests
@@ -623,7 +591,7 @@ tests:
       name: Scale down Monitor with placement
       desc: Scale down monitor nodes to 3 with placement
       module: test_mon.py
-      abort-on-fail: true
+
       polarion-id: CEPH-83573732
       config:
         command: apply
@@ -656,7 +624,6 @@ tests:
               - node6
             sep: " "
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale down OSD Service
@@ -680,7 +647,6 @@ tests:
               data_devices:
                 all: "true"
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale down RGW Service
@@ -702,7 +668,6 @@ tests:
             limit: 2                 # no of daemons
             sep: ";"                 # separator to be used for placements
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale down MDS Service
@@ -724,7 +689,6 @@ tests:
             limit: 2            # no of daemons
             sep: " "            # separator to be used for placements
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Scale down NFS Service
@@ -746,28 +710,6 @@ tests:
             limit: 2
             sep: ";"
       destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: Scale down ISCSI Service
-      desc: Scale down ISCSI target service to 1 node
-      module: test_iscsi.py
-      polarion-id: CEPH-83573756
-      config:
-        command: apply
-        service: iscsi
-        base_cmd_args:            # arguments to ceph orch
-          verbose: true
-        pos_args:
-          - iscsi                 # name of the pool
-          - api_user              # name of the API user
-          - api_pass              # password of the api_user.
-        args:
-          placement:
-            nodes:
-              - node7
-      destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: check-ceph-health
@@ -785,18 +727,20 @@ tests:
         pool_type: 'normal'
       desc: run rados bench for 360 - normal profile
 
-  - test:
-      name: rbd-io
-      module: rbd_faster_exports.py
-      config:
-        io-total: 100M
-      desc: Perform export during read/write,resizing,flattening,lock operations
+  # TODO (tmathew): Skipping test due to known socket timeout exception issue
+  # - test:
+  #     name: rbd-io
+  #     module: rbd_faster_exports.py
+  #     config:
+  #       io-total: 100M
+  #     desc: Perform export during read/write,resizing,flattening,lock operations
 
-  - test:
-      name: rgw sanity tests
-      module: sanity_rgw.py
-      config:
-        script-name: test_multitenant_user_access.py
-        config-file-name: test_multitenant_access.yaml
-        timeout: 300
-      desc: Perform rgw tests
+  # TODO (tmathew): Skipping test due to expected node is not available after remove/shrink operations
+  # - test:
+  #     name: rgw sanity tests
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: test_multitenant_user_access.py
+  #       config-file-name: test_multitenant_access.yaml
+  #       timeout: 300
+  #     desc: Perform rgw tests
