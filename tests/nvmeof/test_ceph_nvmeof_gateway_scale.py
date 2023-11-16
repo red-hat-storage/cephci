@@ -37,7 +37,13 @@ def initiators(ceph_cluster, gateway, config):
     """
     client = get_node_by_id(ceph_cluster, config["node"])
     initiator = Initiator(client)
-    cmd_args = {
+    initiator.disconnect_all()
+    discover_cmd_args = {
+        "transport": "tcp",
+        "traddr": gateway.ip_address,
+        "trsvcid": "4420",
+    }
+    connect_cmd_args = {
         "transport": "tcp",
         "traddr": gateway.ip_address,
         "trsvcid": config["listener_port"],
@@ -45,17 +51,17 @@ def initiators(ceph_cluster, gateway, config):
     json_format = {"output-format": "json"}
 
     # Discover the subsystems
-    sub_nqns, _ = initiator.discover(**{**cmd_args | json_format})
+    sub_nqns, _ = initiator.discover(**{**discover_cmd_args | json_format})
     LOG.debug(sub_nqns)
     for nqn in json.loads(sub_nqns)["records"]:
-        if nqn["trsvcid"] == str(config["listener_port"]):
-            cmd_args["nqn"] = nqn["subnqn"]
+        if nqn["subnqn"] == str(config["subnqn"]):
+            connect_cmd_args["nqn"] = nqn["subnqn"]
             break
     else:
-        raise Exception(f"Subsystem not found -- {cmd_args}")
+        raise Exception(f"Subsystem not found -- {connect_cmd_args}")
 
     # Connect to the subsystem
-    LOG.debug(initiator.connect(**cmd_args))
+    LOG.debug(initiator.connect(**connect_cmd_args))
 
 
 @retry(Exception, tries=5, delay=10)
@@ -207,7 +213,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     namespace_func(**cfg["args"])
                     for io in config["run_io"]:
                         run_io(ceph_cluster, num, io)
-
+                    mem_usage, _ = node.exec_command(
+                        cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
+                        sudo=True,
+                    )
+                    LOG.info(mem_usage)
+                    top_usage, _ = node.exec_command(
+                        cmd="top -b | head -n 20", sudo=True
+                    )
+                    LOG.info(top_usage)
             else:
                 func = fetch_method(nvme_cli, command)
 
@@ -231,6 +245,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             cmd="cephadm shell ceph -s", sudo=True
         )
         LOG.info(health)
+        health_detail, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph health detail", sudo=True
+        )
+        LOG.info(health_detail)
+        mem_usage, _ = node.exec_command(cmd="cat /proc/meminfo", sudo=True)
+        LOG.info(mem_usage)
+        cpu, _ = node.exec_command(cmd="cat /proc/cpuinfo", sudo=True)
+        LOG.info(cpu)
+        top_usage, _ = node.exec_command(cmd="top -b | head -n 20", sudo=True)
+        LOG.info(top_usage)
 
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)
@@ -249,5 +273,19 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             cmd="cephadm shell ceph -s", sudo=True
         )
         LOG.info(health)
+        health_detail, _ = instance.installer.exec_command(
+            cmd="cephadm shell ceph health detail", sudo=True
+        )
+        LOG.info(health_detail)
+        memory, _ = node.exec_command(cmd="cat /proc/meminfo", sudo=True)
+        LOG.info(memory)
+        cpu, _ = node.exec_command(cmd="cat /proc/cpuinfo", sudo=True)
+        LOG.info(cpu)
+        mem_usage, _ = node.exec_command(
+            cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20", sudo=True
+        )
+        LOG.info(mem_usage)
+        top_usage, _ = node.exec_command(cmd="top -b | head -n 20", sudo=True)
+        LOG.info(top_usage)
         return 1
     return 0

@@ -54,11 +54,11 @@ tests:
           - config:
               command: shell
               args:
-                - ceph osd pool create rbd
+                - ceph osd pool create nvmeof_pool
           - config:
               command: shell
               args:
-                - ceph osd pool application enable rbd rbd
+                - rbd pool init nvmeof_pool
           - config:
               command: apply
               service: nvmeof
@@ -66,7 +66,15 @@ tests:
                 placement:
                   label: nvmeof-gw
               pos_args:
-                - rbd
+                - nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd
       desc: RHCS cluster deployment along with nvmeof gateway using cephadm
       destroy-clster: false
       module: test_cephadm.py
