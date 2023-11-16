@@ -111,7 +111,9 @@ def initiators(ceph_cluster, gateway, config):
     LOG.debug(initiator.connect(**_conn_cmd))
 
     # List NVMe targets
-    targets, _ = initiator.list(**json_format)
+    targets = initiator.list_spdk_drives()
+    if not targets:
+        raise Exception(f"NVMe Targets not found on {client.hostname}")
     LOG.debug(targets)
     return targets
 
@@ -221,11 +223,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     p.spawn(configure_subsystems, rbd_obj, rbd_pool, gateway, subsystem)
 
         if config.get("initiator"):
-            targets = json.loads(initiators(ceph_cluster, gateway, config["initiator"]))
+            targets = initiators(ceph_cluster, gateway, config["initiator"])
             LOG.info(f"Targets discovered: {targets}")
 
             # verifying data integrity on NVMe targets
-            for target in targets["Devices"]:
+            for target in targets:
                 nvme = generate_unique_id(length=4)
                 mount_point = f"/mnt/{nvme}"  # Change this to the desired mount point
                 create_filesystem_and_mount(rbd_obj, target["DevicePath"], mount_point)
@@ -304,11 +306,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 time.sleep(10)
                 # Connect to Initiator
                 if config.get("initiator"):
-                    targets = json.loads(
-                        initiators(ceph_cluster, gateway, config["initiator"])
-                    )
+                    targets = initiators(ceph_cluster, gateway, config["initiator"])
                     LOG.info(f"Targets discovered: {targets}")
                 # mount the NVMe target
+                target = targets[0]
                 rbd_obj.exec_cmd(
                     cmd=f"mount {target['DevicePath']} {mount_point}", sudo=True
                 )

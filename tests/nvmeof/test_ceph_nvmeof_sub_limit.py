@@ -50,9 +50,11 @@ def run_io(ceph_cluster, node, config, io):
     # Connect to the subsystem
     LOG.debug(initiator.connect(**cmd_args))
     # List NVMe targets.
-    targets, _ = initiator.list(**json_format)
+    targets = initiator.list_spdk_drives()
+    if not targets:
+        raise Exception(f"NVMe Targets not found on {client.hostname}")
     LOG.debug(targets)
-    for target in json.loads(targets)["Devices"]:
+    for target in targets:
         io_args = {
             "device_name": target["DevicePath"],
             "client_node": client,

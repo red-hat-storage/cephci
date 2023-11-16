@@ -139,8 +139,10 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
             conn_port = {"trsvcid": listener_port}
             _conn_cmd = {**_cmd_args, **conn_port}
             LOG.debug(initiator.connect(**_conn_cmd))
-            targets, _ = initiator.list(**json_format)
-            _target = json.loads(targets)["Devices"][0]["DevicePath"]
+            targets = initiator.list_spdk_drives()
+            if not targets:
+                raise Exception(f"NVMe Targets not found on {client.hostname}")
+            _target = targets[0]["DevicePath"]
             if not verify:
                 return _target
             client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
@@ -302,8 +304,10 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
         conn_port = {"trsvcid": listener_port}
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
-        targets, _ = initiator.list(**json_format)
-        _target = json.loads(targets)["Devices"][0]["DevicePath"]
+        targets = initiator.list_spdk_drives()
+        if not targets:
+            raise Exception(f"NVMe Targets not found on {client.hostname}")
+        _target = targets[0]["DevicePath"]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
@@ -391,8 +395,10 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         conn_port = {"trsvcid": listener_port}
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
-        targets, _ = initiator.list(**json_format)
-        _target = json.loads(targets)["Devices"][0]["DevicePath"]
+        targets = initiator.list_spdk_drives()
+        if not targets:
+            raise Exception(f"NVMe Targets not found on {client.hostname}")
+        _target = targets[0]["DevicePath"]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
@@ -402,11 +408,14 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
 
         # Reboot client node and re-mount the namespaces.
         # Discover and reconnect to subsystem and validate the files on the mount-points.
-        reboot_node(client)
+        if not reboot_node(client):
+            raise Exception("Host did not started post reboot!!!!")
         initiator.configure()
         LOG.debug(initiator.connect(**_cmd_args))
-        targets, _ = initiator.list(**json_format)
-        _target = json.loads(targets)["Devices"][0]["DevicePath"]
+        targets = initiator.list_spdk_drives()
+        if not targets:
+            raise Exception(f"NVMe Targets not found on {client.hostname}")
+        _target = targets[0]["DevicePath"]
         client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
         LOG.info("Validation of CEPH-83576087 is successful.")
@@ -484,8 +493,10 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         conn_port = {"trsvcid": listener_port}
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
-        targets, _ = initiator.list(**json_format)
-        _target = json.loads(targets)["Devices"][0]["DevicePath"]
+        targets = initiator.list_spdk_drives()
+        if not targets:
+            raise Exception(f"NVMe Targets not found on {client.hostname}")
+        _target = targets[0]["DevicePath"]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
@@ -495,7 +506,9 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
 
         # Reboot NVMeoF GW node and wait for the node recovery.
         # Wait for the GW service to be up and running.
-        reboot_node(gw_node)
+        if not reboot_node(gw_node):
+            raise Exception("Host did not started post reboot!!!!!")
+
         check_service_exists(
             ceph_cluster.get_nodes(role="installer")[0],
             service_name=f"nvmeof.{pool}",
@@ -661,7 +674,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83576087(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83575813":
             test_ceph_83575813(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575813":
+        if config["operation"] == "CEPH-83576093":
             test_ceph_83576093(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
