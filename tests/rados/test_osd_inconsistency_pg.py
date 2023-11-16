@@ -95,7 +95,7 @@ def run(ceph_cluster, **kw):
         osd_map_output = rados_obj.get_osd_map(pool=pool_name, obj=oname)
         primary_osd = osd_map_output["acting_primary"]
         # Executing the fsck on the OSD
-        log.info(f" Performing the ceph-bluestore-ttol fsck on the OSD-{primary_osd}")
+        log.info(f" Performing the ceph-bluestore-tool fsck on the OSD-{primary_osd}")
         fsck_output = bluestore_obj.run_consistency_check(primary_osd)
         log.info(f"The fsck output is ::{fsck_output}")
         # Reparing the OSD using the bluestore tool
