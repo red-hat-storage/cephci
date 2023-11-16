@@ -338,3 +338,75 @@ tests:
       module: test_rbd_persistent_writeback_cache_flush.py
       name: Validate cache flush with persistent cache enabled
       polarion-id: CEPH-83574893
+
+  - test:
+      name: RBD PWL cache invalidate.
+      desc: PWL cache invalidate at client pool and image level.
+      module: test_parallel.py
+      polarion-id: CEPH-83574709
+      abort-on-fail: true
+      parallel:
+      - test:
+          abort-on-fail: true
+          config:
+            level: client                        # PWL at client
+            cache_file_size: 1073741824          # 1 GB
+            rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+            client: node6
+            drive: /dev/nvme0n1
+            cleanup: true
+            rep-pool-only: True
+            rep_pool_config:
+              pool: pool1
+              image: image1
+              size: 10G
+            fio:
+              image_name: image1
+              pool_name: pool1
+              runtime: 120
+          desc: RBD Persistent Cache invalidate Client level
+          destroy-cluster: false
+          module: test_rbd_persistent_writeback_cache_invalidate.py
+          name:  PWL cache path validation at client level
+      - test:
+          config:
+            level: pool                          # PWL at Pool level
+            cache_file_size: 2147483648          # 2 GB
+            rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+            client: node6
+            drive: /dev/nvme0n1
+            cleanup: true
+            rep-pool-only: True
+            rep_pool_config:
+              pool: pool2
+              image: image2
+              size: 20G
+            fio:
+              image_name: image2
+              pool_name: pool2
+              runtime: 120
+          desc: RBD Persistent Cache invalidate pool level
+          destroy-cluster: false
+          module: test_rbd_persistent_writeback_cache_invalidate.py
+          name: PWL cache path validation at pool level
+      - test:
+          config:
+            level: image                         # PWL at image level
+            cache_file_size: 4294967296          # 4 GB
+            rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+            client: node6
+            drive: /dev/nvme0n1
+            cleanup: true
+            rep-pool-only: True
+            rep_pool_config:
+              pool: pool3
+              image: image3
+              size: 40G
+              resize_to: 50G
+            fio:
+              image_name: image3
+              pool_name: pool3
+              runtime: 120
+          desc: RBD Persistent Cache invalidate image level
+          module: test_rbd_persistent_writeback_cache_invalidate.py
+          name: PWL cache path validation at image level

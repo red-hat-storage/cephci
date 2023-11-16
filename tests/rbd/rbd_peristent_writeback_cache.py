@@ -191,8 +191,14 @@ class PersistentWriteAheadLog:
         cmd = f"rbd persistent-cache flush {image_spec}"
         return self.client.exec_command(cmd=cmd, sudo=True)
 
-    def invalidate(self, image):
-        pass
+    def invalidate(self, image_spec):
+        """Perform cache invalidate on the image
+        Args:
+            image_spec: <pool>/<image> where cache invalidate needs to be performed.
+        """
+        log.info(f"Perform cache invalidate on image {image_spec}....")
+        cmd = f"rbd persistent-cache invalidate {image_spec}"
+        return self.client.exec_command(cmd=cmd, sudo=True)
 
 
 # utils
