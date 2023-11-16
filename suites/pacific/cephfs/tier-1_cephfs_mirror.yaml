@@ -212,3 +212,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_auth_caps.py
       name: modify User caps and validate the mirroring sync.
       polarion-id: "CEPH-83574109"
+  - test:
+      abort-on-fail: false
+      desc: "Modify the Remote Snap Directories"
+      clusters:
+        ceph1:
+          config:
+            name: Modify the Remote Snap Directories
+      module: cephfs_mirroring.test_cephfs_mirroring_modify_remote_snapshots.py
+      name: Modify the Remote Snap Directories
+      polarion-id: "CEPH-83574120"
