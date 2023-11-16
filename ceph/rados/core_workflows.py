@@ -2561,3 +2561,55 @@ class RadosOrchestrator:
                 log.info(f"{daemon_type} daemon {daemon_id} is rebooted successfully")
                 return True
         return True
+
+    def get_osd_uuid(self, osd_id):
+        """
+        Method return ths osd fsid
+        Args:
+            osd_id: OSD id
+
+        Returns: Return the ceph osd fsid
+
+        """
+        cmd_osd_info = f"ceph osd info osd.{osd_id}"
+        osd_fsid = self.run_ceph_command(cmd=cmd_osd_info)["uuid"]
+        return osd_fsid
+
+    def get_orch_device_list(self, node=None):
+        """
+        Method returns the node or cluster device list in a json format.
+        If node name not exists method return the whole cluster device list.
+        Args:
+            node: Node name in the cluster.
+        Returns: Return the node/cluster device information
+
+        """
+
+        if node is None:
+            cmd_orch_device = "ceph orch device ls"
+        else:
+            cmd_orch_device = f"ceph orch device ls  {node}"
+
+        orch_device_output = self.run_ceph_command(cmd=cmd_orch_device)
+        return orch_device_output
+
+    def get_ceph_volume_lvm_list(self, osd_node, osd_id, full_node=False):
+        """
+        Method returns the lvm list of a current node osds or a specific OSD in the node.
+        Args:
+            osd_node: OSD node object
+            osd_id: osd id number
+            full_node: True -> Returns the all OSD's lvm list in the node
+                       False -> Return a specific OSD lvm list
+        Returns: LVM list in the json format
+
+        """
+        if full_node and osd_id is None:
+            cmd_get_lvm_list = "cephadm shell ceph-volume lvm list --format json"
+        else:
+            cmd_get_lvm_list = (
+                f"cephadm shell ceph-volume lvm list {osd_id} --format json"
+            )
+
+        lvm_list = (osd_node.exec_command(sudo=True, cmd=cmd_get_lvm_list))[0]
+        return json.loads(lvm_list)

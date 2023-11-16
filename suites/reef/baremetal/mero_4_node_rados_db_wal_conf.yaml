@@ -1,0 +1,101 @@
+# Suite contains  tier-2 rados tests which adds DB and wal to the OSD
+#===============================================================================================
+#------------------------------------------------------------------------------------------
+#-----      Tier-2 Add DB & Wal LVM path to the existing OSD                         ------
+#------------------------------------------------------------------------------------------
+# Conf: conf/reef/baremetal/mero_4_node_4_client_conf
+#
+#===============================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_spec_hdd
+                  placement:
+                    host_pattern: '*'
+                  spec:
+                    data_devices:
+                      rotational: 1
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - cephadm
+        node: node4
+      desc: "Configure the client system "
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      name: DB and WAL configuration
+      desc: Add DB and WAL to the existing OSD
+      module: test_osd_db_wal_configuration.py
+      polarion-id: CEPH-83574885
+      abort-on-fail: true
