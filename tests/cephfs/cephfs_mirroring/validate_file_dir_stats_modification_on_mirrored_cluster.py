@@ -13,8 +13,6 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     try:
-        tc = "CEPH-83575625"
-        log.info(f"Running CephFS tests for Polarion ID -{tc}")
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"))
@@ -45,6 +43,14 @@ def run(ceph_cluster, **kw):
         log.info("Enable mirroring mgr module on source and destination")
         enable_mirroring_on_source = fs_mirroring_utils.enable_mirroring_module(
             source_clients[0]
+        )
+        daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
+        fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
+        asok_file = fs_mirroring_utils.get_asok_file(
+            cephfs_mirror_node[0], fsid, daemon_name
+        )
+        peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
+            source_clients[0], source_fs
         )
         if enable_mirroring_on_source:
             log.error("Mirroring module not enabled on Source Cluster.")
@@ -103,6 +109,7 @@ def run(ceph_cluster, **kw):
                 "size": "5368709120",
             },
         ]
+
         for subvolume in subvolume_list:
             fs_util_ceph1.create_subvolume(source_clients[0], **subvolume)
         mounting_dir = "".join(
@@ -171,13 +178,18 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"mkdir {fuse_mounting_dir_1}{subvol2_path}/.snap/{snap2}"
         )
         log.info("Validate the Snapshot Synchronisation on Target Cluster")
-        (
-            fsid,
-            asok_file,
-            filesystem_id,
-            peer_uuid,
-        ) = fs_mirroring_utils.validate_synchronization(
+
+        validate_syncronisation = fs_mirroring_utils.validate_synchronization(
             cephfs_mirror_node[0], source_clients[0], source_fs, 2
+        )
+        if validate_syncronisation:
+            log.error("Snapshot sync failed")
+            raise CommandFailed("Snapshot sync failed")
+        filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
+            source_clients[0], source_fs
+        )
+        peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
+            source_clients[0], source_fs
         )
         result_snap_k1 = fs_mirroring_utils.validate_snapshot_sync_status(
             cephfs_mirror_node[0],
