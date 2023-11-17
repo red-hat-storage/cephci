@@ -86,6 +86,8 @@ def run(ceph_cluster, **kw):
         commands = [
             "ceph config set mon mon_allow_pool_delete true",
             f"ceph fs volume rm {fs_name} --yes-i-really-mean-it",
+            "ceph osd pool rm cfs_data  cfs_data --yes-i-really-really-mean-it",
+            "ceph osd pool rm cfs_metadata  cfs_metadata --yes-i-really-really-mean-it",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
