@@ -1,11 +1,13 @@
 import json
 import secrets
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -48,7 +50,9 @@ def run(ceph_cluster, **kw):
         fuse_mount_dir = "/mnt/fuse_" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
-        fs_util.fuse_mount(
+        time.sleep(60)
+        retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.fuse_mount)
+        retry_mount(
             [client1],
             fuse_mount_dir,
             new_client_hostname="admin",
@@ -60,6 +64,7 @@ def run(ceph_cluster, **kw):
             f"mkdir subdir;"
             f"dd if=/dev/urandom of=subdir/sixmegs bs=1M conv=fdatasync count=6 seek=0;",
         )
+        fs_details = fs_util.get_fs_info(client1, fs_name=fs_name)
 
         out, rc = client1.exec_command(
             sudo=True, cmd=f"rados ls -p cephfs.{fs_name}.data -f json"
@@ -99,13 +104,23 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Initiate recovery tools on filesystem")
-        cmd_list = [
-            f"cephfs-data-scan init --force-init --filesystem {fs_name}",
-            f"cephfs-data-scan scan_extents --filesystem {fs_name}",
-            f"cephfs-data-scan scan_inodes --filesystem {fs_name}",
-            f"cephfs-data-scan scan_links --filesystem {fs_name}",
-            f"cephfs-data-scan cleanup --filesystem {fs_name}",
-        ]
+        if int(build.split(".")[0]) > 7:
+            cmd_list = [
+                f"cephfs-data-scan init --force-init --filesystem {fs_name}",
+                f"cephfs-data-scan scan_extents --filesystem {fs_name}",
+                f"cephfs-data-scan scan_inodes --filesystem {fs_name}",
+                f"cephfs-data-scan scan_links --filesystem {fs_name}",
+                f"cephfs-data-scan cleanup --filesystem {fs_name}",
+            ]
+        else:
+            cmd_list = [
+                f"cephfs-data-scan init --force-init --filesystem {fs_name}",
+                f"cephfs-data-scan scan_extents --filesystem {fs_name} {fs_details['data_pool_name']}",
+                f"cephfs-data-scan scan_inodes --filesystem {fs_name} {fs_details['data_pool_name']}",
+                f"cephfs-data-scan scan_links --filesystem {fs_name}",
+                f"cephfs-data-scan cleanup --filesystem {fs_name} {fs_details['data_pool_name']}",
+            ]
+
         for cmd in cmd_list:
             client1.exec_command(sudo=True, cmd=cmd)
 

@@ -3158,7 +3158,7 @@ os.system('sudo systemctl start  network')
             raise CommandFailed(f"Ceph Cluster is in {health_status} State")
         log.info("Ceph Cluster is Healthy")
 
-    @retry(CommandFailed, tries=5, delay=30)
+    @retry(CommandFailed, tries=10, delay=30)
     def wait_for_host_online(self, client1, node):
         out, rc = client1.exec_command(sudo=True, cmd="ceph orch host ls -f json")
         hosts = json.loads(out)

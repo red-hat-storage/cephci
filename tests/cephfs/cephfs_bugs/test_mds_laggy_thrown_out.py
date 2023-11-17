@@ -1,10 +1,13 @@
+import json
 import secrets
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -12,19 +15,21 @@ log = Log(__name__)
 def run(ceph_cluster, **kw):
     try:
         """
-         CEPH-83575624 - when a standby-replay node is laggy it should be thrown out from the MDS map
-                        if the beacon grace period reaches 15sec.
+        CEPH-83575781 - Allow entries to be removed from lost+found directory in File System
 
-        Steps:
+        Steps to create lost+found directory in FS
         1. Create filesystem
-        2. mount the Fs and set mas mds 2
-        3. set allow_standby_replay to true/1
-        4. write data
-        5. collect standby reply nodes
-        6. Stop the network for 10 sec on the first stnadby reply node
-        7. verify if there is change in stnadby nodes
-        8. Stop the network for 60 sec
-        9. Verify if there change in standby reply nodes. Expectations is to have change in standby node
+        2. mount the Fs
+        3. write data
+        4. purge the metadata pool
+        5. get rados objects from the data written and deleta object
+        6. Reset the sessions,snaps,inodes and file system
+        7. Fail the Fs
+        8. Reset the FS
+        9. Initate recovery tools on FS
+        10. This will create lost+found dir
+
+        As part of TC delete the contents on lost+found  directory
 
         Cleanup:
         1. unmount the FS
@@ -40,27 +45,14 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
-        fs_name = "cephfs_mds_laggy"
-        file = "network_disconnect.sh"
+        fs_name = "cephfs_lost_found"
         fs_util.create_fs(client1, fs_name)
-        mds_nodes = ceph_cluster.get_nodes("mds")
-        host_list = [node.hostname for node in mds_nodes]
-        hosts = " ".join(host_list)
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph orch apply mds {fs_name} --placement='5 {hosts}'",
-            check_ec=False,
-        )
-        client1.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} max_mds 2")
-        client1.exec_command(
-            sudo=True, cmd=f"ceph fs set {fs_name} allow_standby_replay 1"
-        )
-        fs_util.wait_for_mds_process(client1, fs_name)
-
         fuse_mount_dir = "/mnt/fuse_" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
-        fs_util.fuse_mount(
+        time.sleep(60)
+        retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.fuse_mount)
+        retry_mount(
             [client1],
             fuse_mount_dir,
             new_client_hostname="admin",
@@ -72,59 +64,91 @@ def run(ceph_cluster, **kw):
             f"mkdir subdir;"
             f"dd if=/dev/urandom of=subdir/sixmegs bs=1M conv=fdatasync count=6 seek=0;",
         )
+        fs_details = fs_util.get_fs_info(client1, fs_name=fs_name)
 
-        standby_reply_mdss = fs_util.get_standby_replay_mdss(client1, fs_name=fs_name)
-        standby_reply_mdss_objs = [
-            ceph_cluster.get_node_by_hostname(i.split(".")[1])
-            for i in standby_reply_mdss
-        ]
-        standby_reply_mdss_objs[0].upload_file(
-            sudo=True,
-            src="tests/cephfs/cephfs_bugs/network_disconnect.sh",
-            dst=f"/root/{file}",
-        )
         out, rc = client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs status {fs_name}",
+            sudo=True, cmd=f"rados ls -p cephfs.{fs_name}.data -f json"
         )
-        log.info(out)
-        standby_reply_mdss_objs[0].exec_command(
-            sudo=True,
-            cmd=f"bash /root/{file} {standby_reply_mdss_objs[0].ip_address} 10",
-        )
-        out, rc = client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs status {fs_name}",
-        )
-        log.info(out)
-        standby_reply_mdss_10 = fs_util.get_standby_replay_mdss(
-            client1, fs_name=fs_name
-        )
-        standby_reply_mdss_objs_10 = [
-            ceph_cluster.get_node_by_hostname(i.split(".")[1])
-            for i in standby_reply_mdss_10
-        ]
-        if standby_reply_mdss != standby_reply_mdss_10:
+        rados_obj_ls = json.loads(out)
+        log.info("Delete one of the rados object")
+        if not rados_obj_ls:
             raise CommandFailed(
-                f"Standby nodes has changed\n Before : {standby_reply_mdss} \n After : {standby_reply_mdss_objs_10}"
+                "Can not execute the test cases as there are no rados objects created"
             )
-        standby_reply_mdss_objs[0].exec_command(
+        client1.exec_command(
             sudo=True,
-            cmd=f"bash /root/{file} {standby_reply_mdss_objs[0].ip_address} 20",
+            cmd=f"rados rm {rados_obj_ls[0]['name']} -p cephfs.{fs_name}.data",
         )
-        out, rc = client1.exec_command(
+        client1.exec_command(
+            sudo=True, cmd=f"cephfs-table-tool {fs_name}:0 reset session"
+        )
+        log.info("Fail File System")
+        client1.exec_command(sudo=True, cmd=f"ceph fs fail {fs_name}")
+        log.info("Reset sessions snaps and inodes")
+        cmd_list = [
+            f"cephfs-table-tool {fs_name}:0 reset session",
+            f"cephfs-table-tool {fs_name}:0 reset snap",
+            f"cephfs-table-tool {fs_name}:0 reset inode",
+        ]
+        for cmd in cmd_list:
+            client1.exec_command(sudo=True, cmd=cmd)
+
+        log.info("Reset the filesystem")
+        client1.exec_command(
+            sudo=True, cmd=f"ceph fs reset {fs_name} --yes-i-really-mean-it"
+        )
+        log.info("Reset journal")
+        client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs status {fs_name}",
-        )
-        log.info(out)
-        standby_reply_mdss_20 = fs_util.get_standby_replay_mdss(
-            client1, fs_name=fs_name
+            cmd=f"cephfs-journal-tool --rank={fs_name}:0 journal reset --force",
         )
 
-        if standby_reply_mdss == standby_reply_mdss_20:
-            raise CommandFailed(
-                f"Standby nodes did not change\n Before : {standby_reply_mdss} \n After : {standby_reply_mdss_20}"
+        log.info("Initiate recovery tools on filesystem")
+        if int(build.split(".")[0]) > 7:
+            cmd_list = [
+                f"cephfs-data-scan init --force-init --filesystem {fs_name}",
+                f"cephfs-data-scan scan_extents --filesystem {fs_name}",
+                f"cephfs-data-scan scan_inodes --filesystem {fs_name}",
+                f"cephfs-data-scan scan_links --filesystem {fs_name}",
+                f"cephfs-data-scan cleanup --filesystem {fs_name}",
+            ]
+        else:
+            cmd_list = [
+                f"cephfs-data-scan init --force-init --filesystem {fs_name}",
+                f"cephfs-data-scan scan_extents --filesystem {fs_name} {fs_details['data_pool_name']}",
+                f"cephfs-data-scan scan_inodes --filesystem {fs_name} {fs_details['data_pool_name']}",
+                f"cephfs-data-scan scan_links --filesystem {fs_name}",
+                f"cephfs-data-scan cleanup --filesystem {fs_name} {fs_details['data_pool_name']}",
+            ]
+
+        for cmd in cmd_list:
+            client1.exec_command(sudo=True, cmd=cmd)
+
+        log.info("Mark MDS as repaired")
+        client1.exec_command(sudo=True, cmd=f"ceph mds repaired {fs_name}:0")
+
+        out, rc = client1.exec_command(sudo=True, cmd=f"ls -lrt {fuse_mount_dir}")
+        if "lost+found" not in out:
+            raise CommandFailed("Unable to create lost+found directory")
+        out, rc = client1.exec_command(
+            sudo=True, cmd=f"ls -lrt {fuse_mount_dir}/lost+found/"
+        )
+        log.info(f"Contents of {fuse_mount_dir}/lost+found/ :\n {out}")
+        client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}/lost+found/*")
+        out, rc = client1.exec_command(
+            sudo=True, cmd=f"ls -lrt {fuse_mount_dir}/lost+found/"
+        )
+        if "total 0" not in out:
+            log.error(
+                f"Contents of {fuse_mount_dir}/lost+found/ after deletion:\n {out}"
             )
+            raise CommandFailed(
+                f"Some of the contents left over in {fuse_mount_dir}/lost+found/"
+            )
+        log.info(
+            f"Contents of {fuse_mount_dir}/lost+found/ after deletion:\n {out}"
+            f"\nWe are able to delete contents of lost+found dir"
+        )
 
         return 0
 
@@ -139,15 +163,4 @@ def run(ceph_cluster, **kw):
     finally:
         client1.exec_command(sudo=True, cmd=f"umount {fuse_mount_dir}", check_ec=False)
         client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}", check_ec=False)
-        client1.exec_command(
-            sudo=True, cmd=f"ceph fs set {fs_name} allow_standby_replay 0"
-        )
-        client1.exec_command(
-            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
-        )
         fs_util.remove_fs(client1, fs_name)
-        standby_node_obj = ceph_cluster.get_ceph_objects()
-        for node in standby_node_obj:
-            if node.node.hostname == standby_reply_mdss_objs[0].hostname:
-                fs_util.wait_for_host_online(client1, node)
-                break
