@@ -130,8 +130,8 @@ node("rhel-9-medium || ceph-qe-ci") {
                 "composeUrl": composeUrl
             ]
             def subject = "${env.JOB_NAME} ${currentBuild.result} for ${rhcephVersion} - ${cephVersion} build"
-            emailLib.sendEmailForListener(rhcephVersion, cephVersion, composeInfo, ciMsg, failureReason, subject)
-            googlechatnotification(url: "id:rhcephCIGChatRoom", message: "Jenkins URL: ${env.BUILD_URL}")
+            // emailLib.sendEmailForListener(rhcephVersion, cephVersion, composeInfo, ciMsg, failureReason, subject)
+            // googlechatnotification(url: "id:rhcephCIGChatRoom", message: "Jenkins URL: ${env.BUILD_URL}")
         }
     }
 }

@@ -152,15 +152,15 @@ node("rhel-9-medium || ceph-qe-ci") {
             body += "<dl><dt>Jenkins Build:</dt><dd>${env.BUILD_URL}</dd>"
             body += "<dt>Failure Reason:</dt><dd>${failureReason}</dd></dl></body>"
 
-            emailext (
-                mimeType: 'text/html',
-                subject: "${subject}",
-                body: "${body}",
-                from: "cephci@redhat.com",
-                to: "cephci@redhat.com"
-            )
+            // emailext (
+            //     mimeType: 'text/html',
+            //     subject: "${subject}",
+            //     body: "${body}",
+            //     from: "cephci@redhat.com",
+            //     to: "cephci@redhat.com"
+            // )
             subject += "\n Jenkins URL: ${env.BUILD_URL}"
-            googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
+            // googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
         }
     }
 }
