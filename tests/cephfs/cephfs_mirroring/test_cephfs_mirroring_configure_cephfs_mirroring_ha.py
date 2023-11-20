@@ -12,8 +12,10 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-83574099 - Validate the Synchronisation is successful upon enabling fs mirroring.
-    This function performs a series of operations to test CephFS mirroring.
+    CEPH-83575332 - Create a 2 Node - CephFS Mirroring HA from Cephadm shell and
+                    check if the Service has come up as expected and validate mirroring is established
+                    to a remote cluster and all the information regarding sync status
+        This function performs a series of operations to test CephFS mirroring.
     It has pre-requisites,
     performs various operations, and cleans up the system after the tests.
 
@@ -54,12 +56,11 @@ def run(ceph_cluster, **kw):
         fs_util_ceph2.prepare_clients(target_clients, build)
         fs_util_ceph1.auth_list(source_clients)
         fs_util_ceph2.auth_list(target_clients)
+
         source_fs = "cephfs"
         target_fs = "cephfs"
         target_user = "mirror_remote"
         target_site_name = "remote_site"
-
-        log.info("Deploy CephFS Mirroring Configuration")
         fs_mirroring_utils.deploy_cephfs_mirroring(
             source_fs,
             source_clients[0],
@@ -70,7 +71,6 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Create Subvolumes for adding Data")
-        log.info("Scenario 1 : ")
         subvolumegroup_list = [
             {"vol_name": source_fs, "group_name": "subvolgroup_1"},
         ]
@@ -143,32 +143,20 @@ def run(ceph_cluster, **kw):
             source_clients[0], source_fs, subvol2_path
         )
 
-        log.info("Add files into the path and create snapshot on each path")
-        snap1 = "snap_k1"
-        snap2 = "snap_f1"
-        file_name1 = "hello_kernel"
-        file_name2 = "hello_fuse"
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"touch {kernel_mounting_dir_1}{subvol1_path}hello_kernel"
-        )
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"touch {fuse_mounting_dir_1}{subvol2_path}hello_fuse"
-        )
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"mkdir {kernel_mounting_dir_1}{subvol1_path}.snap/{snap1}"
-        )
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"mkdir {fuse_mounting_dir_1}{subvol2_path}.snap/{snap2}"
-        )
-
-        log.info("Validate the Snapshot Synchronisation on Target Cluster")
-        snap_count = 2
-        validate_syncronisation = fs_mirroring_utils.validate_synchronization(
-            cephfs_mirror_node[0], source_clients[0], source_fs, snap_count
-        )
-        if validate_syncronisation:
-            log.error("Snapshot Synchronisation failed..")
-            raise CommandFailed("Snapshot Synchronisation failed")
+        snaps = ["snap_k1", "snap_f1"]
+        snap_count = len(snaps)
+        file_names = ["hello_kernel", "hello_fuse"]
+        for i, snap in enumerate(snaps):
+            source_clients[0].exec_command(
+                sudo=True,
+                cmd=f"touch {kernel_mounting_dir_1 if i == 0 else fuse_mounting_dir_1}"
+                f"{subvol1_path if i == 0 else subvol2_path}{file_names[i]}",
+            )
+            source_clients[0].exec_command(
+                sudo=True,
+                cmd=f"mkdir {kernel_mounting_dir_1 if i == 0 else fuse_mounting_dir_1}"
+                f"{subvol1_path if i == 0 else subvol2_path}.snap/{snap}",
+            )
 
         log.info(
             "Fetch the daemon_name, fsid, asok_file, filesystem_id and peer_id to validate the synchronisation"
@@ -177,10 +165,18 @@ def run(ceph_cluster, **kw):
         log.info(f"fsid on ceph cluster : {fsid}")
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
-        asok_file = fs_mirroring_utils.get_asok_file(
-            cephfs_mirror_node[0], fsid, daemon_name
+        asok_file1 = fs_mirroring_utils.get_asok_file(
+            cephfs_mirror_node[0], fsid, daemon_name[:-1]
         )
-        log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_file}")
+        asok_file2 = fs_mirroring_utils.get_asok_file(
+            cephfs_mirror_node[1], fsid, daemon_name[1:]
+        )
+        log.info(
+            f"Admin Socket file of {cephfs_mirror_node[0].node.hostname} daemon : {asok_file1}"
+        )
+        log.info(
+            f"Admin Socket file of {cephfs_mirror_node[1].node.hostname} daemon : {asok_file2}"
+        )
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
         )
@@ -190,98 +186,112 @@ def run(ceph_cluster, **kw):
         )
         log.info(f"peer uuid of {source_fs} is : {peer_uuid}")
 
-        log.info("Validate if the Snapshots are syned to Target Cluster")
-        result_snap_k1 = fs_mirroring_utils.validate_snapshot_sync_status(
-            cephfs_mirror_node[0],
-            source_fs,
-            snap1,
-            fsid,
-            asok_file,
-            filesystem_id,
-            peer_uuid,
+        log.info("Validate the Snapshot Synchronisation on Target Cluster")
+        validate_sync_dir_on_mirror_node1 = fs_mirroring_utils.get_synced_dir_count(
+            cephfs_mirror_node[0], source_clients[0], source_fs, daemon_name[:-1]
         )
-        result_snap_f1 = fs_mirroring_utils.validate_snapshot_sync_status(
-            cephfs_mirror_node[0],
-            source_fs,
-            snap2,
-            fsid,
-            asok_file,
-            filesystem_id,
-            peer_uuid,
+        log.info(
+            f"Synced directory found on {cephfs_mirror_node[0].node.hostname} "
+            f"is {validate_sync_dir_on_mirror_node1}"
         )
-        if result_snap_k1 and result_snap_f1:
-            log.info(f"Snapshot '{result_snap_k1['snapshot_name']}' has been synced:")
-            log.info(
-                f"Sync Duration: {result_snap_k1['sync_duration']} of '{result_snap_k1['snapshot_name']}'"
-            )
-            log.info(
-                f"Sync Time Stamp: {result_snap_k1['sync_time_stamp']} of '{result_snap_k1['snapshot_name']}'"
-            )
-            log.info(
-                f"Snaps Synced: {result_snap_k1['snaps_synced']} of '{result_snap_k1['snapshot_name']}'"
-            )
 
-            log.info(f"Snapshot '{result_snap_f1['snapshot_name']}' has been synced:")
-            log.info(
-                f"Sync Duration: {result_snap_f1['sync_duration']} of '{result_snap_f1['snapshot_name']}'"
-            )
-            log.info(
-                f"Sync Time Stamp: {result_snap_f1['sync_time_stamp']} of '{result_snap_f1['snapshot_name']}'"
-            )
-            log.info(
-                f"Snaps Synced: {result_snap_f1['snaps_synced']} of '{result_snap_f1['snapshot_name']}'"
-            )
+        validate_sync_dir_on_mirror_node2 = fs_mirroring_utils.get_synced_dir_count(
+            cephfs_mirror_node[1], source_clients[0], source_fs, daemon_name[1:]
+        )
+        log.info(
+            f"Synced directory found on {cephfs_mirror_node[1].node.hostname} "
+            f"is {validate_sync_dir_on_mirror_node2}"
+        )
 
-            log.info("All snapshots synced.")
+        total_dir_synced = int(validate_sync_dir_on_mirror_node1) + int(
+            validate_sync_dir_on_mirror_node2
+        )
+        log.info(f"Total Dir synced is {total_dir_synced}")
+        if total_dir_synced == snap_count:
+            log.info("Total directory count matched snap_count")
         else:
-            log.error("One or both snapshots not found or not synced.")
+            log.error("Total directory count does not match snap_count")
+            raise CommandFailed(
+                "Snapshot count doesn't match, Synchronisation has failed"
+            )
+
+        synced_snapshots = []
+        validate_synced_snaps_on_mirror_node1 = (
+            fs_mirroring_utils.extract_synced_snapshots(
+                cephfs_mirror_node[0],
+                source_fs,
+                fsid,
+                asok_file1,
+                filesystem_id,
+                peer_uuid,
+            )
+        )
+        log.info(
+            f"Synced directory found on {cephfs_mirror_node[0].node.hostname} is"
+            f" {validate_synced_snaps_on_mirror_node1}"
+        )
+        synced_snapshots.append(validate_synced_snaps_on_mirror_node1)
+
+        validate_synced_snaps_on_mirror_node2 = (
+            fs_mirroring_utils.extract_synced_snapshots(
+                cephfs_mirror_node[1],
+                source_fs,
+                fsid,
+                asok_file2,
+                filesystem_id,
+                peer_uuid,
+            )
+        )
+        log.info(
+            f"Synced directory found on {cephfs_mirror_node[1].node.hostname} is "
+            f"{validate_synced_snaps_on_mirror_node2}"
+        )
+        synced_snapshots.append(validate_synced_snaps_on_mirror_node2)
+        log.info(f"Synced Snapshots are {synced_snapshots}")
+        if all(snapshot in synced_snapshots for snapshot in snaps):
+            log.info("All snapshots are synced")
+        else:
+            log.error("One or more snapshots are not synced")
 
         log.info(
             "Validate the synced snapshots and data available on the target cluster"
         )
-        target_mount_path1 = "/mnt/remote_dir1"
-        target_mount_path2 = "/mnt/remote_dir2"
+        target_mount_paths = ["/mnt/remote_dir1", "/mnt/remote_dir2"]
         target_client_user = "client.admin"
-        source_path1 = subvol1_path
-        source_path2 = subvol2_path
-        snapshot_name1 = snap1
-        snapshot_name2 = snap2
-        expected_files1 = file_name1
-        expected_files2 = file_name2
+        source_paths = [subvol1_path, subvol2_path]
+        snapshot_names = snaps
+        expected_files = file_names
 
-        (
-            success1,
-            result1,
-        ) = fs_mirroring_utils.list_and_verify_remote_snapshots_and_data(
-            target_clients[0],
-            target_mount_path1,
-            target_client_user,
-            source_path1,
-            snapshot_name1,
-            expected_files1,
-            target_fs,
-        )
-        (
-            success2,
-            result2,
-        ) = fs_mirroring_utils.list_and_verify_remote_snapshots_and_data(
-            target_clients[0],
-            target_mount_path2,
-            target_client_user,
-            source_path2,
-            snapshot_name2,
-            expected_files2,
-            target_fs,
-        )
+        results = []
+        successes = []
 
-        if success1 and success2:
+        for target_mount_path, source_path, snapshot_name, expected_file in zip(
+            target_mount_paths, source_paths, snapshot_names, expected_files
+        ):
+            (
+                success,
+                result,
+            ) = fs_mirroring_utils.list_and_verify_remote_snapshots_and_data(
+                target_clients[0],
+                target_mount_path,
+                target_client_user,
+                source_path,
+                snapshot_name,
+                expected_file,
+                target_fs,
+            )
+            successes.append(success)
+            results.append(result)
+            log.info(f"Status of {snapshot_name}: {result}")
+
+        if all(successes):
             log.info(
-                "Test Completed Successfully.All snapshots and data are synced to target cluster"
+                "Test Completed Successfully. All snapshots and data are synced to the target cluster"
             )
         else:
-            log.info("Test Failed. Snapshots or Data are missing on target cluster.")
-        log.info(f"Status of {snap1}: {result1}")
-        log.info(f"Status of {snap2}: {result2}")
+            log.error(
+                "Test Failed. Snapshots or Data are missing on the target cluster."
+            )
         return 0
     except Exception as e:
         log.error(e)
@@ -331,9 +341,11 @@ def run(ceph_cluster, **kw):
             fs_util_ceph1.remove_subvolumegroup(source_clients[0], **subvolumegroup)
 
         log.info("Delete the mounted paths")
-        source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {kernel_mounting_dir_1}")
-        source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {fuse_mounting_dir_1}")
-
+        mounted_paths = [kernel_mounting_dir_1, fuse_mounting_dir_1]
+        for path in mounted_paths:
+            source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}")
         log.info("Cleanup Target Client")
-        fs_mirroring_utils.cleanup_target_client(target_clients[0], target_mount_path1)
-        fs_mirroring_utils.cleanup_target_client(target_clients[0], target_mount_path2)
+        for target_mount_path in target_mount_paths:
+            fs_mirroring_utils.cleanup_target_client(
+                target_clients[0], target_mount_path
+            )
