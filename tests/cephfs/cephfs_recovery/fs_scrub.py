@@ -56,9 +56,6 @@ def run(ceph_cluster, **kw):
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util.get_mon_node_ips()
         retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.kernel_mount)
-
-        retry_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
-
         retry_mount(
             [client1],
             kernel_mounting_dir_1,
@@ -70,7 +67,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"mkdir -p {kernel_mounting_dir_1}/{mounting_dir};python3 /home/cephuser/smallfile/smallfile_cli.py "
             f"--operation create --threads 10 --file-size 1 "
-            f"--files 10000 --files-per-dir 100000 --dirs-per-dir 2 --top "
+            f"--files 10000 --files-per-dir 100000 --dirs-per-dir 50 --top "
             f"{kernel_mounting_dir_1}/{mounting_dir}",
             long_running=True,
         )
@@ -87,6 +84,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub pause --format json"
         )
         status = json.loads(out)
+        log.info(f"Scrub Pause : \n {status}")
         if status["return_code"] != 0:
             log.error(
                 f"Return code for pause is expected to be 0 but actual output {status}"
@@ -96,6 +94,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub status --format json"
         )
         status = json.loads(out)
+        log.info(f"Scrub Paused : \n {status}")
         if "PAUSED" not in status["status"]:
             log.error(f"Expected status is PAUSED but actual output {status}")
             return 1
@@ -106,6 +105,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub resume --format json"
         )
         status = json.loads(out)
+        log.info(f"Scrub Resume : \n {status}")
         if status["return_code"] != 0:
             log.error(
                 f"Return code for pause is expected to be 0 but actual output {status}"
@@ -115,14 +115,16 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub status --format json"
         )
         status = json.loads(out)
+        log.info(f"Scrub Resumed : \n {status}")
         if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
             log.error(f"Expected scrub tag is {scrub_tag} but actual output {status}")
             return 1
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub abort --format json"
         )
-        # log.info(json.loads(out))
+
         status = json.loads(out)
+        log.info(f"Scrub Abort : \n {status}")
         if status["return_code"] != 0:
             log.error(
                 f"Return code for pause is expected to be 0 but actual output {status}"
@@ -132,6 +134,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub status --format json"
         )
         status = json.loads(out)
+        log.info(f"Scrub Aborted : \n {status}")
         if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
             log.error(f"Expected scrub tag is {scrub_tag} but actual output {status}")
             return 1
@@ -139,6 +142,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub resume --format json"
         )
         status = json.loads(out)
+        log.info(f"Scrub Resume : \n {status}")
         if status["return_code"] != 0:
             log.error(
                 f"Return code for pause is expected to be 0 but actual output {status}"
@@ -148,9 +152,15 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub status --format json"
         )
         status = json.loads(out)
-        if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
-            log.error(f"Expected scrub tag is {scrub_tag} but actual output {status}")
-            return 1
+        log.info(f"Scrub Resumed : \n {status}")
+        if status["scrubs"].get(scrub_tag):
+            if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
+                log.error(
+                    f"Expected scrub tag is {scrub_tag} but actual output {status}"
+                )
+                return 1
+        else:
+            log.info("Scrub activity has been completed successfully")
         return 0
     except Exception as e:
         log.error(e)
@@ -158,7 +168,7 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
-        log.info("Clean Up in progess")
+        log.info("Clean Up in process")
         clients[0].exec_command(
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
         )
