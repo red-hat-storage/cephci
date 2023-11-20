@@ -2,6 +2,7 @@ import json
 import secrets
 import string
 import traceback
+from json import JSONDecodeError
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -62,8 +63,11 @@ def run(ceph_cluster, **kw):
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
-        output = json.loads(out)
+        try:
+            out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+            output = json.loads(out)
+        except JSONDecodeError:
+            output = json.dumps([out])
         if nfs_name in output:
             log.info("ceph nfs cluster is present")
         else:
@@ -73,8 +77,11 @@ def run(ceph_cluster, **kw):
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=False):
             raise CommandFailed("Cluster has not been deleted")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
-        output = json.loads(out)
+        try:
+            out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+            output = json.loads(out)
+        except JSONDecodeError:
+            output = json.dumps([out])
         if nfs_name not in output:
             log.info("ceph nfs cluster deleted successfully")
         else:
@@ -84,8 +91,11 @@ def run(ceph_cluster, **kw):
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
-        output = json.loads(out)
+        try:
+            out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+            output = json.loads(out)
+        except JSONDecodeError:
+            output = json.dumps([out])
         if nfs_name in output:
             log.info("ceph nfs cluster created successfully")
         else:

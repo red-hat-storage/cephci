@@ -2,6 +2,7 @@ import json
 import secrets
 import string
 import traceback
+from json import JSONDecodeError
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
@@ -20,8 +21,11 @@ def run_io_commands(client, io_commands):
 
 @retry(CommandFailed, tries=3, delay=60)
 def check_nfs_ls(client, nfs_cluster):
-    out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
-    output = json.loads(out)
+    try:
+        out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+        output = json.loads(out)
+    except JSONDecodeError:
+        output = json.dumps([out])
     if nfs_cluster in output:
         log.info("ceph nfs cluster created successfully")
     else:

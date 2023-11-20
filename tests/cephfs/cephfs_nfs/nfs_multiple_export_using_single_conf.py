@@ -1,5 +1,4 @@
 import random
-import secrets
 import string
 import traceback
 
@@ -46,8 +45,7 @@ def run(ceph_cluster, **kw):
         else:
             raise CommandFailed("Failed to create nfs cluster")
         # create nfs
-        export_id1 = secrets.randbelow(1000)
-        export_id2 = secrets.randbelow(1000)
+        export_id1, export_id2 = random.sample(range(1000), 2)
         psuedo1 = f"/cephfs1_{export_id1}"
         psuedo2 = f"/cephfs2_{export_id2}"
         user_id1 = f"nfs.{nfs_name}.{export_id1}"
