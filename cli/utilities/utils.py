@@ -8,8 +8,11 @@ from subprocess import PIPE, Popen
 from threading import Thread
 from time import sleep
 
+import yaml
+
 from ceph.waiter import WaitUntil
 from cli.exceptions import OperationFailedError
+from cli.utilities.containers import Container
 from utility.log import Log
 
 log = Log(__name__)
@@ -826,3 +829,29 @@ def get_all_running_pids(node, process):
     out, _ = node.exec_command(cmd=cmd, sudo=True)
     pids = [s.strip() for s in out.split("\n") if s]
     return pids
+
+
+def get_pid_limit(node, service):
+    """
+    Gets the pids limit of a given service
+    Args:
+        node (CephNode): Ceph node where the service is running
+        service (str): Name of the service (rgw, mon, mds)
+    """
+    # Identify the process name of the given service
+    out = Container(node).ps(filter={"name": service})[0]
+    process_name = out.split("\n")[1]
+    process_name = process_name.split(" ")[0].strip()
+
+    # Check the pids-limit for identified service container
+    inspect_data = Container(node).inspect(image=process_name)[0]
+    inspect_data = yaml.safe_load(inspect_data)[0]
+    pid_limit = [
+        entry
+        for entry in inspect_data["Config"]["CreateCommand"]
+        if "--pids-limit" in entry
+    ]
+    if not pid_limit:
+        return None
+    pid_limit = re.findall(r"-?\d+", pid_limit[0])[0]
+    return pid_limit

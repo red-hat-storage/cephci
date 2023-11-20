@@ -179,3 +179,19 @@ class Container(Cli):
             return 0
         else:
             return 1
+
+    def ps(self, all=None, filter=None):
+        """
+        Returns the details of running containers
+        Args:
+            all (bool): Show all containers
+            filter (dict): Key value to filter
+        """
+        cmd = f"{self.base_cmd} ps"
+        if all:
+            cmd += " --all"
+
+        if filter:
+            for key, val in filter.items():
+                cmd += f" --filter {key}={val}"
+        return self.execute(sudo=True, cmd=cmd)
