@@ -89,6 +89,16 @@ def validate_packages(node, pkgs):
         # Compare installed package version
         compare_packages(node, pkgs)
 
+        # Check client additional package "ceph-diff-sorted" and "rgw-orphan-list"
+        if "ceph-common" in pkgs:
+            out = node.exec_command(
+                sudo=True,
+                cmd="ls -l /usr/bin/rgw-or* /usr/bin/ceph-diff*",
+            )[0]
+            if "rwxr-xr-x" not in out:
+                raise PackageError(
+                    "ceph-common not have additional package 'ceph-diff-sorted' and 'rgw-orphan-list'"
+                )
     finally:
         # Remove installed packages
         remove_packages(node, pkgs)
