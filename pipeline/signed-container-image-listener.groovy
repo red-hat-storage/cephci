@@ -164,8 +164,8 @@ node("rhel-9-medium || ceph-qe-ci") {
             "containerImage": containerImage
         ]
         def subject = "${env.JOB_NAME} ${currentBuild.result} for ${rhcephVersion} - ${cephVersion} (RC) Release Candidate build"
-        emailLib.sendEmailForListener(rhcephVersion, cephVersion, composeInfo, cimsg, failureReason, subject)
+        // emailLib.sendEmailForListener(rhcephVersion, cephVersion, composeInfo, cimsg, failureReason, subject)
         subject += "\n Jenkins URL: ${env.BUILD_URL}"
-        googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
+        // googlechatnotification(url: "id:rhcephCIGChatRoom", message: subject)
     }
 }
