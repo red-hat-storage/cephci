@@ -68,7 +68,7 @@ def krbd_io_handler(**kw):
 
             if operations.get("device_map"):
                 out = rbd.exec_cmd(cmd="rpm -qa|grep rbd-nbd", sudo=True, output=True)
-                if not out or out == 1:
+                if not out or out == 1 or "rbd-nbd" not in out:
                     rbd.exec_cmd(cmd="dnf install rbd-nbd -y", sudo=True)
 
                 out, err = rbd.device_map(
@@ -121,6 +121,7 @@ def krbd_io_handler(**kw):
                         runtime=config.get("runtime", 30),
                         size=config.get("file_size", "100M"),
                         get_time_taken=config.get("get_time_taken", False),
+                        cmd_timeout=config.get("cmd_timeout"),
                     )
                 else:
                     fio_args = {
@@ -135,6 +136,8 @@ def krbd_io_handler(**kw):
                         fio_args.update(
                             {"get_time_taken": config.get("get_time_taken")}
                         )
+                    if config.get("cmd_timeout"):
+                        fio_args.update({"cmd_timeout": config.get("cmd_timeout")})
 
                     config["time_taken"] = run_fio(**fio_args)
 

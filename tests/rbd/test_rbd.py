@@ -44,6 +44,13 @@ def one_time_setup(node, rhbuild, branch: str) -> None:
         branch: The branch that needs to be cloned
         rhbuild: specification of rhbuild. ex: 4.3-rhel-7
     """
+    node.exec_command(cmd="sudo rm -rf /etc/yum.repos.d/epel*")
+    out, _ = node.exec_command(cmd="ceph osd pool ls")
+    if out:
+        pool_list = out.split("\n")
+        if "rbd" not in pool_list:
+            node.exec_command(cmd="ceph osd pool create rbd")
+
     node.exec_command(
         cmd=f"sudo rm -rf ceph && git clone --branch {branch} --single-branch --depth 1 {TEST_REPO}"
     )

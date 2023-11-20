@@ -90,7 +90,13 @@ tests:
       config:
         rep_pool_config:
           num_pools: 1
-          num_images: 1
+          num_images: 2
+          clone_formats:
+            - 1
+            - 2
         ec_pool_config:
           num_pools: 1
-          num_images: 1
+          num_images: 2
+          clone_formats:
+            - 1
+            - 2

@@ -20,7 +20,6 @@
     10. check ceph health status
 """
 
-from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.lvm_utils import lvconvert, lvm_create, lvm_uncache, pvcreate, vgcreate
@@ -153,7 +152,7 @@ def run(ceph_cluster, **kw):
 
     config = kw.get("config")
     rbd = initial_rbd_config(**kw)["rbd_reppool"]
-    cache_client = get_node_by_id(ceph_cluster, config["client"])
+    cache_client = rbd.ceph_client
 
     pool_name = config["rep_pool_config"]["pool"]
 

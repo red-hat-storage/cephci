@@ -10,6 +10,8 @@ Support
 - Only replicated pool supported, No EC pools.
 - Cannot be executed in parallel, if it is same pool or image.
 """
+from time import sleep
+
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_peristent_writeback_cache import (
@@ -78,63 +80,79 @@ def run(ceph_cluster, **kw):
     """
     log.info("Running PWL....")
     config = kw.get("config")
-    rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
-    cache_client = get_node_by_id(ceph_cluster, config["client"])
-    pool = config["rep_pool_config"]["pool"]
-    image = f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"
-    resize = config["rep_pool_config"]["resize_to"]
-    size = config["rep_pool_config"]["size"]
 
-    pwl = PersistentWriteAheadLog(rbd_obj, cache_client, config.get("drive"))
-    config_level, entity = get_entity_level(config)
-
-    try:
-        # Configure PWL
-        pwl.configure_cache_client()
-
-        if config.get("validate_exclusive_lock"):
-            config["image_spec"] = image
-            validate_pwl_without_exclusive_lock(pwl, config, cache_client)
-            return 0
-
-        pwl.configure_pwl_cache(
-            config["rbd_persistent_cache_mode"],
-            config_level,
-            entity,
-            config["cache_file_size"],
+    for level in config.get("levels"):
+        cache_client = get_node_by_id(ceph_cluster, config["client"])
+        kw["ceph_client"] = cache_client
+        rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
+        pool = config["rep_pool_config"]["pool"]
+        image_spec = (
+            f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"
         )
+        image = config["rep_pool_config"]["image"]
+        resize = config["rep_pool_config"].get("resize_to", "")
+        size = config["rep_pool_config"]["size"]
 
-        # Run FIO, validate cache file existence in self.pwl_path under cache node
-        with parallel() as p:
-            p.spawn(run_fio, **fio_ready(config, cache_client))
-            pwl.check_cache_file_exists(
-                image,
-                config["fio"].get("runtime", 120),
-                **config,
+        pwl = PersistentWriteAheadLog(rbd_obj, cache_client, config.get("drive"))
+
+        config["level"] = level
+        config_level, entity = get_entity_level(config)
+
+        try:
+            # Configure PWL
+            pwl.configure_cache_client()
+
+            if config.get("validate_exclusive_lock"):
+                config["image_spec"] = image_spec
+                validate_pwl_without_exclusive_lock(pwl, config, cache_client)
+                return 0
+
+            pwl.configure_pwl_cache(
+                config["rbd_persistent_cache_mode"],
+                config_level,
+                entity,
+                config["cache_file_size"],
             )
 
-        # Increasing the image size
-        if rbd_obj.image_resize(pool, image, resize):
-            log.error(f"Image resize failed for {image}")
-            return 1
+            # Run FIO, validate cache file existence in self.pwl_path under cache node
+            with parallel() as p:
+                p.spawn(run_fio, **fio_ready(config, cache_client))
+                pwl.check_cache_file_exists(
+                    image_spec,
+                    config["fio"].get("runtime", 120),
+                    **config,
+                )
 
-        # shrinking the image to original size
-        if rbd_obj.image_resize(pool, image, size):
-            log.error(f"Image resize failed for {image}")
-            return 1
+            # Increasing the image size
+            if resize and rbd_obj.image_resize(pool, image, resize):
+                log.error(f"Image resize failed for {image}")
+                return 1
 
-        # Removing the image
-        rbd_obj.remove_image(pool_name=pool, image_name=image)
-        if rbd_obj.image_exists(pool_name=pool, image_name=image):
-            log.error(f"Image {image} not deleted successfully")
-            return 1
-        return 0
-    except Exception as err:
-        log.error(err)
-    finally:
-        if config.get("cleanup"):
-            pwl.remove_pwl_configuration(config_level, entity)
-            rbd_obj.clean_up(pools=[pool])
-            pwl.cleanup()
+            # shrinking the image to original size
+            if resize and rbd_obj.image_resize(pool, image, size):
+                log.error(f"Image resize failed for {image}")
+                return 1
 
-    return 1
+            image_status = rbd_obj.image_status(image_spec=image_spec, output=True)
+
+            while "Watchers: none" not in image_status:
+                log.info(f"Image status: {image_status}")
+                sleep(10)
+                image_status = rbd_obj.image_status(image_spec=image_spec, output=True)
+
+            # Removing the image
+            rbd_obj.remove_image(pool_name=pool, image_name=image)
+            if rbd_obj.image_exists(pool_name=pool, image_name=image):
+                log.error(f"Image {image} not deleted successfully")
+                return 1
+        except Exception as err:
+            log.error(err)
+            return 1
+        finally:
+            if config.get("cleanup"):
+                if level != "image":
+                    pwl.remove_pwl_configuration(config_level, entity)
+                rbd_obj.clean_up(pools=[pool])
+                pwl.cleanup()
+
+    return 0

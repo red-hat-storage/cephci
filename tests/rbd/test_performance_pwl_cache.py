@@ -72,6 +72,7 @@ def write_data_compare_time_taken(cache, cfg, client):
                     "device_map": True,
                 },
                 "skip_mkfs": False,
+                "cmd_timeout": 2400,
             },
         }
         krbd_io_handler(**io_config)
@@ -154,8 +155,9 @@ def run(ceph_cluster, **kw):
     )
     config = kw.get("config")
     for level in config.get("levels"):
-        rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
         cache_client = get_node_by_id(ceph_cluster, config["client"])
+        kw["ceph_client"] = cache_client
+        rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
         pool = config["rep_pool_config"]["pool"]
         image = (
             f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"

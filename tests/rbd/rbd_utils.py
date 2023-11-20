@@ -29,6 +29,7 @@ class Rbd:
         self.flag = 0
         self.k_m = self.config.get("ec-pool-k-m", None)
         self.failure_domain = self.config.get("crush-failure-domain", None)
+        self.ceph_client = kw.get("ceph_client")
 
         if kw.get("req_cname"):
             self.ceph_nodes = kw["ceph_cluster_dict"][kw["req_cname"]]
@@ -40,7 +41,7 @@ class Rbd:
             if node.role == "mon":
                 self.ceph_mon = node
                 continue
-            if node.role == "client":
+            if not self.ceph_client and node.role == "client":
                 self.ceph_client = node
                 continue
 

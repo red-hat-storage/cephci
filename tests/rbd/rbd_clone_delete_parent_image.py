@@ -1,3 +1,5 @@
+from time import sleep
+
 from ceph.parallel import parallel
 from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import initial_rbd_config, rbd_remove_image_negative_validate
@@ -63,6 +65,7 @@ def rbd_clone_delete_parent_image(rbd, pool_type, **kw):
             p.spawn(rbd_remove_image_negative_validate, rbd, pool, image)
 
         # move image to trash and delete permanantly and verify trash
+        sleep(60)
         rbd.move_image_trash(pool, image)
         image_id = rbd.get_image_id(pool, image)
         log.info(f"image id is {image_id}")

@@ -95,6 +95,16 @@ tests:
       module: test_client.py
       name: "configure client"
       polarion-id: CEPH-83573758
+
+  - test:
+      desc: Remove any epel packages
+      module: exec.py
+      name: Remove epel packages
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+
   -
     test:
       config:

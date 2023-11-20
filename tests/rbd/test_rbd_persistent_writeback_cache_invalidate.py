@@ -46,6 +46,11 @@ def validate_cache_invalidate(cache, cfg, client):
         cfg: test config
         client: cache client node
     """
+    cache.check_cache_file_exists(
+        f"{cfg['rep_pool_config']['pool']}/{cfg['rep_pool_config']['image']}",
+        cfg["fio"].get("runtime", 120),
+        **cfg,
+    )
     out = cache.get_image_cache_status(cfg["image_spec"])
     log.debug(f"RBD status of image: {out}")
 
@@ -111,49 +116,53 @@ def run(ceph_cluster, **kw):
             invalidate at image/pool/client(node) level in SSD mode	"
     )
     config = kw.get("config")
-    rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
     cache_client = get_node_by_id(ceph_cluster, config["client"])
+    kw["ceph_client"] = cache_client
+    rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
     pool = config["rep_pool_config"]["pool"]
     image = f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"
     config["image_spec"] = image
 
     pwl = PersistentWriteAheadLog(rbd_obj, cache_client, config.get("drive"))
-    config_level, entity = get_entity_level(config)
 
-    try:
-        # Configure PWL
-        pwl.configure_cache_client()
-
+    for level in config.get("levels"):
+        config["level"] = level
         config_level, entity = get_entity_level(config)
 
-        pwl.configure_pwl_cache(
-            config["rbd_persistent_cache_mode"],
-            config_level,
-            entity,
-            config["cache_file_size"],
-        )
+        try:
+            # Configure PWL
+            pwl.configure_cache_client()
 
-        # Run FIO, validate cache file existence in self.pwl_path under cache node
-        with parallel() as p:
-            p.spawn(run_fio, **fio_ready(config, cache_client))
-            pwl.check_cache_file_exists(
-                image,
-                config["fio"].get("runtime", 120),
-                **config,
+            config_level, entity = get_entity_level(config)
+
+            pwl.configure_pwl_cache(
+                config["rbd_persistent_cache_mode"],
+                config_level,
+                entity,
+                config["cache_file_size"],
             )
 
-        # Run FIO, perform cache invalidate and verify the same
-        with parallel() as p:
-            p.spawn(run_fio, **fio_ready(config, cache_client))
-            p.spawn(validate_cache_invalidate, pwl, config, cache_client)
+            # Run FIO, validate cache file existence in self.pwl_path under cache node
+            with parallel() as p:
+                p.spawn(run_fio, **fio_ready(config, cache_client))
+                pwl.check_cache_file_exists(
+                    image,
+                    config["fio"].get("runtime", 120),
+                    **config,
+                )
 
-        return 0
-    except Exception as err:
-        log.error(err)
-    finally:
-        if config.get("cleanup"):
-            pwl.remove_pwl_configuration(config_level, entity)
-            rbd_obj.clean_up(pools=[pool])
-            pwl.cleanup()
+            # Run FIO, perform cache invalidate and verify the same
+            with parallel() as p:
+                p.spawn(run_fio, **fio_ready(config, cache_client))
+                p.spawn(validate_cache_invalidate, pwl, config, cache_client)
 
-    return 1
+            return 0
+        except Exception as err:
+            log.error(err)
+        finally:
+            if config.get("cleanup"):
+                pwl.remove_pwl_configuration(config_level, entity)
+                rbd_obj.clean_up(pools=[pool])
+                pwl.cleanup()
+
+        return 1
