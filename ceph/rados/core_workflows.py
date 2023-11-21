@@ -2636,3 +2636,43 @@ class RadosOrchestrator:
 
         lvm_list = (osd_node.exec_command(sudo=True, cmd=cmd_get_lvm_list))[0]
         return json.loads(lvm_list)
+
+    def get_osd_memory_usage(self, node_object, osd_id):
+        """
+        Methods returns the OSD memory usage
+        Args:
+            node_object: The osd node object
+            osd_id:  The osd id(number)
+
+        Returns: Memory usage of the OSD at that time
+
+        """
+        try:
+            cmd_get_memory = (
+                f'ps -eo pmem,args | grep -E "ceph-osd.*osd.{osd_id}\\b" | '
+                + ('grep -v "init\\| grep" ' "| awk '{print $1}'")
+            )
+            memory_usage = node_object.exec_command(cmd=cmd_get_memory, sudo=True)
+            return float(memory_usage[0].strip())
+        except Exception:
+            raise
+
+    def get_osd_cpu_usage(self, node_object, osd_id):
+        """
+        Methods returns the CPU usage
+        Args:
+            node_object:  The osd node object
+            osd_id: The osd id(number)
+
+        Returns: CPU usage of the OSD at that time.
+
+        """
+        try:
+            cmd_get_cpu = (
+                f'ps -eo pcpu,args | grep -E "ceph-osd.*osd.{osd_id}\\b" | '
+                + ('grep -v "init\\| grep" ' "| awk '{print $1}'")
+            )
+            cpu_usage = node_object.exec_command(cmd=cmd_get_cpu, sudo=True)
+            return float(cpu_usage[0].strip())
+        except Exception:
+            raise
