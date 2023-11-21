@@ -237,6 +237,7 @@ def create_nodes(
                     private_ip=private_ip,
                     hostname=node.hostname,
                     ceph_vmnode=node,
+                    ceph_nodename=node.node.name,
                     id=node.id,
                 )
                 ceph_nodes.append(ceph)
