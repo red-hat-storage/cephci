@@ -46,8 +46,8 @@ def run(ceph_cluster, **kw):
     cmd = "ceph osd pool set noautoscale"
     rados_obj.run_ceph_command(cmd=cmd)
 
-    # sleeping for 5 seconds as the command takes some time to affect the status of pools
-    time.sleep(5)
+    # sleeping for 20 seconds as the command takes some time to affect the status of pools
+    time.sleep(20)
 
     # Getting the autoscale configurations after setting the flag
     # all the pools should have autoscale set to off

@@ -195,7 +195,8 @@ class MonConfigMethods:
         cmd = f"{cmd} {kwargs['name']} {kwargs['value']}"
         self.rados_obj.node.shell([cmd])
 
-        # Sleeping for 1 second for config to be applied
+        # Sleeping for 10 second for config to be applied
+        time.sleep(10)
         log.debug("verifying the value set")
         if not self.verify_set_config(**kwargs):
             log.error(f"Value for config: {kwargs['name']} could not be set")
@@ -252,7 +253,8 @@ class MonConfigMethods:
         cmd = f"{cmd} {kwargs['name']}"
         self.rados_obj.node.shell([cmd])
 
-        # Sleeping for 1 second for config to be applied
+        # Sleeping for 10 second for config to be applied
+        time.sleep(10)
         log.debug("verifying the value set")
         if self.verify_set_config(**kwargs):
             log.error(f"Value for config: {kwargs['name']} is still set")
