@@ -40,6 +40,9 @@ def run(ceph_cluster, **kw):
 
     rados_obj.bench_write(pool_name=pool_name, byte_size=1024, rados_write_duration=50)
 
+    # Increasing backfill & recovery rate
+    rados_obj.change_recovery_threads(config={}, action="set")
+
     log.info("---------- starting workflow 1 - Addition of new mons --------")
     # Setting the mon service as unmanaged by cephadm
     if not mon_obj.set_mon_service_managed_type(unmanaged=True):
@@ -273,6 +276,10 @@ def run(ceph_cluster, **kw):
             log.error("Checks failed post mon reboots")
             raise Exception("Sanity check failed post mon reboots")
         log.debug(f"Successfully restarted mon : {mon_node.hostname}")
+
+    # setting the backfill & recovery rate to default
+    rados_obj.change_recovery_threads(config={}, action="rm")
+
     log.info(
         "Completed rolling reboot of all mon daemons and sanity check."
         " All scenarios Passed"

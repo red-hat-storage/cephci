@@ -567,7 +567,7 @@ class RadosOrchestrator:
             )
         for cmd in cfg_map:
             if action == "set":
-                command = f"{cfg_map[cmd]} {config.get(cmd, 8)}"
+                command = f"{cfg_map[cmd]} {config.get(cmd, 12)}"
             else:
                 command = cfg_map[cmd]
             self.node.shell([command])
