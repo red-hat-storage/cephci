@@ -125,7 +125,7 @@ class Node:
         node = self.cloud.get_node_by_id(self.id)
 
         # Attach volumes to node
-        volumes = volume if type(volume) in (list, tuple) else (volume)
+        volumes = volume if type(volume) in (list, tuple) else [volume]
         for v in volumes:
             self.cloud.attach_volume(node, self.cloud.get_volume_by_name(v))
 
