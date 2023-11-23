@@ -140,6 +140,20 @@ def run(**kw):
         archive_client_node = archive_cluster.get_ceph_object("client").node
         archive_cluster_exists = True
 
+    tertiary_cluster_exists = False
+    if "ceph-ter" in clusters.keys():
+        if "ceph-arc" not in clusters.keys():
+            tertiary_cluster = clusters.get(
+                "ceph-ter", clusters[list(clusters.keys())[2]]
+            )
+        else:
+            tertiary_cluster = clusters.get(
+                "ceph-ter", clusters[list(clusters.keys())[3]]
+            )
+        tertiary_rgw_node = tertiary_cluster.get_ceph_object("rgw").node
+        tertiary_client_node = tertiary_cluster.get_ceph_object("client").node
+        tertiary_cluster_exists = True
+
     test_folder = "rgw-ms-tests"
     test_folder_path = f"/home/cephuser/{test_folder}"
     home_dir_path = "/home/cephuser/"
@@ -154,7 +168,9 @@ def run(**kw):
         if archive_cluster_exists:
             set_test_env(config, archive_rgw_node)
             set_test_env(config, archive_client_node)
-
+        if tertiary_cluster_exists:
+            set_test_env(config, tertiary_rgw_node)
+            set_test_env(config, tertiary_client_node)
         if primary_cluster.rhcs_version.version[0] >= 5:
             setup_cluster_access(primary_cluster, primary_client_node)
             setup_cluster_access(secondary_cluster, secondary_client_node)
@@ -164,6 +180,10 @@ def run(**kw):
                 setup_cluster_access(archive_cluster, archive_rgw_node)
                 setup_cluster_access(archive_cluster, archive_client_node)
                 set_config_param(archive_client_node)
+            if tertiary_cluster_exists:
+                setup_cluster_access(tertiary_cluster, tertiary_rgw_node)
+                setup_cluster_access(tertiary_cluster, tertiary_client_node)
+                set_config_param(tertiary_client_node)
             ms_clusters = [primary_client_node, secondary_client_node]
             for cluster_node in ms_clusters:
                 set_config_param(cluster_node)
