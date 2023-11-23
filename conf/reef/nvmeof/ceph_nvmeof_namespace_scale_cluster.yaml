@@ -36,7 +36,3 @@ globals:
         id: node10
         role:
           - client
-      node7:
-        id: node11
-        role:
-          - client

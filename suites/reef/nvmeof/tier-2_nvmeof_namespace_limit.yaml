@@ -5,6 +5,9 @@
   #  nvmeof GW - at end of each scale step/ test below is the configuration
      # Scale-1 : 1000 namespaces
      # Scale-2 : 2000 namespaces
+     # Scale-3 : 3000 namespaces
+     # Scale-4 : 4000 namespaces
+     # Scale-5 : 5000 namespaces
   #  nvmeof initiator - Each initiator/ client connects to same subsystem
   #  io test (no performance tests)
      # Tool : fio
