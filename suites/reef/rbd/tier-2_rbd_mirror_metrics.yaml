@@ -27,7 +27,6 @@ tests:
                   args:
                     mon-ip: node1
                     orphan-initial-daemons: true
-                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
@@ -61,7 +60,6 @@ tests:
                   args:
                     mon-ip: node1
                     orphan-initial-daemons: true
-                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
@@ -180,3 +178,17 @@ tests:
             io_total: 4G
       polarion-id: CEPH-83575564
       desc: Validate rbd mirror daemon related journal based metrics
+
+  - test:
+      name: Test to verify rbd mirror related network connection metrics
+      module: test_rbd_mirror_connection_metrics.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 10G
+            io_total: 4G
+            mode: image
+            mirrormode: snapshot
+            ceph_exporter_port: "9926"
+      polarion-id: CEPH-83575566
+      desc: Validate rbd mirror related connection health metrics
