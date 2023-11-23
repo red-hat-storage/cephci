@@ -47,6 +47,7 @@ class Ceph(object):
         self.custom_config = None
         self.allow_custom_ansible_config = True
         self.__rhcs_version = None
+        self.ceph_nodename = None
         self.networks = dict()
 
     def __eq__(self, ceph_cluster):
@@ -1315,6 +1316,7 @@ class CephNode(object):
         self.ip_address = kw["ip_address"]
         self.subnet = kw["subnet"]
         self.vmname = kw["hostname"]
+        self.ceph_nodename = kw["ceph_nodename"]
         self.vmshortname = self.vmname.split(".")[0]
 
         if kw.get("ceph_vmnode"):
