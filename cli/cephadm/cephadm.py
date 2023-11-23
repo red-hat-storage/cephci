@@ -12,7 +12,7 @@ class CephAdm(Cli):
         self.base_cmd = base_cmd
         self.base_shell_cmd = f"{self.base_cmd} shell"
         if mount:
-            self.base_shell_cmd += f" --mount {mount} --"
+            self.base_shell_cmd += f" --mount {mount}:{mount} --"
 
         self.ceph = Ceph(nodes, self.base_shell_cmd)
 
