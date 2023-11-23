@@ -329,11 +329,9 @@ def setup_installer_node(
     # Check for ansible preflight
     if not ansible_preflight:
         # Install cephadm package
-        install_cephadm(
-            installer, ceph_version, platform, tools_repo, build_type, ibm_build
-        )
+        install_cephadm(installer, build_type)
 
-        return
+        return True
 
     # Install cephadm ansible preflight
     install_cephadm_ansible(installer, ceph_version, platform, tools_repo, build_type)
