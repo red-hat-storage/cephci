@@ -357,6 +357,7 @@ class CephfsMirroringUtils(object):
         out, _ = cephfs_mirror_node.exec_command(sudo=True, cmd="cephadm ls")
         data = json.loads(out)
         fsid = data[0]["fsid"]
+        log.info(fsid)
         return fsid
 
     def get_daemon_name(self, source_clients):
@@ -372,8 +373,9 @@ class CephfsMirroringUtils(object):
             sudo=True, cmd="ceph orch ps --daemon_type cephfs-mirror -f json"
         )
         data = json.loads(out)
-        daemon_name = data[0]["daemon_name"]
-        return daemon_name
+        daemon_names = [daemon_info["daemon_name"] for daemon_info in data]
+        log.info(daemon_names)
+        return daemon_names
 
     def get_filesystem_id_by_name(self, source_clients, fs_name):
         """
@@ -394,6 +396,7 @@ class CephfsMirroringUtils(object):
             if filesystem["name"] == fs_name:
                 filesystem_id = filesystem["filesystem_id"]
                 break
+        log.info(filesystem_id)
         return filesystem_id
 
     def get_peer_uuid_by_name(self, source_clients, fs_name):
@@ -417,9 +420,10 @@ class CephfsMirroringUtils(object):
                 for peer in peers:
                     peer_uuid = peer["uuid"]
                     break
+        log.info(peer_uuid)
         return peer_uuid
 
-    def get_asok_file(self, cephfs_mirror_node, fsid, daemon_name):
+    def get_asok_file(self, cephfs_mirror_node, fsid, daemon_names):
         """
         Fetches the asok file of the cephfs-mirror daemon.
         Args:
@@ -430,9 +434,13 @@ class CephfsMirroringUtils(object):
             str: The path to the asok file of the cephfs-mirror daemon.
         """
         log.info("Fetch the asok file of the cephfs-mirror daemon.")
-        cmd = f"cd /var/run/ceph/{fsid}/ ; ls -1tr ceph-client.{daemon_name}* | head -n 1 | tr -d '\\n'"
-        file = cephfs_mirror_node.exec_command(sudo=True, cmd=cmd)
-        asok_file = file[0].replace("\\n", "")
+        asok_files = []
+        for daemon_name in daemon_names:
+            cmd = f"cd /var/run/ceph/{fsid}/ ; ls -1tr ceph-client.{daemon_name}* | head -n 1 | tr -d '\\n'"
+            file = cephfs_mirror_node.exec_command(sudo=True, cmd=cmd)
+            asok_file = file[0].replace("\\n", "")
+            asok_files.append(asok_file)
+            log.info(asok_file)
         return asok_file
 
     @retry(CommandFailed, tries=5, delay=30)
@@ -477,6 +485,101 @@ class CephfsMirroringUtils(object):
             raise CommandFailed(
                 "Snap Directory Count is not matching, Synchronization failed"
             )
+
+    @retry(CommandFailed, tries=5, delay=30)
+    def get_synced_dir_count(
+        self,
+        cephfs_mirror_node,
+        source_clients,
+        fs_name,
+        daemon_name,
+    ):
+        """
+        Gets the count of synced directories from the CephFS mirror status.
+
+        Args:
+        - cephfs_mirror_node: The node where the CephFS mirror is hosted
+        - source_clients: Source clients information
+        - fs_name: The name of the file system
+        - daemon_name: The name of the daemon
+
+        Returns:
+        - int: The count of synced directories
+
+        Raises:
+        - CommandFailed: If the directory count is not found or synchronization fails
+        """
+        fsid = self.get_fsid(cephfs_mirror_node)
+        filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
+        asok_file = self.get_asok_file(cephfs_mirror_node, fsid, daemon_name)
+        log.info("Get the details of synced dir from cephfs-mirror status")
+        log.info("Install ceph-common on cephfs-mirror node")
+        cephfs_mirror_node.exec_command(
+            sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
+        )
+        log.info("Get filesystem mirror status")
+        out, _ = cephfs_mirror_node.exec_command(
+            sudo=True,
+            cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file} "
+            f"fs mirror status {fs_name}@{filesystem_id} -f json",
+        )
+        data = json.loads(out)
+        log.info(data)
+        dir_count = data.get("snap_dirs", {}).get("dir_count")
+        if not data.get("snap_dirs"):
+            raise CommandFailed("Unable to get the Snap Dir")
+        if dir_count:
+            log.info(f"Snap Directory Count : {dir_count}")
+        else:
+            log.error(
+                "Snap Directory Count is not matching, Synchronization of snapshots failed"
+            )
+            raise CommandFailed("Snap Directory Count is not matching.")
+        log.info(dir_count)
+        return dir_count
+
+    @retry(CommandFailed, tries=5, delay=30)
+    def extract_synced_snapshots(
+        self,
+        cephfs_mirror_node,
+        fs_name,
+        fsid,
+        asok_file,
+        filesystem_id,
+        peer_uuid,
+    ):
+        """
+        Extracts the name of the last synced snapshot from the CephFS mirror status.
+
+        Args:
+        - cephfs_mirror_node: The node where the CephFS mirror is hosted
+        - fs_name: The name of the file system
+        - fsid: The FSID of the file system
+        - asok_file: The ASOK file for administrative commands
+        - filesystem_id: The ID of the filesystem
+        - peer_uuid: The UUID of the peer cluster
+
+        Returns:
+        - str: The name of the last synced snapshot, if found
+
+        Raises:
+        - CommandFailed: If the snapshot is not found or not synced after multiple attempts
+        """
+        log.info("Get peer mirror status")
+        log.info("Validate the snapshot sync to target cluster.")
+        cmd = (
+            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file} fs mirror peer status "
+            f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
+        )
+        out, _ = cephfs_mirror_node.exec_command(sudo=True, cmd=cmd)
+        data = json.loads(out)
+        for path, status in data.items():
+            last_synced_snap = status.get("last_synced_snap")
+            if last_synced_snap:
+                return last_synced_snap.get("name")
+
+        log.error("last synced Snapshot not found or not synced")
+        raise CommandFailed("last synced Snapshot not found or not synced")
 
     @retry(CommandFailed, tries=5, delay=30)
     def validate_snapshot_sync_status(
@@ -638,9 +741,6 @@ class CephfsMirroringUtils(object):
                 )
         except Exception as e:
             return False, f"Error: {str(e)}"
-        finally:
-            target_clients.exec_command(sudo=True, cmd=f"umount {target_mount_path}")
-            target_clients.exec_command(sudo=True, cmd=f"rm -rf {target_mount_path}")
 
     def cleanup_target_client(self, target_clients, target_mount_path):
         """
@@ -663,3 +763,111 @@ class CephfsMirroringUtils(object):
             )
         except Exception as e:
             log.error(f"Error during cleanup: {str(e)}")
+
+    def deploy_cephfs_mirroring(
+        self,
+        source_fs,
+        source_client,
+        target_fs,
+        target_client,
+        target_user,
+        target_site_name,
+    ):
+        """
+        Deploy CephFS mirroring setup between source and target filesystems.
+
+        Args:
+        - source_fs (str): Name of the source filesystem.
+        - source_client: Client object for the source.
+        - target_fs (str): Name of the target filesystem.
+        - target_client: Client object for the target.
+        - target_user (str): User to be authorized for the target filesystem.
+        - target_site_name (str): Name of the target site.
+
+        Raises:
+        - Exception: If any step fails during the setup process.
+        """
+        try:
+            log.info("Enable mirroring module on source")
+            if self.enable_mirroring_module(source_client) != 0:
+                raise Exception("Failed to enable mirroring module on Source.")
+
+            log.info("Enable mirroring module on target")
+            if self.enable_mirroring_module(target_client) != 0:
+                raise Exception("Failed to enable mirroring module on Target.")
+
+            log.info("Create and authorize user for the target filesystem")
+            if self.create_authorize_user(target_fs, target_user, target_client) != 0:
+                raise Exception(
+                    "Failed to create/authorize user for the target filesystem."
+                )
+
+            log.info("Enable snapshot mirroring on the source filesystem")
+            self.enable_snapshot_mirroring(source_fs, source_client)
+
+            log.info("Create peer bootstrap token")
+            token = self.create_peer_bootstrap(
+                target_fs, target_user, target_site_name, target_client
+            )
+
+            log.info("Import peer bootstrap token on the source filesystem")
+            self.import_peer_bootstrap(source_fs, token, source_client)
+
+            log.info("Validate peer connection")
+            if (
+                self.validate_peer_connection(
+                    source_client, source_fs, target_site_name, target_user, target_fs
+                )
+                != 0
+            ):
+                raise Exception("Peer connection validation failed.")
+
+            log.info("CephFS mirroring setup deployed successfully.")
+
+        except Exception as e:
+            log.error(f"Error deploying CephFS mirroring setup: {e}")
+
+    def destroy_cephfs_mirroring(
+        self, source_fs, source_client, target_fs, target_client, target_user, peer_uuid
+    ):
+        """
+        Destroy CephFS mirroring setup between source and target filesystems.
+
+        Args:
+        - source_fs (str): Name of the source filesystem.
+        - source_client: Client object for the source.
+        - target_fs (str): Name of the target filesystem.
+        - target_client: Client object for the target.
+        - target_user (str): User used for the target filesystem.
+        - peer_uuid (str): UUID of the peer connection.
+
+        Raises:
+        - Exception: If any step fails during the teardown process.
+        """
+        try:
+            log.info("Remove snapshot mirror peer")
+            if not self.remove_snapshot_mirror_peer(
+                source_client, target_fs, peer_uuid
+            ):
+                raise Exception(
+                    f"Failed to remove peer '{peer_uuid}' for filesystem '{target_fs}'"
+                )
+
+            log.info("Disable snapshot mirroring on the source filesystem")
+            self.disable_snapshot_mirroring(source_fs, source_client)
+
+            log.info("Remove user used for peer connection")
+            self.remove_user_used_for_peer_connection(target_user, target_client)
+
+            log.info("Disable mirroring module on Source")
+            if self.disable_mirroring_module(source_client) != 0:
+                raise Exception("Failed to disable mirroring module on Source.")
+
+            log.info("Disable mirroring module on Target")
+            if self.disable_mirroring_module(target_client) != 0:
+                raise Exception("Failed to disable mirroring module on Target.")
+
+            log.info("CephFS mirroring setup destroyed successfully.")
+
+        except Exception as e:
+            log.error(f"Error destroying CephFS mirroring setup: {e}")

@@ -13,6 +13,8 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     try:
+        tc = "CEPH-83575625"
+        log.info(f"Running CephFS tests for Polarion ID -{tc}")
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"))
@@ -40,54 +42,16 @@ def run(ceph_cluster, **kw):
         target_fs = "cephfs"
         target_user = "mirror_remote"
         target_site_name = "remote_site"
-        log.info("Enable mirroring mgr module on source and destination")
-        enable_mirroring_on_source = fs_mirroring_utils.enable_mirroring_module(
-            source_clients[0]
-        )
-        daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
-        fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
-        asok_file = fs_mirroring_utils.get_asok_file(
-            cephfs_mirror_node[0], fsid, daemon_name
-        )
-        peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
-            source_clients[0], source_fs
-        )
-        if enable_mirroring_on_source:
-            log.error("Mirroring module not enabled on Source Cluster.")
-            raise CommandFailed("Enable mirroring mgr module failed")
-        enable_mirroring_on_target = fs_mirroring_utils.enable_mirroring_module(
-            target_clients[0]
-        )
-        if enable_mirroring_on_target:
-            log.error("Mirroring module not enabled on Target Cluster.")
-            raise CommandFailed("Enable mirroring mgr module failed")
-        log.info("Create a user on target cluster for peer connection")
-        target_user_for_peer = fs_mirroring_utils.create_authorize_user(
+        log.info("Deploy CephFS Mirroring Configuration")
+        fs_mirroring_utils.deploy_cephfs_mirroring(
+            source_fs,
+            source_clients[0],
             target_fs,
-            target_user,
             target_clients[0],
+            target_user,
+            target_site_name,
         )
-        if target_user_for_peer:
-            log.error("User Creation Failed with the expected caps")
-            raise CommandFailed("User Creation Failed")
-        log.info(f"Enable cephfs mirroring module on the {source_fs}")
-        fs_mirroring_utils.enable_snapshot_mirroring(source_fs, source_clients[0])
-        log.info("Create the peer bootstrap")
-        bootstrap_token = fs_mirroring_utils.create_peer_bootstrap(
-            target_fs, target_user, target_site_name, target_clients[0]
-        )
-        log.info(f"Token generated after peer bootstrap : {bootstrap_token}")
-        log.info("Import the bootstrap on source")
-        fs_mirroring_utils.import_peer_bootstrap(
-            source_fs, bootstrap_token, source_clients[0]
-        )
-        log.info("Get Peer Connection Information")
-        validate_peer_connection = fs_mirroring_utils.validate_peer_connection(
-            source_clients[0], source_fs, target_site_name, target_user, target_fs
-        )
-        if validate_peer_connection:
-            log.error("Peer Connection not established")
-            raise CommandFailed("Peer Connection failed to establish")
+
         log.info("Create Subvolumes for adding Data")
         log.info("Scenario 1 : ")
         subvolumegroup_list = [
@@ -109,7 +73,6 @@ def run(ceph_cluster, **kw):
                 "size": "5368709120",
             },
         ]
-
         for subvolume in subvolume_list:
             fs_util_ceph1.create_subvolume(source_clients[0], **subvolume)
         mounting_dir = "".join(
@@ -177,20 +140,36 @@ def run(ceph_cluster, **kw):
         source_clients[0].exec_command(
             sudo=True, cmd=f"mkdir {fuse_mounting_dir_1}{subvol2_path}/.snap/{snap2}"
         )
-        log.info("Validate the Snapshot Synchronisation on Target Cluster")
 
-        validate_syncronisation = fs_mirroring_utils.validate_synchronization(
-            cephfs_mirror_node[0], source_clients[0], source_fs, 2
+        log.info("Validate the Snapshot Synchronisation on Target Cluster")
+        snap_count = 2
+        validate_synchronisation = fs_mirroring_utils.validate_synchronization(
+            cephfs_mirror_node[0], source_clients[0], source_fs, snap_count
         )
-        if validate_syncronisation:
-            log.error("Snapshot sync failed")
-            raise CommandFailed("Snapshot sync failed")
+        if validate_synchronisation:
+            log.error("Snapshot Synchronisation failed..")
+            raise CommandFailed("Snapshot Synchronisation failed")
+
+        log.info(
+            "Fetch the daemon_name, fsid, asok_file, filesystem_id and peer_id to validate the synchronisation"
+        )
+        fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
+        log.info(f"fsid on ceph cluster : {fsid}")
+        daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
+        log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
+        asok_file = fs_mirroring_utils.get_asok_file(
+            cephfs_mirror_node[0], fsid, daemon_name
+        )
+        log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_file}")
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
         )
+        log.info(f"filesystem id of {source_fs} is : {filesystem_id}")
         peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
             source_clients[0], source_fs
         )
+        log.info(f"peer uuid of {source_fs} is : {peer_uuid}")
+
         result_snap_k1 = fs_mirroring_utils.validate_snapshot_sync_status(
             cephfs_mirror_node[0],
             source_fs,
@@ -383,13 +362,6 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        log.info("Remove paths used for mirroring")
-        fs_mirroring_utils.remove_path_from_mirroring(
-            source_clients[0], source_fs, subvol1_path
-        )
-        fs_mirroring_utils.remove_path_from_mirroring(
-            source_clients[0], source_fs, subvol2_path
-        )
         log.info("Clean up the system")
         log.info("Delete the snapshots")
         snap_del_list = ["snap_k1", "snap_f1", "snap_f2", "snap_f3"]
@@ -404,24 +376,30 @@ def run(ceph_cluster, **kw):
                 cmd=f"rmdir {fuse_mounting_dir_1}{subvol2_path}/.snap/{snap}",
                 check_ec=False,
             )
-        log.info("Cleanup Target Client")
-        fs_mirroring_utils.cleanup_target_client(target_clients[0], target_mount_path)
+
         log.info("Unmount the paths")
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}"
+        paths_to_unmount = [kernel_mounting_dir_1, fuse_mounting_dir_1]
+        for path in paths_to_unmount:
+            source_clients[0].exec_command(sudo=True, cmd=f"umount -l {path}")
+
+        log.info("Remove paths used for mirroring")
+        fs_mirroring_utils.remove_path_from_mirroring(
+            source_clients[0], source_fs, subvol1_path
         )
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"umount -l {fuse_mounting_dir_1}"
+        fs_mirroring_utils.remove_path_from_mirroring(
+            source_clients[0], source_fs, subvol2_path
         )
-        log.info("Remove snapshot mirroring")
-        if fs_mirroring_utils.remove_snapshot_mirror_peer(
-            source_clients[0], source_fs, peer_uuid
-        ):
-            log.info("Peer removal is successful.")
-        else:
-            log.error("Peer removal failed.")
-        log.info("Disable CephFS Snapshot mirroring")
-        fs_mirroring_utils.disable_snapshot_mirroring(source_fs, source_clients[0])
+
+        log.info("Destroy CephFS Mirroring Setup")
+        fs_mirroring_utils.destroy_cephfs_mirroring(
+            source_fs,
+            source_clients[0],
+            target_fs,
+            target_clients[0],
+            target_user,
+            peer_uuid,
+        )
+
         log.info("Remove Subvolumes")
         for subvolume in subvolume_list:
             # print the file in the subvolume
@@ -443,6 +421,12 @@ def run(ceph_cluster, **kw):
         source_clients[0].exec_command(sudo=True, cmd=f"rmdir {kernel_mounting_dir_1}")
         source_clients[0].exec_command(sudo=True, cmd=f"rmdir {fuse_mounting_dir_1}")
 
-        log.info("Disable mirroring mgr module on source and destination")
-        fs_mirroring_utils.disable_mirroring_module(source_clients[0])
-        fs_mirroring_utils.disable_mirroring_module(target_clients[0])
+        log.info("Cleanup Target Client")
+        fs_mirroring_utils.cleanup_target_client(target_clients[0], target_mount_path)
+        log.info("Unmount the paths")
+        source_clients[0].exec_command(
+            sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}"
+        )
+        source_clients[0].exec_command(
+            sudo=True, cmd=f"umount -l {fuse_mounting_dir_1}"
+        )

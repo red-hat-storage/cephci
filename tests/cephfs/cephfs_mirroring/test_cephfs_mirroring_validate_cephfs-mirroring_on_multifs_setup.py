@@ -564,10 +564,10 @@ def run(ceph_cluster, **kw):
 
         log.info("Delete the users used for creating peer bootstrap")
         fs_mirroring_utils.remove_user_used_for_peer_connection(
-            f"client.{target_user1}", target_clients[0]
+            target_user1, target_clients[0]
         )
         fs_mirroring_utils.remove_user_used_for_peer_connection(
-            f"client.{target_user2}", target_clients[0]
+            target_user2, target_clients[0]
         )
 
         log.info("Cleanup Target Client")
