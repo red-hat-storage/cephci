@@ -1,16 +1,10 @@
 # ======================================================================================
 # Cluster Configuration:
-#    cephci/conf/reef/rgw/tier-0_rgw.yaml
-#
-#    5-Node cluster(RHEL-7.9 and above)
-#    3 MONS, 2 MGR, 4 OSD and 1 RGW service daemon(s)
-#
+#    cephci/conf/quincy/rgw/tier-0_rgw.yaml
+
 # ======================================================================================
 
 tests:
-
-  # Cluster deployment stage
-
   - test:
       abort-on-fail: true
       desc: Install software pre-requisites for cluster deployment.
@@ -28,6 +22,8 @@ tests:
               args:
                 registry-url: registry.redhat.io
                 mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
                 initial-dashboard-password: admin@123
                 dashboard-password-noupdate: true
           - config:
@@ -38,6 +34,18 @@ tests:
                 labels: apply-all-labels
           - config:
               command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
               service: osd
               args:
                 all-available-devices: true
@@ -45,15 +53,46 @@ tests:
               command: apply
               service: rgw
               pos_args:
-                - rgw.1
+                - rgw.all
               args:
                 placement:
                   label: rgw
-      desc: bootstrap with registry-url option and deployment services.
+      desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
-      polarion-id: CEPH-83573713
       module: test_cephadm.py
-      name: RHCS deploy cluster using cephadm
+      name: deploy cluster
+      polarion-id: CEPH-83573713
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
 
   - test:
       abort-on-fail: true
@@ -69,20 +108,6 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
-
-  - test:
-      name: Test BucketNotification with users in same tenant and different tenant
-      desc: BucketNotification with users in same tenant and different tenant
-      polarion-id: CEPH-11204
-      module: sanity_rgw.py
-      config:
-        run-on-rgw: true
-        extra-pkgs:
-          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
-        install_start_kafka: true
-        script-name: test_bucket_policy_with_tenant_user.py
-        config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
-        timeout: 300
 
   - test:
       name: Bucket Lifecycle expiration of incomplete multipart

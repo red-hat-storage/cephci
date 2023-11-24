@@ -931,3 +931,13 @@ tests:
         script-name: user_create.py
         config-file-name: test_user_modify_with_placementid.yaml
         timeout: 500
+
+  - test:
+      name: Bucket Lifecycle expiration of incomplete multipart
+      desc: Bucket Lifecycle expiration of incomplete multipart
+      polarion-id: CEPH-11195
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lc_incomplete_multipart.yaml
+        timeout: 300
