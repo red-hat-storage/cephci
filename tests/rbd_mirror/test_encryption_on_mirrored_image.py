@@ -194,6 +194,7 @@ def test_rbd_encryption(mirror_obj, pool, image, format, **kw):
     parent_file_path = f"/tmp/{image}_dir/{image}_file"
     clone_file_path = f"/tmp/{clone}_dir/{image}_file"
     mirrormode = kw.get("mirrormode", "")
+    mirror_obj.pop("output", [])
 
     for val in mirror_obj.values():
         if val.get("is_secondary", False) == kw.get("is_secondary"):
