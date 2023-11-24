@@ -3127,6 +3127,7 @@ os.system('sudo systemctl start  network')
         log.info(service_ls)
         if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
             raise CommandFailed(f"All {service_name} are Not UP")
+        return True
 
     def validate_ports(self, client, service_name, port):
         json_data, rc = client.exec_command(
