@@ -199,3 +199,17 @@ tests:
       module: test_rbd_compression.py
       name: Test to verify data compression on global, pool and image level
       polarion-id: CEPH-83574644
+
+  - test:
+      desc: Verify python rbd module
+      config:
+        do_not_create_image: true
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+        ec_pool_config:
+          num_pools: 1
+          num_images: 1
+      module: test_rbd_python_module.py
+      polarion-id: CEPH-83574791
+      name: Test image creation, write and read data using python rbd module
