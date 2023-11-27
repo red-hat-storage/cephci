@@ -27,6 +27,19 @@ def argsMap = [
             "keepalived_image": "registry-proxy.engineering.redhat.com/rh-osbs/keepalived:ceph-6.0-rhel-9-containers-candidate-18945-20221026120854",
             "snmp_gateway_image": "registry-proxy.engineering.redhat.com/rh-osbs/snmp-notifier:ceph-6.0-rhel-9-containers-candidate-15559-20221026120853"
         ]
+    ],
+    "7": [
+        "inventory": "conf/inventory/rhel-9.0-server-x86_64-large.yaml",
+        "globalConf": "conf/reef/integrations/7_node_ceph.yaml",
+        "suite": "suites/reef/integrations/ocs.yaml",
+        "platform": "rhel-9",
+        "rgwSecure": "suites/reef/integrations/ocs_rgw_ssl.yaml",
+        "overrides": [
+            "grafana_image": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:9.4.7-1",
+            "prometheus_image": "registry.redhat.io/openshift4/ose-prometheus:v4.12",
+            "node_exporter_image": "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.12",
+            "alertmanager_image": "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.12"
+        ]
     ]
 ]
 def ciMap = [:]
