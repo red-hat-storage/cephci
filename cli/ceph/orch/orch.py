@@ -50,12 +50,13 @@ class Orch(Cli):
             return out[0].strip()
         return out
 
-    def apply(self, service_name=None, check_ec=False, **kw):
+    def apply(self, service_name=None, input=None, check_ec=False, **kw):
         """
         Applies the configuration to hosts.
 
         Args:
             service_name : name of the service
+            input (str): file path
             check_ec (bool): check error message
             kw (dict): key/value pairs that needs to be provided to the installer.
 
@@ -67,6 +68,8 @@ class Orch(Cli):
         cmd = f"{self.base_cmd} apply"
         if service_name:
             cmd += f" {service_name}"
+        if input:
+            cmd += f" -i {input}"
         for arg in kw.pop("pos_args"):
             cmd += f" {arg}"
         cmd += build_cmd_from_args(**kw)
