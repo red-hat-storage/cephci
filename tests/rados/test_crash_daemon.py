@@ -34,21 +34,13 @@ def run(ceph_cluster, **kw):
         # 1. Crash an OSD daemon and inject crash manually
         out, _ = cephadm.shell(args=["ceph osd ls"])
         osd_list = out.strip().split("\n")
+        log.debug(f"List of OSDs: {osd_list}")
         osd_id = random.choice(osd_list)
         log.debug(f"Chosen OSD to crash: OSD.{osd_id}")
         # ensure chosen daemon is not already in crash state
         health_detail, _ = cephadm.shell(["ceph health detail"])
         assert f"osd.{osd_id} crashed" not in health_detail
         assert rados_obj.crash_ceph_daemon(daemon="osd", id=osd_id, manual_inject=True)
-
-        # 2. Crash a MON daemon and let the crash show up automatically
-        mon_list = rados_obj.run_ceph_command("ceph status")["quorum_names"]
-        mon_id = mon_list[0]
-        log.debug(f"Chosen MON to crash: mon.{mon_id}")
-        # ensure chosen daemon is not already in crash state
-        health_detail, _ = cephadm.shell(["ceph health detail"])
-        assert f"mon.{mon_id} crashed" not in health_detail
-        assert rados_obj.crash_ceph_daemon(daemon="mon", id=mon_id)
 
         # archive all existing crashes
         crash_id_list = [
@@ -66,7 +58,26 @@ def run(ceph_cluster, **kw):
             raise AssertionError(
                 "Crash archive failed, crash ls-new still shows crashes"
             )
-        log.info("Archiving of all all existing crashes complete")
+        log.info("Archiving of all existing crashes complete")
+
+        # 2. Crash a MON daemon and let the crash show up automatically
+        mon_list = rados_obj.run_ceph_command("ceph status")["quorum_names"]
+        mon_id = mon_list[-1]
+        log.debug(f"Chosen MON to crash: mon.{mon_id}")
+        # ensure chosen daemon is not already in crash state
+        health_detail, _ = cephadm.shell(["ceph health detail"])
+        assert f"mon.{mon_id} crashed" not in health_detail
+        assert rados_obj.crash_ceph_daemon(daemon="mon", id=mon_id)
+
+        # archive new crash using archive-all
+        cephadm.shell(["ceph crash archive-all"])
+        time.sleep(5)
+        if len(rados_obj.run_ceph_command("ceph crash ls-new")) != 0:
+            log.error("Crash archive failed, crash ls-new still shows crashes")
+            raise AssertionError(
+                "Crash archive failed, crash ls-new still shows crashes"
+            )
+        log.info("Archiving of all existing crashes complete")
 
         # logging ceph crash stat
         out, _ = cephadm.shell(["ceph crash stat"])

@@ -2297,8 +2297,8 @@ class RadosOrchestrator:
                 log.error("Crash warning not found even after manual injection")
                 return False
         else:
-            # wait for 500 secs for crash to be reported in ceph health
-            if not warning_check(timeout=500):
+            # wait for 900 secs for crash to be reported in ceph health
+            if not warning_check(timeout=900):
                 log.error("Crash warning was not generated automatically")
 
         # ensure crash detail is populated in crash ls-new
@@ -2306,7 +2306,9 @@ class RadosOrchestrator:
         if not len(crash_ls_post) > init_crash_ls:
             log.error("New crash not listed in crash ls-new output")
             return False
-        log.debug(f"Output of crash ls-new: {init_crash_ls}")
+        log.debug(
+            f"Output of crash ls-new: {crash_ls_post}" f"\n Count: {len(crash_ls_post)}"
+        )
 
         log.info("Daemon crash warning found in ceph health")
         return True

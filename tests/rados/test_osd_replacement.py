@@ -35,6 +35,7 @@ def run(ceph_cluster, **kw):
     try:
         out, _ = cephadm.shell(args=["ceph osd ls"])
         osd_list = out.strip().split("\n")
+        log.debug(f"List of OSDs: {osd_list}")
         osd_id = int(random.choice(osd_list))
         osd_list.pop(osd_id)
         osd_metadata = ceph_cluster.get_osd_metadata(osd_id=int(osd_id), client=client)
