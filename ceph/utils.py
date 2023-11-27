@@ -526,16 +526,19 @@ def setup_repos(
     installer_url=None,
     repos=None,
     cloud_type="openstack",
+    ibm_build=False,
 ):
-    if base_url.endswith(".repo"):
+    if base_url.endswith(".repo") or ibm_build:
         cmd = f"yum-config-manager --add-repo {base_url}"
         ceph.exec_command(sudo=True, cmd=cmd)
+
     elif base_url.endswith("/repo"):
         cmd = f"curl -L -o /etc/yum.repos.d/upstream.repo {base_url}"
         ceph.exec_command(sudo=True, cmd=cmd)
 
         if "centos" in base_url:
             add_centos_epel_repo(ceph, platform)
+
     else:
         if not repos:
             repos = ["MON", "OSD", "Tools"]

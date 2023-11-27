@@ -246,6 +246,7 @@ class BootstrapMixin:
                     platform=_platform,
                     repos=repos,
                     cloud_type=cloud_type,
+                    ibm_build=ibm_build,
                 )
 
         ansible_run = config.get("cephadm-ansible", None)
