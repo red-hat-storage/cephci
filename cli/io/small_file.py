@@ -2,6 +2,7 @@ from random import choice
 from string import ascii_lowercase, digits
 
 from cli import Cli
+from cli.exceptions import IOError
 
 SMALL_FILE_COMMAND = "python3 smallfile/smallfile_cli.py "
 
@@ -10,6 +11,19 @@ class SmallFile(Cli):
     def __init__(self, client):
         super(SmallFile, self).__init__(client)
         self.client = client
+
+    def pull_smallfile_repo(self):
+        """
+        Git pulls Smallfile repo
+        """
+        try:
+            # Install Fio packages
+            cmd = (
+                "git clone https://github.com/distributed-system-analysis/smallfile.git"
+            )
+            self.execute(sudo=True, long_running=True, cmd=cmd)
+        except Exception:
+            raise IOError("Failed to pull SmallFile")
 
     def run(
         self,
@@ -36,6 +50,9 @@ class SmallFile(Cli):
         """
         if not isinstance(operations, list):
             operations = [operations]
+
+        # Install smallfile
+        self.pull_smallfile_repo()
 
         dir = "".join(choice(ascii_lowercase + digits) for _ in range(10))
 
