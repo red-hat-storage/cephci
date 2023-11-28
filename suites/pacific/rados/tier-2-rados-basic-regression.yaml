@@ -23,6 +23,7 @@ tests:
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 allow-fqdn-hostname: true
+                orphan-initial-daemons: true
           - config:
               command: add_hosts
               service: host
