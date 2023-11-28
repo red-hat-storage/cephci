@@ -102,9 +102,9 @@ def run(ceph_cluster, **kw):
         log.info(f"Performing the repair on the osd-{primary_osd}")
         repair_output = bluestore_obj.repair(primary_osd)
         log.info(f"The repair status is:{repair_output}")
-        health_check = rados_obj.check_inconsistent_health()
+        health_check = rados_obj.check_inconsistent_health(False)
         log.info(f"The health status after the repair is ::{health_check}")
-        assert not health_check
+        assert health_check
         log.info("The inconsistent objects are repaired")
         # Checking for the inconsistent pg's
         inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)

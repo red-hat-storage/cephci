@@ -2142,20 +2142,36 @@ class RadosOrchestrator:
             log.info(f"The inconsistent objects list is empty in the PG {pg_id}")
         return object_details
 
-    def check_inconsistent_health(self):
+    def check_inconsistent_health(self, inconsistent_present: bool = True):
         """
         Method perform the health check for the inconsistent objects
+        Args:
+            inconsistent_present : Flag for Checking inconsistent pg present or not
+
         Returns: True -> Contain inconsistent objects
                  False -> Not contain inconsistent objects
         """
-        health_detail, _ = self.node.shell(args=["ceph health detail"])
-        log.info(f"Health warning: \n {health_detail}")
-        if "inconsistent" not in health_detail:
-            log.info("pg inconsistent not generated in the cluster")
+        # Check in the cluster maximum 10 minutes
+        time_check = 600
+        start_time = time.time()
+        while time.time() - start_time < time_check:
+            health_detail, _ = self.node.shell(args=["ceph health detail"])
+            log.info(f"Health warning: \n {health_detail}")
+            if "inconsistent" not in health_detail and inconsistent_present is False:
+                log.info("pg inconsistent not exists in the cluster")
+                return True
+            elif "inconsistent" in health_detail and inconsistent_present is True:
+                log.info("pg inconsistent generated in the cluster")
+                return True
+            else:
+                log.info("Waiting for the correct status in the cluster")
+                time.sleep(30)
+        if inconsistent_present is True:
+            log.error("Failed to generate pg inconsistent in the cluster")
             return False
-        else:
-            log.info("pg inconsistent generated in the cluster")
-            return True
+        elif inconsistent_present is False:
+            log.error("Failed to clean pg inconsistent in the cluster")
+            return False
 
     def create_inconsistent_object(self, pool_name, object_name):
         """
@@ -2182,6 +2198,7 @@ class RadosOrchestrator:
         if not self.change_osd_state(action="stop", target=primary_osd):
             log.error(f"Unable to stop the OSD : {primary_osd}")
             raise Exception("Execution error")
+        time.sleep(30)
         # Getting the key list
         key_list = self.get_object_key_list(primary_osd, pg_id, object_name)
         rm_key_count = 0
@@ -2198,7 +2215,7 @@ class RadosOrchestrator:
         self.run_deep_scrub(pgid=pg_id)
         # sleeping for 10 seconds, waiting for scrubbing to be over
         time.sleep(10)
-        health_check = self.check_inconsistent_health()
+        health_check = self.check_inconsistent_health(True)
         assert health_check
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
