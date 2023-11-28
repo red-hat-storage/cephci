@@ -80,3 +80,27 @@ class Ceph(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def dashboard(self, **kw):
+        """
+        Executed ceph dashboard commands
+        Args:
+            kw (dict): Key/value pairs of dashboard command arg
+            Supported Keys:
+                set-jwt-token-ttl <seconds:int>
+                dashboard create-self-signed-cert
+                grafana dashboards update
+                get-account-lockout-attempts
+                set-account-lockout-attempts <value>
+                reset-account-lockout-attempts
+                get-alertmanager-api-host
+                set-alertmanager-api-host <value>
+                reset-alertmanager-api-host
+        """
+        cmd = f"{self.base_cmd} dashboard "
+        for key, val in kw.items():
+            cmd += f"{key} {val}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out

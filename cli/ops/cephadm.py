@@ -1,8 +1,10 @@
 import json
+import re
 import tempfile
 
 import yaml
 
+from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError, ResourceNotFoundError
 from cli.utilities.configs import get_registry_details
@@ -182,3 +184,35 @@ def bootstrap(
         raise OperationFailedError("Failed to bootstrap cluster")
 
     return True
+
+
+def is_prometheus_enabled(installer):
+    """Checks if prometheus is enabled
+    Args:
+        installer (CephInstallerNode): Ceph installer node
+    """
+    if get_module_status(installer, "prometheus") == "on":
+        return False
+    return True
+
+
+def is_dashboard_enabled(installer):
+    """Checks if dashboard is enabled
+    Args:
+        installer (CephInstallerNode): Ceph installer node
+    """
+    if not get_module_status(installer, "dashboard") == "on":
+        return False
+    return True
+
+
+def get_module_status(installer, module):
+    """Gets the status of a given module
+    Args:
+        installer (CephInstallerNode): Ceph installer node
+        module (str): Module whose status needs to be checked
+    """
+    out = Ceph(installer).mgr.module.ls()
+    if re.search(f"{module}.*on", out):
+        return "on"
+    return "off"

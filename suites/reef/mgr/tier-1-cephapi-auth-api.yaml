@@ -150,3 +150,13 @@ tests:
   #        api: auth.logout
   #        method: post
   #        status_code: 200
+
+  - test:
+      name: Test allow configuration of prometheus authentication using cephadm
+      desc: Verify that authentication of mon stack is implemented and configurable in RHCS5
+      module: test_mon_stack_auth.py
+      polarion-id: CEPH-83575111
+      abort-on-fail: false
+      config:
+        username: "admin"
+        password: "admin@123"
