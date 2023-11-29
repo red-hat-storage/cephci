@@ -218,9 +218,59 @@ def get_entity_level(config):
     return config_level, entity
 
 
-def fio_ready(config, client):
+def fio_ready(config, client, **kw):
     """Method to prepare FIO config args."""
     fio_args = config["fio"]
     fio_args["client_node"] = client
     fio_args["long_running"] = True
+
+    if kw:
+        fio_args.update(kw)
     return fio_args
+
+
+def unmount(rbd, mount_point):
+    """Unmount the mount point
+
+    Args:
+        rbd: RBD object.
+        mount_point: directory where image is mounted
+    """
+    flag = 0
+    umount_cmd = f"umount -f {mount_point}"
+    if rbd.exec_cmd(cmd=umount_cmd, sudo=True):
+        log.error(f"Umount failed for {mount_point}")
+        flag = 1
+
+    if rbd.exec_cmd(cmd=f"rm -rf {mount_point}", sudo=True):
+        log.error(f"Remove dir failed for {mount_point}")
+        flag = 1
+
+    return flag
+
+
+def device_cleanup(rbd):
+    """Unmount and unmap the device.
+
+    Args:
+        rbd: RBD object
+    """
+    cmd = "lsblk --include 43 --json"
+    out = rbd.exec_cmd(cmd=cmd, sudo=True, output=True)
+    if out:
+        rbd_devices = loads(out)
+
+        for devices in rbd_devices.get("blockdevices"):
+            device_name = f"/dev/{devices.get('name')}"
+            mount_points = devices.get("mountpoints")
+            for mount_point in mount_points:
+                unmount(rbd=rbd, mount_point=mount_point)
+            out_2 = rbd.device_map(
+                operation="unmap",
+                image_spec=f"{device_name}",
+                device_type="nbd",
+                encryption_config=[],
+                long_running=True,
+            )
+            if out_2:
+                log.error(f"RBD unmap failed for {device_name} ")
