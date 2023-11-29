@@ -1,7 +1,9 @@
 """RBD Persistent write back cache."""
 
 import datetime
+import re
 from json import loads
+from time import sleep
 
 from utility.log import Log
 
@@ -274,3 +276,16 @@ def device_cleanup(rbd):
             )
             if out_2:
                 log.error(f"RBD unmap failed for {device_name} ")
+
+
+def kill_fio(rbd):
+    """
+    Kill the fio process running on the client
+    """
+    sleep(60)
+    cmd = "ps -ef | grep fio"
+    out = rbd.exec_cmd(cmd=cmd, sudo=True, output=True)
+    if out and re.findall(r"(fio).*(--name)", out, re.I):
+        proc_id = re.search(r"\d+", out).group()
+        cmd = f"kill -9 {proc_id}"
+        rbd.exec_cmd(cmd=cmd, sudo=True)

@@ -18,34 +18,19 @@ Support
 - Configure cluster with PWL Cache.
 - Only replicated pool supported, No EC pools.
 """
-import re
-from time import sleep
-
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_peristent_writeback_cache import (
     PersistentWriteAheadLog,
     fio_ready,
     get_entity_level,
+    kill_fio,
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import run_fio
 
 log = Log(__name__)
-
-
-def kill_fio(rbd):
-    """
-    Kill the fio process running on the client
-    """
-    sleep(60)
-    cmd = "ps -ef | grep fio"
-    out = rbd.exec_cmd(cmd=cmd, sudo=True, output=True)
-    if out and re.findall(r"(fio).*(--name)", out, re.I):
-        proc_id = re.search(r"\d+", out).group()
-        cmd = f"kill -9 {proc_id}"
-        rbd.exec_cmd(cmd=cmd, sudo=True)
 
 
 def validate_cache_flush(cache, cfg, client):
