@@ -110,8 +110,8 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info("\n ****** Executing finally block ******* \n")
-            mon_obj.remove_config(section="osd", name="osd_memory_target")
             mon_obj.remove_config(section=f"osd.{osd_id}", name="osd_memory_target")
+            mon_obj.remove_config(section="osd", name="osd_memory_target")
         return 0
 
     if config.get("host_level"):
@@ -236,9 +236,18 @@ def run(ceph_cluster, **kw):
             # Changing the value of osd_memory_target for the second random OSD
             log.info(f"Setting a value for osd_memory_target at osd.{osd_ran2} level")
             assert mon_obj.set_config(
-                section=f"osd.{osd_ran}", name="osd_memory_target", value="5800000000"
+                section=f"osd.{osd_ran2}", name="osd_memory_target", value="5800000000"
             )
             log.info("OSD config parameter osd_memory_target set successfully")
+
+            # check the value osd_memory_target of 2nd random osd, should now be 5800000000
+            osdran2_get_omt, osdran2_show_omt = fetch_osd_config_value(osd_ran2)
+            log.info(
+                f"OSD osd_memory_target set for osd.{osd_ran2} from ceph config get: {osdran2_get_omt}"
+            )
+            log.info(
+                f"OSD osd_memory_target set for osd.{osd_ran2} from ceph config show: {osdran2_show_omt}"
+            )
             if not int(osdran2_get_omt) == int(osdran2_show_omt) == 5800000000:
                 log.error(
                     f"Value of osd_memory_target for osd.{osd_ran2} not set as per expectation"
@@ -261,14 +270,14 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info("\n ****** Executing finally block ******* \n")
-            mon_obj.remove_config(section="osd", name="osd_memory_target")
             mon_obj.remove_config(section=f"osd.{osd_ran}", name="osd_memory_target")
             mon_obj.remove_config(section=f"osd.{osd_ran2}", name="osd_memory_target")
             mon_obj.remove_config(
-                section=f"osd.{osd_ran2}",
+                section="osd",
                 location_type="host",
                 location_value=osd_node.hostname,
                 name="osd_memory_target",
             )
+            mon_obj.remove_config(section="osd", name="osd_memory_target")
         log.info("All verifications completed")
         return 0
