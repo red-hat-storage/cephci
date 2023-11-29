@@ -36,7 +36,7 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
     pool_name = config.get("pool_name", "test_stretch_io")
     affected_site = config.get("affected_site", "DC1")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "Arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
 
     if not stretch_enabled_checks(rados_obj=rados_obj):
         log.error(

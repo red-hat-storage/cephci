@@ -121,7 +121,7 @@ class MonitorWorkflows:
             Pass -> True, Fail -> false
         """
         cmd = f"ceph orch ps {host}"
-        out = self.rados_obj.run_ceph_command(cmd=cmd)
+        out = self.rados_obj.run_ceph_command(cmd=cmd, client_exec=True)
         for entry in out:
             if entry["daemon_type"] == "mon":
                 log.debug("Mon daemon present on the host")
@@ -144,9 +144,12 @@ class MonitorWorkflows:
         if not self.check_mon_exists_on_host(host=host):
             log.info(f"Mon daemon not present on the host {host}. Returning Pass")
             return True
-
         cmd = f"ceph orch daemon rm mon.{host} --force"
-        self.client.exec_command(sudo=True, cmd=cmd)
+        try:
+            self.client.exec_command(sudo=True, cmd=cmd)
+        except Exception as err:
+            log.debug(f"Hit issue during command execution : {err}")
+            log.debug("proceeding to check if the command execution was successful")
 
         # Sleeping for 5 seconds for the mon to be removed
         time.sleep(5)

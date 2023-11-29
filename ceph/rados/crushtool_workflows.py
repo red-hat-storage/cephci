@@ -60,7 +60,9 @@ class CrushToolWorkflows:
                 sudo=True, cmd="rpm -qa | grep ceph-base"
             )
         except Exception:
-            self.client.exec_command(sudo=True, cmd="yum install -y ceph-base")
+            self.client.exec_command(
+                sudo=True, cmd="yum install -y ceph-base --nogpgcheck"
+            )
 
     def generate_crush_map_bin(self, loc="/tmp") -> (bool, str):
         """Module to generate the CRUSH bin file
@@ -694,7 +696,9 @@ class OsdToolWorkflows:
                 sudo=True, cmd="rpm -qa | grep ceph-base"
             )
         except Exception:
-            self.client.exec_command(sudo=True, cmd="yum install -y ceph-base")
+            self.client.exec_command(
+                sudo=True, cmd="yum install -y ceph-base --nogpgcheck"
+            )
 
     def generate_osdmap(self, loc="/tmp") -> (bool, str):
         """Module to generate the osdmap bin file
