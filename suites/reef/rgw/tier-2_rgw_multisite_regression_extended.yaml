@@ -1,12 +1,14 @@
-# Test suite for evaluating RGW multi-site deployment scenario.
+# ======================================================================================
+# Cluster Configuration:
+#    cephci/conf/reef/rgw/rgw_multisite.yaml
 #
-# This suite deploys a single realm (India) spanning across two RHCS clusters. It has a
-# zonegroup (shared) which also spans across the clusters. There exists a master (pri)
-# and secondary (sec) zones within this group. The master zone is part of the pri
-# cluster whereas the sec zone is part of the sec datacenter (cluster).
+#    6-Node cluster(RHEL-8 and above)
+#    3 MONS, 2 MGR, 4 OSD and 1 RGW service daemon(s) and 1 client node
+#
+# The deployment is evaluated by running IOs across the environments.
+# ======================================================================================
 
 # The deployment is evaluated by running IOs across the environments.
-# conf : conf/quincy/rgw/rgw_multisite.yaml
 tests:
 
   - test:
@@ -171,7 +173,7 @@ tests:
                     - service_type: crash
                       placement:
                         host_pattern: "*"
-      name: Monitoring Services deployment
+      name: Monitoring Service deployment
       desc: Add monitoring services using spec file.
       module: test_cephadm.py
       polarion-id: CEPH-83574727
@@ -200,7 +202,6 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
-
   - test:
       abort-on-fail: true
       clusters:
@@ -236,7 +237,6 @@ tests:
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
-
   - test:
       abort-on-fail: true
       clusters:
@@ -253,7 +253,6 @@ tests:
       polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on primary
-
   - test:
       abort-on-fail: true
       clusters:
@@ -270,6 +269,7 @@ tests:
       polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on secondary
+  # Test work flow
 
   - test:
       clusters:
