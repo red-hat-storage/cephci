@@ -12,6 +12,8 @@ globals:
           - _admin
           - installer
           - mon
+# Keeping the mgr daemon in the arbiter node until bug fix: https://bugzilla.redhat.com/show_bug.cgi?id=2249962
+          - mgr
           - alertmanager
           - grafana
           - prometheus
@@ -20,7 +22,6 @@ globals:
           - mon
           - mgr
           - _admin
-          - mds
           - osd
         no-of-volumes: 4
         disk-size: 25
@@ -28,14 +29,15 @@ globals:
         role:
           - mon
           - mgr
-          - osd
           - nfs
+          - osd
         no-of-volumes: 4
         disk-size: 25
       node4:
         role:
           - rgw
           - osd
+          - mds
         no-of-volumes: 4
         disk-size: 25
       node5:
@@ -51,14 +53,14 @@ globals:
           - mon
           - mgr
           - osd
-          - rgw
+          - nfs
         no-of-volumes: 4
         disk-size: 25
       node7:
         role:
           - osd
+          - rgw
           - mds
-          - nfs
         no-of-volumes: 4
         disk-size: 25
       node8:
