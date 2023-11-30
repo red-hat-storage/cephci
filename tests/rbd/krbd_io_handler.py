@@ -115,11 +115,12 @@ def krbd_io_handler(**kw):
                         if config.get("file_path")
                         else f"{mount_point}/{image_name}"
                     )
-                    run_fio(
+                    config["time_taken"] = run_fio(
                         client_node=rbd.ceph_client,
                         filename=file_name,
                         runtime=config.get("runtime", 30),
                         size=config.get("file_size", "100M"),
+                        get_time_taken=config.get("get_time_taken", False),
                     )
                 else:
                     fio_args = {
@@ -130,8 +131,12 @@ def krbd_io_handler(**kw):
                         fio_args.update({"size": config.get("io_size")})
                     else:
                         fio_args.update({"runtime": config.get("runtime", 30)})
+                    if config.get("get_time_taken"):
+                        fio_args.update(
+                            {"get_time_taken": config.get("get_time_taken")}
+                        )
 
-                    run_fio(**fio_args)
+                    config["time_taken"] = run_fio(**fio_args)
 
             if operations.get("fsck"):
                 if rbd.exec_cmd(cmd=f"fsck -n {device_names[-1]}"):

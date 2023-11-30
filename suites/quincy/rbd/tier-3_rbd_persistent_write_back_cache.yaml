@@ -436,3 +436,28 @@ tests:
       module: test_concurrent_write_pwl_cache.py
       name: PWL cache creation with exclusive lock and concurrent writes
       polarion-id: CEPH-83574720
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:                          # PWL at client
+          - client
+          - pool
+          - image
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        validate_exclusive_lock: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 20G
+          io_size: 5G
+      desc: Validate performance with/without persistent cache enabled
+      destroy-cluster: false
+      module: test_performance_pwl_cache.py
+      name: Performance comparison with or without pwl cache
+      polarion-id: CEPH-83574711

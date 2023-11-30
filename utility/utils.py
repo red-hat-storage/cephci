@@ -2104,6 +2104,9 @@ def run_fio(**fio_args):
         "long_running": fio_args.get("long_running", False),
         "sudo": True,
     }
+
+    if fio_args.get("get_time_taken"):
+        exec_args["cmd"] = f"time {exec_args['cmd']}"
     if fio_args.get("cmd_timeout"):
         exec_args.update({"timeout": fio_args["cmd_timeout"]})
 
