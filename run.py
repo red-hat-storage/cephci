@@ -206,17 +206,20 @@ def create_nodes(
 
             if cloud_type == "openstack":
                 private_ip = node.get_private_ip()
+                ceph_nodename = node.node.name
             elif "baremetal" in cloud_type:
                 private_key_path = node.private_key if node.private_key else ""
                 private_ip = node.ip_address
                 look_for_key = True if node.private_key else False
                 root_password = node.root_password
+                ceph_nodename = node.hostname
             elif cloud_type == "ibmc":
                 glbs = osp_cred.get("globals")
                 ibmc = glbs.get("ibm-credentials")
                 private_key_path = ibmc.get("private_key_path")
                 private_ip = node.ip_address
                 look_for_key = True
+                ceph_nodename = node.node.name
 
             if node.role == "win-iscsi-clients":
                 clients.append(
@@ -237,7 +240,7 @@ def create_nodes(
                     private_ip=private_ip,
                     hostname=node.hostname,
                     ceph_vmnode=node,
-                    ceph_nodename=node.node.name,
+                    ceph_nodename=ceph_nodename,
                     id=node.id,
                 )
                 ceph_nodes.append(ceph)
