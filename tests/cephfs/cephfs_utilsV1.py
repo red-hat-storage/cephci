@@ -673,13 +673,9 @@ class FsUtils(object):
             fuse_cmd = f"ceph-fuse -n client.{kwargs.get('new_client_hostname', client.node.hostname)} {mount_point} "
             if kwargs.get("extra_params"):
                 fuse_cmd += f"{kwargs.get('extra_params')}"
-            if kwargs.get("wait_for_mount"):
-                if not self.wait_for_cmd_to_succeed(
-                    client, cmd=fuse_cmd, timeout=300, interval=60
-                ):
-                    raise CommandFailed("Failed to mount Filesystem even after 5 min")
-            else:
-                client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
+            rc = client.exec_command(sudo=True, cmd=fuse_cmd, long_running=True)
+            if rc:
+                raise CommandFailed(f"Ceph Fuse Command failed with error: {rc}")
             if not self.wait_until_mount_succeeds(client, mount_point):
                 raise CommandFailed("Failed to appear in mount cmd even after 5 min")
             if kwargs.get("fstab"):
@@ -860,6 +856,7 @@ class FsUtils(object):
             sleep(interval)
         return False
 
+    @retry(CommandFailed, tries=3, delay=60)
     def kernel_mount(self, kernel_clients, mount_point, mon_node_ip, **kwargs):
         """
         Mounts the drive using kernel mount
@@ -892,11 +889,10 @@ class FsUtils(object):
 
             if kwargs.get("extra_params"):
                 kernel_cmd += f"{kwargs.get('extra_params')}"
-            cmd_rc = client.exec_command(
-                sudo=True,
-                cmd=kernel_cmd,
-                long_running=True,
-            )
+
+            cmd_rc = client.exec_command(sudo=True, cmd=kernel_cmd, long_running=True)
+            if cmd_rc:
+                raise CommandFailed(f"Ceph Kernel Command failed with error: {cmd_rc}")
             log.info("validate kernel mount:")
             if kwargs.get("validate", True):
                 if not self.wait_until_mount_succeeds(client, mount_point):

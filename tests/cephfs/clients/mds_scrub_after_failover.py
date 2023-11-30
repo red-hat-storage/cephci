@@ -32,6 +32,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
+        clean_up = False
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
@@ -45,12 +46,11 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
         )
+        retry_remove_volume = retry(CommandFailed, tries=3, delay=60)(fs_util.remove_fs)
         for fs in result:
             fs_name = fs["name"]
             # delete the file systems
-            client1.exec_command(
-                sudo=True, cmd=f"ceph fs volume rm {fs_name} --yes-i-really-mean-it"
-            )
+            retry_remove_volume(client1, fs_name)
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         print(len(mds_nodes))
         mds_names = []
@@ -66,6 +66,8 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 2")
         # # set standby count to 2
         client1.exec_command(sudo=True, cmd="ceph fs set cephfs standby_count_wanted 2")
+        fs_util.wait_for_mds_process(client1, "cephfs")
+        wait_for_two_active_mds(client1, fs_name="cephfs")
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -89,6 +91,7 @@ def run(ceph_cluster, **kw):
                 ",".join(mon_node_ips),
                 extra_params=f",fs={default_fs}",
             )
+        clean_up = True
         cephfs = {
             "fill_data": 60,
             "io_tool": "smallfile",
@@ -142,18 +145,19 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         # cleaning up the mounts
-        fs_util.client_clean_up(
-            "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_1
-        )
-        fs_util.client_clean_up(
-            "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_2
-        )
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[client2], mounting_dir=kernel_mounting_dir_1
-        )
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[client2], mounting_dir=kernel_mounting_dir_2
-        )
+        if clean_up:
+            fs_util.client_clean_up(
+                "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_1
+            )
+            fs_util.client_clean_up(
+                "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_2
+            )
+            fs_util.client_clean_up(
+                "umount", kernel_clients=[client2], mounting_dir=kernel_mounting_dir_1
+            )
+            fs_util.client_clean_up(
+                "umount", kernel_clients=[client2], mounting_dir=kernel_mounting_dir_2
+            )
         # delete the file system I have created
         client1.exec_command(
             sudo=True, cmd="ceph fs volume rm cephfs --yes-i-really-mean-it"
@@ -171,3 +175,45 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f'ceph fs volume create cephfs-ec --placement="2 {mds_hosts_ec}"',
         )
+
+
+def wait_for_two_active_mds(client1, fs_name, max_wait_time=180, retry_interval=10):
+    """
+    Wait until two active MDS (Metadata Servers) are found or the maximum wait time is reached.
+
+    Args:
+        data (str): JSON data containing MDS information.
+        max_wait_time (int): Maximum wait time in seconds (default: 180 seconds).
+        retry_interval (int): Interval between retry attempts in seconds (default: 5 seconds).
+
+    Returns:
+        bool: True if two active MDS are found within the specified time, False if not.
+
+    Example usage:
+    ```
+    data = '...'  # JSON data
+    if wait_for_two_active_mds(data):
+        print("Two active MDS found.")
+    else:
+        print("Timeout: Two active MDS not found within the specified time.")
+    ```
+    """
+
+    start_time = time.time()
+    while time.time() - start_time < max_wait_time:
+        out, rc = client1.exec_command(
+            cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+        )
+        log.info(out)
+        parsed_data = json.loads(out)
+        active_mds = [
+            mds
+            for mds in parsed_data.get("mdsmap", [])
+            if mds.get("rank", -1) in [0, 1] and mds.get("state") == "active"
+        ]
+        if len(active_mds) == 2:
+            return True  # Two active MDS found
+        else:
+            time.sleep(retry_interval)  # Retry after the specified interval
+
+    return False
