@@ -2,6 +2,7 @@ import os
 import random
 import re
 import string
+import tempfile
 from datetime import datetime
 from json import loads
 from subprocess import PIPE, Popen
@@ -855,3 +856,20 @@ def get_pid_limit(node, service):
         return None
     pid_limit = re.findall(r"-?\d+", pid_limit[0])[0]
     return pid_limit
+
+
+def create_yaml_config(node, config):
+    """Create temp yaml file from config
+    Args:
+        node (ceph): ceph node
+        config (dict): ceph config
+    Return: file name
+    """
+    # Create temporory file path
+    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+
+    # Create temporary file and dump data
+    with node.remote_file(sudo=True, file_name=temp_file.name, file_mode="w") as file:
+        yaml.dump(config.get("spec"), file, default_flow_style=False)
+
+    return temp_file.name
