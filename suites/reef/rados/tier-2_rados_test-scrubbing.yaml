@@ -89,6 +89,23 @@ tests:
         delete_pools:
           - scrub_pool
   - test:
+      name: CPU and Memory check during scheduled scrub
+      module: test_scrub_cpu_memory_usage.py
+      desc: Verify CPU and Memory check during scheduled scrub
+      polarion-id: CEPH-9369
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: scheduled_scrub
+              pg_num: 32
+              pg_num_min: 32
+              pool_type: replicated
+              rados_write_duration: 120
+              rados_read_duration: 120
+              byte_size: 1KB
+        delete_pools:
+          - scheduled_scrub
+  - test:
       name: Default scheduled scrub
       polarion-id: CEPH-9361
       module: scheduled_scrub_scenarios.py
