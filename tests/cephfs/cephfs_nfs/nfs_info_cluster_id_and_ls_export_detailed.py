@@ -57,7 +57,11 @@ def run(ceph_cluster, **kw):
         export_id = "1"
         fs_name = "cephfs"
         bind = "/ceph"
-        user_id = f"nfs.{cluster_id}.{export_id}"
+        user_id = (
+            f"nfs.{cluster_id}.{fs_name}"
+            if int(build.split(".")[0]) > 7
+            else f"nfs.{cluster_id}.{export_id}"
+        )
 
         passed = []
         client1.exec_command(

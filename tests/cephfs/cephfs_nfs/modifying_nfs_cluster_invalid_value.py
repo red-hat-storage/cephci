@@ -2,6 +2,7 @@ import json
 import secrets
 import string
 import traceback
+from json import JSONDecodeError
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -39,8 +40,11 @@ def run(ceph_cluster, **kw):
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
-        output = json.loads(out)
+        try:
+            out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+            output = json.loads(out)
+        except JSONDecodeError:
+            output = json.dumps([out])
         if nfs_name in output:
             log.info("ceph nfs cluster created successfully")
         else:
@@ -170,9 +174,16 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph nfs export apply {nfs_name} -i export4.conf",
             check_ec=False,
         )
+        out, ec = client1.exec_command(
+            sudo=True,
+            cmd=f"ceph nfs export apply {nfs_name} -i export4.conf",
+            check_ec=False,
+        )
         log.info(out)
+        log.info(ec)
         if "Invalid protocol" not in out:
-            raise CommandFailed("Protocols fault value should not be applied")
+            if "Invalid protocol" not in ec:
+                raise CommandFailed("Protocols fault value should not be applied")
         else:
             log.info(ec)
 
@@ -195,7 +206,8 @@ def run(ceph_cluster, **kw):
         log.info(out)
         log.info(ec)
         if "is not a valid transport protocol" not in out:
-            raise CommandFailed("Transport fault value should not be applied")
+            if "is not a valid transport protocol" not in ec:
+                raise CommandFailed("Transport fault value should not be applied")
         else:
             log.info(ec)
         return 0
