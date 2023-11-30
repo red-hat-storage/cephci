@@ -134,6 +134,7 @@ tests:
                 data_devices:
                   all: "true"                         # boolean as string
                 encrypted: "true"                     # boolean as string
+                unmanaged: "true"                     # boolean as string
         - config:
             command: shell
             args:                 # sleep to get all services deployed
@@ -171,3 +172,39 @@ tests:
           client_group: clients
           fsid: f64f341c-655d-11eb-8778-fa163e914bcc
           keyring_dest: /etc/ceph/custom_name_ceph.keyring
+  - test:
+      name: Deploy OSD with limit filter spec
+      desc: Deploy OSD with limit filter spec
+      module: test_cephadm.py
+      config:
+        steps:                          # Deploy OSD with limit filter
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: osd
+                  service_id: small_db
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      size: '11GB:16GB'
+                      limit: 2
+                - service_type: osd
+                  service_id: big_db
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      size: '11GB:16GB'
+                      limit: 2
+          - config:
+              command: shell
+              args:                 # sleep to get all services deployed
+                - sleep
+                - "300"
+  - test:
+      name: Verify OSD deployed with limit filter spec
+      desc: Verify OSD deployed with limit filter spec
+      polarion-id: CEPH-83575588
+      module: test_osd_limit_filter.py
