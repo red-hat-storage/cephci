@@ -707,7 +707,7 @@ tests:
           placement:
             nodes:
               - node10
-            limit: 2
+            limit: 1
             sep: ";"
       destroy-cluster: false
 
