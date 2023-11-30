@@ -19,7 +19,11 @@ tests:
         verify_cluster_health: true
         steps:
           - config:
+              rhcs-version: 6.1
+              release: rc
               command: bootstrap
+              orphan-initial-daemons: true
+              skip-monitoring-stack: true
               service: cephadm
               base_cmd_args:
                 verbose: true
@@ -108,6 +112,20 @@ tests:
       config:
         log_to_file: true
       desc: Change config options to enable logging to file
+
+  - test:
+      name: Upgrade cluster to latest 7.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791,CEPH-83573790
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
 
   - test:
       name: EC Pool Recovery Improvement

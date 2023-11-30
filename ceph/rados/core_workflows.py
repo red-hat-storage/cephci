@@ -1850,7 +1850,9 @@ class RadosOrchestrator:
                 sudo=True, cmd="rpm -qa | grep ceph-base"
             )
         except Exception:
-            installer_node.exec_command(sudo=True, cmd="yum install -y ceph-base")
+            installer_node.exec_command(
+                sudo=True, cmd="yum install -y ceph-base --nogpgcheck"
+            )
 
         put_cmd = "rados put -p $pool_name $obj_name ~/sample_1M --offset $offset"
         loop_cmd = (
@@ -2441,7 +2443,9 @@ class RadosOrchestrator:
                 sudo=True, cmd="rpm -qa | grep ceph-common"
             )
         except Exception:
-            host_node.exec_command(sudo=True, cmd="yum install -y ceph-common")
+            host_node.exec_command(
+                sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
+            )
 
     def fetch_osd_status(self, _osd_id) -> str:
         """
@@ -2676,3 +2680,63 @@ class RadosOrchestrator:
             return float(cpu_usage[0].strip())
         except Exception:
             raise
+
+    @staticmethod
+    def block_in_out_packets_on_host(source_host, target_host) -> bool:
+        """
+        Method to use iptables utility to block incoming and outgoing packets from one host to another.
+
+        Args:
+            source_host: Host where the rules need to be added.
+            target_host: Host, traffic to which is stopped on the source host.
+
+        Return:
+            Pass -> True, fail -> False
+        """
+
+        source_hostname = source_host.hostname
+        source_host_ip = source_host.ip_address
+        target_hostname = target_host.hostname
+        target_host_ip = target_host.ip_address
+
+        log.debug(
+            f"Blocking incoming and outgoing traffic to host: {target_hostname}. IP: {target_host_ip}. "
+            f"Adding iptable rules on host {source_hostname}. IP: {source_host_ip}"
+        )
+
+        cmd = f"iptables -A INPUT -s {target_host_ip} -j DROP; iptables -A OUTPUT -d {target_host_ip} -j DROP"
+        log.debug(f"Adding iptable rules via cmd: {cmd}")
+
+        try:
+            out, err = source_host.exec_command(sudo=True, cmd=cmd)
+            time.sleep(10)
+            ver_cmd = f"iptables -C INPUT -s {target_host_ip} -j DROP && iptables -C OUTPUT -d {target_host_ip} -j DROP"
+            out, err = source_host.exec_command(sudo=True, cmd=ver_cmd)
+            if err:
+                log.error(f"iptable rules not set on host : {source_hostname}")
+                return False
+            log.debug(f"IPtable rules set on host : {source_hostname}")
+            return True
+        except Exception as err:
+            log.error(f"Hit error: {err} while trying to add IPtable rules.")
+            return False
+
+    def get_host_object(self, hostname):
+        """
+        Hostname of host, whose ceph_object is required
+        Args:
+            hostname: hostname whose ceph object is required
+        returns:
+            Pass -> ceph_object for the hostname
+            Fail -> None
+        """
+        for node in self.ceph_cluster:
+            if (
+                re.search(hostname, node.hostname)
+                or re.search(hostname, node.vmname)
+                or re.search(hostname, node.shortname)
+            ):
+                return node
+
+        log.error(f"Could not find host object for host {hostname}")
+        return None

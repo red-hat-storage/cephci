@@ -38,7 +38,7 @@ def run(ceph_cluster, **kw):
     pool_name = config.get("pool_name", "test_stretch_io")
     osp_cred = config.get("osp_cred")
     shutdown_site = config.get("shutdown_site", "DC1")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "Arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
     add_network_delay = config.get("add_network_delay", False)
 
     if not stretch_enabled_checks(rados_obj=rados_obj):
