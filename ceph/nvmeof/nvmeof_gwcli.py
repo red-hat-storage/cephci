@@ -7,6 +7,8 @@ from json import loads
 
 from ceph.ceph_admin.common import config_dict_to_string
 from ceph.ceph_admin.orch import Orch
+from cli.utilities.configs import get_registry_details
+from cli.utilities.containers import Registry
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -36,10 +38,17 @@ class NVMeCLI:
     def check(self):
         """Method to pre-check the pre-requisites.
         - check for podman utility
+        - login to IBM container registry if it is IBM build
         """
         check_lists = ["dnf install podman -y"]
         for cmd in check_lists:
             self.node.exec_command(cmd=cmd, sudo=True)
+        if self.CEPH_NVMECLI_IMAGE.startswith("cp"):
+            registry_details = get_registry_details(ibm_build=True)
+            url = registry_details.get("registry-url")
+            username = registry_details.get("registry-username")
+            password = registry_details.get("registry-password")
+            Registry(self.node).login(url, username, password)
 
     def run_control_cli(self, action, **cmd_args):
         """Run CLI via control daemon."""
