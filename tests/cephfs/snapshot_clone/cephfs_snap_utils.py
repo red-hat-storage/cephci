@@ -194,9 +194,10 @@ class SnapUtils(object):
         out, rc = client.exec_command(
             sudo=True, cmd=f'ls -lrt {path}/.snap/| grep "scheduled" | wc -l'
         )
+        log.info(out)
         if not (int(out) > 0):
-            raise CommandFailed("It has not created the scheduled snaphot")
-        log.info("Verify if snaphots created are as per defined schedule")
+            raise CommandFailed("It has not created the scheduled snapshot")
+        log.info("Verify if snapshots created are as per defined schedule")
         null_val, sched_num, sched_type = re.split(r"(\d+)", sched_val)
         out, rc = client.exec_command(
             sudo=True, cmd=f'ls {path}/.snap/| grep "scheduled"'
@@ -220,7 +221,7 @@ class SnapUtils(object):
                     ):
                         sched_verified = 1
                         snap_count += 1
-                if sched_type == "H|h":
+                if sched_type == "h":
                     hour_val2 = sched_snap_list[j].split("-")[4].split("_")[0]
                     hour_val1 = sched_snap_list[i].split("-")[4].split("_")[0]
                     if int(sched_num) == abs(int(int(hour_val2) - int(hour_val1))):
@@ -391,24 +392,25 @@ class SnapUtils(object):
                 for key, value in sched_item["retention"].items():
                     if key == ret_type:
                         ret_num = value
-        for i in range(len(sched_snap_list)):
-            for j in range(i + 1, len(sched_snap_list)):
-                if ret_type == "M":
-                    if (
-                        abs(
-                            int(
-                                int(sched_snap_list[i].split("_")[1])
-                                - int(sched_snap_list[j].split("_")[1])
-                            )
-                        )
-                        >= 1
-                    ):
-                        ret_verified += 1
-                if ret_type == "H|h":
-                    hour_val2 = sched_snap_list[j].split("-")[4].split("_")[0]
-                    hour_val1 = sched_snap_list[i].split("-")[4].split("_")[0]
-                    if abs(int(int(hour_val2) - int(hour_val1))) >= 1:
-                        ret_verified += 1
+                if (
+                    sched_item["path"] == sched_path
+                    and "M" in sched_item["schedule"]
+                    and ret_type == "M"
+                ):
+                    ret_verified = abs(
+                        int(sched_item["created_count"])
+                        - int(sched_item["pruned_count"])
+                    )
+                elif (
+                    sched_item["path"] == sched_path
+                    and "h" in sched_item["schedule"]
+                    and ret_type == "h"
+                ):
+                    ret_verified = abs(
+                        int(sched_item["created_count"])
+                        - int(sched_item["pruned_count"])
+                    )
+
         log.info(
             f"Actual Snapshots : {ret_verified}, Expected Snapshots : {ret_num}, Snapshot list : {sched_snap_list}"
         )

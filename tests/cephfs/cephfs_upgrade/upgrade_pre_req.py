@@ -3,13 +3,21 @@ import random
 import string
 import traceback
 
+import requests
+import yaml
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
+from utility.utils import get_cephci_config
 
 log = Log(__name__)
+
+magna_server = "http://magna002.ceph.redhat.com"
+magna_url = f"{magna_server}/cephci-jenkins/"
+magna_rhcs_artifacts = f"{magna_server}/cephci-jenkins/latest-rhceph-container-info/"
 
 
 def run(ceph_cluster, **kw):
@@ -229,17 +237,18 @@ def run(ceph_cluster, **kw):
                 long_running=True,
             )
 
-            log.info(f"Create manual snapshot on subvolume - {subvol['subvol_name']}")
-
-            snapshot = {
-                "vol_name": subvol["vol_name"],
-                "subvol_name": subvol["subvol_name"],
-                "snap_name": f"snap_{subvol['subvol_name']}",
-                "group_name": subvol["group_name"],
-            }
-            fs_util.create_snapshot(clients[0], **snapshot)
-
-            snap_params = {"snap_list": [f"snap_{subvol['subvol_name']}"]}
+            log.info(f"Create manual snapshots on subvolume - {subvol['subvol_name']}")
+            snap_list = []
+            for i in range(1, 3):
+                snapshot = {
+                    "vol_name": subvol["vol_name"],
+                    "subvol_name": subvol["subvol_name"],
+                    "snap_name": f"snap{i}_{subvol['subvol_name']}",
+                    "group_name": subvol["group_name"],
+                }
+                fs_util.create_snapshot(clients[0], **snapshot)
+                snap_list.append(f"snap{i}_{subvol['subvol_name']}")
+            snap_params = {"snap_list": snap_list}
             ceph_config["CephFS"][subvol["vol_name"]][subvol["group_name"]][
                 subvol["subvol_name"]
             ].update(snap_params)
@@ -249,7 +258,7 @@ def run(ceph_cluster, **kw):
             clone_config = {
                 "vol_name": subvol["vol_name"],
                 "subvol_name": subvol["subvol_name"],
-                "snap_name": f"snap_{subvol['subvol_name']}",
+                "snap_name": f"snap2_{subvol['subvol_name']}",
                 "target_subvol_name": clone_name,
                 "group_name": subvol["group_name"],
                 "target_group_name": subvol["group_name"],
@@ -382,6 +391,22 @@ def run(ceph_cluster, **kw):
                 }
             }
         )
+
+        log.info("Get active MDS config before upgrade")
+        for vol_name in vol_list:
+            mds_list = fs_util.get_active_mdss(clients[0], vol_name)
+            standby_list = []
+            out, rc = clients[0].exec_command(
+                sudo=True, cmd=f"ceph fs status {vol_name} --format json"
+            )
+            output = json.loads(out)
+            standby_list = [
+                mds["name"] for mds in output["mdsmap"] if mds["state"] == "standby"
+            ]
+            ceph_config["CephFS"][vol_name].update(
+                {"active_mds": mds_list, "standby_mds": standby_list}
+            )
+
         if "nautilus" not in ceph_version["version"]:
             nfs_server = ceph_cluster.get_ceph_objects("nfs")
             nfs_client = ceph_cluster.get_ceph_objects("client")
@@ -443,11 +468,12 @@ def run(ceph_cluster, **kw):
 
             ceph_config["NFS"][nfs_name].update(
                 {
-                    "export_path": path,
-                    "export_name": nfs_export_name,
-                    "nfs_mnt_pt": nfs_mounting_dir,
-                    "nfs_mnt_client": nfs_client[0].node.hostname,
-                    "vol_name": "cephfs",
+                    nfs_export_name: {
+                        "export_path": path,
+                        "nfs_mnt_pt": nfs_mounting_dir,
+                        "nfs_mnt_client": nfs_client[0].node.hostname,
+                        "vol_name": "cephfs",
+                    },
                 }
             )
 
@@ -514,9 +540,10 @@ def run(ceph_cluster, **kw):
             ceph_config["NFS"].update({"nfs_ganesha": {}})
             ceph_config["NFS"]["nfs_ganesha"].update(
                 {
-                    "nfs_server": nfs_server[0],
-                    "nfs_mnt_pt": nfs_mounting_dir,
-                    "nfs_mnt_client": nfs_client[0].node.hostname,
+                    nfs_server[0]: {
+                        "nfs_mnt_pt": nfs_mounting_dir,
+                        "nfs_mnt_client": nfs_client[0].node.hostname,
+                    }
                 }
             )
 
@@ -529,9 +556,16 @@ def run(ceph_cluster, **kw):
         f.write(json.dumps(ceph_config, indent=4))
         f.write("\n")
         f.flush()
+
+        if config.get("client_upgrade", 0) == 1:
+            log.info("Upgrade Clients before Cluster upgrade")
+            for client in clients:
+                rh_ceph_repo_update(client, config)
+                cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
+                client.exec_command(sudo=True, cmd=cmd)
+
         for i in mount_points["kernel_mounts"] + mount_points["fuse_mounts"]:
             fs_util.run_ios(clients[0], i)
-            pass
 
         return 0
 
@@ -539,3 +573,34 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+
+
+def rh_ceph_repo_update(client, config):
+    build = config.get("rhbuild")
+    version, platform = build.split("-", 1)
+    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    release = f"RHCEPH-{version}"
+    url = f"{recipe_url}{release}.yaml"
+    data = requests.get(url, verify=False)
+    base_url = yaml.safe_load(data.text)["latest"]["composes"][platform]
+    f = client.remote_file(
+        sudo=True,
+        file_name="/etc/yum.repos.d/rh_ceph.repo",
+        file_mode="r",
+    )
+    base_url_data = config.get("rhs-ceph-repo", base_url)
+    replace_str = f"baseurl={base_url_data}/compose/Tools/x86_64/os/"
+    repo_data = f.readlines()
+    f.close()
+    for i in range(len(repo_data)):
+        line = repo_data[i]
+        if "baseurl" in line:
+            repo_data[i] = f"{replace_str}\n"
+    f = client.remote_file(
+        sudo=True,
+        file_name="/etc/yum.repos.d/rh_ceph.repo",
+        file_mode="w",
+    )
+    for line in repo_data:
+        f.write(line)
+    f.close()
