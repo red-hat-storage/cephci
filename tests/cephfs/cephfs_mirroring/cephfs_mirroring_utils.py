@@ -950,10 +950,10 @@ class CephfsMirroringUtils(object):
         try:
             log.info("Remove snapshot mirror peer")
             if not self.remove_snapshot_mirror_peer(
-                source_client, target_fs, peer_uuid
+                source_client, source_fs, peer_uuid
             ):
                 raise Exception(
-                    f"Failed to remove peer '{peer_uuid}' for filesystem '{target_fs}'"
+                    f"Failed to remove peer '{peer_uuid}' for filesystem '{source_fs}'"
                 )
 
             log.info("Disable snapshot mirroring on the source filesystem")

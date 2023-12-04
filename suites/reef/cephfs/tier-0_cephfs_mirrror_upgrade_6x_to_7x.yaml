@@ -195,4 +195,4 @@ tests:
             name: Validate the Synchronisation is successful upon upgrade
       module: cephfs_mirror_upgrade.post_upgrade_validate.py
       name: Validate the Synchronisation is successful upon upgrade.
-      polarion-id: CEPH-83574099
+      polarion-id: CEPH-83575336
