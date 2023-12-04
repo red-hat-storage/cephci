@@ -35,7 +35,8 @@ bash pipeline/scripts/interop/test-ceph-features.sh \
     --osp-cred cred.yaml \
     --add-repo repo.repo \
     --inventory test.yaml \
-    --platform rhel-<major-version>
+    --platform rhel-<major-version> \
+    --rhcs-version <rhcs_version>
 
 # Custom environment
 export PY_CMD=/home/fedora/cephci-env/bin/python
@@ -43,7 +44,8 @@ bash pipeline/scripts/interop/test-ceph-features.sh \
     --osp-cred rhos-d.yaml \
     --add-repo file.repo \
     --inventory rhel-8.5-latest.yaml \
-    --platform rhel-8
+    --platform rhel-8 \
+    --rhcs-version 6.1
 ```
 
 It is recommended to execute the script from the root folder of this repo.
