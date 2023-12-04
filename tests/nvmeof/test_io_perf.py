@@ -477,7 +477,9 @@ def nvmeof(ceph_cluster, **args):
             "allow_host": "*",
             "listener_port": find_free_port(gw_node),
             "node": args["gw_node"],
-            "gateway-name": find_client_daemon_id(ceph_cluster, pool),
+            "gateway-name": find_client_daemon_id(
+                ceph_cluster, pool, node_name=gw_node.hostname
+            ),
         }
         initiator_cfg = {
             "subnqn": subsystem["nqn"],

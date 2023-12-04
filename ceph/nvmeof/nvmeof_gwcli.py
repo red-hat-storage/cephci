@@ -14,7 +14,7 @@ from utility.log import Log
 LOG = Log(__name__)
 
 
-def find_client_daemon_id(cluster, pool_name):
+def find_client_daemon_id(cluster, pool_name, node_name=None):
     """Find client daemon Id."""
     orch = Orch(cluster=cluster, **{})
     daemons, _ = orch.ps(
@@ -22,6 +22,9 @@ def find_client_daemon_id(cluster, pool_name):
     )
     for daemon in loads(daemons):
         if daemon["service_name"] == f"nvmeof.{pool_name}":
+            if node_name:
+                if daemon["hostname"] != node_name:
+                    continue
             return f"client.{daemon['daemon_name']}"
 
 

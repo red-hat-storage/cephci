@@ -85,7 +85,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
             if command in ["create_listener", "delete_listener"]:
                 client_id = find_client_daemon_id(
-                    ceph_cluster, pool_name=cfg["args"].pop("pool")
+                    ceph_cluster,
+                    pool_name=cfg["args"].pop("pool"),
+                    node_name=node.hostname,
                 )
                 cfg["args"].update(
                     {"gateway-name": client_id, "traddr": node.ip_address}

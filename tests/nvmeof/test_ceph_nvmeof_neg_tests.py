@@ -48,7 +48,9 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
         "node": config["initiator_node"],
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -99,7 +101,9 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         "node": config["initiator_node"],
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -194,7 +198,9 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
         "node": config["initiator_node"],
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -273,7 +279,9 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -364,7 +372,9 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -453,7 +463,9 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     }
 
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -558,7 +570,9 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator = Initiator(client)
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(ceph_cluster, pool)
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
