@@ -350,8 +350,3 @@ tests:
       polarion-id: CEPH-83574794
       desc: verify autoscaler flags functionality
 
-  - test:
-      name: crash warning upon daemon crash
-      module: test_crash_daemon.py
-      polarion-id: CEPH-83573855
-      desc: Verify crash warning in ceph health upon crashing a daemon

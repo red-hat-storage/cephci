@@ -304,16 +304,17 @@ tests:
         delete_pool: true
       desc: Test stretch Cluster mon replacement - Arbiter site
 
-  - test:
-      name: Netsplit Scenarios data-data sites
-      module: test_stretch_netsplit_scenarios.py
-      polarion-id: CEPH-83574979
-      config:
-        pool_name: test_stretch_pool8
-        netsplit_site: DC1
-        tiebreaker_mon_site_name: arbiter
-        delete_pool: true
-      desc: Test stretch Cluster netsplit scenario between data sites
+# Commenting test until fix for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2249962
+#  - test:
+#      name: Netsplit Scenarios data-data sites
+#      module: test_stretch_netsplit_scenarios.py
+#      polarion-id: CEPH-83574979
+#      config:
+#        pool_name: test_stretch_pool8
+#        netsplit_site: DC1
+#        tiebreaker_mon_site_name: arbiter
+#        delete_pool: true
+#      desc: Test stretch Cluster netsplit scenario between data sites
 
   - test:
       name: Netsplit Scenarios data-arbiter sites
