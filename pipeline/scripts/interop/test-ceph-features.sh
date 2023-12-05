@@ -65,6 +65,7 @@ declare -A TEST_SUITES
 if [ "$CEPH_PLATFORM" == "rhel-9" ]; then
     TEST_SUITES["suites/pacific/interop/test-ceph-sanity.yaml"]="conf/pacific/integrations/6node-all-roles.yaml"
     TEST_SUITES["suites/quincy/interop/test-ceph-sanity.yaml"]="conf/quincy/integrations/6node-all-roles.yaml"
+    TEST_SUITES["suites/reef/interop/test-ceph-sanity.yaml"]="conf/reef/integrations/6node-all-roles.yaml"
 elif [ "$CEPH_PLATFORM" == "rhel-8" ]; then
     TEST_SUITES["suites/pacific/interop/test-ceph-sanity.yaml"]="conf/pacific/integrations/6node-all-roles.yaml"
     TEST_SUITES["suites/nautilus/interop/test-ceph-rpms.yaml"]="conf/nautilus/interop/5-nodes-ceph.yaml"
@@ -75,7 +76,9 @@ VM_PREFIXES=()
 for suite in "${!TEST_SUITES[@]}" ; do
     TEST_SUITE=$suite
     TEST_CONFIG=${TEST_SUITES[$suite]}
-    if [[ $TEST_SUITE =~ "quincy" ]]; then
+    if [[ $TEST_SUITE =~ "reef" ]]; then
+      RHCS_VERSION="7.0"
+    elif [[ $TEST_SUITE =~ "quincy" ]]; then
       RHCS_VERSION="6.1"
     elif [[ $TEST_SUITE =~ "pacific" ]]; then
       RHCS_VERSION="5.3"
