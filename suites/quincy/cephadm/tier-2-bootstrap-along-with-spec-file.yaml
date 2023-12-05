@@ -67,3 +67,27 @@ tests:
           ansible_clients: true
       destroy-cluster: false
       abort-on-fail: true
+
+  - test:
+      name: Cephadm custom config file support
+      desc: Cephadm custom config file support with grafana and mon container
+      polarion-id: CEPH-83575585
+      module: test_cephadm_custom_config_support.py
+      config:
+          file_type: yaml
+          mount:
+          spec:
+            - service_type: mon
+              service_name: mon
+              custom_configs:
+                - mount_path: /etc/example.conf
+                  content: test
+                - mount_path: /usr/share/mon/example.cert
+                  content: test
+            - service_type: grafana
+              service_name: grafana
+              custom_configs:
+                - mount_path: /etc/example.conf
+                  content: test
+                - mount_path: /usr/share/grafana/example.cert
+                  content: test

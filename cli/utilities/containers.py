@@ -180,12 +180,13 @@ class Container(Cli):
         else:
             return 1
 
-    def ps(self, all=None, filter=None):
+    def ps(self, all=None, filter=None, format=None):
         """
         Returns the details of running containers
         Args:
             all (bool): Show all containers
             filter (dict): Key value to filter
+            format (string): Format values
         """
         cmd = f"{self.base_cmd} ps"
         if all:
@@ -194,4 +195,68 @@ class Container(Cli):
         if filter:
             for key, val in filter.items():
                 cmd += f" --filter {key}={val}"
+
+        if format:
+            cmd += f" --format {format}"
+
+        return self.execute(sudo=True, cmd=cmd)
+
+    def exec(
+        self,
+        container=None,
+        detach=False,
+        detach_key=None,
+        env=None,
+        interactive=False,
+        latest=False,
+        tty=False,
+        cmds=None,
+    ):
+        """
+        Execute a command in a running container
+        Args
+            container (str): Container name or id
+            detach (bool): Run the exec session in detached mode (backgrounded)
+            detach_key (list): List of detach operation
+            env (list): List of environment variables
+            interactive (bool): Keep stdin open even if not attached
+            latest (bool): Providing the container name or ID, use the last created container
+            tty (bool): Allocate a pseudo-TTY
+            cmds (str): Other commands to be executed
+        """
+        if not container:
+            raise NotSupportedError("Container name or id needs to be provided")
+
+        cmd = f"{self.base_cmd} exec"
+
+        if detach:
+            cmd += " -d"
+
+        if detach_key:
+            detach_key = (
+                detach_key if type(detach_key) in (list, tuple) else [detach_key]
+            )
+            detach_key = " -d ".join(detach_key)
+            cmd += f" {detach_key}"
+
+        if env:
+            env = env if type(env) in (list, tuple) else [env]
+            env = " -e ".join(env)
+            cmd += f" -e {env}"
+
+        if interactive:
+            cmd += " -i"
+
+        if latest:
+            cmd += " -l"
+
+        if tty:
+            cmd += " -t"
+
+        if container:
+            cmd += f" {container}"
+
+        if cmds:
+            cmd += f" {cmds}"
+
         return self.execute(sudo=True, cmd=cmd)
