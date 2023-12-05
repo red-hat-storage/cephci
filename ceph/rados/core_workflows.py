@@ -2877,3 +2877,218 @@ class RadosOrchestrator:
 
         log.error("Noautoscale flag not set on the cluster. Returning Fail..")
         return False
+
+    def create_rbd_image(self, pool_name, img_name, **kwargs):
+        """
+        Creates rbd image on the given pool
+        Args:
+            pool_name: Name of the pool where the image needs to be created
+            img_name: name of the image
+            **kwargs: Any other KW args that need to be sent
+
+        """
+        size = kwargs.get("image_size", "10G")
+        img_cmd = f"rbd create {img_name} --size {size} --pool {pool_name}"
+        self.client.exec_command(sudo=True, cmd=img_cmd)
+
+        # printing image details
+        img_details = f"rbd info {img_name} --pool {pool_name}"
+        out, err = self.client.exec_command(sudo=True, cmd=img_details)
+        log.info(
+            f"Image : {img_name} created on pool : {pool_name}. Image details : {out}"
+        )
+
+    def mount_image_on_client(self, **kwargs):
+        """
+        Mounts the image provided on the given client node
+        Args:
+            kwargs: allowed kwargs are :
+                pool_name: Name of the pool whose image needs to be mounted
+                img_name: name of the image to be mounted
+                client_obj: Ceph object for the client where image needs to be mounted
+                mount_path: directory where the rbd block device needs to be mounted ( optional )
+        """
+        img = kwargs["img_name"]
+        client = kwargs["client_obj"]
+        pool = kwargs["pool_name"]
+        mnt_path = kwargs.get("mount_path", "/tmp/rbd_mounts/")
+
+        log.info(
+            f"Proceeding to mount the images created on to client: {client.hostname},"
+            f"Which has IP: {client.ip_address}, present in subnet: {client.subnet}"
+        )
+
+        map_cmd = f"rbd map {img} --pool {pool}"
+        out, err = client.exec_command(sudo=True, cmd=map_cmd)
+        mnt_name = out.strip()
+        log.debug(
+            f"Block device created: {mnt_name}, Creating ext4 filesystem on the device"
+        )
+
+        # Creating ext4 filesystem on the device
+        mkfs_cmd = f"mkfs.ext4 -m0 {mnt_name}"
+        client.exec_command(sudo=True, cmd=mkfs_cmd)
+
+        # creating mount directory
+        dir_cmd = f"mkdir -p {mnt_path}"
+        client.exec_command(sudo=True, cmd=dir_cmd)
+
+        # Mounting the device on mount path
+        mnt_cmd = f"mount {mnt_name} {mnt_path}"
+        client.exec_command(sudo=True, cmd=mnt_cmd)
+
+        log.debug("Sleeping for 20 seconds for the device to be listed in mount -l")
+        time.sleep(20)
+
+        log.debug(
+            f"All the mounted devices are : {client.exec_command(sudo=True, cmd='mount -l')}"
+        )
+
+        ver_cmd = "mount -l"
+        out, err = client.exec_command(sudo=True, cmd=ver_cmd)
+
+        if mnt_name in out:
+            log.info("Verification successful. Device is listed in mount points.")
+            return f"{mnt_path}{mnt_name}"
+        else:
+            log.error("Verification failed. Device is not listed in mount points.")
+            return None
+
+    def get_rbd_client_ips(self, pool_name, image_name):
+        """
+        Run the 'rbd status' command, parse the output, and collect the IP addresses of the watchers.
+        Args:
+            pool_name: Name of the pool
+            image_name: Name of the image
+        Returns:
+            List of IP addresses of the watchers
+        """
+        command = f"rbd status {pool_name}/{image_name} --debug-rbd 0"
+        try:
+            output, err = self.client.exec_command(sudo=True, cmd=command)
+            output = output.strip()
+            log.debug(
+                f"clients on pool : {pool_name} and image : {image_name} are :\n {output}"
+            )
+            watchers_start_index = output.find("Watchers:")
+            if watchers_start_index != -1:
+                watchers_output = output[watchers_start_index:]
+                lines = watchers_output.split("\n")[1:]
+                watchers_ips = [
+                    re.search(r"watcher=([\d.]+):\d+", line).group(1) for line in lines
+                ]
+                log.debug(f"Client IPs :\n {watchers_ips}\n")
+                return watchers_ips
+            else:
+                log.debug("No watchers found.")
+                return []
+        except Exception as e:
+            log.error(f"Error running command: {e}")
+            return []
+
+    def rbd_bench_write(self, pool_name, image_name, client_obj):
+        """
+        Method to write RBD objects into the pool
+        Args:
+            pool_name: Name of the pool where IOs should be written
+            image_name: Name of the image where IOs should be written
+            client_obj: Ceph object for client from where objects should be written
+        Returns:
+            Tuple(Output of the rbdbench command, execution status)
+        """
+        command = f"sudo rbd bench-write {image_name} --pool={pool_name}"
+        try:
+            out, _ = client_obj.exec_command(sudo=True, cmd=command)
+        except Exception as err:
+            log.debug(f"Exception expected. Error faced : {err}")
+            return err, False
+        log.info(f"Completed writing IOs into the pool. output : {out}")
+        return out, True
+
+    def add_client_blocklisting(self, **kwargs):
+        """
+        Method to blocklist client IPs on ceph cluster
+        Args:
+            kwargs: KW args that are accepted are :
+                ip: IP of the host which is to be blocklisted
+                cidr: CIDR of the host which is to be blocklisted
+        """
+        ip = kwargs.get("ip", None)
+        cidr = kwargs.get("cidr", None)
+        base_cmd = "ceph osd blocklist"
+        if cidr:
+            blklist_cmd = f"{base_cmd} range add {cidr}"
+        else:
+            blklist_cmd = f"{base_cmd} add {ip}"
+        self.run_ceph_command(cmd=blklist_cmd)
+        log.debug(
+            "Sleeping for 20 seconds for IP to be blocked and appear in blocklist ls"
+        )
+        time.sleep(20)
+        blocked_ips = self.get_blocklist_ips()
+        if blocked_ips is None:
+            log.error("Error fetching the blocklisted IPs")
+            return False
+        if cidr:
+            ip = cidr.split("/")[0]
+        if ip not in blocked_ips:
+            log.error(
+                f"IP/CIDR : {ip} not present in block list. Blocked IPs on cluster : {blocked_ips}"
+            )
+            return False
+        log.info(f"IP/CIDR : {ip} blocklisted successfully")
+        return True
+
+    def get_blocklist_ips(self):
+        """
+        Fetches the blocklisted IPs on the cluster
+        returns:
+            List of blocklisted IPs/ CIDRs
+        """
+        cmd = "ceph osd blocklist ls"
+        try:
+            out = self.node.shell([cmd])
+            ip_pattern = re.compile(r"(\d+\.\d+\.\d+\.\d+:\d+/\d+)")
+            ips = ip_pattern.findall(out[0])
+            ips = [ip.split(":")[0] for ip in ips]
+            log.debug(
+                f"Blocklisted IPs on client : {out[0]} \n\n IPs collected : {ips}"
+            )
+            return ips
+        except Exception as err:
+            log.error(f"hit issue : during command execution : {err}")
+            return None
+
+    def rm_client_blocklisting(self, **kwargs):
+        """
+        Method to remove blocklisted client IPs on ceph cluster
+        Args:
+            kwargs: KW args that are accepted are :
+                ip: IP of the host which is to be removed from blocked list
+                cidr: CIDR of the host which is to be removed from blocked list
+        """
+        ip = kwargs.get("ip", None)
+        cidr = kwargs.get("cidr", None)
+        base_cmd = "ceph osd blocklist"
+        if cidr:
+            blklist_cmd = f"{base_cmd} range rm {cidr}"
+        else:
+            blklist_cmd = f"{base_cmd} rm {ip}"
+        self.run_ceph_command(cmd=blklist_cmd)
+        log.debug(
+            "Sleeping for 20 seconds for IP to be unblocked and be removed from blocklist ls"
+        )
+        time.sleep(20)
+        blocked_ips = self.get_blocklist_ips()
+        if blocked_ips is None:
+            log.error("Error fetching the blocklisted IPs")
+            return False
+        if cidr:
+            ip = cidr.split("/")[0]
+        if ip in blocked_ips:
+            log.error(
+                f"IP/CIDR : {ip} present in block list after unblocking. Blocked IPs on cluster : {blocked_ips}"
+            )
+            return False
+        log.info(f"IP/CIDR : {ip} removed from blocklist successfully")
+        return True
