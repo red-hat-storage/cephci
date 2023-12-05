@@ -225,6 +225,10 @@ class RbdMirror:
         self.enable_mirroring(mirror_level="pool", specs=poolname, mode=mode)
         peer_cluster.enable_mirroring(mirror_level="pool", specs=poolname, mode=mode)
 
+        if kw.get("start_rbd_mirror_primary"):
+            time.sleep(60)
+            self.change_service_state(None, "start")
+
         if self.ceph_version >= 4:
             if peer_mode == "bootstrap":
                 self.bootstrap_peers(
@@ -893,8 +897,11 @@ class RbdMirror:
         """
         self.exec_cmd(cmd=f"rbd mirror image resync {imagespec}")
 
-    def random_string(self):
-        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(10)])
+    def random_string(self, **kw):
+        length = 10
+        if kw.get("len"):
+            length = kw["len"]
+        temp_str = "".join([random.choice(string.ascii_letters) for _ in range(length)])
         return temp_str
 
     def delete_pool(self, poolname):
@@ -1414,7 +1421,7 @@ def create_mirrored_images_with_user_specified(**kw):
         number_of_images = config.get("image-count")
 
         for i in range(0, number_of_images):
-            imagename = "test_mirror_image" + mirror1.random_string()
+            imagename = "test_mirror_image" + mirror1.random_string(len=3)
             imagespec = poolname + "/" + imagename
 
             mirror1.create_image(imagespec=imagespec, size=imagesize)
