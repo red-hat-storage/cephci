@@ -117,7 +117,6 @@ tests:
       module: test_cephadm.py
       name: deploy cluster
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:

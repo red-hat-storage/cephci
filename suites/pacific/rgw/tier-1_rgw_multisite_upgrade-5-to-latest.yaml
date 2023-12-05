@@ -120,7 +120,6 @@ tests:
       name: deploy cluster
       polarion-id: CEPH-83575222
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:

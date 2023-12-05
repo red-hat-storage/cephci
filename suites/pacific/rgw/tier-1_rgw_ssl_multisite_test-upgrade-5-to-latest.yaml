@@ -129,7 +129,6 @@ tests:
       polarion-id: CEPH-83574751
 
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
