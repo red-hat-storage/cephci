@@ -218,7 +218,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             with parallel() as p:
                 for subsystem in config["subsystems"]:
                     subsystem["gateway-name"] = find_client_daemon_id(
-                        ceph_cluster, rbd_pool
+                        ceph_cluster, rbd_pool, node_name=gw_node.hostname
                     )
                     p.spawn(configure_subsystems, rbd_obj, rbd_pool, gateway, subsystem)
 

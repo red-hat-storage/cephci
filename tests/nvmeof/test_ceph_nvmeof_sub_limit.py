@@ -158,7 +158,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                                 "subnqn": f"nqn.2016-06.io.spdk:cnode{num}",
                                 "port": listener_port,
                             }
-                            client_id = find_client_daemon_id(ceph_cluster, pool)
+                            client_id = find_client_daemon_id(
+                                ceph_cluster, pool, node_name=node.hostname
+                            )
                             listener.update(
                                 {"gateway-name": client_id, "traddr": node.ip_address}
                             )
