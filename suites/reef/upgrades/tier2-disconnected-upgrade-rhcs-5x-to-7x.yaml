@@ -1,0 +1,31 @@
+#===============================================================================================
+#-----------------------------------------------------------------------------------------------
+# Conf: conf/reef/cephadm/tier-0.yaml
+# - Bootstrap the cluster using disconnected install
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Disconnected Install
+      desc: Bootstrap cluster using disconnected
+      module: test_disconnected_install.py
+      polarion-id: CEPH-83575310
+      config:
+       bootstrap_image: rhceph/rhceph-5-rhel8:latest
+       rhceph_repo: rhceph-5-tools-for-rhel-8-x86_64-rpms
+       registry_image:
+         docker_registry_image: quay.io/aramteke/registry
+
+  - test:
+      name: Disconnected Upgrade
+      desc: Perform disconnected upgrade
+      module: test_disconnected_upgrade.py
+      polarion-id: CEPH-83575552
+      config:
+       bootstrap_image: rhceph/rhceph-7-rhel9:latest
+       rhceph_repo: rhceph-7-tools-for-rhel-9-x86_64-rpms
