@@ -210,6 +210,8 @@ def run(ceph_cluster, **kw):
             cephfs_mirror_node = mds_nodes[1:3]
         else:
             cephfs_mirror_node = mds_nodes
+        for node in cephfs_mirror_node:
+            node.exec_command(sudo=True, cmd="yum install -y ceph-common --nogpgcheck")
         fs_mirroring_utils.add_files_and_validate(
             source_clients,
             kernel_mounting_dir_1,

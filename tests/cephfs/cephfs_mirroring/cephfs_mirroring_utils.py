@@ -379,6 +379,7 @@ class CephfsMirroringUtils(object):
         log.info(daemon_names)
         return daemon_names
 
+    @retry(CommandFailed, tries=5, delay=30)
     def get_filesystem_id_by_name(self, source_clients, fs_name):
         """
         Fetches the filesystem ID of a specified Ceph filesystem.
@@ -401,8 +402,7 @@ class CephfsMirroringUtils(object):
         log.info(filesystem_id)
         return filesystem_id
 
-    retry(CommandFailed, tries=5, delay=60)
-
+    @retry(CommandFailed, tries=5, delay=60)
     def get_peer_uuid_by_name(self, source_clients, fs_name):
         """
         Fetches the peer UUID of a specified Ceph filesystem.
@@ -440,7 +440,7 @@ class CephfsMirroringUtils(object):
             str: The path to the asok file of the cephfs-mirror daemon.
         """
         log.info("Fetch the asok file of the cephfs-mirror daemon.")
-        asok_files = []
+        asok_files = {}
         if not isinstance(daemon_names, list):
             daemon_names = [daemon_names]
         for daemon_name in daemon_names:
@@ -450,12 +450,15 @@ class CephfsMirroringUtils(object):
                     file = node.exec_command(sudo=True, cmd=cmd)
                     asok_file = file[0].replace("\\n", "")
                     if asok_file:
-                        asok_files.append(asok_file)
+                        asok_files[node.node.hostname] = [node, asok_file]
                     log.info(asok_file)
             else:
                 file = cephfs_mirror_node.exec_command(sudo=True, cmd=cmd)
                 asok_file = file[0].replace("\\n", "")
-                asok_files.append(asok_file)
+                asok_files[cephfs_mirror_node.node.hostname] = [
+                    cephfs_mirror_node,
+                    asok_file,
+                ]
                 log.info(asok_file)
         return asok_files
 
@@ -484,10 +487,10 @@ class CephfsMirroringUtils(object):
         filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
         asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
         log.info("Get filesystem mirror status")
-        for node, asok_file in zip(cephfs_mirror_node, asok_files):
-            out, _ = node.exec_command(
+        for node, asok_file in asok_files.items():
+            out, _ = asok_file[0].exec_command(
                 sudo=True,
-                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file} "
+                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
                 f"fs mirror status {fs_name}@{filesystem_id} -f json",
             )
             data = json.loads(out)
@@ -540,10 +543,10 @@ class CephfsMirroringUtils(object):
         for node in cephfs_mirror_node:
             node.exec_command(sudo=True, cmd="yum install -y ceph-common --nogpgcheck")
         log.info("Get filesystem mirror status")
-        for node, asok_file in zip(cephfs_mirror_node, asok_files):
-            out, _ = node.exec_command(
+        for node, asok_file in asok_files.items():
+            out, _ = asok_file[0].exec_command(
                 sudo=True,
-                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file} "
+                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
                 f"fs mirror status {fs_name}@{filesystem_id} -f json",
             )
             data = json.loads(out)
@@ -641,16 +644,12 @@ class CephfsMirroringUtils(object):
             json.JSONDecodeError: If there's an error decoding JSON from the Ceph mirror status response.
         """
         log.info("Get peer mirror status")
-        if not isinstance(cephfs_mirror_node, list):
-            cephfs_mirror_node = [cephfs_mirror_node]
-        if not isinstance(asok_file, list):
-            asok_file = [asok_file]
-        for node, asok in zip(cephfs_mirror_node, asok_file):
+        for node, asok in asok_file.items():
             cmd = (
-                f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok} fs mirror peer status "
+                f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
                 f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
             )
-            out, _ = node.exec_command(sudo=True, cmd=cmd)
+            out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
             data = json.loads(out)
             for path, status in data.items():
                 last_synced_snap = status.get("last_synced_snap")
@@ -898,6 +897,9 @@ class CephfsMirroringUtils(object):
 
         Raises:
         - Exception: If any step fails during the setup process.
+
+        Returns :
+            token(type: str) : Token Generated
         """
         try:
             log.info("Enable mirroring module on source")
@@ -1022,12 +1024,6 @@ class CephfsMirroringUtils(object):
         source_clients[0].exec_command(
             sudo=True, cmd=f"mkdir {kernel_dir}{kernel_subvol_path}.snap/{snap1}"
         )
-
-        log.info("Validate the Snapshot Synchronisation on Target Cluster")
-        self.validate_synchronization(
-            cephfs_mirror_node, source_clients[0], source_fs, snap_count
-        )
-
         log.info(
             "Fetch the daemon_name, fsid, asok_file, filesystem_id and peer_id to validate the synchronisation"
         )

@@ -228,3 +228,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_ha_conversion.py
       name: Convert single node to HA configuration
       polarion-id: "CEPH-83575340"
+  - test:
+      abort-on-fail: false
+      desc: "Validate all failure scenarios to disconnect the mirroring"
+      clusters:
+        ceph1:
+          config:
+            name: Validate all failure scenarios to disconnect the mirroring
+      module: cephfs_mirroring.test_cephfs_mirror_disconnect.py
+      name: Validate all failure scenarios to disconnect the mirroring
+      polarion-id: "CEPH-83574100"
