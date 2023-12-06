@@ -2740,3 +2740,91 @@ class RadosOrchestrator:
 
         log.error(f"Could not find host object for host {hostname}")
         return None
+
+    def get_object_details_head(self, osd_id, object_name):
+        """
+        Method returns the object head in json format
+        Args:
+            osd_id: osd id number
+            object_name : object name
+        Return : Returns the object head details if exists or None
+
+        """
+        cmd_get_object = (
+            f"cephadm shell --name osd.{osd_id} -- ceph-objectstore-tool --data-path "
+            f"/var/lib/ceph/osd/ceph-{osd_id} --head --op list {object_name}"
+        )
+        acting_osd_node = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+        out_put = acting_osd_node.exec_command(sudo=True, cmd=cmd_get_object)
+        object_head = out_put[0].strip()
+        if object_name not in object_head:
+            log.error(
+                f"Not able to retrive the object head for the object-{object_name} "
+            )
+            return None
+        log.info(f"The object head of the {object_name} is {object_head}")
+        return object_head
+
+    def set_snapset_corrupt(self, osd_id, object_head):
+        """
+        Method to corrupt the snapset
+        Args:
+            osd_id : osd id
+            object_head: object head in json format
+        Return: None
+        """
+        cmd_snapset_corrupt = (
+            f"cephadm shell --name osd.{osd_id} -- ceph-objectstore-tool --data-path"
+            f" /var/lib/ceph/osd/ceph-{osd_id}  '{object_head}'   clear-snapset corrupt"
+        )
+        cmd_snapset_corrupt = cmd_snapset_corrupt.replace("\\", "")
+        acting_osd_node = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+        acting_osd_node.exec_command(sudo=True, cmd=cmd_snapset_corrupt)
+        return None
+
+    def create_inconsistent_obj_snap(self, pool_name, object_name):
+        """
+        The method converts the object into inconsistent object
+        The logic implemented in the code is-
+        1. Get the primary osd and pg_id
+        2. Stopping the OSD
+        3. Get the head of an object in json format and corrupt using the clear-snapset
+        4. Start the OSD and perform deep-scrub on that pg id
+        5. Check the status
+        Args:
+            pool_name: pool name
+            object_name: object name in the pool
+        Returns: After converting the object in to inconsistent,method returns the pg id
+                 If it fail returns None
+        """
+        osd_map_output = self.get_osd_map(pool=pool_name, obj=object_name)
+        primary_osd = osd_map_output["acting_primary"]
+        log.info(f"The object stored in the primary osd number-{primary_osd}")
+        pg_id = osd_map_output["pgid"]
+        log.info(f"The object {object_name} is created in the pg-{pg_id}")
+        cmd_update_obj = f"rados -p {pool_name} append {object_name} /etc/hosts"
+        self.client.exec_command(sudo=True, cmd=cmd_update_obj)
+        # stoping the OSD
+        if not self.change_osd_state(action="stop", target=primary_osd):
+            log.error(f"Unable to stop the OSD : {primary_osd}")
+            return None
+        object_head = self.get_object_details_head(primary_osd, object_name)
+        if object_head is None:
+            log.error("The object head is None.Cannot execute further tests")
+            return None
+        self.set_snapset_corrupt(primary_osd, object_head)
+        if not self.change_osd_state(action="start", target=primary_osd):
+            log.error(f"Unable to start the OSD : {primary_osd}")
+            return None
+        log.info(f"Performing the deep-scrub on the pg-{pg_id}")
+        self.run_deep_scrub(pgid=pg_id)
+        # sleeping for 10 seconds, waiting for scrubbing to be over
+        time.sleep(10)
+        health_check = self.check_inconsistent_health()
+        if health_check is False:
+            log.error(
+                "Inconsistent object details not exist in the health detail output"
+            )
+            return None
+        log.info(f"The inconsistent object is created in the pg{pg_id}")
+        return pg_id
