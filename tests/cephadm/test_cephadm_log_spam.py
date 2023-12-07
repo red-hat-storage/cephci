@@ -39,7 +39,7 @@ def validate_spam_log_using_cmd(node, installer):
               to be used in the test.
     """
     # Validate log spam under "cephadm logs" for mgr daemon
-    spam = "Detected new or changed devices"
+    spam = "log [INF] : Detected new or changed devices"
     fsid = CephAdm(node).ceph.fsid()
     if not fsid:
         raise OperationFailedError("Failed to get cluster FSID")
@@ -52,15 +52,30 @@ def validate_spam_log_using_cmd(node, installer):
     ]
 
     # Spam logs had the string "Detected new or changed devices" in them
-    # Validate the spam logs are not present in cephadm logs for mgr daemon
-    timeout, interval = 300, 10
+    # These logs were being over-populated and getting triggered whenever
+    # a device refresh operation was performed
+    # Validate spam logs are not flooding cephadm logs after device refresh
+    timeout, interval = 120, 10
     for w in WaitUntil(timeout=timeout, interval=interval):
+        conf = {"refresh": True}
+        refresh_devs = CephAdm(installer).ceph.orch.device.ls(**conf)
+        if not refresh_devs:
+            raise OperationFailedError("Failed to refresh devices")
         content = CephAdm(installer).logs(fsid, daemon_name[0])
         if not content:
             raise OperationFailedError("Failed to get cephadm logs")
-        if spam in content:
+        before_count = content.count(spam)
+        refresh_devs = CephAdm(installer).ceph.orch.device.ls(**conf)
+        if not refresh_devs:
+            raise OperationFailedError("Failed to refresh devices")
+        content = CephAdm(installer).logs(fsid, daemon_name[0])
+        if not content:
+            raise OperationFailedError("Failed to get cephadm logs")
+        after_count = content.count(spam)
+        # Compare spam log count after device refresh
+        if before_count != after_count:
             raise OperationFailedError(
-                f"Failed: Spam log '{spam}' found in cephadm logs"
+                f"Failed: Spam log '{spam}' is flooding cephadm logs"
             )
 
 
