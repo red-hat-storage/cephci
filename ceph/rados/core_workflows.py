@@ -2828,3 +2828,52 @@ class RadosOrchestrator:
             return None
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
+
+    def set_noautoscale_flag(self, retry: int = 15) -> bool:
+        """
+        sets/Unsets the noautoscale flag on the cluster
+        Args:
+            retry: max number of retries to set the noautoscale flag on the cluster
+        Returns:
+            True -> noautoscale flag set successfully
+            False -> noautoscale flag not set
+        """
+        log.debug("Setting the noautoscale flag on the cluster")
+        iteration = 0
+        flag = True
+
+        while iteration <= retry:
+            iteration += 1
+            cmd = "ceph osd pool set noautoscale"
+            try:
+                out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
+                log.debug(f"o/p of maintenance enter cmd : {out}")
+            except Exception as e:
+                log.debug(f"Exception hit, but was expected; {e}")
+
+            log.debug(
+                "sleeping for 60 seconds before checking status of autoscale flag"
+            )
+            time.sleep(60)
+
+            cmd = "ceph osd pool autoscale-status"
+            pool_status = self.run_ceph_command(cmd=cmd, timeout=600)
+
+            for entry in pool_status:
+                if entry["pg_autoscale_mode"] == "on":
+                    log.error(
+                        f"Pg autoscaler not turned off for pool : {entry['pool_name']}"
+                    )
+                    flag = False
+
+            if flag:
+                log.info(
+                    "Successfully set the no noautoscale flag and all the pools have autoscale turn off"
+                )
+                return flag
+
+            log.debug("Sleeping for 20 seconds and checking again")
+            time.sleep(20)
+
+        log.error("Noautoscale flag not set on the cluster. Returning Fail..")
+        return False

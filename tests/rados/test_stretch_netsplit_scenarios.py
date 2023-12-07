@@ -238,7 +238,7 @@ def run(ceph_cluster, **kw):
                 f"The expected health warnings are generated on the cluster. Warnings : {ceph_health_status}"
             )
             log.info(
-                f"Completed shutdown of hosts in site {netsplit_site}. Host names :{tiebreaker_hosts}."
+                f"Completed adding netsplits in hosts in site {netsplit_site}. Host names :{tiebreaker_hosts}."
                 f" Proceeding to write"
             )
 
@@ -247,9 +247,10 @@ def run(ceph_cluster, **kw):
         # Starting checks to see availability of cluster during netsplit scenario
         # perform rados put to check if write ops is possible
         pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=200, timeout=100)
+        # rados_obj.bench_write(pool_name=pool_name, rados_write_duration=100)
 
-        log.debug("sleeping for 2 minutes for the objects to be displayed in ceph df")
-        time.sleep(120)
+        log.debug("sleeping for 4 minutes for the objects to be displayed in ceph df")
+        time.sleep(240)
 
         # Getting the number of objects post write, to check if writes were successful
         pool_stat_final = rados_obj.get_cephdf_stats(pool_name=pool_name)

@@ -114,17 +114,20 @@ def run(ceph_cluster, **kw):
                 time.sleep(10)
 
             # Moving host into maintenance mode
-            time.sleep(5)
-            if not rados_obj.host_maintenance_enter(hostname=host, retry=15):
+            time.sleep(10)
+            if not rados_obj.host_maintenance_enter(hostname=host, retry=25):
                 log.error(f"Failed to add host : {host} into maintenance mode")
                 raise Exception("Test execution Failed")
-
+            log.debug(
+                f"Host {host} added to maintenance mode, sleeping for 40 seconds before proceeding to next node"
+            )
+            time.sleep(40)
         log.info(
             f"Completed addition of all the hosts in data site {dc_1_name} into maintenance mode"
         )
 
-        # sleeping for 120 seconds for the DC to be identified as in maintenance mode and proceeding to next checks
-        time.sleep(120)
+        # sleeping for 240 seconds for the DC to be identified as in maintenance mode and proceeding to next checks
+        time.sleep(240)
 
         # Checking the health status of the cluster and the active alerts for maintenance mode
         # These should be generated on the cluster
