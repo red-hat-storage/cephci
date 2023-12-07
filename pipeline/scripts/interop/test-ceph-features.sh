@@ -14,6 +14,7 @@ OSP_CRED_FILE=${OSP_CRED_FILE:-}
 REPO_FILE=${REPO_FILE:-}
 VM_SPEC=${VM_SPEC:-}
 BUILD_TYPE=${BUILD_TYPE:-"rc"}
+RHCS_VERSION=${RHCS_VERSION:-}
 
 echo "Red Hat Ceph Storage sanity test suite execution."
 
@@ -33,6 +34,9 @@ while [[ $# -gt 0 ]] ; do
             shift 2 ;;
         --platform)
             CEPH_PLATFORM=$2
+            shift 2 ;;
+        --rhcs-version)
+            RHCS_VERSION=$2
             shift 2 ;;
         *)
             echo "$1 is unsupported."
@@ -60,14 +64,20 @@ if [ -z "${CEPH_PLATFORM}" ] ; then
     exit 1
 fi
 
+if [ -z "${RHCS_VERSION}" ] ; then
+    echo "Require --rhs-version argument."
+    exit 1
+fi
+
 declare -A TEST_SUITES
 
-if [ "$CEPH_PLATFORM" == "rhel-9" ]; then
-    TEST_SUITES["suites/pacific/interop/test-ceph-sanity.yaml"]="conf/pacific/integrations/6node-all-roles.yaml"
-    TEST_SUITES["suites/quincy/interop/test-ceph-sanity.yaml"]="conf/quincy/integrations/6node-all-roles.yaml"
+if [[ $RHCS_VERSION =~ "7." ]]; then
     TEST_SUITES["suites/reef/interop/test-ceph-sanity.yaml"]="conf/reef/integrations/6node-all-roles.yaml"
-elif [ "$CEPH_PLATFORM" == "rhel-8" ]; then
+elif [[ $RHCS_VERSION =~ "6." ]]; then
+    TEST_SUITES["suites/quincy/interop/test-ceph-sanity.yaml"]="conf/quincy/integrations/6node-all-roles.yaml"
+elif [[ $RHCS_VERSION =~ "5." ]]; then
     TEST_SUITES["suites/pacific/interop/test-ceph-sanity.yaml"]="conf/pacific/integrations/6node-all-roles.yaml"
+elif [[ $RHCS_VERSION =~ "4." ]]; then
     TEST_SUITES["suites/nautilus/interop/test-ceph-rpms.yaml"]="conf/nautilus/interop/5-nodes-ceph.yaml"
 fi
 
@@ -76,15 +86,6 @@ VM_PREFIXES=()
 for suite in "${!TEST_SUITES[@]}" ; do
     TEST_SUITE=$suite
     TEST_CONFIG=${TEST_SUITES[$suite]}
-    if [[ $TEST_SUITE =~ "reef" ]]; then
-      RHCS_VERSION="7.0"
-    elif [[ $TEST_SUITE =~ "quincy" ]]; then
-      RHCS_VERSION="6.1"
-    elif [[ $TEST_SUITE =~ "pacific" ]]; then
-      RHCS_VERSION="5.3"
-    elif [[ $TEST_SUITE =~ "nautilus" ]]; then
-      RHCS_VERSION="4.3"
-    fi
 
     random_string=$(cat /dev/urandom | tr -cd 'a-z0-9' | head -c 5)
     VM_PREFIX="ci-${random_string}"
