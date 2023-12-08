@@ -7,3 +7,7 @@ class Initiator(NVMeCLI):
         super().__init__(node)
         self.node = node
         self.configure()
+
+    def nqn(self):
+        out, _ = self.node.exec_command(cmd="nvme show-hostnqn")
+        return out.strip()

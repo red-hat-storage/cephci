@@ -7,7 +7,7 @@ import json
 from copy import deepcopy
 from time import sleep
 
-from ceph.ceph import Ceph
+from ceph.ceph import Ceph, SocketTimeoutException
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
@@ -543,6 +543,129 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
+def test_ceph_83575455(ceph_cluster, rbd, pool, config):
+    """CEPH-83575455: Validate Host access failures"""
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+    client = get_node_by_id(ceph_cluster, config["initiator_node"])
+    initiator = Initiator(client)
+    initiator_nqn = initiator.nqn()
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83575455",
+            "serial": 113,
+            "listener_port": listener_port,
+            "allow_host": initiator_nqn,
+        }
+    )
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575455",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+
+    _dir = f"/tmp/dir_{generate_unique_id(4)}"
+    _file = f"{_dir}/test.log"
+
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "5G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+
+        cmd_args = {
+            "transport": "tcp",
+            "traddr": gateway.node.ip_address,
+            "trsvcid": listener_port,
+        }
+
+        json_format = {"output-format": "json"}
+        disc_port = {"trsvcid": listener_port}
+        _disc_cmd = {**cmd_args, **disc_port, **json_format}
+        initiator.disconnect_all()
+        sub_nqns, _ = initiator.discover(**_disc_cmd)
+        LOG.debug(sub_nqns)
+        _cmd_args = deepcopy(cmd_args)
+        for nqn in json.loads(sub_nqns)["records"]:
+            if nqn["trsvcid"] == listener_port:
+                _cmd_args["nqn"] = nqn["subnqn"]
+                break
+        else:
+            raise Exception(f"Subsystem not found -- {cmd_args}")
+
+        # Connect to the subsystem
+        conn_port = {"trsvcid": listener_port}
+        _conn_cmd = {**_cmd_args, **conn_port}
+        LOG.debug(initiator.connect(**_conn_cmd))
+        targets = initiator.list_spdk_drives()
+        if not targets:
+            raise Exception(f"NVMe Targets not found on {client.hostname}")
+        _target = targets[0]["DevicePath"]
+
+        client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
+        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
+        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
+
+        # Remove client host access to the namespaces
+        # Check for the non-existence of nvme namespaces
+        # Create a file to check IO failure on mount point
+        gateway.remove_host(subnqn=subsystem["nqn"], hostnqn=initiator_nqn)
+        sleep(20)
+        targets = initiator.list_spdk_drives()
+        if targets:
+            raise Exception(f"NVMe Targets found on {client.hostname}!!!")
+        LOG.info(f"NVMe targets not found on {client.hostname} as expected..")
+        try:
+            client.exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/zero of={_file}_test bs=8096 count=10000000",
+                timeout=10,
+            )
+        except SocketTimeoutException as timeout:
+            LOG.info(
+                f"Command execution failure as expected with timeout"
+                f" as IO fails on inaccessible mount point : {timeout}"
+            )
+
+        # Add client host access
+        # Check the existence of the NVMe namespaces
+        gateway.add_host(subnqn=subsystem["nqn"], hostnqn=initiator_nqn)
+        sleep(10)
+        targets = initiator.list_spdk_drives()
+        if not targets:
+            raise Exception(f"NVMe Targets not found on {client.hostname}")
+        client.exec_command(
+            sudo=True, cmd=f"dd if=/dev/zero of={_file}_test bs=4096 count=10000"
+        )
+        client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}_test")
+        LOG.info("Validation of CEPH-83575455 is successful.")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        client.exec_command(sudo=True, cmd=f"umount {_dir}")
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
 def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     """CEPH-83575813: Perform RBD operations shrink and expand on images."""
     # Todo: This Test case has to be re-visited,
@@ -690,6 +813,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83575813(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83576093":
             test_ceph_83576093(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83575455":
+            test_ceph_83575455(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
         LOG.error(err)
