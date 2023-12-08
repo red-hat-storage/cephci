@@ -401,6 +401,8 @@ class CephfsMirroringUtils(object):
         log.info(filesystem_id)
         return filesystem_id
 
+    retry(CommandFailed, tries=5, delay=60)
+
     def get_peer_uuid_by_name(self, source_clients, fs_name):
         """
         Fetches the peer UUID of a specified Ceph filesystem.
@@ -423,6 +425,8 @@ class CephfsMirroringUtils(object):
                     peer_uuid = peer["uuid"]
                     break
         log.info(peer_uuid)
+        if not peer_uuid:
+            raise CommandFailed("Peer uuid not created yet")
         return peer_uuid
 
     def get_asok_file(self, cephfs_mirror_node, fsid, daemon_names):
@@ -526,22 +530,27 @@ class CephfsMirroringUtils(object):
         Raises:
         - CommandFailed: If the directory count is not found or synchronization fails
         """
-        fsid = self.get_fsid(cephfs_mirror_node)
+        if not isinstance(cephfs_mirror_node, list):
+            cephfs_mirror_node = [cephfs_mirror_node]
+        fsid = self.get_fsid(cephfs_mirror_node[0])
         filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
-        asok_file = self.get_asok_file(cephfs_mirror_node, fsid, daemon_name)
+        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_name)
         log.info("Get the details of synced dir from cephfs-mirror status")
         log.info("Install ceph-common on cephfs-mirror node")
-        cephfs_mirror_node.exec_command(
-            sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
-        )
+        for node in cephfs_mirror_node:
+            node.exec_command(sudo=True, cmd="yum install -y ceph-common --nogpgcheck")
         log.info("Get filesystem mirror status")
-        out, _ = cephfs_mirror_node.exec_command(
-            sudo=True,
-            cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file} "
-            f"fs mirror status {fs_name}@{filesystem_id} -f json",
-        )
-        data = json.loads(out)
-        log.info(data)
+        for node, asok_file in zip(cephfs_mirror_node, asok_files):
+            out, _ = node.exec_command(
+                sudo=True,
+                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file} "
+                f"fs mirror status {fs_name}@{filesystem_id} -f json",
+            )
+            data = json.loads(out)
+            if data.get("snap_dirs"):
+                break
+        else:
+            raise CommandFailed("Unable to get the Snap Dir")
         dir_count = data.get("snap_dirs", {}).get("dir_count")
         if not data.get("snap_dirs"):
             raise CommandFailed("Unable to get the Snap Dir")
@@ -926,7 +935,8 @@ class CephfsMirroringUtils(object):
                 raise Exception("Peer connection validation failed.")
 
             log.info("CephFS mirroring setup deployed successfully.")
-
+            log.info(token)
+            return token
         except Exception as e:
             log.error(f"Error deploying CephFS mirroring setup: {e}")
 
