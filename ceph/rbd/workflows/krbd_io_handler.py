@@ -45,7 +45,7 @@ def krbd_io_handler(**kw):
     """
     client = kw.get("client")
     if kw.get("rbd_obj"):
-        rbd = kw.get("rbd")
+        rbd = kw.get("rbd_obj")
     else:
         rbd = Rbd(client)
     config = kw.get("config")

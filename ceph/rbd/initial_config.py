@@ -149,6 +149,28 @@ def update_config(**kw):
                         if is_secondary:
                             image_config[image].update({"is_secondary": True})
 
+                        if rep_pool_config.get("snap_schedule_levels"):
+                            image_config[image].update(
+                                {
+                                    "snap_schedule_levels": rep_pool_config[
+                                        "snap_schedule_levels"
+                                    ]
+                                }
+                            )
+
+                        if rep_pool_config.get("snap_schedule_intervals"):
+                            image_config[image].update(
+                                {
+                                    "snap_schedule_intervals": rep_pool_config[
+                                        "snap_schedule_intervals"
+                                    ]
+                                }
+                            )
+                        if rep_pool_config.get("io_size"):
+                            image_config[image].update(
+                                {"io_size": rep_pool_config["io_size"]}
+                            )
+
                     if rep_pool_config.get(pool):
                         rep_pool_config[pool].update(image_config)
                     else:
@@ -236,6 +258,29 @@ def update_config(**kw):
                         if is_secondary:
                             image_config[image].update({"is_secondary": True})
 
+                        if ec_pool_config.get("snap_schedule_levels"):
+                            image_config[image].update(
+                                {
+                                    "snap_schedule_levels": ec_pool_config[
+                                        "snap_schedule_levels"
+                                    ]
+                                }
+                            )
+
+                        if ec_pool_config.get("snap_schedule_intervals"):
+                            image_config[image].update(
+                                {
+                                    "snap_schedule_intervals": ec_pool_config[
+                                        "snap_schedule_intervals"
+                                    ]
+                                }
+                            )
+
+                        if ec_pool_config.get("io_size"):
+                            image_config[image].update(
+                                {"io_size": ec_pool_config["io_size"]}
+                            )
+
                     if ec_pool_config.get(pool):
                         ec_pool_config[pool].update(image_config)
                     else:
@@ -248,6 +293,14 @@ def update_config(**kw):
                     if ec_pool_config.get("mirrormode"):
                         ec_pool_config[pool].update(
                             {"mirrormode": ec_pool_config["mirrormode"]}
+                        )
+                    if ec_pool_config.get("ec-pool-k-m"):
+                        ec_pool_config[pool].update(
+                            {"ec-pool-k-m": ec_pool_config["ec-pool-k-m"]}
+                        )
+                    if ec_pool_config.get("ec_profile"):
+                        ec_pool_config[pool].update(
+                            {"ec_profile": ec_pool_config["ec_profile"]}
                         )
     return pool_types
 
@@ -540,22 +593,30 @@ def initial_mirror_config(**kw):
     ceph_cluster = kw["ceph_cluster"]
     primary_config = dict()
     secondary_config = dict()
-    for cluster_name, cluster in kw.get("ceph_cluster_dict").items():
-        kw["ceph_cluster"] = cluster
-        if cluster_name == ceph_cluster.name:
-            primary_config = ret_config[cluster_name] = initial_rbd_config(
-                is_secondary=False, is_mirror=True, **kw
-            )
-            ret_config[cluster_name]["is_secondary"] = False
-            primary_config["cluster"] = cluster
-        else:
-            secondary_config = ret_config[cluster_name] = initial_rbd_config(
-                is_secondary=True, is_mirror=True, **kw
-            )
-            ret_config[cluster_name]["is_secondary"] = True
-            secondary_config["cluster"] = cluster
 
-        # Revert kw["ceph_cluster"] to its original value
+    cluster_dict = {
+        k: v for (k, v) in kw["ceph_cluster_dict"].items() if k == ceph_cluster.name
+    }
+    cluster_name = list(cluster_dict.keys())[0]
+    kw["ceph_cluster"] = list(cluster_dict.values())[0]
+    primary_config = ret_config[cluster_name] = initial_rbd_config(
+        is_secondary=False, is_mirror=True, **kw
+    )
+    ret_config[cluster_name]["is_secondary"] = False
+    primary_config["cluster"] = kw["ceph_cluster"]
+
+    cluster_dict = {
+        k: v for (k, v) in kw["ceph_cluster_dict"].items() if k != ceph_cluster.name
+    }
+    cluster_name = list(cluster_dict.keys())[0]
+    kw["ceph_cluster"] = list(cluster_dict.values())[0]
+    secondary_config = ret_config[cluster_name] = initial_rbd_config(
+        is_secondary=True, is_mirror=True, **kw
+    )
+    ret_config[cluster_name]["is_secondary"] = True
+    secondary_config["cluster"] = kw["ceph_cluster"]
+
+    # Revert kw["ceph_cluster"] to its original value
     kw["ceph_cluster"] = ceph_cluster
     config = kw.get("config")
 

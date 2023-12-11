@@ -5,6 +5,7 @@ import time
 
 from ceph.parallel import parallel
 from ceph.rbd.utils import copy_file, exec_cmd, getdict, value
+from ceph.rbd.workflows.snap_scheduling import add_snapshot_scheduling
 from utility.log import Log
 
 log = Log(__name__)
@@ -530,6 +531,27 @@ def config_mirror_multi_pool(
                             output = (
                                 "Snapshot based mirroring did not fail in pool mode"
                             )
+
+                    if image_config_val.get(
+                        "snap_schedule_levels"
+                    ) and image_config_val.get("snap_schedule_intervals"):
+                        for level, interval in zip(
+                            image_config_val["snap_schedule_levels"],
+                            image_config_val["snap_schedule_intervals"],
+                        ):
+                            snap_schedule_config = {
+                                "pool": pool,
+                                "image": image,
+                                "level": level,
+                                "interval": interval,
+                            }
+                            out, err = add_snapshot_scheduling(
+                                rbd_primary, **snap_schedule_config
+                            )
+                            if out or err:
+                                log.error(
+                                    f"Adding snapshot scheduling failed for image {pool}/{image}"
+                                )
 
     # Add back the popped pool test config once configuration is complete
     if pool_test_config:
