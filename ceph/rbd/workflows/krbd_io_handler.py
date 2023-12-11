@@ -83,7 +83,7 @@ def krbd_io_handler(**kw):
                 out = exec_cmd(
                     cmd="rpm -qa|grep rbd-nbd", node=client, sudo=True, output=True
                 )
-                if not out or out == 1:
+                if not out or out == 1 or "rbd-nbd" not in out:
                     exec_cmd(cmd="dnf install rbd-nbd -y", node=client, sudo=True)
 
                 map_config = {

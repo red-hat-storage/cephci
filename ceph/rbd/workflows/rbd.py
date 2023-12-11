@@ -5,7 +5,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def create_snap_and_clone(rbd, snap_spec, clone_spec):
+def create_snap_and_clone(rbd, snap_spec, clone_spec, **kw):
     """_summary_
 
     Args:
@@ -25,6 +25,8 @@ def create_snap_and_clone(rbd, snap_spec, clone_spec):
         return 1
 
     clone_config = {"source-snap-spec": snap_spec, "dest-image-spec": clone_spec}
+    if kw.get("clone_format"):
+        clone_config.update({"rbd-default-clone-format": kw.get("clone_format")})
 
     out, err = rbd.clone(**clone_config)
     if out or err:

@@ -19,7 +19,6 @@
 """
 import time
 
-from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import run_fio
@@ -213,9 +212,8 @@ def run(ceph_cluster, **kw):
         "ceph immutable object cache files."
     )
 
-    config = kw.get("config")
     rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
-    client_node = get_node_by_id(ceph_cluster, config["client"])
+    client_node = rbd_obj.ceph_client
 
     # To configure immutable object cache
     if configure_immutable_cache(rbd_obj, client_node, "user1"):

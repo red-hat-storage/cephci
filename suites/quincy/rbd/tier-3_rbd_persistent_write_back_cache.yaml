@@ -361,6 +361,7 @@ tests:
               pool: pool1
               image: image1
               size: 10G
+              resize_to: 20G
             fio:
               image_name: image1
               pool_name: pool1
@@ -382,6 +383,7 @@ tests:
               pool: pool2
               image: image2
               size: 20G
+              resize_to: 30G
             fio:
               image_name: image2
               pool_name: pool2

@@ -15,6 +15,7 @@ Test Case Flow :
 4. Execute and commit migration and verify.
 """
 import json
+from time import sleep
 
 from ceph.parallel import parallel
 from tests.rbd.rbd_utils import Rbd, initial_rbd_config, verify_migration_commit
@@ -53,9 +54,24 @@ def run(**kw):
         )
 
     log.info("Initiating ceph-qe-script module to upload image exports")
-    rgw_ceph_object = kw["ceph_cluster"].get_ceph_object("rgw")
-    rgw_node = rgw_ceph_object.node
+    rgw_ceph_objects = kw["ceph_cluster"].get_ceph_objects("rgw")
+    len_rgw = len(rgw_ceph_objects)
+    rgw_node = rgw_ceph_objects[0].node
     append_param = " --rgw-node " + str(rgw_node.ip_address)
+
+    log.info("Checking if rgw daemon exists in the cluster")
+    rgw_daemons, err = rbd_obj.exec_cmd(
+        cmd="ceph orch ps --daemon-type rgw --format json", all=True
+    )
+    if not err:
+        rgw_json = json.loads(rgw_daemons)
+        if rgw_json:
+            log.info("RGW daemons exist in the cluster")
+        else:
+            rbd_obj.exec_cmd(
+                cmd=f"ceph orch apply rgw foo --placement='{len_rgw} label:rgw' --port=80"
+            )
+            sleep(30)  # Wait for 30 seconds for deployment to complete
 
     repo_url = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
     rbd_obj.exec_cmd(

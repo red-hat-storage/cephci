@@ -42,7 +42,7 @@ def kill_fio(rbd):
     sleep(60)
     cmd = "ps -ef | grep fio"
     out = rbd.exec_cmd(cmd=cmd, sudo=True, output=True)
-    if out and "fio --name=" in out:
+    if out and re.findall(r"(fio).*(--name)", out, re.I):
         proc_id = re.search(r"\d+", out).group()
         cmd = f"kill -9 {proc_id}"
         rbd.exec_cmd(cmd=cmd, sudo=True)
@@ -96,8 +96,9 @@ def run(ceph_cluster, **kw):
         "Running test - Concurrent writes with exclusive lock. persistent write cache"
     )
     config = kw.get("config")
-    rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
     cache_client = get_node_by_id(ceph_cluster, config["client"])
+    kw["ceph_client"] = cache_client
+    rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
     pool = config["rep_pool_config"]["pool"]
     image = f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"
     config["image_spec"] = image

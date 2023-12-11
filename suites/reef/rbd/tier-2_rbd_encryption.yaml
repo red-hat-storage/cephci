@@ -73,6 +73,16 @@ tests:
       name: configure client
 
   - test:
+      desc: Install rbd-nbd and remove any epel packages
+      module: exec.py
+      name: Install rbd-nbd
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+          - "dnf install rbd-nbd"
+
+  - test:
       desc: Encrypt & decrypt file using same keys and different keys
       config:
         encryption_type: #parent,clone

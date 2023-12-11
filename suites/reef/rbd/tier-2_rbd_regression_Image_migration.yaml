@@ -177,8 +177,8 @@ tests:
       polarion-id: CEPH-83574092
       config:
         ec_pool_config:
-          pool: rbd_pool
-          data_pool: rbd_ec_pool
+          pool: rbd_ec_pool
+          data_pool: rbd_data_pool
           image: rbd_image
           size: 100M
         rep_pool_config:

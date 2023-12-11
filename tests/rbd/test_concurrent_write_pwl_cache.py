@@ -21,6 +21,8 @@ Support
 - Configure cluster with PWL Cache.
 - Only replicated pool supported, No EC pools.
 """
+from time import sleep
+
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.rbd.krbd_io_handler import krbd_io_handler
@@ -146,6 +148,13 @@ def validate_concurrent_writes(cache, cfg, client):
         raise Exception(f"Validation of concurrent writes failed with error: {e}")
     finally:
         device_cleanup(cache.rbd)
+        image_status = cache.rbd.image_status(image_spec=cfg["image_spec"], output=True)
+
+        while "Watchers: none" not in image_status:
+            sleep(10)
+            image_status = cache.rbd.image_status(
+                image_spec=cfg["image_spec"], output=True
+            )
 
 
 def run(ceph_cluster, **kw):
@@ -166,8 +175,9 @@ def run(ceph_cluster, **kw):
     )
     config = kw.get("config")
     for level in config.get("levels"):
-        rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
         cache_client = get_node_by_id(ceph_cluster, config["client"])
+        kw["ceph_client"] = cache_client
+        rbd_obj = initial_rbd_config(**kw)["rbd_reppool"]
         pool = config["rep_pool_config"]["pool"]
         image = (
             f"{config['rep_pool_config']['pool']}/{config['rep_pool_config']['image']}"
