@@ -56,6 +56,12 @@ def configure_esx(gateway, config, nguid_list):
     command = "esxcli nvme namespace list"
     output = execute_ssh_command(ssh_esx, command)
     LOG.info(output)
+
+    command = "esxcli nvme device list"
+    output = execute_ssh_command(ssh_esx, command)
+    LOG.info(output)
+
+    
     names = output.strip().split("\n")
     namespace_data = [name.split()[0] for name in names[3:]]
     namespaces = [item.replace("eui.", "") for item in namespace_data]
