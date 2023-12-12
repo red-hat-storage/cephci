@@ -1,0 +1,84 @@
+# Rados test configuration for replica-1 pool
+# Deployment for all the ceph daemons , with 5 mon's, 3 mgr's, and 6 OSD daemons
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+      node2:
+        role:
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+      node3:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 1
+        disk-size: 50
+      node4:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 1
+        disk-size: 50
+      node5:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 1
+        disk-size: 50
+      node6:
+        role:
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - crash
+      node7:
+        role:
+          - client
+      node8:
+        role:
+          - mon
+          - rgw
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 1
+        disk-size: 50
+      node9:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 1
+        disk-size: 50
+      node10:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 1
+        disk-size: 50
+      node11:
+        role:
+          - mon
+          - rgw
+          - node-exporter
+          - crash

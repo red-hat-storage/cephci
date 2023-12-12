@@ -670,6 +670,23 @@ class CrushToolWorkflows:
         log.info(f"Successfully set rules with name {rule_name} on the cluster")
         return True
 
+    def remove_device_class(self, osd_list: list) -> bool:
+        """
+        Method to remove the device class of one or more OSDs
+        Args:
+            osd_list: List of OSD IDs
+        Returns:
+            True -> device class removed successfully
+            False -> device class removal failed
+        """
+        device_rm_cmd = "ceph osd crush rm-device-class "
+        _cmd = device_rm_cmd + " ".join(osd_list)
+        out, err = self.client.exec_command(cmd=_cmd, sudo=True)
+        log.info(err)
+        if "done removing class of osd" in err or "belongs to no class" in err:
+            return True
+        return False
+
 
 class OsdToolWorkflows:
     """
