@@ -43,6 +43,12 @@ def run(ceph_cluster, **kw):
         client2 = clients[1]
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
+        log.info("Collect client IDs if already exists")
+        out, rc = client1.exec_command(
+            sudo=True, cmd="ceph tell mds.0 client ls --format json"
+        )
+        client_details = json.loads(out)
+        client_id_list_before = [item["id"] for item in client_details]
         mount_dir = "/mnt/" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
@@ -75,21 +81,25 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             out, rc = client1.exec_command(sudo=True, cmd=command)
-        output = json.loads(out)
-        for item in output:
-            client_metadata = item["client_metadata"]
-            kernel_client = 0
-            if "kernel_version" in client_metadata.keys():
-                kernel_client = 1
-            if (
-                client1.node.shortname == item["client_metadata"]["hostname"]
-                and kernel_client == 1
-            ):
-                client_id = item["id"]
-        log.info("Blocking the Cephfs client")
-        command = f"ceph tell mds.0 client evict id={client_id}"
-        out, rc = client1.exec_command(sudo=True, cmd=command)
-        time.sleep(5)
+
+        log.info("Collect client IDs After mount")
+        out, rc = client1.exec_command(
+            sudo=True, cmd="ceph tell mds.0 client ls --format json"
+        )
+        client_details = json.loads(out)
+        client_id_list_after = [item["id"] for item in client_details]
+        difference_list = [
+            item for item in client_id_list_after if item not in client_id_list_before
+        ]
+        if not difference_list:
+            raise CommandFailed(
+                "no new client it added even after mouting the directory"
+            )
+        log.info(f"Blocking the Cephfs client with id {difference_list}")
+        for id in difference_list:
+            command = f"ceph tell mds.0 client evict id={id}"
+            out, rc = client1.exec_command(sudo=True, cmd=command)
+            time.sleep(30)
         try:
             log.info("Verifying mount is inaccessible")
             out, rc = client1.exec_command(sudo=True, cmd=f"ls {mount_dir}")

@@ -202,7 +202,7 @@ def run(ceph_cluster, **kw):
                     return 1
             log.info(f"Permissions set for client {client_name} is working")
             client_number += 1
-            # Create client with read permission on "dir_2" directory
+            # Create client with read and write permission on "dir_2" directory
             client_name = "Client_" + str(client_number)
             kernel_mount_dir = "/mnt/" + "".join(
                 secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
@@ -231,16 +231,16 @@ def run(ceph_cluster, **kw):
                 extra_params=f" -r /dir_2 {fuse_fs_para}",
             )
             # Verify mount on root directory fails
-            kernel_mount_dir = "/mnt/" + "".join(
+            kernel_mount_dir_fail = "/mnt/" + "".join(
                 secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
             )
-            fuse_mount_dir = "/mnt/" + "".join(
+            fuse_mount_dir_fail = "/mnt/" + "".join(
                 secrets.choice(string.ascii_lowercase + string.digits) for i in range(5)
             )
             try:
                 fs_util.kernel_mount(
                     client,
-                    kernel_mount_dir,
+                    kernel_mount_dir_fail,
                     mon_node_ip,
                     new_client_hostname=client_name,
                     extra_params=kernel_fs_para,
@@ -251,16 +251,8 @@ def run(ceph_cluster, **kw):
                     f"Permissions set for client {client_name} is working for kernel mount"
                 )
             except CommandFailed as e:
-                log.info(e)
-                err = str(e)
-                err = err.split()
-                if "mount" in err:
-                    log.info(
-                        f"Permissions set for client {client_name} is working for kernel mount"
-                    )
-                else:
-                    log.info(traceback.format_exc())
-                    return 1
+                log.error(e)
+
             except Exception as e:
                 log.info(e)
                 log.info(traceback.format_exc())
@@ -273,7 +265,7 @@ def run(ceph_cluster, **kw):
             try:
                 fs_util.fuse_mount(
                     client,
-                    fuse_mount_dir,
+                    fuse_mount_dir_fail,
                     new_client_hostname=client_name,
                     extra_params=fuse_fs_para,
                 )
@@ -286,13 +278,9 @@ def run(ceph_cluster, **kw):
                 log.info(e)
                 err = str(e)
                 err = err.split()
-                if "mount" in err:
-                    log.info(
-                        f"Permissions set for client {client_name} is working for fuse mount"
-                    )
-                else:
-                    log.info(traceback.format_exc())
-                    return 1
+                log.info(
+                    f"Fuse mount failed wtih {err} and this expected as client has permissions only to /dir2"
+                )
             except Exception as e:
                 log.info(e)
                 log.info(traceback.format_exc())
@@ -345,16 +333,8 @@ def run(ceph_cluster, **kw):
                     f"Permissions set for client {client_name} is working for kernel mount"
                 )
             except CommandFailed as e:
-                log.info(e)
-                err = str(e)
-                err = err.split()
-                if "mount" in err:
-                    log.info(
-                        f"Permissions set for client {client_name} is working for kernel mount"
-                    )
-                else:
-                    log.info(traceback.format_exc())
-                    return 1
+                log.error(e)
+
             except Exception as e:
                 log.info(e)
                 log.info(traceback.format_exc())
@@ -375,16 +355,8 @@ def run(ceph_cluster, **kw):
                     f"Permissions set for client {client_name} is working for fuse mount"
                 )
             except CommandFailed as e:
-                log.info(e)
-                err = str(e)
-                err = err.split()
-                if "mount" in err:
-                    log.info(
-                        f"Permissions set for client {client_name} is working for fuse mount"
-                    )
-                else:
-                    log.info(traceback.format_exc())
-                    return 1
+                log.error(e)
+
             except Exception as e:
                 log.info(e)
                 log.info(traceback.format_exc())

@@ -30,8 +30,8 @@ def verify_mount_failure_on_root(
     **kwargs:
         extra_params : we can include extra parameters for mount options such as fs_name
     """
-    kernel_fs_para = f",fs={kwargs.get('fs_name', '')}"
-    fuse_fs_para = f" --client_fs {kwargs.get('fs_name', '')}"
+    kernel_fs_para = f",fs={kwargs.get('fs_name', 'cephfs')}"
+    fuse_fs_para = f" --client_fs {kwargs.get('fs_name', 'cephfs')}"
     try:
         fs_util.kernel_mount(
             client,
@@ -268,7 +268,7 @@ def run(ceph_cluster, **kw):
                 client_name,
                 mon_node_ip,
             )
-            if rc == 1:
+            if rc != 1:
                 return 1
             log.info(f"Testing client eviction for {client_name}")
             out, rc = client[0].exec_command(
@@ -365,7 +365,7 @@ def run(ceph_cluster, **kw):
                 client_name,
                 mon_node_ip,
             )
-            if rc == 1:
+            if rc != 1:
                 return 1
             log.info(f"Testing client eviction for {client_name}")
             out, rc = client[0].exec_command(
