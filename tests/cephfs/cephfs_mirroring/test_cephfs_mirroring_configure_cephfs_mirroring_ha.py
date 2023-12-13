@@ -221,7 +221,7 @@ def run(ceph_cluster, **kw):
                 cephfs_mirror_node[0],
                 source_fs,
                 fsid,
-                asok_file1[0],
+                asok_file1[cephfs_mirror_node[0].node.hostname][1],
                 filesystem_id,
                 peer_uuid,
             )
@@ -237,7 +237,7 @@ def run(ceph_cluster, **kw):
                 cephfs_mirror_node[1],
                 source_fs,
                 fsid,
-                asok_file2[0],
+                asok_file2[cephfs_mirror_node[1].node.hostname][1],
                 filesystem_id,
                 peer_uuid,
             )

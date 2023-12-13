@@ -139,6 +139,45 @@ class FsUtils(object):
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
 
+    def get_mds_nodes(self, client, fs_name="cephfs"):
+        """
+        Gets the mds node objects based on the filesystem name provided
+        Args:
+            client:
+            fs_name:
+
+        Returns:
+            List of MDS node objects
+        """
+        out, rc = client.exec_command(sudo=True, cmd="ceph orch ps -f json")
+        output = json.loads(out)
+        deamon_dict = self.filter_daemons(output, "mds", fs_name)
+
+        mds_nodes = []
+        for node in deamon_dict:
+            for hostname, deamon in node.items():
+                node = self.ceph_cluster.get_node_by_hostname(hostname)
+            mds_nodes.append(node)
+        mds_nodes_hostnames = [i.hostname for i in mds_nodes]
+        ceph_nodes = self.ceph_cluster.get_ceph_objects()
+        server_list = []
+
+        for node in ceph_nodes:
+            if node.node.hostname in mds_nodes_hostnames:
+                log.info(f"{node.node.hostname} is added to server list")
+                server_list.append(node)
+        seen_hosts = set()
+
+        # Filter the list based on the surname attribute
+        filtered_list = [
+            mds_deamon
+            for mds_deamon in server_list
+            if mds_deamon.node.hostname not in seen_hosts
+            and not seen_hosts.add(mds_deamon.node.hostname)
+        ]
+
+        return list(set(filtered_list))
+
     def enable_mds_logs(self, client, fs_name="cephfs", validate=True):
         """
 
@@ -1940,6 +1979,27 @@ os.system('sudo systemctl start  network')
         node.exec_command(sudo=True, cmd="python3 /home/cephuser/nw_disconnect.py")
         log.info("Starting the network..")
         return 0
+
+    def network_disconnect_v1(self, node, sleep_time=60):
+        """
+        Disconnects the network on a specified node using a custom Bash script.
+        Args:
+            node:
+            sleep_time:
+
+        Returns:
+
+        """
+        file = "network_disconnect.sh"
+        node.upload_file(
+            sudo=True,
+            src="tests/cephfs/cephfs_bugs/network_disconnect.sh",
+            dst=f"/root/{file}",
+        )
+        node.exec_command(
+            sudo=True,
+            cmd=f"bash /root/{file} {node.node.ip_address} {sleep_time}",
+        )
 
     def node_power_failure(
         self,
