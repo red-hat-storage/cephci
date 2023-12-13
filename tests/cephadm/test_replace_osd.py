@@ -1,4 +1,4 @@
-import json
+import ast
 
 from ceph.utils import get_nodes_by_ids
 from ceph.waiter import WaitUntil
@@ -17,7 +17,7 @@ def verify_osd_state(cephadm, osd_id, state):
     timeout, interval = 60, 2
     for w in WaitUntil(timeout=timeout, interval=interval):
         out = cephadm.ceph.osd.tree(**kw)
-        data = json.loads(out[0])
+        data = ast.literal_eval(out)
         for node in data.get("nodes"):
             _id = node.get("id")
             _type = node.get("type")
