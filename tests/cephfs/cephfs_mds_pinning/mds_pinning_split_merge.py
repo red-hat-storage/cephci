@@ -206,7 +206,12 @@ def run(ceph_cluster, **kw):
                 raise CommandFailed("Mds info command failed")
 
             log.info("Execution of Test case 11233 ended:")
-            print("Results:")
+            log.info("Results:")
+            log.info(node1_before_io)
+            log.info(node1_after_del)
+            log.info(node1_after_io)
+            log.info("Test case %s Passed" % (tc))
+
             if node1_before_io != node1_after_io and node1_after_io != node1_after_del:
                 log.info(node1_before_io)
                 log.info(node1_after_del)

@@ -930,10 +930,13 @@ class FsUtils(object):
                 kernel_cmd += f"{kwargs.get('extra_params')}"
 
             cmd_rc = client.exec_command(sudo=True, cmd=kernel_cmd, long_running=True)
-            if cmd_rc:
-                raise CommandFailed(f"Ceph Kernel Command failed with error: {cmd_rc}")
+
             log.info("validate kernel mount:")
             if kwargs.get("validate", True):
+                if cmd_rc:
+                    raise CommandFailed(
+                        f"Ceph Kernel Command failed with error: {cmd_rc}"
+                    )
                 if not self.wait_until_mount_succeeds(client, mount_point):
                     raise CommandFailed(
                         "Failed to appear in mount cmd even after 5 min"
