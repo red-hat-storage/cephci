@@ -93,3 +93,15 @@ tests:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_incomplete_multipart.yaml
         timeout: 300
+
+  # Object lock no overwrite
+  - test:
+      name: object lock no overwrite
+      desc: object lock no overwrite
+      polarion-id: CEPH-83574059
+      module: sanity_rgw.py
+      comments: known issue (bz-1890843)
+      config:
+        script-name: test_object_lock_no_overwrite.py
+        config-file-name: test_object_lock_no_overwrite.yaml
+        timeout: 500
