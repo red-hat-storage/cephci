@@ -12,6 +12,7 @@
 #                  snapshots and capture the time taken
 #  CEPH-83575584 - Validate the max snapshot that can be created under a root FS sub volume.
 #  CEPH-83575629 - Validate the max clones can be created from single snapshot of subvolume.
+#  CEPH-83581234 - Snap schedule retention count validation using n
 #=======================================================================================================================
 tests:
   -
@@ -164,3 +165,11 @@ tests:
       module: cephfs_scale.max_clones_from_snap.py
       name: "Clone scale testing"
       polarion-id: "CEPH-83575629"
+  - test:
+      name: snap_retention_count_validate
+      module: snapshot_clone.snap_schedule_retention_vol_subvol.py
+      desc: snap retention count validate with n usage on vol and subvol
+      abort-on-fail: false
+      config:
+        test_name : longevity
+      polarion-id: "CEPH-83581234"
