@@ -104,12 +104,6 @@ tests:
       destroy-cluster: false
 
   - test:
-      name: test_validate_safe_stop_hosts
-      desc: Verify if a host be safely stopped without reducing the availability using ceph orch ok-to-stop command
-      polarion-id: CEPH-83573767
-      module: test_node_safe_stop.py
-
-  - test:
       name: Remove Host label
       desc: Remove host label osd from node4
       module: test_host.py
@@ -415,7 +409,11 @@ tests:
         args:
           all-available-devices: true
       destroy-cluster: false
-
+  - test:
+      name: test_validate_safe_stop_hosts
+      desc: Verify if a host be safely stopped without reducing the availability using ceph orch ok-to-stop command
+      polarion-id: CEPH-83573767
+      module: test_node_safe_stop.py
   - test:
       name: Configure client
       desc: Configure client on node9
