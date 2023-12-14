@@ -47,6 +47,7 @@ Below configs are needed in order to run the tests
 """
 
 import json
+import os
 import time
 
 import yaml
@@ -311,12 +312,18 @@ def run(**kw):
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:
-            io_info = home_dir_path + f"io_info_{config_file_name}"
+            io_info = home_dir_path + f"io_info_{os.path.basename(config_file_name)}"
             for site in verify_io_on_sites:
                 verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
-                log.info(f"Check sync status on {site}")
-                verify_sync_status(verify_io_on_site_node)
+                if config.get("multisite-replication-disabled", False):
+                    log.info(
+                        f"Multisite replication disabled. skipping sync status check on {site}"
+                    )
+                else:
+                    log.info(f"Check sync status on {site}")
+                    verify_sync_status(verify_io_on_site_node)
                 # adding sleep for 80 seconds before verification of data starts
+                log.info("sleeping for 80 seconds before verification of data starts")
                 time.sleep(80)
                 log.info(f"verification IO on {site}")
                 if test_site != site:
@@ -332,9 +339,21 @@ def run(**kw):
                     long_running=True,
                 )
                 log.info(f"verify io status code is : {verify_status}")
-                if verify_status != 0:
-                    log.error(verify_status)
-                    return verify_status
+                if verify_status != 0:  # Verify io failure on other site
+                    if config.get("multisite-replication-disabled", False):
+                        log.info(
+                            f"Multisite replication disabled. objects not synced to {site}"
+                            + " and verify io failed as expected."
+                        )
+                    else:
+                        raise Exception(f"verify io failed on {site}")
+                else:  # Verify io is successful on other site
+                    if config.get("multisite-replication-disabled", False):
+                        raise Exception(
+                            f"objects synced to {site} even after disabling multisite replication."
+                        )
+                    else:
+                        log.info(f"verify io is successful on {site}")
 
     return test_status
 
