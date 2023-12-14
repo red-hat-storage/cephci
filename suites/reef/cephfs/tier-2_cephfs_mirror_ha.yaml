@@ -204,3 +204,14 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_ha_disconnect.py
       name: Validate all failure scenarios to disconnect the mirroring
       polarion-id: "CEPH-83575334"
+  - test:
+      abort-on-fail: false
+      desc: "Validate FS mirroring on ha with 4 nodes"
+      clusters:
+        ceph1:
+          config:
+            name: Validate FS mirroring on ha with 4 nodes
+      module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring_ha_on_4_nodes.py
+      name: Validate FS mirroring on ha with 4 nodes
+      polarion-id: "CEPH-83575338"
+
