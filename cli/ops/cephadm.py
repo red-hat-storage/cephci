@@ -159,7 +159,7 @@ def bootstrap(
                     <key,val> (dict): Dict with key, val
     """
     # Check for mon IP
-    if kw.get("mon-ip"):
+    if not kw.get("mon-ip"):
         if not nodes:
             raise ResourceNotFoundError("Nodes are required to get mon id")
 

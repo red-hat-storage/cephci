@@ -8,7 +8,6 @@ from utility.log import Log
 
 log = Log(__name__)
 
-
 CEPHADM_PREFLIGHT_PLAYBOOK = "cephadm-preflight.yml"
 ETC_HOSTS = "/etc/hosts"
 
@@ -184,9 +183,10 @@ def create_self_signed_certificate(node):
 
 def create_link_to_domain_cert(node):
     """Creates a link to the domain certificate"""
+    # Create symlink
     cmd = f"ln -s {DOMAIN_CERT_PATH} {DOMAIN_CERT_PATH_CERT}"
     out, _ = node.exec_command(cmd=cmd, sudo=True)
-    if out:
+    if out and "File exists" not in out:
         log.error("Failed to create a link to the domain certificate")
         return False
     return True
@@ -314,7 +314,7 @@ def add_images_to_private_registry(
 
     for image in images:
         img_reg = image.replace(f"{registry}/", "")
-        src_image = f"{image}"
+        src_image = f"{registry}/{image}"
         dst_image = f"{node.hostname}:5000/{img_reg}"
         skopeo_cmd = generate_skopeo_copy_cmd(
             src_image,

@@ -191,7 +191,7 @@ def setup_private_container_registry(
         private_reg_username (str): private registry username
         private_reg_password (str): private registry password
         docker_reg_image (str): docker-registry image name
-        images (str): list of images
+        images (list): list of images
     """
 
     # Step 1: Create folders for the private registry
@@ -245,12 +245,6 @@ def setup_private_container_registry(
         return False
 
     # Step 10: List down private registry images
-    if not get_private_registry_image(
-        installer, private_reg_username, private_reg_password
-    ):
-        return False
-
-    # Step 11: List down private registry images
     if not get_private_registry_image(
         installer, private_reg_username, private_reg_password
     ):
