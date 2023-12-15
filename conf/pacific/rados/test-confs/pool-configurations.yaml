@@ -4,7 +4,7 @@ replicated:
     pool_type: replicated
     pool_name: re_pool_10
     pg_num: 64
-    size: 4
+    size: 3
     disable_pg_autoscale: true
   sample-pool-2:
     pool_type: replicated
@@ -14,7 +14,7 @@ replicated:
     pool_type: replicated
     pool_name: re_pool_30
     pg_num: 128
-    size: 2
+    size: 3
 erasure:
   sample-pool-1:
     pool_name: ec_pool_10

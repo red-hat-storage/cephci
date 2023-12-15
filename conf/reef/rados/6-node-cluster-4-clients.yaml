@@ -51,49 +51,33 @@ globals:
           - rgw
       node7:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
+          openstack: RHEL-9.3.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_8
+          - provider_net_cci_13
         role:
           - client
       node8:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
+          openstack: RHEL-9.3.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_8
+          - provider_net_cci_13
         role:
           - client
       node9:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
-          ibmc: rhel-87-server-released
+          openstack: RHEL-9.3.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_9
+          - provider_net_cci_10
         role:
           - client
       node10:
         image-name:
-          openstack: RHEL-7.9-x86_64-ga-latest
-          ibmc: rhel-server-79-x86-64-kvm
-        networks:
-          - provider_net_cci_9
-        role:
-          - client
-      node11:
-        image-name:
-          openstack: RHEL-9.1.0-x86_64-ga-latest
+          openstack: RHEL-9.3.0-x86_64-ga-latest
           ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_7
-        role:
-          - client
-      node12:
-        image-name:
-          openstack: RHEL-9.1.0-x86_64-ga-latest
-          ibmc: rhel-91-server-released
-        networks:
-          - provider_net_cci_7
+          - provider_net_cci_10
         role:
           - client
