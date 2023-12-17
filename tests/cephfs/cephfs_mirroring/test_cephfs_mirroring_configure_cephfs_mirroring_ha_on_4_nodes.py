@@ -78,6 +78,8 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph orch apply cephfs-mirror --placement='4 {ha_nodes}'",
         )
+        for node in cephfs_mirror_node:
+            node.exec_command(sudo=True, cmd="yum install -y ceph-common --nogpgcheck")
         fs_util_ceph1.validate_services(source_clients[0], "cephfs-mirror")
 
         fs_mirroring_utils.deploy_cephfs_mirroring(

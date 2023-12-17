@@ -178,6 +178,19 @@ class FsUtils(object):
 
         return list(set(filtered_list))
 
+    def get_fsid(self, client):
+        """
+        Returns the FSID of the cluster
+        Args:
+            client:
+
+        Returns:
+
+        """
+        out, rc = client.exec_command(sudo=True, cmd="ceph fsid -f json")
+        output = json.loads(out)
+        return output.get("fsid", "")
+
     def enable_mds_logs(self, client, fs_name="cephfs", validate=True):
         """
 
@@ -3202,7 +3215,7 @@ os.system('sudo systemctl start  network')
         if spec_frontend_port not in status_ports:
             raise CommandFailed(f"The frontend port{port} is not matching")
 
-    def get_ceph_health_status(self, client, validate=True):
+    def get_ceph_health_status(self, client, validate=True, status=["HEALTH_OK"]):
         """
         Validate if the Ceph Health is OK or in ERROR State.
         Args:
@@ -3214,7 +3227,7 @@ os.system('sudo systemctl start  network')
         log.info(out)
         health_status = json.loads(out)["health"]["status"]
 
-        if health_status != "HEALTH_OK":
+        if health_status not in status:
             raise CommandFailed(f"Ceph Cluster is in {health_status} State")
         log.info("Ceph Cluster is Healthy")
 

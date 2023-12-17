@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import string
 import traceback
@@ -148,6 +149,30 @@ def run(ceph_cluster, **kw):
         for cmd in cmd_list:
             collect_ceph_details(client1, cmd)
         log.info("Clean Up in progess")
-        for snapshot in snapshot_list:
-            fs_util.remove_snapshot(client1, **snapshot)
-        fs_util.remove_subvolume(client1, **subvolume, check_ec=False)
+        fs_util.enable_mds_logs(client1, default_fs)
+        try:
+            for snapshot in snapshot_list:
+                fs_util.remove_snapshot(client1, **snapshot, check_ec=False)
+            fs_util.remove_subvolume(client1, **subvolume, check_ec=False)
+        except Exception as e:
+            log.info(e)
+            log.info(traceback.format_exc())
+            return 1
+        finally:
+            fs_util.disable_mds_logs(client1, default_fs)
+            mds_nodes = fs_util.get_mds_nodes(client1)
+            log_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+            fsid = fs_util.get_fsid(client1)
+
+            for mds in mds_nodes:
+                file_list = mds.node.get_dir_list(f"/var/log/ceph/{fsid}/", sudo=True)
+                log.info(file_list)
+                for file_name in file_list:
+                    if "mds" in file_name:
+                        src_path = os.path.join(f"/var/log/ceph/{fsid}", file_name)
+                        dst_path = os.path.join(log_dir, file_name)
+                        mds.download_file(
+                            src=src_path,
+                            dst=dst_path,
+                            sudo=True,
+                        )

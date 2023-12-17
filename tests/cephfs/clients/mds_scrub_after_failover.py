@@ -51,6 +51,7 @@ def run(ceph_cluster, **kw):
             fs_name = fs["name"]
             # delete the file systems
             retry_remove_volume(client1, fs_name)
+            time.sleep(60)
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         print(len(mds_nodes))
         mds_names = []
