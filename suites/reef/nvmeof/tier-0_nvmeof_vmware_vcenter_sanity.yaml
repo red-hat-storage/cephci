@@ -1,0 +1,203 @@
+# Basic Ceph-NvmeoF sanity with RHEL and vmware clients
+# Test config at conf/reef/nvmeof/ceph_nvmeof_vmware_sanity.yaml or conf/reef/nvmeof/octo-6-node-env.yaml for baremetal
+# This suite will be re-written or enhanced based on NVMeOF 7.1 test requirements for vmware
+
+tests:
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Configure Initiators
+#  Run IO on NVMe Targets
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - rbd pool init nvmeof_pool
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  label: nvmeof-gw
+              pos_args:
+                - nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd
+      desc: deploy NVMeoF service on GW node
+      destroy-clster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy NVMeoF service on GW node
+
+##  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        node: node5
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              command: create_subsystem
+              args:
+                subnqn: nqn.2016-06.io.spdk:cnode1
+                serial_num: 1
+                max_ns: 500
+          - config:
+              command: create_listener
+              args:
+                subnqn: nqn.2016-06.io.spdk:cnode1
+                port: 4420
+                pool: nvmeof_pool
+          - config:
+              command: add_host
+              args:
+                subnqn: nqn.2016-06.io.spdk:cnode1
+                hostnqn: "*"
+          - config:
+              command: add_namespace
+              args:
+                start_count: 1
+                end_count: 8
+                image_size: 1T
+                pool: rbd
+                subnqn: nqn.2016-06.io.spdk:cnode1
+          - config:
+              command: get_subsystems
+        initiators:
+          subnqn: nqn.2016-06.io.spdk:cnode1
+          listener_port: 4420
+          node: node6
+        run_io:
+          - node: node6
+            io_type: write
+      desc: Configure nvmeof target and run IO from RHEL
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_scale.py
+      name: Manage nvmeof gateway entities
+      polarion-id: CEPH-83575783
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node5
+        vmware_clients:
+          - vcenter_host: cephqe-vcenter2.lab.eng.blr.redhat.com
+            ip: 10.70.44.249
+            root_password: Redhat231#
+            sub_nqn: nqn.2016-06.io.spdk:cnode1
+            sub_port: 4420
+      desc: test to configure VMware esx server and validate connection
+      destroy-cluster: false
+      module: test_ceph_nvmeof_vmware_vcenter_clients.py
+      name: Configure VMware clients
+      polarion-id:
+
+  - test:
+      abort-on-fail: false
+      config:
+         command: remove
+         service: nvmeof
+         args:
+           service_name: nvmeof.nvmeof_pool
+           verify: true
+      desc: Remove nvmeof service on GW node
+      destroy-clster: false
+      module: test_orch.py
+      name: Delete nvmeof gateway
+
+  - test:
+      abort-on-fail: false
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph config set mon mon_allow_pool_delete true
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm nvmeof_pool nvmeof_pool --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
+      desc: Delete nvmeof and rbd pool from ceph cluster
+      destroy-clster: false
+      module: test_cephadm.py
+      name: Delete NVMeOF pools
