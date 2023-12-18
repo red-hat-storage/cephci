@@ -1,6 +1,6 @@
 # This conf needs to use only for openstack environment as this subnets are from rhos01 infra.
-# node1, node2, node3 are part of subnet shared_net_4 with CIDR(10.0.104.0/22)
-# node4, node5 are part of subnet shared_net_11 with CIDR(10.0.204.0/22)
+# node1, node2, node3,node4 are part of subnet shared_net_4 with CIDR(10.0.201.0/24)
+# node5 are part of subnet satqe_net_5 with CIDR(10.0.171.0/25)
 globals:
   - ceph-cluster:
       name: ceph
@@ -31,20 +31,22 @@ globals:
           - shared_net_4
         role:
           - mon
+          - mgr
           - osd
         no-of-volumes: 3
         disk-size: 15
       node4:
         networks:
-          - shared_net_11
+          - shared_net_4
         role:
           - mon
+          - mgr
           - osd
         no-of-volumes: 3
         disk-size: 15
       node5:
         networks:
-          - shared_net_11
+          - satqe_net_5
         role:
           - mon
           - mgr
