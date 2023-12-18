@@ -70,8 +70,8 @@ def config_rbd_multi_pool(
             pool=pool_config.get("data_pool"),
             k_m=pool_config.get("ec-pool-k-m"),
             profile=pool_config.get("ec_profile", "use_default"),
-            pg_num=pool_config.get("ec_pg_num", 16),
-            pgp_num=pool_config.get("ec_pgp_num", 16),
+            pg_num=pool_config.get("ec_pg_num", 32),
+            pgp_num=pool_config.get("ec_pgp_num", 32),
             failure_domain=pool_config.get("failure_domain", ""),
             client=client,
             cluster=cluster,
@@ -103,7 +103,15 @@ def config_rbd_multi_pool(
                     {
                         k: v
                         for k, v in image_config_val.items()
-                        if k not in ["io_total", "test_config", "is_secondary"]
+                        if k
+                        not in [
+                            "io_total",
+                            "test_config",
+                            "is_secondary",
+                            "snap_schedule_levels",
+                            "snap_schedule_intervals",
+                            "io_size",
+                        ]
                     }
                 )
                 create_config.update({"cluster": cluster})

@@ -90,7 +90,7 @@ def create_ecpool(
         0 if ec pool creation is successful
         1 if ec pool creation fails
     """
-    cmd = f"ceph osd pool create {pool} {pg_num} {pgp_num} erasure --cluster {cluster}"
+    cmd = f"ceph osd pool create {pool} {pg_num} {pgp_num} erasure --cluster {cluster} "
     if profile != "use_default":
         cmd += profile
         if set_ec_profile(
