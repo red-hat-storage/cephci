@@ -1,66 +1,11 @@
-from copy import deepcopy
-
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config, random_string
-from ceph.rbd.utils import getdict
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.execute import execute
-from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
-from ceph.rbd.workflows.snap_scheduling import verify_snapshot_schedule
+from ceph.rbd.workflows.snap_scheduling import run_io_verify_snap_schedule
 from utility.log import Log
 
 log = Log(__name__)
-
-
-def run_io_verify_snap_schedule(**kw):
-    """
-    Run IOs on the given image and verify snapshot schedule
-    """
-    pool_type = kw.get("pool_type")
-    rbd = kw.get("rbd")
-    client = kw.get("client")
-    config = deepcopy(kw.get("config").get(pool_type))
-    for pool, pool_config in getdict(config).items():
-        multi_image_config = getdict(pool_config)
-        multi_image_config.pop("test_config", {})
-        for image, image_config in multi_image_config.items():
-            image_spec = f"{pool}/{image}"
-
-            io_size = image_config.get(
-                "io_size", int(int(image_config["size"][:-1]) / 3)
-            )
-            io_config = {
-                "rbd_obj": rbd,
-                "client": client,
-                "size": image_config["size"],
-                "do_not_create_image": True,
-                "config": {
-                    "file_size": io_size,
-                    "file_path": [f"{kw['mount_path']}"],
-                    "get_time_taken": True,
-                    "image_spec": [image_spec],
-                    "operations": {
-                        "fs": "ext4",
-                        "io": True,
-                        "mount": True,
-                        "nounmap": False,
-                        "device_map": True,
-                    },
-                    "skip_mkfs": kw["skip_mkfs"],
-                },
-            }
-            krbd_io_handler(**io_config)
-            kw["io_config"] = io_config
-            for interval in image_config.get("snap_schedule_intervals"):
-                out = verify_snapshot_schedule(rbd, pool, image, interval)
-                if out:
-                    log.error(f"Snapshot verification failed for image {pool}/{image}")
-                    if kw.get("raise_exception"):
-                        raise Exception(
-                            f"Snapshot verification failed for image {pool}/{image}"
-                        )
-                    return 1
-    return 0
 
 
 def test_cluster_upgrade(**kw):
