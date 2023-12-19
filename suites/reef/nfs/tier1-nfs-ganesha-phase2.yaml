@@ -225,3 +225,13 @@ tests:
         nfs_version: 4.1
         clients: 3
         operation: verify_non_existing_file
+
+  - test:
+      name: Nfs verify export unexport while nfs share is in use
+      module: nfs_verify_stress.py
+      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
+      polarion-id: CEPH-83575994
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
