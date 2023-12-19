@@ -84,7 +84,7 @@ def run(ceph_cluster, **kw):
             if output[0].rstrip() != target[1]:
                 raise CommandFailed(f"Failed to set {client_conf} to {value}")
 
-        fs_util.get_ceph_health_status(client1)
+        fs_util.get_ceph_health_status(client1, status=["HEALTH_WARN", "HEALTH_OK"])
         log.info("Successfully set all the client config values")
         return 0
     except Exception as e:

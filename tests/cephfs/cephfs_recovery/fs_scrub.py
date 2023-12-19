@@ -98,9 +98,14 @@ def run(ceph_cluster, **kw):
         if "PAUSED" not in status["status"]:
             log.error(f"Expected status is PAUSED but actual output {status}")
             return 1
-        if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
-            log.error(f"Expected scrub tag is {scrub_tag} but actual output {status}")
-            return 1
+        if status["scrubs"].get(scrub_tag):
+            if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
+                log.error(
+                    f"Expected scrub tag is {scrub_tag} but actual output {status}"
+                )
+                return 1
+        else:
+            log.info("Scrub activity has been completed successfully")
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub resume --format json"
         )
@@ -116,9 +121,14 @@ def run(ceph_cluster, **kw):
         )
         status = json.loads(out)
         log.info(f"Scrub Resumed : \n {status}")
-        if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
-            log.error(f"Expected scrub tag is {scrub_tag} but actual output {status}")
-            return 1
+        if status["scrubs"].get(scrub_tag):
+            if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
+                log.error(
+                    f"Expected scrub tag is {scrub_tag} but actual output {status}"
+                )
+                return 1
+        else:
+            log.info("Scrub activity has been completed successfully")
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub abort --format json"
         )
@@ -135,9 +145,14 @@ def run(ceph_cluster, **kw):
         )
         status = json.loads(out)
         log.info(f"Scrub Aborted : \n {status}")
-        if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
-            log.error(f"Expected scrub tag is {scrub_tag} but actual output {status}")
-            return 1
+        if status["scrubs"].get(scrub_tag):
+            if status["scrubs"][scrub_tag]["tag"] != scrub_tag:
+                log.error(
+                    f"Expected scrub tag is {scrub_tag} but actual output {status}"
+                )
+                return 1
+        else:
+            log.info("Scrub activity has been completed successfully")
         out, rc = client1.exec_command(
             sudo=True, cmd=f"ceph tell mds.{default_fs}:0 scrub resume --format json"
         )

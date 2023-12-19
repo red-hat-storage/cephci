@@ -293,9 +293,6 @@ def run(ceph_cluster, **kw):
                     break
             else:
                 break
-        import pdb
-
-        pdb.set_trace()
         fs_mirroring_utils.validate_snapshot_sync_status(
             cephfs_mirror_node,
             source_fs,
