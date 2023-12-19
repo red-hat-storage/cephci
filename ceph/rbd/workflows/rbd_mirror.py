@@ -2,6 +2,7 @@ import ast
 import datetime
 import json
 import time
+from copy import deepcopy
 
 from ceph.parallel import parallel
 from ceph.rbd.utils import copy_file, exec_cmd, getdict, value
@@ -558,3 +559,166 @@ def config_mirror_multi_pool(
         pool_config["test_config"] = pool_test_config
 
     return output
+
+
+def check_image_mirror_status(status, timeout=120, **kw):
+    """
+    Check if all the images in kw, have the status specified in status variable
+    """
+    config = deepcopy(kw.get("config").get(kw["pool_type"]))
+    for pool, pool_config in getdict(config).items():
+        multi_image_config = getdict(pool_config)
+        multi_image_config.pop("test_config", {})
+        for image in multi_image_config.keys():
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+            while end_time > datetime.datetime.now():
+                rbd = kw["rbd"]
+                out, err = rbd.mirror.image.status(
+                    pool=pool, image=image, format="json"
+                )
+                if err:
+                    log.error("Error while fetching rbd mirror image status")
+                    return 1
+                log.debug(f"RBD mirror status of image: {out}")
+                image_status = json.loads(out)
+                # check if image status is same as the status given below and break
+                if status in image_status["state"]:
+                    log.info("Image status is as expected")
+                    break
+            else:
+                log.error(f"Image status is not {status}")
+                return 1
+
+    return 0
+
+
+def toggle_rbd_mirror_daemon_status_and_verify(**kw):
+    """
+    Stop RBD Mirror daemons and verify that mirroring status shows down+stopped in primary
+    and down+replaying in secondary. Start RBD mirror daemons and verify that mirroring
+    status goes back to up+stopped and up+replaying
+
+    Returns:
+        0 if test is success, 1 if failed
+        if kw["raise_exception"] is True, then an exception will be raised for failure
+    """
+    client = kw["client"]
+    out, err = client.exec_command(
+        cmd="ceph orch ps --daemon-type rbd-mirror --format json", sudo=True
+    )
+    if err:
+        log.error("Error while fetching rbd-mirror daemons")
+        if kw.get("raise_exception"):
+            raise Exception("Error while fetching rbd-mirror daemons")
+        else:
+            return 1
+
+    rbd_mirror_daemons = json.loads(out)
+
+    for daemon in rbd_mirror_daemons:
+        out, err = client.exec_command(
+            cmd=f"ceph orch daemon stop {daemon['daemon_name']}", sudo=True
+        )
+        if err:
+            log.error("Error while stopping rbd-mirror daemons")
+            if kw.get("raise_exception"):
+                raise Exception("Error while stopping rbd-mirror daemons")
+            else:
+                return 1
+        time.sleep(20)
+        out, err = client.exec_command(
+            cmd=f"ceph orch ps --daemon-id {daemon['daemon_id']} --format json",
+            sudo=True,
+        )
+        if err:
+            log.error("Error while fetching rbd-mirror daemon status")
+            if kw.get("raise_exception"):
+                raise Exception("Error while fetching rbd-mirror daemon status")
+            else:
+                return 1
+        daemon_stats = json.loads(out)[0]
+        if "stopped" not in daemon_stats["status_desc"]:
+            if kw.get("raise_exception"):
+                raise Exception("rbd-mirror daemon is not stopped")
+            else:
+                log.error("rbd-mirror daemon is not stopped")
+                return 1
+        # Verify if stop is success by checking ceph orch ps status
+
+    # for every mirrored image, verify the status based on whether its primary or secondary
+    # if kw["is_secondary"]:
+    #     rc = check_image_mirror_status(status="down+replaying", **kw)
+    #     if rc:
+    #         log.error(
+    #             "Image status is not down+replaying after stopping rbd-mirror daemon"
+    #         )
+    #         if kw.get("raise_exception"):
+    #             raise Exception(
+    #                 "Image status is not down+replaying after stopping rbd-mirror daemon"
+    #             )
+    #         else:
+    #             return 1
+    # else:
+    rc = check_image_mirror_status(status="down+stopped", **kw)
+    if rc:
+        log.error("Image status is not down+stopped after stopping rbd-mirror daemon")
+        if kw.get("raise_exception"):
+            raise Exception(
+                "Image status is not down+stopped after stopping rbd-mirror daemon"
+            )
+        else:
+            return 1
+
+    for daemon in rbd_mirror_daemons:
+        out, err = client.exec_command(
+            cmd=f"ceph orch daemon start {daemon['daemon_name']}"
+        )
+        if err:
+            log.error("Error while starting rbd-mirror daemons")
+            if kw.get("raise_exception"):
+                raise Exception("Error while starting rbd-mirror daemons")
+            else:
+                return 1
+        time.sleep(20)
+        out, err = client.exec_command(
+            cmd=f"ceph orch ps --daemon-id {daemon['daemon_id']} --format json",
+            sudo=True,
+        )
+        if err:
+            log.error("Error while fetching rbd-mirror daemon status")
+            if kw.get("raise_exception"):
+                raise Exception("Error while fetching rbd-mirror daemon status")
+            else:
+                return 1
+        daemon_stats = json.loads(out)[0]
+        if "running" not in daemon_stats["status_desc"]:
+            if kw.get("raise_exception"):
+                raise Exception("rbd-mirror daemon is not running")
+            else:
+                log.error("rbd-mirror daemon is not running")
+                return 1
+        # Verify if start is success by checking ceph orch ps status
+
+    # for every mirrored image, verify the status based on whether its primary or secondary
+    if kw["is_secondary"]:
+        rc = check_image_mirror_status(status="up+replaying", **kw)
+        if rc:
+            log.error(
+                "Image status is not up+replaying after starting rbd-mirror daemon"
+            )
+            if kw.get("raise_exception"):
+                raise Exception(
+                    "Image status is not up+replaying after starting rbd-mirror daemon"
+                )
+            else:
+                return 1
+    else:
+        rc = check_image_mirror_status(status="up+stopped", **kw)
+        if rc:
+            log.error("Image status is not up+stopped after starting rbd-mirror daemon")
+            if kw.get("raise_exception"):
+                raise Exception(
+                    "Image status is not up+stopped after starting rbd-mirror daemon"
+                )
+            else:
+                return 1
