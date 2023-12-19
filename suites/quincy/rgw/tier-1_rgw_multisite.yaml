@@ -296,3 +296,17 @@ tests:
             config-file-name: test_multisite_sync_policy_extended.yaml
             verify-io-on-site: ["ceph-sec"]
             timeout: 300
+
+  - test:
+      name: bucket granular sync policy with allowed allowed schemantic
+      desc: Test bucket granular sync policy with allowed allowed schemantic
+      polarion-id: CEPH-CEPH-83575868
+      module: sanity_rgw_multisite.py
+      comments: Known issue BZ-2153834
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_multisite_granular_bucket_sync_policy.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
