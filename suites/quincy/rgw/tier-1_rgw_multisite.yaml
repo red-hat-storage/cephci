@@ -310,3 +310,16 @@ tests:
             config-file-name: test_multisite_granular_bucket_sync_policy.yaml
             verify-io-on-site: ["ceph-sec"]
             timeout: 300
+
+  - test:
+      name: S3CMD object download on primary
+      desc: S3CMD object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_s3cmd.py
+            config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+            timeout: 300
+            # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
