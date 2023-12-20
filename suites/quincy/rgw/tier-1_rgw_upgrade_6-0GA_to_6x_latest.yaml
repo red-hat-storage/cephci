@@ -120,6 +120,16 @@ tests:
       polarion-id: CEPH-14237
 
   - test:
+      name: S3CMD small and multipart object download pre upgrade
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        timeout: 300
+
+  - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
       desc: test etag verification
       module: sanity_rgw.py
@@ -233,6 +243,16 @@ tests:
       module: sanity_rgw.py
       name: download objects post upgrade
       polarion-id: CEPH-14237
+
+  - test:
+      name: S3CMD small and multipart object download post upgrade
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects with etag verification post upgrade
