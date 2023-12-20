@@ -394,18 +394,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_unordered.yaml
-            timeout: 300
-      desc: test duration for unordered listing of buckets
-      module: sanity_rgw_multisite.py
-      name: unordered listing of buckets post upgrade
-      polarion-id: CEPH-83573545
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
@@ -427,3 +415,15 @@ tests:
       module: sanity_rgw_multisite.py
       name: Test manual resharding brownfield scenario after upgrade
       polarion-id: CEPH-83574735
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_unordered.yaml
+            timeout: 300
+      desc: test duration for unordered listing of buckets
+      module: sanity_rgw_multisite.py
+      name: unordered listing of buckets post upgrade
+      polarion-id: CEPH-83573545
