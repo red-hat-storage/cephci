@@ -7,7 +7,7 @@
 #   cephadm cluster bootstrap with mutiple public network
 # Test-Suite:
 #   tier-2_multiple_subnet_openstack_only.yaml
-# Cluster Configuration: conf/quincy/cephadm/tier-2_multiple_subnet_openstack_only.yaml
+# Cluster Configuration: conf/quincy/cephadm/tier-2_rhos01_multiple_subnet_openstack_only.yaml
 # Node1 - admin, Mon, Mgr, Installer, alertmanager, grafana,
 #         prometheus, node-exporter , crash
 # Node2 - Mon, Mgr, OSD
@@ -18,7 +18,7 @@
 #   (1) Bootstrap cluster with options,
 ##       - registry-json: <registry-URL>
 ##       - mon-ip: <monitor IP address: Required>
-##       - public-network: <CIDR of provider_net_cci_9 and provider_net_cci_11
+##       - public-network: <CIDR of shared_net_4 and shared_net_5
 ##   (2) Copy SSH keys to nodes.
 ##   (3) Add nodes to cluster with address and role labels attached to it using
 #        Host spec yaml file.
@@ -55,7 +55,7 @@ tests:
                 mon-ip: node1
                 config:
                   global:
-                    public_network: 10.0.104.0/22,10.0.204.0/22
+                    public_network: 10.0.201.0/24,10.0.171.0/25
           - config:
               command: add_hosts
               service: host
@@ -76,8 +76,6 @@ tests:
                     - node1
                     - node2
                     - node3
-                    - node4
-                    - node5
           - config:
               command: apply
               service: mgr
@@ -86,7 +84,6 @@ tests:
                   nodes:
                     - node1
                     - node2
-                    - node5
           - config:
               command: apply
               service: osd
@@ -107,6 +104,6 @@ tests:
       desc: Verify multiple public network option
       module: test_config.py
       config:
-        public_network: 10.0.104.0/22,10.0.204.0/22
+        public_network: 10.0.201.0/24,10.0.171.0/25
       polarion-id: CEPH-83575132
       abort-on-fail: true
