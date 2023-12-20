@@ -1254,22 +1254,14 @@ class SSHConnectionManager(object):
         end_time = datetime.datetime.now() + self.outage_timeout
         while end_time > datetime.datetime.now():
             try:
-                if self.look_for_keys:
-                    self.__client.connect(
-                        self.ip_address,
-                        username=self.username,
-                        look_for_keys=self.look_for_keys,
-                        allow_agent=False,
-                        key_file_name=self.__private_key_file_path
-                    )
-                else:
-                    self.__client.connect(
-                        self.ip_address,
-                        username=self.username,
-                        password=self.password,
-                        look_for_keys=self.look_for_keys,
-                        allow_agent=False,
-                    )
+                self.__client.connect(
+                    self.ip_address,
+                    username=self.username,
+                    password=self.password,
+                    look_for_keys=self.look_for_keys,
+                    allow_agent=False,
+                    key_file_name=self.__private_key_file_path,
+                )
                 self.__outage_start_time = None
                 return
             except Exception as e:
