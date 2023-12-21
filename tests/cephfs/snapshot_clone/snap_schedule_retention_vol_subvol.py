@@ -83,7 +83,8 @@ def run(ceph_cluster, **kw):
         snap_util = SnapUtils(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
-        installer_node = ceph_cluster.get_ceph_object("installer")
+        mgr_node = ceph_cluster.get_ceph_objects("mgr")[0]
+
         build = config.get("build", config.get("rhbuild"))
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
@@ -137,6 +138,7 @@ def run(ceph_cluster, **kw):
             "functional": test_functional,
             "longevity": test_longevity,
             "systemic": test_systemic,
+            "negative": test_negative,
         }
         if test_name_type in test_dict:
             test_list = test_dict[test_name_type]
@@ -154,7 +156,7 @@ def run(ceph_cluster, **kw):
             "fs_util": fs_util_v1,
             "snap_util": snap_util,
             "client": client1,
-            "installer_node": installer_node,
+            "mgr_node": mgr_node,
         }
         for test_case_name in test_list:
             log.info(
@@ -189,6 +191,7 @@ def run(ceph_cluster, **kw):
                         )
                         multi_fs = 1
             cleanup_params = run_snap_test(snap_test_params)
+            log.info(f"post_test_params:{cleanup_params}")
             snap_test_params["export_created"] = cleanup_params["export_created"]
             if cleanup_params["test_status"] == 1:
                 assert False, f"Test {test_case_name} failed"
@@ -264,6 +267,9 @@ def run_snap_test(snap_test_params):
         post_test_params = snap_retention_count_validate(snap_test_params)
     elif "snap_sched_multi_fs" in test_case_name:
         post_test_params = snap_sched_multi_fs(snap_test_params)
+    elif "non_existing_path" in test_case_name:
+        post_test_params = snap_sched_non_existing_path(snap_test_params)
+        log.info(f"post_test_params:{post_test_params}")
     # Cleanup subvolume and group
     if "subvol" in snap_test_params.get("test_case"):
         cmd = f"ceph fs subvolume rm {snap_test_params['fs_name']} {snap_test_params['subvol_name']} "
@@ -480,7 +486,7 @@ def snap_retention_count_validate(snap_test_params):
        traceback or exception in mgr logs,perform snap clean up, set back default mds_max_snaps_per_dir value
     """
     client = snap_test_params["client"]
-    installer_node = snap_test_params["installer_node"]
+    mgr_node = snap_test_params["mgr_node"]
     snap_util = snap_test_params["snap_util"]
     fs_util = snap_test_params["fs_util"]
     snap_util.enable_snap_schedule(client)
@@ -606,10 +612,12 @@ def snap_retention_count_validate(snap_test_params):
         sudo=True, cmd=f"rmdir {snap_path}/.snap/manual_test_snap"
     )
     log.info("Verify retention when mds_max_snaps_per_dir set to non-default value - 8")
-
-    log.info("Enable mgr debug logs")
-    cmd = "ceph config set mgr log_to_file true"
-    out, rc = client.exec_command(sudo=True, cmd=cmd)
+    out, rc = client.exec_command(sudo=True, cmd="ceph config get mgr log_to_file")
+    default_mgr_config = out.strip()
+    if default_mgr_config in "false":
+        log.info("Enable mgr debug logs")
+        cmd = "ceph config set mgr log_to_file true"
+        out, rc = client.exec_command(sudo=True, cmd=cmd)
     log.info("Note default value for mds_max_snaps_per_dir")
     out, rc = client.exec_command(
         sudo=True, cmd="ceph config get mds mds_max_snaps_per_dir"
@@ -635,16 +643,16 @@ def snap_retention_count_validate(snap_test_params):
         log.error("A check to verify only 8 scheduled snaps retained, has failed")
     log.info("Note last entry in mgr logs")
     log.info("Fetch the FSID of the ceph cluster")
-    out, _ = installer_node.exec_command(sudo=True, cmd="cephadm ls")
+    out, _ = mgr_node.exec_command(sudo=True, cmd="cephadm ls")
     data = json.loads(out)
     fsid = data[0]["fsid"]
     cmd = f"cd /var/log/ceph/{fsid}/;ls *mgr*log"
-    out, _ = installer_node.exec_command(sudo=True, cmd=cmd)
+    out, _ = mgr_node.exec_command(sudo=True, cmd=cmd)
     mgr_file = out.strip()
     cmd = f"cat /var/log/ceph/{fsid}/{mgr_file}|grep Traceback|wc -l"
-    traceback_before, _ = installer_node.exec_command(sudo=True, cmd=cmd)
+    traceback_before, _ = mgr_node.exec_command(sudo=True, cmd=cmd)
     cmd = f"cat /var/log/ceph/{fsid}/{mgr_file}|grep Exception|wc -l"
-    exception_before, _ = installer_node.exec_command(sudo=True, cmd=cmd)
+    exception_before, _ = mgr_node.exec_command(sudo=True, cmd=cmd)
     log.info(
         f"Traceback info before: {traceback_before},Exception info : {exception_before}"
     )
@@ -669,9 +677,9 @@ def snap_retention_count_validate(snap_test_params):
             test_fail = 1
             log.error("Unexpected error during manual snap creation")
     cmd = f"cat /var/log/ceph/{fsid}/{mgr_file}|grep Traceback|wc -l"
-    traceback_after, _ = installer_node.exec_command(sudo=True, cmd=cmd)
+    traceback_after, _ = mgr_node.exec_command(sudo=True, cmd=cmd)
     cmd = f"cat /var/log/ceph/{fsid}/{mgr_file}|grep Exception|wc -l"
-    exception_after, _ = installer_node.exec_command(sudo=True, cmd=cmd)
+    exception_after, _ = mgr_node.exec_command(sudo=True, cmd=cmd)
 
     log.info("Verify no exception or traceback in mgr logs since last entry")
     log.info(
@@ -695,6 +703,9 @@ def snap_retention_count_validate(snap_test_params):
     post_test_params["test_status"] = test_fail
     snap_util.remove_snap_schedule(client, snap_test_params["path"])
     umount_all(mnt_paths, snap_test_params)
+    out, rc = client.exec_command(
+        sudo=True, cmd=f"ceph config set mgr log_to_file {default_mgr_config}"
+    )
     return post_test_params
 
 
@@ -822,6 +833,69 @@ def snap_sched_multi_fs(snap_test_params):
         cmd = f"rm -rf {mnt_pt}/*file*"
         client.exec_command(sudo=True, cmd=cmd, timeout=1800)
         client.exec_command(sudo=True, cmd=f"umount {mnt_pt}")
+    post_test_params["test_status"] = test_fail
+    return post_test_params
+
+
+def snap_sched_non_existing_path(snap_test_params):
+    """Verify Snapshot schedule can be created for non-existing path.
+    After the start-time is hit for the
+    schedule, the snap-schedule module should have deactivated the schedule without throwing a traceback error.
+    The snap-scheule module should continue to remain responsive and a log message should be seen in the logs
+    about deactivating the schedule."""
+    client = snap_test_params["client"]
+    snap_util = snap_test_params["snap_util"]
+    fs_util = snap_test_params["fs_util"]
+    snap_util.enable_snap_schedule(client)
+    snap_test_params["validate"] = True
+    snap_test_params["path"] = "/non-existent"
+    sched_list = ["1M"]
+    snap_test_params["retention"] = "3M"
+    snap_test_params["start_time"] = get_iso_time(client)
+    snap_test_params["sched"] = sched_list[0]
+    mgr_node = snap_test_params["mgr_node"]
+    post_test_params = {}
+    test_fail = 0
+    out, rc = client.exec_command(sudo=True, cmd="ceph config set mgr log_to_file true")
+    log.info("Create snap-schedule for non-existing path")
+    snap_util.create_snap_schedule(snap_test_params)
+    log.info("Verify schedule for non-existent path got deactivated")
+    if snap_util.check_snap_sched_active(client, snap_test_params["path"], "False"):
+        test_fail = 1
+
+    log.info("Verify message in mgr log for non-existing path")
+    out, _ = mgr_node.exec_command(sudo=True, cmd="cephadm ls")
+    data = json.loads(out)
+    fsid = data[0]["fsid"]
+    cmd = f"cd /var/log/ceph/{fsid}/;ls *mgr*log"
+    out, _ = mgr_node.exec_command(sudo=True, cmd=cmd)
+    mgr_file = out.strip()
+    cmd = f'cat /var/log/ceph/{fsid}/{mgr_file}|grep "ERROR snap_schedule.fs.schedule_client" -A 5'
+    path_err_msg, _ = mgr_node.exec_command(sudo=True, cmd=cmd)
+    path_err_msg = path_err_msg.strip()
+    exp_str = "cephfs.ObjectNotFound: error in mkdir"
+    if exp_str in path_err_msg:
+        log.info(f"Message for non-existing path is logged : {path_err_msg}")
+    else:
+        test_fail = 1
+        log.error("Message not logged in mgr module")
+    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+    log.info("Create snap-schedule for existing path, verify it works")
+    snap_test_params["path"] = "/"
+    sched_list = ["1h"]
+    snap_test_params["sched"] = sched_list[0]
+    snap_util.create_snap_schedule(snap_test_params)
+    time.sleep(10)
+    log.info("Verify snap-schedule is still active after 10secs")
+    if snap_util.check_snap_sched_active(client, snap_test_params["path"], "True"):
+        test_fail = 1
+
+    log.info("Performing cleanup")
+    snap_path, post_test_params["export_created"] = fs_util.mount_ceph(
+        "fuse", snap_test_params
+    )
+    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+    client.exec_command(sudo=True, cmd=f"umount {snap_path}")
     post_test_params["test_status"] = test_fail
     return post_test_params
 
