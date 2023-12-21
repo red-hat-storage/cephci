@@ -63,7 +63,8 @@ def get_md5sum_rbd_image(**kw):
             "source-image-or-snap-spec": kw.get("image_spec"),
             "path-name": kw.get("file_path"),
         }
-        if kw.get("rbd").export(**export_spec):
+        out, err = kw.get("rbd").export(**export_spec)
+        if "100% complete...done" not in out + err:
             log.error(f"Export failed for image {kw.get('image_spec')}")
             return None
     return exec_cmd(
@@ -104,6 +105,45 @@ def check_data_integrity(**kw):
         log.error("md5sum values don't match")
         return 1
     return 0
+
+
+# def check_data_integrity_for_multiple_images(**kw):
+#     """
+#     Check data integrity for multiple images in multiple pools
+#     kw: {
+#         "pool_type":<>,
+#         "rbd":<>,
+#         "sec_obj":<>,
+#         "client":<>,
+#         "sec_client":<>,
+#         <multipool and multiimage config>
+#     }
+#     """
+#     pdb.set_trace()
+#     pool_type = kw.get("pool_type")
+#     rbd = kw.get("rbd")
+#     sec_rbd = kw.get("sec_obj")
+#     client = kw.get("client")
+#     sec_client = kw.get("sec_client")
+#     config = deepcopy(kw.get("config").get(pool_type))
+#     for pool, pool_config in getdict(config).items():
+#         multi_image_config = getdict(pool_config)
+#         multi_image_config.pop("test_config", {})
+#         for image in multi_image_config.keys():
+#             image_spec = f"{pool}/{image}"
+#             data_integrity_spec = {
+#                 "first": {"image_spec": image_spec, "rbd": rbd, "client": client},
+#                 "second": {
+#                     "image_spec": image_spec,
+#                     "rbd": sec_rbd,
+#                     "client": sec_client,
+#                 },
+#             }
+#             rc = check_data_integrity(**data_integrity_spec)
+#             if rc:
+#                 log.error(f"Data integrity check failed for {image_spec}")
+#                 return 1
+#     return 0
 
 
 def exec_cmd(node, cmd, **kw):

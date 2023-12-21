@@ -23,7 +23,7 @@ def test_snap_mirror_cluster_ops(
     rbd_obj, sec_obj, client_node, sec_client, pool_type, **kw
 ):
     """
-    Test the immutable object cache with cluster operations.
+    Test the snap mirroring with cluster operations.
 
     Args:
         rbd_obj: RBD object
@@ -283,22 +283,6 @@ def run(**kw):
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
         for pool_type in pool_types:
-            # rc = toggle_rbd_mirror_daemon_status_and_verify(
-            #     client=client,
-            #     rbd=rbd,
-            #     is_secondary=False,
-            #     pool_type=pool_type,
-            #     **kw,
-            # )
-
-            # rc = toggle_rbd_mirror_daemon_status_and_verify(
-            #     client=sec_client,
-            #     rbd=sec_rbd,
-            #     is_secondary=True,
-            #     pool_type=pool_type,
-            #     **kw,
-            # )
-
             rc = test_snap_mirror_cluster_ops(
                 rbd, sec_rbd, client, sec_client, pool_type, **kw
             )

@@ -184,6 +184,9 @@ def update_config(**kw):
                             {"mirrormode": rep_pool_config["mirrormode"]}
                         )
 
+                    if rep_pool_config.get("way"):
+                        rep_pool_config[pool].update({"way": rep_pool_config["way"]})
+
     if not kw.get("config").get("rep-pool-only"):
         pool_types.append("ec_pool_config")
         if not config.get("ec_pool_config"):
@@ -302,6 +305,8 @@ def update_config(**kw):
                         ec_pool_config[pool].update(
                             {"ec_profile": ec_pool_config["ec_profile"]}
                         )
+                    if ec_pool_config.get("way"):
+                        ec_pool_config[pool].update({"way": ec_pool_config["way"]})
     return pool_types
 
 
@@ -494,6 +499,7 @@ def initial_mirror_config(**kw):
                     ec_pgp_num:
                     mode: <pool/image>
                     mirrormode: <journal/snapshot>
+                    way: "one-way"
                 ec_pool_config:
                     ec-pool-k-m: 2,1
                     num_pools:
@@ -512,6 +518,7 @@ def initial_mirror_config(**kw):
                     ec_pgp_num:
                     mode: <pool/image>
                     mirrormode: <journal/snapshot>
+                    way: "one-way"
         Advanced configuration <specifying only detailed pool and image configuration>:
             config:
                 do_not_create_image: True  # if not set then images will be created by default
