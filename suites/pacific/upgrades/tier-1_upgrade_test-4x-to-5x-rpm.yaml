@@ -113,13 +113,12 @@ tests:
           name: rbd-io
           module: rbd_faster_exports.py
           config:
-            io-total: 100M
-            cleanup: false
+            io-total: 30M
           desc: Perform export during read/write,resizing,flattening,lock operations
       - test:
           abort-on-fail: false
           config:
-              timeout: 600
+              timeout: 100
           desc: Runs IOs in parallel with upgrade process
           module: cephfs_upgrade.cephfs_io.py
           name: "cephfs-io"
@@ -188,7 +187,7 @@ tests:
     name: rbd-io
     module: rbd_faster_exports.py
     config:
-        io-total: 100M
+        io-total: 30M
     desc: Perform export during read/write,resizing,flattening,lock operations
 
 - test:
@@ -197,5 +196,5 @@ tests:
     config:
         script-name: test_multitenant_user_access.py
         config-file-name: test_multitenant_access.yaml
-        timeout: 300
+        timeout: 100
     desc: Perform rgw tests

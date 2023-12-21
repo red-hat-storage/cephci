@@ -56,6 +56,15 @@ class CephadmAnsible:
                 sudo=True,
             )
         else:
+            # Remove ansible and ceph-ansible as per the latest doc (RHCS 5 Upgrade Guide[Section 2.8])
+            """Doc Link https://access.redhat.com/documentation/en-us/red_hat_ceph_storage/5/html/upgrade_guide
+            /upgrading-a-red-hat-ceph-storage-cluster-running-rhel-8-from-rhcs-4-to-rhcs-5
+            #installing-cephadm-ansible-on-an-upgraded-storage-cluster_assembly_upgrading-a-red-hat-ceph-storage-cluster
+            -running-rhel-8-from-rhcs-4-to-rhcs-5"""
+            self.admin.exec_command(
+                cmd="dnf remove ansible ceph-ansible -y",
+                sudo=True,
+            )
             self.admin.exec_command(
                 cmd=f"subscription-manager repos --enable={ANSIBLE_RPM}",
                 sudo=True,
