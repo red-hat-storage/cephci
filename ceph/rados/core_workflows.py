@@ -1862,7 +1862,7 @@ class RadosOrchestrator:
         )
 
         export_cmd = (
-            f"export pool_name={pool_name} obj_name={obj_name} END={int(obj_size/2)}"
+            f"export pool_name={pool_name} obj_name={obj_name} END={int(obj_size / 2)}"
         )
         inst_run_cmd = f"{export_cmd}; export offset=1048576; {loop_cmd}"
         client_run_cmd = f"{export_cmd}; export offset=0; {loop_cmd}"
@@ -3092,3 +3092,24 @@ class RadosOrchestrator:
             return False
         log.info(f"IP/CIDR : {ip} removed from blocklist successfully")
         return True
+
+    def get_daemon_metadata(self, daemon_type: str, daemon_id: str = None):
+        """
+        Method to fetch the metadata for any daemon
+        If daemon id is not provided, return complete output of
+        ceph <daemon_type> metadata
+        Returns:
+            metadata (List) -> If daemon_id is not provided
+            metadata (Dict) -> If daemon_id is provided
+            None if metadata is not found
+        """
+        base_cmd = f"ceph {daemon_type} metadata"
+        if not daemon_id:
+            return self.run_ceph_command(cmd=base_cmd, client_exec=True)
+
+        out = self.run_ceph_command(cmd=f"{base_cmd} {daemon_id}", client_exec=True)
+        if out is None:
+            log.error(
+                f"Metadata info for the input daemon: {daemon_type} {daemon_id} not found"
+            )
+        return out

@@ -62,8 +62,34 @@ class Api:
 
         return response.status_code, response.json()
 
-    def get(self):
-        pass
+    def get(self, data=None, header=None, verify=DEFAULT_VERIFY, check_sc=False):
+        """Get method for request
+
+        Args:
+            data (dict): Request payload
+            header (dict): Request header
+            verify (bool): Request URL verifier
+            check_sc (bool): Check for status code validation
+        """
+        LOG.info(f"Request URL - {self.url}")
+        LOG.info(f"Request VERIFY - {verify}")
+        LOG.info("Request METHOD - GET")
+
+        params = {"url": self.url, "verify": verify}
+
+        if data:
+            params["data"] = json.dumps(data)
+            LOG.debug(f"Request DATA - {data}")
+
+        if header:
+            params["headers"] = header
+            LOG.info(f"Request HEADER - {header}")
+
+        response = requests.get(**params)
+        if check_sc:
+            return self._response(response)
+
+        return response
 
     def post(self, data=None, header=None, verify=DEFAULT_VERIFY, check_sc=False):
         """Post method for request

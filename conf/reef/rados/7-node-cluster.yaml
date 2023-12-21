@@ -19,6 +19,7 @@ globals:
           - mon
           - mgr
           - mds
+          - nfs
           - rgw
           - node-exporter
           - alertmanager
@@ -49,6 +50,7 @@ globals:
           - mon
           - mgr
           - mds
+          - nfs
           - rgw
           - node-exporter
           - crash
