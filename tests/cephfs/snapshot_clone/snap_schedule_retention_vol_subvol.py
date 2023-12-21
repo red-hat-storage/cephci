@@ -612,12 +612,8 @@ def snap_retention_count_validate(snap_test_params):
         sudo=True, cmd=f"rmdir {snap_path}/.snap/manual_test_snap"
     )
     log.info("Verify retention when mds_max_snaps_per_dir set to non-default value - 8")
-    out, rc = client.exec_command(sudo=True, cmd="ceph config get mgr log_to_file")
-    default_mgr_config = out.strip()
-    if default_mgr_config in "false":
-        log.info("Enable mgr debug logs")
-        cmd = "ceph config set mgr log_to_file true"
-        out, rc = client.exec_command(sudo=True, cmd=cmd)
+    out, rc = client.exec_command(sudo=True, cmd="ceph config set mgr log_to_file true")
+
     log.info("Note default value for mds_max_snaps_per_dir")
     out, rc = client.exec_command(
         sudo=True, cmd="ceph config get mds mds_max_snaps_per_dir"
@@ -703,9 +699,7 @@ def snap_retention_count_validate(snap_test_params):
     post_test_params["test_status"] = test_fail
     snap_util.remove_snap_schedule(client, snap_test_params["path"])
     umount_all(mnt_paths, snap_test_params)
-    out, rc = client.exec_command(
-        sudo=True, cmd=f"ceph config set mgr log_to_file {default_mgr_config}"
-    )
+
     return post_test_params
 
 
