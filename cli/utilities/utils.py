@@ -217,6 +217,8 @@ def get_custom_repo_url(base_url, cloud_type="openstack"):
 
     if cloud_type == "ibmc":
         base_url += "Tools"
+    elif base_url.endswith("x86_64/"):
+        return base_url
     else:
         base_url += "compose/Tools/x86_64/os/"
 
