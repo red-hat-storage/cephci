@@ -1236,6 +1236,7 @@ class SSHConnectionManager(object):
         self.__transport = None
         self.__outage_start_time = None
         self.outage_timeout = datetime.timedelta(seconds=outage_timeout)
+        self.__private_key_file_path = private_key_file_path
 
     @property
     def client(self):
@@ -1259,6 +1260,7 @@ class SSHConnectionManager(object):
                     password=self.password,
                     look_for_keys=self.look_for_keys,
                     allow_agent=False,
+                    key_file_name=self.__private_key_file_path,
                 )
                 self.__outage_start_time = None
                 return
