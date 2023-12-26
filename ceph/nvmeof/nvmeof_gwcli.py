@@ -70,34 +70,52 @@ class NVMeCLI:
         """Get all subsystems."""
         return self.run_control_cli("get_subsystems")
 
-    def create_block_device(self, name, image, pool, block_size=None):
+    def get_spdk_nvmf_log_flags_and_level(self):
+        """Get nvmeoF log flags and level."""
+        return self.run_control_cli("get_spdk_nvmf_log_flags_and_level")
+
+    def disable_spdk_nvmf_logs(self):
+        """Disable SPDK NVMeoF logs."""
+        return self.run_control_cli("disable_spdk_nvmf_logs")
+
+    def set_spdk_nvmf_logs(self, **kwargs):
+        """Set SPDK NVMeoF logs."""
+        args = {"flags": True}
+        args = {**args, **kwargs}
+        return self.run_control_cli("set_spdk_nvmf_logs", **args)
+
+    def create_block_device(self, name, image, pool, **kwargs):
         """Create block device using rbd image."""
         args = {"image": image, "pool": pool, "bdev": name}
-        if block_size:
-            args["block-size"] = block_size
+        args = {**args, **kwargs}
         return self.run_control_cli("create_bdev", **args)
 
-    def delete_block_device(self, name):
+    def resize_block_device(self, bdev, size):
+        """Create block device using rbd image."""
+        args = {"bdev": bdev, "size": size}
+        return self.run_control_cli("resize_bdev", **args)
+
+    def delete_block_device(self, name, force=None):
         """Delete block device."""
         args = {"bdev": name}
+        if force:
+            args["force"] = True
         return self.run_control_cli("delete_bdev", **args)
 
-    def create_subsystem(self, subnqn, serial_num, max_ns=None):
+    def create_subsystem(self, subnqn, serial_num, **kwargs):
         """Create subsystem."""
         args = {"subnqn": subnqn, "serial": serial_num}
-        if max_ns:
-            args["max-namespaces"] = max_ns
+        args = {**args, **kwargs}
         return self.run_control_cli("create_subsystem", **args)
 
     def delete_subsystem(self, subnqn):
         """Delete subsystem."""
         return self.run_control_cli("delete_subsystem", **{"subnqn": subnqn})
 
-    def add_namespace(self, subnqn, bdev, nsid=None):
+    def add_namespace(self, subnqn, bdev, **kwargs):
         """Add namespace under subsystem."""
         args = {"subnqn": subnqn, "bdev": bdev}
-        if nsid:
-            args["nsid"] = nsid
+        args = {**args, **kwargs}
         return self.run_control_cli("add_namespace", **args)
 
     def remove_namespace(self, subnqn, bdev):
