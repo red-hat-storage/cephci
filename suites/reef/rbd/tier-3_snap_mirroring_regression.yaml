@@ -1,9 +1,9 @@
 #===============================================================================================
 # Tier-level: 3
-# Test-Suite: tier-3_cluster_operations_with_snap_mirroring.yaml
+# Test-Suite: tier-3_snap_mirroring_regression.yaml
 #
 # Cluster Configuration:
-#    cephci/conf/pacific/rbd/tier-1_rbd_mirror.yaml
+#    cephci/conf/reef/rbd/5-node-2-clusters.yaml
 #    No of Clusters : 2
 #    Node 2 must to be a client node
 #===============================================================================================
@@ -167,7 +167,6 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            rep-pool-only: true
             rep_pool_config:
               num_pools: 1
               num_images: 1
@@ -194,7 +193,6 @@ tests:
               io_size: 200M
         ceph-rbd2:
           config:
-            rep-pool-only: true
             rep_pool_config:
               num_pools: 1
               num_images: 1
@@ -219,3 +217,127 @@ tests:
               snap_schedule_intervals:
                 - 1m
               io_size: 200M
+
+  - test:
+      abort-on-fail: True
+      desc: Verify snapshot mirroring with snap and clone operations
+      name: Test snap and clone operations on snapshot mirrored clusters
+      module: test_rbd_snap_mirroring_with_snap_clone_op.py
+      polarion-id: CEPH-83574861
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals: #one value for each level specified above
+                - 1m
+              io_size: 200M
+            ec_pool_config:
+              ec-pool-k-m: "2,1"
+              ec_profile: "ec_profile"
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals:
+                - 1m
+              io_size: 200M
+        ceph-rbd2:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals: #one value for each level specified above
+                - 1m
+              io_size: 200M
+            ec_pool_config:
+              ec-pool-k-m: "2,1"
+              ec_profile: "ec_profile"
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals:
+                - 1m
+              io_size: 200M
+
+  - test:
+      abort-on-fail: True
+      desc: Verify one way snapshot mirroring with snap and clone operations
+      name: Test snap and clone operations on one way snapshot mirrored clusters
+      module: test_rbd_snap_mirroring_with_snap_clone_op.py
+      polarion-id: CEPH-83574862
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals: #one value for each level specified above
+                - 1m
+              io_size: 200M
+              way: "one-way"
+            ec_pool_config:
+              ec-pool-k-m: "2,1"
+              ec_profile: "ec_profile"
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals:
+                - 1m
+              io_size: 200M
+              way: "one-way"
+        ceph-rbd2:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals: #one value for each level specified above
+                - 1m
+              io_size: 200M
+              way: "one-way"
+            ec_pool_config:
+              ec-pool-k-m: "2,1"
+              ec_profile: "ec_profile"
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image # compulsory argument if mirroring needs to be setup
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals:
+                - 1m
+              io_size: 200M
+              way: "one-way"

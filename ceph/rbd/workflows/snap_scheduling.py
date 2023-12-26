@@ -95,9 +95,68 @@ def verify_snapshot_schedule(rbd, pool, image, interval="1m"):
         return 1
 
 
-def run_io_verify_snap_schedule(**kw):
+def run_io_verify_snap_schedule_single_image(**kw):
     """
     Run IOs on the given image and verify snapshot schedule
+    kw: {
+        "rbd": <>,
+        "client": <>,
+        "pool": <>,
+        "image": <>,
+        "mount_path": <>,
+        "skip_mkfs": <>,
+        "image_config": {
+            "size": <>,
+            "io_size": <>,
+            "snap_schedule_intervals":[]
+        }
+    }
+    """
+    rbd = kw.get("rbd")
+    client = kw.get("client")
+    pool = kw.get("pool")
+    image = kw.get("image")
+    image_spec = f"{pool}/{image}"
+    image_config = kw.get("image_config")
+
+    io_size = image_config.get("io_size", int(int(image_config["size"][:-1]) / 3))
+    io_config = {
+        "rbd_obj": rbd,
+        "client": client,
+        "size": image_config["size"],
+        "do_not_create_image": True,
+        "config": {
+            "file_size": io_size,
+            "file_path": [f"{kw['mount_path']}"],
+            "get_time_taken": True,
+            "image_spec": [image_spec],
+            "operations": {
+                "fs": "ext4",
+                "io": True,
+                "mount": True,
+                "nounmap": False,
+                "device_map": True,
+            },
+            "skip_mkfs": kw["skip_mkfs"],
+        },
+    }
+    krbd_io_handler(**io_config)
+    kw["io_config"] = io_config
+    for interval in image_config.get("snap_schedule_intervals"):
+        out = verify_snapshot_schedule(rbd, pool, image, interval)
+        if out:
+            log.error(f"Snapshot verification failed for image {pool}/{image}")
+            if kw.get("raise_exception"):
+                raise Exception(
+                    f"Snapshot verification failed for image {pool}/{image}"
+                )
+            return 1
+    return 0
+
+
+def run_io_verify_snap_schedule(**kw):
+    """
+    Run IOs on the given images and verify snapshot schedule
     """
     pool_type = kw.get("pool_type")
     rbd = kw.get("rbd")
@@ -107,40 +166,18 @@ def run_io_verify_snap_schedule(**kw):
         multi_image_config = getdict(pool_config)
         multi_image_config.pop("test_config", {})
         for image, image_config in multi_image_config.items():
-            image_spec = f"{pool}/{image}"
-
-            io_size = image_config.get(
-                "io_size", int(int(image_config["size"][:-1]) / 3)
+            rc = run_io_verify_snap_schedule_single_image(
+                rbd=rbd,
+                client=client,
+                pool=pool,
+                image=image,
+                image_config=image_config,
+                mount_path=kw.get("mount_path"),
+                skip_mkfs=kw.get("skip_mkfs"),
             )
-            io_config = {
-                "rbd_obj": rbd,
-                "client": client,
-                "size": image_config["size"],
-                "do_not_create_image": True,
-                "config": {
-                    "file_size": io_size,
-                    "file_path": [f"{kw['mount_path']}"],
-                    "get_time_taken": True,
-                    "image_spec": [image_spec],
-                    "operations": {
-                        "fs": "ext4",
-                        "io": True,
-                        "mount": True,
-                        "nounmap": False,
-                        "device_map": True,
-                    },
-                    "skip_mkfs": kw["skip_mkfs"],
-                },
-            }
-            krbd_io_handler(**io_config)
-            kw["io_config"] = io_config
-            for interval in image_config.get("snap_schedule_intervals"):
-                out = verify_snapshot_schedule(rbd, pool, image, interval)
-                if out:
-                    log.error(f"Snapshot verification failed for image {pool}/{image}")
-                    if kw.get("raise_exception"):
-                        raise Exception(
-                            f"Snapshot verification failed for image {pool}/{image}"
-                        )
-                    return 1
+            if rc:
+                log.error(
+                    f"Run IO and verify snap schedule failed for image {pool}/{image}"
+                )
+                return 1
     return 0
