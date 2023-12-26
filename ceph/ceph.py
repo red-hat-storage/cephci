@@ -1229,14 +1229,16 @@ class SSHConnectionManager(object):
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
-        if look_for_keys:
-            self.pkey = paramiko.RSAKey.from_private_key_file(private_key_file_path)
+        self.pkey = (
+            paramiko.RSAKey.from_private_key_file(private_key_file_path)
+            if look_for_keys
+            else None
+        )
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
         self.__outage_start_time = None
         self.outage_timeout = datetime.timedelta(seconds=outage_timeout)
-        self.__private_key_file_path = private_key_file_path
 
     @property
     def client(self):
@@ -1260,7 +1262,7 @@ class SSHConnectionManager(object):
                     password=self.password,
                     look_for_keys=self.look_for_keys,
                     allow_agent=False,
-                    key_file_name=self.__private_key_file_path,
+                    pkey=self.pkey,
                 )
                 self.__outage_start_time = None
                 return
