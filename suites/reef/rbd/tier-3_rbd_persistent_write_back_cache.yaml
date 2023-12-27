@@ -77,7 +77,7 @@ tests:
         sudo: true
         commands:
           - "rm -rf /etc/yum.repos.d/epel*"
-          - "dnf install rbd-nbd"
+          - "dnf install rbd-nbd -y"
 
   - test:
       abort-on-fail: true
