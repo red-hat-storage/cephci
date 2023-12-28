@@ -598,7 +598,7 @@ tests:
         ceph-pri:
           config:
             extra-pkgs:
-              - yum install -y jq
+              - jq
             script-name: test_rgw_restore_index_tool.py
             config-file-name: test_rgw_restore_index_versioned_buckets.yaml
             run-on-haproxy: true
