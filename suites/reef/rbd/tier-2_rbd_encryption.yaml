@@ -80,7 +80,7 @@ tests:
         sudo: true
         commands:
           - "rm -rf /etc/yum.repos.d/epel*"
-          - "dnf install rbd-nbd"
+          - "dnf install rbd-nbd -y"
 
   - test:
       desc: Encrypt & decrypt file using same keys and different keys
