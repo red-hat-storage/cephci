@@ -314,7 +314,10 @@ def add_images_to_private_registry(
 
     for image in images:
         img_reg = image.replace(f"{registry}/", "")
-        src_image = f"{registry}/{image}"
+        if registry not in img_reg:
+            src_image = f"{registry}/{img_reg}"
+        else:
+            src_image = img_reg
         dst_image = f"{node.hostname}:5000/{img_reg}"
         skopeo_cmd = generate_skopeo_copy_cmd(
             src_image,
