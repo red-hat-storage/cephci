@@ -7,7 +7,7 @@ esxi:
 cprovider:
     name: 'VMWare vSphere Cloud Provider Details'
     vcenter-bng:
-        hostname: 'cephqe-vcenter2.lab.eng.blr.redhat.com'
+        auth-url: 'cephqe-vcenter2.lab.eng.blr.redhat.com'
         username: 'Administrator@vsphere.local'
         password: 'Redhat231#'
         port: 443

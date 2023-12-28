@@ -1,17 +1,21 @@
 """
 Note: Do not use this module directly in the Test Cases.
 """
+from asyncio import exceptions
+from logging import exception
 import re
 import string
 
 from pyVim import connect
 from pyVmomi import vim
-import six
+from integration.vmware.configs import configs as g
+from cli.exceptions import ConfigError
+from utility.log import Log
 
 IP_REGEX = r"(^[12]?\d{1,2}\.[12]?\d{1,3}\.[12]?\d{1,2}\.[12]?\d{1,2}$)"
 
 
-class VmWare(object):
+class VMWare(object):
 
     def __init__(self):
         try:
@@ -39,5 +43,5 @@ class VmWare(object):
             connect.Disconnect(self.vsphere_client)
         except Exception as e:
             g.log.error(e)
-            raise exceptions.CloudProviderError(e)
+            raise exception.CloudProviderError(e)
 
