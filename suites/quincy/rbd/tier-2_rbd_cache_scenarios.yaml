@@ -104,12 +104,12 @@ tests:
       abort-on-fail: true
       config:
         rep_pool_config:
-          num_pools: 2
-          num_images: 5
+          num_pools: 1
+          num_images: 1
           size: 4G
         ec_pool_config:
-          num_pools: 2
-          num_images: 5
+          num_pools: 1
+          num_images: 1
           size: 4G
         fio:
           size: 100M

@@ -60,7 +60,7 @@ def run(**kw):
 
     try:
         client = kw.get("ceph_cluster").get_ceph_object(role="client").node
-        client.exec_command(cmd="sudo pip install docopt")
+        client.exec_command(cmd="sudo pip3 install docopt")
         client.exec_command(
             cmd="git clone --depth 1 https://github.com/red-hat-storage/cephci.git"
         )
