@@ -26,7 +26,6 @@ def test_rbd_ecpool(rbd, pool_type, **kw):
             image_name=kw["config"][pool_type]["image"],
             pool_name=kw["config"][pool_type]["pool"],
             client_node=client,
-            size="100%",
         )
         rbd.remove_image(
             pool_name=kw["config"][pool_type]["pool"],
