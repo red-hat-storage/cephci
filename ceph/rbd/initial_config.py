@@ -187,6 +187,11 @@ def update_config(**kw):
                     if rep_pool_config.get("way"):
                         rep_pool_config[pool].update({"way": rep_pool_config["way"]})
 
+                    if rep_pool_config.get("journal_delay"):
+                        rep_pool_config[pool].update(
+                            {"journal_delay": rep_pool_config["journal_delay"]}
+                        )
+
     if not kw.get("config").get("rep-pool-only"):
         pool_types.append("ec_pool_config")
         if not config.get("ec_pool_config"):
@@ -307,6 +312,10 @@ def update_config(**kw):
                         )
                     if ec_pool_config.get("way"):
                         ec_pool_config[pool].update({"way": ec_pool_config["way"]})
+                    if ec_pool_config.get("journal_delay"):
+                        ec_pool_config[pool].update(
+                            {"journal_delay": ec_pool_config["journal_delay"]}
+                        )
     return pool_types
 
 
