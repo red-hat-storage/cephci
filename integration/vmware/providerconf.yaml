@@ -4,14 +4,23 @@ esxi:
         ip: '10.70.44.38'
         user: 'root'
         passwd: 'redhat1!23'
-cprovider:
+vcenters:
     name: 'VMWare vSphere Cloud Provider Details'
-    vcenter-bng:
-        auth-url: 'cephqe-vcenter2.lab.eng.blr.redhat.com'
+    vcenter-bng1:
+        hostname: 'cephqe-vcenter2.lab.eng.blr.redhat.com'
         username: 'Administrator@vsphere.local'
         password: 'Redhat231#'
         port: 443
-	dc_name: 'cephqe-dc'
-	cluster_name: 'Cluster-1'
-	esxi_servers:
-		- cephqe-virt11.lab.eng.blr.redhat.com
+	    dc_name: 'cephqe-dc'
+        cluster_name: 'Cluster-1'
+        esxi_servers:
+            - cephqe-virt11.lab.eng.blr.redhat.com
+    vcenter-bng2:
+        hostname: 'cephqe-vcenter1.lab.eng.blr.redhat.com'
+        username: 'Administrator@vsphere.local'
+        password: 'Redhat231#'
+        port: 443
+	    dc_name: 'cephqe-dc'
+        cluster_name: 'Cluster-1'
+        esxi_servers:
+            - cephqe-virt11.lab.eng.blr.redhat.com

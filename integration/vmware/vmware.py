@@ -6,8 +6,7 @@ from logging import exception
 import re
 import string
 
-from pyVim import connect
-from pyVmomi import vim
+import connect
 from integration.vmware.configs import configs as g
 from cli.exceptions import ConfigError
 from utility.log import Log
@@ -19,10 +18,12 @@ class VMWare(object):
 
     def __init__(self):
         try:
-            self.hostname = g.config['cprovider']['vcenter']['hostname']
-            self.username = g.config['cprovider']['vcenter']['username']
-            self.password = g.config['cprovider']['vcenter']['password']
-            self.port = g.config['cprovider']['vcenter'].get('port', 443)
+
+            self.hostname = g.config['vcenters']['vcenter-bng']['hostname']
+            self.username = g.config['esxi']['vcenter-bng']['username']
+            self.password = g.config['vcenters']['vcenter-bng']['password']
+            self.port = g.config['vcenters']['vcenter'].get('port', 443)
+            
         except KeyError:
             msg = ("Config file doesn't have values related to vmware Cloud"
                    " Provider.")
