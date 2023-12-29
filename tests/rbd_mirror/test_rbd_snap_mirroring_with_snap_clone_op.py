@@ -259,6 +259,9 @@ def run(**kw):
     """CEPH-83574861 - Configure two-way rbd-mirror (replicated and ec pool) on
     Stand alone CEPH cluster on image with snapshot based mirroring and perform snapshot,
     clone and mirror snapshot schedule operations from primary and secondary clusters.
+    CEPH-83574862 - Configure one-way rbd-mirror (replicated pool) on Stand alone CEPH
+    cluster on image with snapshot based mirroring and perform clone operations from
+    primary and secondary clusters.
     Pre-requisites :
     We need atleast one client node with ceph-common, fio and rbd-nbd packages,
     conf and keyring files in both clusters with snapshot based RBD mirroring
@@ -313,6 +316,18 @@ def run(**kw):
                 io_size: 200M
     Test Case Flow
     1. Bootstrap two CEPH clusters and setup snapshot based mirroring in between these clusters
+    2. Create pools and images as specified, enable snapshot based mirroring for all these images
+    3. Schedule snapshots for each of these images and run IOs on each of the images
+    4. Perform the operations like add snapshots - remove snapshots - list snapshots - rollback
+        snapshots - purge snapshots
+    5. Try snapshot creation/deletion from secondary cluster
+    6. Perform Clone Operations like protect snapshot,  clone the snapshot,  unprotect snapshot,
+        flatten clone
+    7. Try above operation from secondary
+    8. Perform snap schedule operations like, add/list/status/remove from both primary and secondary
+        clusters
+    Test Case Flow 2
+    1. Bootstrap two CEPH clusters and setup one way snapshot based mirroring in between these clusters
     2. Create pools and images as specified, enable snapshot based mirroring for all these images
     3. Schedule snapshots for each of these images and run IOs on each of the images
     4. Perform the operations like add snapshots - remove snapshots - list snapshots - rollback
