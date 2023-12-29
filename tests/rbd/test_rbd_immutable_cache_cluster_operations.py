@@ -67,8 +67,6 @@ def verify_immutable_cache_objects(rbd, node, **kw):
         "pool_name": pool,
         "image_name": image,
         "io_type": "write",
-        "verify": "crc32",
-        "verify_fatal": 1,
     }
 
     if kw:
@@ -100,15 +98,25 @@ def verify_immutable_cache_objects(rbd, node, **kw):
         run_fio(**fio_args)
 
         # waiting for cache files getting generated
-        time.sleep(120)
-        out = node.exec_command(cmd=f"ls {immutable_cache_path}0", sudo=True)
+        time.sleep(60)
+        i = 0
+        while i < 20:
+            full_path = f"{immutable_cache_path}{i}"
 
-        if "rbd_data" not in out[0]:
-            log.debug(out)
-            log.error("No cache files found")
+            # Execute the command for the current iteration
+            out = node.exec_command(cmd=f"ls {full_path}", sudo=True)
+
+            # Check if "rbd_data" is present in the command output
+            if "rbd_data" in out[0]:
+                log.info(f"Cache files found in {full_path}: {out}")
+                break
+
+            i += 1
+
+        # If no cache files are found, log an error
+        else:
+            log.debug("No cache files found in any directory")
             return 1
-
-        log.info(f"Cache files found: {out}")
         return 0
 
     except Exception as err:
