@@ -85,12 +85,12 @@ tests:
         io_exec:
             -   proto: librbd
                 image:
-                    size: 2G
+                    size: 25G
                     count: 10
                 node: node10             # client node
             -   proto: nvmeof
                 image:
-                    size: 2G
+                    size: 25G
                     count: 10
                 gw_node: node6          # gateway node
                 initiator_node: node10   # client node
@@ -112,12 +112,12 @@ tests:
         io_exec:
           -   proto: librbd
               image:
-                size: 2G
+                size: 25G
                 count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 2G
+                size: 25G
                 count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
@@ -139,12 +139,12 @@ tests:
         io_exec:
           -   proto: librbd
               image:
-                size: 2G
+                size: 25G
                 count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 2G
+                size: 25G
                 count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
@@ -166,12 +166,12 @@ tests:
         io_exec:
           -   proto: librbd
               image:
-                size: 2G
+                size: 25G
                 count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 2G
+                size: 25G
                 count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
