@@ -11,7 +11,6 @@ Module to perform tier-4 tests on pools WRT OSD daemons.
 
 """
 import datetime
-import json
 import random
 import time
 
@@ -21,11 +20,10 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
+from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from ceph.utils import get_node_by_id
-from tests.ceph_installer.test_cephadm import run as add_osd
-from tests.cephadm.test_host import run as deploy_host
 from tests.rados.rados_test_util import get_device_path, wait_for_device
-from tests.rados.stretch_cluster import get_osd_details, wait_for_clean_pg_sets
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -43,6 +41,7 @@ def run(ceph_cluster, **kw) -> int:
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
+    service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     pool_configs = config.get("pool_configs")
     pool_configs_path = config.get("pool_configs_path")
     osd_nodes = ceph_cluster.get_nodes(role="osd")
@@ -66,216 +65,6 @@ def run(ceph_cluster, **kw) -> int:
             "Completed health check of the cluster after test pool creation. Cluster health good!!"
         )
 
-    def add_new_hosts(add_nodes: list = None):
-        try:
-            if add_nodes is None:
-                add_nodes = ["node12", "node13"]
-            # Adding new hosts to the cluster
-            add_args = {
-                "command": "add_hosts",
-                "service": "host",
-                "args": {
-                    "nodes": add_nodes,
-                    "attach_address": True,
-                    "labels": "apply-all-labels",
-                },
-            }
-            add_args.update(config)
-
-            ncount_pre = len(rados_obj.run_ceph_command(cmd="ceph orch host ls"))
-            deploy_host(ceph_cluster=ceph_cluster, config=add_args)
-
-            if not ncount_pre < len(
-                rados_obj.run_ceph_command(cmd="ceph orch host ls")
-            ):
-                log.error("New hosts are not added into the cluster")
-                raise Exception("Execution error")
-
-            log.info(
-                "New hosts added to the cluster successfully, Proceeding to deploy OSDs on the same."
-            )
-            # Deploying OSDs on the new nodes.
-            osd_args = {
-                "steps": [
-                    {
-                        "config": {
-                            "command": "apply_spec",
-                            "service": "orch",
-                            "validate-spec-services": True,
-                            "specs": [
-                                {
-                                    "service_type": "osd",
-                                    "service_id": "new_osds",
-                                    "encrypted": "true",
-                                    "placement": {"label": "osd-bak"},
-                                    "spec": {"data_devices": {"all": "true"}},
-                                }
-                            ],
-                        }
-                    }
-                ]
-            }
-            osd_args.update(config)
-            ocount_pre = len(get_osd_details(node=cephadm))
-            add_osd(ceph_cluster=ceph_cluster, config=osd_args)
-            if not ocount_pre < len(get_osd_details(node=cephadm)):
-                log.error("New OSDs were not added into the cluster")
-                raise Exception("Execution error")
-
-            log.info("Deployed new hosts and deployed OSDs on them")
-        except Exception as e:
-            log.error(f"Failed with exception: {e.__doc__}")
-            log.exception(e)
-            raise
-
-    def remove_offline_host(host_node_name: str):
-        # get initial count of hosts in the cluster
-        host_count_pre = len(rados_obj.run_ceph_command(cmd="ceph orch host ls"))
-        # Removing an OSD host and checking status
-        rm_host = get_node_by_id(ceph_cluster, host_node_name)
-        log.info(f"Identified host : {rm_host.hostname} to be removed from the cluster")
-
-        # get list of osd_id on the host to be removed
-        rm_osd_list = rados_obj.collect_osd_daemon_ids(osd_node=rm_host)
-        log.info(f"list of osds on {rm_host.hostname}: {rm_osd_list}")
-        # Starting to drain an offline host.
-        log.info("Starting to drain an offline host")
-        cephadm.shell([f"ceph orch host drain {rm_host.hostname} --force"])
-        # Sleeping for 2 seconds for removal to have started
-        time.sleep(2)
-        log.debug(f"Started drain operation on node : {rm_host.hostname}")
-
-        status_cmd = "ceph orch osd rm status -f json"
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=7200)
-        flag = False
-        while end_time > datetime.datetime.now():
-            out, err = cephadm.shell([status_cmd])
-            try:
-                drain_ops = json.loads(out)
-                for entry in drain_ops:
-                    if entry["drain_done_at"] is None or entry["draining"]:
-                        log.debug(
-                            f"Drain operations are going on host {rm_host.hostname} \nOperations: {entry}"
-                        )
-                        raise Exception(
-                            f"drain process for OSD {entry['osd_id']} is still going on"
-                        )
-                    log.info(f"Drain operation completed for OSD {entry['osd_id']}")
-                log.info(f"Drain operations completed on host : {rm_host.hostname}")
-                flag = True
-                break
-            except json.JSONDecodeError:
-                log.info(f"Drain operations completed on host : {rm_host.hostname}")
-                flag = True
-                break
-            except Exception as error:
-                if end_time < datetime.datetime.now():
-                    log.error(f"Hit issue during drain operations: {error}")
-                    raise Exception(error)
-                log.info("Sleeping for 120 seconds and checking again....")
-                time.sleep(120)
-
-        if not flag:
-            log.error(
-                "Drain operation not completed on the cluster even after 7200 seconds"
-            )
-            raise
-        # remove the offline host so that drain operation gets completed
-        log.info(f"Removing host {rm_host.hostname} from the cluster")
-        cephadm.shell([f"ceph orch host rm {rm_host.hostname} --force --offline"])
-        time.sleep(10)
-        if not host_count_pre > len(
-            rados_obj.run_ceph_command(cmd="ceph orch host ls")
-        ):
-            log.error("Host count in the cluster has not reduced")
-            out, err = cephadm.shell(
-                [f"ceph orch host ls --host_pattern {rm_host.hostname}"]
-            )
-            if "0 hosts in cluster" not in out or rm_host.hostname in out:
-                log.error(f"{rm_host.hostname} is still part of the cluster")
-            raise Exception("Host count in the cluster has not reduced")
-        log.info(
-            f"Completed drain and removal operation on the host. {rm_host.hostname}"
-        )
-
-    def remove_custom_host(host_node_name: str):
-        try:
-            # Removing an OSD host and checking status
-            rm_host = get_node_by_id(ceph_cluster, host_node_name)
-            log.info(
-                f"Identified host : {rm_host.hostname} to be removed from the cluster"
-            )
-
-            # get list of osd_id on the host to be removed
-            rm_osd_list = rados_obj.collect_osd_daemon_ids(osd_node=rm_host)
-            dev_path_list = []
-            for osd_id in rm_osd_list:
-                dev_path_list.append(get_device_path(host=rm_host, osd_id=osd_id))
-                utils.set_osd_out(ceph_cluster, osd_id=osd_id)
-                utils.osd_remove(ceph_cluster, osd_id=osd_id)
-            time.sleep(30)
-            # Starting to drain the host
-            drain_cmd = f"ceph orch host drain {rm_host.hostname} --force"
-            cephadm.shell([drain_cmd])
-            # Sleeping for 2 seconds for removal to have started
-            time.sleep(2)
-            log.debug(f"Started drain operation on node : {rm_host.hostname}")
-
-            status_cmd = "ceph orch osd rm status -f json"
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-            flag = False
-            while end_time > datetime.datetime.now():
-                out, err = cephadm.shell([status_cmd])
-                try:
-                    drain_ops = json.loads(out)
-                    for entry in drain_ops:
-                        log.debug(
-                            f"Drain operations are going on host {rm_host.hostname} \nOperations: {entry}"
-                        )
-                except json.JSONDecodeError:
-                    log.info(f"Drain operations completed on host : {rm_host.hostname}")
-                    flag = True
-                    break
-                except Exception as error:
-                    log.error(f"Hit issue during drain operations: {error}")
-                    raise Exception(error)
-                log.debug("Sleeping for 10 seconds and checking again....")
-                time.sleep(10)
-
-            if not flag:
-                log.error(
-                    "Drain operation not completed on the cluster even after 600 seconds"
-                )
-                raise Exception("Execution Error")
-            log.info(
-                f"Completed drain operation on the host. {rm_host.hostname}\n Removing host from the cluster"
-            )
-
-            for dev_path in dev_path_list:
-                assert utils.zap_device(
-                    ceph_cluster, host=rm_host.hostname, device_path=dev_path
-                )
-
-            time.sleep(5)
-            rm_cmd = f"ceph orch host rm {rm_host.hostname} --force"
-            cephadm.shell([rm_cmd])
-            time.sleep(5)
-
-            # Checking if the host still exists on the cluster
-            ls_cmd = "ceph orch host ls"
-            hosts = rados_obj.run_ceph_command(cmd=ls_cmd)
-            for host in hosts:
-                if host["hostname"] == rm_host.hostname:
-                    log.error(f"Host : {rm_host.hostname} still present on the cluster")
-                    raise Exception("Host not removed error")
-            log.info(
-                f"Successfully removed host : {rm_host.hostname} from the cluster. Checking status after removal"
-            )
-        except Exception as e:
-            log.error(f"Failed with exception: {e.__doc__}")
-            log.exception(e)
-            raise
-
     log.info("\n\n---- Starting All workflows ----\n\n")
     if not config.get("osd_host_fail", False):
         # rebooting one OSD and checking cluster health
@@ -289,7 +78,7 @@ def run(ceph_cluster, **kw) -> int:
                 log.error(f"Unable to restart the OSD : {target_osd}")
                 raise Exception("Execution error")
 
-            # Waiting for recovery to post OSD reboot
+            # Waiting for recovery post OSD reboot
             method_should_succeed(wait_for_clean_pg_sets, rados_obj)
             log.debug(
                 "PG's are active + clean post OSD reboot, proceeding to restart next OSD"
@@ -482,7 +271,7 @@ def run(ceph_cluster, **kw) -> int:
         log.info(
             "---- Starting workflow ----\n---- 6. Removal and addition of OSD Hosts ----"
         )
-        add_new_hosts()
+        service_obj.add_new_hosts()
         # Waiting for recovery to post OSD addition into cluster
         method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         log.debug("PG's are active + clean post OSD addition")
@@ -494,7 +283,9 @@ def run(ceph_cluster, **kw) -> int:
         )
 
         # Removing newly added OSD host and checking status
-        remove_custom_host(host_node_name=config.get("remove_host", "node13"))
+        service_obj.remove_custom_host(
+            host_node_name=config.get("remove_host", "node13")
+        )
         # Waiting for recovery to post OSD host remove
         method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         log.debug("PG's are active + clean post OSD removal")
@@ -540,10 +331,10 @@ def run(ceph_cluster, **kw) -> int:
             log.info(f"{osd_hosts[0]} is offline as expected.")
 
             # proceeding to remove the offline host
-            remove_offline_host(host_node_name=osd_hosts[0])
+            service_obj.remove_offline_host(host_node_name=osd_hosts[0])
 
             # adding new OSD host which will serve as replacement to the offline host
-            add_new_hosts(add_nodes=["node13"])
+            service_obj.add_new_hosts(add_nodes=["node13"])
 
             # Waiting for recovery to post OSD host addition
             method_should_succeed(wait_for_clean_pg_sets, rados_obj)
