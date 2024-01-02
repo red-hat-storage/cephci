@@ -114,3 +114,33 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
         timeout: 300
+
+  - test:
+      name: Swift user with read access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_read.yaml
+        timeout: 300
+
+  - test:
+      name: Swift user with write access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_write.yaml
+        timeout: 300
+
+  - test:
+      name: Swift user with readwrite access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_readwrite.yaml
+        timeout: 300
