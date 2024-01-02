@@ -206,3 +206,14 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_same_rule_id_diff_rules.yaml
         timeout: 500
+
+  # swift container operation
+  - test:
+      name: swift enabling versioning on a bucket that is S3 versioned
+      desc: test swift enabling versioning on a bucket that is S3 versioned
+      polarion-id: CEPH-10649
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_s3_and_swift_versioning.yaml
+        timeout: 500
