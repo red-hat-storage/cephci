@@ -406,20 +406,6 @@ tests:
           config:
             set-env: true
             script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_multipart_haproxy.yaml
-            run-on-haproxy: true
-            timeout: 300
-      desc: test M buckets multipart uploads on haproxy node
-      module: sanity_rgw_multisite.py
-      name: test M buckets multipart uploads on haproxy node
-      polarion-id: CEPH-83575433
-
-  - test:
-      clusters:
-        ceph-sec:
-          config:
-            set-env: true
-            script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_compression_haproxy.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
@@ -542,6 +528,63 @@ tests:
       module: sanity_rgw_multisite.py
       name: m buckets with n objects
       comments: bug-2213138, known failure
+# test the workaround to sync only from one active zone
+  - test:
+      clusters:
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zone modify --rgw-zone archive --sync_from primary --sync_from_all false"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+            timeout: 120
+      desc: test the workaround to sync only from one active zone
+      module: exec.py
+      name: test the workaround to sync only from one active zone
+      polarian-id: CEPH-83581371
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_Mbuckets_with_Nobjects_no_reshard_haproxy.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            run-on-haproxy: true
+            timeout: 600
+      desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
+      polarion-id: CEPH-83575575
+      module: sanity_rgw_multisite.py
+      name: m buckets with n objects
+      comments: bug-2213138, workaround test, should pass
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            set-env: true
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_multipart_haproxy.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test M buckets multipart uploads on haproxy node
+      module: sanity_rgw_multisite.py
+      name: test M buckets multipart uploads on haproxy node
+      polarion-id: CEPH-83575433
+
+  - test:
+      clusters:
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zone modify --rgw-zone archive --sync_from_all true"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+            timeout: 120
+      desc: Sync to the archive zone from all active sites
+      module: exec.py
+      name: Sync to the archive zone from all active sites
+      polarian-id: CEPH-83581371
   - test:
       clusters:
         ceph-pri:
