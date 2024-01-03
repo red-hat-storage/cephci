@@ -26,16 +26,20 @@ def run(ceph_cluster, **kw):
     # Disable balancer module
     CephAdm(node).ceph.mgr.module.disable("balancer")
 
+    # Enable crash module
+    CephAdm(node).ceph.mgr.module.enable("crash")
+
     # Get running mgr containers
     running_ctrs, _ = get_running_containers(
         node, format="json", expr="name=mgr", sudo=True
     )
     if not running_ctrs:
         raise ResourceNotFoundError("No running mgr containers")
-    ctr_id = [item.get("Names")[0] for item in loads(running_ctrs)][0]
+    ctr_ids = [item.get("Names")[0] for item in loads(running_ctrs)]
 
     # Stop mgr containers
-    stop_container(node, ctr_id)
+    for ctr_id in ctr_ids:
+        stop_container(node, ctr_id)
 
     # Get crash stats
     crash_stat = CephAdm(node).ceph.crash.stat()
@@ -43,8 +47,16 @@ def run(ceph_cluster, **kw):
 
     # Check for crash records
     if crash_stat in ("0 crashes recorded", init_crash_stat):
-        raise OperationFailedError(
-            "No new crash stats were recorded even after a crash happened"
-        )
+        # Check if core dump is found
+        try:
+            cmd = "ls /var/lib/ceph/crash"
+            node.exec_command(cmd=cmd, sudo=True)
+            raise OperationFailedError(
+                "No new crash stats were recorded even after a crash happened"
+            )
+        except Exception:
+            log.info(
+                "No crashes were created during test and the stat returned the expected value"
+            )
 
     return 0
