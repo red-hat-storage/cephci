@@ -32,8 +32,12 @@ def run(ceph_cluster, **kw):
     for folder in folders:
         dirs = installer.get_dir_list(dir_path=folder, sudo=True)
         if not dirs:
-            raise OperationFailedError(
-                f"Unexpected! Crash status not reflected in {folder}"
-            )
-    log.info("Crash error was listed in both the crash directories")
+            # Fail test if the crash stat return the crash details
+            if "0 crashes recorded" not in crash_stat:
+                raise OperationFailedError(
+                    f"Unexpected! Crash status not reflected in {folder}"
+                )
+            else:
+                log.info("No crashes were triggered during the test")
+    log.info("Crash stat and crash directories returns the same status")
     return 0
