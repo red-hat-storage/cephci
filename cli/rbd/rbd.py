@@ -5,6 +5,7 @@ from cli.utilities.utils import build_cmd_from_args
 
 from .device import Device
 from .feature import Feature
+from .image_meta import Image_meta
 from .mirror.mirror import Mirror
 from .pool import Pool
 from .snap import Snap
@@ -19,6 +20,7 @@ class Rbd(Cli):
         self.device = Device(nodes, self.base_cmd)
         self.snap = Snap(nodes, self.base_cmd)
         self.feature = Feature(nodes, self.base_cmd)
+        self.image_meta = Image_meta(nodes, self.base_cmd)
 
     def create(self, **kw):
         """

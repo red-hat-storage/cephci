@@ -1,0 +1,203 @@
+#===============================================================================================
+# Tier-level: 3
+# Test-Suite: tier-3_journal_mirroring_regression.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/quincy/rbd/5-node-2-clusters.yaml
+#    No of Clusters : 2
+#    Node 2 must to be a client node
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd1:
+            config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                - ceph-common
+                - fio
+              copy_admin_keyring: true
+          ceph-rbd2:
+            config:
+                command: add
+                id: client.1
+                node: node2
+                install_packages:
+                    - ceph-common
+                    - fio
+                copy_admin_keyring: true
+        desc: Configure the client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      abort-on-fail: True
+      desc: Verify journal mirroring with delayed replication
+      name: Test delayed replication on journal mirrored clusters
+      module: test_rbd_journal_mirroring_with_delay.py
+      polarion-id: CEPH-11491
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: pool # compulsory argument if mirroring needs to be setup
+              journal_delay: "2m"
+              io_size: 200M
+            ec_pool_config:
+              ec-pool-k-m: "2,1"
+              ec_profile: "ec_profile"
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: pool # compulsory argument if mirroring needs to be setup
+              journal_delay: "2m"
+              io_size: 200M
+        ceph-rbd2:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: pool # compulsory argument if mirroring needs to be setup
+              journal_delay: "2m"
+              io_size: 200M
+            ec_pool_config:
+              ec-pool-k-m: "2,1"
+              ec_profile: "ec_profile"
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: pool # compulsory argument if mirroring needs to be setup
+              journal_delay: "2m"
+              io_size: 200M
