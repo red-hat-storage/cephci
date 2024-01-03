@@ -24,6 +24,12 @@ tests:
             ssh_user: cephuser
 
   - test:
+      name: Delete cluster using cephadm rm-cluster command
+      desc:  Verify cluster purge via cephamd commands
+      polarion-id: CEPH-83573765
+      module: test_remove_cluster.py
+
+  - test:
       name: Bootstrap cluster using cephadm-ansible wrapper modules
       desc: Execute 'bootstrap-with-exisitng-keys.yaml' playbook
       polarion-id: CEPH-83575205
