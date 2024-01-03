@@ -137,7 +137,7 @@ tests:
       name: Verify create file, create hardlink and lookups from nfs clients
       module: nfs_verify_file_ops_hard_links.py
       desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id:
+      polarion-id: CEPH-83577597
       abort-on-fail: false
       config:
         nfs_version: 4.2
@@ -148,7 +148,7 @@ tests:
       name: Modifying file attributes such as size, modification time, and access time
       module: nfs_verify_file_modification.py
       desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id:
+      polarion-id: CEPH-83577602
       abort-on-fail: false
       config:
         nfs_version: 4.1
@@ -159,7 +159,7 @@ tests:
      name: Nfs export with client permission
      module: nfs_client_permission_export
      desc: Test nfs export with authorized client mount
-     polarion-id:
+     polarion-id: CEPH-83578394
      abort-on-fail: false
      config:
        nfs_version: 4.1
@@ -169,7 +169,7 @@ tests:
      name: Nfs Test File Truncate
      module: nfs_file_truncate.py
      desc: Perform file truncate operation from clients
-     polarion-id:
+     polarion-id: CEPH-83577598
      abort-on-fail: false
      config:
        nfs_version: 4.1
@@ -179,7 +179,7 @@ tests:
       name: Nfs Verify multiple parallel io and lookups
       module: nfs_verify_multiple_parallel_io_and_lookups.py
       desc: Perform look ups while multiple parallel io are in progress
-      polarion-id:
+      polarion-id: CEPH-83581304
       abort-on-fail: false
       config:
         nfs_version: 4.1
@@ -188,7 +188,7 @@ tests:
       name: Nfs Verify rm write lookups in parellel from multi clients
       module: nfs_verify_parallel_rm_write_lookup.py
       desc: Perform lookups rm and write at the same time
-      polarion-id:
+      polarion-id: CEPH-83577591
       abort-on-fail: false
       config:
         nfs_version: 4.1
@@ -198,7 +198,7 @@ tests:
      name: Nfs Test File Append
      module: nfs_file_append.py
      desc: Perform file append operation from clients
-     polarion-id:
+     polarion-id: CEPH-83577599
      abort-on-fail: false
      config:
        nfs_version: 4.1
@@ -208,7 +208,7 @@ tests:
       name: Nfs Verify read write operation permissions
       module: nfs_verify_read_write_operations.py
       desc: Perform read write without permissions on nfs share
-      polarion-id:
+      polarion-id: CEPH-83575941
       abort-on-fail: false
       config:
         nfs_version: 4.1
@@ -219,7 +219,7 @@ tests:
       name: Nfs verify read and write non existing file
       module: nfs_verify_read_write_operations.py
       desc: Perform read write of no existing file on nfs share
-      polarion-id:
+      polarion-id: CEPH-83575927
       abort-on-fail: false
       config:
         nfs_version: 4.1
