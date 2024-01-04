@@ -128,7 +128,25 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
 
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+
     try:
+        # Check if the bootstrap has to be performed as non-root user
+        if config.get("install_as_non_root_user", False):
+            node = ceph_cluster.get_nodes(role="installer")[0]
+
+            # Add *umask 027* to user's ~/.bashrc file
+            cmd = "echo *umask 027* >> ~/.bashrc"
+            node.exec_command(cmd=cmd, sudo=True)
+
+            # Verify the bashrc file is updated
+            cmd = "cat ~/.bashrc"
+            out, _ = node.exec_command(cmd=cmd, sudo=True)
+            if "*umask 027*" not in out:
+                LOG.error(
+                    "Failed to update user's bashrc file. Install via non-root user failed"
+                )
+                return 1
+
         steps = config.get("steps", [])
         for step in steps:
             cfg = step["config"]
