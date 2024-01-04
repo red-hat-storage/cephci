@@ -323,3 +323,27 @@ tests:
             config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
             timeout: 300
             # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
+
+  - test:
+      name: bucket granular sync policy on enabled enabled schemantic with directional flow
+      desc: Test bucket granular sync policy on enabled enabled schemantic with directional flow
+      polarion-id: CEPH-83575137
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_multisite_granular_bucketsync_enable_enable.yaml
+            timeout: 300
+
+  - test:
+      name: bucket granular sync policy on allowed forbidden schemantic with directional flow
+      desc: Test bucket granular sync policy on allowed allowed schemantic with directional flow
+      polarion-id: CEPH-83575137
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_multisite_granular_bucketsync_allowed_forbidden.yaml
+            timeout: 300
