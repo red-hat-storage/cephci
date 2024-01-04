@@ -96,11 +96,11 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
-      desc: bootstrap and deployment services with label placements.
-      polarion-id: CEPH-83573777
+      desc: bootstrap and deployment services with label placements as non-root user.
+      polarion-id: CEPH-83575596
       destroy-cluster: false
       module: test_cephadm.py
-      name: Deploy RHCS cluster using cephadm
+      name: Deploy RHCS cluster using cephadm as non root user
   - test:
       abort-on-fail: true
       config:
