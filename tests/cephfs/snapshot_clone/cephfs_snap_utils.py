@@ -12,6 +12,7 @@ import time
 
 from ceph.ceph import CommandFailed
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -131,6 +132,31 @@ class SnapUtils(object):
         )
         snap_list = cmd_out.strip().split()
         return snap_list
+
+    @staticmethod
+    @retry(BaseException, tries=10, delay=10)
+    def check_snap_sched_active(client, path, state="True", fs_name="cephfs"):
+        """
+        To check state of schedule path as True or False .
+        Args:
+            Required:
+             client: ceph client to run cmd
+             path : path set for snap-schedule, type - str
+            Optional:
+             state : field 'active' value to be checked, by default checks for active to be 'True'
+             fs_name : cephfs name, default=cephfs
+
+        Returns: 0, if expected state for active is seen , else 1.
+        """
+        cmd = f"ceph fs snap-schedule status {path}  --fs {fs_name} -f json"
+        out, rc = client.exec_command(sudo=True, cmd=cmd)
+        sched_status = json.loads(out)
+        for sched_item in sched_status:
+            log.info(f"{str(sched_item['active'])},{state}")
+            if sched_item["path"] == path and str(sched_item["active"]) == state:
+                return 0
+            else:
+                raise Exception(ValueError, "Unexpected snap-schedule active state")
 
     def activate_snap_schedule(self, client, path, **kw_args):
         """

@@ -856,6 +856,7 @@ def snap_sched_non_existing_path(snap_test_params):
     log.info("Verify schedule for non-existent path got deactivated")
     if snap_util.check_snap_sched_active(client, snap_test_params["path"], "False"):
         test_fail = 1
+        log.error("Snap Schedule is still active for non-existent path")
 
     log.info("Verify message in mgr log for non-existing path")
     out, _ = mgr_node.exec_command(sudo=True, cmd="cephadm ls")
@@ -883,6 +884,7 @@ def snap_sched_non_existing_path(snap_test_params):
     log.info("Verify snap-schedule is still active after 10secs")
     if snap_util.check_snap_sched_active(client, snap_test_params["path"], "True"):
         test_fail = 1
+        log.info("Snap Schedule is not active for existing path")
 
     log.info("Performing cleanup")
     snap_path, post_test_params["export_created"] = fs_util.mount_ceph(
@@ -975,5 +977,6 @@ def umount_all(mnt_paths, umount_params):
 def get_iso_time(client):
     date_utc = client.exec_command(sudo=True, cmd="date")
     log.info(date_utc[0])
-    date_utc_parsed = parser.parse(date_utc[0])
+    date_utc_parsed = parser.parse(date_utc[0], ignoretz="True")
+    log.info(f"date_parsed_iso:{date_utc_parsed.isoformat()}")
     return date_utc_parsed.isoformat()
