@@ -749,6 +749,61 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, cleanup_cfg)
+        
+def test_ceph_83575814(ceph_cluster, rbd, pool, config):
+    """CEPH-83575814: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress."""
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83575814",
+            "serial": 83575814,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
+        "listener_port": listener_port,
+        "node": config["initiator_node"],
+    }
+    client = get_node_by_id(ceph_cluster, config["initiator_node"])
+    initiator = Initiator(client)
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "1G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+        with parallel() as p:
+            p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
+            sleep(20)
+            # out, err = rbd.remove_image(pool, img, **{"all": True, "check_ec": False})
+            # if "rbd: error: image still has watchers" not in out + err:
+            #     raise Exception("RBD image removed when its in use.")
+            # LOG.info("RBD image removal failed as expected when its in use....")
+    except Exception as err:
+        raise Exception(err)
+    finally:
+        cleanup_cfg = {
+            "gw_node": config["gw_node"],
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
@@ -815,6 +870,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83576093(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83575455":
             test_ceph_83575455(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83575814":
+            test_ceph_83575814(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
         LOG.error(err)
