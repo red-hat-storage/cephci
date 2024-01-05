@@ -1,0 +1,145 @@
+globals:
+  -
+    ceph-cluster:
+      name: ceph-pri
+      networks:
+        public: ['10.0.0.0/12']
+      nodes:
+        -
+          hostname: pluto001.ceph.redhat.com
+          ip: 10.8.129.101
+          root_password: r
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: pluto002.ceph.redhat.com
+          ip: 10.8.129.102
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: pluto003.ceph.redhat.com
+          ip: 10.8.129.103
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+            - client
+          volumes:
+            - /dev/sdb
+            - /dev/sda
+            - /dev/sdd
+
+
+  -
+    ceph-cluster:
+      name: ceph-sec
+      networks:
+        public: ['10.0.0.0/12']
+      nodes:
+        -
+          hostname: pluto004.ceph.redhat.com
+          ip: 10.8.129.104
+          root_password: r
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: pluto005.ceph.redhat.com
+          ip: 10.8.129.105
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sda
+        -
+          hostname: pluto006.ceph.redhat.com
+          ip: 10.8.129.106
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+            - client
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sda
+
+  -
+    ceph-cluster:
+      name: ceph-arc
+      networks:
+        public: ['10.0.0.0/12']
+      nodes:
+        -
+          hostname: pluto007.ceph.redhat.com
+          ip: 10.8.129.107
+          root_password: r
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: pluto008.ceph.redhat.com
+          ip: 10.8.129.108
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: pluto010.ceph.redhat.com
+          ip: 10.8.129.110
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+            - client
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
