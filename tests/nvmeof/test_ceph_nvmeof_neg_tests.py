@@ -8,10 +8,12 @@ from copy import deepcopy
 from time import sleep
 
 from ceph.ceph import Ceph, SocketTimeoutException
+from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
+from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.utils import get_node_by_id
 from cli.utilities.utils import reboot_node
 from tests.cephadm import test_nvmeof, test_orch
@@ -23,6 +25,7 @@ from tests.nvmeof.test_ceph_nvmeof_gateway import (
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import find_free_port, generate_unique_id
+from ceph.rbd.workflows.cluster_operations import operation
 
 LOG = Log(__name__)
 
@@ -749,11 +752,14 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, cleanup_cfg)
-        
+
+
 def test_ceph_83575814(ceph_cluster, rbd, pool, config):
     """CEPH-83575814: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    mon_obj = MonitorWorkflows(node=cephadm)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -765,14 +771,12 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
             "allow_host": "*",
         }
     )
-
+    client = get_node_by_id(ceph_cluster, config["node"])
     initiator_cfg = {
         "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
-    client = get_node_by_id(ceph_cluster, config["initiator_node"])
-    initiator = Initiator(client)
     try:
         subsystem["gateway-name"] = find_client_daemon_id(
             ceph_cluster, pool, node_name=gw_node.hostname
@@ -787,13 +791,34 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         gateway.add_namespace(subsystem["nqn"], img)
 
         config.update(initiator_cfg)
+        mon_host = ceph_cluster.get_nodes(role="mon")[0]
         with parallel() as p:
             p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
             sleep(20)
-            # out, err = rbd.remove_image(pool, img, **{"all": True, "check_ec": False})
-            # if "rbd: error: image still has watchers" not in out + err:
-            #     raise Exception("RBD image removed when its in use.")
-            # LOG.info("RBD image removal failed as expected when its in use....")
+            LOG.info("Test to remove mon service")
+            cmd = f"ceph orch host label rm {mon_host.hostname} mon"
+            out, err = client.exec_command(cmd=cmd, sudo=True)
+
+            if err:
+                raise Exception(f"ceph mon remove command failed as {err}")
+
+            LOG.info("ceph mon removal failed as expected...")
+            p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)
+            LOG.info(
+                "Test to add the mon service back to the cluster with pwl cache test"
+            )
+            cmd = f"ceph orch host label add {mon_host.hostname} mon"
+            out, err = client.exec_command(cmd=cmd, sudo=True)
+
+            # Check for errors
+            if err:
+                raise Exception(f"ceph mon add command failed as {err}")
+
+            sleep(10)
+            p.spawn(
+                operation, mon_obj, "check_mon_exists_on_host", host=mon_host.hostname
+            )
+
     except Exception as err:
         raise Exception(err)
     finally:
