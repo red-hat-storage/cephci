@@ -105,6 +105,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: Inconsistent object pg check
       desc: Inconsistent object pg check
       module: test_osd_inconsistency_pg.py
@@ -203,3 +210,9 @@ tests:
             obj_end: 5
             num_keys_obj: 10
         delete_pool: true
+
+  - test:
+      name: Automatic trimming of osdmaps
+      desc: check for periodic trimming of osdmaps
+      module: test_osdmap_trim.py
+      polarion-id: CEPH-10046

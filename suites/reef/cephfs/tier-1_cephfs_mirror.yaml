@@ -185,6 +185,10 @@ tests:
   - test:
       abort-on-fail: false
       desc: "Configure CephFS Mirroring modification of source and target cluster"
+      clusters:
+        ceph1:
+          config:
+            name: Configure CephFS Mirroring modification of source and target cluster
       module: cephfs_mirroring.validate_file_dir_stats_modification_on_mirrored_cluster.py
       name: validate_file_dir_stats_modification_on_mirrored_cluster
       polarion-id: "CEPH-83575625"
@@ -238,3 +242,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_disconnect.py
       name: Validate all failure scenarios to disconnect the mirroring
       polarion-id: "CEPH-83574100"
+  - test:
+      abort-on-fail: false
+      desc: "Validate multiple snapshots Synchronization on Mirror setup"
+      clusters:
+        ceph1:
+          config:
+            name: Validate multiple snapshots Synchronization on Mirror setup
+      module: cephfs_mirroring.test_cephfs_mirroring_multiple_snapshots.py
+      name: Validate multiple snapshots Synchronization on Mirror setup
+      polarion-id: "CEPH-83580026"

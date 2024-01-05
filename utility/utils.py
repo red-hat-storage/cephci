@@ -2313,6 +2313,123 @@ def get_bucket_sync_status(node, bucket_name):
     return out
 
 
+def get_ceph_version_from_cluster(client):
+    """
+    Retrieve the Ceph version installed on a cluster using the provided client.
+
+    Args:
+        client : An instance of the client used for executing commands.
+
+    Returns:
+        str or None: The Ceph version if installed, or None if Ceph is not installed.
+
+    Raises:
+        ValueError: If the JSON output does not contain the expected version information.
+    """
+    out, rc = client.exec_command(
+        sudo=True,
+        cmd="ceph version -f json",
+        check_ec=False,
+    )
+    log.info(out)
+    ceph_version = json.loads(out)
+    version_string = ceph_version.get("version", None)
+    log.info(version_string)
+    if not version_string:
+        log.error("Ceph is not installed please install ceph")
+        return None
+    version_pattern = r"ceph version (\S+).*"
+    match = re.search(version_pattern, version_string)
+    re.search(version_pattern, version_string)
+    if not match:
+        raise RuntimeError("Failed to get ceph version from cluster")
+    ceph_version_installed = match.group(1)
+    return ceph_version_installed
+
+
+def get_ceph_version_from_repo(client, config):
+    """
+    Install Ceph and retrieve the version from the specified repository.
+
+    Args:
+        client (YourClientType): An instance of the client used for executing commands.
+        config (dict): Configuration parameters including 'rhbuild', 'base_url', and 'env_type'.
+
+    Returns:
+        str: The Ceph version retrieved from the repository.
+
+    Raises:
+        RuntimeError: If mandatory parameters are missing or the platform is unsupported.
+    """
+    podman_run = "podman run -it --rm"
+    rhel8_ubi_image = "registry.access.redhat.com/ubi8/ubi"
+    rhel9_ubi_image = "registry.access.redhat.com/ubi9/ubi"
+    exec_cmd = "sh -c"
+    yum_add_repo = "dnf config-manager --add-repo"
+    curl_add_repo = "curl -L -o /etc/yum.repos.d/upstream.repo"
+    ibm_license = (
+        "yum install --nogpgcheck -y ibm-storage-ceph-license && "
+        "touch /usr/share/ibm-storage-ceph-license/accept"
+    )
+    install_ceph_common = "yum install ceph-common -q --nogpgcheck -y"
+
+    # Define command arguments
+    cmd_args = [podman_run]
+
+    # Get rhel version
+    platform = config.get("rhbuild")
+    if not platform:
+        raise RuntimeError("Mandatory parameter 'platform' does not exist")
+    elif "rhel-9" in platform:
+        cmd_args.append(rhel9_ubi_image)
+    elif "rhel-8" in platform:
+        cmd_args.append(rhel8_ubi_image)
+    else:
+        raise RuntimeError(f"Unsupported platform '{platform}'")
+
+    # Get ceph repo
+    rhs_ceph_repo = config.get("base_url")
+    if not rhs_ceph_repo:
+        raise RuntimeError("rhs_ceph_repo does not exist")
+
+    # Check for rhs ceph repo
+    env_type = config.get("env_type", "RH")
+
+    # Check for Redhat build
+    if env_type == "RH" and not rhs_ceph_repo.endswith(".repo"):
+        rhs_ceph_repo += "/compose/Tools/x86_64/os"
+
+    if env_type.lower() == "upstream":
+        yum_cmd_args = [f"{curl_add_repo} {rhs_ceph_repo}"]
+    else:
+        yum_cmd_args = [f"{yum_add_repo} {rhs_ceph_repo}"]
+
+    # Check for IBM build
+    if env_type == "IBM":
+        yum_cmd_args.append(ibm_license)
+
+    # Add install package command
+    yum_cmd_args.append(install_ceph_common)
+
+    # Get package install command
+    yum_cmd_args = " && ".join(yum_cmd_args)
+
+    # Get final command
+    cmd_args.extend([exec_cmd, f'"{yum_cmd_args}"'])
+    cmd_args = " ".join(cmd_args)
+    out, rc = client.exec_command(
+        sudo=True,
+        cmd=f"{cmd_args}",
+        check_ec=False,
+    )
+    log.info(out)
+    build_match = re.search(r"ceph-common-\d+:(\d+\.\d+\.\d+-\d+.el\dcp).*", out)
+    if not build_match:
+        raise RuntimeError(f"Failed to get ceph version from url {rhs_ceph_repo}")
+    ceph_version = build_match.group(1)
+    return ceph_version
+
+
 def find_free_port(host):
     find_port = """
 import socket
