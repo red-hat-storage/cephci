@@ -45,17 +45,13 @@ tests:
               args:
                 all-available-devices: true
           - config:
-              command: apply_spec
-              service: orch
-              specs:
-                - service_type: rgw
-                  service_id: rgw.ssl
-                  placement:
-                    nodes:
-                      - node5
-                  spec:
-                    ssl: true
-                    rgw_frontend_ssl_certificate: create-cert
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
