@@ -755,7 +755,7 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
 
 
 def test_ceph_83575814(ceph_cluster, rbd, pool, config):
-    """CEPH-83575814: Perform cluster operations when  IO operations between 
+    """CEPH-83575814: Perform cluster operations when  IO operations between
     NVMeOF target NVMe-OF initiator are in progress.
     """
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
