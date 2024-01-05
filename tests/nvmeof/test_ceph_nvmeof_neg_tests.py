@@ -14,6 +14,7 @@ from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.rados.monitor_workflows import MonitorWorkflows
+from ceph.rbd.workflows.cluster_operations import operation
 from ceph.utils import get_node_by_id
 from cli.utilities.utils import reboot_node
 from tests.cephadm import test_nvmeof, test_orch
@@ -25,7 +26,6 @@ from tests.nvmeof.test_ceph_nvmeof_gateway import (
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import find_free_port, generate_unique_id
-from ceph.rbd.workflows.cluster_operations import operation
 
 LOG = Log(__name__)
 
