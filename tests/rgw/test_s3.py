@@ -348,6 +348,11 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
         "email": user_info["email"],
     }
 
+    if user_prefix == "iam":
+        log.info("Adding user-policy caps for IAM user")
+        cmd = f'radosgw-admin caps add --uid={uid} --caps="user-policy=*"'
+        out, err = node.exec_command(sudo=True, cmd=cmd)
+
 
 def create_s3_conf(
     cluster: Ceph,
@@ -380,6 +385,7 @@ def create_s3_conf(
     create_s3_user(node=rgw_node, user_prefix="main", data=data)
     create_s3_user(node=rgw_node, user_prefix="alt", data=data)
     create_s3_user(node=rgw_node, user_prefix="tenant", data=data)
+    create_s3_user(node=rgw_node, user_prefix="iam", data=data)
 
     if kms_keyid:
         data["main"]["kms_keyid"] = kms_keyid
