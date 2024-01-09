@@ -3,6 +3,7 @@ from copy import deepcopy
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 
+from .config.config import Config
 from .device import Device
 from .feature import Feature
 from .image_meta import Image_meta
@@ -21,6 +22,7 @@ class Rbd(Cli):
         self.snap = Snap(nodes, self.base_cmd)
         self.feature = Feature(nodes, self.base_cmd)
         self.image_meta = Image_meta(nodes, self.base_cmd)
+        self.config = Config(nodes, self.base_cmd)
 
     def create(self, **kw):
         """

@@ -31,27 +31,27 @@ def config_mirroring_delay(**kw):
     operation = kw.get("operation")
     if kw.get("delay_per_image"):
         if operation == "set":
-            _, err = rbd.image_meta.set(
+            _, err = rbd.config.image.set(
                 pool=pool,
                 image=image,
-                key="conf_rbd_mirroring_replay_delay",
+                key="rbd_mirroring_replay_delay",
                 value=delay,
             )
         elif operation == "remove":
-            out, err = rbd.image_meta.remove(
-                pool=pool, image=image, key="conf_rbd_mirroring_replay_delay"
+            out, err = rbd.config.image.remove(
+                pool=pool, image=image, key="rbd_mirroring_replay_delay"
             )
             if not err:
                 return out
         elif operation == "get":
-            out, err = rbd.image_meta.get(
-                pool=pool, image=image, key="conf_rbd_mirroring_replay_delay"
+            out, err = rbd.config.image.get(
+                pool=pool, image=image, key="rbd_mirroring_replay_delay"
             )
             if not err:
                 return out
         if err:
             log.error(
-                f"Performing operation {operation} conf_rbd_mirroring_replay_delay failed for {pool}/{image}"
+                f"Performing operation {operation} rbd_mirroring_replay_delay failed for {pool}/{image}"
             )
             return 1
     else:
