@@ -1,3 +1,5 @@
+from time import sleep
+
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
 from cli.ceph.ceph import Ceph
@@ -77,6 +79,7 @@ def run(ceph_cluster, **kw):
         )
 
         # Mount the volume with rootsquash enable on client
+        sleep(9)
         clients[0].create_dirs(dir_path=nfs_squash_mount, sudo=True)
         if Mount(clients[0]).nfs(
             mount=nfs_squash_mount,
