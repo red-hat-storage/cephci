@@ -1,4 +1,5 @@
 # Suite is to be used to verify the dups trimming scenario on all NVMe cluster
+# Conf file to be used : conf/quincy/baremetal_pipeline/mero_conf.yaml
 
 tests:
   - test:
@@ -23,7 +24,7 @@ tests:
               args:
                 custom_image: "registry.redhat.io/rhceph/rhceph-5-rhel8:5-184"
                 custom_repo: "https://download.eng.bos.redhat.com/rel-eng/rhel-8/RHCEPH-5/RHCEPH-5.1-RHEL-8-RC-4.1/compose/Tools/x86_64/os/"
-                mon-ip: depressa007
+                mon-ip: mero001
                 allow-fqdn-hostname: true
                 yes-i-know: true
           - config:
@@ -64,12 +65,10 @@ tests:
                   service_id: osds
                   encrypted: "true"                     # boolean as string
                   placement:
-                    host_pattern: '*'
+                    label: osd
                   spec:
                     data_devices:
-                      paths:
-                        - /dev/nvme0n1
-                        - /dev/nvme1n1
+                      all: true
 
   - test:
       name: MDS Service deployment with spec
@@ -120,7 +119,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: depressa012                     # client node
+        node: mero015                     # client node
         install_packages:
           - ceph-common
         copy_admin_keyring: true          # Copy admin keyring to node
@@ -151,6 +150,7 @@ tests:
       config:
         log_to_file: true
       desc: Change config options to enable logging to file
+
   - test:
       name: rbd-io
       module: rbd_faster_exports.py
@@ -198,5 +198,6 @@ tests:
             - type: replicated
               conf: sample-pool-2
         pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+        verify_inflation: true
       desc: Verify that the duplicates in the PG log entries are trimmed regularly
       abort-on-fail: true

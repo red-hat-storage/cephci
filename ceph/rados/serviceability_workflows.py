@@ -52,6 +52,11 @@ class ServiceabilityMethods:
             add_nodes(list): List input of nodeIDs to be added to the cluster
         Returns:
             None | Raises exception in case of failure.
+
+        NOTE :
+        1. If OSDs are to be deployed on host that is added, make sure that the label on the host is "osd-bak"
+        2. OSDs would be deployed on all available devices on the host/s added
+        3. If no nodes are provided, the method tries the deployment on node12 & node13
         """
         try:
             if add_nodes is None:
