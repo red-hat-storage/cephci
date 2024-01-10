@@ -139,3 +139,9 @@ tests:
       module: test_bluestoretool_workflows.py
       polarion-id: CEPH-83571692
       desc: Verify ceph-bluestore-tool functionalities
+
+  - test:
+      name: Bluestore rescue
+      desc: Bluestore resuce verification
+      polarion-id: CEPH-8
+      module: test_osd_bluestore_rescue.py
