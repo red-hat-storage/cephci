@@ -345,4 +345,16 @@ tests:
       module: clients.verify_root_squash_in_caps.py
       name: verify root_squash cap works in multiFS
       polarion-id: "CEPH-83573868"
+  - test:
+      abort-on-fail: false
+      desc: "Verify Client eviction is deferred if OSD was laggy"
+      module: cephfs_bugs.test_defer_client_evict_on_laggy_osd.py
+      name: Client eviction deferred if OSD is laggy
+      polarion-id: "CEPH-83581592"
+  - test:
+      abort-on-fail: false
+      desc: "Verify Client is blocklisted if session metadata is bloated"
+      module: cephfs_bugs.test_client_blocklist_large_session_metadata.py
+      name: Verify Client is blocklisted if session metadata is bloated
+      polarion-id: "CEPH-83581613"
 
