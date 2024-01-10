@@ -1,8 +1,8 @@
 # Physical/Bare-metal environment required for Ceph Nvme-oF.
-# The below defined cluster has 4 nodes + 1 Ceph-Nvmeof node + 1 Client node.
+# The below defined cluster has 4 nodes + 2 Ceph-Nvmeof node + 1 Client node.
 # Cluster configuration:
 #      3 MONS, 2 MGR, 5 OSD nodes
-#      1 Ceph NVMeoF GW node
+#      2 Ceph NVMeoF GW node
 #      1 NVMe initiator nodes
 globals:
   -
@@ -71,6 +71,7 @@ globals:
           root_password: passwd
           role:
             - osd
+            - nvmeof-gw
           volumes:
             - /dev/sdb
             - /dev/sdc
