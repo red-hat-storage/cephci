@@ -117,7 +117,6 @@ tests:
       name: deploy cluster
 
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
@@ -299,8 +298,8 @@ tests:
             timeout: 300
 
   - test:
-      name: bucket granular sync policy with allowed allowed schemantic
-      desc: Test bucket granular sync policy with allowed allowed schemantic
+      name: bucket granular sync policy with allowed allowed semantic
+      desc: Test bucket granular sync policy with allowed allowed semantic
       polarion-id: CEPH-CEPH-83575868
       module: sanity_rgw_multisite.py
       comments: Known issue BZ-2153834
@@ -313,8 +312,8 @@ tests:
             timeout: 300
 
   - test:
-      name: bucket granular sync policy on enabled enabled schemantic with directional flow
-      desc: Test bucket granular sync policy on enabled enabled schemantic with directional flow
+      name: bucket granular sync policy on enabled enabled semantic with directional flow
+      desc: Test bucket granular sync policy on enabled enabled semantic with directional flow
       polarion-id: CEPH-83575137
       module: sanity_rgw_multisite.py
       clusters:
@@ -325,8 +324,8 @@ tests:
             timeout: 300
 
   - test:
-      name: bucket granular sync policy on allowed forbidden schemantic with directional flow
-      desc: Test bucket granular sync policy on allowed allowed schemantic with directional flow
+      name: bucket granular sync policy on allowed forbidden semantic with directional flow
+      desc: Test bucket granular sync policy on allowed allowed semantic with directional flow
       polarion-id: CEPH-83575137
       module: sanity_rgw_multisite.py
       clusters:
