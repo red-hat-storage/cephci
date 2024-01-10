@@ -796,7 +796,7 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         mon_host = ceph_cluster.get_nodes(role="mon")[0]
         with parallel() as p:
             p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
-            sleep(20)
+            sleep(180)
             LOG.info("Test to remove mon service")
             cmd = f"ceph orch host label rm {mon_host.hostname} mon"
             out, err = client.exec_command(cmd=cmd, sudo=True)
