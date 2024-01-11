@@ -775,7 +775,6 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
             "allow_host": "*",
         }
     )
-    client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator_cfg = {
         "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
         "listener_port": listener_port,
@@ -800,11 +799,9 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
             p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
 
             LOG.info("Test to remove mon service")
-            LOG.info(
-                "Test to remove the mon service from the cluster"
-            )
+            LOG.info("Test to remove the mon service from the cluster")
             p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)
-            LOG.info("ceph mon removal failed as expected when its use....")            
+            LOG.info("ceph mon removal failed as expected when its use....")
 
             LOG.info("Test to add the mon service back to the cluster")
             p.spawn(operation, mon_obj, "add_mon_service", host=mon_host)
@@ -813,10 +810,13 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
                 operation, mon_obj, "check_mon_exists_on_host", host=mon_host.hostname
             )
 
-            LOG.info(
-                "Test to remove the osd service and add back to the cluster"
+            LOG.info("Test to remove the osd service and add back to the cluster")
+            p.spawn(
+                osd_remove_and_add_back,
+                ceph_cluster=ceph_cluster,
+                rados_obj=rados_obj,
+                pool=pool,
             )
-            p.spawn(osd_remove_and_add_back, ceph_cluster=ceph_cluster, rados_obj=rados_obj, pool=pool)
     except Exception as err:
         LOG.error(err)
         return 1
