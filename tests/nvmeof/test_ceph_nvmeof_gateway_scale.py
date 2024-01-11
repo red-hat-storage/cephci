@@ -41,7 +41,7 @@ def initiators(ceph_cluster, gateway, config):
     discover_cmd_args = {
         "transport": "tcp",
         "traddr": gateway.ip_address,
-        "trsvcid": "4420",
+        "trsvcid": "8009",
     }
     connect_cmd_args = {
         "transport": "tcp",
@@ -211,6 +211,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     cfg["args"].clear()
 
                     cfg["args"].update({"bdev": f"{name}-bdev{num}", "subnqn": nqn})
+                    cfg["args"]["anagrpid"] = (
+                        1 if num < 201 else 2
+                    )  # only applicable for 2 Gws, 1 subsystem with 400 namespaces
                     namespace_func = fetch_method(nvme_cli, command)  # add namespaces
                     namespace_func(**cfg["args"])
                     for io in config["run_io"]:

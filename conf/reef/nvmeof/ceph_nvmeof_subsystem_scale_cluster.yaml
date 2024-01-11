@@ -22,6 +22,7 @@ globals:
         role:
           - mds
           - osd
+          - nvmeof-gw
         no-of-volumes: 4
         disk-size: 20
       node5:
@@ -33,6 +34,5 @@ globals:
         no-of-volumes: 4
         disk-size: 20
       node6:
-        id: node10
         role:
           - client
