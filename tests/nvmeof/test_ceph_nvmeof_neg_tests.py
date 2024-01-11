@@ -13,8 +13,9 @@ from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
+from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
-from ceph.rbd.workflows.cluster_operations import operation
+from ceph.rbd.workflows.cluster_operations import operation, osd_remove_and_add_back
 from ceph.utils import get_node_by_id
 from cli.utilities.utils import reboot_node
 from tests.cephadm import test_nvmeof, test_orch
@@ -762,6 +763,7 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
     gateway = NVMeCLI(gw_node)
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     mon_obj = MonitorWorkflows(node=cephadm)
+    rados_obj = RadosOrchestrator(node=cephadm)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -773,7 +775,7 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
             "allow_host": "*",
         }
     )
-    client = get_node_by_id(ceph_cluster, config["node"])
+    client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator_cfg = {
         "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
         "listener_port": listener_port,
@@ -796,33 +798,28 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         mon_host = ceph_cluster.get_nodes(role="mon")[0]
         with parallel() as p:
             p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
-            sleep(180)
+
             LOG.info("Test to remove mon service")
-            cmd = f"ceph orch host label rm {mon_host.hostname} mon"
-            out, err = client.exec_command(cmd=cmd, sudo=True)
-
-            if err:
-                raise Exception(f"ceph mon remove command failed as {err}")
-
-            LOG.info("ceph mon removal failed as expected...")
-            p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)
             LOG.info(
-                "Test to add the mon service back to the cluster with pwl cache test"
+                "Test to remove the mon service from the cluster"
             )
-            cmd = f"ceph orch host label add {mon_host.hostname} mon"
-            out, err = client.exec_command(cmd=cmd, sudo=True)
+            p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)
+            LOG.info("ceph mon removal failed as expected when its use....")            
 
-            # Check for errors
-            if err:
-                raise Exception(f"ceph mon add command failed as {err}")
-
+            LOG.info("Test to add the mon service back to the cluster")
+            p.spawn(operation, mon_obj, "add_mon_service", host=mon_host)
             sleep(10)
             p.spawn(
                 operation, mon_obj, "check_mon_exists_on_host", host=mon_host.hostname
             )
 
+            LOG.info(
+                "Test to remove the osd service and add back to the cluster"
+            )
+            p.spawn(osd_remove_and_add_back, ceph_cluster=ceph_cluster, rados_obj=rados_obj, pool=pool)
     except Exception as err:
-        raise Exception(err)
+        LOG.error(err)
+        return 1
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
