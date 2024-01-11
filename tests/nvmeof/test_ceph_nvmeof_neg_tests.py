@@ -758,6 +758,14 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
 def test_ceph_83575814(ceph_cluster, rbd, pool, config):
     """CEPH-83575814: Perform cluster operations when  IO operations between
     NVMeOF target NVMe-OF initiator are in progress.
+    Args:
+        ceph_cluster (CephCluster): The Ceph cluster instance.
+        rbd (RadosBlockDevice): The RBD instance.
+        pool (str): The Ceph pool name.
+        config (dict): Configuration parameters.
+
+    Returns:
+        int: 0 on success, 1 on failure.
     """
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gateway = NVMeCLI(gw_node)
@@ -798,19 +806,17 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         with parallel() as p:
             p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
 
-            LOG.info("Test to remove mon service")
-            LOG.info("Test to remove the mon service from the cluster")
+            LOG.info("Removing mon service from the cluster")
             p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)
-            LOG.info("ceph mon removal failed as expected when its use....")
 
-            LOG.info("Test to add the mon service back to the cluster")
+            LOG.info("Adding mon service back to the cluster")
             p.spawn(operation, mon_obj, "add_mon_service", host=mon_host)
             sleep(10)
             p.spawn(
                 operation, mon_obj, "check_mon_exists_on_host", host=mon_host.hostname
             )
 
-            LOG.info("Test to remove the osd service and add back to the cluster")
+            LOG.info("Removing osd service and adding back to the cluster")
             p.spawn(
                 osd_remove_and_add_back,
                 ceph_cluster=ceph_cluster,
