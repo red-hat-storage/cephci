@@ -361,6 +361,23 @@ tests:
       name: Validate Host accessibility to NVMe namespaces
       polarion-id: CEPH-83575455
 
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        operation: CEPH-83575814
+      desc: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: Perform cluster operations when  IO operations are in progress.
+      polarion-id: CEPH-83575814
+
 # Reboot GW node
   - test:
       abort-on-fail: true
