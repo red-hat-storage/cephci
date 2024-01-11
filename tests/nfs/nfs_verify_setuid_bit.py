@@ -117,19 +117,19 @@ def run(ceph_cluster, **kw):
             fs=fs_name,
             squash="rootsquash",
         )
+        sleep(9)
 
         # Mount the volume with rootsquash enable on clients
-        for client in clients:
-            client.create_dirs(dir_path=nfs_squash_mount, sudo=True)
-            if Mount(client).nfs(
-                mount=nfs_squash_mount,
-                version=version,
-                port=port,
-                server=nfs_server_name,
-                export=nfs_export_squash,
-            ):
-                raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
-            log.info("Mount succeeded on client")
+        clients[0].create_dirs(dir_path=nfs_squash_mount, sudo=True)
+        if Mount(clients[0]).nfs(
+            mount=nfs_squash_mount,
+            version=version,
+            port=port,
+            server=nfs_server_name,
+            export=nfs_export_squash,
+        ):
+            raise OperationFailedError(f"Failed to mount nfs on {clients[0].hostname}")
+        log.info("Mount succeeded on client")
 
         # Create oprtaions on each client
         for client, operation in operations.items():

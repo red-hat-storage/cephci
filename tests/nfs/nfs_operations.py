@@ -1,4 +1,5 @@
 from threading import Thread
+from time import sleep
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
@@ -29,11 +30,13 @@ def setup_nfs_cluster(
 ):
     # Step 1: Enable nfs
     Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
+    sleep(3)
 
     # Step 2: Create an NFS cluster
     Ceph(clients[0]).nfs.cluster.create(
         name=nfs_name, nfs_server=nfs_server, ha=ha, vip=vip
     )
+    sleep(3)
 
     # Step 3: Perform Export on clients
     i = 0
@@ -42,6 +45,7 @@ def setup_nfs_cluster(
             fs_name=fs_name, nfs_name=nfs_name, nfs_export=f"{export}_{i}", fs=fs
         )
         i += 1
+        sleep(1)
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
@@ -62,6 +66,7 @@ def setup_nfs_cluster(
         ):
             raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
         i += 1
+        sleep(1)
     log.info("Mount succeeded on all clients")
 
 
@@ -103,15 +108,18 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
             )
 
         log.info("Unmounting nfs-ganesha mount on client:")
+        sleep(3)
         if Unmount(client).unmount(nfs_mount):
             raise OperationFailedError(f"Failed to unmount nfs on {client.hostname}")
         log.info("Removing nfs-ganesha mount dir on client:")
         client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}")
+        sleep(3)
 
     # Delete all exports
     for i in range(len(clients)):
         Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
+    sleep(30)
 
 
 def perform_failover(nfs_nodes, failover_node, vip):
