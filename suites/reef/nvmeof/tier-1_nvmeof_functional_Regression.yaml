@@ -375,7 +375,7 @@ tests:
       desc: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress.
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
-      name: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress.
+      name: Perform cluster operations when  IO operations are in progress.
       polarion-id: CEPH-83575814
 
 # Reboot GW node

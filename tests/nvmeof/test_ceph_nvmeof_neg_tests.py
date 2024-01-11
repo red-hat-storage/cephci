@@ -797,7 +797,7 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
 
         # Create image
         img = f"{name}-image"
-        rbd.create_image(pool, img, "1G")
+        rbd.create_image(pool, img, "10G")
         gateway.create_block_device(img, img, pool)
         gateway.add_namespace(subsystem["nqn"], img)
 
