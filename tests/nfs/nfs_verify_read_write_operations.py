@@ -44,6 +44,7 @@ def run(ceph_cluster, **kw):
             fs_name,
             nfs_export,
             fs,
+            ceph_cluster=ceph_cluster,
         )
 
         if operation == "verify_permission":

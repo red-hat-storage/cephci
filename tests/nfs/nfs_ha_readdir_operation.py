@@ -85,6 +85,7 @@ def run(ceph_cluster, **kw):
             fs,
             ha,
             vip,
+            ceph_cluster=ceph_cluster,
         )
 
         # Create oprtaions on each client

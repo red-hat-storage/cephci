@@ -58,6 +58,7 @@ def run(ceph_cluster, **kw):
             fs,
             ha,
             vip,
+            ceph_cluster=ceph_cluster,
         )
         log.info("Successfully setup NFS cluster")
 

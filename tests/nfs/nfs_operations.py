@@ -1,3 +1,4 @@
+from datetime import datetime
 from threading import Thread
 from time import sleep
 
@@ -5,10 +6,13 @@ from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
-from cli.utilities.utils import get_ip_from_node, reboot_node
+from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from utility.log import Log
 
 log = Log(__name__)
+
+ceph_cluster_obj = None
+setup_start_time = None
 
 
 class NfsCleanupFailed(Exception):
@@ -27,7 +31,15 @@ def setup_nfs_cluster(
     fs,
     ha=False,
     vip=None,
+    ceph_cluster=None,
 ):
+    # Get ceph cluter object and setup start time
+    global ceph_cluster_obj
+    global setup_start_time
+    ceph_cluster_obj = ceph_cluster
+    setup_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    setup_start_time = datetime.strptime(setup_start_time, "%Y-%m-%d %H:%M:%S")
+
     # Step 1: Enable nfs
     Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
     sleep(3)
@@ -69,6 +81,10 @@ def setup_nfs_cluster(
         sleep(1)
     log.info("Mount succeeded on all clients")
 
+    # Step 5: Enable nfs coredump to nfs nodes
+    nfs_nodes = ceph_cluster.get_nodes("nfs")
+    Enable_nfs_coredump(nfs_nodes)
+
 
 def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
     """
@@ -87,6 +103,16 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
     """
     if not isinstance(clients, list):
         clients = [clients]
+
+    # Check nfs coredump
+    if ceph_cluster_obj:
+        nfs_nodes = ceph_cluster_obj.get_nodes("nfs")
+        coredump_path = "/var/lib/systemd/coredump"
+        for nfs_node in nfs_nodes:
+            if check_coredump_generated(nfs_node, coredump_path, setup_start_time):
+                raise NfsCleanupFailed(
+                    "Coredump generated post execution of the current test case"
+                )
 
     # Wait until the rm operation is complete
     timeout, interval = 600, 10

@@ -67,6 +67,7 @@ def run(ceph_cluster, **kw):
             fs,
             ha,
             vip,
+            ceph_cluster=ceph_cluster,
         )
     except Exception as e:
         log.error(f"Failed to setup nfs cluster {e}")

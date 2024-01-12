@@ -44,6 +44,7 @@ def run(ceph_cluster, **kw):
             fs_name,
             nfs_export,
             fs,
+            ceph_cluster=ceph_cluster,
         )
 
         # Create multi depth dirs under nfs share
