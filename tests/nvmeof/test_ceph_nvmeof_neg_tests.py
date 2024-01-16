@@ -8,10 +8,14 @@ from copy import deepcopy
 from time import sleep
 
 from ceph.ceph import Ceph, SocketTimeoutException
+from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmeof.initiator import Initiator
 from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
+from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.monitor_workflows import MonitorWorkflows
+from ceph.rbd.workflows.cluster_operations import operation, osd_remove_and_add_back
 from ceph.utils import get_node_by_id
 from cli.utilities.utils import reboot_node
 from tests.cephadm import test_nvmeof, test_orch
@@ -751,6 +755,87 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
         teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
+def test_ceph_83575814(ceph_cluster, rbd, pool, config):
+    """CEPH-83575814: Perform cluster operations when  IO operations between
+    NVMeOF target NVMe-OF initiator are in progress.
+    Args:
+        ceph_cluster (CephCluster): The Ceph cluster instance.
+        rbd (RadosBlockDevice): The RBD instance.
+        pool (str): The Ceph pool name.
+        config (dict): Configuration parameters.
+
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gateway = NVMeCLI(gw_node)
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    mon_obj = MonitorWorkflows(node=cephadm)
+    rados_obj = RadosOrchestrator(node=cephadm)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83575814",
+            "serial": 83575814,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
+        "listener_port": listener_port,
+        "node": config.get("initiator_node"),
+    }
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "10G")
+        gateway.create_block_device(img, img, pool)
+        gateway.add_namespace(subsystem["nqn"], img)
+
+        config.update(initiator_cfg)
+        mon_host = ceph_cluster.get_nodes(role="mon")[0]
+        with parallel() as p:
+            p.spawn(initiators, ceph_cluster, gateway, initiator_cfg)
+
+            LOG.info("Removing mon service from the cluster")
+            p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)
+
+            LOG.info("Adding mon service back to the cluster")
+            p.spawn(operation, mon_obj, "add_mon_service", host=mon_host)
+            sleep(10)
+            p.spawn(
+                operation, mon_obj, "check_mon_exists_on_host", host=mon_host.hostname
+            )
+
+            LOG.info("Removing osd service and adding back to the cluster")
+            p.spawn(
+                osd_remove_and_add_back,
+                ceph_cluster=ceph_cluster,
+                rados_obj=rados_obj,
+                pool=pool,
+            )
+    except Exception as err:
+        LOG.error(err)
+        return 1
+    finally:
+        cleanup_cfg = {
+            "gw_node": config.get("gw_node"),
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
@@ -815,6 +900,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83576093(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83575455":
             test_ceph_83575455(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83575814":
+            test_ceph_83575814(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
         LOG.error(err)

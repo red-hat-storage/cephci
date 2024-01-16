@@ -21,8 +21,8 @@ LOG = Log(__name__)
 def configure_subsystems(rbd, pool, gw, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_nqn = config["nqn"]
-    max_ns = config.get("max_ns", 32)
-    gw.create_subsystem(sub_nqn, config["serial"], max_ns)
+    max_ns = {"max-namespaces": config.get("max_ns", 32)}
+    gw.create_subsystem(sub_nqn, config["serial"], **max_ns)
 
     cfg = {"gateway-name": config.pop("gateway-name"), "traddr": gw.node.ip_address}
     gw.create_listener(sub_nqn, config["listener_port"], **cfg)
