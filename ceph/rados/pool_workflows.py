@@ -4,6 +4,7 @@ Module to change pool attributes
 2. Snapshots
 """
 import datetime
+import random
 import time
 import traceback
 
@@ -334,11 +335,12 @@ class PoolFunctions:
         log.info(f"Completed deleting all objects from pool {pool_name}")
         return True
 
-    def create_pool_snap(self, pool_name: str):
+    def create_pool_snap(self, pool_name: str, count: int = 1):
         """
         Creates snapshots of the given pool
         Args:
             pool_name: name of the pool
+            count: number of snaps to create (optional)
         Returns: Pass -> name of the snapshot created, Fail -> False
 
         """
@@ -356,12 +358,10 @@ class PoolFunctions:
                 return False
 
         # Creating snaps on the pool provided
-        cmd = "uuidgen"
-        out, err = self.rados_obj.node.shell([cmd])
-        uuid = out[0:5]
-        snap_name = f"{pool_name}-snap-{uuid}"
-        cmd = f"ceph osd pool mksnap {pool_name} {snap_name}"
-        self.rados_obj.node.shell([cmd], long_running=True)
+        for _ in range(count):
+            snap_name = f"{pool_name}-snap-{random.randint(0, 10000)}"
+            cmd = f"ceph osd pool mksnap {pool_name} {snap_name}"
+            self.rados_obj.node.shell([cmd], long_running=True)
 
         # Checking if snap was created successfully
         if not self.check_snap_exists(snap_name=snap_name, pool_name=pool_name):
