@@ -406,7 +406,7 @@ class RadosOrchestrator:
             kwargs: Any other param that needs to passed
                 - rados_write_duration -> duration of write operation (int)
                 - byte_size -> size of objects to be written (str)
-                    eg : 10KB, 4096
+                    eg : 10KB, default - 4096KB
                 - max_objs -> max number of objects to be written (int)
                 - verify_stats -> arg to control whether obj stats need to
                   be verified after write (bool) | default: True
@@ -1353,6 +1353,7 @@ class RadosOrchestrator:
             )
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
+            raise
         return log_lines
 
     def set_mclock_profile(self, profile="balanced", osd="osd", reset=False):
@@ -3113,3 +3114,15 @@ class RadosOrchestrator:
                 f"Metadata info for the input daemon: {daemon_type} {daemon_id} not found"
             )
         return out
+
+    def get_osd_status(self, osd_id):
+        """
+        method to fetch the output of osd status command -
+        ceph tell osd.N status command
+        Args:
+            osd_id: ID of desired osd daemon
+        Returns:
+            dict output of ceph tell osd.N status command
+        """
+        base_cmd = f"ceph tell osd.{osd_id} status"
+        return self.run_ceph_command(cmd=base_cmd)
