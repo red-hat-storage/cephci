@@ -60,15 +60,26 @@ def run(ceph_cluster, **kw):
 
             # set a value for osd_memory_target at OSD level
             log.info("Setting a value for osd_memory_target at OSD level")
-            assert mon_obj.set_config(
-                section="osd", name="osd_memory_target", value="6000000000"
+            # assert mon_obj.set_config(
+            #     section="osd", name="osd_memory_target", value="6000000000"
+            # )
+            """ ^ setting of osd config parameter using MonConfig object fails due to
+            multiple valid entries of osd_memory_target with different values
+            in ceph config dump.
+            As a workaround, the value is set and verified through cephadm shell command
+            until a resolution for the edge case is found."""
+            out, _ = cephadm.shell(
+                args=["ceph config set osd osd_memory_target 6000000000"]
             )
-            log.info("OSD config parameter osd_memory_target set successfully")
 
+            # verify the value set using ceph config get and ceph config show
             osd_get_omt = mon_obj.get_config(section="osd", param="osd_memory_target")
+            assert int(osd_get_omt) == 6000000000
             osd_show_omt = mon_obj.show_config(
                 daemon="osd", id="0", param="osd_memory_target"
             )
+            assert int(osd_show_omt) == 6000000000
+            log.info("OSD config parameter osd_memory_target set successfully")
             log.info(
                 f"OSD osd_memory_target set at OSD level from ceph config get: {osd_get_omt}"
             )
@@ -80,12 +91,18 @@ def run(ceph_cluster, **kw):
             osd_id = random.choice(osd_list)
             log.debug(f"Chosen OSD: osd.{osd_id}")
             log.info(f"Setting a value for osd_memory_target at osd.{osd_id} level")
-            assert mon_obj.set_config(
-                section=f"osd.{osd_id}", name="osd_memory_target", value="5000000000"
+            # assert mon_obj.set_config(
+            #     section=f"osd.{osd_id}", name="osd_memory_target", value="5000000000"
+            # )
+            out, _ = cephadm.shell(
+                args=[f"ceph config set osd.{osd_id} osd_memory_target 5000000000"]
             )
-            log.info("OSD config parameter osd_memory_target set successfully")
 
+            # verify the value set using ceph config get and ceph config show
             osdid_get_omt, osdid_show_omt = fetch_osd_config_value(osd_id)
+            assert int(osdid_get_omt) == 5000000000
+            assert int(osdid_show_omt) == 5000000000
+            log.info("OSD config parameter osd_memory_target set successfully")
             log.info(
                 f"OSD osd_memory_target set for osd.{osd_id} from ceph config get: {osdid_get_omt}"
             )
@@ -117,7 +134,8 @@ def run(ceph_cluster, **kw):
     if config.get("host_level"):
         doc = """
         # CEPH-83580881
-        # BZ-2213873
+        # BZ-2213873 | Quincy
+        # BZ-2249014 | Pacific
         This test is to verify the propagation of osd_memory_target parameter
         set at HOST level to individual OSDs
         1. Create cluster with default configuration
@@ -134,10 +152,12 @@ def run(ceph_cluster, **kw):
         """
         log.info(doc)
         # Test will run for all releases once BZ-2213873 has been back-ported
-        if not rhbuild.startswith("6"):
+        # [Jan-2024] BZ-2213873 has now been back ported to Pacific with BZ-2249014
+        if rhbuild.startswith("7"):
             log.info(
-                "\n \n ********\n [29-Nov-2023] "
-                "Test is currently only valid for RHCS 6.1z3 Quincy build 160 and above"
+                "\n \n ********\n [29-Nov-2023] / [10-Jan-2024] "
+                "Test is currently invalid for RHCS Reef as the fix is yet to be"
+                "cherry picked to Reef nightly builds."
                 f"\n Input RHCS build - {rhbuild}, passing the test without running"
                 f"\n *********"
             )
