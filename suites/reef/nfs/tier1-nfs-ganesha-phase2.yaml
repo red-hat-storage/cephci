@@ -235,3 +235,15 @@ tests:
       config:
         nfs_version: 4.1
         clients: 3
+
+  - test:
+      name: Nfs Ganesha copy operations
+      module: test_file_ops_copy.py
+      desc: Perform file and dir copy and lookups in parallel
+      polarion-id: CEPH-83577595
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
