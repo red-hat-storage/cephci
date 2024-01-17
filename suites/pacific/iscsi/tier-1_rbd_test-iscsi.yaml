@@ -75,7 +75,7 @@ tests:
               command: shell
         verify_cluster_health: true
       desc: "RHCS cluster deployment using cephadm"
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: "deploy cluster"
   -

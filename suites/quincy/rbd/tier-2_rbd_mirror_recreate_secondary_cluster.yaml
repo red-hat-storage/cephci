@@ -130,7 +130,7 @@ tests:
                   args:
                     all-available-devices: true
       desc: RBD Mirror cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy 3 cluster for mirror failback test
       abort-on-fail: true
@@ -223,7 +223,7 @@ tests:
                     placement:
                       label: rbd-mirror
       desc: RBD Mirror daemon deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy rbd-mirror daemon
 

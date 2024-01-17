@@ -48,7 +48,7 @@ tests:
               args:
                 all-available-devices: true
       desc: RHCS cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
 

@@ -122,7 +122,7 @@ tests:
                         - node4
                         - node5
       desc: CephFS Mirror cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       polarion-id: CEPH-83574114
       name: deploy cephfs-mirror

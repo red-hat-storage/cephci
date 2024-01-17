@@ -61,7 +61,7 @@ tests:
                 placement:
                   label: rgw
       desc: RHCS cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
 # Test cases to be executed

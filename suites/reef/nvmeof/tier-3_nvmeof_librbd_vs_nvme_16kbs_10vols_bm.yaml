@@ -1,5 +1,5 @@
 # Basic IO Perf comparison test LibRBD vs NVMeoF protocols
-# cluster configuration: conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml
+# cluster configuration: conf/reef/nvmeof/ceph_nvmeof_sanity.yaml
 
 tests:
 
@@ -44,7 +44,7 @@ tests:
               args:
                 all-available-devices: true
       desc: RHCS cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
 

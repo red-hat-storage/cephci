@@ -108,7 +108,7 @@ tests:
                       nodes:
                         - node5
       desc: RBD Mirror cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
 

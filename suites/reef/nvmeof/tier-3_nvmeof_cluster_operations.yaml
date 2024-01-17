@@ -1,21 +1,12 @@
-# Tier2: RBD luks encryption testing
-#
-# This test suite runs test scripts to evaluate the functionality of
-# luks encryption in RBD.
-#
-# Conf File - conf/pacific/rbd/tier-0_rbd.yaml
-#
-# The following tests are covered
-#  - CEPH-83575263 - Encrypt & decrypt file using same keys and different keys
-#  - CEPH-83575251 - Encrypt image and clone using combinations of encryption type
+# NVMeoTCP functional regression tests suite
+# cluster configuration file: conf/reef/nvmeof/ceph_nvmeof_functional.yaml
 
 tests:
-
+# Set up the cluster
   - test:
       abort-on-fail: true
       module: install_prereq.py
       name: install ceph pre-requisites
-
   - test:
       abort-on-fail: true
       config:
@@ -26,8 +17,8 @@ tests:
               service: cephadm
               args:
                 mon-ip: node1
-                orphan-initial-daemons: true
-                skip-monitoring-stack: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
           - config:
               command: add_hosts
               service: host
@@ -56,45 +47,37 @@ tests:
       module: test_cephadm.py
       name: deploy cluster
 
+#  Test cases to be executed
   - test:
       abort-on-fail: true
       config:
         command: add
         id: client.1
-        node: node6
+        nodes:
+          - node10
+          - node11
         install_packages:
           - ceph-common
-          - fio
-          - rbd-nbd
         copy_admin_keyring: true
-      desc: Configure client node
+      desc: Setup client on NVMEoF gateway
       destroy-cluster: false
       module: test_client.py
-      name: configure client
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
 
   - test:
-      desc: Encrypt & decrypt file using same keys and different keys
+      abort-on-fail: false
       config:
-        encryption_type: #parent,clone
-          - luks1,luks1
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        operation: CEPH-83575814
+      desc: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress.
       destroy-cluster: false
-      module: test_rbd_encryption.py
-      name: encrypt image and clone using different keys
-      polarion-id: CEPH-83575263
-
-  - test:
-      desc: Apply different combinations of encryption to parent and clone
-      config:
-        encryption_type: #parent,clone
-           - luks1,luks1
-           - luks1,NA
-           - luks2,luks1
-           - luks2,luks2
-           - luks2,NA
-           - NA,luks1
-           - NA,luks2
-           - luks1,luks2
-      destroy-cluster: false
-      module: test_rbd_encryption.py
-      name: Encrypt image and clone using combinations of encryption type
-      polarion-id: CEPH-83575251
+      module: test_ceph_nvmeof_neg_tests.py
+      name: Perform cluster operations when  IO operations are in progress.
+      polarion-id: CEPH-83575814
