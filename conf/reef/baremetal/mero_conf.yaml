@@ -50,6 +50,7 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/sdl
         - hostname: mero007
           id: node5
           ip: 10.8.129.227
@@ -67,9 +68,9 @@ globals:
             - /dev/sdg
             - /dev/sdh
             - /dev/sdi
+            - /dev/sdj
             - /dev/sdk
             - /dev/sdl
-            - /dev/sdj
         - hostname: mero009
           id: node6
           ip: 10.8.129.229
@@ -92,6 +93,7 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
+            - /dev/sdm
         - hostname: mero011
           id: node7
           ip: 10.8.129.231
@@ -102,15 +104,16 @@ globals:
             - /dev/sda
             - /dev/sdb
             - /dev/sdc
+            - /dev/sdd
             - /dev/sde
             - /dev/sdf
             - /dev/sdg
             - /dev/sdh
             - /dev/sdi
-            - /dev/sdk
             - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
             - /dev/sdm
-            - /dev/sdn
         - hostname: mero013
           id: node8
           ip: 10.8.129.233
@@ -129,6 +132,7 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/sdl
             - /dev/sdm
         - hostname: mero014
           id: node9
@@ -150,6 +154,7 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/sdl
             - /dev/sdm
         - hostname: mero015
           id: node10
@@ -184,6 +189,7 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
+            - /dev/sdm
         - hostname: mero018
           id: node13
           ip: 10.8.129.238
@@ -204,6 +210,7 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/sdl
         - hostname: mero019
           id: node14
           ip: 10.8.129.239
@@ -225,6 +232,7 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
+            - /dev/sdm
         - hostname: mero020
           id: node15
           ip: 10.8.129.240
@@ -246,3 +254,4 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
+            - /dev/sdm
