@@ -128,6 +128,16 @@ tests:
 
   - test:
       abort-on-fail: true
+      config:
+        check_status: true
+        commands:
+          - "radosgw-admin user create --uid=rgw-admin-ops-user --display_name='rgw-admin-ops-user' --email rgw-admin-ops-user@foo.foo"
+      desc: Execute radosgw-admin commands for zone
+      module: exec.py
+      name: rgw-admin-user
+
+  - test:
+      abort-on-fail: true
       desc: "Retrieve the deployed cluster information."
       module: gather_cluster_info.py
       name: "Get ceph cluster details."
