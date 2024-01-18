@@ -49,6 +49,7 @@ def run(ceph_cluster, **kw):
             fs_name,
             nfs_export,
             fs,
+            ceph_cluster=ceph_cluster,
         )
         # Perform file creation on client 1
         for i in range(100):

@@ -55,6 +55,7 @@ def run(ceph_cluster, **kw):
             fs,
             ha,
             vip,
+            ceph_cluster=ceph_cluster,
         )
 
         # Create a file on Client 1

@@ -627,8 +627,12 @@ def check_coredump_generated(node, coredump_path, created_after):
     cmd = f"ls -Art {coredump_path} | tail -n 1"
     file_name, _ = node.exec_command(cmd=cmd, sudo=True)
 
+    # If the path is empty / not created, return False as no coredump has been generated
+    if file_name == "":
+        return False
+
     # Get the file creation time
-    cmd = f"stat -c '%w' {file_name}"
+    cmd = f"stat -c '%w' {coredump_path}/{file_name}"
     created_time, _ = node.exec_command(cmd=cmd, sudo=True)
 
     # Remove timezone and fractional seconds from time
@@ -638,8 +642,8 @@ def check_coredump_generated(node, coredump_path, created_after):
 
     # Verify if the file is created after the given time
     if created_time > created_after:
-        return False
-    return True
+        return True
+    return False
 
 
 def create_files(client, mount_point, file_count):

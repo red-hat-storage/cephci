@@ -42,6 +42,7 @@ def run(ceph_cluster, **kw):
             fs_name,
             nfs_export,
             fs,
+            ceph_cluster=ceph_cluster,
         )
 
         log.info(f"Run SPECstorage with {benchmark} benchmark")

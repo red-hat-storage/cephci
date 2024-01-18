@@ -67,6 +67,7 @@ def run(ceph_cluster, **kw):
             fs_name,
             nfs_export,
             fs_name,
+            ceph_cluster=ceph_cluster,
         )
 
         # Create export with squash permission

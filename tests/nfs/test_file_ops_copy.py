@@ -94,6 +94,7 @@ def run(ceph_cluster, **kw):
             fs_name,
             nfs_export,
             fs_name,
+            ceph_cluster=ceph_cluster,
         )
         # Create files and dirs from client 1 and copy files and dirs from client 2
         client1 = clients[0]
