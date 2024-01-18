@@ -210,3 +210,57 @@ tests:
               base_cmd_args:
                 verbose: true
               verify_cluster_health: true
+
+  - test:
+      name: Nfs Verify rm write lookups in parellel from multi clients
+      module: nfs_verify_parallel_rm_write_lookup.py
+      desc: Perform lookups rm and write at the same time
+      polarion-id: CEPH-83577591
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+
+  - test:
+    name: Nfs Verify read write operation permissions
+    module: nfs_verify_read_write_operations.py
+    desc: Perform read write without permissions on nfs share
+    polarion-id: CEPH-83575941
+    abort-on-fail: false
+    config:
+      nfs_version: 4.1
+      clients: 3
+      operation: verify_permission
+
+  - test:
+      name: Nfs verify read and write non existing file
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write of no existing file on nfs share
+      polarion-id: CEPH-83575927
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_non_existing_file
+
+  - test:
+      name: Nfs verify export unexport while nfs share is in use
+      module: nfs_verify_stress.py
+      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
+      polarion-id: CEPH-83575994
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+
+  - test:
+      name: Nfs Ganesha copy operations
+      module: test_file_ops_copy.py
+      desc: Perform file and dir copy and lookups in parallel
+      polarion-id: CEPH-83577595
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
