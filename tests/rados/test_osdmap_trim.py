@@ -80,7 +80,7 @@ def run(ceph_cluster, **kw):
         bench_cfg = {
             "pool_name": _pool_name,
             "byte_size": "10KB",
-            "duration": 600,
+            "rados_write_duration": 600,
             "background": True,
         }
         rados_obj.bench_write(**bench_cfg)
