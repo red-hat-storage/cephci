@@ -138,12 +138,19 @@ def device_cleanup(rbd, client, **kw):
             flag = 1
 
     if kw.get("device_name"):
-        map_config = {
-            "image-snap-or-device-spec": kw["device_name"],
-            "device-type": kw.get("device_type", "nbd"),
-        }
+        if kw.get("device-type"):
+            # RBD image map cleanup with device map
+            map_config = {
+                "image-snap-or-device-spec": kw["device_name"],
+                "device-type": kw.get("device_type", "nbd"),
+            }
+            _, err = rbd.device.unmap(**map_config)
 
-        _, err = rbd.device.unmap(**map_config)
+        else:
+            # RBD image map cleanup without device map
+            map_config = {"image-or-snap-or-device-spec": kw["device_name"]}
+            _, err = rbd.unmap(**map_config)
+
         if err:
             log.error(f"Device unmap failed for {kw['device_name']} ")
             flag = 1

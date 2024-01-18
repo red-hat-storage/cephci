@@ -127,3 +127,19 @@ tests:
       module: test_rbd_immutable_cache_cluster_operations.py
       name: Immutable object cache creation with cluster operation
       polarion-id: CEPH-83574132
+
+  - test:
+      abort-on-fail: true
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+          size: 4G
+        fio:
+          size: 3G
+      desc: Validate performance with/without immutable cache enabled
+      destroy-cluster: false
+      module: test_performance_immutable_cache.py
+      name: verify performance for Immutable object cache
+      polarion-id: CEPH-83581376

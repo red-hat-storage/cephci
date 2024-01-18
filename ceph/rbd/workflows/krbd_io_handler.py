@@ -116,7 +116,7 @@ def krbd_io_handler(**kw):
                 if not config.get("skip_mkfs"):
                     run_mkfs(
                         client_node=client,
-                        device_name=device_names[-1],
+                        device_name=device_names[-1][0].strip(),
                         type=operations.get("fs"),
                     )
                 # Creating mount directory and mouting device
@@ -126,9 +126,8 @@ def krbd_io_handler(**kw):
                     else f"/tmp/mp_{device_names[-1].split('/')[-1]}"
                 )
                 mount_points.append(mount_point)
-                mount_cmd = (
-                    f"mkdir {mount_point}; mount {device_names[-1]} {mount_point}"
-                )
+
+                mount_cmd = f"mkdir {mount_point}; mount {device_names[-1][0].strip()} {mount_point}"
                 if kw.get("read_only"):
                     mount_cmd += " -o ro,noload"
                 out, err = exec_cmd(cmd=mount_cmd, node=client, all=True)
@@ -143,21 +142,35 @@ def krbd_io_handler(**kw):
                         if config.get("file_path")
                         else f"{mount_point}/{image_name}"
                     )
-                    run_fio(
+                    config["time_taken"] = run_fio(
                         client_node=client,
                         filename=file_name,
                         runtime=config.get("runtime", 30),
                         size=config.get("file_size", "100M"),
+                        get_time_taken=config.get("get_time_taken", False),
+                        cmd_timeout=config.get("cmd_timeout"),
+                        io_type=config.get("io_type", "write"),
                     )
                 else:
-                    run_fio(
-                        client_node=client,
-                        device_name=device_names[-1],
-                        runtime=config.get("runtime", 30),
-                    )
+                    fio_args = {
+                        "client_node": rbd.ceph_client,
+                        "device_name": device_names[-1][0].strip(),
+                    }
+                    if config.get("io_size"):
+                        fio_args.update({"size": config.get("io_size")})
+                    else:
+                        fio_args.update({"runtime": config.get("runtime", 30)})
+                    if config.get("get_time_taken"):
+                        fio_args.update(
+                            {"get_time_taken": config.get("get_time_taken")}
+                        )
+                    if config.get("cmd_timeout"):
+                        fio_args.update({"cmd_timeout": config.get("cmd_timeout")})
+
+                    config["time_taken"] = run_fio(**fio_args)
 
             if operations.get("fsck"):
-                if exec_cmd(node=client, cmd=f"fsck -n {device_names[-1]}"):
+                if exec_cmd(node=client, cmd=f"fsck -n {device_names[-1][0].strip()}"):
                     log.debug("fsck failed")
                     return_flag = 1
 
@@ -168,13 +181,12 @@ def krbd_io_handler(**kw):
                         "rbd": rbd,
                         "client": client,
                         "file_name": mount_point,
-                        # "image_spec": image_spec,
-                        # "encryption_config": config.get("encryption_config"),
-                        "device_type": config.get("device_type", "nbd"),
-                        "device_name": device_name,
-                        # "read_only": kw.get("read_only"),
+                        "device_name": device_name[0].strip(),
                     }
-                    # Note: Implement cleanup for map
+                    if operations.get("device_map"):
+                        cleanup_config.update(
+                            {"device_type": config.get("device_type", "nbd")}
+                        )
                     return_flag = device_cleanup(**cleanup_config)
     kw["config"]["device_names"] = device_names
     return return_flag, ""
