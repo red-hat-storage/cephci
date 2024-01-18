@@ -203,6 +203,16 @@ tests:
         config-file-name: test_lc_rule_same_rule_id_diff_rules.yaml
         timeout: 500
 
+  - test:
+      name: Test bucket lc reverse transition
+      desc: Test bucket lc reverse transition
+      polarion-id: CEPH-83573373
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_reverse_transition.yaml
+        timeout: 300
+
   # swift container operation
   - test:
       name: swift enabling versioning on a bucket that is S3 versioned
