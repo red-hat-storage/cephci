@@ -98,9 +98,9 @@ tests:
         osd_level: true
 
   - test:
-      name: osd_memory_target param set at Host level
+      name: osd_memory_target param set at host level
       module: test_osd_memory_target.py
-      desc: Verification of osd_memory_target parameter set at OSD level
+      desc: Verification of osd_memory_target parameter set at host level
       polarion-id: CEPH-83580881
       config:
         host_level: true
