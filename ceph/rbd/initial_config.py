@@ -1,5 +1,5 @@
 from ceph.rbd.utils import getdict, random_string
-from ceph.rbd.workflows.rbd import config_rbd_multi_pool
+from ceph.rbd.workflows.rbd import create_pools_and_images
 from ceph.rbd.workflows.rbd_mirror import config_mirror_multi_pool
 from ceph.utils import get_node_by_id
 from cli.rbd.rbd import Rbd
@@ -441,7 +441,7 @@ def initial_rbd_config(ceph_cluster, **kw):  # ,
     for pool_type in pool_types:
         pool_config = getdict(config.get(pool_type))
         is_ec_pool = True if "ec" in pool_type else False
-        if config_rbd_multi_pool(
+        if create_pools_and_images(
             rbd=rbd,
             multi_pool_config=pool_config,
             is_ec_pool=is_ec_pool,
@@ -449,6 +449,10 @@ def initial_rbd_config(ceph_cluster, **kw):  # ,
             config=config,
             client=client,
             is_secondary=kw.get("is_secondary", False),
+            create_pool_parallely=config[pool_type].get("create_pool_parallely", False),
+            create_image_parallely=config[pool_type].get(
+                "create_image_parallely", False
+            ),
         ):
             log.error(f"RBD configuration failed for {pool_type}")
             return None
