@@ -48,7 +48,7 @@ tests:
       module: test_cephadm.py
       name: deploy cluster
 
-##  Test cases to be executed
+#  Test cases to be executed
   - test:
       abort-on-fail: true
       config:
@@ -103,60 +103,127 @@ tests:
       abort-on-fail: false
       config:
         node: node6
+        pool: rbd
+        port: 5500
         steps:
           - config:
-              command: create_subsystem
-              args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                serial_num: 1
+              service: version          # CLI Version
+              command: version
+              base_cmd_args:
+                format: json
+                output: log
           - config:
-              command: create_listener
-              args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                port: 5001
-                pool: rbd
+              service: gateway
+              command: version         # gateway Version
+              base_cmd_args:
+                format: json
+                output: log
           - config:
-              command: add_host
-              args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                hostnqn: "*"
+              service: gateway
+              command: info             # gateway info
           - config:
-              command: create_block_device
-              args:
-                name: bdev1
-                image: image1
-                pool: rbd
+              service: log_level
+              command: get
+              base_cmd_args:
+                format: json
+                output: stdio
           - config:
-              command: add_namespace
+              service: log_level
+              command: set
+              base_cmd_args:
+                format: json
+                output: stdio
               args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                bdev: bdev1
+                level: error
+                print: error
           - config:
-              command: get_subsystems
+              service: log_level
+              command: disable
+              base_cmd_args:
+                format: json
+                output: stdio
           - config:
-              command: delete_listener
+              service: subsystem
+              command: add              # Subsystem add
               args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                pool: rbd
-                port: 5001
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                serial-number: 1
           - config:
-              command: remove_host
-              args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                hostnqn: "*"
+              service: subsystem
+              command: list             # Subsystem list
+              base_cmd_args:
+                format: json
           - config:
-              command: remove_namespace
+              service: connection
+              command: list             # Subsystem connection list
+              base_cmd_args:
+                format: json
               args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                bdev: bdev1
+                subsystem: nqn.2016-06.io.spdk:cnode1
           - config:
-              command: delete_subsystem
+              service: listener
+              command: add                # Listener add
               args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                gateway-name: node6
+                trsvcid: 5001
+                traddr: node6
+              base_cmd_args:
+                format: json
           - config:
-              command: delete_block_device
+              service: listener
+              command: list               # Listener list
               args:
-                name: bdev1
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: listener
+              command: delete             # listener del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                gateway-name: node6
+                trsvcid: 5001
+                traddr: node6
+          - config:
+              service: host
+              command: add              # add Host access
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                host: "*"
+          - config:
+              service: host
+              command: list             # List access hosts
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: host
+              command: delete           # access host del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                host: "*"
+          - config:
+              service: namespace
+              command: add              # Namespace add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                rbd-image: image1
+                rbd-pool: rbd
+                nsid: 1
+          - config:
+              service: namespace
+              command: list             # namespace list
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: namespace
+              command: delete           # namespace delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 1
+          - config:
+              service: subsystem
+              command: delete           # subsystem delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
       desc: Manage NVMeoF Subsystem entities
       destroy-cluster: false
       module: test_nvme_cli.py
