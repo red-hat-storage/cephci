@@ -45,12 +45,12 @@ tests:
               args:
                 all-available-devices: true
       desc: RHCS cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
 
-#  Configure Initiators
-#  Run IO on NVMe Targets
+  #  Configure Initiators
+  #  Run IO on NVMe Targets
   - test:
       abort-on-fail: true
       config:
@@ -81,7 +81,7 @@ tests:
               args:
                 - rbd pool init rbd
       desc: deploy NVMeoF service on GW node
-      destroy-clster: false
+      destroy-cluster: false
       do-not-skip-tc: true
       module: test_cephadm.py
       name: deploy NVMeoF service on GW node
@@ -176,7 +176,7 @@ tests:
            service_name: nvmeof.nvmeof_pool
            verify: true
       desc: Remove nvmeof service on GW node
-      destroy-clster: false
+      destroy-cluster: false
       module: test_orch.py
       name: Delete nvmeof gateway
 
@@ -198,6 +198,6 @@ tests:
               args:
                 - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
       desc: Delete nvmeof and rbd pool from ceph cluster
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: Delete NVMeOF pools
