@@ -103,6 +103,20 @@ tests:
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Limit PG log size
+      polarion-id: CEPH-83573252
+      module: test_pg_log_limit.py
+      desc: Verify PG log growth limit using pglog_hardlimit flag
+
   - test:
         name: Testing async recovery
         desc: Testing async recovery
