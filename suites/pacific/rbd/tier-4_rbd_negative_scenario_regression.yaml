@@ -70,7 +70,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node4
+        node: node6
         install_packages:
           - ceph-common
           - fio
