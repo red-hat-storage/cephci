@@ -17,6 +17,7 @@ tests:
       config:
         args:
           mon-ip: node1
+          allow-fqdn-hostname: true
         command: bootstrap
         service: cephadm
       desc: "Bootstrap the cluster with minimal configuration."
