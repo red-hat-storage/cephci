@@ -550,6 +550,7 @@ tests:
       desc: test mdlog trimming on primary
       polarion-id: CEPH-10544 #CEPH-10722, CEPH-10547
       module: sanity_rgw_multisite.py
+      comments: Known issue BZ-2230359
       clusters:
         ceph-pri:
           config:
