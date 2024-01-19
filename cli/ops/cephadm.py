@@ -163,7 +163,7 @@ def bootstrap(
         if not nodes:
             raise ResourceNotFoundError("Nodes are required to get mon id")
 
-        kw["mon-ip"] = get_node_ip(nodes, kw.pop("mon-ip"))
+    kw["mon-ip"] = get_node_ip(nodes, kw.pop("mon-ip"))
 
     # Check for bootstrap configs
     for k in kw.keys():

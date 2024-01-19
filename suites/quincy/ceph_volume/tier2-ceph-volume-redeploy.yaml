@@ -3,6 +3,7 @@
 #    - Bootstrap
 #    - Host management
 #    - Re-deploy non-collocated OSDs
+#    - Deploy OSDs with spec crush_device_class
 #------------------------------------------------------------------------------
 
 tests:
@@ -91,3 +92,21 @@ tests:
               size: 16GB
             db_devices:
               size: 32GB
+
+  - test:
+      name: OSDs deploy with spec crush_device_class
+      desc: Deploy OSD using the DriveGroup spec crush_device_class on specified paths
+      polarion-id: CEPH-83575587
+      module: test_osd_deploy_with_spec_crush_device_class.py
+      config:
+        spec:
+          service_type: osd
+          service_name: osd_sdd
+          placement:
+            label: "osd"
+          crush_device_class: ssd
+          spec:
+            data_devices:
+              paths:
+              - /dev/vdb
+              - /dev/vdc
