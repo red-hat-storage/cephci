@@ -133,6 +133,53 @@ class SnapUtils(object):
         snap_list = cmd_out.strip().split()
         return snap_list
 
+    def sched_snap_cleanup(
+        self, client, client_snap_path, subvol_name="", group_name="", fs_name="cephfs"
+    ):
+        """
+        To delete scheduled snapshots from client mount path.
+        Args:
+            client: ceph client to run cmd
+            client_snap_path : an absolute path of cephfs volume in client mount point
+            where snap-schedule is set, type - str
+            for eg., /mnt/cephfs_kernel/volumes/subvolumegroup1/subvolume1/ for schedule path
+            "/volumes/subvolumegroup1/subvolume1/.." or /mnt/cephfs_fuse/ for schedule path "/"
+        Returns: a list, each item referring to a scheduled snapshot name
+        """
+        snap_list = self.get_scheduled_snapshots(client, client_snap_path)
+        if subvol_name:
+            for snap in snap_list:
+                cmd = f"ceph fs subvolume snapshot rm {fs_name} {subvol_name} "
+                cmd += f"{snap} {group_name}"
+                try:
+                    client.exec_command(
+                        sudo=True,
+                        cmd=cmd,
+                        check_ec=False,
+                    )
+                except Exception as ex:
+                    if "No such file or directory" in str(ex):
+                        log.info(ex)
+                    else:
+                        log.error(
+                            f"Scheduled snapshot deletion failed with unexpected error - {ex}"
+                        )
+        else:
+            for snap in snap_list:
+                try:
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"rmdir {client_snap_path}/.snap/{snap}",
+                    )
+                except Exception as ex:
+                    if "No such file or directory" in str(ex):
+                        log.info(ex)
+                    else:
+                        log.error(
+                            f"Scheduled snapshot deletion failed with unexpected error - {ex}"
+                        )
+        return 0
+
     @staticmethod
     @retry(BaseException, tries=10, delay=10)
     def check_snap_sched_active(client, path, state="True", fs_name="cephfs"):

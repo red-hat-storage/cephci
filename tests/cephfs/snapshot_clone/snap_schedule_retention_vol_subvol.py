@@ -372,21 +372,13 @@ def snap_sched_test(snap_test_params):
         schedule_path = f"{subvol_path.strip()}/.."
     post_test_params["test_status"] = test_fail
     snap_util.remove_snap_schedule(client, schedule_path)
+
     if "subvol" in snap_test_params.get("test_case"):
-        for snap in snap_list_type["kernel"]:
-            cmd = f"ceph fs subvolume snapshot rm {snap_test_params['fs_name']} {snap_test_params['subvol_name']} "
-            cmd += f"{snap} {snap_test_params['group_name']}"
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-                check_ec=False,
-            )
+        subvol = snap_test_params["subvol_name"]
+        group = snap_test_params["group_name"]
+        snap_util.sched_snap_cleanup(client, io_path, subvol, group)
     else:
-        for snap in snap_list_type["fuse"]:
-            client.exec_command(
-                sudo=True,
-                cmd=f"rmdir {mnt_paths['fuse']}/.snap/{snap}",
-            )
+        snap_util.sched_snap_cleanup(client, io_path)
     umount_all(mnt_paths, snap_test_params)
     return post_test_params
 
@@ -449,7 +441,7 @@ def snap_retention_test(snap_test_params):
             ):
                 test_fail = 1
     log.info(f"Performing test{snap_test_params['test_case']} cleanup")
-    snap_list = snap_util.get_scheduled_snapshots(client, snap_path)
+
     post_test_params["test_status"] = test_fail
     schedule_path = snap_test_params["path"]
     snap_util.deactivate_snap_schedule(client, schedule_path)
@@ -457,21 +449,13 @@ def snap_retention_test(snap_test_params):
         client, snap_test_params["path"], ret_val=snap_test_params["retention"]
     )
     snap_util.remove_snap_schedule(client, schedule_path)
+
     if "subvol" in snap_test_params.get("test_case"):
-        for snap in snap_list:
-            cmd = f"ceph fs subvolume snapshot rm {snap_test_params['fs_name']} {snap_test_params['subvol_name']} "
-            cmd += f"{snap} {snap_test_params['group_name']}"
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-                check_ec=False,
-            )
+        subvol = snap_test_params["subvol_name"]
+        group = snap_test_params["group_name"]
+        snap_util.sched_snap_cleanup(client, io_path, subvol, group)
     else:
-        for snap in snap_list:
-            client.exec_command(
-                sudo=True,
-                cmd=f"rmdir {mnt_paths['fuse']}/.snap/{snap}",
-            )
+        snap_util.sched_snap_cleanup(client, io_path)
     umount_all(mnt_paths, snap_test_params)
     return post_test_params
 
@@ -694,10 +678,17 @@ def snap_retention_count_validate(snap_test_params):
     )
 
     log.info(f"Performing test{snap_test_params['test_case']} cleanup")
-    snap_util.sched_snap_cleanup(client, snap_path)
+    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+
+    if "subvol" in snap_test_params.get("test_case"):
+        subvol = snap_test_params["subvol_name"]
+        group = snap_test_params["group_name"]
+        snap_util.sched_snap_cleanup(client, snap_path, subvol, group)
+    else:
+        snap_util.sched_snap_cleanup(client, snap_path)
 
     post_test_params["test_status"] = test_fail
-    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+
     umount_all(mnt_paths, snap_test_params)
 
     return post_test_params
@@ -944,18 +935,13 @@ def snap_retention_service_restart(snap_test_params):
     if snap_util.validate_snap_retention(client, snap_path, snap_test_params["path"]):
         test_fail = 1
     log.info(f"Performing test{snap_test_params['test_case']} cleanup")
-    snap_list = snap_util.get_scheduled_snapshots(client, snap_path)
     post_test_params["test_status"] = test_fail
     schedule_path = snap_test_params["path"]
     snap_util.remove_snap_retention(
         client, snap_test_params["path"], ret_val=snap_test_params["retention"]
     )
     snap_util.remove_snap_schedule(client, schedule_path)
-    for snap in snap_list:
-        client.exec_command(
-            sudo=True,
-            cmd=f"rmdir {snap_path}/.snap/{snap}",
-        )
+    snap_util.sched_snap_cleanup(client, snap_path)
     client.exec_command(sudo=True, cmd=f"umount {snap_path}")
     return post_test_params
 
