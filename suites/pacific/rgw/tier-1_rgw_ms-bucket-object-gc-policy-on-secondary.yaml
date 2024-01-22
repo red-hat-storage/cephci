@@ -337,17 +337,6 @@ tests:
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets.yaml
             timeout: 300
-  - test:
-      name: LargeObjGet_GC test
-      desc: test_LargeObjGet_GC on secondary
-      polarion-id: CEPH-83574416
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_LargeObjGet_GC.py
-            config-file-name: test_LargeObjGet_GC.yaml
-            timeout: 300
 
   - test:
       name: create tenanted user

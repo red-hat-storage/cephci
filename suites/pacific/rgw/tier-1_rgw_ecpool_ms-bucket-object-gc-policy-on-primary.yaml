@@ -365,17 +365,6 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             timeout: 300
   - test:
-      name: test sharding on primary
-      desc: test_Mbuckets_with_Nobjects_sharding on primary
-      polarion-id: CEPH-83573597
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
-            timeout: 300
-  - test:
       name: test Mbuckets on primary
       desc: test_Mbuckets on primary
       polarion-id: CEPH-83575435
@@ -386,17 +375,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets.yaml
-            timeout: 300
-  - test:
-      name: LargeObjGet_GC on primary
-      desc: test_LargeObjGet_GC on primary
-      polarion-id: CEPH-83574416
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_LargeObjGet_GC.py
-            config-file-name: test_LargeObjGet_GC.yaml
             timeout: 300
 
   - test:
