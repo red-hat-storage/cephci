@@ -12,7 +12,7 @@ class Pool(Cli):
 
     def ls(self, **kw):
         """List pool details"""
-        cmd = f"{self.base_cmd} ls details{build_cmd_from_args(**kw)}"
+        cmd = f"{self.base_cmd} ls detail {build_cmd_from_args(**kw)}"
 
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
