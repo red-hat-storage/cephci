@@ -45,12 +45,12 @@ def run(ceph_cluster, **kw):
     if not out:
         raise RemoveOsdError("Failed to fetch the pools")
 
-    pools = loads(out[0])
+    pools = loads(out)
     pool_size = 2  # Update the pool size to 2
     for pool in pools:
         pool_name = pool.get("pool_name")
         out = CephAdm(osd_node).ceph.osd.pool.set(pool_name, "size", pool_size)
-        if not out:
+        if out:
             raise RemoveOsdError("Failed to update the pool size")
 
     # Perform osd remove
