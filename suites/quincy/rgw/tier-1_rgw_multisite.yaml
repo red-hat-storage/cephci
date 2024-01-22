@@ -338,7 +338,7 @@ tests:
 
   - test:
       name: bucket granular sync policy on allowed forbidden semantic with directional flow
-      desc: Test bucket granular sync policy on allowed allowed semantic with directional flow
+      desc: Test bucket granular sync policy on allowed forbidden semantic with directional flow
       polarion-id: CEPH-83575137
       module: sanity_rgw_multisite.py
       clusters:
@@ -346,4 +346,16 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_multisite_granular_bucketsync_allowed_forbidden.yaml
+            timeout: 300
+
+  - test:
+      name: bucket granular sync policy on forbidden forbidden semantic with directional flow
+      desc: Test bucket granular sync policy on forbidden forbidden semantic with directional flow
+      polarion-id: CEPH-83575139
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_multisite_granular_bucketsync_forbidden_forbidden.yaml
             timeout: 300
