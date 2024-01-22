@@ -7,7 +7,7 @@
 # Test-Case Covered:
 #	CEPH-83573264 - [Cephfs]Taking the cephfs down with down flag.
 #   CEPH-11267 - Execute FS Scrub Commands on cephfs
-#   CEPH-83575627 : Verify Snapshot retention works even after service restarts
+#   CEPH-83575627 - Verify Snapshot retention works after services restart, Verify snap-schedule on non-existent path
 #   CEPH-11264 - Move data and meta_data pool to different root level bucket in OSD tree.
 
 #=======================================================================================================================---

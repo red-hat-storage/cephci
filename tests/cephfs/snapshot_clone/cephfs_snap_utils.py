@@ -220,6 +220,8 @@ class SnapUtils(object):
         cmd = f"ceph fs snap-schedule activate {path}"
         if kw_args.get("sched_val"):
             cmd += f" {kw_args.get('sched_val')}"
+        if kw_args.get("fs_name"):
+            cmd += f" --fs {kw_args.get('fs_name')}"
         client.exec_command(sudo=True, cmd=cmd)
 
     def deactivate_snap_schedule(self, client, path, **kw_args):
@@ -237,9 +239,11 @@ class SnapUtils(object):
         cmd = f"ceph fs snap-schedule deactivate {path}"
         if kw_args.get("sched_val"):
             cmd += f" {kw_args.get('sched_val')}"
+        if kw_args.get("fs_name"):
+            cmd += f" --fs {kw_args.get('fs_name')}"
         client.exec_command(sudo=True, cmd=cmd)
 
-    def remove_snap_schedule(self, client, path):
+    def remove_snap_schedule(self, client, path, **kw_args):
         """
         To remove a snap-schedule for given path
         Args:
@@ -249,6 +253,8 @@ class SnapUtils(object):
         Returns: None
         """
         cmd = f"ceph fs snap-schedule remove {path}"
+        if kw_args.get("fs_name"):
+            cmd += f" --fs {kw_args.get('fs_name')}"
         client.exec_command(sudo=True, cmd=cmd)
 
     def validate_snap_schedule(self, client, path, sched_val):
@@ -325,6 +331,8 @@ class SnapUtils(object):
         """
         client = snap_params["client"]
         sched_cmd = f"ceph fs snap-schedule retention add {snap_params['path']} {snap_params['retention']}"
+        if snap_params.get("fs_name"):
+            sched_cmd += f" --fs {snap_params.get('fs_name')}"
         out, rc = client.exec_command(sudo=True, cmd=sched_cmd)
         log.info(out)
         if snap_params["validate"] is True:
@@ -380,6 +388,8 @@ class SnapUtils(object):
         cmd = f"ceph fs snap-schedule retention remove {path}"
         if kw_args.get("ret_val"):
             cmd += f" {kw_args.get('ret_val')}"
+        if kw_args.get("fs_name"):
+            cmd += f" --fs {kw_args.get('fs_name')}"
         client.exec_command(sudo=True, cmd=cmd)
 
     def add_snap_sched_data(self, client, io_path, run_time):

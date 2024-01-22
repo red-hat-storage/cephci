@@ -26,6 +26,7 @@
 #   CEPH-83574724   Create Clone of subvolume which is completely filled with data till disk quota exceeded
 #   CEPH-83575038   verify CRUD operation on metadata of subvolume's snapshot
 #   CEPH-83574681 Cancel the subvolume snapshot clonning
+#.  CEPH-83579271 Snap schedule and retention testing
 #===============================================================================================
 tests:
   -
