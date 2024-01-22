@@ -67,7 +67,7 @@ def run(ceph_cluster, **kw):
         )
 
         th1.start()
-        # th2.start()
+        th2.start()
 
         # While the IO's are in progress, do the look ups in parallel
         while th1.is_alive() or th2.is_alive():
