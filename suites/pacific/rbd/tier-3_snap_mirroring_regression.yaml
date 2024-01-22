@@ -238,6 +238,8 @@ tests:
               snap_schedule_intervals: #one value for each level specified above
                 - 1m
               io_size: 200M
+              test_config:
+                ignore_rollback: True
             ec_pool_config:
               ec-pool-k-m: "2,1"
               ec_profile: "ec_profile"
@@ -251,6 +253,8 @@ tests:
               snap_schedule_intervals:
                 - 1m
               io_size: 200M
+              test_config:
+                ignore_rollback: True
         ceph-rbd2:
           config:
             rep_pool_config:
@@ -264,6 +268,8 @@ tests:
               snap_schedule_intervals: #one value for each level specified above
                 - 1m
               io_size: 200M
+              test_config:
+                ignore_rollback: True
             ec_pool_config:
               ec-pool-k-m: "2,1"
               ec_profile: "ec_profile"
@@ -277,6 +283,8 @@ tests:
               snap_schedule_intervals:
                 - 1m
               io_size: 200M
+              test_config:
+                ignore_rollback: True
 
   - test:
       abort-on-fail: True
@@ -299,6 +307,8 @@ tests:
                 - 1m
               io_size: 200M
               way: "one-way"
+              test_config:
+                ignore_rollback: True
             ec_pool_config:
               ec-pool-k-m: "2,1"
               ec_profile: "ec_profile"
@@ -313,6 +323,8 @@ tests:
                 - 1m
               io_size: 200M
               way: "one-way"
+              test_config:
+                ignore_rollback: True
         ceph-rbd2:
           config:
             rep_pool_config:
@@ -327,6 +339,8 @@ tests:
                 - 1m
               io_size: 200M
               way: "one-way"
+              test_config:
+                ignore_rollback: True
             ec_pool_config:
               ec-pool-k-m: "2,1"
               ec_profile: "ec_profile"
@@ -341,3 +355,5 @@ tests:
                 - 1m
               io_size: 200M
               way: "one-way"
+              test_config:
+                ignore_rollback: True

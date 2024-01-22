@@ -41,7 +41,7 @@ def test_snap_mirror_snap_clone_ops(
         config = deepcopy(kw.get("config").get(pool_type))
         for pool, pool_config in getdict(config).items():
             multi_image_config = getdict(pool_config)
-            multi_image_config.pop("test_config", {})
+            test_config = multi_image_config.pop("test_config", {})
             for image, image_config in multi_image_config.items():
                 image_spec = f"{pool}/{image}"
                 mount_path = f"/tmp/mnt_{random_string(len=5)}"
@@ -151,38 +151,39 @@ def test_snap_mirror_snap_clone_ops(
                     )
                     return 1
 
-                log.info(
-                    f"Testing snap rollback functionality for {image_spec} in primary cluster"
-                )
-                snap_rollback_conf = {
-                    "pool": pool,
-                    "image": image,
-                    "image_config": image_config,
-                    "rbd": rbd_obj,
-                    "client": client_node,
-                    "is_secondary": False,
-                    "mount_path": f"{mount_path}/file_01",
-                    **kw,
-                }
-                rc = test_snap_rollback(**snap_rollback_conf)
-                if rc:
-                    log.error(
-                        f"Snap rollback failed for pool type {image_spec} in primary cluster"
+                if not test_config.get("ignore_rollback"):
+                    log.info(
+                        f"Testing snap rollback functionality for {image_spec} in primary cluster"
                     )
-                    return 1
+                    snap_rollback_conf = {
+                        "pool": pool,
+                        "image": image,
+                        "image_config": image_config,
+                        "rbd": rbd_obj,
+                        "client": client_node,
+                        "is_secondary": False,
+                        "mount_path": f"{mount_path}/file_01",
+                        **kw,
+                    }
+                    rc = test_snap_rollback(**snap_rollback_conf)
+                    if rc:
+                        log.error(
+                            f"Snap rollback failed for pool type {image_spec} in primary cluster"
+                        )
+                        return 1
 
-                log.info(
-                    f"Testing snap rollback functionality for {image_spec} in secondary cluster"
-                )
-                snap_rollback_conf["rbd"] = sec_obj
-                snap_rollback_conf["client"] = sec_client
-                snap_rollback_conf["is_secondary"] = True
-                rc = test_snap_rollback(**snap_rollback_conf)
-                if rc:
-                    log.error(
-                        f"Snap rollback did not work as expected for pool type {image_spec} in secondary cluster"
+                    log.info(
+                        f"Testing snap rollback functionality for {image_spec} in secondary cluster"
                     )
-                    return 1
+                    snap_rollback_conf["rbd"] = sec_obj
+                    snap_rollback_conf["client"] = sec_client
+                    snap_rollback_conf["is_secondary"] = True
+                    rc = test_snap_rollback(**snap_rollback_conf)
+                    if rc:
+                        log.error(
+                            f"Snap rollback did not work as expected for pool type {image_spec} in secondary cluster"
+                        )
+                        return 1
 
                 log.info(
                     f"Remove a user defined snap from secondary cluster for {image_spec}"
