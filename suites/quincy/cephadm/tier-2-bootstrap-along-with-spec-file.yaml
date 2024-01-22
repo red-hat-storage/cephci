@@ -26,10 +26,13 @@ tests:
             spec:
               - service_type: host
                 hostname: node1
+                addr: node1
               - service_type: host
                 hostname: node2
+                addr: node2
               - service_type: host
                 hostname: node3
+                addr: node3
               - service_type: mon
                 placement:
                   hosts:
