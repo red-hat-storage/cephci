@@ -9,8 +9,8 @@ import plotly.io as pio
 import yaml
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.gateway import delete_gateway
-from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
+from ceph.nvmegw_cli.subsystem import Subsystem
+from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof, test_orch
@@ -41,6 +41,7 @@ csv_op = []
 RBD_MAP = "rbd map {pool}/{image}"
 RBD_UNMAP = "rbd unmap {device}"
 ARTIFACTS_DIR = tempfile.TemporaryDirectory().name
+cli_image = str()
 
 
 def initialize():
@@ -451,7 +452,8 @@ def nvmeof(ceph_cluster, **args):
 
     # Configure NVMEoF Gateway
     gw_node = get_node_by_id(ceph_cluster, args["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
     initiator = get_node_by_id(ceph_cluster, args["initiator_node"])
     initiator.exec_command(cmd=f"mkdir -p {ARTIFACTS_DIR}", sudo=True)
 
@@ -490,8 +492,14 @@ def nvmeof(ceph_cluster, **args):
         try:
             for i in range(args["image"]["count"]):
                 rbd.create_image(pool, f"{name}-image{i}", args["image"]["size"])
-                gateway.create_block_device(f"{name}-bdev{i}", f"{name}-image{i}", pool)
-                gateway.add_namespace(subsystem["nqn"], f"{name}-bdev{i}")
+                ns_args = {
+                    "args": {
+                        "subsystem": subsystem["nqn"],
+                        "rbd-pool": pool,
+                        "rbd-image": f"{name}-image{i}",
+                    }
+                }
+                gateway.namespace.add(**ns_args)
 
             # Run with profiles and collect results
             for io_profile in args["io_profiles"]:
@@ -577,7 +585,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                       gw_node: node6
                       initiator_node: node7
     """
-    global results, csv_op
+    global results, csv_op, cli_image
     results, csv_op = initialize()
 
     config = kwargs["config"]
@@ -594,7 +602,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            NVMeCLI.CEPH_NVMECLI_IMAGE = value
+            cli_image = value
             break
 
     try:
@@ -614,10 +622,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         # cleanup pool
         if not config.get("do_not_delete_pool"):
             rbd_obj.clean_up(pools=[rbd_pool])
-
-        # delete NVMe Gateway
-        if config.get("delete_gateway"):
-            delete_gateway(get_node_by_id(ceph_cluster, config["delete_gateway"]))
 
         # Build artifacts, Create CSV and Json file
         run_cfg = kwargs["run_config"]

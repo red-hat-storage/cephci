@@ -42,7 +42,7 @@ def configure_subsystems(rbd, pool, subsystem, config):
             # Create image
             for num in range(count):
                 p.spawn(rbd.create_image, pool, f"{name}-image{num}", size)
-            namespace_args = {**sub_args, **{"rbd-pool": pool}}
+        namespace_args = {**sub_args, **{"rbd-pool": pool}}
         with parallel() as p:
             # Create namespace in gateway
             for num in range(count):
@@ -70,6 +70,8 @@ def initiators(ceph_cluster, gateway, config):
             listener_port: 5002
             node: node7
     """
+    # import pdb
+    # pdb.set_trace()
     client = get_node_by_id(ceph_cluster, config["node"])
     initiator = Initiator(client)
     cmd_args = {
@@ -245,11 +247,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
-    cli_image = None
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            cli_image = value
+            Subsystem.NVMEOF_CLI_IMAGE = value
             break
 
     if config.get("cleanup-only"):
@@ -259,7 +260,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     try:
         gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
         gw_port = config.get("gw_port", 5500)
-        Subsystem.NVMEOF_CLI_IMAGE = cli_image
         subsystem = Subsystem(gw_node, gw_port)
         if config.get("install"):
             cfg = {
