@@ -485,12 +485,12 @@ tests:
       polarion-id: CEPH-83575433
 
   - test:
-      name: S3CMD object download on tertiary
+      name: S3CMD object download on primary
       desc: S3CMD object download or GET
       polarion-id: CEPH-83575477
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-ter:
+        ceph-pri:
           config:
             script-name: ../s3cmd/test_s3cmd.py
             config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
