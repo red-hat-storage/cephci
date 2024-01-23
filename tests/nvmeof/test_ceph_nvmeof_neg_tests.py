@@ -10,8 +10,9 @@ from time import sleep
 from ceph.ceph import Ceph, SocketTimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
+from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
+from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
@@ -29,12 +30,14 @@ from utility.log import Log
 from utility.utils import find_free_port, generate_unique_id
 
 LOG = Log(__name__)
+cli_image = str()
 
 
 def test_ceph_83575812(ceph_cluster, rbd, pool, config):
     """CEPH-83575812 Remove the image during NVMe images are in use."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
     listener_port = find_free_port(gw_node)
     subsystem = dict()
     subsystem.update(
@@ -61,8 +64,10 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "1G")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
         with parallel() as p:
@@ -87,7 +92,8 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
 def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     """CEPH-83576084: Delete-recreate bdev in loop and rediscover namespace."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -114,8 +120,15 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "1G")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
+        ns_args = {
+            "args": {
+                "subsystem": subsystem["nqn"],
+                "rbd-pool": pool,
+                "rbd-image": img,
+                "nsid": 1,
+            }
+        }
+        gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
@@ -130,7 +143,7 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         _file = f"{_dir}/test.log"
 
         def check_client(verify=False):
-            disc_port = {"trsvcid": listener_port}
+            disc_port = {"trsvcid": 8009}
             _disc_cmd = {**cmd_args, **disc_port, **json_format}
             initiator.disconnect_all()
             sub_nqns, _ = initiator.discover(**_disc_cmd)
@@ -162,10 +175,11 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         client.exec_command(sudo=True, cmd=f"mount {target} {_dir}")
         client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
 
+        _ns_args = {"args": {"subsystem": subsystem["nqn"], "nsid": 1}}
         for _ in "check":
             client.exec_command(sudo=True, cmd=f"umount {_dir}")
-            gateway.remove_namespace(subsystem["nqn"], img)
-            gateway.add_namespace(subsystem["nqn"], img)
+            gateway.namespace.delete(**_ns_args)
+            gateway.namespace.add(**ns_args)
             check_client(verify=True)
 
         LOG.info("Validation of CEPH-83576084 is successful.")
@@ -184,7 +198,8 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
 def test_ceph_83575467(ceph_cluster, rbd, pool, config):
     """CEPH-83575467: Perform restart and validate the gateway entities"""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -212,13 +227,20 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
         for i in range(5):
             img = f"{name}-image{i}"
             rbd.create_image(pool, img, "500M")
-            gateway.create_block_device(img, img, pool)
-            gateway.add_namespace(subsystem["nqn"], img)
+            ns_args = {
+                "args": {
+                    "subsystem": subsystem["nqn"],
+                    "rbd-pool": pool,
+                    "rbd-image": img,
+                }
+            }
+            gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
+        sub_args = {"base_cmd_args": {"format": "json"}}
         initiators(ceph_cluster, gateway, initiator_cfg)
-        _, gw_info_bkp = gateway.get_subsystems()
-        gw_info_bkp = json.loads(gw_info_bkp.split("\n", 1)[1])
+        _, gw_info_bkp = gateway.list(**sub_args)
+        gw_info_bkp = json.loads(gw_info_bkp.strip())["subsystems"]
 
         # restart nvmeof service
         restart_cfg = {
@@ -230,8 +252,8 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
             }
         }
         test_orch.run(ceph_cluster, **restart_cfg)
-        _, gw_info = gateway.get_subsystems()
-        gw_info = json.loads(gw_info.split("\n", 1)[1])
+        _, gw_info = gateway.list(**sub_args)
+        gw_info = json.loads(gw_info.strip())["subsystems"]
 
         if gw_info != gw_info_bkp:
             raise Exception(
@@ -253,7 +275,8 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
 def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     """CEPH-83576085: Perform map and unmap NVMe namespaces in loop."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -292,14 +315,16 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "1G")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
         initiator = Initiator(client)
 
-        disc_port = {"trsvcid": listener_port}
+        disc_port = {"trsvcid": 8009}
         _disc_cmd = {**cmd_args, **disc_port, **json_format}
         initiator.disconnect_all()
         sub_nqns, _ = initiator.discover(**_disc_cmd)
@@ -346,7 +371,8 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
 def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     """CEPH-83576087: Reboot client node and validate NVMe namespaces"""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -385,15 +411,17 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "1G")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
         initiator = Initiator(client)
 
         initiator.disconnect_all()
-        disc_port = {"trsvcid": listener_port}
+        disc_port = {"trsvcid": 8009}
         _disc_cmd = {**cmd_args, **disc_port, **json_format}
         sub_nqns, _ = initiator.discover(**_disc_cmd)
         LOG.debug(sub_nqns)
@@ -448,7 +476,8 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
 def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     """CEPH-83576093: Perform reboot on GW node and validate the namespaces."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -476,8 +505,10 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "1G")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
@@ -492,7 +523,7 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         _dir = f"/tmp/dir_{generate_unique_id(4)}"
         _file = f"{_dir}/test.log"
 
-        disc_port = {"trsvcid": listener_port}
+        disc_port = {"trsvcid": 8009}
         _disc_cmd = {**cmd_args, **disc_port, **json_format}
         initiator.disconnect_all()
         sub_nqns, _ = initiator.discover(**_disc_cmd)
@@ -550,7 +581,8 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
 def test_ceph_83575455(ceph_cluster, rbd, pool, config):
     """CEPH-83575455: Validate Host access failures"""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator = Initiator(client)
     initiator_nqn = initiator.nqn()
@@ -584,8 +616,10 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "5G")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
 
@@ -596,7 +630,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         }
 
         json_format = {"output-format": "json"}
-        disc_port = {"trsvcid": listener_port}
+        disc_port = {"trsvcid": 8009}
         _disc_cmd = {**cmd_args, **disc_port, **json_format}
         initiator.disconnect_all()
         sub_nqns, _ = initiator.discover(**_disc_cmd)
@@ -627,7 +661,8 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         # Remove client host access to the namespaces
         # Check for the non-existence of nvme namespaces
         # Create a file to check IO failure on mount point
-        gateway.remove_host(subnqn=subsystem["nqn"], hostnqn=initiator_nqn)
+        host_args = {"args": {"subsystem": subsystem["nqn"], "host": initiator_nqn}}
+        gateway.host.delete(**host_args)
         sleep(20)
         targets = initiator.list_spdk_drives()
         if targets:
@@ -647,7 +682,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
 
         # Add client host access
         # Check the existence of the NVMe namespaces
-        gateway.add_host(subnqn=subsystem["nqn"], hostnqn=initiator_nqn)
+        gateway.host.add(**host_args)
         sleep(10)
         targets = initiator.list_spdk_drives()
         if not targets:
@@ -676,7 +711,8 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     #       since this issue at RBD operations are considered
     #       for GA release. This test case will fail at Tech Preview.
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -710,8 +746,14 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
         rbd.create_image(pool, img2, "5G")
 
         for img in [img1, img2]:
-            gateway.create_block_device(img, img, pool)
-            gateway.add_namespace(subsystem["nqn"], img)
+            ns_args = {
+                "args": {
+                    "subsystem": subsystem["nqn"],
+                    "rbd-pool": pool,
+                    "rbd-image": img,
+                }
+            }
+            gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
         # Run IOS on nvme namespaces
@@ -768,7 +810,8 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         int: 0 on success, 1 on failure.
     """
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gateway = NVMeCLI(gw_node)
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     mon_obj = MonitorWorkflows(node=cephadm)
     rados_obj = RadosOrchestrator(node=cephadm)
@@ -798,8 +841,10 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "10G")
-        gateway.create_block_device(img, img, pool)
-        gateway.add_namespace(subsystem["nqn"], img)
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        gateway.namespace.add(**ns_args)
 
         config.update(initiator_cfg)
         mon_host = ceph_cluster.get_nodes(role="mon")[0]
@@ -861,7 +906,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     operation: remove
 
     """
-
+    global cli_image
     LOG.info("Running Ceph Ceph NVMEoF Negative tests.")
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
@@ -870,7 +915,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            NVMeCLI.CEPH_NVMECLI_IMAGE = value
+            cli_image = value
             break
 
     try:
