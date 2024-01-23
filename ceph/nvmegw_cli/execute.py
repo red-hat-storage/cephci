@@ -29,6 +29,6 @@ class ExecuteCommandMixin:
                 config_dict_to_string(cmd_args),
             ]
         )
-        out = self.node.exec_command(cmd=command)
+        out = self.node.exec_command(cmd=command, sudo=True)
         LOG.info(out)
         return out
