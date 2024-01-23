@@ -24,7 +24,6 @@ globals:
           - node-exporter
           - alertmanager
           - crash
-          - rgw
         no-of-volumes: 4
         disk-size: 15
       node3:
@@ -33,7 +32,6 @@ globals:
           - osd
           - node-exporter
           - crash
-          - rgw
           - mds
         no-of-volumes: 4
         disk-size: 15
@@ -49,7 +47,6 @@ globals:
           - node-exporter
           - alertmanager
           - crash
-          - rgw
         no-of-volumes: 4
         disk-size: 15
       node6:
@@ -58,7 +55,6 @@ globals:
           - osd
           - node-exporter
           - crash
-          - rgw
           - mds
         no-of-volumes: 4
         disk-size: 15
