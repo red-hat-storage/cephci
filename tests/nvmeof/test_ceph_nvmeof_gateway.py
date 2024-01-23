@@ -70,8 +70,6 @@ def initiators(ceph_cluster, gateway, config):
             listener_port: 5002
             node: node7
     """
-    # import pdb
-    # pdb.set_trace()
     client = get_node_by_id(ceph_cluster, config["node"])
     initiator = Initiator(client)
     cmd_args = {
