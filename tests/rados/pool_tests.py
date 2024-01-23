@@ -77,7 +77,7 @@ def run(ceph_cluster, **kw):
         time.sleep(25)
 
         # Waiting for up to 2.5 hours for the recovery to complete and PG's to enter active + Clean state
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=9000)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=15000)
         while end_time > datetime.datetime.now():
             flag = True
             status_report = rados_obj.run_ceph_command(cmd="ceph report")

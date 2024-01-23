@@ -62,7 +62,7 @@ globals:
             - mds
             - mon
             - mgr
-            - osd
+            - osd-bak
           root_password: passwd
           volumes:
             - /dev/sda

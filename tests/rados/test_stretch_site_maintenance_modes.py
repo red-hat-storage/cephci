@@ -94,12 +94,12 @@ def run(ceph_cluster, **kw):
     # Checking which DC to be added to maintenance mode is It data site or Arbiter site
     if affected_site in [dc_1_name, dc_2_name]:
         log.debug(
-            f"Proceeding to add hosts of the data site {dc_1_name} into maintenance mode"
+            f"Proceeding to add hosts of the data site {dc_2_name} into maintenance mode"
         )
         # Proceeding to add hosts into maintenance mode, adding site 1
         # Getting the name of the active mgr instance host for failover
         # Checking for every host as a site might have more than 1 mgr instance, and the mgr can failover in same site
-        for host in dc_1_hosts:
+        for host in dc_2_hosts:
             log.debug(f"Proceeding to add host : {host} into maintenance mode")
             mgr_dump = "ceph mgr dump"
             active_mgr = rados_obj.run_ceph_command(cmd=mgr_dump, client_exec=True)

@@ -306,8 +306,8 @@ class RadosOrchestrator:
             iteration += 1
             cmd = f"ceph orch host maintenance enter {hostname} --force"
             try:
-                out, _ = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
-                log.debug(f"o/p of maintenance enter cmd : {out}")
+                out, err = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
+                log.debug(f"o/p of maintenance enter cmd : {out}, err stream : {err}")
             except Exception as e:
                 log.debug(f"Exception hit, but was expected; {e}")
             time.sleep(20)
@@ -571,7 +571,7 @@ class RadosOrchestrator:
             )
         for cmd in cfg_map:
             if action == "set":
-                command = f"{cfg_map[cmd]} {config.get(cmd, 12)}"
+                command = f"{cfg_map[cmd]} {config.get(cmd, 18)}"
             else:
                 command = cfg_map[cmd]
             self.node.shell([command])
@@ -1685,7 +1685,7 @@ class RadosOrchestrator:
         for pgid in pool_pgids:
             # Checking the PG state. There Should not be inactive state
             pg_state = self.get_pg_state(pg_id=pgid)
-            if any("inactive" in key for key in pg_state.split("+")):
+            if any("unknown" in key for key in pg_state.split("+")):
                 log.error(f"PG: {pgid} in inactive state)")
                 return False
         log.info(

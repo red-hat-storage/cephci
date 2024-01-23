@@ -107,11 +107,14 @@ def get_device_path(host, osd_id):
     Returns:  device path
     """
     out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
-    container_id = [
-        item["Names"][0]
-        for item in json.loads(out)
-        if f"osd.{osd_id}" in item["Command"]
-    ][0]
+    out = json.loads(out)
+    log.debug(f"containers on the host :\n {out}\n")
+    try:
+        container_id = [
+            item["Names"][0] for item in out if f"osd.{osd_id}" in item["Command"]
+        ][0]
+    except Exception as err:
+        log.error(f"host exception : {err}")
     should_not_be_empty(container_id, "Failed to retrieve container id")
     # fetch device path by osd_id
     volume_out, _ = host.exec_command(
