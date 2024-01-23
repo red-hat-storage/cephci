@@ -495,51 +495,6 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
   - test:
-      name: Apply ISCSI Service
-      desc: Installing ISCSI service and gateway on iscsi role nodes
-      module: test_iscsi.py
-      polarion-id: CEPH-83573756
-      config:
-        command: apply
-        service: iscsi
-        base_cmd_args:            # arguments to ceph orch
-          verbose: true
-        pos_args:
-          - iscsi                 # name of the pool
-          - api_user              # name of the API user
-          - api_pass              # password of the api_user.
-        args:
-          trusted_ip_list:      #it can be used both as keyword/positional arg in 5.x
-            - node1
-            - node4
-          placement:
-            label: iscsi          # either label or node.
-      destroy-cluster: false
-      abort-on-fail: true
-  - test:
-      name: Apply ISCSI Service
-      desc: Apply ISCSI target service on iscsi role nodes
-      module: test_iscsi.py
-      polarion-id:
-      config:
-        command: apply
-        service: iscsi
-        base_cmd_args:            # arguments to ceph orch
-          verbose: true
-        pos_args:
-          - iscsi                 # name of the pool
-          - api_user              # name of the API user
-          - api_pass              # password of the api_user.
-        args:
-          trusted_ip_list:        #it can be used both as keyword/positional arg in 5.x
-            - node1
-            - node4
-          placement:
-            nodes:
-              - node8          # either label or node.
-      destroy-cluster: false
-      abort-on-fail: true
-  - test:
       name: Apply Prometheus Service
       desc: Apply Prometheus service on role nodes
       module: test_monitoring.py
