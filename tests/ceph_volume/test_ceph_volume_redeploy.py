@@ -78,7 +78,9 @@ def run(ceph_cluster, **kw):
     CephAdm(nodes=installer, mount=file).ceph.orch.apply(**c)
 
     # Wait for cluster health to be ok
-    wait_for_cluster_health(node=installer, status="HEALTH_OK")
+    wait_for_cluster_health(
+        node=installer, status="HEALTH_OK", timeout=1800, interval=30
+    )
 
     # Get the lvm list before OSD Zap
     running_containers, _ = get_running_containers(
