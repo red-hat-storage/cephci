@@ -706,10 +706,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
 
 
 def test_ceph_83575813(ceph_cluster, rbd, pool, config):
-    """CEPH-83575813: Perform RBD operations shrink and expand on images."""
-    # Todo: This Test case has to be re-visited,
-    #       since this issue at RBD operations are considered
-    #       for GA release. This test case will fail at Tech Preview.
+    """CEPH-83575813: Perform NVMeoF RBD operations expand on images."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     Subsystem.NVMEOF_CLI_IMAGE = cli_image
     gateway = Subsystem(gw_node, 5500)
@@ -742,10 +739,10 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
         # Create image
         img1 = f"{name}-image1"
         img2 = f"{name}-image2"
-        rbd.create_image(pool, img1, "10G")
-        rbd.create_image(pool, img2, "5G")
+        imgs = {img1: "1G", img2: "2G"}
 
-        for img in [img1, img2]:
+        for img, size in imgs.items():
+            rbd.create_image(pool, img, size)
             ns_args = {
                 "args": {
                     "subsystem": subsystem["nqn"],
@@ -757,33 +754,36 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
 
         config.update(initiator_cfg)
         # Run IOS on nvme namespaces
+        initiator.disconnect_all()
         initiators(ceph_cluster, gateway, initiator_cfg)
 
-        def check(_node, size):
-            out, _ = _node.exec_command(sudo=True, cmd="lsblk -J")
+        def check(_node, _size):
+            out, _ = _node.exec_command(sudo=True, cmd="lsblk -bJ")
             for _img in json.loads(out)["blockdevices"]:
-                if _img["name"].startswith("nvme") and _img["size"] == size:
+                if _img["name"].startswith("nvme") and _img["size"] == _size:
+                    LOG.info(f"Found Image with {_size}: {_img}")
                     return True
-            raise Exception(f"Did not find NVMe disk with Size {size}")
+            raise Exception(f"Did not find NVMe disk with Size {_size}")
 
-        for _size in ["10G", "5G"]:
-            check(client, _size)
+        rbd_objs = rbd.get_disk_usage_for_pool(pool)["images"]
+        for img in imgs.keys():
+            rbd_img_size = [
+                i["provisioned_size"] for i in rbd_objs if img == i["name"]
+            ][0]
+            check(client, rbd_img_size)
 
-        # shrink and expand the images
-        # validate the sizes at the client side
-        rbd.image_resize(pool, img1, "11G")
-        rbd.image_resize(pool, img2, "4G")
+        # Expand the images and validate the sizes at the client side
+        gateway.namespace.resize(
+            **{"args": {"subsystem": subsystem["nqn"], "nsid": 1, "size": 3000}}
+        )
+        gateway.namespace.resize(
+            **{"args": {"subsystem": subsystem["nqn"], "nsid": 2, "size": 4000}}
+        )
+
+        for img in rbd.get_disk_usage_for_pool(pool)["images"]:
+            check(client, img["provisioned_size"])
         initiator.disconnect_all()
-        cmd_args = {
-            "transport": "tcp",
-            "traddr": gateway.node.ip_address,
-            "nqn": "nqn.2016-06.io.spdk:ceph_83575813",
-        }
-        conn_port = {"trsvcid": config["listener_port"]}
-        _conn_cmd = {**cmd_args, **conn_port}
-        LOG.debug(initiator.connect(**_conn_cmd))
-        for _size in ["11G", "4G"]:
-            check(client, _size)
+        initiators(ceph_cluster, gateway, initiator_cfg)
         LOG.info("Validation of CEPH-83575813 is successful.")
     except Exception as err:
         raise Exception(err)

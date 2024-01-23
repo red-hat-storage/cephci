@@ -17,3 +17,6 @@ class Namespace(NVMeGWCLI):
 
     def list(self, **kwargs):
         return self.run_nvme_cli("list", **kwargs)
+
+    def resize(self, **kwargs):
+        return self.run_nvme_cli("resize", **kwargs)
