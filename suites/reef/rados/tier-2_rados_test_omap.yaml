@@ -230,3 +230,9 @@ tests:
       desc: check for periodic trimming of osdmaps
       module: test_osdmap_trim.py
       polarion-id: CEPH-10046
+
+  - test:
+      name: Trimming of onodes
+      desc: check for the onode trimming in the cluster
+      module: test_osd_onode_trimming.py
+      polarion-id: CEPH-83575269
