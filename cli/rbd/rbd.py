@@ -311,6 +311,7 @@ class Rbd(Cli):
           Example:
             Supported keys:
                 source-image-or-snap-spec(str) : [<pool-name>/[<namespace>/]]<image-name>
+                                                    [@<snap-name>])
                 path-name(str) : export file (or '-' for stdout)
                 See rbd help export for more supported keys
         """
@@ -320,3 +321,49 @@ class Rbd(Cli):
         cmd = f"{self.base_cmd} export {image_spec} {export_path} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd)
+
+    def copy(self, **kw):
+        """
+        This method is used to copy image
+        Args:
+            kw(dict): Key/Value pairs that needs to be provided
+            Example:
+                Supported keys:
+                    source-image-or-snap-spec(str) : [<pool-name>/[<namespace>/]]<image-name>
+                                                    [@<snap-name>])
+                    dest-image-spec(str) : [<pool-name>/[<namespace>/]]<image-name>
+                    pool(str) : source pool name
+                    image(str) : source image name
+                    snap(str) : source snap name
+                    dest-pool(str) : destination pool name
+                    dest(str) : destination image name
+                    See rbd help copy for more supported keys
+        """
+        kw_copy = deepcopy(kw)
+        image_spec = kw_copy.pop("source-image-or-snap-spec", "")
+        dest_image_spec = kw_copy.pop("dest-image-spec", "")
+        cmd = f"{self.base_cmd} copy {image_spec} {dest_image_spec} {build_cmd_from_args(**kw_copy)}"
+
+        return self.execute_as_sudo(cmd=cmd)
+
+    def rename(self, **kw):
+        """
+        Rename the size of image.
+        kw(dict): Key/value pairs that needs to be provided to the installer
+            Example::
+            Supported keys:
+                source-image-spec(str) : [<pool-name>/[<namespace>/]]<image-name>
+                dest-image-spec(str) : [<pool-name>/[<namespace>/]]<image-name>
+                pool(str) : source pool name
+                image(str): name of the image on which resize should happen
+                size (int)     :  updated size of image
+                dest-pool(str) : destination pool name
+                dest(str) : destination image name
+                See rbd help rename for more supported keys
+        """
+        kw_copy = deepcopy(kw)
+        image_spec = kw_copy.pop("source-image-spec", "")
+        dest_spec = kw_copy.pop("dest-image-spec", "")
+        cmd = f"{self.base_cmd} rename {image_spec} {dest_spec} {build_cmd_from_args(**kw_copy)}"
+
+        return self.execute_as_sudo(cmd=cmd, check_ec=False, long_running=False)

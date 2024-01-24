@@ -145,7 +145,7 @@ def krbd_io_handler(**kw):
                     config["time_taken"] = run_fio(
                         client_node=client,
                         filename=file_name,
-                        runtime=config.get("runtime", 30),
+                        run_time=config.get("run_time", 30),
                         size=config.get("file_size", "100M"),
                         get_time_taken=config.get("get_time_taken", False),
                         cmd_timeout=config.get("cmd_timeout"),
@@ -159,7 +159,7 @@ def krbd_io_handler(**kw):
                     if config.get("io_size"):
                         fio_args.update({"size": config.get("io_size")})
                     else:
-                        fio_args.update({"runtime": config.get("runtime", 30)})
+                        fio_args.update({"run_time": config.get("run_time", 30)})
                     if config.get("get_time_taken"):
                         fio_args.update(
                             {"get_time_taken": config.get("get_time_taken")}
