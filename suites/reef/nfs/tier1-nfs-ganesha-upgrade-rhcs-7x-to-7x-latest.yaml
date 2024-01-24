@@ -58,14 +58,6 @@ tests:
               args:
                 all-available-devices: true
           - config:
-              command: shell
-              args:
-                - ceph
-                - fs
-                - volume
-                - create
-                - cephfs
-          - config:
               command: apply
               service: rgw
               pos_args:
@@ -74,19 +66,19 @@ tests:
                 placement:
                   label: rgw
           - config:
-              command: apply
-              service: mds
-              base_cmd_args:
-                verbose: true
-              pos_args:
-                - cephfs
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
               args:
                 placement:
-                  nodes:
-                    - node2
-                    - node6
-                  limit: 2
-                  sep: " "
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
           - config:
               args:
                 - "ceph osd pool create rbd"
@@ -163,6 +155,18 @@ tests:
       abort-on-fail: true
 
   - test:
+      name: Setup NFS-Ganesha cluster
+      desc: Setup NFS-Ganesha cluster
+      module: nfs_verify_multiple_parallel_io_and_lookups.py
+      polarion-id: CEPH-83581304
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+        io: false
+        cleanup: false
+
+  - test:
       name: Upgrade cluster to latest RHCS 7.x along with NFS-Ganesha IOs
       desc: Upgrade cluster to latest RHCS 7.x along with NFS-Ganesha IOs
       module: test_parallel.py
@@ -176,29 +180,7 @@ tests:
             config:
               nfs_version: 4.1
               clients: 4
-        - test:
-            name: Nfs Verify File Operations
-            module: nfs_verify_file_operations.py
-            desc: Change the ownership (user and group) of files within the NFS export
-            polarion-id: CEPH-83577601
-            abort-on-fail: false
-            config:
-              nfs_version: 4.1
-              clients: 3
-              file_count: 100
-              operations:
-                client01 : create_files
-                client02 : change_ownership
-                client03 : perform_lookups
-        - test:
-            name: Nfs Verify Readdir Ops
-            module: nfs_verify_readdir_ops.py
-            desc: Perform readir operation from clients
-            polarion-id: CEPH-83577590
-            abort-on-fail: false
-            config:
-              nfs_version: 4.1
-              clients: 4
+              setup: false
         - test:
             name: Upgrade cluster to latest RHCS 7.x
             desc: Upgrade cluster to latest RHCS 7.x
@@ -222,15 +204,15 @@ tests:
         clients: 4
 
   - test:
-    name: Nfs Verify read write operation permissions
-    module: nfs_verify_read_write_operations.py
-    desc: Perform read write without permissions on nfs share
-    polarion-id: CEPH-83575941
-    abort-on-fail: false
-    config:
-      nfs_version: 4.1
-      clients: 3
-      operation: verify_permission
+      name: Nfs Verify read write operation permissions
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write without permissions on nfs share
+      polarion-id: CEPH-83575941
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_permission
 
   - test:
       name: Nfs verify read and write non existing file
