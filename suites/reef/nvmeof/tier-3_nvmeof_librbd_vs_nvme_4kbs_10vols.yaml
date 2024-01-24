@@ -1,5 +1,6 @@
 # Basic IO Perf comparison test LibRBD vs NVMeoF protocols
-# cluster configuration: conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml
+# cluster configuration: conf/reef/nvmeof/ceph_nvmeof_sanity.yaml
+# Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 
 tests:
 
@@ -44,7 +45,7 @@ tests:
               args:
                 all-available-devices: true
       desc: RHCS cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
 
@@ -67,66 +68,62 @@ tests:
       name: configure Ceph client for NVMe tests
       polarion-id: CEPH-83573758
 
-  # Test IO Perf
+#   Test IO Perf
   - test:
-      name: libRBD VS NVMeoF - WriteNRead IOtype
-      description: WriteNRead IO comparison on 10G image with 16kb-block-size
+      name: libRBD VS NVMeoF - WriteNRead IOtype 4kb 10vols
+      description: WriteNRead IO-comparison on 10G-multi-volumes with 4kb blocksize
       module: test_io_perf.py
-      polarion-id: CEPH-83576114
+      polarion-id: CEPH-83576116
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
           - FIO_WRITE_BS_4k_IODepth8_LIBAIO
           - FIO_READ_BS_4k_IODepth8_LIBAIO
-        io_overrides:
-          bs: 16k
         rbd_pool: rbd
         do_not_delete_pool: true
         io_exec:
             -   proto: librbd
                 image:
-                    size: 10G
-                    count: 1
+                    size: 2G
+                    count: 10
                 node: node10             # client node
             -   proto: nvmeof
                 image:
-                    size: 10G
-                    count: 1
+                    size: 2G
+                    count: 10
                 gw_node: node6          # gateway node
                 initiator_node: node10   # client node
                 install_gw: true
 
   - test:
-      name: libRBD VS NVMeoF ReadWrite IOType 16k blocksize
-      description: ReadWrite IOType comparison on 10G image with 16kb-block-size
+      name: libRBD VS NVMeoF ReadWrite IOType with 4kbs 10vols
+      description: ReadWrite IO-comparison on 10G-multi-volumes with 4k blocksize
       module: test_io_perf.py
-      polarion-id: CEPH-83576114
+      polarion-id: CEPH-83576116
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
           - FIO_RW_BS_4k_IODepth8_RWRatio70R_LIBAIO
         rbd_pool: rbd
         do_not_delete_pool: true
-        io_overrides:
-          bs: 16k
         io_exec:
           -   proto: librbd
               image:
-                size: 10G
-                count: 1
+                size: 2G
+                count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 10G
-                count: 1
+                size: 2G
+                count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
 
   - test:
-      name: libRBD VS NVMeoF Random WriteNRead IOType 16k blocksize
-      description: Random WriteNRead IOType comparison on 10G image with 16kb-blocksize
+      name: libRBD VS NVMeoF Random WriteNRead IOType with 4kbs 10vols
+      description: Random WriteNRead IOType-comparison on 10G-multi-volumes with 4k blocksize
       module: test_io_perf.py
-      polarion-id: CEPH-83576114
+      polarion-id: CEPH-83576116
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
@@ -134,26 +131,24 @@ tests:
           - FIO_RandREAD_BS_4k_IODepth8_LIBAIO
         rbd_pool: rbd
         do_not_delete_pool: true
-        io_overrides:
-          bs: 16k
         io_exec:
           -   proto: librbd
               image:
-                size: 10G
-                count: 1
+                size: 2G
+                count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 10G
-                count: 1
+                size: 2G
+                count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
 
   - test:
-      name: libRBD VS NVMeoF Random ReadWrite IOType
-      description: Random ReadWrite IOType comparison on 10G image with 16kb-block-size
+      name: libRBD VS NVMeoF Random ReadWrite IOType with 4kbs 10vols
+      description: Random ReadWrite IOType-comparison on 10G-multi-volumes with 4k blocksize
       module: test_io_perf.py
-      polarion-id: CEPH-83576114
+      polarion-id: CEPH-83576116
       config:
         iterations: 1               # number of iterations to find out average
         io_profiles:
@@ -161,17 +156,15 @@ tests:
         rbd_pool: rbd
         do_not_delete_pool: false
         delete_gateway: node6
-        io_overrides:
-          bs: 16k
         io_exec:
           -   proto: librbd
               image:
-                size: 10G
-                count: 1
+                size: 2G
+                count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 10G
-                count: 1
+                size: 2G
+                count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node

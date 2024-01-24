@@ -1,5 +1,6 @@
 # Basic IO Perf comparison test LibRBD vs NVMeoF protocols
-# cluster configuration: conf/quincy/nvmeof/ceph_nvmeof_sanity.yaml
+# cluster configuration: conf/reef/nvmeof/ceph_nvmeof_sanity.yaml
+# Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 
 tests:
 
@@ -44,7 +45,7 @@ tests:
               args:
                 all-available-devices: true
       desc: RHCS cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
 
@@ -85,12 +86,12 @@ tests:
         io_exec:
             -   proto: librbd
                 image:
-                    size: 2G
+                    size: 25G
                     count: 10
                 node: node10             # client node
             -   proto: nvmeof
                 image:
-                    size: 2G
+                    size: 25G
                     count: 10
                 gw_node: node6          # gateway node
                 initiator_node: node10   # client node
@@ -112,12 +113,12 @@ tests:
         io_exec:
           -   proto: librbd
               image:
-                size: 2G
+                size: 25G
                 count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 2G
+                size: 25G
                 count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
@@ -139,12 +140,12 @@ tests:
         io_exec:
           -   proto: librbd
               image:
-                size: 2G
+                size: 25G
                 count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 2G
+                size: 25G
                 count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
@@ -166,12 +167,12 @@ tests:
         io_exec:
           -   proto: librbd
               image:
-                size: 2G
+                size: 25G
                 count: 10
               node: node10             # client node
           -   proto: nvmeof
               image:
-                size: 2G
+                size: 25G
                 count: 10
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
