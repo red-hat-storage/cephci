@@ -300,7 +300,7 @@ tests:
   - test:
       name: bucket granular sync policy with allowed allowed semantic
       desc: Test bucket granular sync policy with allowed allowed semantic
-      polarion-id: CEPH-CEPH-83575868
+      polarion-id: CEPH-83575868
       module: sanity_rgw_multisite.py
       comments: Known issue BZ-2153834
       clusters:
