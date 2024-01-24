@@ -66,6 +66,7 @@ def run(ceph_cluster, **kw):
     from the list obtained
     with ceph fs ls. Create snap-schedule with and without specifying FS name and validate behaviour, without
     FS name it should generate error. Remove snap-schedule with and without FS name and validate behaviour.
+    Repeat for all subcommands - retention add, retention remove, status,activate,deactivate
 
     Note : For each workflow except 5, all minutely, hourly, daily, weekly schedules will be applied and
     verified with status, but only minutely schedule is validated due to run time limitation.
@@ -372,21 +373,13 @@ def snap_sched_test(snap_test_params):
         schedule_path = f"{subvol_path.strip()}/.."
     post_test_params["test_status"] = test_fail
     snap_util.remove_snap_schedule(client, schedule_path)
+
     if "subvol" in snap_test_params.get("test_case"):
-        for snap in snap_list_type["kernel"]:
-            cmd = f"ceph fs subvolume snapshot rm {snap_test_params['fs_name']} {snap_test_params['subvol_name']} "
-            cmd += f"{snap} {snap_test_params['group_name']}"
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-                check_ec=False,
-            )
+        subvol = snap_test_params["subvol_name"]
+        group = snap_test_params["group_name"]
+        snap_util.sched_snap_cleanup(client, io_path, subvol, group)
     else:
-        for snap in snap_list_type["fuse"]:
-            client.exec_command(
-                sudo=True,
-                cmd=f"rmdir {mnt_paths['fuse']}/.snap/{snap}",
-            )
+        snap_util.sched_snap_cleanup(client, io_path)
     umount_all(mnt_paths, snap_test_params)
     return post_test_params
 
@@ -449,7 +442,7 @@ def snap_retention_test(snap_test_params):
             ):
                 test_fail = 1
     log.info(f"Performing test{snap_test_params['test_case']} cleanup")
-    snap_list = snap_util.get_scheduled_snapshots(client, snap_path)
+
     post_test_params["test_status"] = test_fail
     schedule_path = snap_test_params["path"]
     snap_util.deactivate_snap_schedule(client, schedule_path)
@@ -457,21 +450,13 @@ def snap_retention_test(snap_test_params):
         client, snap_test_params["path"], ret_val=snap_test_params["retention"]
     )
     snap_util.remove_snap_schedule(client, schedule_path)
+
     if "subvol" in snap_test_params.get("test_case"):
-        for snap in snap_list:
-            cmd = f"ceph fs subvolume snapshot rm {snap_test_params['fs_name']} {snap_test_params['subvol_name']} "
-            cmd += f"{snap} {snap_test_params['group_name']}"
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-                check_ec=False,
-            )
+        subvol = snap_test_params["subvol_name"]
+        group = snap_test_params["group_name"]
+        snap_util.sched_snap_cleanup(client, io_path, subvol, group)
     else:
-        for snap in snap_list:
-            client.exec_command(
-                sudo=True,
-                cmd=f"rmdir {mnt_paths['fuse']}/.snap/{snap}",
-            )
+        snap_util.sched_snap_cleanup(client, io_path)
     umount_all(mnt_paths, snap_test_params)
     return post_test_params
 
@@ -694,10 +679,17 @@ def snap_retention_count_validate(snap_test_params):
     )
 
     log.info(f"Performing test{snap_test_params['test_case']} cleanup")
-    snap_util.sched_snap_cleanup(client, snap_path)
+    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+
+    if "subvol" in snap_test_params.get("test_case"):
+        subvol = snap_test_params["subvol_name"]
+        group = snap_test_params["group_name"]
+        snap_util.sched_snap_cleanup(client, snap_path, subvol, group)
+    else:
+        snap_util.sched_snap_cleanup(client, snap_path)
 
     post_test_params["test_status"] = test_fail
-    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+
     umount_all(mnt_paths, snap_test_params)
 
     return post_test_params
@@ -730,7 +722,7 @@ def snap_sched_multi_fs(snap_test_params):
     try:
         out, rc = client.exec_command(sudo=True, cmd="ceph fs snap-schedule add / 2M")
         out, rc = client.exec_command(sudo=True, cmd="ceph fs snap-schedule remove /")
-        # test_fail = 1
+        test_fail = 1
         log.error(
             "BZ 2224060: snap-schedule create without fs-name passed but it was not expected"
         )
@@ -749,6 +741,7 @@ def snap_sched_multi_fs(snap_test_params):
 
     log.info("Create snap-schedule on all ceph FS except first one in list")
     fs_cnt = len(total_fs)
+    fs_snap_path = {}
     for i in range(1, fs_cnt):
         snap_test_params["fs_name"] = total_fs[i]["name"]
         snap_test_params["sched"] = sched_list[0]
@@ -762,7 +755,7 @@ def snap_sched_multi_fs(snap_test_params):
             )
             mnt_paths[mnt_type] = path
             mnt_path_fs.append(path)
-        snap_path = f"{mnt_paths['fuse']}"
+        fs_snap_path[total_fs[i]["name"]] = f"{mnt_paths['fuse']}"
         io_path = f"{mnt_paths['kernel']}/"
 
         for sched_val in sched_list:
@@ -770,7 +763,9 @@ def snap_sched_multi_fs(snap_test_params):
             snap_util.create_snap_schedule(snap_test_params)
         log.info(f"add sched data params : {client} {io_path} {duration_min}")
         fs_util.run_ios_V1(snap_test_params["client"], io_path, run_time=duration_min)
-        if snap_util.validate_snap_schedule(client, snap_path, sched_list[0]):
+        if snap_util.validate_snap_schedule(
+            client, fs_snap_path[total_fs[i]["name"]], sched_list[0]
+        ):
             log.error("Snapshot schedule validation failed")
             test_fail = 1
 
@@ -780,7 +775,7 @@ def snap_sched_multi_fs(snap_test_params):
 
     try:
         out, rc = client.exec_command(sudo=True, cmd="ceph fs snap-schedule status /")
-        # test_fail = 1
+        test_fail = 1
         log.error(
             "BZ 2224060: snap-schedule status without fs-name passed but it was not expected"
         )
@@ -796,6 +791,125 @@ def snap_sched_multi_fs(snap_test_params):
             log.error(
                 "snap-schedule status without fs-name failed for unexpected error"
             )
+    snap_test_params["fs_name"] = total_fs[1]["name"]
+    log.info("Verify snap-schedule status with fs-name in multi-fs setup suceeds")
+    client.exec_command(
+        sudo=True,
+        cmd=f"ceph fs snap-schedule status / --fs {snap_test_params['fs_name']}",
+    )
+
+    log.info(
+        "Verify fs-name is prompted when snap-schedule retention add is run without fs-name"
+    )
+    try:
+        out, rc = client.exec_command(
+            sudo=True, cmd="ceph fs snap-schedule retention add / M 5"
+        )
+        test_fail = 1
+        log.error(
+            "BZ 2224060: snap-schedule retention add without fs-name passed but it was not expected"
+        )
+
+    except Exception as e:
+        log.info(e)
+        if exp_err_str in str(e):
+            log.info(
+                "fs-name is prompted when snap-schedule retention add is tried without fs-name"
+            )
+        else:
+            test_fail = 1
+            log.error(
+                "snap-schedule retention add without fs-name failed for unexpected error"
+            )
+    log.info("Verify retention add with fs-name in multi-fs setup suceeds")
+    snap_test_params["retention"] = "3M1h5d4w"
+    snap_util.create_snap_retention(snap_test_params)
+
+    log.info(
+        "Verify fs-name is prompted when snap-schedule retention remove is run without fs-name"
+    )
+    try:
+        ret_cmd = (
+            f"ceph fs snap-schedule retention remove /  {snap_test_params['retention']}"
+        )
+        out, rc = client.exec_command(sudo=True, cmd=ret_cmd)
+        test_fail = 1
+        log.error(
+            "BZ 2224060: snap-schedule retention remove without fs-name passed but it was not expected"
+        )
+
+    except Exception as e:
+        log.info(e)
+        if exp_err_str in str(e):
+            log.info(
+                "fs-name is prompted when snap-schedule retention remove is tried without fs-name"
+            )
+        else:
+            test_fail = 1
+            log.error(
+                "snap-schedule retention remove without fs-name failed for unexpected error"
+            )
+    log.info("Verify retention remove with fs-name in multi-fs setup suceeds")
+    snap_util.remove_snap_retention(
+        client,
+        snap_test_params["path"],
+        ret_val=snap_test_params["retention"],
+        fs_name=snap_test_params["fs_name"],
+    )
+
+    log.info(
+        "Verify fs-name is prompted when snap-schedule deactivate is run without fs-name"
+    )
+    try:
+        out, rc = client.exec_command(
+            sudo=True, cmd="ceph fs snap-schedule deactivate /"
+        )
+        test_fail = 1
+        log.error(
+            "BZ 2224060: snap-schedule deactivate without fs-name passed but it was not expected"
+        )
+
+    except Exception as e:
+        log.info(e)
+        if exp_err_str in str(e):
+            log.info(
+                "fs-name is prompted when snap-schedule deactivate is tried without fs-name"
+            )
+        else:
+            test_fail = 1
+            log.error(
+                "snap-schedule deactivate without fs-name failed for unexpected error"
+            )
+    log.info("Verify deactivate with fs-name in multi-fs setup suceeds")
+    snap_util.deactivate_snap_schedule(
+        client, snap_test_params["path"], fs_name=snap_test_params["fs_name"]
+    )
+
+    log.info(
+        "Verify fs-name is prompted when snap-schedule activate is run without fs-name"
+    )
+    try:
+        out, rc = client.exec_command(sudo=True, cmd="ceph fs snap-schedule activate /")
+        test_fail = 1
+        log.error(
+            "BZ 2224060: snap-schedule activate without fs-name passed but it was not expected"
+        )
+
+    except Exception as e:
+        log.info(e)
+        if exp_err_str in str(e):
+            log.info(
+                "fs-name is prompted when snap-schedule activate is tried without fs-name"
+            )
+        else:
+            test_fail = 1
+            log.error(
+                "snap-schedule activate without fs-name failed for unexpected error"
+            )
+    log.info("Verify snap-schedule activate with fs-name in multi-fs setup suceeds")
+    snap_util.activate_snap_schedule(
+        client, snap_test_params["path"], fs_name=snap_test_params["fs_name"]
+    )
 
     log.info("Verify snap-schedule remove without fs-name gives an error")
     try:
@@ -810,7 +924,7 @@ def snap_sched_multi_fs(snap_test_params):
                 "fs-name is prompted when snap-schedule remove is tried without fs-name"
             )
         else:
-            # test_fail = 1
+            test_fail = 1
             log.error(
                 "BZ 2224060: snap-schedule remove without fs-name failed for unexpected error"
             )
@@ -821,7 +935,9 @@ def snap_sched_multi_fs(snap_test_params):
             client, snap_test_params["path"], fs_name=total_fs[i]["name"]
         )
 
-    snap_util.sched_snap_cleanup(client, snap_path)
+    for i in range(1, fs_cnt):
+        snap_util.sched_snap_cleanup(client, fs_snap_path[total_fs[i]["name"]])
+
     log.info(mnt_path_fs)
     for mnt_pt in mnt_path_fs:
         cmd = f"rm -rf {mnt_pt}/*file*"
@@ -944,18 +1060,13 @@ def snap_retention_service_restart(snap_test_params):
     if snap_util.validate_snap_retention(client, snap_path, snap_test_params["path"]):
         test_fail = 1
     log.info(f"Performing test{snap_test_params['test_case']} cleanup")
-    snap_list = snap_util.get_scheduled_snapshots(client, snap_path)
     post_test_params["test_status"] = test_fail
     schedule_path = snap_test_params["path"]
     snap_util.remove_snap_retention(
         client, snap_test_params["path"], ret_val=snap_test_params["retention"]
     )
     snap_util.remove_snap_schedule(client, schedule_path)
-    for snap in snap_list:
-        client.exec_command(
-            sudo=True,
-            cmd=f"rmdir {snap_path}/.snap/{snap}",
-        )
+    snap_util.sched_snap_cleanup(client, snap_path)
     client.exec_command(sudo=True, cmd=f"umount {snap_path}")
     return post_test_params
 

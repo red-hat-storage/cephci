@@ -2728,7 +2728,7 @@ os.system('sudo systemctl start  network')
                     if smallfile_params.get(io_param):
                         io_params[io_param] = smallfile_params[io_param]
             dir_suffix = "".join(
-                [random.choice(string.ascii_letters) for _ in range(2)]
+                [random.choice(string.ascii_letters) for _ in range(3)]
             )
             io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
             client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
