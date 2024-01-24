@@ -163,7 +163,26 @@ tests:
                       - node4
                   spec:
                     backend_service: rgw.rgw.realm1
-                    virtual_ip: 10.0.211.172/22
+                    virtual_ip: 127.1.1.100/8
+                    virtual_interface_networks:
+                      # rhos-d network id's
+                      - '10.0.208.0/22'  # provider_net_cci_12
+                      - '10.0.204.0/22'  # provider_net_cci_11
+                      - '10.0.108.0/22'  # provider_net_cci_9
+                      - '10.0.104.0/22'  # provider_net_cci_8
+                      - '10.0.100.0/22'  # provider_net_cci_7
+                      - '10.0.96.0/22'  # provider_net_cci_6
+                      - '10.0.152.0/22'  # provider_net_cci_5
+                      - '10.0.148.0/22'  # provider_net_cci_4
+                      # rhos-01 network id's
+                      - '10.0.195.0/24'  # shared_net_12
+                      - '10.0.194.0/24'  # shared_net_11
+                      - '10.0.192.0/24'  # shared_net_9
+                      - '10.0.191.0/24'  # shared_net_8
+                      - '10.0.190.0/24'  # shared_net_7
+                      - '10.0.189.0/24'  # shared_net_6
+                      - '10.0.188.0/24'  # shared_net_5
+                      - '10.0.201.0/24'  # shared_net_4
                     frontend_port: 443
                     monitor_port: 1967
                     ssl_cert: create-cert
@@ -189,6 +208,25 @@ tests:
                       - node6
                   spec:
                     backend_service: rgw.rgw.realm2
-                    virtual_ip: 10.0.209.108/22
+                    virtual_ip: 127.1.1.200/8
+                    virtual_interface_networks:
+                      # rhos-d network id's
+                      - '10.0.208.0/22'  # provider_net_cci_12
+                      - '10.0.204.0/22'  # provider_net_cci_11
+                      - '10.0.108.0/22'  # provider_net_cci_9
+                      - '10.0.104.0/22'  # provider_net_cci_8
+                      - '10.0.100.0/22'  # provider_net_cci_7
+                      - '10.0.96.0/22'  # provider_net_cci_6
+                      - '10.0.152.0/22'  # provider_net_cci_5
+                      - '10.0.148.0/22'  # provider_net_cci_4
+                      # rhos-01 network id's
+                      - '10.0.195.0/24'  # shared_net_12
+                      - '10.0.194.0/24'  # shared_net_11
+                      - '10.0.192.0/24'  # shared_net_9
+                      - '10.0.191.0/24'  # shared_net_8
+                      - '10.0.190.0/24'  # shared_net_7
+                      - '10.0.189.0/24'  # shared_net_6
+                      - '10.0.188.0/24'  # shared_net_5
+                      - '10.0.201.0/24'  # shared_net_4
                     frontend_port: 8083
                     monitor_port: 1967
