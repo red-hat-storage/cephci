@@ -346,6 +346,8 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_auth agent"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "radosgw-admin zone placement modify --rgw-zone secondary --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
               - "ceph orch restart {service_name:shared.sec}"
             timeout: 120
         ceph-pri:
@@ -358,6 +360,8 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_auth agent"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "radosgw-admin zone placement modify --rgw-zone primary --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
               - "ceph orch restart {service_name:shared.pri}"
             timeout: 120
         ceph-arc:
@@ -370,11 +374,14 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_auth agent"
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "radosgw-admin zone placement modify --rgw-zone archive --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
               - "ceph orch restart {service_name:shared.arc}"
             timeout: 120
       desc: Setting vault configs for sse-s3 on multisite
       module: exec.py
-      name: set sse-s3 vault configs on multisite
+      name: sse-s3 vault configs, and zlib compression
+      polarian-id: CEPH-83575916
 
 
   - test:
