@@ -19,7 +19,7 @@ tests:
       module: test_cephadm_ansible_bootstrap.py
       config:
         bootstrap:
-          playbook: cephadm-bootstrap.yaml
+          playbook: bootstrap-with-registry-details.yaml
           set_selinux: permissive  # permissive or enforcing
           module_args:
             mon_ip: node1

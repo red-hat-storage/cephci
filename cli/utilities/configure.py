@@ -340,7 +340,7 @@ def setup_installer_node(
     configure_cephadm_ansible_inventory(nodes)
 
     # Execute cephadm ansible preflight playbook
-    exec_cephadm_preflight(installer, build_type, tools_repo)
+    exec_cephadm_preflight(installer, build_type, ibm_build, tools_repo)
 
 
 def setup_client_node(installer, ansible_clients):
