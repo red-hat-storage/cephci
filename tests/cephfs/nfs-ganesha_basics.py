@@ -1,4 +1,6 @@
 import datetime
+import secrets
+import string
 import time
 import traceback
 
@@ -34,7 +36,11 @@ def run(ceph_cluster, **kw):
         log.info(f"MetaData Information {log.metadata} in {__name__}")
         tc = "nfs-ganesha"
         nfs_mounting_dir = "/mnt/nfs/"
-        dir_name = "dir"
+        mounting_dir = nfs_mounting_dir + "ceph/"
+        dir_name = "dir_" + "".join(
+            secrets.choice(string.ascii_uppercase + string.digits) for i in range(3)
+        )
+
         log.info("Running cephfs %s test case" % (tc))
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
@@ -55,19 +61,19 @@ def run(ceph_cluster, **kw):
             nfs_export_name = "/export1"
             path = "/"
             nfs_server_name = nfs_server[0].node.hostname
-            # Create ceph nfs cluster
+            log.info("Create ceph nfs cluster")
             nfs_client[0].exec_command(sudo=True, cmd="ceph mgr module enable nfs")
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server_name}"
             )
-            # Verify ceph nfs cluster is created
+            log.info("Verify ceph nfs cluster is created")
             if wait_for_process(
                 client=nfs_client[0], process_name=nfs_name, ispresent=True
             ):
                 log.info("ceph nfs cluster created successfully")
             else:
                 raise CommandFailed("Failed to create nfs cluster")
-            # Create cephfs nfs export
+            log.info("Create cephfs nfs export")
             if "5.0" in rhbuild:
                 nfs_client[0].exec_command(
                     sudo=True,
@@ -81,7 +87,7 @@ def run(ceph_cluster, **kw):
                     f"{nfs_export_name} {fs_name} path={path}",
                 )
 
-            # Verify ceph nfs export is created
+            log.info("Verify ceph nfs export is created")
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
             )
@@ -89,20 +95,17 @@ def run(ceph_cluster, **kw):
                 log.info("ceph nfs export created successfully")
             else:
                 raise CommandFailed("Failed to create nfs export")
-            # Mount ceph nfs exports
+            log.info("Mount ceph nfs exports")
             nfs_client[0].exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
             assert wait_for_cmd_to_succeed(
                 nfs_client[0],
                 cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
             )
-            nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
-            )
             out, rc = nfs_client[0].exec_command(cmd="mount")
             mount_output = out.split()
-            log.info("Checking if nfs mount is is passed of failed:")
+            log.info("Checking if nfs mount is passed of failed:")
             assert nfs_mounting_dir.rstrip("/") in mount_output
+
             log.info("Creating Directory")
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"mkdir {nfs_mounting_dir}{dir_name}"
@@ -114,39 +117,41 @@ def run(ceph_cluster, **kw):
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
             )
+
+            log.info("Removing nfs-ganesha mount dir on client:")
             nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
-                f"{nfs_mounting_dir}{dir_name}",
-                long_running=True,
+                sudo=True, cmd=f"rm -rf {nfs_mounting_dir}{dir_name}"
             )
-            # Unmount nfs
-            nfs_client[0].exec_command(sudo=True, cmd=f"umount {nfs_mounting_dir}")
-            # Delete cephfs nfs export
+            nfs_client[0].exec_command(sudo=True, cmd=f"umount -l {nfs_mounting_dir}")
+            nfs_client[0].exec_command(sudo=True, cmd=f"rm -rf {nfs_mounting_dir}")
+
+            log.info("Delete cephfs nfs export")
             nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs export delete {nfs_name} {nfs_export_name}"
             )
-            # Verify cephfs nfs export is deleted
+
+            log.info("Verify cephfs nfs export is deleted")
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
             )
-
             if nfs_export_name not in out:
                 log.info("cephf nfs export deleted successfully")
             else:
                 raise CommandFailed("Failed to delete cephfs nfs export")
-            # Delete nfs cluster
+
+            log.info("Delete nfs cluster")
             nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs cluster delete {nfs_name}"
             )
-            # Adding Delay to reflect in cluster list
+
+            log.info("Adding Delay to reflect in cluster list")
             time.sleep(5)
             if not wait_for_process(
                 client=nfs_client[0], process_name=nfs_name, ispresent=False
             ):
                 raise CommandFailed("Cluster has not been deleted")
-            # Verify nfs cluster is deleted
+
+            log.info("Verify nfs cluster is deleted")
             out, rc = nfs_client[0].exec_command(sudo=True, cmd="ceph nfs cluster ls")
             if nfs_name not in out:
                 log.info("ceph nfs cluster deleted successfully")
@@ -189,7 +194,6 @@ def run(ceph_cluster, **kw):
             else:
                 raise CommandFailed("NFS ganesha mount failed")
 
-            mounting_dir = nfs_mounting_dir + "ceph/"
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"mkdir {mounting_dir}{dir_name}"
             )
@@ -215,14 +219,13 @@ def run(ceph_cluster, **kw):
             )
             log.info("Removing nfs-ganesha mount dir on client:")
             nfs_client[0].exec_command(sudo=True, cmd="rm -rf  %s" % (nfs_mounting_dir))
-
             log.info("Cleaning up successfull")
         return 0
     except CommandFailed as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
