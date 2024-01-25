@@ -37,8 +37,8 @@ tests:
       destroy-cluster: false
       module: test_host.py
       name: "Test host add with labels and IP"
-  
-  -test:
+
+  - test:
       abort-on-fail: true
       config:
         args:
