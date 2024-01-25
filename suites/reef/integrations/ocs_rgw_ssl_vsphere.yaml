@@ -37,6 +37,19 @@ tests:
       destroy-cluster: false
       module: test_host.py
       name: "Test host add with labels and IP"
+  
+  -test:
+      abort-on-fail: true
+      config:
+        args:
+          placement:
+            label: mon
+        command: apply
+        service: mon
+      desc: Test deploying MON daemons using labels.
+      destroy-cluster: false
+      module: test_mon.py
+      name: Test MON daemon deployment using labels.
 
   - test:
       abort-on-fail: true
