@@ -2,57 +2,117 @@
 ---
 tests:
   - test:
-      name: setup install pre-requisistes
-      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
       module: install_prereq.py
       abort-on-fail: true
 
   - test:
-      name: cluster deployment
-      desc: Execute the cluster deployment workflow.
-      module: test_cephadm.py
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes
+      module: test_bootstrap.py
+      polarion-id: CEPH-83575289
       config:
-        verify_cluster_health: true
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          mon-ip: node1
+          orphan-initial-daemons: true
+          skip-dashboard: true
+          ssh-user: cephuser
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node2
+                - node3
+                - node4
+              location:
+                root: default
+                datacenter: DC1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node5
+                - node6
+                - node7
+              location:
+                root: default
+                datacenter: DC2
+            - service_type: mon
+              placement:
+                label: mon
+            - service_type: mgr
+              placement:
+                label: mgr
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Service deployment with spec
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
         steps:
           - config:
-              command: bootstrap
-              service: cephadm
-              base_cmd_args:
-                verbose: true
-              args:
-                mon-ip: node1
-                orphan-initial-daemons: true
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: mgr
-              args:
-                placement:
-                  label: mgr
-          - config:
-              command: apply
-              service: mon
-              args:
-                placement:
-                  label: mon
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
           - config:
               command: shell
-              args:
+              args: # display OSD tree
+                - "ceph osd tree"
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
                 - ceph
                 - fs
                 - volume
                 - create
                 - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
           - config:
               command: apply
               service: rgw
@@ -61,41 +121,28 @@ tests:
               args:
                 placement:
                   label: rgw
-          - config:
-              command: apply
-              service: mds
-              base_cmd_args:
-                verbose: true
-              pos_args:
-                - cephfs
-              args:
-                placement:
-                  nodes:
-                    - node2
-                    - node6
-                  limit: 2
-                  sep: " "
-      destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Configure client admin
       desc: Configures client admin node on cluster
       module: test_client.py
-      polarion-id: CEPH-83573758
+      polarion-id:
       config:
         command: add
-        id: client.1
-        node: node7
+        id: client.1                      # client Id (<type>.<Id>)
+        nodes:
+          - node8:
+              release: 7
         install_packages:
           - ceph-common
           - ceph-base
-        copy_admin_keyring: true
-        caps:
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
           mon: "allow *"
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
+      abort-on-fail: true
 
   - test:
       name: Enable logging to file
@@ -105,58 +152,16 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
-      name: Mon election strategies
-      polarion-id: CEPH-83573627
-      module: test_election_strategies.py
-      desc: Change Mon election strategies and verify status
-
-  - test:
-      name: Replicated pool LC
-      module: rados_prep.py
-      polarion-id: CEPH-83571632
-      config:
-        replicated_pool:
-          create: true
-          pool_name: test_re_pool
-          pg_num: 16
-          disable_pg_autoscale: true
-          rados_write_duration: 100
-          rados_read_duration: 30
-        set_pool_configs:
-          pool_name: test_re_pool
-          configurations:
-            pg_num: 32
-            pgp_num: 32
-            pg_autoscale_mode: 'on'
-            compression_mode: aggressive
-            compression_algorithm: zlib
-      desc: Create replicated pools and run IO
-
-  - test:
       name: Deploy stretch Cluster
-      module: stretch_cluster.py
-      polarion-id: CEPH-83573621
+      module: test_stretch_deployment_with_placement.py
+      polarion-id: CEPH-83573625
       config:
-        site1: site-A
-        site2: site-B
-        perform_add_capacity: false
-        osd_max_backfills: 16
-        osd_recovery_max_active: 16
+        no_affinity: false
+        stretch_rule_name: stretch_rule
+        tiebreaker_mon_site_name: arbiter
       desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
       abort-on-fail: true
 
-  - test:
-      name: Verify stretch Cluster
-      module: stretch_cluster.py
-      polarion-id: CEPH-83573630
-      config:
-        verify_forced_recovery: true
-        osd_max_backfills: 16
-        osd_recovery_max_active: 16
-        rados_write_duration: 200
-      desc: Verify forced recovery and healthy on a stretch configured cluster
-
-  # Running basic rbd and rgw tests after deployment of stretch cluster
 
   - test:
       name: rbd-io
@@ -169,7 +174,6 @@ tests:
           size: 10G
         io-total: 100M
       desc: Perform export during read/write,resizing,flattening,lock operations
-      polarion-id: CEPH-83574972
 
   - test:
       name: rgw sanity tests
@@ -179,4 +183,28 @@ tests:
         config-file-name: test_multitenant_access.yaml
         timeout: 300
       desc: Perform rgw tests
-      polarion-id: CEPH-9740
+
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+
+  - test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+
+  - test:
+      name: Verify stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573630
+      config:
+        verify_forced_recovery: true
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+        rados_write_duration: 200
+      desc: Verify forced recovery and healthy on a stretch configured cluster
