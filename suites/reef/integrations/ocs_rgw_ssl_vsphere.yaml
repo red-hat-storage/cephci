@@ -42,6 +42,19 @@ tests:
       abort-on-fail: true
       config:
         args:
+          placement:
+            label: mon
+        command: apply
+        service: mon
+      desc: Test deploying MON daemons using labels.
+      destroy-cluster: false
+      module: test_mon.py
+      name: Test MON daemon deployment using labels.
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
           all-available-devices: true
         command: apply
         service: osd
