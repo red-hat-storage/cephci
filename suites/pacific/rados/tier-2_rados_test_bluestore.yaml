@@ -133,10 +133,3 @@ tests:
       config:
         bluestore_cache: true
       desc: Verify tuning of BlueStore cache size for HDDs and SSDs
-
-
-  - test:
-      name: ceph-bluestore-tool utility
-      module: test_bluestoretool_workflows.py
-      polarion-id: CEPH-83571692
-      desc: Verify ceph-bluestore-tool functionalities

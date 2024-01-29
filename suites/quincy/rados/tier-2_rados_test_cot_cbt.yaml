@@ -1,12 +1,11 @@
 # Suite contains basic tier-2 rados tests
 #===============================================================================================
 #------------------------------------------------------------------------------------------
-#----- Tier-2 - To check Bluestore features   ------
+#----- Tier-2 test to verify all functionalities of COT and CBT tool ------
 #------------------------------------------------------------------------------------------
 # Conf: conf/quincy/rados/7-node-cluster.yaml
 #
 #===============================================================================================
-
 tests:
   - test:
       name: setup install pre-requisistes
@@ -113,23 +112,13 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
-      name: BlueStore Checksum algorithms
-      module: test_bluestore_configs.py
-      polarion-id: CEPH-83571646
-      config:
-        checksums:
-          - none
-          - crc32c
-          - crc32c_16
-          - crc32c_8
-          - xxhash32
-          - xxhash64
-      desc: Verify the different applicable BlueStore Checksum algorithms
+      name: ceph-bluestore-tool utility
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83571692
+      desc: Verify ceph-bluestore-tool functionalities
 
   - test:
-      name: BlueStore cache size tuning
-      module: test_bluestore_configs.py
-      polarion-id: CEPH-83571675
-      config:
-        bluestore_cache: true
-      desc: Verify tuning of BlueStore cache size for HDDs and SSDs
+      name: ceph-objectstore-tool utility
+      module: test_objectstoretool_workflows.py
+      polarion-id: CEPH-83581811
+      desc: Verify ceph-objectstore-tool functionalities

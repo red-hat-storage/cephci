@@ -1,5 +1,5 @@
 # Suite contains tests to be run after upgrade [brownfield deployment]
-# Use cluster-conf file: conf/quincy/rados/7-node-cluster.yaml
+# Use cluster-conf file: conf/reef/rados/7-node-cluster.yaml
 
 tests:
   - test:
@@ -23,7 +23,7 @@ tests:
                 verbose: true
               args:
                 rhcs-version: 5.3
-                release: rc
+                release: z3
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io

@@ -1848,11 +1848,11 @@ class RadosOrchestrator:
         installer_node = self.ceph_cluster.get_nodes(role="installer")[0]
         try:
             out, rc = installer_node.exec_command(
-                sudo=True, cmd="rpm -qa | grep ceph-base"
+                sudo=True, cmd="rpm -qa | grep ceph-common"
             )
         except Exception:
             installer_node.exec_command(
-                sudo=True, cmd="yum install -y ceph-base --nogpgcheck"
+                sudo=True, cmd="yum install -y ceph-common --nogpgcheck"
             )
 
         put_cmd = "rados put -p $pool_name $obj_name ~/sample_1M --offset $offset"
