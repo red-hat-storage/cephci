@@ -17,3 +17,11 @@ class ConfigKey(Cli):
         """
         cmd = f"{self.base_cmd} set {key} {value}"
         return self.execute(sudo=True, check_ec=False, long_running=True, cmd=cmd)
+
+    def get(self, key):
+        """Get config key value
+        Args:
+            key (str): config key
+        """
+        cmd = f"{self.base_cmd} get {key}"
+        return self.execute(sudo=True, check_ec=False, long_running=True, cmd=cmd)
