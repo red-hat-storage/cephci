@@ -8,6 +8,6 @@
       cephadm_bootstrap:
         image: "{{ image | default(False) }}"
         mon_ip: "{{ mon_ip }}"
-        registry_url: "{{ registry_url }}"
-        registry_username: "{{ registry_username }}"
-        registry_password: "{{ registry_password }}"
+        registry_url: "{{ registry_url | default() }}"
+        registry_username: "{{ registry_username | default() }}"
+        registry_password: "{{ registry_password | default() }}"
