@@ -199,6 +199,47 @@ def run(ceph_cluster, **kw):
         log.debug(
             f" waiting for PGs to settle down on pool {pool['pool_name']} after removing bulk flag"
         )
+        if pool.get("check_premerge_pgs", False):
+            log.debug(
+                "Checking for premerge PGs in the cluster during PG autoscaler activity"
+            )
+            no_premerge_pgs = False
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=900)
+            while end_time > datetime.datetime.now():
+                flag = True
+                status_report = rados_obj.run_ceph_command(
+                    cmd="ceph report", client_exec=True
+                )
+
+                # Proceeding to check if all PG's are in active + clean
+                for entry in status_report["num_pg_by_state"]:
+                    if "premerge" in [key for key in entry["state"].split("+")]:
+                        flag = False
+                        log.debug(f"Observed premerge PGs : {entry['state']}")
+
+                    if flag:
+                        log.info(
+                            "The recovery and back-filling of the OSD is completed"
+                        )
+                        no_premerge_pgs = True
+                        break
+                    log.info(
+                        f"Waiting for active + clean and checking for premerge PGs."
+                        f" Active alerts: {status_report['health']['checks'].keys()},"
+                        f"PG States : {status_report['num_pg_by_state']}"
+                        f" checking status again in {10} seconds"
+                    )
+                    time.sleep(10)
+            if not no_premerge_pgs:
+                log.error(
+                    "Observed that there are PGs in 'premerge' state for more than 900 seconds. fail"
+                    "bug fix verification : https://bugzilla.redhat.com/show_bug.cgi?id=1810949 "
+                )
+                raise Exception("Premerge Pgs on the cluster error")
+            log.info(
+                "Completed checking PG states on merge. No premerge PGs seen for extended duration"
+            )
+
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
         pg_count_bulk_false = rados_obj.get_pool_details(pool=pool["pool_name"])[
             "pg_num_target"

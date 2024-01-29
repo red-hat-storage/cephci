@@ -142,11 +142,53 @@ tests:
         delete_pool: true
 
   - test:
-      name: Inconsistent object pg check using pool snapshot
-      desc: Inconsistent object pg check using pool snapshot
+      name: Inconsistent object pg check using pool snapshot for RE pools
+      desc: Inconsistent object pg check using pool snapshot for RE pools
       module: test_osd_snap_inconsistency_pg.py
       polarion-id: CEPH-9942
       config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_snap_pool_re
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+# Bug: https://bugzilla.redhat.com/show_bug.cgi?id=2263023
+# Need to identify method to create Inconsistent object without manipulating the omap entries
+#  - test:
+#      name: Inconsistent object pg check for EC pools
+#      desc: Inconsistent object pg check for EC pools
+#      module: test_osd_inconsistency_pg.py
+#      polarion-id: CEPH-83571453
+#      config:
+#        verify_osd_omap_entries:
+#          configurations:
+#            pool-1:
+#              pool_name: Inconsistent_pool_ec
+#              pool_type: erasure
+#              pg_num: 1
+#              k: 2
+#              m: 2
+#              crush-failure-domain: host
+#          omap_config:
+#            obj_start: 0
+#            obj_end: 5
+#            num_keys_obj: 10
+#        delete_pool: true
+
+  - test:
+      name: Inconsistent object secondary pg check using pool snapshot
+      desc: Inconsistent object pg check using pool snapshot for RE pools for secondary OSD in PG
+      module: test_osd_snap_inconsistency_pg.py
+      polarion-id: CEPH-83571452
+      config:
+        test_secondary: true
         verify_osd_omap_entries:
           configurations:
             pool-1:

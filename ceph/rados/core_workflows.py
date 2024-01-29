@@ -412,6 +412,7 @@ class RadosOrchestrator:
                   be verified after write (bool) | default: True
                 - check_ec (bool) -> boolean to control exit code check
                 - background (bool) -> run rados bench as background process and continue with test execution
+                - nocleanup (bool) -> if false, the nocleanup flag will not be added and the objects would be deleted
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
@@ -419,7 +420,10 @@ class RadosOrchestrator:
         max_objs = kwargs.get("max_objs")
         verify_stats = kwargs.get("verify_stats", True)
         check_ec = kwargs.get("check_ec", True)
-        cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write --no-cleanup"
+        nocleanup = kwargs.get("nocleanup", True)
+        cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write"
+        if nocleanup:
+            cmd = f"{cmd} --no-cleanup"
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
@@ -2783,11 +2787,13 @@ class RadosOrchestrator:
         acting_osd_node.exec_command(sudo=True, cmd=cmd_snapset_corrupt)
         return None
 
-    def create_inconsistent_obj_snap(self, pool_name, object_name):
+    def create_inconsistent_obj_snap(
+        self, pool_name, object_name, secondary: bool = False
+    ):
         """
         The method converts the object into inconsistent object
         The logic implemented in the code is-
-        1. Get the primary osd and pg_id
+        1. Get the target osd and pg_id
         2. Stopping the OSD
         3. Get the head of an object in json format and corrupt using the clear-snapset
         4. Start the OSD and perform deep-scrub on that pg id
@@ -2795,27 +2801,34 @@ class RadosOrchestrator:
         Args:
             pool_name: pool name
             object_name: object name in the pool
+            secondary: If true, the inconsistent object would be generated on secondary OSD of the PG
         Returns: After converting the object in to inconsistent,method returns the pg id
                  If it fail returns None
         """
         osd_map_output = self.get_osd_map(pool=pool_name, obj=object_name)
-        primary_osd = osd_map_output["acting_primary"]
-        log.info(f"The object stored in the primary osd number-{primary_osd}")
+        log.debug(
+            f"\nThe acting set details for the object : {object_name}"
+            f" on pool : {pool_name} is {osd_map_output}\n"
+        )
+        target_osd = osd_map_output["acting_primary"]
+        if secondary:
+            target_osd = osd_map_output["acting"][-1]
+        log.info(f"The object stored in the target osd number-{target_osd}")
         pg_id = osd_map_output["pgid"]
         log.info(f"The object {object_name} is created in the pg-{pg_id}")
         cmd_update_obj = f"rados -p {pool_name} append {object_name} /etc/hosts"
         self.client.exec_command(sudo=True, cmd=cmd_update_obj)
         # stoping the OSD
-        if not self.change_osd_state(action="stop", target=primary_osd):
-            log.error(f"Unable to stop the OSD : {primary_osd}")
+        if not self.change_osd_state(action="stop", target=target_osd):
+            log.error(f"Unable to stop the OSD : {target_osd}")
             return None
-        object_head = self.get_object_details_head(primary_osd, object_name)
+        object_head = self.get_object_details_head(target_osd, object_name)
         if object_head is None:
             log.error("The object head is None.Cannot execute further tests")
             return None
-        self.set_snapset_corrupt(primary_osd, object_head)
-        if not self.change_osd_state(action="start", target=primary_osd):
-            log.error(f"Unable to start the OSD : {primary_osd}")
+        self.set_snapset_corrupt(target_osd, object_head)
+        if not self.change_osd_state(action="start", target=target_osd):
+            log.error(f"Unable to start the OSD : {target_osd}")
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
         self.run_deep_scrub(pgid=pg_id)
