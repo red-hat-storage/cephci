@@ -5,7 +5,7 @@ globals:
       name: ceph
       node1:
         networks:
-          - provider_net_cci_12
+          - shared_net_15
         role:
           - _admin
           - mon
@@ -16,7 +16,7 @@ globals:
           - prometheus
       node2:
         networks:
-          - provider_net_cci_12
+          - shared_net_15
         role:
           - mon
           - mgr
@@ -24,14 +24,14 @@ globals:
           - rgw
       node3:
         networks:
-          - provider_net_cci_12
+          - shared_net_15
         role:
           - osd
         no-of-volumes: 5
         disk-size: 25
       node4:
         networks:
-          - provider_net_cci_12
+          - shared_net_15
         role:
           - osd
         no-of-volumes: 5
@@ -43,7 +43,7 @@ globals:
         disk-size: 25
       node6:
         networks:
-          - provider_net_cci_12
+          - shared_net_15
         role:
           - mon
           - mgr
@@ -54,7 +54,7 @@ globals:
           openstack: RHEL-9.3.0-x86_64-ga-latest
           ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_13
+          - shared_net_2
         role:
           - client
       node8:
@@ -62,7 +62,7 @@ globals:
           openstack: RHEL-9.3.0-x86_64-ga-latest
           ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_13
+          - shared_net_2
         role:
           - client
       node9:
@@ -70,7 +70,7 @@ globals:
           openstack: RHEL-9.3.0-x86_64-ga-latest
           ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_10
+          - shared_net_5
         role:
           - client
       node10:
@@ -78,6 +78,6 @@ globals:
           openstack: RHEL-9.3.0-x86_64-ga-latest
           ibmc: rhel-91-server-released
         networks:
-          - provider_net_cci_10
+          - shared_net_5
         role:
           - client
