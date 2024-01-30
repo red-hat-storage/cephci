@@ -147,7 +147,11 @@ def run(ceph_cluster, **kwargs):
 
     # Get the Tools repo file name
     out = installer.get_dir_list(dir_path=YUM_REPO_DIR)
-    file_name = [repo for repo in out if "Tools" in repo][0]
+    build_type = "ibm" if config.get("ibm_build") else "rh"
+    if build_type == "rh":
+        file_name = [repo for repo in out if "Tools" in repo][0]
+    elif build_type == "ibm":
+        file_name = [repo for repo in out if "IBM" in repo][0]
 
     try:
         # Validate if requied packages are installed
