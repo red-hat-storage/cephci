@@ -1,3 +1,4 @@
+import math
 import random
 import string
 
@@ -185,3 +186,16 @@ def create_map_options(encryption_config):
     options = options[:-1]  # remove trailing comma
 
     return options
+
+
+def convert_size(size_bytes):
+    """
+    Convert size in bytes to other pretty formats
+    """
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "K", "M", "G", "T", "P", "E", "Z", "Y")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p)
+    return "%s%s" % (s, size_name[i])
