@@ -118,11 +118,7 @@ tests:
               id: client.2                     # client Id (<type>.<Id>)
               nodes:
                 - node9:
-                    release: 6
-                - node10:
-                    release: 6
-                - node11:
-                    release: 6
+                    release: 7
               install_packages:
                 - ceph-common
               copy_admin_keyring: true          # Copy admin keyring to node
@@ -139,7 +135,7 @@ tests:
             config:
               command: add
               id: client.3                      # client Id (<type>.<Id>)
-              node: node12                       # client node
+              node: node10                       # client node
               install_packages:
                 - ceph-common
               copy_admin_keyring: true          # Copy admin keyring to node
