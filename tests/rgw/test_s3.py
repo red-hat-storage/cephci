@@ -352,6 +352,8 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
         log.info("Adding user-policy caps for IAM user")
         cmd = f'radosgw-admin caps add --uid={uid} --caps="user-policy=*"'
         out, err = node.exec_command(sudo=True, cmd=cmd)
+        cmd = f'radosgw-admin caps add --uid={uid} --caps="roles=*"'
+        out, err = node.exec_command(sudo=True, cmd=cmd)
 
 
 def create_s3_conf(
@@ -569,13 +571,19 @@ def _rgw_lc_debug(cluster: Ceph, add: bool = True) -> None:
     for daemon in rgw_daemons:
         if add:
             command = f"ceph config set {daemon} rgw_lc_debug_interval 10"
+            command_1 = f"ceph config set {daemon} rgw_sts_key abcdefghijklmnop"
+            command_2 = f"ceph config set {daemon} rgw_s3_auth_use_sts true"
         else:
             command = f"ceph config rm {daemon} rgw_lc_debug_interval"
+            command_1 = f"ceph config rm {daemon} rgw_sts_key"
+            command_2 = f"ceph config rm {daemon} rgw_s3_auth_use_sts"
 
         node.exec_command(sudo=True, cmd=command)
+        node.exec_command(sudo=True, cmd=command_1)
+        node.exec_command(sudo=True, cmd=command_2)
 
     for service in rgw_services:
         node.exec_command(sudo=True, cmd=f"ceph orch restart {service}")
 
     # Restart can take time
-    sleep(60)
+    sleep(30)
