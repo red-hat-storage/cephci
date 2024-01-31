@@ -243,7 +243,7 @@ tests:
             commands:
               - "yum install -y jq"
               - "radosgw-admin zonegroup get --rgw-zonegroup=shared > /tmp/zonegroup_shared_backup.json"
-              - "jq -r '.zones[].log_meta=false | .zones[].log_data=false | .zones[].sync_from_all=false' /tmp/zonegroup_shared_backup.json > /tmp/zonegroup_shared.json"
+              - "jq -r '.zones[].log_data=false | .zones[].sync_from_all=false' /tmp/zonegroup_shared_backup.json > /tmp/zonegroup_shared.json"
               - "radosgw-admin zonegroup set --rgw-zonegroup=shared --infile=/tmp/zonegroup_shared.json"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "sleep 20"
@@ -281,6 +281,24 @@ tests:
             multisite-replication-disabled: True
             verify-io-on-site: ["ceph-pri"]
             timeout: 500
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            role: rgw
+            sudo: True
+            commands:
+              - "radosgw-admin zonegroup get --rgw-zonegroup=shared > /tmp/zonegroup_shared_backup.json"
+              - "jq -r '.zones[].log_data=true | .zones[].sync_from_all=true' /tmp/zonegroup_shared_backup.json > /tmp/zonegroup_shared.json"
+              - "radosgw-admin zonegroup set --rgw-zonegroup=shared --infile=/tmp/zonegroup_shared.json"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "sleep 20"
+      desc: enable multisite sync between primary and secondary zones
+      module: exec.py
+      name: enable multisite sync between zones
+      polarion-id: CEPH-83581229
 
   - test:
       name: bucket granular sync policy on enabled forbidden semantic with symmetrical and directional flow
