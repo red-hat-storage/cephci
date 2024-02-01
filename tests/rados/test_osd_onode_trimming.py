@@ -1,7 +1,10 @@
 """
 Method to verify the onode trimming
+Bugzilla:
+  https://bugzilla.redhat.com/show_bug.cgi?id=1947215
 """
 import datetime
+import re
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -26,11 +29,38 @@ def run(ceph_cluster, **kw):
 
     osd_list = []
     onode_values = {}
-    log_line = [
-        "trim maximum skip pinned reached",
-    ]
-    mon_obj.set_config(section="osd", name="debug_bluestore", value="20/20")
+
     try:
+        regex = r"\s*(\d.\d)-rhel-\d"
+        build = (re.search(regex, config.get("build", config.get("rhbuild")))).groups()[
+            0
+        ]
+
+        if float(build) >= 6.0:
+            onode_key = "onodes_pinned"
+        else:
+            onode_key = "bluestore_pinned_onodes"
+
+        log_line = [
+            "trim maximum skip pinned reached",
+        ]
+        bluestore_cache_trim_value = mon_obj.get_config(
+            section="osd", param="bluestore_cache_trim_max_skip_pinned"
+        )
+        log.info(
+            f"The bluestore_cache_trim_value value is -{bluestore_cache_trim_value}"
+        )
+        if int(bluestore_cache_trim_value) != 1000:
+            log.error(
+                f"The default value of bluestore_cache_trim_max_skip_pinned is {bluestore_cache_trim_value} "
+                f"and not equal to the 1000 which is default"
+            )
+            return 1
+
+        mon_obj.set_config(
+            section="osd", name="bluestore_cache_trim_max_skip_pinned", value="20"
+        )
+
         for node in ceph_nodes:
             if node.role == "osd":
                 node_osds = rados_object.collect_osd_daemon_ids(node)
@@ -39,18 +69,23 @@ def run(ceph_cluster, **kw):
         log.info("Creating a replicated pool with default config")
         assert rados_object.create_pool(pool_name=pool_name)
 
+        for id in osd_list:
+            if not rados_object.change_osd_state(action="restart", target=id):
+                log.error(f"Unable to restart the OSD : {id}")
+                return 1
+        mon_obj.set_config(section="osd", name="debug_bluestore", value="20/20")
+        init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         bench_cfg = {
             "pool_name": pool_name,
             "byte_size": "1KB",
             "rados_write_duration": 300,
         }
         rados_object.bench_write(**bench_cfg)
-        # Get the inode details of the cluster
-        # ceph tell osd.* perf dump | grep -i onodes_pinned
-        init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        rados_object.bench_read(**bench_cfg)
+
         for id in osd_list:
             perf_dump_output = rados_object.get_osd_perf_dump(id)
-            onode_pinned_obj = perf_dump_output["bluestore"]["onodes_pinned"]
+            onode_pinned_obj = perf_dump_output["bluestore"][onode_key]
             if int(onode_pinned_obj) != 0:
                 log.info(f"The inodes pinned in the osd {id} are {onode_pinned_obj} ")
                 onode_values[id] = onode_pinned_obj
@@ -62,7 +97,7 @@ def run(ceph_cluster, **kw):
             while time.time() < time_end:
                 rados_object.run_scrub(osd=osd_id)
                 perf_dump_output = rados_object.get_osd_perf_dump(id)
-                current_onode_value = perf_dump_output["bluestore"]["onodes_pinned"]
+                current_onode_value = perf_dump_output["bluestore"][onode_key]
                 if current_onode_value < old_inodes:
                     log.info(
                         f"The inodes are reduced from the {old_inodes} to {current_onode_value}"
@@ -115,6 +150,9 @@ def run(ceph_cluster, **kw):
         method_should_succeed(rados_object.detete_pool, pool_name)
         log.info("deleted the pool successfully")
         mon_obj.remove_config(section="osd", name="debug_bluestore")
+        mon_obj.remove_config(
+            section="osd", name="bluestore_cache_trim_max_skip_pinned"
+        )
     return 0
 
 
