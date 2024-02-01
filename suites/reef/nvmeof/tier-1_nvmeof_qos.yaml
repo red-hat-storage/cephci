@@ -1,0 +1,269 @@
+# Basic Ceph-NvmeoF sanity Test suite
+# cluster configuration file: conf/reef/nvmeof/ceph_nvmeof_sanity.yaml
+
+tests:
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+#  Configure Ceph NVMeoF gateway
+#  Configure Initiators
+#  Run IO on NVMe Targets
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - ceph osd pool application enable rbd rbd
+          - config:
+              command: shell
+              args:
+                - rbd create -s 1G image1
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  label: nvmeof-gw
+              pos_args:
+                - rbd
+      desc: NVMeoF Gateway deployment using cephadm
+      destroy-clster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy nvmeof gateway
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node6
+        pool: rbd
+        port: 5500
+        steps:
+          - config:
+              service: version          # CLI Version
+              command: version
+              base_cmd_args:
+                format: json
+                output: log
+          - config:
+              service: gateway
+              command: version         # gateway Version
+              base_cmd_args:
+                format: json
+                output: log
+          - config:
+              service: gateway
+              command: info             # gateway info
+          - config:
+              service: log_level
+              command: get
+              base_cmd_args:
+                format: json
+                output: stdio
+          - config:
+              service: log_level
+              command: set
+              base_cmd_args:
+                format: json
+                output: stdio
+              args:
+                level: error
+                print: error
+          - config:
+              service: log_level
+              command: disable
+              base_cmd_args:
+                format: json
+                output: stdio
+          - config:
+              service: subsystem
+              command: add              # Subsystem add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                serial-number: 1
+          - config:
+              service: subsystem
+              command: list             # Subsystem list
+              base_cmd_args:
+                format: json
+          - config:
+              service: connection
+              command: list             # Subsystem connection list
+              base_cmd_args:
+                format: json
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: listener
+              command: add                # Listener add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                gateway-name: node6
+                trsvcid: 5001
+                traddr: node6
+              base_cmd_args:
+                format: json
+          - config:
+              service: listener
+              command: list               # Listener list
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: listener
+              command: delete             # listener del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                gateway-name: node6
+                trsvcid: 5001
+                traddr: node6
+          - config:
+              service: host
+              command: add              # add Host access
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                host: "*"
+          - config:
+              service: host
+              command: list             # List access hosts
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: host
+              command: delete           # access host del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                host: "*"
+          - config:
+              service: namespace
+              command: add              # Namespace add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                rbd-image: image1
+                rbd-pool: rbd
+                nsid: 1
+          - config:
+              service: namespace
+              command: list             # namespace list
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: namespace
+              command: set_qos             # namespace set_qos
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                rw-ios-per-second: 10
+          - config:
+              service: namespace
+              command: delete           # namespace delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 1
+          - config:
+              service: subsystem
+              command: delete           # subsystem delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+      desc: Manage NVMeoF Subsystem entities
+      destroy-clster: false
+      module: test_nvme_cli.py
+      name: Manage nvmeof gateway entities
+      polarion-id: CEPH-83581750
+
+# Clean-up
+  - test:
+      abort-on-fail: true
+      config:
+         command: remove
+         service: nvmeof
+         args:
+           service_name: nvmeof.rbd
+           verify: true
+      desc: NVMeoF Gateway deployment using cephadm
+      destroy-clster: false
+      module: test_orch.py
+      name: Delete nvmeof gateway
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph config set mon mon_allow_pool_delete true
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
+      desc: NVMeoF Gateway deployment using cephadm
+      do-not-skip-tc: true
+      destroy-clster: false
+      module: test_cephadm.py
+      name: Delete nvmeof gateway pre-reqs

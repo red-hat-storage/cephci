@@ -4,6 +4,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 
 """
 import json
+import re
 from copy import deepcopy
 from time import sleep
 
@@ -881,6 +882,196 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         teardown(ceph_cluster, rbd, cleanup_cfg)
 
 
+def test_ceph_83581753(ceph_cluster, rbd, pool, config):
+    """CEPH-83581753: Set QoS for namespace in subsystem with invalid values
+    for mandatory args and invalid args.
+    Args:
+        ceph_cluster (CephCluster): The Ceph cluster instance.
+        rbd (RadosBlockDevice): The RBD instance.
+        pool (str): The Ceph pool name.
+        config (dict): Configuration parameters.
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_83581753",
+            "serial": 83581753,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
+        "listener_port": listener_port,
+        "node": config.get("initiator_node"),
+    }
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        list_args = {}
+        list_args.setdefault("args", {}).update(
+            {"subsystem": "nqn.2016-06.io.spdk:ceph_83581753"}
+        )
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "10G")
+
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        gateway.namespace.add(**ns_args)
+        config.update(initiator_cfg)
+        _, namespaces = gateway.namespace.list(**list_args)
+        pattern = r"\│\s*(\d+)\s*│"
+        nsid = [int(match) for match in re.findall(pattern, namespaces)]
+
+        qos_args_with_invalid_values = {}
+        qos_args_with_invalid_values.setdefault("args", {}).update(
+            {"nsid": 10, "subsystem": subsystem["nqn"], "rw-ios-per-second": 10}
+        )
+        try:
+            _ = gateway.namespace.set_qos(**qos_args_with_invalid_values)
+        except Exception as err:
+            if "Can't find namespace" not in str(err):
+                raise Exception(
+                    "Set QoS was failed as expected due to invalid namespace."
+                )
+            LOG.info("Set QoS was failed as expected due to invalid namespace....")
+        qos_args_with_invalid_args = {}
+        qos_args_with_invalid_args.setdefault("args", {}).update(
+            {
+                "nsid": nsid[0],
+                "load-balancing-group": "4",
+                "subsystem": subsystem["nqn"],
+                "rw-ios-per-second": 10,
+            }
+        )
+        try:
+            _ = gateway.namespace.set_qos(**qos_args_with_invalid_args)
+        except Exception as err:
+            if (
+                "load-balancing-group argument is not allowed for set_qos commandt"
+                not in str(err)
+            ):
+                raise Exception("Set QoS was failed as expected due to invalid args.")
+            LOG.info("Set QoS was failed as expected due to invalid args....")
+
+    finally:
+        cleanup_cfg = {
+            "gw_node": config.get("gw_node"),
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+            "subsystems": [subsystem],
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
+        return 0
+
+
+def test_ceph_83581945(ceph_cluster, rbd, pool, config):
+    """CEPH-83581945: Set QoS for namespace in subsystem without mandatory args.
+    Args:
+        ceph_cluster (CephCluster): The Ceph cluster instance.
+        rbd (RadosBlockDevice): The RBD instance.
+    pool (str): The Ceph pool name.
+    config (dict): Configuration parameters.
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    Subsystem.NVMEOF_CLI_IMAGE = cli_image
+    gateway = Subsystem(gw_node, 5500)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph_883581945",
+            "serial": 83581945,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
+        "listener_port": listener_port,
+        "node": config.get("initiator_node"),
+    }
+    try:
+        subsystem["gateway-name"] = find_client_daemon_id(
+            ceph_cluster, pool, node_name=gw_node.hostname
+        )
+        configure_subsystems(rbd, pool, gateway, subsystem)
+        list_args = {}
+        list_args.setdefault("args", {}).update({"subsystem": subsystem["nqn"]})
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "10G")
+
+        ns_args = {
+            "args": {"subsystem": subsystem["nqn"], "rbd-pool": pool, "rbd-image": img}
+        }
+        config.update(initiator_cfg)
+        gateway.namespace.add(**ns_args)
+        _, namespaces = gateway.namespace.list(**list_args)
+        pattern = r"\│\s*(\d+)\s*│"
+        nsid = [int(match) for match in re.findall(pattern, namespaces)]
+
+        qos_args_without_mandatory_args = {}
+        qos_args_without_mandatory_args.setdefault("args", {}).update({"nsid": nsid[0]})
+        try:
+            _ = gateway.namespace.set_qos(**qos_args_without_mandatory_args)
+        except Exception as err:
+            if "the following arguments are required" not in str(err):
+                raise Exception(
+                    "Set QoS was failed as expected due to absence of mandatory args."
+                )
+            LOG.info(
+                "Set QoS was failed as expected due to absence of mandatory args...."
+            )
+        qos_args_without_mandatory_args = {}
+        qos_args_without_mandatory_args.setdefault("args", {}).update(
+            {"rw-ios-per-second": 10, "subsystem": subsystem["nqn"]}
+        )
+        try:
+            _ = gateway.namespace.set_qos(**qos_args_without_mandatory_args)
+        except Exception as err:
+            if (
+                "At least one of --nsid or --uuid arguments is mandatory for set_qos command"
+                not in str(err)
+            ):
+                raise Exception(
+                    "Set QoS was failed as expected due to absence of mandatory args."
+                )
+            LOG.info(
+                "Set QoS was failed as expected due to absence of mandatory args...."
+            )
+    finally:
+        cleanup_cfg = {
+            "gw_node": config.get("gw_node"),
+            "initiators": [initiator_cfg],
+            "cleanup": ["initiators", "gateway", "pool"],
+            "rbd_pool": pool,
+            "subsystems": [subsystem],
+        }
+        teardown(ceph_cluster, rbd, cleanup_cfg)
+        return 0
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
@@ -947,6 +1138,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83575455(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83575814":
             test_ceph_83575814(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83581753":
+            test_ceph_83581753(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83581945":
+            test_ceph_83581945(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
         LOG.error(err)
