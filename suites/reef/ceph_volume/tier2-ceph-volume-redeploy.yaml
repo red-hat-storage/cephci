@@ -38,6 +38,14 @@ tests:
                 hostname: node3
                 labels:
                  - osd
+              - service_type: host
+                hostname: node1
+                addr: node1
+              - service_type: host
+                hostname: node2
+                addr: node2
+              - service_type: host
+                hostname: node3
               - service_type: mon
                 placement:
                   hosts:
@@ -54,6 +62,14 @@ tests:
                   hosts:
                     - node1
                     - node2
+              - service_type: alertmanager
+                placement:
+                  hosts:
+                    - node1
+              - service_type: grafana
+                placement:
+                  hosts:
+                    - node1
         client:
           ansible_clients: true
       destroy-cluster: false
