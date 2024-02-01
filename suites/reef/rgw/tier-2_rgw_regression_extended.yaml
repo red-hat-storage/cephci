@@ -144,3 +144,13 @@ tests:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_readwrite.yaml
         timeout: 300
+
+  - test:
+      name: Test rgw put bucket website with users of same and different tenant
+      desc: Test rgw put bucket website with users of same and different tenant
+      polarion-id: CEPH-11148
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_put_bucket_website_with_tenant_same_and_different_user.yaml
+        timeout: 500
