@@ -1,3 +1,4 @@
+from cli.exceptions import ResourceNotFoundError
 from cli.utilities.containers import Container
 from cli.utilities.packages import Package, PackageError, ReposError, Rpm
 from cli.utilities.utils import get_custom_repo_url
@@ -149,9 +150,13 @@ def run(ceph_cluster, **kwargs):
     out = installer.get_dir_list(dir_path=YUM_REPO_DIR)
     build_type = "ibm" if config.get("ibm_build") else "rh"
     if build_type == "rh":
-        file_name = [repo for repo in out if "Tools" in repo][0]
+        _files = [repo for repo in out if "Tools" in repo or "RHCEPH" in repo]
     elif build_type == "ibm":
-        file_name = [repo for repo in out if "IBM" in repo][0]
+        _files = [repo for repo in out if "IBM" in repo]
+    # Raise error if expected repository is not added
+    if not _files:
+        raise ResourceNotFoundError("Expected repository not added to node")
+    file_name = _files[0]
 
     try:
         # Validate if requied packages are installed
