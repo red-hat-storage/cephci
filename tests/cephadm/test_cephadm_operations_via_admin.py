@@ -1,5 +1,6 @@
 import os
 
+from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
 
 
@@ -44,14 +45,20 @@ def run(ceph_cluster, **kw):
             f"Failed to add label '{label}' on node '{hostname}'"
         )
     # Verify files in new admin node
-    for file in files:
-        result = os.path.exists(file)
-        if result is False:
-            raise CephadmOperationsAdmin(
-                f"File '{file}' not present on node '{hostname}'"
-            )
+    timeout, interval = 300, 6
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        _files = [_f for _f in files if os.path.exists(_f)]
+        if len(_files) == len(files):
+            break
+    if w.expired:
+        raise CephadmOperationsAdmin(
+            f"Failed to validate presence of '{files}' on node '{hostname}'"
+        )
     # Operation using orch command in new admin node
-    result = CephAdm(node).ceph.orch.ls()
-    if "RUNNING" not in result:
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        result = CephAdm(node).ceph.orch.ls()
+        if "RUNNING" in result:
+            break
+    if w.expired:
         raise CephadmOperationsAdmin(f"Orch ls operation failed on node '{hostname}'")
     return 0
