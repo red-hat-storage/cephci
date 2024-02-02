@@ -3126,3 +3126,15 @@ class RadosOrchestrator:
         """
         base_cmd = f"ceph tell osd.{osd_id} status"
         return self.run_ceph_command(cmd=base_cmd)
+
+    def get_osd_perf_dump(self, osd_id):
+        """
+        method to get the perf dump of osd-
+        ceph tell osd.N perf dump command
+        Args:
+            osd_id: ID of desired osd daemon
+        Returns:
+            dict output of ceph tell osd.N perf dump command
+        """
+        base_cmd = f"ceph tell osd.{osd_id} perf dump"
+        return self.run_ceph_command(cmd=base_cmd)
