@@ -181,3 +181,13 @@ tests:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_curl_transfer_encoding_chunked.yaml
         timeout: 500
+
+  - test:
+      name: Test rgw put bucket website with users of same and different tenant
+      desc: Test rgw put bucket website with users of same and different tenant
+      polarion-id: CEPH-11148
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_put_bucket_website_with_tenant_same_and_different_user.yaml
+        timeout: 500
