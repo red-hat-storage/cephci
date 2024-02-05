@@ -407,3 +407,54 @@ tests:
       polarion-id: CEPH-83573390
       module: sanity_rgw_multisite.py
       name: test multipart+encrypt object access at the archive site
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_current_expiration.yaml
+            timeout: 300
+      desc: Test LC on archive for current versions
+      polarion-id: CEPH-83575394
+      module: sanity_rgw_multisite.py
+      name: Test LC on archive for current versions
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_newer_noncurrent_expiration.yaml
+            timeout: 300
+      desc: Test LC on archive for newer-noncurrent versions
+      polarion-id: CEPH-83575919
+      module: sanity_rgw_multisite.py
+      name: Test LC on archive for newer-noncurrent versions
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_noncurrent_expiration.yaml
+            timeout: 300
+      desc: Test LC on archive for non-current versions
+      polarion-id: CEPH-83575394
+      module: sanity_rgw_multisite.py
+      name: Test LC on archive for non-current versions
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_objects_size_noncurrent.yaml
+            timeout: 300
+      desc: Test LC on archive for objects size expiration
+      polarion-id: CEPH-83582000
+      module: sanity_rgw_multisite.py
+      name: Test LC on archive for objects size expiration
