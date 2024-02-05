@@ -411,7 +411,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: ../s3cmd/test_lifecycle_s3cmd.py
             config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_current_expiration.yaml
             timeout: 300
@@ -424,7 +423,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: ../s3cmd/test_lifecycle_s3cmd.py
             config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_newer_noncurrent_expiration.yaml
             timeout: 300
@@ -432,12 +430,12 @@ tests:
       polarion-id: CEPH-83575919
       module: sanity_rgw_multisite.py
       name: Test LC on archive for newer-noncurrent versions
+      comments: new in 7.1, fails since code yet not present
 
   - test:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: ../s3cmd/test_lifecycle_s3cmd.py
             config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_noncurrent_expiration.yaml
             timeout: 300
@@ -450,7 +448,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: ../s3cmd/test_lifecycle_s3cmd.py
             config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_objects_size_noncurrent.yaml
             timeout: 300
@@ -458,3 +455,4 @@ tests:
       polarion-id: CEPH-83582000
       module: sanity_rgw_multisite.py
       name: Test LC on archive for objects size expiration
+      comments : new in 7.1, fails since code yet not present
