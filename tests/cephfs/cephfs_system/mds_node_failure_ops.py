@@ -12,11 +12,11 @@ from utility.log import Log
 log = Log(__name__)
 
 global stop_flag
+stop_flag = False
 
 
 def start_io_time(fs_util, client1, mounting_dir, timeout=300):
     global stop_flag
-    stop_flag = False
     iter = 0
     if timeout:
         stop = datetime.now() + timedelta(seconds=timeout)
@@ -32,6 +32,7 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         )
         iter = iter + 1
         if stop_flag:
+            log.info("Exited as stop flag is set to True")
             break
 
 
@@ -89,6 +90,7 @@ def run(ceph_cluster, **kw):
             new_client_hostname="admin",
             extra_params=f" --client_fs {fs_name}",
         )
+        global stop_flag
         with parallel() as p:
             global stop_flag
             p.spawn(
@@ -227,7 +229,7 @@ def run(ceph_cluster, **kw):
                 else:
                     log.error("cluster is not healty")
             log.info(
-                "mon services have been stopped and started and cluster is Healthy"
+                "mds services have been stopped and started and cluster is Healthy"
             )
             for mds in mds_nodes:
                 cluster_health_beforeIO = check_ceph_healthly(
@@ -258,10 +260,10 @@ def run(ceph_cluster, **kw):
                 else:
                     log.error("cluster is not healty")
             log.info(
-                "mon services have been stopped and started and cluster is Healthy"
+                "mds services have been stopped and started and cluster is Healthy"
             )
-        log.info("Setting stop flag")
-        stop_flag = True
+            log.info("Setting stop flag")
+            stop_flag = True
         return 0
 
     except Exception as e:

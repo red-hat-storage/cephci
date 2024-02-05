@@ -2,7 +2,7 @@
 #=======================================================================================================================
 # Tier-level: 4
 # Test-Suite: tier-4_cephfs_system.yaml
-# Conf file : conf/pacific/cephfs/tier_0_fs.yaml
+# Conf file : conf/quincy/cephfs/tier_0_fs.yaml
 # Test-Case Covered:
 #   CEPH-11261: MON node power failure, with client IO
 #   CEPH-11263: MDS node power failure, with client IO
