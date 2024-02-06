@@ -1,9 +1,35 @@
-# This test case is to automate image operations
-# in scale for baremetal configuration. Image operations
-# covered as part of this test are - image list, info,
-# rename, resize, copy, feature enable, disable, run io
-# and check rbd status and remove image and verify the same
-# for multiple pools and images at scale.
+"""RBD Image operations at scale
+
+Test Case Covered:
+CEPH-83582443 - [Baremetal] [ScaleTest] - Test all rbd image operations at scale
+
+Steps:
+1) Create an RHCS cluster on baremetal nodes as specified in setup. Execute IOs to
+fill the cluster to a decent percentage
+2) Create 10 RBD pools and 100 images per pool parallely on this cluster
+3) List all the images in every pool and verify that they match the configuration
+specified in the test suite
+4) Get image info for all the images and verify that the specified information is
+present and correct
+5) Resize all images parallely and verify
+6) Rename all images parallely and verify
+7) Create new pools and copy images from current pool to new pool parallely and verify
+8) Enable and disable all image features such as "object-map", "deep-flatten",
+"journaling", "exclusive-lock" and verify that they are disabled and enabled
+9) Run IOs on the images parallely for a specified size and verify rbd status that
+the image has watchers when IOs are in progress
+10) Set metadata for all images parallely and verify
+11) Remove all images parallely and verify
+
+Pre-requisites :
+- need client node with ceph-common package, conf and keyring files
+- FIO should be installed on the client.
+
+Environment and limitations:
+- The cluster should have enough storage to create atleast 1000 images with 4G each
+- cluster/global-config-file: config/reef/baremetal/mero_conf.yaml
+- Should be Bare-metal.
+"""
 
 from copy import deepcopy
 from time import sleep
@@ -200,6 +226,22 @@ def test_rbd_image_operations_for_pool(
             log.error(f"Run IOs and verify rbd status failed for pool {pool}")
             return 1
 
+        log.info(
+            f"Perform image metadata operations and verify for images in pool {pool}"
+        )
+        rc = wrapper_for_image_ops(
+            rbd=rbd,
+            pool=pool,
+            image_config=multi_image_config,
+            client=client,
+            ops_module="ceph.rbd.workflows.rbd",
+            ops_method="metadata_ops_single_image",
+            test_ops_parallely=test_ops_parallely,
+        )
+        if rc:
+            log.error(f"Perform image metadata operations failed for pool {pool}")
+            return 1
+
         log.info(f"Remove images and verify for pool {pool}")
         rc = wrapper_for_image_ops(
             rbd=rbd,
@@ -273,7 +315,7 @@ def run(**kw):
     Args:
         **kw: test data
     """
-    log.info("Running test <polarion_id> - Testing RBD image operations.")
+    log.info("Running test CEPH-83582443 - Testing RBD image operations.")
 
     try:
         if kw.get("client_node"):

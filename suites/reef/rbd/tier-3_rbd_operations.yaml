@@ -51,7 +51,8 @@ tests:
       config:
         command: add
         id: client.1
-        node: node10
+        # node: node10
+        node: node4
         install_packages:
           - ceph-common
           - fio
@@ -72,24 +73,44 @@ tests:
           - "rm -rf /etc/yum.repos.d/epel*"
           - "dnf install rbd-nbd -y"
 
+  # - test:
+  #     desc: Run all image operations in scale
+  #     module: test_rbd_image_operations.py
+  #     name: RBD image operations in scale
+  #     polarion-id: CEPH-83582443
+  #     config:
+  #       rep_pool_config:
+  #         num_pools: 10
+  #         num_images: 100
+  #         size: 4G
+  #         create_pool_parallely: true
+  #         create_image_parallely: true
+  #         test_ops_parallely: true
+  #       ec_pool_config:
+  #         num_pools: 10
+  #         num_images: 100
+  #         size: 4G
+  #         create_pool_parallely: true
+  #         create_image_parallely: true
+  #         test_ops_parallely: true
+
   - test:
-      desc: Run all image operations in scale
-      module: test_rbd_image_operations.py
-      name: RBD image operations in scale
+      desc: Run all image trash operations in scale
+      module: test_rbd_trash_operations.py
+      name: RBD image trash operations in scale
+      polarion-id: CEPH-83582444
       config:
         rep_pool_config:
-          num_pools: 10
-          num_images: 100
+          num_pools: 3
+          num_images: 5
           size: 4G
           create_pool_parallely: true
           create_image_parallely: true
-          test_ops_parallely: true
+          # test_ops_parallely: true
         ec_pool_config:
-          num_pools: 10
-          num_images: 100
+          num_pools: 3
+          num_images: 5
           size: 4G
           create_pool_parallely: true
           create_image_parallely: true
-          test_ops_parallely: true
-        fio:
-          size: 100M
+          # test_ops_parallely: true

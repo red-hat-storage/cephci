@@ -730,6 +730,103 @@ def run_io_and_check_rbd_status(**kw):
     return 0
 
 
+def metadata_ops_single_image(**kw):
+    """Set, list, get and remove image metadata for an image and verify
+
+    kw: {
+        "rbd": <>,
+        "pool": <>,
+        "image": <>,
+        "test_ops_parallely": <>
+    }
+    """
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    image = kw.get("image")
+    test_ops_parallely = kw.get("test_ops_parallely", False)
+    value = datetime.datetime.today().strftime("%Y-%m-%d")
+    out, err = rbd.image_meta.set(
+        pool=pool, image=image, key="last_update", value=value
+    )
+
+    if out or err:
+        log.error(f"Setting image metadata failed for {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(f"Setting image metadata failed for {pool}/{image}")
+        return 1
+
+    out, err = rbd.image_meta.get(pool=pool, image=image, key="last_update")
+
+    if err:
+        log.error(f"Getting image meta value for last_update failed for {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(
+                f"Getting image meta value for last_update failed for {pool}/{image}"
+            )
+        return 1
+
+    if out.strip() != value:
+        log.error(
+            f"Image metadata value does not match the value set for last_update for {pool}/{image}"
+        )
+        if test_ops_parallely:
+            raise Exception(
+                f"Image metadata value does not match the value set for last_update for {pool}/{image}"
+            )
+        return 1
+    else:
+        log.info(
+            f"Image metadata value set for last_update is the same as the value fetched using get method for {pool}/{image}"
+        )
+
+    out, err = rbd.image_meta.list(pool=pool, image=image, format="json")
+
+    if err:
+        log.error(f"Image metadata list failed for {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(f"Image metadata list failed for {pool}/{image}")
+        return 1
+
+    meta = json.loads(out)
+    if meta.get("last_update") != value:
+        log.error(
+            f"Image metadata value does not match the value set for last_update for {pool}/{image}"
+        )
+        if test_ops_parallely:
+            raise Exception(
+                f"Image metadata value does not match the value set for last_update for {pool}/{image}"
+            )
+        return 1
+    else:
+        log.info(
+            f"Image metadata value set for last_update is the same as the value fetched using list method for {pool}/{image}"
+        )
+
+    out, err = rbd.image_meta.rm(pool=pool, image=image, key="last_update")
+
+    if out or err:
+        log.error(f"Image metadata remove failed for {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(f"Image metadata remove failed for {pool}/{image}")
+        return 1
+
+    out, err = rbd.image_meta.get(pool=pool, image=image, key="last_update")
+
+    if out or err and "failed to get metadata" not in out + err:
+        log.error(f"Image metadata still present after deletion for {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(
+                f"Image metadata still present after deletion for {pool}/{image}"
+            )
+        return 1
+    elif "failed to get metadata" in out + err:
+        log.info(
+            f"Image metadata for last_update removed successfully for {pool}/{image}"
+        )
+
+    return 0
+
+
 def wrapper_for_image_ops(**kw):
     """
     Perform specified image operation for images in pool,

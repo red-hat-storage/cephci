@@ -1,6 +1,9 @@
 import json
+import pdb
 
+from ceph.parallel import parallel
 from ceph.rbd.utils import get_md5sum_rbd_image, random_string
+from ceph.rbd.workflows.rbd import wrapper_for_image_ops
 from ceph.rbd.workflows.snap_scheduling import (
     run_io_verify_snap_schedule_single_image,
     verify_snapshot_schedule,
@@ -458,3 +461,264 @@ def purge_snap_and_verify(**kw):
             log.error(f"Snapshot purge did not delete all snaps for {pool}/{image}")
             return 1
     return 0
+
+
+def create_clone_and_verify(**kw):
+    """
+    Create a single snap and clone for the given image
+
+    Args: kw{
+        "rbd": <>,
+        "pool": <>,
+        "image": <>,
+        "snap": <>,
+        "clone": <>,
+        "test_ops_parallely": <>
+    }
+    """
+    # pdb.set_trace()
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    image = kw.get("image")
+    snap_name = kw.get("snap")
+    clone = kw.get("clone")
+    test_ops_parallely = kw.get("test_ops_parallely")
+    clone_spec = {
+        "source-snap-spec": f"{pool}/{image}@{snap_name}",
+        "dest-image-spec": f"{pool}/{clone}",
+    }
+    out, err = rbd.clone(**clone_spec)
+    if out or err and "100% complete" not in out + err:
+        log.error(f"Clone creation failed for {pool}/{clone}")
+        if test_ops_parallely:
+            raise Exception(f"Clone creation failed for {pool}/{clone}")
+        return 1
+
+    out, err = rbd.children(pool=pool, image=image, snap=snap_name, format="json")
+    if err:
+        log.error(f"Fetching children for snap {pool}/{image}@{snap_name} failed")
+        if test_ops_parallely:
+            raise Exception(
+                f"Fetching children for snap {pool}/{image}@{snap_name} failed"
+            )
+        return 1
+
+    children = json.loads(out)
+    if not [child.get("image") for child in children if child.get("image") == clone]:
+        log.error(f"Clone {pool}/{clone} doesn't exist after creation")
+        if test_ops_parallely:
+            raise Exception(f"Clone {pool}/{clone} doesn't exist after creation")
+        return 1
+
+    log.info(f"Clone {pool}/{clone} creation successful")
+    return 0
+
+
+def create_snap_and_clones(**kw):
+    """
+    Create snap and clones based on the input specified for the given image
+
+    Args: kw{
+        "rbd": <>,
+        "pool": <>,
+        "image": <>,
+        "snap_spec": <snaps and clones to be created>
+                        Ex: {
+                            "snap_1": ["clone_11", "clone_12",..],
+                        }
+        "test_parallely": <>
+    }
+    """
+    # pdb.set_trace()
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    image = kw.get("image")
+    snap_spec = kw.get("snap_spec")
+    test_ops_parallely = kw.get("test_ops_parallely")
+
+    snap_name = list(snap_spec.keys())[0]
+    clones = snap_spec.get(snap_name)
+
+    out, err = rbd.snap.create(pool=pool, image=image, snap=snap_name)
+    if out or err and "100% complete" not in out + err:
+        log.error(f"Snap creation failed for {pool}/{image}@{snap_name}")
+        if test_ops_parallely:
+            raise Exception(f"Snap creation failed for {pool}/{image}@{snap_name}")
+        return 1
+
+    if not snap_exists(rbd=rbd, pool=pool, image=image, snap_name=snap_name):
+        log.error(f"Snapshot {snap_name} does not exist in snap ls for {pool}/{image}")
+        return 1
+
+    if clones:
+        out, err = rbd.snap.protect(pool=pool, image=image, snap=snap_name)
+        if out or err and "100% complete" not in out + err:
+            log.error(f"Snap protect failed for {pool}/{image}@{snap_name}")
+            if test_ops_parallely:
+                raise Exception(f"Snap protect failed for {pool}/{image}@{snap_name}")
+            return 1
+
+    if test_ops_parallely:
+        with parallel() as p:
+            for clone in clones:
+                p.spawn(
+                    create_clone_and_verify,
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    snap=snap_name,
+                    clone=clone,
+                    test_ops_parallely=test_ops_parallely,
+                )
+    else:
+        for clone in clones:
+            rc = create_clone_and_verify(
+                rbd=rbd, pool=pool, image=image, snap=snap_name, clone=clone
+            )
+            if rc:
+                log.error(f"Clone creation failed for {pool}/{clone}")
+                return 1
+
+    return 0
+
+
+def create_snaps_and_clones(**kw):
+    """
+    Create snap and clones based on the input specified for the given image
+
+    Args: kw{
+        "rbd": <>,
+        "pool": <>,
+        "image": <>,
+        "image_conf": <snaps and clones to be created>
+                        Ex: {
+                            "snap_1": ["clone_11", "clone_12",..],
+                        }
+        "test_parallely": <>
+    }
+    """
+    # pdb.set_trace()
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    image = kw.get("image")
+    snaps_spec = kw.get("image_conf", {}).get("snap_spec")
+    test_ops_parallely = kw.get("test_ops_parallely")
+
+    if test_ops_parallely:
+        with parallel() as p:
+            for snap, clones in snaps_spec.items():
+                p.spawn(
+                    create_snap_and_clones,
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    snap_spec={snap: clones},
+                    test_ops_parallely=test_ops_parallely,
+                )
+    else:
+        for snap, clones in snaps_spec.items():
+            rc = create_snap_and_clones(
+                rbd=rbd, pool=pool, image=image, snap_spec={snap: clones}
+            )
+            if rc:
+                log.error(f"Creation of snaps and clones failed for {pool}/{image}")
+                return 1
+
+    return 0
+
+
+def is_snap_present(**kw):
+    """
+    Check if the given image has atleast one snapshot
+
+    Args:
+        kw:{
+            "rbd": <>,
+            "pool": <>,
+            "image": <>,
+            "test_ops_parallely": <>
+        }
+    """
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    image = kw.get("image")
+    test_ops_parallely = kw.get("test_ops_parallely")
+
+    out, err = rbd.snap.ls(pool=pool, image=image, format="json")
+    if err:
+        log.error(f"Error while fetching snapshots for image {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(f"Error while fetching snapshots for image {pool}/{image}")
+        return 1
+
+    snaps = json.loads(out)
+    if len(snaps) > 0:
+        return True
+    else:
+        return False
+
+
+def is_children_present(**kw):
+    """
+    Check if the given image has atleast one child
+
+    Args:
+        kw: {
+            "rbd": <>,
+            "pool": <>,
+            "image": <>,
+            "test_ops_parallely": <>
+        }
+    """
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    image = kw.get("image")
+    test_ops_parallely = kw.get("test_ops_parallely")
+
+    out, err = rbd.children(pool=pool, image=image, format="json")
+    if err:
+        log.error(f"Error while fetching children for image {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(f"Error while fetching children for image {pool}/{image}")
+        return 1
+
+    children = json.loads(out)
+    if len(children) > 0:
+        return True
+    else:
+        return False
+
+
+def get_images_without_snap_and_or_clone(**kw):
+    """
+    Get all images in a pool having zero snaps and/or clones
+
+    Args:
+        kw: {
+            "rbd": <>,
+            "pool": <>,
+            "test_ops_parallely": <>
+        }
+    """
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    test_ops_parallely = kw.get("test_ops_parallely")
+    req_images = []
+
+    out, err = rbd.ls(pool=pool, format="json")
+    if err:
+        log.error(f"Error while fetching images from pool {pool}: {err}")
+        return 1
+    images_in_pool = json.loads(out)
+    for image in images_in_pool:
+        if not (
+            is_snap_present(
+                rbd=rbd, pool=pool, image=image, test_ops_parallely=test_ops_parallely
+            )
+            or is_children_present(
+                rbd=rbd, pool=pool, image=image, test_ops_parallely=test_ops_parallely
+            )
+        ):
+            req_images.append(image)
+
+    return req_images
