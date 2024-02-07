@@ -36,7 +36,7 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-11262 - OSD node power failure, with client IO
+    CEPH-83573429 - [Cephfs] Fail mds daemon by it's rank
 
     Test Steps:
     1. Mount Fuse and Kernel mounts

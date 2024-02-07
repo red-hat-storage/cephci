@@ -324,7 +324,7 @@ tests:
   - test:
       name: Subvolume metadata creation, delete and modifying test
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_metadata.py
-      polarion-id: CEPH-83571330
+      polarion-id: CEPH-83575032
       desc: Subvolume metadata creation, delete and modifying test
       abort-on-fail: false
   - test:
