@@ -34,24 +34,51 @@ def run(ceph_cluster, **kw):
     bluestore_obj = BluestoreToolWorkflows(node=cephadm)
     pool_target_configs = config["verify_osd_omap_entries"]["configurations"]
     omap_target_configs = config["verify_osd_omap_entries"]["omap_config"]
+    pools = []
     try:
         # Creating pools and starting the test
         for entry in pool_target_configs.values():
             log.debug(
                 f"Creating {entry['pool_type']} pool on the cluster with name {entry['pool_name']}"
             )
-            method_should_succeed(
-                rados_obj.create_pool,
-                **entry,
-            )
+            if entry["pool_type"] == "replicated":
+                method_should_succeed(
+                    rados_obj.create_pool,
+                    **entry,
+                )
+            else:
+                method_should_succeed(
+                    rados_obj.create_erasure_pool,
+                    name=entry["pool_name"],
+                    **entry,
+                )
             pool_name = entry["pool_name"]
+            pool_type = entry["pool_type"]
+            pools.append(pool_name)
             log.info(
-                f"Created the pool {entry['pool_name']}. beginning to create large number of omap entries on the pool"
+                f"Created the pool {entry['pool_name']}. beginning to create large number of entries on the pool"
             )
-        # Creating omaps
-        if not pool_obj.fill_omap_entries(pool_name=pool_name, **omap_target_configs):
-            log.error(f"Omap entries not generated on pool {pool_name}")
-            return 1
+
+            if pool_type == "replicated":
+                # Creating omaps on Replicated pools
+                if not pool_obj.fill_omap_entries(
+                    pool_name=pool_name, **omap_target_configs
+                ):
+                    log.error(f"Omap entries not generated on pool {pool_name}")
+                    return 1
+            else:
+                # Creating rados bench objects
+                if not rados_obj.bench_write(
+                    pool_name=pool_name,
+                    byte_size="1000KB",
+                    max_objs=50,
+                    rados_write_duration=30,
+                    verify_stats=False,
+                ):
+                    log.error(f"Objects not written on pool {pool_name}")
+                    return 1
+
+        pool_name = random.choice(pools)
         obj_list = rados_obj.get_object_list(pool_name)
         oname = random.choice(obj_list)
         # Create inconsistency objects

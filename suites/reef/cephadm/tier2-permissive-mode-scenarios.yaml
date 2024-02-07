@@ -123,3 +123,11 @@ tests:
       desc: Verify ceph health detail info when mon node is offline
       polarion-id: CEPH-83575328
       module: test_ceph_health_detail_when_mon_offline.py
+
+  - test:
+      name: Change cluster network and public network using cephadm
+      desc: Verify changing the cluster network using cephadm
+      polarion-id: CEPH-83575112
+      module: test_validate_cluster_and_public_network_change.py
+      config:
+        public-network: 10.0.201.0/24

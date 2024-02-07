@@ -363,30 +363,6 @@ tests:
       desc: Setting vault configs for sse-s3 on multisite
       module: exec.py
       name: set sse-s3 vault configs on multisite
-
-  - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_s3_per_object.yaml
-        timeout: 300
-      desc: test_sse_s3_per_object
-      module: sanity_rgw_multisite.py
-      name: sse-s3 per object encryption test
-      polarion-id: CEPH-83575153
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            set-env: true
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-            timeout: 300
-      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
-      module: sanity_rgw_multisite.py
-      name: sse-s3 per bucket encryption test
-      polarion-id: CEPH-83574622
-
   - test:
       config:
         script-name: test_sse_s3_kms_with_vault.py
@@ -450,10 +426,13 @@ tests:
       polarion-id: CEPH-83574620
 
   - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_kms_per_object.yaml
-        timeout: 300
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_kms_per_object.yaml
+            timeout: 300
       desc: test_sse_kms_per_object
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_object

@@ -195,3 +195,24 @@ tests:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_s3_resource_tag_role_policy.yaml
         timeout: 500
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+        rule: root netem delay 20ms 2ms distribution normal
+      desc: Configuring network traffic delay
+      module: configure-tc.py
+      name: apply-net-qos
+      polarion-id: CEPH-83575222
+
+  - test:
+      name: STS aswi Tests to test creds expire while copy object in progress
+      desc: STS aswi Tests to test creds expire while copy object in progress
+      polarion-id: CEPH-83581390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_creds_expire_copy_in_progress.yaml
+        timeout: 500

@@ -191,7 +191,7 @@ tests:
   - test:
       name: Verify dups trimming
       module: test_pg_dups_trimming.py
-      polarion-id: CEPH-83572728
+      polarion-id: CEPH-83575116
       config:
         pool_configs:
             - type: replicated

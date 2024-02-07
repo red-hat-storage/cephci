@@ -112,60 +112,6 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
-      name: Inconsistent object pg check
-      desc: Inconsistent object pg check
-      module: test_osd_inconsistency_pg.py
-      polarion-id: CEPH-9924
-      config:
-        verify_osd_omap_entries:
-          configurations:
-            pool-1:
-              pool_name: Inconsistent_pool
-              pool_type: replicated
-              pg_num: 1
-          omap_config:
-            obj_start: 0
-            obj_end: 5
-            num_keys_obj: 10
-        delete_pool: true
-
-  - test:
-      name: Inconsistent object pg check using pool snapshot
-      desc: Inconsistent object pg check using pool snapshot
-      module: test_osd_snap_inconsistency_pg.py
-      polarion-id: CEPH-9942
-      config:
-        verify_osd_omap_entries:
-          configurations:
-            pool-1:
-              pool_name: Inconsistent_snap_pool
-              pool_type: replicated
-              pg_num: 1
-          omap_config:
-            obj_start: 0
-            obj_end: 5
-            num_keys_obj: 10
-        delete_pool: true
-
-  - test:
-      name: OSD compaction with failures
-      module: test_osd_compaction.py
-      polarion-id: CEPH-11681
-      config:
-        omap_config:
-          pool_name: re_pool_large_omap
-          large_warn: true
-          obj_start: 0
-          obj_end: 5
-          normal_objs: 400
-          num_keys_obj: 200001
-        bench_config:
-          pool_name: re_pool_bench
-          pg_num: 128
-          pgp_num: 128
-      desc: Perform OSD compaction with & without failures
-
-  - test:
       name: OMAP feature
       desc: Testing omap features
       module: test_scrub_omap.py
@@ -211,8 +157,3 @@ tests:
             num_keys_obj: 10
         delete_pool: true
 
-  - test:
-      name: Automatic trimming of osdmaps
-      desc: check for periodic trimming of osdmaps
-      module: test_osdmap_trim.py
-      polarion-id: CEPH-10046

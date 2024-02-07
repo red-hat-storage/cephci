@@ -156,7 +156,7 @@ tests:
 
   - test:
       name: Deploy stretch Cluster
-      polarion-id: CEPH-83573621
+      polarion-id: CEPH-83574982
       module: test_stretch_deployment_with_placement.py
       config:
         no_affinity: false
