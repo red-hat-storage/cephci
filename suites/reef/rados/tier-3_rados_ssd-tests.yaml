@@ -5,7 +5,7 @@
 # - ADD or remove OSDs.
 # - Remove replicated EC pool and verify the re-balance
 # - ADD HDD OSDs and perform IOS
-# configuration file loaction: conf/pacific/baremetal/mero_conf.yaml
+# configuration file loaction: /conf/reef/baremetal/mero_conf.yaml
 tests:
   - test:
       name: setup install pre-requisites
@@ -187,7 +187,6 @@ tests:
               pool_type: replicated
         delete_pools:
           - rpool_01
-
   - test:
       name: OSD deployment on single SSD
       desc: Add OSD services on single SSD.
