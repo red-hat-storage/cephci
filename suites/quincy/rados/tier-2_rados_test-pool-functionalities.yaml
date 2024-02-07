@@ -350,15 +350,18 @@ tests:
             byte_size: 10KB
       desc: Verification of the effect of compression on replicated pools
 
-# Blocked due to BZ 2172795
-#  - test:
-#      name: Verify cluster behaviour during PG autoscaler warn
-#      module: pool_tests.py
-#      polarion-id:  CEPH-83573413
-#      config:
-#        verify_autoscaler_warn:
-#          pool_name: test-pool-10
-#      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
+# Blocked due to BZ 2172795. Bugzilla fixed.
+  - test:
+      name: Verify cluster behaviour during PG autoscaler warn
+      module: pool_tests.py
+      polarion-id:  CEPH-83573413
+      config:
+        verify_autoscaler_warn:
+          pool_configs:
+            - type: replicated
+              conf: sample-pool-1
+          pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 
   - test:
       name: Verify degraded pool behaviour at min_size
