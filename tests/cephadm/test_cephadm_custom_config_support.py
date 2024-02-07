@@ -1,3 +1,4 @@
+from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import CephadmOpsExecutionError
 from cli.ops.cephadm import generate_bootstrap_config
@@ -12,12 +13,19 @@ def check_custom_file(node, config):
             filter={"name": service}, format='"{{.ID}} {{.IMAGE}}"'
         )[0]
         mount_path = spec.get("custom_configs")[1].get("mount_path")
-        result = Container(node).exec(
-            container=container, interactive=True, tty=True, cmds=f"cat {mount_path}"
-        )[0]
-        if result != spec.get("custom_configs")[1].get("content"):
+        timeout, interval = 300, 6
+        for w in WaitUntil(timeout=timeout, interval=interval):
+            result = Container(node).exec(
+                container=container,
+                interactive=True,
+                tty=True,
+                cmds=f"cat {mount_path}",
+            )[0]
+            if result == spec.get("custom_configs")[1].get("content"):
+                break
+        if w.expired:
             raise CephadmOpsExecutionError(
-                "{service} container file content not updated"
+                f"{service} container file content not updated"
             )
 
 
@@ -43,7 +51,7 @@ def run(ceph_cluster, **kwargs):
         service = spec.get("service_name")
         out = CephAdm(installer).ceph.orch.redeploy(service)
         if "Scheduled" not in out:
-            raise CephadmOpsExecutionError("Fail to redeploy {service}")
+            raise CephadmOpsExecutionError(f"Fail to redeploy {service}")
 
     # Validate custom file mounted in containers
     check_custom_file(installer, config)
