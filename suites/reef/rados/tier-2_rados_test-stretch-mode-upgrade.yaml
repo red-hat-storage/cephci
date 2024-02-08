@@ -174,6 +174,7 @@ tests:
   - test:
       name: rbd-io
       module: rbd_faster_exports.py
+      polarion-id: CEPH-83574972
       config:
         rep-pool-only: True
         rep_pool_config:
@@ -229,6 +230,7 @@ tests:
   - test:
       name: rbd-io
       module: rbd_faster_exports.py
+      polarion-id: CEPH-83574972
       config:
         rep-pool-only: True
         rep_pool_config:
