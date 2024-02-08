@@ -138,7 +138,7 @@ tests:
   - test:
       name: Test OSD Memory Target
       desc: Set OSD Memory Target on OSD and Host
-      module: test_osd_memory_target.py
+      module: test_osd_memory_target_cephadm.py
       config:
         hosts:
             - node3

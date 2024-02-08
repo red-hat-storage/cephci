@@ -38,7 +38,7 @@ def run(ceph_cluster, **kw):
     log.info(f"Memory target is set on host '{hostname}' : '{value}'")
 
     # Verify that the option is set in ceph config dump
-    kw = {"format": "json-pretty"}
+    kw = {"format": "json"}
     out = cephadm.ceph.config.dump(**kw)
     data = json.loads(out[0])
     found = False
@@ -56,7 +56,7 @@ def run(ceph_cluster, **kw):
 
     # Verify osd memory target for osd on the host matches the host level value
     out = cephadm.ceph.osd.tree(**kw)
-    data = json.loads(out[0])
+    data = json.loads(out)
     for item in data["nodes"]:
         if item.get("type") == "host" and item.get("name") == hostname:
             osd_list = item["children"]
