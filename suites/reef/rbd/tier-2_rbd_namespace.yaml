@@ -1,0 +1,85 @@
+# Tier2: Test suite to cover RBD namespace related tests
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_namespace.yaml
+#
+# Ceph RBD component.
+#
+# Cluster Configuration:
+#    Conf file - conf/reef/rbd/4-node-cluster-with-1-client.yaml
+#    Node 4 must to be a client node
+#
+# The following tests are covered
+#   - CEPH-83582474 - Testing RBD namespace create in default pool
+tests:
+  # Setup the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+# Test to be executed
+  - test:
+      desc: Run namespace creation in default pool
+      module: test_rbd_namespace_default_pool.py
+      name: RBD namespace creation in default pool
+      polarion-id: CEPH-83582474
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}

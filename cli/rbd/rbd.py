@@ -8,6 +8,7 @@ from .device import Device
 from .feature import Feature
 from .image_meta import Image_meta
 from .mirror.mirror import Mirror
+from .namespace import Namespace
 from .pool import Pool
 from .snap import Snap
 
@@ -23,6 +24,7 @@ class Rbd(Cli):
         self.feature = Feature(nodes, self.base_cmd)
         self.image_meta = Image_meta(nodes, self.base_cmd)
         self.config = Config(nodes, self.base_cmd)
+        self.namespace = Namespace(nodes, self.base_cmd)
 
     def create(self, **kw):
         """
