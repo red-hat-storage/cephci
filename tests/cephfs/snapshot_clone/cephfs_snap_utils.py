@@ -462,37 +462,40 @@ class SnapUtils(object):
         )
         sched_snap_list = out.split()
         ret_verified = 0
-        if ret_type not in ["M", "h"]:
-            log.info(
-                f"Retention validation does not exist for {ret_type} type intervals"
-            )
-            return 0
+
         cmd = f"ceph fs snap-schedule status {sched_path} --fs {fs_name} -f json"
         out, rc = client.exec_command(sudo=True, cmd=cmd)
         sched_status = json.loads(out)
         for sched_item in sched_status:
-            if sched_item["path"] == sched_path and sched_item.get("retention"):
-                for key, value in sched_item["retention"].items():
-                    if key == ret_type:
-                        ret_num = value
-                if (
-                    sched_item["path"] == sched_path
-                    and "M" in sched_item["schedule"]
-                    and ret_type == "M"
-                ):
-                    ret_verified = abs(
-                        int(sched_item["created_count"])
-                        - int(sched_item["pruned_count"])
+            if sched_item["path"] == sched_path:
+                if sched_item.get("retention"):
+                    for key, value in sched_item["retention"].items():
+                        if key == ret_type:
+                            ret_num = value
+                    if "M" in sched_item["schedule"] and ret_type == "M":
+                        ret_verified = abs(
+                            int(sched_item["created_count"])
+                            - int(sched_item["pruned_count"])
+                        )
+                    elif "h" in sched_item["schedule"] and ret_type == "h":
+                        ret_verified = abs(
+                            int(sched_item["created_count"])
+                            - int(sched_item["pruned_count"])
+                        )
+                    elif "M" in sched_item["schedule"] and ret_type == "n":
+                        ret_verified = abs(
+                            int(sched_item["created_count"])
+                            - int(sched_item["pruned_count"])
+                        )
+                else:
+                    out, rc = client.exec_command(
+                        sudo=True, cmd="ceph config get mds mds_max_snaps_per_dir"
                     )
-                elif (
-                    sched_item["path"] == sched_path
-                    and "h" in sched_item["schedule"]
-                    and ret_type == "h"
-                ):
-                    ret_verified = abs(
-                        int(sched_item["created_count"])
-                        - int(sched_item["pruned_count"])
-                    )
+                    if int(out.strip()) >= 100:
+                        ret_num = int(out.strip()) - 1
+                    else:
+                        ret_num = int(out.strip())
+                    ret_verified = len(sched_snap_list)
 
         log.info(
             f"Actual Snapshots : {ret_verified}, Expected Snapshots : {ret_num}, Snapshot list : {sched_snap_list}"
