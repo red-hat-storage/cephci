@@ -2728,7 +2728,10 @@ os.system('sudo systemctl start  network')
                     if smallfile_params.get(io_param):
                         io_params[io_param] = smallfile_params[io_param]
             dir_suffix = "".join(
-                [random.choice(string.ascii_letters) for _ in range(3)]
+                [
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in range(3)
+                ]
             )
             io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
             client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
@@ -3390,7 +3393,7 @@ os.system('sudo systemctl start  network')
                  export_created : 1, if export was created in module else 0
         """
         client = mount_params["client"]
-        fs_vol_path = "/"
+        fs_vol_path = mount_params.get("mnt_path", "/")
         mount_suffix = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(3))
