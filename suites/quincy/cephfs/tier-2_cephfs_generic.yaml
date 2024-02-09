@@ -1,0 +1,167 @@
+---
+#=======================================================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_generic.yaml
+  # Conf file : conf/quincy/cephfs/tier-2_cephfs_9-node-cluster.yaml
+# Test-Case Covered:
+#   CEPH-83573462 - Validate the fs command to increase/decrease the max mds daemons
+#   CEPH-83574291 - Configure the standby_replay daemons for active mds, verify add and remove of the feature.
+#   CEPH-83573429 - [Cephfs] Fail mds daemon by it's rank
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: the max mds daemons
+      module: ceph-83573462.py
+      polarion-id: CEPH-83573462
+      desc: Validate the fs command to increase decrease the max mds daemons
+      abort-on-fail: false
+  - test:
+      name: Configure the standby_replay daemons
+      module: ceph_83574291.py
+      polarion-id: CEPH-83574291
+      desc: Configure the standby_replay daemons for active mds verify add and remove of the feature
+      abort-on-fail: false
+  - test:
+      name: Fail mds daemon by it rank
+      module: mds_fail_with_rank.py
+      polarion-id: CEPH-83573429
+      desc: Fail mds daemon by it rank
+      abort-on-fail: false
