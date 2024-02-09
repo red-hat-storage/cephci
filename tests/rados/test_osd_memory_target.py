@@ -21,7 +21,6 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
-    rhbuild = config.get("rhbuild")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
@@ -74,18 +73,18 @@ def run(ceph_cluster, **kw):
 
             # verify the value set using ceph config get and ceph config show
             osd_get_omt = mon_obj.get_config(section="osd", param="osd_memory_target")
+            log.info(
+                f"OSD osd_memory_target set at OSD level from ceph config get: {osd_get_omt}"
+            )
             assert int(osd_get_omt) == 6000000000
             osd_show_omt = mon_obj.show_config(
                 daemon="osd", id="0", param="osd_memory_target"
             )
-            assert int(osd_show_omt) == 6000000000
-            log.info("OSD config parameter osd_memory_target set successfully")
-            log.info(
-                f"OSD osd_memory_target set at OSD level from ceph config get: {osd_get_omt}"
-            )
             log.info(
                 f"OSD osd_memory_target set at OSD level from ceph config show: {osd_show_omt}"
             )
+            assert int(osd_show_omt) == 6000000000
+            log.info("OSD config parameter osd_memory_target set successfully")
 
             # pick an OSD at random to change the osd_memory_target at individual OSD level
             osd_id = random.choice(osd_list)
@@ -100,15 +99,15 @@ def run(ceph_cluster, **kw):
 
             # verify the value set using ceph config get and ceph config show
             osdid_get_omt, osdid_show_omt = fetch_osd_config_value(osd_id)
-            assert int(osdid_get_omt) == 5000000000
-            assert int(osdid_show_omt) == 5000000000
-            log.info("OSD config parameter osd_memory_target set successfully")
             log.info(
                 f"OSD osd_memory_target set for osd.{osd_id} from ceph config get: {osdid_get_omt}"
             )
             log.info(
                 f"OSD osd_memory_target set for osd.{osd_id} from ceph config show: {osdid_show_omt}"
             )
+            assert int(osdid_get_omt) == 5000000000
+            assert int(osdid_show_omt) == 5000000000
+            log.info("OSD config parameter osd_memory_target set successfully")
 
             if not int(osdid_get_omt) == int(osdid_show_omt) == 5000000000:
                 log.error(
@@ -127,8 +126,8 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info("\n ****** Executing finally block ******* \n")
-            mon_obj.remove_config(section=f"osd.{osd_id}", name="osd_memory_target")
             mon_obj.remove_config(section="osd", name="osd_memory_target")
+            mon_obj.remove_config(section=f"osd.{osd_id}", name="osd_memory_target")
         return 0
 
     if config.get("host_level"):
@@ -136,6 +135,7 @@ def run(ceph_cluster, **kw):
         # CEPH-83580881
         # BZ-2213873 | Quincy
         # BZ-2249014 | Pacific
+        # BZ-2244604 | Reef
         This test is to verify the propagation of osd_memory_target parameter
         set at HOST level to individual OSDs
         1. Create cluster with default configuration
@@ -151,17 +151,6 @@ def run(ceph_cluster, **kw):
         9. osd_memory_target value for the 2nd random OSD should get updated
         """
         log.info(doc)
-        # Test will run for all releases once BZ-2213873 has been back-ported
-        # [Jan-2024] BZ-2213873 has now been back ported to Pacific with BZ-2249014
-        if rhbuild.startswith("7"):
-            log.info(
-                "\n \n ********\n [29-Nov-2023] / [10-Jan-2024] "
-                "Test is currently invalid for RHCS Reef as the fix is yet to be"
-                "cherry picked to Reef nightly builds."
-                f"\n Input RHCS build - {rhbuild}, passing the test without running"
-                f"\n *********"
-            )
-            return 0
         try:
             osd_node = random.choice(osd_nodes)
             log.info(f"Random OSD host chosen for the test : {osd_node.hostname}")

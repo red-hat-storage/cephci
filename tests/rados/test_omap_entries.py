@@ -45,7 +45,7 @@ def run(ceph_cluster, **kw):
                 rados_obj.bench_write(
                     pool_name=pool_name,
                     **{
-                        "rados_write_duration": 600,
+                        "rados_write_duration": 500,
                         "byte_size": "4096KB",
                         "max_objs": normal_objs,
                     },

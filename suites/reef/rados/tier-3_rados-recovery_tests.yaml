@@ -112,12 +112,6 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
-      name: Limit PG log size
-      polarion-id: CEPH-83573252
-      module: test_pg_log_limit.py
-      desc: Verify PG log growth limit using pglog_hardlimit flag
-
-  - test:
         name: Testing async recovery
         desc: Testing async recovery
         module: test_osd_async_recovery.py
@@ -130,3 +124,9 @@ tests:
                 pool_name: async_recover
                 pg_num: 16
           desc: Verification of the async recovery
+
+  - test:
+      name: Limit PG log size
+      polarion-id: CEPH-83573252
+      module: test_pg_log_limit.py
+      desc: Verify PG log growth limit using pglog_hardlimit flag
