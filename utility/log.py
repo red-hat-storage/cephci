@@ -20,6 +20,7 @@ later updating log format with 'datetime - level -filename:line_number - message
 """
 import inspect
 import logging
+import logging.handlers
 import os
 from copy import deepcopy
 from typing import Any, Dict
@@ -220,6 +221,11 @@ class Log:
         self.info(f"Test logfile: {test_logfile}")
 
         _handler = logging.FileHandler(test_logfile)
+        _handler = logging.handlers.RotatingFileHandler(
+            test_logfile,
+            maxBytes=10 * 1024 * 1024,  # Set the maximum log file size to 10 MB
+            backupCount=20,  # Keep up to 20 old log files which will be 200 MB per test case
+        )
         _handler.setFormatter(log_format)
         self._logger.addHandler(_handler)
         # error file handler
