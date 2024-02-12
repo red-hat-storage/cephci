@@ -26,6 +26,7 @@ Utility to report result to service
             [--project <STR>]
             [--testrun-id <STR>]
             [--testrun-title <STR>]
+            [--testplan-id <STR>]
             [--xunit <PATH>...]
             [--query <STR>]
             [--config <YAML>]
@@ -40,6 +41,7 @@ Utility to report result to service
         -t --testrun-template <STR>     Test run template
         --testrun-id <STR>              Test run ID
         --testrun-title <STR>           Test run title
+        --testplan-id <STR>             Test plan
         --xunit <PATH>                  XML result files
         --project <STR>                 Project name
         --query <STR>                   Query to create test plan
@@ -87,7 +89,9 @@ def create_testrun_template(project, id, query):
         raise Exception(msg)
 
 
-def create_testrun(project, id, title=None, template=None, status="inprogress"):
+def create_testrun(
+    project, id, title=None, template=None, status="inprogress", testplan_id=None
+):
     """Creating Test Run"""
     from pylero.test_run import TestRun
 
@@ -100,6 +104,13 @@ def create_testrun(project, id, title=None, template=None, status="inprogress"):
 
         # Set testrun status
         tr.status = status
+
+        # Set testplan
+        if testplan_id:
+            tr.plannedin = testplan_id
+
+        # Update testruns
+        tr.update()
 
         LOG.info(f"Testrun '{id}' created successfully")
     except Exception as e:
@@ -166,6 +177,7 @@ if __name__ == "__main__":
     testrun_template = args.get("--testrun-template")
     testrun_id = args.get("--testrun-id")
     testrun_title = args.get("--testrun-title")
+    testplan_id = args.get("--testplan-id")
     query = args.get("--query")
     xunit_results = args.get("--xunit")
     config = args.get("--config")
@@ -198,7 +210,9 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Create testrun
-    create_testrun(project, testrun_id, testrun_title, testrun_template)
+    create_testrun(
+        project, testrun_id, testrun_title, testrun_template, testplan_id=testplan_id
+    )
 
     # Update results with testrun
     for xunit in xunit_results:
