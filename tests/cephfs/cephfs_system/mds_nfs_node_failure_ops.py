@@ -1,13 +1,16 @@
+import json
 import secrets
 import string
 import traceback
 from datetime import datetime, timedelta
+from json import JSONDecodeError
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -34,6 +37,19 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         fs_util.run_ios(client1, f"{mounting_dir}/run_ios_{iter}/", io_tools=["dd"])
         client1.exec_command(sudo=True, cmd=f"rm -rf {mounting_dir}/run_ios_{iter}")
         iter = iter + 1
+
+
+@retry(CommandFailed, tries=3, delay=60)
+def check_nfs_ls(client, nfs_cluster):
+    try:
+        out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+        output = json.loads(out)
+    except JSONDecodeError:
+        output = json.dumps([out])
+    if nfs_cluster in output:
+        log.info("ceph nfs cluster created successfully")
+    else:
+        raise CommandFailed("Failed to create nfs cluster")
 
 
 def run(ceph_cluster, **kw):
@@ -87,12 +103,7 @@ def run(ceph_cluster, **kw):
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")
-        out, rc = client1.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        output = out.split()
-        if nfs_name in output:
-            log.info("ceph nfs cluster created successfully")
-        else:
-            raise CommandFailed("Failed to create nfs cluster")
+        check_nfs_ls(client1, nfs_name)
         nfs_export_name = "/export_" + "".join(
             secrets.choice(string.digits) for i in range(3)
         )

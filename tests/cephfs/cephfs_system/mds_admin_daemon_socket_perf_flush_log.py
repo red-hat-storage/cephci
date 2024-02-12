@@ -8,6 +8,7 @@ from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -34,6 +35,10 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
+        retry_ceph_health = retry(CommandFailed, tries=5, delay=60)(
+            fs_util.get_ceph_health_status
+        )
+        retry_ceph_health(clients[0])
         fs_details = fs_util.get_fs_info(client1)
         if not fs_details:
             fs_util.create_fs(client1, "cephfs")

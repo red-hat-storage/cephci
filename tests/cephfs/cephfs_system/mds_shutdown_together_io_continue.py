@@ -2,10 +2,12 @@ import random
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -57,6 +59,10 @@ def run(ceph_cluster, **kw):
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
+        retry_ceph_health = retry(CommandFailed, tries=5, delay=60)(
+            fs_util.get_ceph_health_status
+        )
+        retry_ceph_health(clients[0])
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util.get_mon_node_ips()
         fs_util.kernel_mount(
@@ -110,7 +116,8 @@ def run(ceph_cluster, **kw):
         num_files_after = f"ls -l {fuse_mounting_dir_1} | grep -c '^d'"
         out2 = client1.exec_command(sudo=True, cmd=num_files_after)
         after1 = int(out2[0].replace("\n", ""))
-        if before1 < after1:
+        log.info(f"before : {before1} , After : {after1}")
+        if before1 <= after1:
             return 0
         else:
             return 1

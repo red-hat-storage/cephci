@@ -13,11 +13,11 @@ log = Log(__name__)
 
 
 global stop_flag
+stop_flag = False
 
 
 def start_io_time(fs_util, client1, mounting_dir, timeout=300):
     global stop_flag
-    stop_flag = False
     iter = 0
     if timeout:
         stop = datetime.now() + timedelta(seconds=timeout)

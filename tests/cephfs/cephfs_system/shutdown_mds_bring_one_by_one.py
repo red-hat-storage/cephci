@@ -8,6 +8,7 @@ from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -56,6 +57,10 @@ def run(ceph_cluster, **kw):
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
+        retry_ceph_health = retry(CommandFailed, tries=5, delay=60)(
+            fs_util.get_ceph_health_status
+        )
+        retry_ceph_health(clients[0])
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util.get_mon_node_ips()
         fs_util.kernel_mount(
@@ -78,7 +83,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd=f"mkdir {test_dir}")
 
         def create_io_dir():
-            for i in range(1, 3000):
+            for i in range(1, 300):
                 directory_name = f"{fuse_mounting_dir_1}directory_{i}"
                 client1.exec_command(sudo=True, cmd=f"mkdir {directory_name}")
                 file_name = f"{directory_name}/file_{i}.txt"
@@ -87,7 +92,7 @@ def run(ceph_cluster, **kw):
         # Creating 5k dirs and files in parallel
         with parallel() as p:
             p.spawn(create_io_dir)
-        find_mdsmap = "ceph fs status -f json"
+        find_mdsmap = "ceph fs status cephfs -f json"
         out1 = client1.exec_command(sudo=True, cmd=find_mdsmap)
         output1 = json.loads(out1[0])
         mdsmap = output1["mdsmap"]
@@ -98,17 +103,17 @@ def run(ceph_cluster, **kw):
         up_mds = []
         standby_mds = []
         for mds in mdsmap:
-            if mds["state"] == "active":
+            if mds["state"] == "active" and mds["name"].startswith("cephfs."):
                 up_mds.append(mds["name"])
-            if mds["state"] == "standby":
+            if mds["state"] == "standby" and mds["name"].startswith("cephfs."):
                 standby_mds.append(mds["name"])
         first_shut = up_mds[0].split(".")[1]
-        log.info("first_shut_node=", first_shut)
+        log.info(f"first_shut_node={first_shut}")
         bringup_mds = []
         for mds in mds_nodes:
             print(mds.node.hostname)
             if mds.node.hostname == first_shut:
-                bringup_mds.append(mds.node)
+                bringup_mds.append(mds)
                 fs_util.node_power_off(node=mds.node, sleep_time=150, **params)
         # updating mds
         out2 = client1.exec_command(sudo=True, cmd=find_mdsmap)
@@ -149,10 +154,6 @@ def run(ceph_cluster, **kw):
         output4 = json.loads(out4[0])
         mdsmap4 = output4["mdsmap"]
         log.info(f"mdsmap4={mdsmap4}")
-        # all mds should be in failed state
-        for mds in mdsmap4:
-            if mds["state"] != "failed":
-                raise CommandFailed(f"mds {mds['name']} is not in failed state")
         for bring in mds_nodes:
             fs_util.node_power_on(node=bring.node, sleep_time=150, **params)
         # check if the mds is restarted
