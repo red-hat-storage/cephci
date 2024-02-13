@@ -22,6 +22,14 @@ class Osd(Cli):
             return out[0].strip()
         return out
 
+    def ls(self):
+        """List OSD id"""
+        cmd = f"{self.base_cmd} ls"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].splitlines()
+        return out
+
     def set(self, flag):
         """Set osd flag
 
