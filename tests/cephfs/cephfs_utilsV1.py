@@ -1218,6 +1218,8 @@ class FsUtils(object):
 
         """
         fs_cmd = f"ceph fs volume create {vol_name}"
+        if kwargs.get("placement"):
+            fs_cmd += f" --placement {kwargs.get('placement')}"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)
         )

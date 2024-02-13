@@ -1,3 +1,5 @@
+import os
+
 from cli import Cli
 from cli.utilities.packages import Package
 
@@ -10,12 +12,13 @@ class SpecStorage(Cli):
     def __init__(self, primary_client):
         super(SpecStorage, self).__init__(primary_client)
         self.primary_client = primary_client
-        self.base_cmd = "python3 /root/SPECstorage2020/SM2020"
         self.packages = ["matplotlib", "PyYAML", "pylibyaml"]
         self.config = "sfs_rc"
-        self.install_dest = "/root/SPECstorage2020"
+        self.install_dest = "/root/specStorage/"
+        self.base_cmd = f"python3 {self.install_dest}SPECstorage2020/SM2020"
         self.outputlog = "result"
         self.benchmark_file = "storage2020.yml"
+        self.install_loc = "http://magna006.ceph.redhat.com/cephci-jenkins/"
 
     def install_spec_storage(self):
         """
@@ -28,13 +31,22 @@ class SpecStorage(Cli):
                 Package(self.primary_client).pip_install(package)
 
             # Add SpecStorage tool
-            cmd = "mount -t nfs -o sec=sys,nfsvers=4.1 reesi004.ceph.redhat.com:/ /tmp"
+            self.execute(sudo=True, cmd=f"mkdir -p {self.install_dest}")
+            cmd = (
+                f"wget {self.install_loc}spec_storage/SPECstorage2020-2529.tgz "
+                f"-O {self.install_dest}/SPECstorage2020-2529.tgz"
+            )
             self.execute(sudo=True, cmd=cmd)
-            cmd = "tar zxvf /tmp/spec_storage/SPECstorage2020-2529.tgz -C /root"
+            cmd = (
+                f"wget {self.install_loc}spec_storage/SPECstorage_clients.sh "
+                f"-O {self.install_dest}/SPECstorage_clients.sh"
+            )
+            self.execute(sudo=True, cmd=cmd)
+            cmd = f"tar zxvf {self.install_dest}/SPECstorage2020-2529.tgz -C {self.install_dest}"
             self.execute(sudo=True, cmd=cmd)
 
             # Run SPECstorage clients script
-            cmd = ". /tmp/spec_storage/SPECstorage_clients.sh"
+            cmd = f". {self.install_dest}/SPECstorage_clients.sh"
             self.execute(sudo=True, cmd=cmd)
         except Exception:
             raise SpecStorageError("SPECstorage installation failed")
@@ -62,7 +74,14 @@ class SpecStorage(Cli):
         """
         try:
             # Add config file "sfc_rc"
-            cmd = f"cp /tmp/spec_storage/{self.config} {self.install_dest}"
+            cmd = f"wget  {self.install_loc}spec_storage/{self.config} -O {self.install_dest}/{self.config}"
+            self.execute(sudo=True, cmd=cmd)
+            # Update installer Location
+            cmd = (
+                f"sed -i '/EXEC_PATH=/d' {self.install_dest}/{self.config} && "
+                f"echo EXEC_PATH={self.install_dest}/SPECstorage2020/binaries/linux/x86_64/netmist >> "
+                f"{self.install_dest}/{self.config}"
+            )
             self.execute(sudo=True, cmd=cmd)
 
             # Update clients with mount point
@@ -131,11 +150,12 @@ class SpecStorage(Cli):
             nfs_mount,
             benchmark_defination,
         )
-
+        nfs_mount = nfs_mount.rstrip("/")
+        last_path_component = os.path.basename(nfs_mount)
         # Run SPECstorage
         cmd = (
-            f"{self.base_cmd} -b {self.install_dest}/{self.benchmark_file}"
+            f"{self.base_cmd} -b {self.install_dest}/SPECstorage2020/{self.benchmark_file}"
             f" -r {self.install_dest}/{self.config}"
-            f" -s {benchmark}-{self.outputlog}"
+            f" -s {benchmark}-{self.outputlog}-{last_path_component}"
         )
         return self.execute(sudo=True, long_running=True, cmd=cmd)
