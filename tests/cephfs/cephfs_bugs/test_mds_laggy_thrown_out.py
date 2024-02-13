@@ -105,8 +105,14 @@ def run(ceph_cluster, **kw):
             for i in standby_reply_mdss_10
         ]
         if standby_reply_mdss != standby_reply_mdss_10:
+            if standby_reply_mdss_objs[0].hostname not in standby_reply_mdss_objs_10:
+                log.info(
+                    f"Standby nodes has changed\n "
+                    f"Before : {standby_reply_mdss} \n After : {standby_reply_mdss_10}"
+                )
+                return 0
             raise CommandFailed(
-                f"Standby nodes has changed\n Before : {standby_reply_mdss} \n After : {standby_reply_mdss_objs_10}"
+                f"Standby nodes has changed\n Before : {standby_reply_mdss} \n After : {standby_reply_mdss_10}"
             )
         standby_reply_mdss_objs[0].exec_command(
             sudo=True,
