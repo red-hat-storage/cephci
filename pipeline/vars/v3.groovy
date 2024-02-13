@@ -1163,8 +1163,11 @@ def reimageNodes(def platform, def nodelist) {
 }
 
 def get_ceph_version(rhcephVersion){
-    def cephVersion = 'quincy'
-    if(rhcephVersion.contains("5.")){
+    def cephVersion = 'reef'
+    if(rhcephVersion.contains("6.")){
+        cephVersion = 'quincy'
+    }
+    else if(rhcephVersion.contains("5.")){
         cephVersion = 'pacific'
     }
     else if(rhcephVersion.contains("3.")){
