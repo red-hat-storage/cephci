@@ -259,6 +259,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.error(be, exc_info=True)
         instance = CephAdmin(cluster=ceph_cluster, **config)
         execute_and_log_results(instance)
+        mem_usage, _ = node.exec_command(
+            cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
+            sudo=True,
+        )
+        LOG.info(mem_usage)
+        top_usage, _ = node.exec_command(cmd="top -b | head -n 20", sudo=True)
+        LOG.info(top_usage)
 
         return 1
 
