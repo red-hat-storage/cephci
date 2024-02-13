@@ -38,7 +38,7 @@ def run(ceph_cluster, **kw):
     # Make the service unmanaged
     specs = config.get("spec")
     specs["unmanaged"] = "true"
-    file = create_yaml_config(node=installer, config=specs)
+    file = create_yaml_config(installer, specs)
 
     # Create OSDs with yaml file
     c = {"pos_args": [], "input": file}
@@ -76,7 +76,7 @@ def run(ceph_cluster, **kw):
     # Make the service managed
     specs = config.get("spec")
     specs["unmanaged"] = "false"
-    file = create_yaml_config(node=installer, config=specs)
+    file = create_yaml_config(installer, specs)
 
     # Create OSDs with yaml file
     c = {"pos_args": [], "input": file}

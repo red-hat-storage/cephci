@@ -85,7 +85,10 @@ tests:
           service_type: osd
           service_name: osd_hdd
           placement:
-            label: "osd"
+            hosts:
+              - node0
+              - node1
+              - node2
           spec:
             data_devices:
               size: 16GB
@@ -102,7 +105,10 @@ tests:
           service_type: osd
           service_name: osd_hdd
           placement:
-            label: "osd"
+            hosts:
+              - node0
+              - node1
+              - node2
           spec:
             data_devices:
               size: 16GB

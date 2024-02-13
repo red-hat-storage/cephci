@@ -18,7 +18,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdm(installer)
 
     # Generate a yaml file
-    file = create_yaml_config(node=installer, config=config)
+    file = create_yaml_config(installer, config)
 
     # Create OSDs with yaml file
     c = {"pos_args": [], "input": file}

@@ -7,7 +7,7 @@ from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
 from cli.exceptions import OperationFailedError
-from cli.utilities.operations import wait_for_cluster_health
+from cli.utilities.operations import wait_for_osd_daemon_state
 from cli.utilities.utils import (
     create_yaml_config,
     get_lvm_on_osd_container,
@@ -70,17 +70,38 @@ def run(ceph_cluster, **kw):
     size = device_spec.get("data_devices", {}).get("size", {}).replace("GB", "")
     _add_node_volumes(nodes=osd_nodes, config=config, size=size, count=4)
 
+    # Get required host from config specs
+    nodes = config.get("spec", {}).get("placement", {}).get("hosts")
+    host = [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
+
+    # Create a spec file specific to hostname
+    specs = config.get("spec", {})
+    specs["placement"]["hosts"] = host
+
+    # Refresh ceph orch devices
+    c = {"refresh": True}
+    if not CephAdm(installer).ceph.orch.device.ls(**c):
+        raise OperationFailedError("Devices are not re-freshed")
+
     # Generate a yaml file
-    file = create_yaml_config(node=installer, config=config)
+    file = create_yaml_config(installer, specs)
 
     # Create OSDs with yaml file
     c = {"pos_args": [], "input": file}
     CephAdm(nodes=installer, mount=file).ceph.orch.apply(**c)
 
-    # Wait for cluster health to be ok
-    wait_for_cluster_health(
-        node=installer, status="HEALTH_OK", timeout=1800, interval=30
-    )
+    # Wait for OSDs ids
+    timeout, interval = 300, 6
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        if CephAdm(installer).ceph.osd.ls():
+            break
+    if w.expired:
+        raise OperationFailedError("Failed to wait for OSD to generate")
+
+    # Wait for OSDs to be ready and running state
+    out = CephAdm(installer).ceph.osd.ls()
+    for osd in out:
+        wait_for_osd_daemon_state(installer, osd, "up")
 
     # Get the lvm list before OSD Zap
     running_containers, _ = get_running_containers(
