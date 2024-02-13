@@ -1,0 +1,1011 @@
+# Cluster for Nfs Ganesha Scale environment.
+
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.19.96.0/23']
+      nodes:
+        - hostname: cali013.ceph.redhat.com
+          id: node1
+          ip: 10.8.130.13
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdd
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali015.ceph.redhat.com
+          id: node2
+          ip: 10.8.130.15
+          root_password: passwd
+          role:
+            - mds
+            - nfs
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali016.ceph.redhat.com
+          id: node3
+          ip: 10.8.130.16
+          root_password: passwd
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali018.ceph.redhat.com
+          id: node4
+          ip: 10.8.130.18
+          root_password: passwd
+          role:
+            - nfs
+            - mds
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: cali019.ceph.redhat.com
+          id: node5
+          ip: 10.8.130.19
+          root_password: passwd
+          role:
+            - osd
+            - mon
+            - nfs
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali020.ceph.redhat.com
+          id: node6
+          ip: 10.8.130.20
+          root_password: passwd
+          role:
+            - osd
+            - mgr
+            - mon
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: dhcp47-187.lab.eng.blr.redhat.com
+          id: node9
+          ip: 10.70.47.187
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-14.lab.eng.blr.redhat.com
+          id: node10
+          ip: 10.70.46.14
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-9.lab.eng.blr.redhat.com
+          id: node11
+          ip: 10.70.46.9
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-8.lab.eng.blr.redhat.com
+          id: node12
+          ip: 10.70.46.8
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-11.lab.eng.blr.redhat.com
+          id: node13
+          ip: 10.70.46.11
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-186.lab.eng.blr.redhat.com
+          id: node14
+          ip: 10.70.47.186
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-10.lab.eng.blr.redhat.com
+          id: node15
+          ip: 10.70.46.10
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-245.lab.eng.blr.redhat.com
+        #   id: node16
+        #   ip: 10.70.45.245
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node46
+          id: node16
+          ip: 10.0.204.157
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-244.lab.eng.blr.redhat.com
+        #   id: node17
+        #   ip: 10.70.45.244
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node45
+          id: node17
+          ip: 10.0.204.233
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-247.lab.eng.blr.redhat.com
+        #   id: node18
+        #   ip: 10.70.45.247
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-OA18ZA-node73
+          id: node18
+          ip: 10.0.207.189
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-165.lab.eng.blr.redhat.com
+          id: node19
+          ip: 10.70.47.165
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-164.lab.eng.blr.redhat.com
+          id: node20
+          ip: 10.70.47.164
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-246.lab.eng.blr.redhat.com
+        #   id: node21
+        #   ip: 10.70.45.246
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node44
+          id: node21
+          ip: 10.0.207.206
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-167.lab.eng.blr.redhat.com
+          id: node22
+          ip: 10.70.47.167
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-241.lab.eng.blr.redhat.com
+        #   id: node23
+        #   ip: 10.70.45.241
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node43
+          id: node23
+          ip: 10.0.205.9
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-240.lab.eng.blr.redhat.com
+        #   id: node24
+        #   ip: 10.70.45.240
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-OA18ZA-node72
+          id: node24
+          ip: 10.0.204.146
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-160.lab.eng.blr.redhat.com
+          id: node25
+          ip: 10.70.47.160
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-161.lab.eng.blr.redhat.com
+          id: node26
+          ip: 10.70.47.161
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-163.lab.eng.blr.redhat.com
+          id: node27
+          ip: 10.70.47.163
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-162.lab.eng.blr.redhat.com
+          id: node28
+          ip: 10.70.47.162
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-166.lab.eng.blr.redhat.com
+          id: node29
+          ip: 10.70.47.166
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-173.lab.eng.blr.redhat.com
+          id: node30
+          ip: 10.70.47.173
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-172.lab.eng.blr.redhat.com
+          id: node31
+          ip: 10.70.47.172
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-242.lab.eng.blr.redhat.com
+        #   id: node32
+        #   ip: 10.70.45.242
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node42
+          id: node32
+          ip: 10.0.206.43
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-175.lab.eng.blr.redhat.com
+          id: node33
+          ip: 10.70.47.175
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-253.lab.eng.blr.redhat.com
+        #   id: node34
+        #   ip: 10.70.45.253
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node41
+          id: node34
+          ip: 10.0.206.176
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-252.lab.eng.blr.redhat.com
+        #   id: node35
+        #   ip: 10.70.45.252
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-OA18ZA-node71
+          id: node35
+          ip: 10.0.205.230
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-174.lab.eng.blr.redhat.com
+          id: node36
+          ip: 10.70.47.174
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-169.lab.eng.blr.redhat.com
+          id: node37
+          ip: 10.70.47.169
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-255.lab.eng.blr.redhat.com
+        #   id: node38
+        #   ip: 10.70.45.255
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node40
+          id: node38
+          ip: 10.0.206.140
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-168.lab.eng.blr.redhat.com
+          id: node39
+          ip: 10.70.47.168
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-171.lab.eng.blr.redhat.com
+          id: node40
+          ip: 10.70.47.171
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-170.lab.eng.blr.redhat.com
+          id: node41
+          ip: 10.70.47.170
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-149.lab.eng.blr.redhat.com
+          id: node42
+          ip: 10.70.47.149
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-254.lab.eng.blr.redhat.com
+        #   id: node43
+        #   ip: 10.70.45.254
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-OA18ZA-node70
+          id: node43
+          ip: 10.0.204.202
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-148.lab.eng.blr.redhat.com
+          id: node44
+          ip: 10.70.47.148
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-151.lab.eng.blr.redhat.com
+          id: node45
+          ip: 10.70.47.151
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-251.lab.eng.blr.redhat.com
+        #   id: node46
+        #   ip: 10.70.45.251
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node39
+          id: node46
+          ip: 10.0.209.10
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-250.lab.eng.blr.redhat.com
+        #   id: node47
+        #   ip: 10.70.45.250
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node38
+          id: node47
+          ip: 10.0.210.145
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-229.lab.eng.blr.redhat.com
+        #   id: node48
+        #   ip: 10.70.45.229
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-OA18ZA-node69
+          id: node48
+          ip: 10.0.209.219
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-228.lab.eng.blr.redhat.com
+        #   id: node49
+        #   ip: 10.70.45.228
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        # - hostname: dhcp45-248.lab.eng.blr.redhat.com
+        #   id: node50
+        #   ip: 10.70.45.248
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        # - hostname: dhcp45-231.lab.eng.blr.redhat.com
+        #   id: node51
+        #   ip: 10.70.45.231
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        # - hostname: dhcp45-249.lab.eng.blr.redhat.com
+        #   id: node52
+        #   ip: 10.70.45.249
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node37
+          id: node49
+          ip: 10.0.208.86
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node36
+          id: node50
+          ip: 10.0.208.164
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node68
+          id: node51
+          ip: 10.0.210.91
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node35
+          id: node52
+          ip: 10.0.211.80
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-150.lab.eng.blr.redhat.com
+          id: node53
+          ip: 10.70.47.150
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp47-145.lab.eng.blr.redhat.com
+          id: node54
+          ip: 10.70.47.145
+          root_password: r00tme
+          role:
+            - client
+        # - hostname: dhcp45-230.lab.eng.blr.redhat.com
+        #   id: node55
+        #   ip: 10.70.45.230
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node46
+          id: node55
+          ip: 10.0.204.157
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node75
+          id: node56
+          ip: 10.0.207.223
+          root_password: passwd
+          role:
+            - client
+        # - hostname: dhcp45-224.lab.eng.blr.redhat.com
+        #   id: node57
+        #   ip: 10.70.45.224
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        # - hostname: dhcp45-224.lab.eng.blr.redhat.com
+        #   id: node57
+        #   ip: 10.70.45.224
+        #   root_password: r00tme
+        #   role:
+        #     - client
+        - hostname: ceph-nfs_client-YMKPPJ-node47
+          id: node57
+          ip: 10.0.207.134
+          root_password: passwd
+          role:
+            - client
+        - hostname: dhcp47-144.lab.eng.blr.redhat.com
+          id: node58
+          ip: 10.70.47.144
+          root_password: r00tme
+          role:
+            - client
+
+      #### RHOS-D Node
+
+        - hostname: ceph-nfs_client-YMKPPJ-node29
+          id: node59
+          ip: 10.0.210.244
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node28
+          id: node60
+          ip: 10.0.209.97
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node64
+          id: node61
+          ip: 10.0.208.74
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node27
+          id: node62
+          ip: 10.0.208.93
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node26
+          id: node63
+          ip: 10.0.208.245
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node25
+          id: node64
+          ip: 10.0.209.25
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node63
+          id: node65
+          ip: 10.0.209.110
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node24
+          id: node66
+          ip: 10.0.211.83
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node23
+          id: node67
+          ip: 10.0.210.170
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node62
+          id: node68
+          ip: 10.0.210.249
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node22
+          id: node69
+          ip: 10.0.210.121
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node21
+          id: node70
+          ip: 10.0.211.150
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node20
+          id: node71
+          ip: 10.0.211.122
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node61
+          id: node72
+          ip: 10.0.208.14
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node19
+          id: node73
+          ip: 10.0.208.114
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node18
+          id: node74
+          ip: 10.0.211.114
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node17
+          id: node75
+          ip: 10.0.208.80
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node15
+          id: node76
+          ip: 10.0.209.65
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node16
+          id: node77
+          ip: 10.0.210.229
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node8
+          id: node78
+          ip: 10.0.209.189
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node7
+          id: node79
+          ip: 10.0.211.174
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node6
+          id: node80
+          ip: 10.0.211.5
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node5
+          id: node81
+          ip: 10.0.208.52
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node58
+          id: node82
+          ip: 10.0.211.25
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node4
+          id: node83
+          ip: 10.0.209.183
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node3
+          id: node84
+          ip: 10.0.209.96
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node2
+          id: node85
+          ip: 10.0.210.148
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node1
+          id: node86
+          ip: 10.0.209.26
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node92
+          id: node87
+          ip: 10.0.209.140
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node86
+          id: node88
+          ip: 10.0.99.206
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node60
+          id: node89
+          ip: 10.0.153.78
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node83
+          id: node90
+          ip: 10.0.153.36
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node59
+          id: node91
+          ip: 10.0.204.131
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node82
+          id: node92
+          ip: 10.0.205.92
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node57
+          id: node93
+          ip: 10.0.205.2
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node81
+          id: node94
+          ip: 10.0.205.93
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node56
+          id: node95
+          ip: 10.0.207.86
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node80
+          id: node96
+          ip: 10.0.204.176
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node55
+          id: node97
+          ip: 10.0.204.78
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node54
+          id: node98
+          ip: 10.0.205.32
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node79
+          id: node99
+          ip: 10.0.207.46
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node53
+          id: node100
+          ip: 10.0.205.254
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node78
+          id: node101
+          ip: 10.0.204.217
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node52
+          id: node102
+          ip: 10.0.206.188
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node51
+          id: node103
+          ip: 10.0.206.110
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node77
+          id: node104
+          ip: 10.0.207.104
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node50
+          id: node105
+          ip: 10.0.206.65
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-OA18ZA-node76
+          id: node106
+          ip: 10.0.205.39
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node49
+          id: node107
+          ip: 10.0.205.125
+          root_password: passwd
+          role:
+            - client
+        - hostname: ceph-nfs_client-YMKPPJ-node48
+          id: node108
+          ip: 10.0.205.249
+          root_password: passwd
+          role:
+            - client
+        # - hostname: ceph-nfs_client-OA18ZA-node75
+        #   id: node30
+        #   ip: 10.0.207.223
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node47
+        #   id: node31
+        #   ip: 10.0.207.134
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node46
+        #   id: node32
+        #   ip: 10.0.204.157
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node74
+        #   id: node33
+        #   ip: 10.0.207.160
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node45
+        #   id: node34
+        #   ip: 10.0.204.233
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node73
+        #   id: node35
+        #   ip: 10.0.207.189
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node44
+        #   id: node36
+        #   ip: 10.0.207.206
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node43
+        #   id: node37
+        #   ip: 10.0.205.9
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node72
+        #   id: node38
+        #   ip: 10.0.204.146
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node42
+        #   id: node39
+        #   ip: 10.0.206.43
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node41
+        #   id: node40
+        #   ip: 10.0.206.176
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node71
+        #   id: node41
+        #   ip: 10.0.205.230
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node40
+        #   id: node42
+        #   ip: 10.0.206.140
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node70
+        #   id: node43
+        #   ip: 10.0.204.202
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node39
+        #   id: node44
+        #   ip: 10.0.209.10
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node38
+        #   id: node45
+        #   ip: 10.0.210.145
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node69
+        #   id: node46
+        #   ip: 10.0.209.219
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node37
+        #   id: node47
+        #   ip: 10.0.208.86
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node36
+        #   id: node48
+        #   ip: 10.0.208.164
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node68
+        #   id: node49
+        #   ip: 10.0.210.91
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node35
+        #   id: node50
+        #   ip: 10.0.211.80
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node34
+        #   id: node51
+        #   ip: 10.0.211.182
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node67
+        #   id: node52
+        #   ip: 10.0.209.135
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node33
+        #   id: node53
+        #   ip: 10.0.208.187
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node32
+        #   id: node54
+        #   ip: 10.0.209.30
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node66
+        #   id: node55
+        #   ip: 10.0.211.107
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node31
+        #   id: node56
+        #   ip: 10.0.210.36
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-YMKPPJ-node30
+        #   id: node57
+        #   ip: 10.0.210.41
+        #   root_password: passwd
+        #   role:
+        #     - client
+        # - hostname: ceph-nfs_client-OA18ZA-node65
+        #   id: node58
+        #   ip: 10.0.208.160
+        #   root_password: passwd
+        #   role:
+        #     - client

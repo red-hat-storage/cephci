@@ -1,0 +1,1503 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha ---
+#-------------------------------------
+# Conf: conf/reef/nfs/nfs_ganesha_scale.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test NFS server with SPECstorage/FIO/SamllFile benchmark
+#
+#===============================================================================================
+tests:
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.1
+  #       node: node6
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.2
+  #       node: node7
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.8
+  #       node: node6
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.4
+  #       node: node9
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.5
+  #       node: node10
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.6
+  #       node: node11
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.7
+  #       node: node12
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.8
+  #       node: node13
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.9
+  #       node: node14
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.10
+  #       node: node15
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     desc: enable repo
+  #     destroy-cluster: false
+  #     module: test_enable_repo.py
+  #     name: Enables repo
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.1
+  #       node: node8
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.2
+  #       node: node9
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.3
+  #       node: node10
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.4
+  #       node: node11
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.5
+  #       node: node12
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.6
+  #       node: node13
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.7
+  #       node: node14
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.8
+  #       node: node15
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.9
+  #       node: node16
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.10
+  #       node: node17
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.11
+  #       node: node18
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.12
+  #       node: node19
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.13
+  #       node: node20
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.14
+  #       node: node21
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.15
+  #       node: node22
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.16
+  #       node: node23
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.17
+  #       node: node24
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.18
+  #       node: node25
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.19
+  #       node: node26
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.20
+  #       node: node27
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.21
+  #       node: node28
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.22
+  #       node: node29
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.23
+  #       node: node30
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.24
+  #       node: node31
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.25
+  #       node: node32
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.26
+  #       node: node33
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.27
+  #       node: node34
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.28
+  #       node: node35
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.29
+  #       node: node36
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.30
+  #       node: node37
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.31
+  #       node: node38
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.32
+  #       node: node39
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.33
+  #       node: node40
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.34
+  #       node: node41
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.35
+  #       node: node42
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.36
+  #       node: node43
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.37
+  #       node: node44
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.38
+  #       node: node45
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.39
+  #       node: node46
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.40
+  #       node: node47
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.41
+  #       node: node48
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.42
+  #       node: node49
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.43
+  #       node: node50
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.44
+  #       node: node51
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.45
+  #       node: node52
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.46
+  #       node: node53
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.47
+  #       node: node54
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.48
+  #       node: node55
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.49
+  #       node: node56
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.50
+  #       node: node57
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.51
+  #       node: node58
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.52
+  #       node: node59
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.53
+  #       node: node60
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.54
+  #       node: node61
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.55
+  #       node: node62
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.56
+  #       node: node63
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.57
+  #       node: node64
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.58
+  #       node: node65
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.59
+  #       node: node66
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.60
+  #       node: node67
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.61
+  #       node: node68
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.62
+  #       node: node69
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.63
+  #       node: node70
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.64
+  #       node: node71
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.65
+  #       node: node72
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.66
+  #       node: node73
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.67
+  #       node: node74
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.68
+  #       node: node75
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.69
+  #       node: node76
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.70
+  #       node: node77
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.71
+  #       node: node78
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.72
+  #       node: node79
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.73
+  #       node: node80
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.74
+  #       node: node81
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.75
+  #       node: node82
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.76
+  #       node: node83
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.77
+  #       node: node84
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.78
+  #       node: node85
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.79
+  #       node: node86
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-fuse
+  #       copy_admin_keyring: true
+  #     desc: Configure the RGW,RBD client system
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure client
+
+  # - test:
+  #     name: CephFS IO
+  #     desc: CephFS IO with specfic percentage
+  #     module: test_connect_nodes.py
+  #     abort-on-fail: false
+
+  # - test:
+  #     name: CephFS IO
+  #     desc: CephFS IO with specfic percentage
+  #     module: test_io.py
+  #     config:
+  #       wait_for_io: True
+  #       cephfs:
+  #         "fill_data": 30
+  #         "num_of_clients": 100
+  #         "io_tool": "smallfile"
+  #         "mount": "fuse"
+  #         "batch_size": 30
+  #         "filesystem": "cephfs_io_1"
+  #         "mount_dir": ""
+  #     abort-on-fail: false
+
+  - test:
+      name: Test nfs scale with SpecStorage
+      module: nfs_verify_scale.py
+      desc: Test nfs scale setup with SpecStorage IO tool
+      polarion-id:
+      abort-on-fail: false
+      config:
+        execution_type: parallel
+        ha: True
+        vip: 10.8.130.236/21
+        num_of_servers: 2
+        num_of_exports: 1500
+        num_of_clients: 100
+        exports_per_client: 15
+        nfs_version: 4.1
+        benchmark: SWBUILD
+        load: 1
+        incr_load: 1
+        num_runs: 1
+        clients:
+          - client1
+          - client2
+          - client3
+          - client4
+          - client5
+          - client6
+          - client7
+          - client8
+          - client9
+          - client10
+          - client11
+          - client12
+          - client13
+          - client14
+          - client15
+          - client16
+          - client17
+          - client18
+          - client19
+          - client20
+          - client21
+          - client22
+          - client23
+          - client24
+          - client25
+          - client26
+          - client27
+          - client28
+          - client29
+          - client30
+          - client31
+          - client32
+          - client33
+          - client34
+          - client35
+          - client36
+          - client37
+          - client38
+          - client39
+          - client40
+          - client41
+          - client42
+          - client43
+          - client44
+          - client45
+          - client46
+          - client47
+          - client48
+          - client49
+          - client50
+          - client51
+          - client52
+          - client53
+          - client54
+          - client55
+          - client56
+          - client57
+          - client58
+          - client59
+          - client60
+          - client61
+          - client62
+          - client63
+          - client64
+          - client65
+          - client66
+          - client67
+          - client68
+          - client69
+          - client70
+          - client71
+          - client72
+          - client73
+          - client74
+          - client75
+          - client76
+          - client77
+          - client78
+          - client79
+          - client80
+          - client81
+          - client82
+          - client83
+          - client84
+          - client85
+          - client86
+          - client87
+          - client88
+          - client89
+          - client90
+          - client91
+          - client92
+          - client93
+          - client94
+          - client95
+          - client96
+          - client97
+          - client98
+          - client99
+          - client100
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 30
+          Files_per_dir: 60
+          File_size: 3k
+          Instances: 4
