@@ -491,3 +491,30 @@ tests:
       module: test_rbd_pwl_cache_cluster_operation.py
       name: Validate cluster operation with persistent cache enabled
       polarion-id: CEPH-83574891
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:
+          - client
+          - pool
+          - image
+        cache_file_size: 1073741824         # 1 GB
+        rbd_persistent_cache_mode: ssd      # "ssd" or "rwl" on pmem device
+        drive: /dev/nvme0n1
+        client: node10
+        cleanup: true
+        validate_cache_path: true
+        rep-pool-only: True
+        do_not_create_image: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          size: 100M
+      desc: Validate PWL cache status on encrypted images
+      destroy-cluster: false
+      module: test_rbd_pwl_with_encrypted_images.py
+      name: PWL cache creation on encrypted images
+      polarion-id: CEPH-83575409
