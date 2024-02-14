@@ -1,4 +1,5 @@
 import json
+import random
 import re
 import secrets
 import string
@@ -238,9 +239,12 @@ def run_snap_test(snap_test_params):
             "vol_name": snap_test_params["fs_name"],
             "group_name": "subvolgroup_snap_schedule",
         }
+        dir_suffix = "".join(
+            [random.choice(string.ascii_lowercase + string.digits) for _ in range(3)]
+        )
         subvolume = {
             "vol_name": snap_test_params["fs_name"],
-            "subvol_name": "snap_subvolume",
+            "subvol_name": f"snap_subvolume_{dir_suffix}",
             "group_name": "subvolgroup_snap_schedule",
             "size": "6442450944",
         }

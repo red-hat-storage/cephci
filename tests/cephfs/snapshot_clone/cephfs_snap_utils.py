@@ -466,9 +466,11 @@ class SnapUtils(object):
         cmd = f"ceph fs snap-schedule status {sched_path} --fs {fs_name} -f json"
         out, rc = client.exec_command(sudo=True, cmd=cmd)
         sched_status = json.loads(out)
+        log.info(f"sched_status:{sched_status}")
         for sched_item in sched_status:
             if sched_item["path"] == sched_path:
                 if sched_item.get("retention"):
+                    log.info(f"sched_item:{sched_item}")
                     for key, value in sched_item["retention"].items():
                         if key == ret_type:
                             ret_num = value
@@ -477,16 +479,19 @@ class SnapUtils(object):
                             int(sched_item["created_count"])
                             - int(sched_item["pruned_count"])
                         )
+                        log.info(f"ret_verified : {ret_verified},ret_type:{ret_type}")
                     elif "h" in sched_item["schedule"] and ret_type == "h":
                         ret_verified = abs(
                             int(sched_item["created_count"])
                             - int(sched_item["pruned_count"])
                         )
+                        log.info(f"ret_verified : {ret_verified},ret_type:{ret_type}")
                     elif "M" in sched_item["schedule"] and ret_type == "n":
                         ret_verified = abs(
                             int(sched_item["created_count"])
                             - int(sched_item["pruned_count"])
                         )
+                        log.info(f"ret_verified : {ret_verified},ret_type:{ret_type}")
                 else:
                     out, rc = client.exec_command(
                         sudo=True, cmd="ceph config get mds mds_max_snaps_per_dir"
