@@ -450,12 +450,12 @@ tests:
           config:
             roles:
               - rgw
-            rule: root netem delay 30ms 6ms distribution normal
+            rule: root netem delay 10ms 5ms distribution normal
         ceph-sec:
           config:
             roles:
               - rgw
-            rule: root netem delay 20ms 5ms distribution normal
+            rule: root netem delay 10ms 5ms distribution normal
       desc: Configuring network traffic delay
       module: configure-tc.py
       name: apply-net-qos
