@@ -7,6 +7,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -151,8 +152,11 @@ def run(ceph_cluster, **kw):
         log.info("Clean Up in progess")
         fs_util.enable_mds_logs(client1, default_fs)
         try:
+            retry_remove_snapshot = retry(CommandFailed, tries=3, delay=30)(
+                fs_util.remove_snapshot
+            )
             for snapshot in snapshot_list:
-                fs_util.remove_snapshot(client1, **snapshot, check_ec=False)
+                retry_remove_snapshot(client1, **snapshot, check_ec=False)
             fs_util.remove_subvolume(client1, **subvolume, check_ec=False)
         except Exception as e:
             log.info(e)
