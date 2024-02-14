@@ -73,12 +73,53 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
-# Test to be executed
+# Tests to be executed
   - test:
       desc: Run namespace creation in default pool
       module: test_rbd_namespace_default_pool.py
       name: RBD namespace creation in default pool
       polarion-id: CEPH-83582474
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}
+
+  - test:
+      desc: Run namespace creation in custom pool
+      module: test_rbd_namespace_custom_pool.py
+      name: RBD namespace creation in custom pool
+      polarion-id: CEPH-83582475
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd03: {}
+
+  - test:
+      desc: Run image creation in the namespace
+      module: test_rbd_namespace_image_pool.py
+      name: RBD image creation in the namespace
+      polarion-id: CEPH-83582476
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}
+
+  - test:
+      desc: Run namespace creation with the same name in diff pool
+      module: test_rbd_namespace_same_ns_diff_pool.py
+      name: RBD namespace creation with the same name in diff pool
+      polarion-id: CEPH-83582478
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd05: {}
+          rbd06: {}
+
+  - test:
+      desc: Run img creation with the same name in diff ns
+      module: test_rbd_namespace_same_img_diff_ns.py
+      name: RBD img creation with the same name in diff ns
+      polarion-id: CEPH-83582479
       config:
         rep-pool-only: True
         rep_pool_config:
