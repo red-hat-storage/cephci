@@ -3,8 +3,16 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
+from ceph.nvmegw_cli.connection import Connection
+from ceph.nvmegw_cli.gateway import Gateway
+from ceph.nvmegw_cli.host import Host
+from ceph.nvmegw_cli.listener import Listener
+from ceph.nvmegw_cli.log_level import LogLevel
+from ceph.nvmegw_cli.namespace import Namespace
+from ceph.nvmegw_cli.subsystem import Subsystem
+from ceph.nvmegw_cli.version import Version
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
+from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -12,6 +20,17 @@ from utility.retry import retry
 from utility.utils import generate_unique_id, run_fio
 
 LOG = Log(__name__)
+
+services = {
+    "log_level": LogLevel,
+    "version": Version,
+    "gateway": Gateway,
+    "connection": Connection,
+    "subsystem": Subsystem,
+    "listener": Listener,
+    "host": Host,
+    "namespace": Namespace,
+}
 
 
 def initiators(ceph_cluster, gateway, config):
@@ -61,54 +80,22 @@ def run_io(ceph_cluster, num, io):
             raise Exception("FIO failure")
 
 
-def configure_subsystem(config, nvme_cli, ceph_cluster, node):
+def configure_subsystem(config, _cls, command):
     max_ns = config["args"].pop("max-namespaces")
-    pool_name = config["args"].pop("pool")
-    port = config["args"].pop("port")
-    hostnqn = config["args"].pop("hostnqn")
-
     for num in range(1, config["args"].pop("subsystems") + 1):
         config["args"].update(
             {
-                "subnqn": f"nqn.2016-06.io.spdk:cnode{num}",
-                "serial_num": f"{num}",
+                "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
+                "s": f"{num}",
                 "m": max_ns,
             }
         )
-
-        subsystem_func = fetch_method(nvme_cli, "create_subsystem")
-        subsystem_func(**config["args"])
-        config["args"].clear()
-
-        client_id = find_client_daemon_id(
-            ceph_cluster, pool_name, node_name=node.hostname
-        )
-        config["args"].update(
-            {
-                "subnqn": f"nqn.2016-06.io.spdk:cnode{num}",
-                "gateway-name": client_id,
-                "traddr": node.ip_address,
-                "port": port,
-            }
-        )
-
-        listener_func = fetch_method(nvme_cli, "create_listener")
-        listener_func(**config["args"])
-        config["args"].clear()
-
-        config["args"].update(
-            {
-                "subnqn": f"nqn.2016-06.io.spdk:cnode{num}",
-                "hostnqn": hostnqn,
-            }
-        )
-
-        host_access_func = fetch_method(nvme_cli, "add_host")
-        host_access_func(**config["args"])
+        subsystem_func = fetch_method(_cls, command)
+        subsystem_func(**config)
         config["args"].clear()
 
 
-def configure_listener(config, nvme_cli, ceph_cluster, node):
+def configure_listener(config, _cls, command, ceph_cluster, node):
     port = config["args"].pop("port")
     pool_name = config["args"].pop("pool")
 
@@ -118,20 +105,34 @@ def configure_listener(config, nvme_cli, ceph_cluster, node):
         )
         config["args"].update(
             {
-                "subnqn": f"nqn.2016-06.io.spdk:cnode{num}",
+                "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
                 "gateway-name": client_id,
                 "traddr": node.ip_address,
-                "port": port,
+                "trsvcid": port,
             }
         )
 
-        listener_func = fetch_method(nvme_cli, "create_listener")
-        listener_func(**config["args"])
+        listener_func = fetch_method(_cls, command)
+        listener_func(**config)
+        config["args"].clear()
+
+
+def configure_host(config, _cls, command):
+    hostnqn = config["args"].pop("hostnqn", None) or "'*'"
+    for num in range(1, config["args"].pop("subsystems") + 1):
+        config["args"].update(
+            {
+                "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
+                "host": hostnqn,
+            }
+        )
+        host_access_func = fetch_method(_cls, command)
+        host_access_func(**config)
         config["args"].clear()
 
 
 def configure_namespace(
-    config, nvme_cli, ceph_cluster, node, init_config, rbd_obj, io_param
+    config, _cls, command, ceph_cluster, node, init_config, rbd_obj, io_param
 ):
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
@@ -157,25 +158,14 @@ def configure_namespace(
             config["args"].clear()
             config["args"].update(
                 {
-                    "name": f"{name}-bdev{num}",
-                    "image": f"{name}-image{num}",
-                    "pool": pool,
+                    "rbd-image": f"{name}-image{num}",
+                    "rbd-pool": pool,
+                    "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
                 }
             )
-
-            bdev_func = fetch_method(nvme_cli, "create_block_device")
-            bdev_func(**config["args"])
-            config["args"].clear()
-
-            config["args"].update(
-                {
-                    "bdev": f"{name}-bdev{num}",
-                    "subnqn": f"nqn.2016-06.io.spdk:cnode{sub_num}",
-                }
-            )
-            config["args"]["anagrpid"] = 1 if sub_num < half_sub + 1 else 2
-            namespace_func = fetch_method(nvme_cli, "add_namespace")
-            namespace_func(**config["args"])
+            config["args"]["load-balancing-group"] = 1 if sub_num < half_sub + 1 else 2
+            namespace_func = fetch_method(_cls, command)
+            namespace_func(**config)
 
             for io in io_param:
                 run_io(ceph_cluster, num, io)
@@ -209,6 +199,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Configure Ceph NVMeoF entities at scale over CLI.")
     config = deepcopy(kwargs["config"])
     node = get_node_by_id(ceph_cluster, config["node"])
+    port = config.get("port", 5500)
     rbd_pool = config.get("rbd_pool", "rbd_pool")
     kwargs["config"].update(
         {
@@ -219,13 +210,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     )
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
     overrides = kwargs.get("test_data", {}).get("custom-config")
-
+    cli_image = None
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            NVMeCLI.CEPH_NVMECLI_IMAGE = value
+            cli_image = value
             break
-
-    nvme_cli = NVMeCLI(node, config.get("port", 5500))
 
     try:
         steps = config.get("steps", [])
@@ -234,18 +223,25 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         for step in steps:
             cfg = step["config"]
+            service = cfg.pop("service")
             command = cfg.pop("command")
 
-            if command == "create_subsystem":
-                configure_subsystem(cfg, nvme_cli, ceph_cluster, node)
-            elif command == "create_listener":
-                configure_listener(cfg, nvme_cli, ceph_cluster, node)
-            elif command == "add_namespace":
+            _cls = services[service](node, port)
+            if cli_image:
+                _cls.NVMEOF_CLI_IMAGE = cli_image
+
+            if service == "subsystem":
+                configure_subsystem(cfg, _cls, command)
+            elif service == "listener":
+                configure_listener(cfg, _cls, command, ceph_cluster, node)
+            elif service == "host":
+                configure_host(cfg, _cls, command)
+            elif service == "namespace":
                 configure_namespace(
-                    cfg, nvme_cli, ceph_cluster, node, init_config, rbd_obj, io
+                    cfg, _cls, command, ceph_cluster, node, init_config, rbd_obj, io
                 )
             else:
-                func = fetch_method(nvme_cli, command)
+                func = fetch_method(_cls, command)
 
                 if "args" not in cfg:
                     cfg["args"] = {}
