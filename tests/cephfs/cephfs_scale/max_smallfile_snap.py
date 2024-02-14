@@ -95,6 +95,12 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} subvol_max_snap",
         )
+        log.info("Note default value for mds_max_snaps_per_dir")
+        out, rc = client1.exec_command(
+            sudo=True, cmd="ceph config get mds mds_max_snaps_per_dir"
+        )
+        default_retention = int(out.strip())
+        log.info(f"Default value for mds_max_snaps_per_dir:{default_retention}")
         client1.exec_command(
             sudo=True,
             cmd=f"ceph config set mds mds_max_snaps_per_dir {max_snap}",
@@ -150,6 +156,10 @@ def run(ceph_cluster, **kw):
         for cmd in cmd_list:
             collect_ceph_details(client1, cmd)
         log.info("Clean Up in progess")
+        out, rc = client1.exec_command(
+            sudo=True,
+            cmd=f"ceph config set mds mds_max_snaps_per_dir {default_retention}",
+        )
         for snapshot in snapshot_list:
             fs_util.remove_snapshot(client1, **snapshot)
         fs_util.remove_subvolume(client1, **subvolume, check_ec=False)

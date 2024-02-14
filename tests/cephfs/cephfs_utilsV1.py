@@ -2730,7 +2730,7 @@ os.system('sudo systemctl start  network')
             dir_suffix = "".join(
                 [
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in range(3)
+                    for _ in range(4)
                 ]
             )
             io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
