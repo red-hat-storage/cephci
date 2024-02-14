@@ -110,6 +110,23 @@ tests:
               size: 32GB
 
   - test:
+      name: OSDs redeployed colocated and non-colocated
+      desc: Dedicated db not creating for newly deployed OSDs for non-collocated scenario
+      polarion-id: CEPH-83575602
+      module: test_redeploy_collocated_and_non_collocated_osd.py
+      config:
+        spec:
+          service_type: osd
+          service_name: osd_hdd
+          placement:
+            label: "osd"
+          spec:
+            data_devices:
+              size: 15GB
+            db_devices:
+              size: 100GB
+
+  - test:
       name: OSDs deploy with spec crush_device_class
       desc: Deploy OSD using the DriveGroup spec crush_device_class on specified paths
       polarion-id: CEPH-83575587
