@@ -865,11 +865,11 @@ def get_pid_limit(node, service):
     return pid_limit
 
 
-def create_yaml_config(node, config):
+def create_yaml_config(node, specs):
     """Create temp yaml file from config
     Args:
         node (ceph): ceph node
-        config (dict): ceph config
+        specs (dict): ceph specs
     Return: file name
     """
     # Create temporory file path
@@ -877,6 +877,6 @@ def create_yaml_config(node, config):
 
     # Create temporary file and dump data
     with node.remote_file(sudo=True, file_name=temp_file.name, file_mode="w") as file:
-        yaml.dump(config.get("spec"), file, default_flow_style=False)
+        yaml.dump(specs, file, default_flow_style=False)
 
     return temp_file.name
