@@ -270,6 +270,7 @@ tests:
       desc: test_bucket_listing_flat_unordered.yaml on secondary
       polarion-id: CEPH-83573545  #CEPH-83574826
       module: sanity_rgw_multisite.py
+      comments: Known issue BZ-2256668
       clusters:
         ceph-sec:
           config:
