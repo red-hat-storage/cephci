@@ -42,7 +42,7 @@ class MonElectionStrategies:
         """
         allows to add mon to  disallowed leaders list in ceph
         Args:
-            mon: name of the monitor to be added/removed
+            mon: name of the monitor to be added
         Returns: True -> Pass, False -> fail
         """
         cmd = f" ceph mon add disallowed_leader {mon}"
@@ -58,9 +58,9 @@ class MonElectionStrategies:
 
     def remove_disallow_mon(self, mon):
         """
-        allows to add mon to  disallowed leaders list in ceph
+        allows to remove a mon from the disallowed leaders' list
         Args:
-            mon: name of the monitor to be added/removed
+            mon: name of the monitor to be removed
         Returns: True -> Pass, False -> fail
         """
         cmd = f" ceph mon rm disallowed_leader {mon}"

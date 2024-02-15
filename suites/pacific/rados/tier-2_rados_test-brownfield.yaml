@@ -1,5 +1,5 @@
 # Suite contains tests to be run after upgrade [brownfield deployment]
-# Use cluster-conf file: conf/reef/rados/7-node-cluster.yaml
+# Use cluster-conf file: conf/pacific/rados/7-node-cluster.yaml
 
 tests:
   - test:
