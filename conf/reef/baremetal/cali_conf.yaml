@@ -1,0 +1,132 @@
+# Cluster for Nfs Ganesha Scale environment.
+
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.19.96.0/23']
+      nodes:
+        - hostname: cali013.ceph.redhat.com
+          id: node1
+          ip: 10.8.130.13
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdd
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali015.ceph.redhat.com
+          id: node2
+          ip: 10.8.130.15
+          root_password: passwd
+          role:
+            - mds
+            - nfs
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali016.ceph.redhat.com
+          id: node3
+          ip: 10.8.130.16
+          root_password: passwd
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali018.ceph.redhat.com
+          id: node4
+          ip: 10.8.130.18
+          root_password: passwd
+          role:
+            - nfs
+            - mds
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: cali019.ceph.redhat.com
+          id: node5
+          ip: 10.8.130.19
+          root_password: passwd
+          role:
+            - osd
+            - mon
+            - nfs
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        - hostname: cali020.ceph.redhat.com
+          id: node6
+          ip: 10.8.130.20
+          root_password: passwd
+          role:
+            - osd
+            - mgr
+            - mon
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: dhcp47-187.lab.eng.blr.redhat.com
+          id: node9
+          ip: 10.70.47.187
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-14.lab.eng.blr.redhat.com
+          id: node10
+          ip: 10.70.46.14
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-9.lab.eng.blr.redhat.com
+          id: node11
+          ip: 10.70.46.9
+          root_password: r00tme
+          role:
+            - client
+        - hostname: dhcp46-8.lab.eng.blr.redhat.com
+          id: node12
+          ip: 10.70.46.8
+          root_password: r00tme
+          role:
+            - client
