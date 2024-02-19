@@ -73,7 +73,7 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
-# Tests to be executed
+#Tests to be executed
   - test:
       desc: Run namespace creation in default pool
       module: test_rbd_namespace_default_pool.py
@@ -120,6 +120,26 @@ tests:
       module: test_rbd_namespace_same_img_diff_ns.py
       name: RBD img creation with the same name in diff ns
       polarion-id: CEPH-83582479
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}
+
+  - test:
+      desc: Run namespace deletion positive flow
+      module: test_rbd_namespace_remove_pos.py
+      name: RBD namespace deletion positive flow
+      polarion-id: CEPH-83583642
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}
+
+  - test:
+      desc: Run namespace deletion negative flow
+      module: test_rbd_namespace_remove_neg.py
+      name: RBD namespace deletion negative flow
+      polarion-id: CEPH-83582477
       config:
         rep-pool-only: True
         rep_pool_config:

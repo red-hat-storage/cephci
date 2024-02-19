@@ -292,13 +292,18 @@ def list_images_and_verify_with_input(**kw):
         kw: {
             "rbd": <>,
             "pool": <>,
+            "namespace": <>,
             "images": <>
         }
     """
     rbd = kw.get("rbd")
     pool = kw.get("pool")
+    namespace = kw.get("namespace", None)
     log.info(f"Listing all pools in the cluster of pool type {pool}")
-    out, err = rbd.ls(pool=pool, format="json")
+    if namespace is not None:
+        out, err = rbd.ls(pool=pool, namespace=namespace, format="json")
+    else:
+        out, err = rbd.ls(pool=pool, format="json")
     if err:
         log.error(f"Error while fetching images from pool {pool}: {err}")
         return 1
@@ -476,29 +481,38 @@ def remove_single_image_and_verify(**kw):
             "rbd": <>,
             "pool": <>,
             "image": <>,
+            "namespace":<>,
             "test_ops_parallely": <>
         }
     """
     rbd = kw.get("rbd")
     pool = kw.get("pool")
     image = kw.get("image")
+    namespace = kw.get("namespace", None)
     test_ops_parallely = kw.get("test_ops_parallely", False)
 
     log.info(f"Removing image {image} from pool {pool}")
-    out, err = rbd.rm(pool=pool, image=image)
+    if namespace is not None:
+        out, err = rbd.rm(pool=pool, namespace=namespace, image=image)
+    else:
+        out, err = rbd.rm(pool=pool, image=image)
     if out or err and "100% complete" not in out + err:
         log.error(
-            f"Image remove failed for image {pool}/{image} with error {out} {err}"
+            f"Image remove failed for image {pool}/{namespace}/{image} with error {out} {err}"
         )
         if test_ops_parallely:
             raise Exception(
-                f"Image remove failed for image {pool}/{image} with error {out} {err}"
+                f"Image remove failed for image {pool}/{namespace}/{image} with error {out} {err}"
             )
         return 1
 
-    rc = list_images_and_verify_with_input(rbd=rbd, pool=pool, images=[image])
+    rc = list_images_and_verify_with_input(
+        rbd=rbd, pool=pool, namespace=namespace, images=[image]
+    )
     if not rc:
-        log.error(f"Image with name {image} is present in pool {pool} after removal")
+        log.error(
+            f"Image with name {image} is present in pool {pool}/{namespace} after removal"
+        )
         if test_ops_parallely:
             raise Exception(
                 f"Image with name {image} is present in pool {pool} after removal"
