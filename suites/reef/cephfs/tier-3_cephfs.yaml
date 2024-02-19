@@ -1,7 +1,7 @@
 #=======================================================================================================================
 # Tier-level: 2
 # Test-Suite: tier-3_cephfs.yaml
-# Conf file : conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml
+# Conf file : conf/reef/cephfs/tier-2_cephfs_9-node-cluster.yaml
 # Test-Case Covered:
 #   CEPH-11238: Converting standy MDS to active MDS
 #   CEPH-11258: Add & remove osd while doing CephFS IOs & check cluster health
