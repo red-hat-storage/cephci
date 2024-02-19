@@ -55,7 +55,7 @@ class NVMeCLI:
 
     def run_control_cli(self, action, **cmd_args):
         """Run CLI via control daemon."""
-        base_cmd = f"podman run {self.CEPH_NVMECLI_IMAGE}"
+        base_cmd = f"podman run --rm {self.CEPH_NVMECLI_IMAGE}"
         base_cmd += (
             f" --server-address {self.node.ip_address} --server-port {self.port}"
         )
