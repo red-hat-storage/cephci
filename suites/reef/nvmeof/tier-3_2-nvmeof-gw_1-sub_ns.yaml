@@ -1,10 +1,11 @@
-# Test suite to scale with 2 GWs having 1 subsystem with 400 namespaces
+# Test suite to scale with 2 GWs GWs having 1 subsystem to 2048 namespaces with 400 namespaces as scale interval per test case
 # Test config at conf/reef/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml or conf/reef/nvmeof/octo-6-node-env.yaml for baremetal
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
   #  2 ceph-nvmeof GWs colocated with osd on node4 and node5, node 6 is nvmeof initiator
   #  nvmeof GW - at end of each scale step/ test below is the configuration
-     # Scale-1 : 1 subsystem, 400 namespaces,  400 RBD images of 1TB size each
+     # Scale-1: 1 subsystem, 400 namespaces,  400 RBD images of 1TB size each
+     # Scale-2 : 1 subsystem, 1648 namespaces,  1648 RBD images of 1TB size each
   #  nvmeof initiator - Each initiator/ client connects to a subsystem ( 1 initiator : 1 subsystem)
   #  io test (no performance tests)
      # Tool : fio
@@ -209,99 +210,6 @@ tests:
               command: add_namespace
               args:
                 start_count: 401
-                end_count: 800
-                image_size: 1T
-                pool: rbd
-                subnqn: nqn.2016-06.io.spdk:cnode1
-          - config:
-              command: get_subsystems
-        initiators:
-            subnqn: nqn.2016-06.io.spdk:cnode1
-            listener_port: 4420
-            node: node6
-        run_io:
-          - node: node6
-            io_type: write
-      desc: Scale to 800 namespaces with IO
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
-      name: Scale to 800 namespaces with IO on 2GW and 1 subsystem
-      polarion-id: CEPH-83582433
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node4
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: add_namespace
-              args:
-                start_count: 801
-                end_count: 1200
-                image_size: 1T
-                pool: rbd
-                subnqn: nqn.2016-06.io.spdk:cnode1
-          - config:
-              command: get_subsystems
-        initiators:
-            subnqn: nqn.2016-06.io.spdk:cnode1
-            listener_port: 4420
-            node: node6
-        run_io:
-          - node: node6
-            io_type: write
-      desc: Scale to 1200 namespaces with IO
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
-      name: Scale to 1200 namespaces with IO on 2GW and 1 subsystem
-      polarion-id: CEPH-83582434
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node4
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: add_namespace
-              args:
-                start_count: 1201
-                end_count: 1600
-                image_size: 1T
-                pool: rbd
-                subnqn: nqn.2016-06.io.spdk:cnode1
-          - config:
-              command: get_subsystems
-        initiators:
-            subnqn: nqn.2016-06.io.spdk:cnode1
-            listener_port: 4420
-            node: node6
-        run_io:
-          - node: node6
-            io_type: write
-      desc: Scale to 1600 namespaces with IO
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
-      name: Scale to 1600 namespaces with IO on 2GW and 1 subsystem
-      polarion-id: CEPH-83582435
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node4
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: add_namespace
-              args:
-                start_count: 1601
                 end_count: 2048
                 image_size: 1T
                 pool: rbd
