@@ -31,9 +31,12 @@ class Fio(Cli):
                 )
             )
         for filename, config in configs:
-            remote_file = self.ctx.remote_file(
-                sudo=True, file_name=filename, file_mode="w"
-            )
+            if self.ctx.role == "windows_client":
+                remote_file = self.ctx.remote_file(file_name=filename, file_mode="w")
+            else:
+                remote_file = self.ctx.remote_file(
+                    sudo=True, file_name=filename, file_mode="w"
+                )
             remote_file.write(config)
             remote_file.flush()
             filenames.append(filename)
@@ -86,10 +89,17 @@ iodepth= {iodepth}
 
         # Run Fio
         for file in filenames:
-            cmd = (
-                f"fio {file} --output-format=json "
-                f"--output={file}_{self.ctx.hostname}_{mount_dir.replace('/', '')}.json"
-            )
-            self.execute(sudo=True, long_running=True, cmd=cmd)
+            if self.ctx.role == "windows_client":
+                cmd = (
+                    f"fio {file} --output-format=json "
+                    f"--output={file}_windows_{mount_dir.replace('/', '')}.json"
+                )
+                self.execute(sudo=True, long_running=True, cmd=cmd)
+            else:
+                cmd = (
+                    f"fio {file} --output-format=json "
+                    f"--output={file}_{self.ctx.hostname}_{mount_dir.replace('/', '')}.json"
+                )
+                self.execute(sudo=True, long_running=True, cmd=cmd)
 
         return True
