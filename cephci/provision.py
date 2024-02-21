@@ -4,6 +4,7 @@ import yaml
 from cluster_conf import collect_conf, write_output
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
+from utils.utility import set_logging_env
 
 from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
@@ -11,7 +12,7 @@ from cli.cluster.volume import Volume
 from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
 
-log = Log(__name__)
+LOG = Log(__name__)
 
 RESOURCES = []
 
@@ -24,37 +25,34 @@ Utility to cleanup cluster from cloud
             (--global-conf <YAML>)
             (--inventory <YAML>)
             (--prefix <STR>)
-            (--log-level <LOG>)
             [--cluster-conf <YAML>]
-            [--config <YAML>]
             [--image <STR>]
             [--vmsize <STR>]
             [--network <STR>...]
+            [--config <YAML>]
+            [--log-level <LOG>]
+            [--log-dir <PATH>]
 
         cephci/cleanup.py --help
 
     Options:
-        -h --help                   Help
-        -t --cloud-type <CLOUD>     Cloud type [openstack|ibmc|baremetal]
-        --global-conf <YAML>        Global config file with node details
-        --inventory <YAML>          Cluster details config
-        -p --prefix <STR>           Resource name prefix
-        -l --log-level <LOG>        Log level for log utility
-        --image <STR>               Cloud images to be used for node
-        --network <STR>             Cloud network to be attached to node
-        --vmsize <STR>              Cloud image flavor
-        --cluster-conf <YAML>       Cluster config file path
-        --config <YAML>             Config file with cloud credentials
+        -h --help               Help
+        --cloud-type <CLOUD>    Cloud type [openstack|ibmc|baremetal]
+        --global-conf <YAML>    Global config file with node details
+        --inventory <YAML>      Cluster details config
+        --prefix <STR>          Resource name prefix
+        --image <STR>           Cloud images to be used for node
+        --network <STR>         Cloud network to be attached to node
+        --vmsize <STR>          Cloud image flavor
+        --cluster-conf <YAML>   Cluster config file path
+        --config <YAML>         Config file with cloud credentials
+        --log-level <LOG>       Log level for log utility Default: DEBUG
+        --log-dir <PATH>        Log directory for logs
 """
 
 
-def _set_log(level):
-    """Set log level"""
-    log.logger.setLevel(level.upper())
-
-
 def _load_config(config):
-    log.info(f"Loading config file - {config}")
+    LOG.info(f"Loading config file - {config}")
     with open(config, "r") as _stream:
         try:
             return yaml.safe_load(_stream)
@@ -106,11 +104,11 @@ def provision_node(name, cloud, config, disk, timeout=600, interval=10):
         # Add volume to resource bucket
         RESOURCES.append(volume)
 
-        log.info(f"Provisioning volume '{volname}'")
+        LOG.info(f"Provisioning volume '{volname}'")
 
         # Provision volume
         volume.create(volsize, timeout, interval)
-        log.info(
+        LOG.info(
             f"Volume '{volume.name}' with id '{volume.id}' provisioned successfully"
         )
 
@@ -128,11 +126,11 @@ def provision_node(name, cloud, config, disk, timeout=600, interval=10):
     # Add volume to resource bucket
     RESOURCES.append(node)
 
-    log.info(f"Provisioning node '{name}'")
+    LOG.info(f"Provisioning node '{name}'")
 
     # Provision node
     node.create(image, vmsize, cloud_data, network, timeout, interval)
-    log.info(f"Node '{node.name}' with id '{node.id}' provisioned successfully")
+    LOG.info(f"Node '{node.name}' with id '{node.id}' provisioned successfully")
 
     # Attach volumes provisioned to node
     node.attach_volume(volumes)
@@ -146,7 +144,7 @@ def provision(cloud, prefix, cluster_configs, node_configs, timeout=600, interva
         cluster, procs = _c.get("ceph-cluster"), []
         name = cluster.get("name")
 
-        log.info(f"Provisioning cluster '{name}'")
+        LOG.info(f"Provisioning cluster '{name}'")
         for key in cluster.keys():
             if "node" not in key:
                 continue
@@ -176,10 +174,10 @@ def provision(cloud, prefix, cluster_configs, node_configs, timeout=600, interva
         stale = [r.name for r in RESOURCES if r.state]
         if stale:
             msg = f"Failed to provision resources {', '.join(stale)}"
-            log.error(msg)
+            LOG.error(msg)
             raise OperationFailedError(msg)
 
-        log.info(f"Cluster '{name}' provisioned successfully")
+        LOG.info(f"Cluster '{name}' provisioned successfully")
 
 
 if __name__ == "__main__":
@@ -187,7 +185,6 @@ if __name__ == "__main__":
     args = docopt(doc)
 
     # Get user parameters
-    config = args.get("--config")
     cloud = args.get("--cloud-type")
     global_conf = args.get("--global-conf")
     inventory = args.get("--inventory")
@@ -195,11 +192,13 @@ if __name__ == "__main__":
     network = args.get("--network")
     image = args.get("--image")
     vmsize = args.get("--vmsize")
-    log_level = args.get("--log-level")
     cluster_conf = args.get("--cluster-conf")
+    config = args.get("--config")
+    log_level = args.get("--log-level")
+    log_dir = args.get("--log-dir")
 
     # Set log level
-    _set_log(log_level)
+    LOG = set_logging_env(level=log_level, path=log_dir)
 
     # Read configuration for cloud
     get_configs(config)
@@ -223,7 +222,7 @@ if __name__ == "__main__":
     data = collect_conf(cloud, prefix, global_configs)
 
     # Log cluster configuration
-    log.info(f"\nCluster configuration details -\n{data}")
+    LOG.info(f"\nCluster configuration details -\n{data}")
 
     # write output to yaml
     write_output(cluster_conf, data) if cluster_conf else None

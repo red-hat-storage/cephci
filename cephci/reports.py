@@ -46,7 +46,7 @@ Utility to report result to service
         --project <STR>                 Project name
         --query <STR>                   Query to create test plan
         --config <YAML>                 Config file with service details
-        --log-level <LOG>            Log level for log utility Default: DEBUG
+        --log-level <LOG>               Log level for log utility Default: DEBUG
         --log-dir <PATH>                Log directory for logs
 """
 

@@ -17,19 +17,34 @@ from cli.utilities.utils import (
 )
 
 doc = """
-A simple test suite wrapper that executes tests based on yaml test configuration
+Utility to gather cluster information
 
- Usage:
-    cephci/gather_info.py (--reuse <FILE>)
-        [--output <YAML>]
+    Usage:
+       cephci/cluster_info.py (--reuse <FILE>)
+           [--output <YAML>]
 
- Options:
-    --reuse <FILE>      Use the stored vm state for rerun
-    -o --output <YAML>  Create file with cluster info collected
+       cephci/cluster_info.py --help
+
+    Options:
+       -h --help        Help
+       --reuse <FILE>   Use the stored vm state for rerun
+       --output <YAML>  Create file with cluster info collected
 """
 
 
+def _load_cluster_config(config):
+    """Load cluster configration from Ceph CI object"""
+    cluster = None
+    with open(config, "rb") as f:
+        cluster = pickle.load(f)
+
+    [n.reconnect() for _, c in cluster.items() for n in c]
+
+    return cluster
+
+
 def get_node_details(node):
+    """Gather node details"""
     kernel_ver, _ = get_kernel_version(sudo=True, node=node)
     release_info, _ = get_release_info(sudo=True, node=node)
 
@@ -44,6 +59,7 @@ def get_node_details(node):
 
 
 def get_cluster_details(node):
+    """Gather cluster cluster details"""
     ceph, kw = CephAdm(node).ceph, {"format": "json"}
     details = [
         {"Host_list": json.loads(ceph.orch.host.ls(**kw))},
@@ -54,14 +70,16 @@ def get_cluster_details(node):
 
 
 def get_osd_host_disks(node):
+    """Gather OSD host disks details"""
     disks, _ = get_disk_list(sudo=True, check_ec=False, node=node, expr="ceph-")
     if disks:
         disks = disks.strip().split("\n")
 
-    return []
+    return disks
 
 
 def get_installed_packages(node):
+    """Gether ceph installed package details"""
     packages = ["cephadm", "ansible", "cephadm-ansible", "podman"]
     rpm, installed = Rpm(node), []
     for pkg in packages:
@@ -73,6 +91,7 @@ def get_installed_packages(node):
 
 
 def get_container_images_details(node):
+    """Gather container image details"""
     images, _ = get_container_images(
         sudo=True, node=node, format="{{.Repository}} {{.Tag}}"
     )
@@ -80,21 +99,23 @@ def get_container_images_details(node):
     if not images:
         return []
 
-    image_details = []
+    details = []
     for image in images.strip().split("\n"):
         name, tag = image.split()
-        image_details.append({"Name": name, "Tag": tag})
+        details.append({"Name": name, "Tag": tag})
 
-    return image_details
+    return details
 
 
 def get_container_details(node):
+    """Gather container information"""
     ctrs, _ = get_running_containers(
         sudo=True, node=node, format="{{.ID}} {{.Image}} {{.Names}}"
     )
     if not ctrs:
         return []
-    ctrs_info = []
+
+    _info = []
     for ctr in ctrs.strip().split("\n"):
         id, image, name = ctr.split()
         details = {"ID": id, "Image": image, "Name": name}
@@ -105,44 +126,34 @@ def get_container_details(node):
         if pkgs:
             details["Packages"] = pkgs.strip().split("\n")
 
-        ctrs_info.append(details)
+        _info.append(details)
 
-    return ctrs_info
+    return _info
 
 
 def gather_info(cluster):
+    """Gather cluster configuration info"""
     info, nodes = {}, cluster.get_nodes()
     for node in nodes:
-        node_info = get_node_details(node)
-        node_info.update({"List_of_packages": get_installed_packages(node)})
+        _info = get_node_details(node)
+        _info.update({"List_of_packages": get_installed_packages(node)})
         if node.role == "installer":
-            node_info.update({"Cluster_details": get_cluster_details(node)})
+            _info.update({"Cluster_details": get_cluster_details(node)})
 
         if node.role != "client":
-            node_info.update({"List_of_images": get_container_images_details(node)})
-            node_info.update({"List_of_containers": get_container_details(node)})
+            _info.update({"List_of_images": get_container_images_details(node)})
+            _info.update({"List_of_containers": get_container_details(node)})
 
         if node.role == "osd":
-            node_info.update({"List_of_host_ceph_disks": get_osd_host_disks(node)})
+            _info.update({"List_of_host_ceph_disks": get_osd_host_disks(node)})
 
-        info.update({node.hostname: node_info})
+        info.update({node.hostname: _info})
 
     return info
 
 
-def load_cluster_config(config):
-    cluster_dict = None
-    with open(config, "rb") as f:
-        cluster_dict = pickle.load(f)
-
-    for _, cluster in cluster_dict.items():
-        for node in cluster:
-            node.reconnect()
-
-    return cluster_dict
-
-
 def write_output(data, output):
+    """Write output data to stream"""
     if not output:
         print(data)
         return
@@ -152,11 +163,16 @@ def write_output(data, output):
 
 
 if __name__ == "__main__":
+    # Set user parameters
     args = docopt(doc)
+
+    # Get user parameters
     config, output = args.get("--reuse"), args.get("--output")
 
-    cluster_dict, cluster_info = load_cluster_config(config), {}
-    for cluster_name in cluster_dict:
-        cluster_info[cluster_name] = gather_info(cluster_dict.get(cluster_name))
+    # Collect cluster information
+    _dict, _info = _load_cluster_config(config), {}
+    for name in _dict:
+        _info[name] = gather_info(_dict.get(name))
 
-    write_output(cluster_info, output)
+    # Write data to stream
+    write_output(_info, output)
