@@ -47,8 +47,33 @@ while true; do
 done
 
 echo "Initiating reimage of nodes"
-${REIMAGE_CMD} --os-type rhel --os-version ${OS_VER} ${NODES}
+# Run reimage command with error handling
+if ! ${REIMAGE_CMD} --os-type rhel --os-version ${OS_VER} ${NODES}; then
+    echo "Reimage command failed, continuing with checks..."
+fi
 
+# Check OS on each node
+nodes_with_mismatch=()
+for node in ${NODES} ; do
+    echo "Checking OS on ${node}"
+    actual_os=$(ssh ubuntu@${node}.ceph.redhat.com 'cat /etc/os-release | grep VERSION_ID' | awk -F '"' '{print $2}')
+    if [ "${actual_os}" != "${OS_VER}" ]; then
+        echo "Error: OS version mismatch on ${node}. Expected: ${OS_VER}, Actual: ${actual_os}"
+        nodes_with_mismatch+=("${node}")
+    else
+        echo "OS version matches on ${node}: ${actual_os}"
+    fi
+    echo "-----------------------------------"
+done
+
+# Check if any nodes have OS mismatches
+if [ ${#nodes_with_mismatch[@]} -gt 0 ]; then
+    echo "Nodes with OS version mismatches:"
+    printf '%s\n' "${nodes_with_mismatch[@]}"
+    exit 1
+fi
+
+# Additional setup steps
 for node in ${NODES} ; do
     initial_setup "${node}"
     wipe_drives "${node}"
