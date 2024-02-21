@@ -54,6 +54,7 @@ class Rbd(Cli):
             Example::
             Supported keys:
                 pool(str)  : name of the pool(optional)
+                namespace(str): name of the namespace(optional)
                 pool-spec(str) : <pool_name>[/<namespace>]
                 See rbd help ls for more supported keys
         """
@@ -199,6 +200,7 @@ class Rbd(Cli):
                 image-spec(str) : [<pool-name>/[<namespace>/]]<image-name
                 image(str) : name of the image that should be removed
                 pool(str)  : name of the pool from which image should be retreived(optional)
+                namespace(str): name of the namespace from which image should be remoevd(optional)
                 See rbd help rm for more supported keys
         """
         kw_copy = deepcopy(kw)

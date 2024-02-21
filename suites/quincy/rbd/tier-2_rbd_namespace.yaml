@@ -124,3 +124,23 @@ tests:
         rep-pool-only: True
         rep_pool_config:
           rbd: {}
+
+  - test:
+    desc: Run namespace deletion positive flow
+    module: test_rbd_namespace_remove_pos.py
+    name: RBD namespace deletion positive flow
+    polarion-id: CEPH-83583642
+    config:
+      rep-pool-only: True
+      rep_pool_config:
+        rbd: {}
+
+  - test:
+      desc: Run namespace deletion negative flow
+      module: test_rbd_namespace_remove_neg.py
+      name: RBD namespace deletion negative flow
+      polarion-id: CEPH-83582477
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}
