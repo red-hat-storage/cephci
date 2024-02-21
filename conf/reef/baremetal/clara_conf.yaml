@@ -120,20 +120,24 @@ globals:
         - hostname: clara010
           id: node9
           ip: 10.8.129.10
+          root_password: passwd
           role:
             - client
         - hostname: clara011
           id: node10
           ip: 10.8.129.11
+          root_password: passwd
           role:
             - client
         - hostname: clara013
           id: node11
+          root_password: passwd
           ip: 10.8.129.13
           role:
             - client
         - hostname: clara015
           id: node12
           ip: 10.8.129.15
+          root_password: passwd
           role:
             - client
