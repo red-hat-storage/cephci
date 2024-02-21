@@ -2,10 +2,42 @@ from socket import socket
 
 from paramiko.ssh_exception import SSHException
 
-from ceph.ceph import SocketTimeoutException, SSHConnectionManager
+from ceph.ceph import CephNode, SocketTimeoutException, SSHConnectionManager
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def setup_windows_clients(windows_clients):
+    """
+    Setup windows clients
+    Args:
+        windows_clients(dict(dict)): Dict containing ip address and user creds of windows nodes
+    """
+    count = 0
+    windows_clients_obj = []
+    for windows_client in windows_clients:
+        ceph_nodename = f"windows_client{count}"
+        ceph = CephNode(
+            username=windows_client["user"],
+            password=windows_client["password"],
+            root_password=windows_client["password"],
+            look_for_key=False,
+            private_key_path=None,
+            root_login=None,
+            role=["windows_client"],
+            no_of_volumes=None,
+            ip_address=windows_client["ip"],
+            subnet=None,
+            private_ip=None,
+            hostname=windows_client["hostname"],
+            ceph_vmnode=None,
+            ceph_nodename=ceph_nodename,
+            id=ceph_nodename,
+        )
+        windows_clients_obj.append(ceph)
+        count = count + 1
+    return windows_clients_obj
 
 
 def establish_windows_client_conn(windows_clients):

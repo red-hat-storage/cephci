@@ -646,7 +646,7 @@ def check_coredump_generated(node, coredump_path, created_after):
     return False
 
 
-def create_files(client, mount_point, file_count):
+def create_files(client, mount_point, file_count, windows_client=False):
     """
     Create files
     Args:
@@ -656,10 +656,17 @@ def create_files(client, mount_point, file_count):
     """
     for i in range(1, file_count + 1):
         try:
-            client.exec_command(
-                sudo=True,
-                cmd=f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1",
-            )
+            if windows_client:
+                cmd = f"type nul > {mount_point}\\win_file{i}"
+                client.exec_command(
+                    cmd=cmd,
+                )
+            else:
+                cmd = f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1"
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
         except Exception:
             raise OperationFailedError(f"failed to create file file{i}")
 
