@@ -14,15 +14,15 @@ globals:
             - installer
             - mon
           root_password: passwd
-        - hostname: mero003
-          id: node2
-          ip: 10.8.129.223
-          role:
-            - mds
-            - mgr
-            - mon
-            - _admin
-          root_password: passwd
+#        - hostname: mero003
+#          id: node2
+#          ip: 10.8.129.223
+#          role:
+#            - mds
+#            - mgr
+#            - mon
+#            - _admin
+#          root_password: passwd
         - hostname: mero004
           id: node3
           ip: 10.8.129.224
