@@ -51,26 +51,26 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/sdl
-        - hostname: mero007
-          id: node5
-          ip: 10.8.129.227
-          role:
-            - osd
-            - rgw
-          root_password: passwd
-          volumes:
-            - /dev/sda
-            - /dev/sdb
-            - /dev/sdc
-            - /dev/sdd
-            - /dev/sde
-            - /dev/sdf
-            - /dev/sdg
-            - /dev/sdh
-            - /dev/sdi
-            - /dev/sdj
-            - /dev/sdk
-            - /dev/sdl
+#        - hostname: mero007
+#          id: node5
+#          ip: 10.8.129.227
+#          role:
+#            - osd
+#            - rgw
+#          root_password: passwd
+#          volumes:
+#            - /dev/sda
+#            - /dev/sdb
+#            - /dev/sdc
+#            - /dev/sdd
+#            - /dev/sde
+#            - /dev/sdf
+#            - /dev/sdg
+#            - /dev/sdh
+#            - /dev/sdi
+#            - /dev/sdj
+#            - /dev/sdk
+#            - /dev/sdl
         - hostname: mero009
           id: node6
           ip: 10.8.129.229
