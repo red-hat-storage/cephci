@@ -1,6 +1,5 @@
 import multiprocessing as mp
 
-import yaml
 from cluster_conf import collect_conf, write_output
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
@@ -9,7 +8,8 @@ from utils.utility import set_logging_env
 from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
-from cli.exceptions import ConfigError, OperationFailedError
+from cli.exceptions import OperationFailedError
+from cli.utilities.utils import load_config
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -18,10 +18,10 @@ RESOURCES = []
 
 
 doc = """
-Utility to cleanup cluster from cloud
+Utility to provision cluster on cloud
 
     Usage:
-        cephci/cleanup.py --cloud-type <CLOUD>
+        cephci/provision.py --cloud-type <CLOUD>
             (--global-conf <YAML>)
             (--inventory <YAML>)
             (--prefix <STR>)
@@ -33,7 +33,7 @@ Utility to cleanup cluster from cloud
             [--log-level <LOG>]
             [--log-dir <PATH>]
 
-        cephci/cleanup.py --help
+        cephci/provision.py --help
 
     Options:
         -h --help               Help
@@ -49,45 +49,6 @@ Utility to cleanup cluster from cloud
         --log-level <LOG>       Log level for log utility Default: DEBUG
         --log-dir <PATH>        Log directory for logs
 """
-
-
-def _load_config(config):
-    LOG.info(f"Loading config file - {config}")
-    with open(config, "r") as _stream:
-        try:
-            return yaml.safe_load(_stream)
-        except yaml.YAMLError:
-            raise ConfigError(f"Invalid configuration file '{config}'")
-
-
-def _get_inventory(inventory, image=None, vmsize=None, network=None):
-    """Read node configs"""
-    inventory = _load_config(inventory).get("instance")
-
-    if not image:
-        image = inventory.get("create").get("image-name")
-        if not image:
-            raise ConfigError(
-                "Mandatory parameter 'image' not available in inventory or parameter"
-            )
-
-    if not vmsize:
-        vmsize = inventory.get("create").get("vm-size")
-        if not vmsize:
-            raise ConfigError(
-                "Mandatory parameter 'vmsize' not provided in inventory or parameter"
-            )
-
-    cloud_data = inventory.get("setup")
-    if not cloud_data:
-        raise ConfigError("Mandatory parameter 'setup' not provided in inventory")
-
-    return {
-        "image": image,
-        "vmsize": vmsize,
-        "cloud_data": cloud_data,
-        "network": network,
-    }
 
 
 def provision_node(name, cloud, config, disk, timeout=600, interval=10):
@@ -140,6 +101,7 @@ def provision_node(name, cloud, config, disk, timeout=600, interval=10):
 
 def provision(cloud, prefix, cluster_configs, node_configs, timeout=600, interval=10):
     """Provision cluster with global configs"""
+    # Create cluster configs
     for _c in cluster_configs:
         cluster, procs = _c.get("ceph-cluster"), []
         name = cluster.get("name")
@@ -205,8 +167,7 @@ if __name__ == "__main__":
 
     # Read configurations
     cloud_configs = get_cloud_credentials(cloud)
-    global_configs = _load_config(global_conf).get("globals")
-    node_configs = _get_inventory(inventory, image, vmsize, network)
+    global_configs = load_config(global_conf).get("globals")
 
     # Connect to cloud
     cloud = CloudProvider(cloud, **cloud_configs)
@@ -215,10 +176,13 @@ if __name__ == "__main__":
     timeout, retry = cloud_configs.pop("timeout"), cloud_configs.pop("retry")
     interval = int(timeout / retry) if timeout and retry else None
 
+    # Get node configs based on inventory
+    node_configs = cloud.get_inventory(inventory, image, vmsize, network)
+
     # Provision cluster
     provision(cloud, prefix, global_configs, node_configs, timeout, interval)
 
-    # Cleanup cluster
+    # Collect cluster config
     data = collect_conf(cloud, prefix, global_configs)
 
     # Log cluster configuration

@@ -4,6 +4,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from cli.exceptions import CloudProviderError, ConfigError, UnexpectedStateError
+from cli.utilities.utils import load_config
 from cli.utilities.waiter import WaitUntil
 from utility.log import Log
 
@@ -758,3 +759,36 @@ class Openstack:
             self.get_flavors()
 
         return self.get_flavor_by_id(self._flavors.get(name))
+
+    def get_inventory(self, inventory, image=None, vmsize=None, network=None):
+        """Read node configs"""
+        # Load inventory file
+        inventory = load_config(inventory).get("instance")
+
+        # Check for image details
+        if not image:
+            image = inventory.get("create").get("image-name")
+            if not image:
+                raise ConfigError(
+                    "Mandatory parameter 'image' not available in inventory or parameter"
+                )
+
+        # Check for instance details
+        if not vmsize:
+            vmsize = inventory.get("create").get("vm-size")
+            if not vmsize:
+                raise ConfigError(
+                    "Mandatory parameter 'vmsize' not provided in inventory or parameter"
+                )
+
+        # Check for instance config
+        cloud_data = inventory.get("setup")
+        if not cloud_data:
+            raise ConfigError("Mandatory parameter 'setup' not provided in inventory")
+
+        return {
+            "image": image,
+            "vmsize": vmsize,
+            "cloud_data": cloud_data,
+            "network": network,
+        }

@@ -12,7 +12,7 @@ from time import sleep
 import yaml
 
 from ceph.waiter import WaitUntil
-from cli.exceptions import OperationFailedError
+from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.containers import Container
 from utility.log import Log
 
@@ -887,3 +887,12 @@ def create_yaml_config(node, specs):
         yaml.dump(specs, file, default_flow_style=False)
 
     return temp_file.name
+
+
+def load_config(config):
+    log.info(f"Loading config file - {config}")
+    with open(config, "r") as _stream:
+        try:
+            return yaml.safe_load(_stream)
+        except yaml.YAMLError:
+            raise ConfigError(f"Invalid configuration file '{config}'")
