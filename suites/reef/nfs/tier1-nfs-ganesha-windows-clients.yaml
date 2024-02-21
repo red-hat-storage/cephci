@@ -95,3 +95,18 @@ tests:
           - ip: 10.70.45.148
             user: manisha
             password: Redhat
+
+  - test:
+      name: NFS-Ganesha Verify mount the NFS volume via V3 on both windows and linux client and run IO's in parallel
+      desc: Verify Mount the NFS volume via V3 on both windows and linux client and run IO's in parallel
+      polarion-id: CEPH-83581037
+      module: nfs_verify_v3_mount_window_linux.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.45.111
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
