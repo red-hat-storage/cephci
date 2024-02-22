@@ -80,7 +80,7 @@ def run_io(ceph_cluster, num, io):
             raise Exception("FIO failure")
 
 
-def configure_subsystem(config, _cls, command):
+def configure_subsystems(config, _cls, command):
     max_ns = config["args"].pop("max-namespaces")
     for num in range(1, config["args"].pop("subsystems") + 1):
         config["args"].update(
@@ -95,29 +95,34 @@ def configure_subsystem(config, _cls, command):
         config["args"].clear()
 
 
-def configure_listener(config, _cls, command, ceph_cluster, node):
+def configure_listeners(config, _cls, command, ceph_cluster):
     port = config["args"].pop("port")
     pool_name = config["args"].pop("pool")
+    subsystems = config["args"].pop("subsystems")
+    nodes = config["args"].pop("nodes")
+    LOG.info(nodes)
+    for node in nodes:
+        LOG.info(node)
+        listener_node = get_node_by_id(ceph_cluster, node)
+        for num in range(1, subsystems + 1):
+            client_id = find_client_daemon_id(
+                ceph_cluster, pool_name, node_name=listener_node.hostname
+            )
+            config["args"].update(
+                {
+                    "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
+                    "gateway-name": client_id,
+                    "traddr": listener_node.ip_address,
+                    "trsvcid": port,
+                }
+            )
+            _cls.node = listener_node
+            listener_func = fetch_method(_cls, command)
+            listener_func(**config)
+            config["args"].clear()
 
-    for num in range(1, config["args"].pop("subsystems") + 1):
-        client_id = find_client_daemon_id(
-            ceph_cluster, pool_name, node_name=node.hostname
-        )
-        config["args"].update(
-            {
-                "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
-                "gateway-name": client_id,
-                "traddr": node.ip_address,
-                "trsvcid": port,
-            }
-        )
 
-        listener_func = fetch_method(_cls, command)
-        listener_func(**config)
-        config["args"].clear()
-
-
-def configure_host(config, _cls, command):
+def configure_hosts(config, _cls, command):
     hostnqn = config["args"].pop("hostnqn", None) or "'*'"
     for num in range(1, config["args"].pop("subsystems") + 1):
         config["args"].update(
@@ -131,18 +136,14 @@ def configure_host(config, _cls, command):
         config["args"].clear()
 
 
-def configure_namespace(
+def configure_namespaces(
     config, _cls, command, ceph_cluster, node, init_config, rbd_obj, io_param
 ):
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
     image_size = config["args"].pop("image_size")
     pool = config["args"].pop("pool")
-    half_sub = int(subsystems / 2)
     namespaces_sub = int(namespaces / subsystems)
-
-    LOG.info(half_sub)
-    LOG.info(namespaces_sub)
 
     for sub_num in range(1, subsystems + 1):
         init_config.update({"subnqn": f"nqn.2016-06.io.spdk:cnode{sub_num}"})
@@ -163,7 +164,16 @@ def configure_namespace(
                     "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
                 }
             )
-            config["args"]["load-balancing-group"] = 1 if sub_num < half_sub + 1 else 2
+
+            if subsystems == 1:
+                config["args"]["load-balancing-group"] = (
+                    1 if num == int(namespaces_sub / 2) else 2
+                )
+            else:
+                half_sub = int(subsystems / 2)
+                config["args"]["load-balancing-group"] = (
+                    1 if sub_num < half_sub + 1 else 2
+                )
             namespace_func = fetch_method(_cls, command)
             namespace_func(**config)
 
@@ -231,13 +241,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 _cls.NVMEOF_CLI_IMAGE = cli_image
 
             if service == "subsystem":
-                configure_subsystem(cfg, _cls, command)
+                configure_subsystems(cfg, _cls, command)
             elif service == "listener":
-                configure_listener(cfg, _cls, command, ceph_cluster, node)
+                configure_listeners(cfg, _cls, command, ceph_cluster)
             elif service == "host":
-                configure_host(cfg, _cls, command)
+                configure_hosts(cfg, _cls, command)
             elif service == "namespace":
-                configure_namespace(
+                configure_namespaces(
                     cfg, _cls, command, ceph_cluster, node, init_config, rbd_obj, io
                 )
             else:
