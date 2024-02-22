@@ -1,4 +1,4 @@
-# Test suite to scale with 2 GWs GWs having 1 subsystem to 2048 namespaces with 400 namespaces as scale interval per test case
+# Test suite to scale with 2 GWs GWs having 1 subsystem to 2048 namespaces
 # Test config at conf/reef/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml or conf/reef/nvmeof/octo-6-node-env.yaml for baremetal
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
@@ -120,52 +120,32 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: create_subsystem
+              service: subsystem
+              command: add
               args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                serial_num: 1
+                subsystems: 1
                 max-namespaces: 2048
                 ana-reporting: ""
           - config:
-              command: create_listener
+              service: listener
+              command: add
               args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
+                subsystems: 1
                 port: 4420
                 pool: nvmeof_pool
+                nodes:
+                  - node4
+                  - node5
           - config:
-              command: add_host
+              service: host
+              command: add
               args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                hostnqn: "*"
-          - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target
+                subsystems: 1
+      desc: Configure 2 NVMeOF Gateways with 1 subsystem
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
-      name: Configure NVMeOF GW-1
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Configure NVMeOF Gateways
       polarion-id: CEPH-83581625
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node5
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: create_listener
-              args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-                port: 4420
-                pool: nvmeof_pool
-          - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
-      name: Configure NVMeOF GW-2
-      polarion-id: CEPH-83581627
 
   - test:
       abort-on-fail: true
@@ -176,25 +156,22 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: add_namespace
+              service: namespace
+              command: add
               args:
-                start_count: 1
-                end_count: 400
+                subsystems: 1
+                namespaces: 400
                 image_size: 1T
                 pool: rbd
-                subnqn: nqn.2016-06.io.spdk:cnode1
-          - config:
-              command: get_subsystems
         initiators:
-            subnqn: nqn.2016-06.io.spdk:cnode1
-            listener_port: 4420
-            node: node6
+          listener_port: 4420
+          node: node6
         run_io:
           - node: node6
             io_type: write
       desc: Scale to 400 namespaces with IO
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 400 namespaces with IO on 2GW and 1 subsystem
       polarion-id: CEPH-83581756
 
@@ -207,42 +184,24 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: add_namespace
+              service: namespace
+              command: add
               args:
-                start_count: 401
-                end_count: 2048
+                subsystems: 1
+                namespaces: 1648
                 image_size: 1T
                 pool: rbd
-                subnqn: nqn.2016-06.io.spdk:cnode1
-          - config:
-              command: get_subsystems
         initiators:
-            subnqn: nqn.2016-06.io.spdk:cnode1
-            listener_port: 4420
-            node: node6
+          listener_port: 4420
+          node: node6
         run_io:
           - node: node6
             io_type: write
       desc: Scale to 2048 namespaces with IO
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 2048 namespaces with IO on 2GW and 1 subsystem
       polarion-id: CEPH-83582436
-
-  - test:
-      abort-on-fail: false
-      config:
-        node: node4
-        steps:
-          - config:
-              command: delete_subsystem
-              args:
-                subnqn: nqn.2016-06.io.spdk:cnode1
-      desc: Manage NVMeoF Subsystem entities
-      destroy-cluster: false
-      module: test_nvme_cli.py
-      name: Delete NVMeOF targets
-      polarion-id: CEPH-83575783
 
   - test:
       abort-on-fail: false

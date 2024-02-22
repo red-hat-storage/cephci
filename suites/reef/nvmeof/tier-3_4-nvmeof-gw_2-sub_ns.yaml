@@ -1,4 +1,4 @@
-# Test suite to scale with 4 GWs having 2 subsystem to 2048 namespaces with 400 namespaces as scale interval per test case
+# Test suite to scale with 4 GWs having 2 subsystem to 2048 namespaces
 # Test config at conf/reef/nvmeof/ceph_nvmeof_4-nvmeof-gw_scale_cluster.yaml
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
@@ -120,87 +120,34 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: create_subsystem
+              service: subsystem
+              command: add
               args:
                 subsystems: 2
                 max-namespaces: 2048
                 ana-reporting: ""
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 2
                 port: 4420
                 pool: nvmeof_pool
-                hostnqn: "*"
+                nodes:
+                  - node4
+                  - node5
+                  - node6
+                  - node7
           - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target with 2 subsystems
+              service: host
+              command: add
+              args:
+                subsystems: 2
+      desc: Configure 4 NVMeOF Gateways with 2 subsystems
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Configure NVMeOF GW-1
+      name: Configure NVMeOF Gateways
       polarion-id: CEPH-83581625
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node5
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: create_listener
-              args:
-                subsystems: 2
-                port: 4420
-                pool: nvmeof_pool
-          - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target with 2 subsystems
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Configure NVMeOF GW-2
-      polarion-id: CEPH-83581627
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node6
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: create_listener
-              args:
-                subsystems: 2
-                port: 4420
-                pool: nvmeof_pool
-          - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Configure NVMeOF GW-3
-      polarion-id: CEPH-83582224
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node7
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: create_listener
-              args:
-                subsystems: 2
-                port: 4420
-                pool: nvmeof_pool
-          - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Configure NVMeOF GW-4
-      polarion-id: CEPH-83582225
 
   - test:
       abort-on-fail: true
@@ -211,14 +158,13 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: add_namespace
+              service: namespace
+              command: add
               args:
                 subsystems: 2
                 namespaces: 400
                 image_size: 1T
                 pool: rbd
-          - config:
-              command: get_subsystems
         initiators:
             listener_port: 4420
             node: node8
@@ -240,14 +186,13 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: add_namespace
+              service: namespace
+              command: add
               args:
                 subsystems: 2
                 namespaces: 1648
                 image_size: 1T
                 pool: rbd
-          - config:
-              command: get_subsystems
         initiators:
             listener_port: 4420
             node: node8

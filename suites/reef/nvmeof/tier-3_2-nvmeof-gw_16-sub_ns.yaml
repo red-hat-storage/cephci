@@ -1,4 +1,4 @@
-# Test suite to scale with 2 GWs having 1 subsystem to 2048 namespaces with 400 namespaces as scale interval per test case
+# Test suite to scale with 2 GWs having 16 subsystems to 2048 namespaces
 # Test config at conf/reef/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml or conf/reef/nvmeof/octo-6-node-env.yaml for baremetal
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
@@ -120,43 +120,32 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: create_subsystem
+              service: subsystem
+              command: add
               args:
                 subsystems: 16
                 max-namespaces: 2048
                 ana-reporting: ""
-                port: 4420
-                pool: nvmeof_pool
-                hostnqn: "*"
           - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target with 16 subsystems
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Configure NVMeOF GW-1
-      polarion-id: CEPH-83581625
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node5
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              command: create_listener
+              service: listener
+              command: add
               args:
                 subsystems: 16
                 port: 4420
                 pool: nvmeof_pool
+                nodes:
+                  - node4
+                  - node5
           - config:
-              command: get_subsystems
-      desc: Configure NVMeOF target with 16 subsystems
+              service: host
+              command: add
+              args:
+                subsystems: 16
+      desc: Configure 2 NVMeOF Gateways with 16 subsystems
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Configure NVMeOF GW-2
-      polarion-id: CEPH-83581627
+      name: Configure NVMeOF Gateways
+      polarion-id: CEPH-83581625
 
   - test:
       abort-on-fail: true
@@ -167,17 +156,16 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: add_namespace
+              service: namespace
+              command: add
               args:
                 subsystems: 16
-                namespaces: 2048
+                namespaces: 400
                 image_size: 1T
                 pool: rbd
-          - config:
-              command: get_subsystems
         initiators:
-            listener_port: 4420
-            node: node6
+          listener_port: 4420
+          node: node6
         run_io:
           - node: node6
             io_type: write
@@ -196,17 +184,16 @@ tests:
         rep-pool-only: true
         steps:
           - config:
-              command: add_namespace
+              service: namespace
+              command: add
               args:
                 subsystems: 16
                 namespaces: 1648
                 image_size: 1T
                 pool: rbd
-          - config:
-              command: get_subsystems
         initiators:
-            listener_port: 4420
-            node: node6
+          listener_port: 4420
+          node: node6
         run_io:
           - node: node6
             io_type: write
