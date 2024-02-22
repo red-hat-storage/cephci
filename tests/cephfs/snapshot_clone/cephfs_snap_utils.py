@@ -433,7 +433,7 @@ class SnapUtils(object):
             time.sleep(30)
 
     def validate_snap_retention(
-        self, client, client_path, sched_path, ret_type="M", fs_name="cephfs"
+        self, client, client_path, sched_path, ret_type="m", fs_name="cephfs"
     ):
         """
         To validate snapshot retentionset on ceph FS path by verifying snapshots created.
@@ -474,7 +474,7 @@ class SnapUtils(object):
                     for key, value in sched_item["retention"].items():
                         if key == ret_type:
                             ret_num = value
-                    if "M" in sched_item["schedule"] and ret_type == "M":
+                    if "m" in sched_item["schedule"] and ret_type == "m":
                         ret_verified = abs(
                             int(sched_item["created_count"])
                             - int(sched_item["pruned_count"])
@@ -486,7 +486,7 @@ class SnapUtils(object):
                             - int(sched_item["pruned_count"])
                         )
                         log.info(f"ret_verified : {ret_verified},ret_type:{ret_type}")
-                    elif "M" in sched_item["schedule"] and ret_type == "n":
+                    elif "m" in sched_item["schedule"] and ret_type == "n":
                         ret_verified = abs(
                             int(sched_item["created_count"])
                             - int(sched_item["pruned_count"])
