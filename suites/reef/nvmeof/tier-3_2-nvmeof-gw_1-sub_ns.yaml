@@ -1,16 +1,16 @@
-# Test suite to scale with 2 GWs having 1 subsystem to 2048 namespaces
+# Test suite to scale with 2 GWs GWs having 1 subsystem to 2048 namespaces
 # Test config at conf/reef/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml or conf/reef/nvmeof/octo-6-node-env.yaml for baremetal
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
   #  2 ceph-nvmeof GWs colocated with osd on node4 and node5, node 6 is nvmeof initiator
   #  nvmeof GW - at end of each scale step/ test below is the configuration
-     # Scale-1: 8 subsystem, 400 namespaces,  400 RBD images of 1TB size each
-     # Scale-2 : 8 subsystem, 1648 namespaces,  1648 RBD images of 1TB size each
+     # Scale-1: 1 subsystem, 400 namespaces,  400 RBD images of 1TB size each
+     # Scale-2 : 1 subsystem, 1648 namespaces,  1648 RBD images of 1TB size each
   #  nvmeof initiator - Each initiator/ client connects to a subsystem ( 1 initiator : 1 subsystem)
   #  io test (no performance tests)
      # Tool : fio
      # io is run on all nvme volumes listed on all initiators configured to that point
-     # io type combination : For volumes listed on an initiator a write
+     # io type combination : For volumes listed on an initiator a write followed by a read
      # io runtime is 10 seconds per volume/ image
   # Check ceph health and rbd image usage at end of test
 tests:
@@ -74,7 +74,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure Ceph client for NVMe tests
-      polarion-id: CEPH-83573758
+      polarion-id: CEPH-23573752
 
   - test:
       abort-on-fail: true
@@ -123,14 +123,14 @@ tests:
               service: subsystem
               command: add
               args:
-                subsystems: 8
+                subsystems: 1
                 max-namespaces: 2048
                 ana-reporting: ""
           - config:
               service: listener
               command: add
               args:
-                subsystems: 8
+                subsystems: 1
                 port: 4420
                 pool: nvmeof_pool
                 nodes:
@@ -140,8 +140,8 @@ tests:
               service: host
               command: add
               args:
-                subsystems: 8
-      desc: Configure 2 NVMeOF Gateways with 8 subsystems
+                subsystems: 1
+      desc: Configure 2 NVMeOF Gateways with 1 subsystem
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Configure NVMeOF Gateways
@@ -159,7 +159,7 @@ tests:
               service: namespace
               command: add
               args:
-                subsystems: 8
+                subsystems: 1
                 namespaces: 400
                 image_size: 1T
                 pool: rbd
@@ -172,8 +172,8 @@ tests:
       desc: Scale to 400 namespaces with IO
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Scale to 400 namespaces with IO on 2GW and 8 subsystems
-      polarion-id: CEPH-83582454
+      name: Scale to 400 namespaces with IO on 2GW and 1 subsystem
+      polarion-id: CEPH-83581756
 
   - test:
       abort-on-fail: true
@@ -187,7 +187,7 @@ tests:
               service: namespace
               command: add
               args:
-                subsystems: 8
+                subsystems: 1
                 namespaces: 1648
                 image_size: 1T
                 pool: rbd
@@ -200,8 +200,8 @@ tests:
       desc: Scale to 2048 namespaces with IO
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Scale to 2048 namespaces with IO on 2GW and 8 subsystems
-      polarion-id: CEPH-83582459
+      name: Scale to 2048 namespaces with IO on 2GW and 1 subsystem
+      polarion-id: CEPH-83582436
 
   - test:
       abort-on-fail: false
