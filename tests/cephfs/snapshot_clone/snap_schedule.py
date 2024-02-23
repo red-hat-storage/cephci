@@ -106,7 +106,7 @@ def run(ceph_cluster, **kw):
         commands = [
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity true",
             "ceph mgr module enable snap_schedule",
-            f"ceph fs snap-schedule add path 1M --fs {default_fs}",
+            f"ceph fs snap-schedule add path 1m --fs {default_fs}",
             f"ceph fs snap-schedule activate path --fs {default_fs}",
         ]
         modified_commands = [

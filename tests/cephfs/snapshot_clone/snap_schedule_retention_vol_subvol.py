@@ -307,7 +307,7 @@ def snap_sched_test(snap_test_params):
         )
         snap_test_params["path"] = f"{subvol_path.strip()}/.."
     snap_test_params["validate"] = True
-    sched_list = ["2M", "1h", "1d", "1w"]
+    sched_list = ["2m", "1h", "1d", "1w"]
     mnt_list = ["kernel", "fuse", "nfs"]
     test_fail = 0
     mnt_paths = {}
@@ -322,7 +322,7 @@ def snap_sched_test(snap_test_params):
         if snap_util.create_snap_schedule(snap_test_params) == 1:
             log.info("Snapshot schedule creation/verification failed")
             test_fail = 1
-        if "M" in sched_val:
+        if "m" in sched_val:
             sched_list = re.split(r"(\d+)", sched_val)
             duration_min = int(sched_list[1]) * 3
             for mnt_type in mnt_list:
@@ -395,8 +395,8 @@ def snap_retention_test(snap_test_params):
     snap_util.enable_snap_schedule(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
-    sched_list = ["2M", "1h", "7d", "4w"]
-    snap_test_params["retention"] = "3M1h5d4w"
+    sched_list = ["2m", "1h", "7d", "4w"]
+    snap_test_params["retention"] = "3m1h5d4w"
     test_fail = 0
     mnt_list = ["kernel", "fuse", "nfs"]
     mnt_paths = {}
@@ -410,7 +410,7 @@ def snap_retention_test(snap_test_params):
         )
         snap_test_params["path"] = f"{subvol_path.strip()}/.."
     for sched_val in sched_list:
-        if "M" in sched_val:
+        if "m" in sched_val:
             sched_val_ret = sched_val
         snap_test_params["sched"] = sched_val
         snap_test_params["start_time"] = get_iso_time(client)
@@ -418,9 +418,9 @@ def snap_retention_test(snap_test_params):
     snap_util.create_snap_retention(snap_test_params)
     ret_list = re.split(r"([0-9]+[ A-Za-z]?)", snap_test_params["retention"])
     snap_util.remove_snap_retention(client, snap_test_params["path"], ret_val="1h")
-    snap_test_params["retention"] = "3M5d4w"
+    snap_test_params["retention"] = "3m5d4w"
     for ret_item in ret_list:
-        if "M" in ret_item:
+        if "m" in ret_item:
             temp_list = re.split(r"(\d+)", ret_item)
             duration_min = int(temp_list[1]) * 2
             for mnt_type in mnt_list:
@@ -481,7 +481,7 @@ def snap_retention_count_validate(snap_test_params):
     snap_util.enable_snap_schedule(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
-    sched_list = ["1M"]
+    sched_list = ["1m"]
 
     test_fail = 0
     mnt_list = ["kernel", "fuse", "nfs"]
@@ -707,7 +707,7 @@ def snap_sched_multi_fs(snap_test_params):
     snap_test_params["path"] = "/"
 
     snap_test_params["validate"] = True
-    sched_list = ["1M", "1h", "1d", "1w"]
+    sched_list = ["1m", "1h", "1d", "1w"]
 
     test_fail = 0
     mnt_list = ["kernel", "fuse", "nfs"]
@@ -724,7 +724,7 @@ def snap_sched_multi_fs(snap_test_params):
         "filesystem argument is required when there is more than one file system"
     )
     try:
-        out, rc = client.exec_command(sudo=True, cmd="ceph fs snap-schedule add / 2M")
+        out, rc = client.exec_command(sudo=True, cmd="ceph fs snap-schedule add / 2m")
         out, rc = client.exec_command(sudo=True, cmd="ceph fs snap-schedule remove /")
         test_fail = 1
         log.error(
@@ -826,7 +826,7 @@ def snap_sched_multi_fs(snap_test_params):
                 "snap-schedule retention add without fs-name failed for unexpected error"
             )
     log.info("Verify retention add with fs-name in multi-fs setup suceeds")
-    snap_test_params["retention"] = "3M1h5d4w"
+    snap_test_params["retention"] = "3m1h5d4w"
     snap_util.create_snap_retention(snap_test_params)
 
     log.info(
@@ -963,8 +963,8 @@ def snap_sched_non_existing_path(snap_test_params):
     snap_util.enable_snap_schedule(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/non-existent"
-    sched_list = ["1M"]
-    snap_test_params["retention"] = "3M"
+    sched_list = ["1m"]
+    snap_test_params["retention"] = "3m"
     snap_test_params["start_time"] = get_iso_time(client)
     snap_test_params["sched"] = sched_list[0]
     mgr_node = snap_test_params["mgr_node"]
@@ -1023,8 +1023,8 @@ def snap_retention_service_restart(snap_test_params):
     snap_util.enable_snap_schedule(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
-    sched_list = ["1M"]
-    snap_test_params["retention"] = "3M"
+    sched_list = ["1m"]
+    snap_test_params["retention"] = "3m"
     svc_list = ["mgr", "mds", "mon"]
     test_fail = 0
     post_test_params = {}
