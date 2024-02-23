@@ -1341,12 +1341,8 @@ class RadosOrchestrator:
         """
         fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
         host = self.fetch_host_node(daemon_type=daemon_type, daemon_id=daemon_id)
-        if daemon_type == "osd":
+        if daemon_type == "osd" or daemon_type == "mgr":
             systemctl_name = f"ceph-{fsid}@{daemon_type}.{daemon_id}.service"
-        elif daemon_type == "mgr":
-            systemctl_name = (
-                f"ceph-{fsid}@{daemon_type}.{host.hostname}.{daemon_id}.service"
-            )
         elif daemon_type == "mon":
             systemctl_name = f"ceph-{fsid}@{daemon_type}.{host.hostname}.service"
         else:

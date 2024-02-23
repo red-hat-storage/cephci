@@ -166,3 +166,9 @@ tests:
             conf: sample-pool-2
         pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
       desc: CIDR Blocklisting of ceph rbd clients
+
+  - test:
+      name: Database reopening by libcephsqlite
+      module: test_libcephsqlite.py
+      polarion-id: CEPH-83583664
+      desc: libcephsqlite reopens database connection upon blocklisting
