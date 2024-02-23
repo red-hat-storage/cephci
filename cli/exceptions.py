@@ -63,3 +63,9 @@ class IOError(Exception):
     """
     Custom exception thrown when IO failure happens
     """
+
+
+class RemoteConnectionError(Exception):
+    """
+    Custom exception thrown when Remote Connection fails
+    """
