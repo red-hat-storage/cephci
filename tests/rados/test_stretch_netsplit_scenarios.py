@@ -265,6 +265,9 @@ def run(ceph_cluster, **kw):
             log.error(
                 "Write ops should be possible, number of objects in the pool has not changed"
             )
+            log.debug(
+                "Test case expected to fail until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2265116"
+            )
             raise Exception(
                 f"Pool {pool_name} has {pool_stat['stats']['objects']} objs"
             )
@@ -294,6 +297,9 @@ def run(ceph_cluster, **kw):
 
     except Exception as err:
         log.error(f"Hit an exception: {err}. Test failed")
+        log.debug(
+            "Test case expected to fail until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2265116"
+        )
         return 1
     finally:
         log.debug("---------------- In Finally Block -------------")

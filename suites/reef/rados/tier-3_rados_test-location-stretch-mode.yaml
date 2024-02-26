@@ -320,6 +320,7 @@ tests:
       desc: Test stretch Cluster mon replacement - Arbiter site
 
 # Commenting test until fix for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2249962
+# New Bug: https://bugzilla.redhat.com/show_bug.cgi?id=2265116
   - test:
       name: Netsplit Scenarios data-data sites
       module: test_stretch_netsplit_scenarios.py
@@ -330,6 +331,17 @@ tests:
         tiebreaker_mon_site_name: arbiter
         delete_pool: true
       desc: Test stretch Cluster netsplit scenario between data sites
+
+  - test:
+      name: OSD and host replacement
+      module: test_stretch_osd_serviceability_scenarios.py
+      polarion-id: CEPH-83575474
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test stretch Cluster osd and Host replacement
 
   - test:
       name: Netsplit Scenarios data-arbiter sites

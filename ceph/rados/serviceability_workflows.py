@@ -41,7 +41,13 @@ class ServiceabilityMethods:
     def get_osd_count(self):
         return len(self.rados_obj.run_ceph_command(cmd="ceph osd ls"))
 
-    def add_new_hosts(self, add_nodes: list = None):
+    def add_new_hosts(
+        self,
+        add_nodes: list = None,
+        crush_bucket_name: str = None,
+        crush_bucket_type: str = None,
+        crush_bucket_val: str = None,
+    ):
         """
         Module to add a new host to an existing deployment.
         Assumptions: If nodeId as per global conf is not provided,
@@ -50,6 +56,10 @@ class ServiceabilityMethods:
         the cluster
         Args:
             add_nodes(list): List input of nodeIDs to be added to the cluster
+            crush_bucket_name: Name of the bucket to be moved
+            crush_bucket_type(str): Name of the crush bucket to add during host addition.
+                                    Eg: datacenter, zone, host etc...
+            crush_bucket_val(str): Value of the crush bucket to add during host addition.
         Returns:
             None | Raises exception in case of failure.
 
@@ -75,6 +85,10 @@ class ServiceabilityMethods:
 
             ncount_pre = self.get_host_count()
             deploy_host(ceph_cluster=self.cluster, config=add_args)
+            if crush_bucket_name:
+                cmd = f"ceph osd crush move {crush_bucket_name} {crush_bucket_type}={crush_bucket_val}"
+                self.rados_obj.run_ceph_command(cmd=cmd)
+                time.sleep(5)
 
             if not ncount_pre < self.get_host_count():
                 log.error("New hosts are not added into the cluster")
