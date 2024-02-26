@@ -64,8 +64,12 @@ def setup_nfs_cluster(
         export_list.append(export_name)
         sleep(1)
 
-    # If the mount version is v3, make necessary changes
-    if version == 3:
+    # Get the mount versions specific to clients
+    mount_versions = _get_client_specific_mount_versions(version, clients)
+
+    # Check if the mount version v3 is included in the list of versions and
+    # if the mount version is v3, make necessary changes
+    if 3 in mount_versions.keys():
         _enable_v3_mount(export_list, nfs_name)
 
     # Step 4: Perform nfs mount
@@ -76,18 +80,19 @@ def setup_nfs_cluster(
         nfs_server = vip.split("/")[0]  # Remove the port
 
     i = 0
-    for client in clients:
-        client.create_dirs(dir_path=nfs_mount, sudo=True)
-        if Mount(client).nfs(
-            mount=nfs_mount,
-            version=version,
-            port=port,
-            server=nfs_server,
-            export=f"{export}_{i}",
-        ):
-            raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
-        i += 1
-        sleep(1)
+    for version, clients in mount_versions.items():
+        for client in clients:
+            client.create_dirs(dir_path=nfs_mount, sudo=True)
+            if Mount(client).nfs(
+                mount=nfs_mount,
+                version=version,
+                port=port,
+                server=nfs_server,
+                export=f"{export}_{i}",
+            ):
+                raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
+            i += 1
+            sleep(1)
     log.info("Mount succeeded on all clients")
 
     # Step 5: Enable nfs coredump to nfs nodes
@@ -155,6 +160,21 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
         Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
+
+
+def _get_client_specific_mount_versions(versions, clients):
+    # Identify the multi mount versions specific to clients
+    version_dict = {}
+    if not isinstance(versions, list):
+        version_dict[versions] = clients
+        return version_dict
+    ctr = 0
+    for entry in versions:
+        ver = list(entry.keys())[0]
+        count = list(entry.values())[0]
+        version_dict[ver] = clients[ctr : ctr + int(count)]
+        ctr = ctr + int(count)
+    return version_dict
 
 
 def _enable_v3_mount(exports, nfs_name):
