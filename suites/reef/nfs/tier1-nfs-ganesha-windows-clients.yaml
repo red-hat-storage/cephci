@@ -159,3 +159,18 @@ tests:
             user: manisha
             password: Redhat
       abort-on-fail: false
+
+  - test:
+      name: Verify rootsquash operation post mounting the NFS volume on windows client
+      desc: Enable rootsquash post running some IO's from windows client
+      polarion-id: CEPH-83581042
+      module: nfs_rootsquash_post_io_operation_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.44.246
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
