@@ -1656,6 +1656,10 @@ class FsUtils(object):
         Returns:
             Returns the cmd_out and cmd_rc for remove cmd
         """
+        delete_mon_allow_cmd = "ceph config set mon mon_allow_pool_delete true"
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=delete_mon_allow_cmd, check_ec=kwargs.get("check_ec", True)
+        )
         rmvolume_cmd = f"ceph fs volume rm {vol_name} --yes-i-really-mean-it"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=rmvolume_cmd, check_ec=kwargs.get("check_ec", True)

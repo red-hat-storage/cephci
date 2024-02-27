@@ -207,4 +207,10 @@ tests:
       polarion-id: CEPH-83575624
       desc: Check for Standby-reply nodes changes if there is network glitch for more than 60 sec
       abort-on-fail: false
+  - test:
+      name: Check to prevent usage of Pools which has Pool level snaps for Filesystem creation.
+      module: cephfs_bugs.test_disallow_fs_creation_with_pool_level_snaps.py
+      polarion-id: CEPH-83583762
+      desc: Creation of pool-level snaps for pools actively associated with a filesystem is disallowed
+      abort-on-fail: false
 
