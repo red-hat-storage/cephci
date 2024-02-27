@@ -2,7 +2,7 @@ import json
 
 from ceph.utils import get_nodes_by_ids
 from cli.cephadm.cephadm import CephAdm
-from cli.exceptions import ConfigError, UnexpectedStateError
+from cli.exceptions import ConfigError, ResourceNotFoundError, UnexpectedStateError
 from utility.log import Log
 
 log = Log(__name__)
@@ -57,11 +57,18 @@ def run(ceph_cluster, **kw):
     # Verify osd memory target for osd on the host matches the host level value
     out = cephadm.ceph.osd.tree(**kw)
     data = json.loads(out)
+    listitems = []
+    for item in data["nodes"]:
+        if item.get("type") == "host":
+            listitems.append(item.get("name"))
+    # Validate if the node is present under 'ceph osd tree'
+    if hostname not in listitems:
+        raise ResourceNotFoundError(f"node {hostname} not found under 'ceph osd tree'")
     for item in data["nodes"]:
         if item.get("type") == "host" and item.get("name") == hostname:
             osd_list = item["children"]
             osd_id = f"osd.{str(osd_list[0])}"
-            out = cephadm.ceph.config.get(who="osd_id", key="osd_memory_target")
+            out = cephadm.ceph.config.get(who=osd_id, key="osd_memory_target")
             if out[0].strip() not in str(value):
                 raise UnexpectedStateError(
                     f"osd memory target for '{osd_id}' doesnot match host value '{value}' "
@@ -70,4 +77,4 @@ def run(ceph_cluster, **kw):
                 f"osd memory target for '{osd_id}' matches the host "
                 f"level value : '{value}'"
             )
-            return 0
+    return 0
