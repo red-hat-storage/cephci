@@ -1,5 +1,7 @@
 import json
+from importlib import import_module
 
+from ceph.parallel import parallel
 from ceph.rbd.utils import get_md5sum_rbd_image, random_string
 from ceph.rbd.workflows.snap_scheduling import (
     run_io_verify_snap_schedule_single_image,
@@ -90,16 +92,18 @@ def snap_create_list_and_verify(**kw):
         "is_secondary":<True/False>,
         "pool": <>,
         "image": <>,
+        "test_ops_parallely": <True/False>
         <multipool and multiimage config>
     }
     """
     rbd = kw.get("rbd")
     sec_rbd = kw.get("sec_obj")
-    is_secondary = kw.get("is_secondary")
+    is_secondary = kw.get("is_secondary", False)
     pool = kw.get("pool")
     image = kw.get("image")
-    image_config = kw.get("image_config")
-    snap_name = f"snap_{random_string(len=5)}"
+    image_config = kw.get("image_config", None)
+    snap_name = kw.get("snap_name", f"snap_{random_string(len=5)}")
+    test_ops_parallely = kw.get("test_ops_parallely", False)
     out, err = rbd.snap.create(pool=pool, image=image, snap=snap_name)
     if (
         is_secondary
@@ -114,21 +118,38 @@ def snap_create_list_and_verify(**kw):
             log.error(
                 f"Snapshot {snap_name} does not exist in snap ls for {pool}/{image} for primary cluster"
             )
+            if test_ops_parallely:
+                raise Exception(
+                    f"Snapshot {snap_name} does not exist in snap ls for {pool}/{image} for primary cluster"
+                )
             return 1
-        for interval in image_config.get("snap_schedule_intervals"):
-            out = verify_snapshot_schedule(rbd, pool, image, interval)
-            if out:
-                log.error(f"Snapshot verification failed for image {pool}/{image}")
-                return 1
+        if image_config is not None:
+            for interval in image_config.get("snap_schedule_intervals"):
+                out = verify_snapshot_schedule(rbd, pool, image, interval)
+                if out:
+                    log.error(f"Snapshot verification failed for image {pool}/{image}")
+                    if test_ops_parallely:
+                        raise Exception(
+                            f"Snapshot verification failed for image {pool}/{image}"
+                        )
+                    return 1
         if sec_rbd and not snap_exists(
             rbd=sec_rbd, pool=pool, image=image, snap_name=snap_name
         ):
             log.error(
                 f"Snapshot {snap_name} does not exist in snap ls for {pool}/{image} for secondary cluster"
             )
+            if test_ops_parallely:
+                raise Exception(
+                    f"Snapshot {snap_name} does not exist in snap ls for {pool}/{image} for secondary cluster"
+                )
             return 1
     else:
         log.error(f"Snapshot creation did not behave as expected for {pool}/{image}")
+        if test_ops_parallely:
+            raise Exception(
+                f"Snapshot creation did not behave as expected for {pool}/{image}"
+            )
         return 1
     return 0
 
@@ -457,4 +478,46 @@ def purge_snap_and_verify(**kw):
         if snaps:
             log.error(f"Snapshot purge did not delete all snaps for {pool}/{image}")
             return 1
+    return 0
+
+
+def wrapper_for_image_snap_ops(**kw):
+    """
+    Perform specified image snap operation for images in pool,
+    and verify either sequentially or parallely based on input
+
+    Args:
+        kw: {
+            "rbd": <>,
+            "pool": <>,
+            "image": <>,
+            "snap_names": [<>]
+            "ops_module": <>,
+            "ops_method": <>,
+            "test_ops_parallely": <>
+        }
+    """
+    rbd = kw.get("rbd")
+    pool = kw.get("pool")
+    image = kw.pop("image", {})
+    snap_names = kw.pop("snap_names", [])
+    test_ops_parallely = kw.get("test_ops_parallely", False)
+    ops_module = kw.pop("ops_module", {})
+    mod_obj = import_module(ops_module)
+    ops_method = kw.pop("ops_method", {})
+    method_obj = getattr(mod_obj, ops_method)
+    log.info(f"Test image snap operations {ops_method} for pool {pool}/{image}")
+
+    if test_ops_parallely:
+        with parallel() as p:
+            for snap in snap_names:
+                p.spawn(method_obj, rbd=rbd, pool=pool, image=image, snap_name=snap)
+    else:
+        for snap in snap_names:
+            rc = method_obj(rbd=rbd, pool=pool, image=image, snap_name=snap)
+            if rc:
+                log.error(
+                    f"Test image snap operation {ops_method} failed for {pool}/{image}/{snap}"
+                )
+                return 1
     return 0
