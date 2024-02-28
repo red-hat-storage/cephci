@@ -4,6 +4,7 @@ from threading import Thread
 from time import sleep
 
 from cli.ceph.ceph import Ceph
+from cli.exceptions import OperationFailedError
 from cli.io.fio import Fio
 from cli.utilities.windows_utils import setup_windows_clients
 from utility.log import Log
@@ -136,18 +137,49 @@ def run(ceph_cluster, **kw):
         if vip:
             virtual_ip = vip.split("/")[0]
 
+        # th_list = []
+        # for client in windows_clients:
+        #     cmd = r"curl --create-dirs -O --output-dir " \
+        #           r"C:\Users\Manisha http://magna002.ceph.redhat.com/cephci-jenkins/fio/fio.exe"
+        #     # out = client.exec_command(cmd=cmd)
+        #     th = Thread(
+        #         target=lambda: client.exec_command(cmd=cmd), args=()
+        #     )
+        #     th.start()
+        #     th_list.append(th)
+        # for th in th_list:
+        #     th.join()
+        # for client in windows_clients:
+        #     cmd = r"dir C:\Users\Manisha"
+        #     out = client.exec_command(cmd=cmd)
+        #     log.info(out)
+
         var = 1
         for client in windows_clients:
-            dir = "K"
+            dir = "P"
             mount_dir_list = []
             # Do mounts
-            for _ in range(int(exports_per_client)):
+            for i in range(int(exports_per_client)):
                 nfs_mounting_dir = chr(ord(dir) + i) + ":"
+
+                # Perform umount in case the mount is already present
+                try:
+                    cmd = f"umount {nfs_mounting_dir}"
+                    out = client.exec_command(cmd=cmd)
+                    log.info(out)
+                except Exception as e:
+                    log.info(str(e))
+
                 export = f"/export_{var}"
                 cmd = f"mount {virtual_ip}:{export} {nfs_mounting_dir}"
-                client.exec_command(cmd=cmd)
+                out = client.exec_command(cmd=cmd)
+                log.info(out)
+                if "is now successfully connected" not in out[0]:
+                    raise OperationFailedError(f"Failed to mount. Error: {out[0]}")
+                cmd = "mount"
+                out = client.exec_command(cmd=cmd)
+                log.info(out[0])
                 mount_dir_list.append(nfs_mounting_dir)
-
                 var += 1
             log.info(f"\nMount succeeded on {client.hostname} \n\n")
 
@@ -158,7 +190,7 @@ def run(ceph_cluster, **kw):
         log.info("Starting IO")
         ioengine = "libaio"
         workloads = ["randrw"]
-        size = ["5G"]
+        size = ["4G"]
         iodepth_value = ["4"]
         numjobs = "4"
         for client in windows_clients:
