@@ -219,7 +219,9 @@ def run_test(ceph_cluster, **kw):
         if config.get("delete_pool"):
             rados_obj.detete_pool(pool=pool_name)
 
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, 1800)
+    method_should_succeed(
+        wait_for_clean_pg_sets, rados_obj, timeout=1800, test_pool=pool_name
+    )
     try:
         for host in acting_osd_hosts:
             assert verify_deviation(

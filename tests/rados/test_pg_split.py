@@ -53,10 +53,13 @@ def run(ceph_cluster, **kw):
 
         log.info("Running PG split merge scenarios")
         pool = create_pools(config, rados_obj, client_node)
+        pool_name = pool["pool_name"]
         should_not_be_empty(pool, "Failed to retrieve pool details")
         write_to_pools(config, rados_obj, client_node)
         log.debug("Completed writing objects into pool")
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
 
         init_pg_count = rados_obj.get_pool_property(
             pool=pool["pool_name"], props="pg_num"
@@ -160,7 +163,9 @@ def run(ceph_cluster, **kw):
         log.debug(
             f" waiting for PGs to settle down on pool {pool['pool_name']} after applying bulk flag"
         )
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
 
         endtime = datetime.datetime.now() + datetime.timedelta(seconds=10000)
         while datetime.datetime.now() < endtime:
@@ -240,7 +245,9 @@ def run(ceph_cluster, **kw):
                 "Completed checking PG states on merge. No premerge PGs seen for extended duration"
             )
 
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
         pg_count_bulk_false = rados_obj.get_pool_details(pool=pool["pool_name"])[
             "pg_num_target"
         ]

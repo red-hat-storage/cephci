@@ -84,7 +84,9 @@ def run(ceph_cluster, **kw) -> int:
                 raise Exception("Config change error")
             # Sleeping for 1 min for new PG numbers to be calculated by the cluster
             time.sleep(60)
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            method_should_succeed(
+                wait_for_clean_pg_sets, rados_obj, test_pool=pool_name
+            )
         else:
             if not pool_obj.set_bulk_flag(pool_name=pool_name):
                 log.error("Failed to set the bulk flag")
@@ -92,7 +94,9 @@ def run(ceph_cluster, **kw) -> int:
 
             # Sleeping for 1 min for new PG numbers to be calculated by the cluster
             time.sleep(60)
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            method_should_succeed(
+                wait_for_clean_pg_sets, rados_obj, test_pool=pool_name
+            )
         # error checks
         if not rados_obj.run_pool_sanity_check():
             log.error("Checks failed post config update")

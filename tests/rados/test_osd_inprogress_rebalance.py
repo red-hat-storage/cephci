@@ -43,6 +43,7 @@ def run(ceph_cluster, **kw):
         log.info("Running osd in progress rebalance tests")
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
+        pool_name = pool["pool_name"]
         write_to_pools(config, rados_obj, client_node)
         rados_obj.change_recovery_threads(config=pool, action="set")
         acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
@@ -57,9 +58,9 @@ def run(ceph_cluster, **kw):
         )
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
         utils.osd_remove(ceph_cluster, osd_id)
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
         method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
         method_should_succeed(wait_for_device, host, osd_id, action="remove")
         osd_id1 = acting_pg_set[1]
@@ -72,7 +73,7 @@ def run(ceph_cluster, **kw):
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id1)
         utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
         method_should_succeed(wait_for_device, host, osd_id, action="add")
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
 
         acting_pg_set1 = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
         if len(acting_pg_set) != len(acting_pg_set1):

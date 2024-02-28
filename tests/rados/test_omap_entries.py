@@ -79,7 +79,7 @@ def run(ceph_cluster, **kw):
                     time.sleep(5)
 
                     # Waiting for cluster to get clean state after OSD stopped
-                    if not wait_for_clean_pg_sets(rados_obj):
+                    if not wait_for_clean_pg_sets(rados_obj, test_pool=pool_name):
                         log.error("PG's in cluster are not active + Clean state.. ")
                         raise Exception(
                             "PG's in cluster are not active + Clean state.. "

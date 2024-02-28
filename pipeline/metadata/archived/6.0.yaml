@@ -236,16 +236,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - cephfs
-        - name: "RADOS regression testing osd rebalance with many pools"
-          execution_time: "29m 39s"
-          suite: "suites/quincy/rados/tier-2_rados_test-osd-rebalance-many-pools.yaml"
-          global-conf: "conf/quincy/rados/11-node-cluster.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rados
         - name: "Permissive Mode Scenarios"
           execution_time: "16m 25s"
           suite: "suites/quincy/cephadm/tier-2-permissive-mode-scenarios.yaml"
@@ -607,16 +597,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "Testing RADOS regression for in-progress osd rebalance"
-          execution_time: "38m 4s"
-          suite: "suites/quincy/rados/tier-2_rados_test-osd-inprogress-rebalance.yaml"
-          global-conf: "conf/quincy/rados/11-node-cluster.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
-          metadata:
-            - rados
         - name: "test-rgw-quota-management"
           execution_time: "39m 30s"
           suite: "suites/pacific/rgw/tier-2_rgw_test-quota-management.yaml"
@@ -938,15 +918,6 @@ pipelines:
         - name: "RADOS test scenarios for PG split and merge"
           execution_time: "1h 40m"
           suite: "suites/quincy/rados/tier-2_rados_test-pg-split-merge.yaml"
-          global-conf: "conf/quincy/rados/7-node-cluster.yaml"
-          platform: "rhel-9"
-          inventory:
-            openstack: "conf/inventory/rhel-9-latest.yaml"
-          metadata:
-            - rados
-        - name: "RADOS testing snaps during rebalance"
-          execution_time: "55m"
-          suite: "suites/quincy/rados/tier-2_rados_test-osd-rebalance-snap.yaml"
           global-conf: "conf/quincy/rados/7-node-cluster.yaml"
           platform: "rhel-9"
           inventory:

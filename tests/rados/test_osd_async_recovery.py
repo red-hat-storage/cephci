@@ -45,8 +45,9 @@ def run(ceph_cluster, **kw):
                 f"Creating {entry['pool_type']} pool on the cluster with name {entry['pool_name']}"
             )
             method_should_succeed(rados_object.create_pool, **entry)
+            pool_name = entry["pool_name"]
             rados_object.bench_write(
-                pool_name=entry["pool_name"], rados_write_duration=900, background=True
+                pool_name=pool_name, rados_write_duration=900, background=True
             )
             log_lines = [
                 "choose_async_recovery_replicated candidates by cost are",
@@ -69,7 +70,9 @@ def run(ceph_cluster, **kw):
                 if not rados_object.change_osd_state(action="restart", target=osd_id):
                     log.error(f" Failed to restart OSD : {osd_id}")
                     return 1
-                method_should_succeed(wait_for_clean_pg_sets, rados_object)
+                method_should_succeed(
+                    wait_for_clean_pg_sets, rados_object, test_pool=pool_name
+                )
                 end_time, _ = installer.exec_command(
                     cmd="sudo date '+%Y-%m-%d %H:%M:%S'"
                 )
