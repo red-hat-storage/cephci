@@ -247,3 +247,13 @@ tests:
         clients: 3
         num_files: 1000
         num_dirs: 1000
+
+  - test:
+      name: Nfs Ganesha test multi mount versions
+      module: nfs_verify_multi_mount_version.py
+      desc: Perform different mount versions on clients and validate the behavior
+      polarion-id: CEPH-83577595
+      abort-on-fail: true
+      config:
+        clients: 3
+        nfs_version: [4.1: 2, 3: 1]  # Out of the 3 clients, 2 will be mounted with v4.1 and other with v3
