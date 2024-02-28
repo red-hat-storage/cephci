@@ -363,8 +363,11 @@ class BootstrapMixin:
                 "promtail",
                 "snmp_gateway",
                 "loki",
-                "nvmeof",
             ]
+            if _rhcs_version >= 7.0:
+                supported_overrides += [
+                    "nvmeof",
+                ]
 
             for image in supported_overrides:
                 image_key = f"{image}_image"
