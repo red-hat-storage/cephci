@@ -83,6 +83,21 @@ tests:
       name: configure client
 
   - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
       name: Nfs Verify nfs mount on windows client
       module: nfs_verify_windows_client.py
       desc: Verify accessing and performing mount on windows client
@@ -106,6 +121,40 @@ tests:
         linux_clients: 1
         windows_clients:
           - ip: 10.70.45.111
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha Verify file rename operation from 1 client and parallel lookups from other clients
+      desc: Verify file rename operation from 1 client and parallel lookups from other clients
+      polarion-id: CEPH-83581037
+      module: nfs_verify_window_clinets_file_rename_lookups.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.44.246
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.44.247
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha Verify Mount the NFS share on windows (v3) and linux (v4.1) and run IO's i. parallel
+      desc: Verify Mount the NFS share on windows (v3) and linux (v4.1) and run IO's i. parallel
+      polarion-id: CEPH-83581037
+      module: nfs_verify_mount_linux_v4_windows_clinet_v3.py
+      config:
+        nfs_version: [4.1: 1, 3: 1]
+        linux_clients: 2
+        windows_clients:
+          - ip: 10.70.44.246
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat

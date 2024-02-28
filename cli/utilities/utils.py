@@ -671,7 +671,7 @@ def create_files(client, mount_point, file_count, windows_client=False):
             raise OperationFailedError(f"failed to create file file{i}")
 
 
-def perform_lookups(client, mount_point, num_files):
+def perform_lookups(client, mount_point, num_files, windows_client=False):
     """
     Perform lookups
     Args:
@@ -681,12 +681,19 @@ def perform_lookups(client, mount_point, num_files):
     """
     for _ in range(num_files):
         try:
-            log.info(
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"ls -laRt {mount_point}/",
+            if windows_client:
+                log.info(
+                    client.exec_command(
+                        cmd=f"dir {mount_point}",
+                    )
                 )
-            )
+            else:
+                log.info(
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"ls -laRt {mount_point}/",
+                    )
+                )
         except FileNotFoundError as e:
             error_message = str(e)
             if "No such file or directory" not in error_message:
@@ -896,3 +903,29 @@ def load_config(config):
             return yaml.safe_load(_stream)
         except yaml.YAMLError:
             raise ConfigError(f"Invalid configuration file '{config}'")
+
+
+def rename_file(client, mount_point, file_count, windows_client=False):
+    """
+    Rename files
+    Args:
+        clients (ceph): Client nodes
+        mount_point (str): mount path
+        file_count (int): total file count
+        windows_client (bool): true for windows client
+    """
+    for i in range(1, file_count + 1):
+        try:
+            if windows_client:
+                cmd = f'ren "{mount_point}\\win_file{i}" "new_win_file{i}"'
+                client.exec_command(
+                    cmd=cmd,
+                )
+            else:
+                cmd = f"mv {mount_point}/file{i} {mount_point}/new_file{i}"
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+        except Exception:
+            raise OperationFailedError(f"failed to rename file file{i}")
