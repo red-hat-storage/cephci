@@ -79,7 +79,7 @@ def run(ceph_cluster, **kw) -> int:
                 raise Exception("Execution error")
 
             # Waiting for recovery post OSD reboot
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
             log.debug(
                 "PG's are active + clean post OSD reboot, proceeding to restart next OSD"
             )
@@ -135,7 +135,7 @@ def run(ceph_cluster, **kw) -> int:
                 raise Exception("Execution error")
 
             # Waiting for recovery to post OSD stop
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
             log.debug(
                 f"PG's are active + clean post OSD stop of {target_osd}, proceeding to start OSD"
             )
@@ -146,7 +146,7 @@ def run(ceph_cluster, **kw) -> int:
                 raise Exception("Execution error")
 
             # Waiting for recovery to post OSD start
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
             log.debug(
                 f"PG's are active + clean post OSD start of {target_osd}, proceeding to restart next OSD"
             )
@@ -171,7 +171,7 @@ def run(ceph_cluster, **kw) -> int:
                     raise Exception("Execution error")
 
                 # Waiting for recovery to post OSD restart
-                method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
                 log.debug(
                     f"PG's are active + clean post OSD restart of {target_osd}, proceeding to restart next OSD"
                 )

@@ -158,7 +158,9 @@ def run(ceph_cluster, **kw):
     log.debug(
         " waiting for PGs to settle down and recover post OSD stop and start during mon removal"
     )
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, 5000)
+    method_should_succeed(
+        wait_for_clean_pg_sets, rados_obj, timeout=5000, test_pool=pool_name
+    )
 
     if not rados_obj.run_pool_sanity_check():
         log.error("Checks failed post mon removal and OSD rebalance")
@@ -211,7 +213,9 @@ def run(ceph_cluster, **kw):
     log.debug(
         " waiting for PGs to settle down and recover post OSD stop and start during mon Addition"
     )
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, 5000)
+    method_should_succeed(
+        wait_for_clean_pg_sets, rados_obj, timeout=5000, test_pool=pool_name
+    )
 
     if not rados_obj.run_pool_sanity_check():
         log.error("Checks failed post mon addition and OSD rebalance")

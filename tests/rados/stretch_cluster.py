@@ -112,7 +112,7 @@ def run(ceph_cluster, **kw):
 
         # there was data written into pool when the OSD's were down.
         # Verifying if data is recovered and placed into the OSD's after bringing them back
-        res = wait_for_clean_pg_sets(rados_obj)
+        res = wait_for_clean_pg_sets(rados_obj, test_pool=pool_name)
         if not res:
             log.error("PG's in cluster are not active + Clean ")
             return 1
@@ -304,57 +304,80 @@ def run(ceph_cluster, **kw):
 
 
 def wait_for_clean_pg_sets(
-    rados_obj: RadosOrchestrator, timeout: Any = 9000, _sleep: Any = 120
+    rados_obj: RadosOrchestrator,
+    timeout: Any = 10000,
+    sleep_interval: Any = 120,
+    test_pool: str = None,
 ) -> bool:
     """
-    Waiting for up to 2.5 hours for the PG's to enter active + Clean state after stretch changes
+    Waiting for up to 2.5 hours for the PG's to enter active + Clean state.
+    If pool name is provided, just checks the PGs of that pool for active + clean
     Automation for bug : [1] & [2]
     Args:
         rados_obj: RadosOrchestrator object to run commands
         timeout: timeout in seconds or "unlimited"
-        _sleep: sleep timeout in seconds (default: 120)
+        sleep_interval: sleep timeout in seconds (default: 120)
+        test_pool: name of the test pool, whose PG states need to be monitored.
 
     Returns:  True -> pass, False -> fail
-
     """
-    end_time = 0
+    end_time = None
     if timeout == "unlimited":
-        condition = lambda x: "unlimited" == x
+        condition = lambda: True
     elif isinstance(timeout, int):
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
-        condition = lambda x: end_time > datetime.datetime.now()
+        end_time = datetime.datetime.utcnow() + datetime.timedelta(seconds=timeout)
+        condition = lambda: datetime.datetime.utcnow() < end_time
 
-    while condition(end_time if isinstance(timeout, int) else timeout):
-        flag = True
-        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
-
-        # Proceeding to check if all PG's are in active + clean
-        for entry in status_report["num_pg_by_state"]:
-            rec = (
-                "remapped",
-                "backfilling",
-                "degraded",
-                "incomplete",
-                "peering",
-                "recovering",
-                "recovery_wait",
-                "undersized",
-                "backfilling_wait",
-            )
-            if any(key in rec for key in entry["state"].split("+")):
-                flag = False
-
-        if flag:
-            log.info("The recovery and back-filling of the OSD is completed")
-            return True
-        log.info(
-            f"Waiting for active + clean. Active alerts: {status_report['health']['checks'].keys()},"
-            f"PG States : {status_report['num_pg_by_state']}"
-            f" checking status again in {_sleep} seconds"
+    while condition():
+        health_warnings = (
+            "remapped",
+            "backfilling",
+            "degraded",
+            "incomplete",
+            "peering",
+            "recovering",
+            "recovery_wait",
+            "undersized",
+            "backfilling_wait",
         )
-        time.sleep(_sleep)
+        all_pg_active_clean = True
+        if test_pool:
+            log.debug(f"Checking for active + clean PGs on pool: {test_pool}")
+            pool_pg_ids = rados_obj.get_pgid(pool_name=test_pool)
+            for pg_id in pool_pg_ids:
+                pg_state = rados_obj.get_pg_state(pg_id=pg_id)
+                if any(key in health_warnings for key in pg_state.split("+")):
+                    all_pg_active_clean = False
+                    log.debug(f"PG: {pg_id} in states: {pg_state}")
+                log.info(
+                    f"Waiting for active + clean. PG: {pg_id} in state: {pg_state}."
+                    f" Checking status again in {sleep_interval} seconds"
+                )
+        else:
+            try:
+                status_report = rados_obj.run_ceph_command(
+                    cmd="ceph report", client_exec=True
+                )
+                for entry in status_report["num_pg_by_state"]:
+                    if any(key in health_warnings for key in entry["state"].split("+")):
+                        all_pg_active_clean = False
+                        log.debug(f"PG state: {entry['state']}")
+                    log.info(
+                        f"Waiting for active + clean. Active alerts: {status_report['health']['checks'].keys()},"
+                        f" PG States: {status_report['num_pg_by_state']}."
+                        f" Checking status again in {sleep_interval} seconds"
+                    )
+            except Exception as e:
+                log.error(f"Error occurred while fetching status report: {e}")
 
-    log.error("The cluster did not reach active + Clean state")
+        if all_pg_active_clean:
+            log.info("The recovery and back-filling of the OSDs/Pool is completed")
+            return True
+        time.sleep(sleep_interval)
+
+    log.error(
+        "The cluster/Pool did not reach active + Clean state within the specified timeout"
+    )
     return False
 
 

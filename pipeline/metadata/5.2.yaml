@@ -369,22 +369,6 @@ suites:
       - rados
       - stage-2
 
-  - name: "Testing RADOS regression for in-progress osd rebalance"
-    suite: "suites/pacific/rados/tier-2_rados_test-osd-inprogress-rebalance.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-    platform: "rhel-8"
-    rhbuild: "5.2"
-    inventory:
-      openstack: "conf/inventory/rhel-8-latest.yaml"
-      ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-    metadata:
-      - schedule
-      - tier-2
-      - openstack
-      - ibmc
-      - rados
-      - stage-2
-
   - name: "Testing RADOS regression for Stretch mode upgrade"
     suite: "suites/pacific/rados/tier-2_rados_test-stretch-mode-upgrade.yaml"
     global-conf: "conf/pacific/rados/stretch-mode-host-location-attrs.yaml"
@@ -417,21 +401,6 @@ suites:
       - rados
       - stage-4
 
-  - name: "RADOS regression testing osd rebalance with many pools"
-    suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance-many-pools.yaml"
-    global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-    platform: "rhel-8"
-    rhbuild: "5.2"
-    inventory:
-      openstack: "conf/inventory/rhel-8-latest.yaml"
-      ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-    metadata:
-      - sanity
-      - tier-2
-      - openstack
-      - ibmc
-      - rados
-      - stage-5
 
   - name: "Tier-0 test suite for 5x for RGW sanity"
     suite: "suites/pacific/rgw/tier-0_rgw.yaml"

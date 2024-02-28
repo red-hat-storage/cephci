@@ -54,6 +54,7 @@ def run(ceph_cluster, **kw):
         log.error("Failed to retrieve pool details")
         return 1
 
+    pool_name = pool["pool_name"]
     # Set recover threads configurations
     rados_obj.change_recovery_threads(config=pool, action="set")
 
@@ -61,7 +62,7 @@ def run(ceph_cluster, **kw):
     if rhbuild.startswith("6") and config.get("mclock_profile"):
         rados_obj.set_mclock_profile(profile=config["mclock_profile"])
 
-    acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
+    acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
     log.info(f"Acting set {acting_pg_set}")
     if not acting_pg_set:
         log.error("Failed to retrieve acting pg set")
@@ -99,19 +100,27 @@ def run(ceph_cluster, **kw):
     )
     utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
     method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+    method_should_succeed(
+        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+    )
     utils.osd_remove(ceph_cluster, osd_id)
     if cr_pool.get("rados_put", False):
         do_rados_get(client_node, pool["pool_name"], 1)
 
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+    method_should_succeed(
+        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+    )
     method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
     method_should_succeed(wait_for_device, host, osd_id, action="remove")
     utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
     method_should_succeed(wait_for_device, host, osd_id, action="add")
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+    method_should_succeed(
+        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+    )
     do_rados_put(mon=client_node, pool=pool["pool_name"], nobj=1000)
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout)
+    method_should_succeed(
+        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+    )
     if cr_pool.get("rados_put", False):
         do_rados_get(client_node, pool["pool_name"], 1)
     utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)

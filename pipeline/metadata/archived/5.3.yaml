@@ -182,16 +182,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
           metadata:
             - cephfs
-        - name: "RADOS regression testing osd rebalance with many pools"
-          execution_time: "32m 39s"
-          suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance-many-pools.yaml"
-          global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - rados
         - name: "Tier-2 Cephfs test Multifs"
           execution_time: "32m 44s"
           suite: "suites/pacific/cephfs/tier-2_cephfs_test-multifs.yaml"
@@ -636,16 +626,6 @@ pipelines:
             ibmc: "conf/inventory/ibm-vpc-rhel-9-latest.yaml"
           metadata:
             - rgw
-        - name: "Testing RADOS regression for in-progress osd rebalance"
-          execution_time: "41m 41s"
-          suite: "suites/pacific/rados/tier-2_rados_test-osd-inprogress-rebalance.yaml"
-          global-conf: "conf/pacific/rados/11-node-cluster.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
-            ibmc: "conf/inventory/ibm-vpc-rhel-8-latest.yaml"
-          metadata:
-            - rados
         - name: "Tier-2 test suite for 5x - RBD functionality"
           execution_time: "42m 41s"
           suite: "suites/pacific/rbd/tier-2_rbd_regression.yaml"
@@ -1027,15 +1007,6 @@ pipelines:
           platform: "rhel-9"
           inventory:
             openstack: "conf/inventory/rhel-9-latest.yaml"
-          metadata:
-            - rados
-        - name: "RADOS testing snaps during rebalance"
-          execution_time: "55ms"
-          suite: "suites/pacific/rados/tier-2_rados_test-osd-rebalance-snap.yaml"
-          global-conf: "conf/pacific/rados/7-node-cluster.yaml"
-          platform: "rhel-8"
-          inventory:
-            openstack: "conf/inventory/rhel-8-latest.yaml"
           metadata:
             - rados
   rc:

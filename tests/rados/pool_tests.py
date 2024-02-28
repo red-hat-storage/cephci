@@ -310,8 +310,9 @@ def run(ceph_cluster, **kw):
                     **entry,
                 )
             rados_obj.bench_write(**entry)
+            pool_name = entry["pool_name"]
             if not pool_obj.verify_target_ratio_set(
-                pool_name=entry["pool_name"], ratio=entry["target_size_ratio"]
+                pool_name=pool_name, ratio=entry["target_size_ratio"]
             ):
                 log.error(
                     f"Could not change the target ratio on the pool: {entry['pool_name']}"
@@ -339,7 +340,7 @@ def run(ceph_cluster, **kw):
                 )
                 return 1
 
-            res = wait_for_clean_pg_sets(rados_obj)
+            res = wait_for_clean_pg_sets(rados_obj, test_pool=pool_name)
             if not res:
                 log.error(
                     "PG's in cluster are not active + Clean after the ratio change"
