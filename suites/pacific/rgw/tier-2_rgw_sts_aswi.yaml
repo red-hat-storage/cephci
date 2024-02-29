@@ -201,7 +201,7 @@ tests:
       config:
         roles:
           - rgw
-        rule: root netem delay 10ms 5ms distribution normal
+        rule: root netem delay 20ms 2ms distribution normal
       desc: Configuring network traffic delay
       module: configure-tc.py
       name: apply-net-qos
