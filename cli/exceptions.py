@@ -69,3 +69,9 @@ class RemoteConnectionError(Exception):
     """
     Custom exception thrown when Remote Connection fails
     """
+
+
+class OsdOperationError(Exception):
+    """
+    Custom exception thrown when OSD operation fails
+    """
