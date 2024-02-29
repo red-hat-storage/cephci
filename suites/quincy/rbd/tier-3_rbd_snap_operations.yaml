@@ -85,6 +85,7 @@ tests:
       desc: Run all image snap operations in scale
       module: test_rbd_image_snap_operations.py
       name: RBD image snap operations in scale
+      polarion-id: CEPH-83584063
       config:
         rep_pool_config:
           rbd_scale_snap_pool:
@@ -97,5 +98,5 @@ tests:
             data_pool: rbd_ec_pool
             rbd_ec_scale_snap_image:
               size: 1G
-              num_of_snaps: 5
+              num_of_snaps: 500
           test_ops_parallely: true

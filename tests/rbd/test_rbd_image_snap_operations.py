@@ -42,6 +42,8 @@ def test_rbd_image_snap_operations(rbd_obj, **kw):
                 snap_names = [
                     f"snap_{snap_suffix}" for snap_suffix in range(num_of_snaps)
                 ]
+                # 1. Perform snap create operation, parallel is also supported
+                log.info("Test image snap create operation")
                 rc = wrapper_for_image_snap_ops(
                     rbd=rbd,
                     pool=pool,
@@ -52,8 +54,47 @@ def test_rbd_image_snap_operations(rbd_obj, **kw):
                     test_ops_parallely=test_ops_parallely,
                 )
                 if rc:
-                    log.error(f"Snap operations on the {pool}/{image} failed")
+                    log.error(f"Snap create operations on the {pool}/{image} failed")
                     return 1
+                else:
+                    log.info(f"Snap create operations on the {pool}/{image} succeeded")
+
+                # 2. Perform snap clone operation i.e which in turn calls
+                # a. protect snap b. clone snap c. flatten snap d.unprotect snap
+                # parallel is also supported
+                log.info("Test image snap clone operation")
+                rc = wrapper_for_image_snap_ops(
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    snap_names=snap_names,
+                    ops_module="ceph.rbd.workflows.snap_clone_operations",
+                    ops_method="clone_ops",
+                    test_ops_parallely=test_ops_parallely,
+                )
+                if rc:
+                    log.error(f"Snap clone operations on the {pool}/{image} failed")
+                    return 1
+                else:
+                    log.info(f"Snap clone operations on the {pool}/{image} succeeded")
+
+                # 3. Remove the snaps, paralle is also supported
+                log.info("Test image snap rm operation")
+                rc = wrapper_for_image_snap_ops(
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    snap_names=snap_names,
+                    ops_module="ceph.rbd.workflows.snap_clone_operations",
+                    ops_method="remove_snap_and_verify",
+                    test_ops_parallely=test_ops_parallely,
+                )
+                if rc:
+                    log.error(f"Snap remove operations on the {pool}/{image} failed")
+                    return 1
+                else:
+                    log.info(f"Snap remove operations on the {pool}/{image} succeeded")
+
     return 0
 
 

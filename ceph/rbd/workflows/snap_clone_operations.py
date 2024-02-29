@@ -171,19 +171,27 @@ def clone_ops(**kw):
             "num_clones_per_snap": <>,
             "unprotect_snap": <True/False>,
             "flatten_clone": <True/False>
-        }
+        },
+        "test_ops_parallely": <True/False>
+        "snap_name": <>
     }
     """
     rbd = kw.get("rbd")
-    is_secondary = kw.get("is_secondary")
+    is_secondary = kw.get("is_secondary", False)
     pri_rbd = kw.get("pri_rbd")
     pool = kw.get("pool")
     image = kw.get("image")
-    image_config = kw.get("image_config")
-    user_defined_snaps = get_user_defined_snaps(rbd=rbd, pool=pool, image=image)
-    operations = kw.get("operations")
+    image_config = kw.get("image_config", None)
+    test_ops_parallely = kw.get("test_ops_parallely", False)
+    snap_name = kw.get("snap_name", None)
+    user_defined_snaps = list()
+    if snap_name is None:
+        user_defined_snaps = get_user_defined_snaps(rbd=rbd, pool=pool, image=image)
+    else:
+        user_defined_snaps.append({"name": snap_name})
+    operations = kw.get("operations", {})
     num_clones_per_snap = operations.pop("num_clones_per_snap", 1)
-    if operations.get("protect_snap"):
+    if operations.get("protect_snap", True):
         log.info(
             f"Performing snapshot protect for all user snapshots in {pool}/{image}"
         )
@@ -214,12 +222,21 @@ def clone_ops(**kw):
                     log.error(
                         f"Snapshot protection failed for {pool}/{image}@{snap['name']} with error {err}"
                     )
+                    if test_ops_parallely:
+                        raise Exception(
+                            f"Snapshot protection failed for {pool}/{image}@{snap['name']} with error {err}"
+                        )
                     return 1
             elif is_secondary and not err:
                 log.error(f"Snapshot protect did not fail for {pool}/{image}")
+                if test_ops_parallely:
+                    raise Exception(f"Snapshot protect did not fail for {pool}/{image}")
                 return 1
+            else:
+                snaps_ls_out = snap_list(rbd=rbd, pool=pool, image=image)
+                log.info(f"Protecting the snap is complete {snaps_ls_out}")
 
-    if operations.get("create_clone"):
+    if operations.get("create_clone", True):
         log.info(
             f"Creating {num_clones_per_snap} number of clones per snapshot for each user\
                     defined snapshot for {pool}/{image}"
@@ -234,9 +251,15 @@ def clone_ops(**kw):
                 log.error(
                     f"Clone creation failed for {pool}/{image}@{snap['name']} with error {err}"
                 )
+                if test_ops_parallely:
+                    raise Exception(
+                        f"Clone creation failed for {pool}/{image}@{snap['name']} with error {err}"
+                    )
                 return 1
+            else:
+                log.info(f"Cloning of snap {snap} is complete")
 
-    if operations.get("flatten_clone"):
+    if operations.get("flatten_clone", True):
         log.info(
             f"Performing flatten operations for all clones of all user snapshots in {pool}/{image}"
         )
@@ -248,6 +271,10 @@ def clone_ops(**kw):
                 log.error(
                     f"Fetching children failed for snap {pool}/{image}@{snap['name']} with error {err}"
                 )
+                if test_ops_parallely:
+                    raise Exception(
+                        f"Fetching children failed for snap {pool}/{image}@{snap['name']} with error {err}"
+                    )
                 return 1
             clones = json.loads(out)
             for clone in clones:
@@ -256,9 +283,15 @@ def clone_ops(**kw):
                     log.error(
                         f"Flatten clone failed for {clone['pool']}/{clone['image']} with error {err}"
                     )
+                    if test_ops_parallely:
+                        raise Exception(
+                            f"Flatten clone failed for {clone['pool']}/{clone['image']} with error {err}"
+                        )
                     return 1
+                else:
+                    log.info(f"Flatten of clone {clone} is complete ")
 
-    if operations.get("unprotect_snap"):
+    if operations.get("unprotect_snap", True):
         log.info(
             f"Performing snapshot unprotect for all user snapshots in {pool}/{image}"
         )
@@ -273,10 +306,21 @@ def clone_ops(**kw):
                     log.error(
                         f"Snapshot unprotect failed for {pool}/{image}@{snap['name']} with error {err}"
                     )
+                    if test_ops_parallely:
+                        raise Exception(
+                            f"Snapshot unprotect failed for {pool}/{image}@{snap['name']} with error {err}"
+                        )
                     return 1
             elif is_secondary and not err:
                 log.error(f"Snapshot unprotect did not fail for {pool}/{image}")
+                if test_ops_parallely:
+                    raise Exception(
+                        f"Snapshot unprotect did not fail for {pool}/{image}"
+                    )
                 return 1
+            else:
+                snaps_ls_out = snap_list(rbd=rbd, pool=pool, image=image)
+                log.info(f"UnProtecting the snap is complete {snaps_ls_out}")
     return 0
 
 
@@ -380,15 +424,23 @@ def remove_snap_and_verify(**kw):
         "image": <>,
         "rbd": <>,
         "is_secondary": <True/False>,
-        <multipool and multiimage config>
+        <multipool and multiimage config>,
+        "test_ops_parallely": <True/False>,
+        "snap_name": <>
     }
     """
     rbd = kw.get("rbd")
-    is_secondary = kw.get("is_secondary")
+    is_secondary = kw.get("is_secondary", False)
     pool = kw.get("pool")
     image = kw.get("image")
-    user_defined_snap = get_user_defined_snaps(rbd=rbd, pool=pool, image=image)[0]
-    if not is_secondary and user_defined_snap["protected"] == "true":
+    test_ops_parallely = kw.get("test_ops_parallely", False)
+    snap_name = kw.get("snap_name", None)
+    user_defined_snap = dict()
+    if snap_name is None:
+        user_defined_snap = get_user_defined_snaps(rbd=rbd, pool=pool, image=image)[0]
+    else:
+        user_defined_snap.update({"name": snap_name})
+    if not is_secondary and user_defined_snap.get("protected", "false") == "true":
         _, err = rbd.snap.unprotect(
             pool=pool, image=image, snap=user_defined_snap["name"]
         )
@@ -396,6 +448,10 @@ def remove_snap_and_verify(**kw):
             log.error(
                 f"Error while unprotecting snapshot {user_defined_snap['name']}: {err}"
             )
+            if test_ops_parallely:
+                raise Exception(
+                    f"Error while unprotecting snapshot {user_defined_snap['name']}: {err}"
+                )
             return 1
     out, err = rbd.snap.rm(pool=pool, image=image, snap=user_defined_snap["name"])
     if is_secondary:
@@ -407,12 +463,20 @@ def remove_snap_and_verify(**kw):
             log.error(
                 f"Snap remove did not fail as expected for {pool}/{image}@{user_defined_snap['name']}"
             )
+            if test_ops_parallely:
+                raise Exception(
+                    f"Snap remove did not fail as expected for {pool}/{image}@{user_defined_snap['name']}"
+                )
             return 1
     else:
         if err and "100% complete...done" not in out + err:
             log.error(
                 f"Snapshot remove failed for {pool}/{image}@{user_defined_snap['name']} with error {err}"
             )
+            if test_ops_parallely:
+                raise Exception(
+                    f"Snapshot remove failed for {pool}/{image}@{user_defined_snap['name']} with error {err}"
+                )
             return 1
     if not is_secondary:
         if snap_exists(
@@ -421,6 +485,10 @@ def remove_snap_and_verify(**kw):
             log.error(
                 f"Snapshot {pool}/{image}@{user_defined_snap['name']} exists even after removal"
             )
+            if test_ops_parallely:
+                raise Exception(
+                    f"Snapshot {pool}/{image}@{user_defined_snap['name']} exists even after removal"
+                )
             return 1
     return 0
 
@@ -511,7 +579,14 @@ def wrapper_for_image_snap_ops(**kw):
     if test_ops_parallely:
         with parallel() as p:
             for snap in snap_names:
-                p.spawn(method_obj, rbd=rbd, pool=pool, image=image, snap_name=snap)
+                p.spawn(
+                    method_obj,
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    snap_name=snap,
+                    test_ops_parallely=True,
+                )
     else:
         for snap in snap_names:
             rc = method_obj(rbd=rbd, pool=pool, image=image, snap_name=snap)
