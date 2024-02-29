@@ -33,6 +33,11 @@ from ceph.utils import (
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
 )
+from cli.performance.memory_and_cpu_utils import (
+    start_logging_processes,
+    stop_logging_process,
+    upload_mem_and_cpu_logger_script,
+)
 from utility import sosreport
 from utility.log import Log
 from utility.polarion import post_to_polarion
@@ -90,6 +95,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--skip-enabling-rhel-rpms]
         [--skip-sos-report]
         [--skip-tc <items>]
+        [--monitor-performance]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
@@ -151,6 +157,8 @@ Options:
   --skip-sos-report                 Enables to collect sos-report on test suite failures
                                     [default: false]
   --skip-tc <items>                 skip test case provided in comma seperated fashion
+  --monitor-performance             Monitor performance and CPU usage on all/required nodes
+                                    for every test and collects data to specified dir
 """
 log = Log()
 test_names = []
@@ -378,6 +386,9 @@ def run(args):
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
     post_to_report_portal = args.get("--report-portal")
+
+    # Get Perf and CPU mon param
+    enable_perf_mon = args.get("--monitor-performance", False)
 
     # jenkin job url
     jenkin_job_url = os.environ.get("BUILD_URL")
@@ -685,6 +696,8 @@ def run(args):
         "log_dir": run_dir,
         "run_id": run_id,
     }
+    download_path = run_dir if not log_directory else log_directory
+
     for test in tests:
         test = test.get("test")
         tc = fetch_test_details(test)
@@ -706,6 +719,17 @@ def run(args):
         start = datetime.datetime.now()
 
         for cluster_name in test.get("clusters", ceph_cluster_dict):
+            # If Performance and CPU usage monitoring is enabled, perform pre-reqs
+            if enable_perf_mon:
+                if not upload_mem_and_cpu_logger_script(
+                    ceph_cluster_dict[cluster_name]
+                ):
+                    log.error(
+                        "Failed to upload Memory and CPU monitoring scripts to nodes. "
+                        "The tests will proceed without monitoring"
+                    )
+                    enable_perf_mon = False
+
             if test.get("clusters"):
                 config = test.get("clusters").get(cluster_name).get("config", {})
                 parallel = test.get("clusters").get(cluster_name).get("parallel")
@@ -779,6 +803,11 @@ def run(args):
             if os.environ.get("KERNEL-REPO-URL") is not None:
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")
 
+            # Start performance and Cpu usage monitoring
+            if enable_perf_mon:
+                logging_process, tracker = start_logging_processes(
+                    ceph_cluster_dict[cluster_name], unique_test_name
+                )
             try:
                 if "build" in config.keys():
                     _rhcs_version = config["build"]
@@ -813,6 +842,14 @@ def run(args):
                 rc = 1
 
             finally:
+                # Stop performance and Cpu usage monitoring
+                if enable_perf_mon:
+                    stop_logging_process(
+                        ceph_cluster_dict[cluster_name],
+                        logging_process,
+                        download_path,
+                        tracker,
+                    )
                 collect_recipe(ceph_cluster_dict[cluster_name])
                 if store:
                     store_cluster_state(ceph_cluster_dict, ceph_clusters_file)

@@ -1,6 +1,7 @@
 import os
 from threading import Thread
 
+from cli.utilities.configs import get_cephci_config
 from utility.log import Log
 
 log = Log(__name__)
@@ -19,22 +20,27 @@ def upload_mem_and_cpu_logger_script(cluster):
     """
     is_present = []
     for node in cluster:
-        log.info(node.hostname)
-        log.info(f"{SCRIPT_PATH}{SCRIPT}")
-        node.upload_file(
-            sudo=True, src=f"{SCRIPT_PATH}{SCRIPT}", dst=f"{SCRIPT_DST_PATH}{SCRIPT}"
-        )
-
-        # Check if the upload was successful or not
+        # Copy file only if not present, avoid repetitive copy
         if SCRIPT not in node.get_dir_list(dir_path=f"{SCRIPT_DST_PATH}"):
-            is_present.append(False)
-            log.error(f"Failed to copy script to {node.hostname}")
+            node.upload_file(
+                sudo=True,
+                src=f"{SCRIPT_PATH}{SCRIPT}",
+                dst=f"{SCRIPT_DST_PATH}{SCRIPT}",
+            )
+
+            # Check if the upload was successful or not
+            if SCRIPT not in node.get_dir_list(dir_path=f"{SCRIPT_DST_PATH}"):
+                is_present.append(False)
+                log.error(f"Failed to copy script to {node.hostname}")
+            else:
+                is_present.append(True)
         else:
+            log.info("Memory monitoring script already present, skipping copy")
             is_present.append(True)
     return all(is_present)
 
 
-def start_logging_processes(ceph_cluster, test_name, interval):
+def start_logging_processes(ceph_cluster, test_name):
     """
     Start logging processes on all nodes for a given process
     Args:
@@ -45,14 +51,23 @@ def start_logging_processes(ceph_cluster, test_name, interval):
 
     logging_process = []
     tracker = {}
-    for ceph_process in ("osd", "mgr", "mon"):
-        nodes = ceph_cluster.get_nodes(ceph_process)
+    proc_mon_details = _get_process_list_to_monitor()
+    interval = proc_mon_details["interval"]
+    for ceph_process in proc_mon_details["process_list"]:
+        role = ceph_process.replace("ceph-", "").strip()
+        nodes = ceph_cluster.get_nodes(role)
+        if not nodes:
+            log.info(
+                f"No nodes found specific to given process {ceph_process}, running on all nodes"
+            )
+            nodes = ceph_cluster.get_nodes()
         for node in nodes:
+            log.info(f"Triggering monitoring for {ceph_process} on {node.hostname}")
             if node not in tracker.keys():
                 tracker[node] = []
             node_specific_test_name = f"{node.hostname}-{test_name}"
             logger_cmd = (
-                f"/usr/bin/env python {SCRIPT_DST_PATH}{SCRIPT} -p ceph-{ceph_process} "
+                f"/usr/bin/env python {SCRIPT_DST_PATH}{SCRIPT} -p {ceph_process.strip()} "
                 f"-t {node_specific_test_name} -i {interval}"
             )
             # Set the stop_flag as 0 before starting the test
@@ -66,7 +81,7 @@ def start_logging_processes(ceph_cluster, test_name, interval):
             )
             logging_process.append(th)
             th.start()
-            tracker[node].append(f"ceph-{ceph_process}-{node_specific_test_name}")
+            tracker[node].append(f"{ceph_process.strip()}-{node_specific_test_name}")
     return logging_process, tracker
 
 
@@ -77,6 +92,7 @@ def stop_logging_process(ceph_cluster, logging_process, download_path, tracker):
         ceph_cluster(ceph): Ceph cluster object
         logging_process(dict): Dictionary of all the active logging processes
         download_path(str): Path to where the data has to be downloaded
+        tracker(dict): Dict keeping track of each mon job
     """
     nodes = ceph_cluster.get_nodes()
     for node in nodes:
@@ -108,14 +124,27 @@ def download_logger_data_from_nodes(download_path, tracker):
         download_path(str): Path where the logs are to be downloaded
         tracker(dict): Tracker Dictionary containing nodes and files to be copied for each node
     """
+    try:
+        for node, files in tracker.items():
+            for file in files:
+                src_file = f"/root/{file}.csv"
+                download_dir = (
+                    f"{download_path}/performance-metrics/{file.split('-')[-1]}"
+                )
+                os.makedirs(download_dir, exist_ok=True)
+                node.download_file(
+                    src=src_file, dst=f"{download_dir}/{file}.csv", sudo=True
+                )
+                log.info(f"Downloading {file} from {node.hostname} to {download_dir}")
+        log.info("All files downloaded from all the nodes")
+    except Exception:
+        log.error(f"Failed to download {file} from {node.hostname}")
 
-    for node, files in tracker.items():
-        for file in files:
-            src_file = f"/root/{file}.csv"
-            download_dir = f"{download_path}/performance-metrics/{file.split('-')[-1]}"
-            os.makedirs(download_dir, exist_ok=True)
-            node.download_file(
-                src=src_file, dst=f"{download_dir}/{file}.csv", sudo=True
-            )
-            log.info(f"All files downloaded from {node.hostname}")
-    log.info("All files downloaded from all the nodes")
+
+def _get_process_list_to_monitor():
+    config = get_cephci_config()
+    perf_mon_data = config.get("performace_monitoring")
+    return {
+        "process_list": perf_mon_data.get("processes_to_monitor").split(","),
+        "interval": perf_mon_data.get("interval"),
+    }
