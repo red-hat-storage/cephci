@@ -636,6 +636,7 @@ tests:
       polarion-id: CEPH-83575917
       module: sanity_rgw_multisite.py
       name: Upload 5000 objects via s3cmd to test full sync at archive
+      comments: Known issue in 7.1, Bug 2262400
   - test:
       clusters:
         ceph-pri:
