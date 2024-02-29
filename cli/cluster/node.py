@@ -64,16 +64,13 @@ class Node:
                 if free_ips > 3:
                     return n
 
-    def create(self, image, size, cloud_data, network=None, timeout=300, interval=10):
-        """Create node on cloud
+    def _get_osp_resources(self, **config):
+        """Get Openstack available resources
 
-        Args:
+        Kwargs:
             image (str): Image to be used for node
             size (int): Node root volume size
-            cloud_data (dict): Configuration steps after deployment
             network (str): Network to be attached to node
-            timeout (int): Operation waiting time in sec
-            interval (int): Operation retry time in sec
         """
         if self.id:
             msg = f"Node with name '{self.name}' already exists"
@@ -81,37 +78,58 @@ class Node:
             raise OperationFailedError(msg)
 
         # Get cloud image
-        _image = self.cloud.get_image_by_name(image)
+        _image = self.cloud.get_image_by_name(config.get("image"))
         if not _image:
-            msg = f"Image '{image}' not available on cloud"
+            msg = f"Image {config.get('image')} not available on cloud"
             log.error(msg)
             raise ResourceNotFoundError(msg)
 
         # Get cloud vm flavor
-        _size = self.cloud.get_flavor_by_name(size)
+        _size = self.cloud.get_flavor_by_name(config.get("size"))
         if not _size:
-            msg = f"VM size '{size}' not available on cloud"
+            msg = f"VM size {config.get('size')} not available on cloud"
             log.error(msg)
             raise ResourceNotFoundError(msg)
 
         # Get network object
-        if not network:
-            network = self._get_available_network()
-        _network = self.cloud.get_network_by_name(network)
+        if not config.get("networks"):
+            config["networks"] = self._get_available_network()
+
+        _network = self.cloud.get_network_by_name(config.get("networks"))
         if not _network:
-            msg = f"Network '{network}' not available on cloud"
+            msg = f"Network {config.get('networks')} not available on cloud"
             log.error(msg)
             raise ResourceNotFoundError(msg)
 
-        log.info(f"Attaching network '{network}' to node '{self.name}'")
+        return {"image": _image, "size": _size, "networks": [_network]}
 
-        # Create vm on cloud
+    def create(self, timeout=300, interval=10, **configs):
+        """Create node on cloud
+
+        Args:
+            timeout (int): Operation waiting time in sec
+            interval (int): Operation retry time in sec
+
+        Kwargs:
+            image (str): Image to be used for node
+            size (int): Node root volume size
+            cloud_data (dict): Configuration steps after deployment
+            network (str): Network to be attached to node
+            os_type (str): OS type
+            os_version (str): OS version
+        """
+        # Get Openstack resources from Openstack
+        if str(self.cloud) == "openstack":
+            configs.update(self._get_osp_resources(**configs))
+
+        # Create vm
         self.cloud.create_node(
-            self.name, _image, _size, cloud_data, [_network], timeout, interval
+            **configs, name=self._name, timeout=timeout, interval=interval
         )
 
         # Wait until private ips attached to node
-        self.cloud.wait_for_node_private_ips(self.name, timeout, interval)
+        if self.cloud == "openstack":
+            self.cloud.wait_for_node_private_ips(self.name, timeout, interval)
 
         return True
 
