@@ -44,17 +44,18 @@ fill_workload = """<?xml version="1.0" encoding="UTF-8" ?>
 
 <!-- Initialization -->
     <workstage name="init_containers">
-        <work type="init" workers="1" config="cprefix=bucket_prefix;containers=r(1,6)"/>
+        <work type="init" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count)"/>
     </workstage>
 
     <workstage name="preparing_cluster">
-        <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,6);oprefix=pri-obj;
+        <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);oprefix=pri-obj;
         objects=r(1,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
     </workstage>
   </workflow>
 </workload>"""
 
 avail_storage = 0
+bucket_count = 0
 bucket_prefix = ""
 
 hybrid_workload = """<?xml version="1.0" encoding="UTF-8" ?>
@@ -79,6 +80,18 @@ hybrid_workload = """<?xml version="1.0" encoding="UTF-8" ?>
   </workflow>
 </workload>"""
 
+symm_workload = """<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="fillCluster" description="RGW testing">
+  <storage type="s3" config="timeout=900000;accesskey=x;secretkey=y;endpoint=workload_endpoint;path_style_access=true"/>
+  <auth type="none"/>
+  <workflow>
+    <workstage name="preparing_cluster">
+        <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);
+        objects=r(1,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
+    </workstage>
+  </workflow>
+</workload>"""
+
 
 def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     """
@@ -94,11 +107,18 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     Returns:
         workload xml file name which is created on controller node
     """
-    global fill_workload, avail_storage, hybrid_workload, bucket_prefix
+    global fill_workload, avail_storage, hybrid_workload, bucket_prefix, symm_workload, bucket_count
     workload_type = config.get("workload_type", "fill")
-    workload_conf = fill_workload if workload_type == "fill" else hybrid_workload
+    if workload_type == "fill":
+        workload_conf = fill_workload
+    elif workload_type == "hybrid":
+        workload_conf = hybrid_workload
+    elif workload_type == "symmetrical":
+        workload_conf = symm_workload
     bucket_prefix = config.get("bucket_prefix", "pri-bkt")
     workload_conf = workload_conf.replace("bucket_prefix", f"{bucket_prefix}")
+    bucket_count = config.get("number_of_buckets", 6)
+    workload_conf = workload_conf.replace("bucket_count", f"{bucket_count}")
     run_time = config.get("run_time", 3600)
     workload_conf = workload_conf.replace("run_time", f"{run_time}")
     keys = get_or_create_user(client)
@@ -244,7 +264,7 @@ def push_workload(controller, client, workload_file_name):
 
 
 def record_sync_status(record_sync_site_client, config):
-    global workload_file_id, bucket_prefix
+    global workload_file_id, bucket_prefix, bucket_count
     LOG.info(
         "creating a file to record sync status and bucket sync status until data is caught up"
     )
@@ -269,7 +289,7 @@ def record_sync_status(record_sync_site_client, config):
         )
         sync_record_file.write(f"\n\n{datetime.now()}\n\n")
         sync_record_file.write(out)
-        for bucket_index in range(1, 7):
+        for bucket_index in range(1, bucket_count + 1):
             sync_record_file.write("\n")
             bucket_name = f"{bucket_prefix}{bucket_index}"
             out = utils.get_bucket_sync_status(record_sync_site_client, bucket_name)
@@ -292,14 +312,17 @@ def run(ceph_cluster, **kwargs) -> int:
     LOG.info("preparing and pushing cosbench workload to fill 30% of the cluster")
     clusters = kwargs.get("ceph_cluster_dict")
     config = kwargs["config"]
-    controller = get_nodes_by_ids(ceph_cluster, config["controllers"])[0]
-    client = ceph_cluster.get_nodes(role="installer")[0]
-    rgw = ceph_cluster.get_nodes(role="rgw")[0]
+    for key, val in clusters.items():
+        controller = get_nodes_by_ids(val, config["controllers"])
+        if len(controller) != 0:
+            controller = controller[0]
+            client = val.get_nodes(role="installer")[0]
+            rgw = val.get_nodes(role="rgw")[0]
+            workload_file_name = prepare_workload_config_file(
+                val, client, rgw, controller, config
+            )
+            break
     record_sync_on_site = config.get("record_sync_on_site")
-
-    workload_file_name = prepare_workload_config_file(
-        ceph_cluster, client, rgw, controller, config
-    )
     push_workload(controller, client, workload_file_name)
     if record_sync_on_site:
         record_sync_site = clusters.get(record_sync_on_site)

@@ -68,7 +68,14 @@ def execute(test, args, results: dict):
     """
 
     test = test.get("test")
-    config = test.get("config", dict())
+    if "clusters" in test:
+        log.info("Its a multisite setup")
+        cluster = test["clusters"].get(
+            "ceph-rgw1", test["clusters"][list(test["clusters"].keys())[0]]
+        )
+        config = cluster["config"]
+    else:
+        config = test.get("config", dict())
     config.update(args["config"])
     file_name = test.get("module")
     mod_file_name = os.path.splitext(file_name)[0]
