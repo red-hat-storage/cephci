@@ -23,6 +23,7 @@ globals:
           - mgr
           - _admin
           - osd
+          - osd-bak
         no-of-volumes: 4
         disk-size: 25
       node3:
@@ -31,6 +32,7 @@ globals:
           - mgr
           - nfs
           - osd
+          - osd-bak
         no-of-volumes: 4
         disk-size: 25
       node4:
@@ -38,6 +40,7 @@ globals:
           - rgw
           - osd
           - mds
+          - osd-bak
         no-of-volumes: 4
         disk-size: 25
       node5:
@@ -46,6 +49,7 @@ globals:
           - _admin
           - mgr
           - osd
+          - osd-bak
         no-of-volumes: 4
         disk-size: 25
       node6:
@@ -54,6 +58,7 @@ globals:
           - mgr
           - osd
           - nfs
+          - osd-bak
         no-of-volumes: 4
         disk-size: 25
       node7:
@@ -61,6 +66,7 @@ globals:
           - osd
           - rgw
           - mds
+          - osd-bak
         no-of-volumes: 4
         disk-size: 25
       node8:
