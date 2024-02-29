@@ -22,6 +22,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.pool_workflows import PoolFunctions
 from utility.log import Log
 
 log = Log(__name__)
@@ -73,13 +74,13 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     rados_obj = RadosOrchestrator(node=node)
     mon_nodes = ceph_cluster.get_nodes(role="mon")
     osd_nodes = ceph_cluster.get_nodes(role="osd")
-    client_node = ceph_cluster.get_nodes(role="client")[0]
+    pool_obj = PoolFunctions(node=node)
     installer_node = ceph_cluster.get_nodes(role="installer")[0]
     daemon_info = rados_obj.run_ceph_command(cmd="ceph orch ps")
     mon_daemons = [entry for entry in daemon_info if entry["daemon_type"] == "mon"]
 
     # Duration for which we will sleep after the mon DB changes are made and mon would have begun trimming old mappings
-    mon_db_trim_wait_dur = 1200
+    mon_db_trim_wait_dur = 2000
 
     # List to capture the mon db size throughout the duration of the test to check the variations in DB size
     mon_db_size_list = list()
@@ -95,15 +96,15 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     # creating scenarios where the mon db would be updated with new info
     change_config_for_slow_ops(rados_obj=rados_obj, action="set", **kwargs)
     mon_db_size_list.append(get_mondb_size(mon_nodes[0], mon_daemons))
+    log.debug(f"Init mon db sizes on the cluster : {mon_db_size_list}")
 
     # Starting read and write on by creating a test pool .
     pool_name = "test_pool_ops"
     if not rados_obj.create_pool(pool_name=pool_name):
         error = "failed to create pool to run IO"
         raise TestCaseFailureException(error)
-    cmd = f"rados --no-log-to-stderr -b 1024 -p {pool_name} bench 400 write --no-cleanup &"
-    client_node.exec_command(sudo=True, cmd=cmd)
-
+    pool_obj.set_bulk_flag(pool_name=pool_name)
+    rados_obj.bench_write(pool_name=pool_name, background=True, verify_stats=False)
     mon_db_size_list.append(get_mondb_size(mon_nodes[0], mon_daemons))
 
     # deleting a previously created pool to increase OSD operations and map changes
@@ -111,23 +112,12 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     rados_obj.detete_pool(pool="delete_pool")
 
     # Proceeding to reboot 1 OSD from each host to trigger rebalance & Backfill
-    cluster_fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
-    daemon_info = rados_obj.run_ceph_command(cmd="ceph orch ps")
-    osd_daemons = [entry for entry in daemon_info if entry["daemon_type"] == "osd"]
     for onode in osd_nodes:
-        for osd in osd_daemons:
-            if re.search(osd["hostname"], onode.hostname):
-                # Not using the container ID's provided in ceph orch ps command.
-                # Bug : https://bugzilla.redhat.com/show_bug.cgi?id=1943494
-                # cmd = f"podman restart {osd['container_id']}"
-                cmd = f"systemctl restart ceph-{cluster_fsid}@osd.{osd['daemon_id']}.service"
-                log.info(
-                    f"rebooting osd-{osd['daemon_id']} on host {osd['hostname']}. Command {cmd}"
-                )
-                onode.exec_command(sudo=True, cmd=cmd)
-                # Sleeping for 5 seconds for status to be updated
-                time.sleep(5)
-                break
+        osds = rados_obj.collect_osd_daemon_ids(osd_node=onode)
+        rados_obj.change_osd_state(action="restart", target=osds[0])
+        # Sleeping for 5 seconds for status to be updated
+        time.sleep(5)
+        break
 
     # Re-weighting the OSd's based on usage to trigger rebalance
     # todo: Verify re-balancing process on OSD's ( PG movement across cluster)
@@ -185,6 +175,8 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
             f" checking status again in 1 minute"
         )
         time.sleep(60)
+
+    log.debug(f"Mon db sizes post add, remove, delete operations. {mon_db_size_list}")
 
     # Checking if any slow operations are reported and waiting for 'dur' for the slow_ops to be cleared
     end_time = datetime.datetime.now() + datetime.timedelta(
@@ -339,6 +331,11 @@ def change_config_for_slow_ops(rados_obj: RadosOrchestrator, action: str, **kwar
         "osd_max_backfills": f"ceph config {action} osd osd_max_backfills",
         "osd_recovery_max_active": f"ceph config {action} osd osd_recovery_max_active",
     }
+
+    if rados_obj.check_osd_op_queue(qos="mclock"):
+        rados_obj.node.shell(
+            ["ceph config set osd osd_mclock_override_recovery_settings true"]
+        )
 
     # Removing the config values set when action is to remove
     if action == "rm":
