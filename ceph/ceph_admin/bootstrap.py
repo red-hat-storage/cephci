@@ -1,6 +1,7 @@
 """Module that allows QE to interface with cephadm bootstrap CLI."""
 import json
 import tempfile
+from distutils.version import LooseVersion
 from typing import Dict
 
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
@@ -364,7 +365,7 @@ class BootstrapMixin:
                 "snmp_gateway",
                 "loki",
             ]
-            if _rhcs_version >= 7.0:
+            if self.cluster.rhcs_version >= LooseVersion("7.0"):
                 supported_overrides += [
                     "nvmeof",
                 ]
