@@ -1,3 +1,4 @@
+from cli.cloudproviders.baremetal import Baremetal
 from cli.cloudproviders.openstack import Openstack
 from cli.exceptions import ConfigError
 from utility.log import Log
@@ -14,6 +15,9 @@ class CloudProvider:
         self._type = cloud.lower()
         if self._type == "openstack":
             self._cloud = Openstack(**config)
+
+        elif self._type == "baremetal":
+            self._cloud = Baremetal(**config)
 
         else:
             raise ConfigError(f"Unsupported cloud provider '{cloud}'")
