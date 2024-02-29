@@ -9,6 +9,7 @@ Methods:
     rados cppool
     rados import/export
 """
+import datetime
 import time
 
 import yaml
@@ -49,12 +50,12 @@ def run(ceph_cluster, **kw) -> int:
     # Writing objects with omap entries
     if pool_orig["pool_type"] == "replicated":
         if not pool_obj.fill_omap_entries(
-            pool_name=pool_orig["pool_name"], obj_end=500
+            pool_name=pool_orig["pool_name"], obj_end=50, num_keys_obj=100
         ):
             log.error(f"Omap entries not generated on pool {pool_orig['pool_name']}")
             return 1
 
-    do_rados_put(mon=client_node, pool=pool_orig["pool_name"], nobj=1000)
+    do_rados_put(mon=client_node, pool=pool_orig["pool_name"], nobj=50)
 
     snapshots = []
     for _ in range(5):
@@ -65,13 +66,16 @@ def run(ceph_cluster, **kw) -> int:
             log.error("Could not create snapshot on the pool")
             return 1
 
+    copy_start_time = datetime.datetime.now()
     # Using cppool to copy contents b/w the pools
     cmd = f"rados cppool {pool_orig['pool_name']} {pool_target['pool_name']}"
     client_node.exec_command(sudo=True, cmd=cmd, long_running=True)
-
+    copy_end_time = datetime.datetime.now()
     # Sleeping for 2 seconds after copy to perform get operations
     time.sleep(2)
 
+    copy_duration = copy_end_time - copy_start_time
+    log.info(f"Time taken for copying the data via  'rados cppool' is {copy_duration}")
     do_rados_get(client_node, pool_target["pool_name"], 1)
 
     # Checking if the snapshots of pool was also copied
@@ -94,6 +98,7 @@ def run(ceph_cluster, **kw) -> int:
         cmd="touch /tmp/file",
     )
 
+    copy_start_time = datetime.datetime.now()
     # crating export of data on old pool
     cmd = f"rados export -p {pool_orig['pool_name']} /tmp/file"
     client_node.exec_command(sudo=True, cmd=cmd, long_running=True)
@@ -101,6 +106,12 @@ def run(ceph_cluster, **kw) -> int:
     # Importing the file into the new pool
     cmd = f"rados import -p {pool_target['pool_name']} /tmp/file"
     client_node.exec_command(sudo=True, cmd=cmd, long_running=True)
+    copy_end_time = datetime.datetime.now()
+
+    copy_duration = copy_end_time - copy_start_time
+    log.info(
+        f"Time taken for copying the data via  'rados import / export' is {copy_duration}"
+    )
 
     # Sleeping for 2 seconds after copy to perform get operations
     time.sleep(2)

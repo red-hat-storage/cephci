@@ -181,11 +181,15 @@ def run(ceph_cluster, **kw):
             return 1
 
         # Writing the same amount of data into two pools
-        if not rados_obj.bench_write(pool_name=pool_1, **pool_config):
+        if not rados_obj.bench_write(
+            pool_name=pool_1, byte_size="5M", max_objs=200, verify_stats=True
+        ):
             log.error("Failed to write objects into Pool-1, with compression enabled")
             return 1
 
-        if not rados_obj.bench_write(pool_name=pool_2, **pool_config):
+        if not rados_obj.bench_write(
+            pool_name=pool_2, byte_size="5M", max_objs=200, verify_stats=True
+        ):
             log.error(
                 "Failed to write objects into Pool-2, without compression enabled"
             )
