@@ -202,6 +202,11 @@ def _enable_v3_mount(exports, nfs_name):
     # Get the ganesha conf to verify the set operation
     CephAdm(installer).ceph.config_key.get(key="mgr/cephadm/services/nfs/ganesha.conf")
 
+    # Enable v3 support on NFS export
+    enable_v3_export(exports, nfs_name, installer)
+
+
+def enable_v3_export(exports, nfs_name, installer):
     # Update all export file content to accommodate v3
     for export in exports:
         export_file = f"export_{export[-1]}.conf"
