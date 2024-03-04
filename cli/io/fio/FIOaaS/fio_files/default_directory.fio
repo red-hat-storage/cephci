@@ -1,0 +1,15 @@
+[global]
+ioengine=libaio
+direct=1
+size=100M
+runtime=30
+time_based=1
+group_reporting=1
+fsync=32
+directory=/external
+
+[test-1]
+numjobs=1
+rw=write
+iodepth=8
+bs=4k
