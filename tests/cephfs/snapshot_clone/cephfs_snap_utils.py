@@ -9,10 +9,12 @@ import random
 import re
 import string
 import time
+from distutils.version import LooseVersion
 
 from ceph.ceph import CommandFailed
 from utility.log import Log
 from utility.retry import retry
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -282,7 +284,11 @@ class SnapUtils(object):
             sudo=True, cmd=f'ls {path}/.snap/| grep "scheduled"'
         )
         sched_snap_list = out.split()
-        if sched_type not in ["M", "H"]:
+        ceph_version = get_ceph_version_from_cluster(client)
+        m_granularity = (
+            "M" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "m"
+        )
+        if sched_type not in [m_granularity, "H"]:
             log.info(
                 f"Schedule validation does not exist for {sched_val} type intervals"
             )
@@ -291,7 +297,7 @@ class SnapUtils(object):
         snap_count = 1
         for i in range(len(sched_snap_list)):
             for j in range(i + 1, len(sched_snap_list)):
-                if sched_type == "M":
+                if sched_type == m_granularity:
                     if int(sched_num) == abs(
                         int(
                             int(sched_snap_list[i].split("_")[1])
@@ -451,6 +457,14 @@ class SnapUtils(object):
         Returns: 0 : success, 1 : failure
         """
         log.info("Validate if scheduled snapshots are retained as per Retention policy")
+        ceph_version = get_ceph_version_from_cluster(client)
+        m_granularity = (
+            "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+        )
+        if ret_type == "m":
+            ret_type = (
+                "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+            )
         out, rc = client.exec_command(
             sudo=True, cmd=f'ls -lrt {client_path}/.snap/| grep "scheduled" | wc -l'
         )
@@ -467,6 +481,9 @@ class SnapUtils(object):
         out, rc = client.exec_command(sudo=True, cmd=cmd)
         sched_status = json.loads(out)
         log.info(f"sched_status:{sched_status}")
+        import pdb
+
+        pdb.set_trace()
         for sched_item in sched_status:
             if sched_item["path"] == sched_path:
                 if sched_item.get("retention"):
@@ -474,7 +491,10 @@ class SnapUtils(object):
                     for key, value in sched_item["retention"].items():
                         if key == ret_type:
                             ret_num = value
-                    if "m" in sched_item["schedule"] and ret_type == "m":
+                    if (
+                        m_granularity in sched_item["schedule"]
+                        and ret_type == m_granularity
+                    ):
                         ret_verified = abs(
                             int(sched_item["created_count"])
                             - int(sched_item["pruned_count"])
@@ -486,7 +506,7 @@ class SnapUtils(object):
                             - int(sched_item["pruned_count"])
                         )
                         log.info(f"ret_verified : {ret_verified},ret_type:{ret_type}")
-                    elif "m" in sched_item["schedule"] and ret_type == "n":
+                    elif m_granularity in sched_item["schedule"] and ret_type == "n":
                         ret_verified = abs(
                             int(sched_item["created_count"])
                             - int(sched_item["pruned_count"])
