@@ -63,23 +63,19 @@ def run(ceph_cluster, **kw):
             False -> Warning not present on the cluster
 
         """
-        # tbd: when backported to new release, add the release in the list below.
-        if rhbuild.split("-")[0] in ["7.1"]:
-            log.info(
-                "Checking if health warning for different site weights is Present on cluster"
-            )
-            status_report = rados_obj.run_ceph_command(
-                cmd="ceph report", client_exec=True
-            )
-            ceph_health_status = list(status_report["health"]["checks"].keys())
-            log.debug(f"Ceph report: \n\n {status_report} \n\n")
-            expected_warn = "UNEVEN_WEIGHTS_STRETCH_MODE"
-            if expected_warn in ceph_health_status:
-                log.info("warning  present on the cluster")
-                log.info(f"Warnings generated on the cluster : {ceph_health_status}")
-                return True
-            log.info("Warning not present on the cluster")
-            return False
+        log.info(
+            "Checking if health warning for different site weights is Present on cluster"
+        )
+        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
+        ceph_health_status = list(status_report["health"]["checks"].keys())
+        log.debug(f"Ceph report: \n\n {status_report} \n\n")
+        expected_warn = "UNEVEN_WEIGHTS_STRETCH_MODE"
+        if expected_warn in ceph_health_status:
+            log.info("warning  present on the cluster")
+            log.info(f"Warnings generated on the cluster : {ceph_health_status}")
+            return True
+        log.info("Warning not present on the cluster")
+        return False
 
     if not stretch_enabled_checks(rados_obj=rados_obj):
         log.error(
@@ -168,9 +164,10 @@ def run(ceph_cluster, **kw):
     method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
 
     # Checking if the expected health warning about the different site weights are seen.
-    if not check_stretch_health_warning():
-        log.error("Warnings not generated on the cluster")
-        raise Exception("Warning not present on cluster")
+    if rhbuild.split("-")[0] in ["7.1"]:
+        if not check_stretch_health_warning():
+            log.error("Warnings not generated on the cluster")
+            raise Exception("Warning not present on cluster")
 
     # Checking cluster health after OSD removal
     method_should_succeed(rados_obj.run_pool_sanity_check)
@@ -202,9 +199,10 @@ def run(ceph_cluster, **kw):
         raise Exception("Inactive PGs during stop error")
 
     # Checking if the expected health warning about the different site weights is removed post addition of OSD.
-    if check_stretch_health_warning():
-        log.error("Warnings not removed on the cluster post osd addition")
-        raise Exception("Warning present on cluster")
+    if rhbuild.split("-")[0] in ["7.1"]:
+        if check_stretch_health_warning():
+            log.error("Warnings not removed on the cluster post osd addition")
+            raise Exception("Warning present on cluster")
 
     # Checking cluster health after OSD Addition
     method_should_succeed(rados_obj.run_pool_sanity_check)
@@ -264,9 +262,10 @@ def run(ceph_cluster, **kw):
         raise Exception("Inactive PGs during stop error")
 
     # Checking if the expected health warning about the different site weights is displayed post removal of OSD host
-    if not check_stretch_health_warning():
-        log.error("Warnings is not displayed on the cluster post osd host removal")
-        raise Exception("Warning not present on cluster")
+    if rhbuild.split("-")[0] in ["7.1"]:
+        if not check_stretch_health_warning():
+            log.error("Warnings is not displayed on the cluster post osd host removal")
+            raise Exception("Warning not present on cluster")
 
     log.debug(
         f"Ceph osd tree after host removal : \n\n {rados_obj.run_ceph_command(cmd='ceph osd tree')} \n\n"
@@ -297,9 +296,10 @@ def run(ceph_cluster, **kw):
         raise Exception("Inactive PGs during stop error")
 
     # Checking if the health warning about the different site weights is removed post addition of OSD host
-    if check_stretch_health_warning():
-        log.error("Warnings is not removed on the cluster post osd host addition")
-        raise Exception("Warning present on cluster")
+    if rhbuild.split("-")[0] in ["7.1"]:
+        if check_stretch_health_warning():
+            log.error("Warnings is not removed on the cluster post osd host addition")
+            raise Exception("Warning present on cluster")
 
     # perform rados put to check if write ops is possible
     pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=200, timeout=50)

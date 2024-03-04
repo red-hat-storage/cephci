@@ -207,6 +207,8 @@ def run(ceph_cluster, **kw):
             f" Host names :{tiebreaker_hosts}. Proceeding to write"
         )
 
+    # sleeping for 20 seconds for the services to be logically marked down in stretch mode
+    time.sleep(20)
     # perform rados put to check if write ops is possible
     pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=200, timeout=50)
 
@@ -233,12 +235,12 @@ def run(ceph_cluster, **kw):
         log.debug(
             f"Proceeding to remove hosts data site {dc_1_name} from maintenance mode"
         )
-        for host in dc_1_hosts:
+        for host in dc_2_hosts:
             if not rados_obj.host_maintenance_exit(hostname=host, retry=15):
                 log.error(f"Failed to remove host : {host} from maintenance mode")
                 raise Exception("Test execution Failed")
         log.info(
-            f"Completed removing all the hosts in site {dc_1_name} from maintenance mode. Host names : {dc_1_hosts}"
+            f"Completed removing all the hosts in site {dc_2_name} from maintenance mode. Host names : {dc_1_hosts}"
         )
 
     else:
@@ -247,19 +249,39 @@ def run(ceph_cluster, **kw):
             if not rados_obj.host_maintenance_exit(hostname=host, retry=15):
                 log.error(f"Failed to remove host : {host} from maintenance mode")
                 raise Exception("Test execution Failed")
-        time.sleep(60)
         log.info(
-            f"Completed Restart of all the hosts in site {affected_site}. Host names : {tiebreaker_hosts}"
+            f"Completed removal of all the hosts in site {affected_site} from maintainence mode."
+            f" Host names : {tiebreaker_hosts}"
         )
+        time.sleep(120)
+        # Checking the active alerts for maintenance mode. They should not be present.
+        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
+        ceph_health_status = list(status_report["health"]["checks"].keys())
+        expected_health_warns = (
+            "HOST_IN_MAINTENANCE",
+            "OSD_DATACENTER_DOWN",
+        )
+        if any(elem in ceph_health_status for elem in expected_health_warns):
+            log.error(
+                f"Health warnings on the cluster not cleared for Maintainence mode on the hosts."
+                f" Warns on cluster : {ceph_health_status}\n"
+            )
+            raise Exception("Health warnings not cleared error")
 
-    log.info("Proceeding to do checks post Stretch mode site down scenarios")
+    log.info(
+        "Proceeding to do checks post Stretch mode post maintenance mode scenarios"
+    )
 
     if not post_site_down_checks(rados_obj=rados_obj):
-        log.error(f"Checks failed post Site {affected_site} Down and Up scenarios")
+        log.error(
+            f"Checks failed post Site {affected_site} post maintenance mode scenarios"
+        )
         raise Exception("Post execution checks failed on the Stretch cluster")
 
     if not rados_obj.run_pool_sanity_check():
-        log.error(f"Checks failed post Site {affected_site} Down and Up scenarios")
+        log.error(
+            f"Checks failed post Site {affected_site} post maintenance mode scenarios"
+        )
         raise Exception("Post execution checks failed on the Stretch cluster")
 
     if config.get("delete_pool"):
