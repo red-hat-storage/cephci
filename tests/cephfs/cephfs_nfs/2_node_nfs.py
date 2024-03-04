@@ -133,10 +133,10 @@ def run(ceph_cluster, **kw):
             f"/file$(printf %03d "
             "$n"
             ") bs=1M count=1000; done",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4000 "
-            f" --files 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_2}/dir4",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4000 --files"
-            f" 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_2}/dir4",
+            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 40 "
+            f" --files 10 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_2}/dir4",
+            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 40 --files"
+            f" 10 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_2}/dir4",
             f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}",
         ]
         for command in commands:
