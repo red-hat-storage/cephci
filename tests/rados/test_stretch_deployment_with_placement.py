@@ -14,6 +14,7 @@ configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads/
 
 """
 
+import random
 import re
 import time
 
@@ -24,6 +25,10 @@ from tests.rados.stretch_cluster import (
     setup_crush_rule,
     setup_crush_rule_with_no_affinity,
     wait_for_clean_pg_sets,
+)
+from tests.rados.test_stretch_site_down import (
+    get_stretch_site_hosts,
+    stretch_enabled_checks,
 )
 from utility.log import Log
 
@@ -47,6 +52,8 @@ def run(ceph_cluster, **kw):
     stretch_rule_name = config.get("stretch_rule_name", "stretch_rule")
     no_affinity_crush_rule = config.get("no_affinity", False)
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    stretch_pre_deploy_negative_workflows = config.get("negative_scenarios", False)
+    stretch_bucket = config.get("stretch_bucket", "datacenter")
 
     log.debug("Running pre-checks to deploy Stretch mode on the cluster")
 
@@ -216,14 +223,130 @@ def run(ceph_cluster, **kw):
 
     log.info("Set-up CRUSH location attributes on all the mon daemons")
 
+    osd_tree_cmd = "ceph osd tree"
+    buckets = rados_obj.run_ceph_command(osd_tree_cmd)
+    dc_buckets = [d for d in buckets["nodes"] if d.get("type") == stretch_bucket]
+    dc_1 = dc_buckets.pop()
+    dc_1_name = dc_1["name"]
+    dc_2 = dc_buckets.pop()
+    dc_2_name = dc_2["name"]
+    all_hosts = get_stretch_site_hosts(
+        rados_obj=rados_obj, tiebreaker_mon_site_name=tiebreaker_mon_site_name
+    )
+    dc_1_hosts = all_hosts.dc_1_hosts
+    dc_2_hosts = all_hosts.dc_2_hosts
+    tiebreaker_hosts = all_hosts.tiebreaker_hosts
+
+    log.debug(f"Hosts present in Datacenter : {dc_1_name} : {dc_1_hosts}")
+    log.debug(f"Hosts present in Datacenter : {dc_2_name} : {dc_2_hosts}")
+    log.debug(
+        f"Hosts present in Datacenter : {tiebreaker_mon_site_name} : {tiebreaker_hosts}"
+    )
+
     # Enabling Stretch mode on the cluster
     # Enabling the stretch cluster mode
     log.info(f"tiebreaker node provided: {tiebreaker_mon}")
-    cmd = (
+    stretch_enable_cmd = (
         f"ceph mon enable_stretch_mode {tiebreaker_mon} {stretch_rule_name} datacenter"
     )
+
+    if stretch_pre_deploy_negative_workflows:
+        log.info("Performing Pre deployment -ve scenarios in stretch mode")
+        # Stretch mode enablement should not be possible if there is EC pool.
+
+        log.info("Scenario 1: EC pool. With EC pool, stretch mode not to be deployed")
+        pool_name = "ec-stretch-pool"
+        if not rados_obj.create_erasure_pool(name="stretch-ec", pool_name=pool_name):
+            log.error("UnAble to create EC pool Fail")
+            raise Exception("EC pool not created error")
+        try:
+            cephadm.shell([stretch_enable_cmd])
+            if stretch_mode_status(rados_obj=rados_obj):
+                log.error(
+                    "The cluster has stretch mode enabled with EC pool...Exiting..."
+                )
+                return 1
+        except Exception as err:
+            log.info(
+                f"Unable to deploy stretch mode on cluster.. Scenario pass.. \nErr hit: {err} "
+            )
+        rados_obj.detete_pool(pool=pool_name)
+
+        log.info("Scenario 2: non-default rule pool")
+        pool_name = "non-stretch-rule-pool"
+        if not rados_obj.create_pool(
+            pool_name=pool_name, crush_rule="replicated_rule", size=2
+        ):
+            log.error(f"Failed to create pool : {pool_name}")
+            raise Exception(
+                "Regular pool with non-default crush rule not created. Error.."
+            )
+        if stretch_mode_status(rados_obj=rados_obj):
+            log.error(
+                "The cluster has stretch mode enabled with non-default crush rule pule...Exiting..."
+            )
+            return 1
+        try:
+            cephadm.shell([stretch_enable_cmd])
+        except Exception as err:
+            log.info(
+                f"Unable to deploy stretch mode on cluster.. Scenario pass.. \nErr hit: {err} "
+            )
+        rados_obj.detete_pool(pool=pool_name)
+
+        log.info("Scenario 3: more than 2 DC's")
+        # Trying to Add another DC in stretch mode. stretch mode deployment should Fail
+        bucket_name = "test-bkt"
+        stretch_bucket = "datacenter"
+        cmd1 = f"ceph osd crush add-bucket {bucket_name} {stretch_bucket}"
+        rados_obj.run_ceph_command(cmd=cmd1)
+        cmd2 = f"ceph osd crush move {bucket_name} root=default"
+        rados_obj.run_ceph_command(cmd=cmd2)
+        time.sleep(10)
+        try:
+            cephadm.shell([stretch_enable_cmd])
+            if stretch_mode_status(rados_obj=rados_obj):
+                log.error(
+                    "The cluster has stretch mode enabled with more than 2 DCs...Exiting..."
+                )
+                return 1
+        except Exception as err:
+            log.info(
+                f"Unable to deploy stretch mode on cluster when there are more than 2 DCs.."
+                f" Scenario pass.. \n Err hit: {err} "
+            )
+        cmd3 = f"ceph osd crush rm {bucket_name}"
+        rados_obj.run_ceph_command(cmd=cmd3)
+
+        log.info("Scenario 4: Uneven site weights")
+        # Making the site weights unequal. Stretch mode should not be enabled
+        bucket_name = random.choice(dc_2_hosts)
+        log.debug(
+            f"Chose host : {dc_2_hosts} from {dc_2_name} to move to trigger weight imbalance"
+        )
+        cmd1 = f"ceph osd crush move {bucket_name} {stretch_bucket}={dc_1_name}"
+        rados_obj.run_ceph_command(cmd=cmd1)
+        log.info(f"bucket {bucket_name} moved to the other DC {dc_1_name}")
+        time.sleep(10)
+        cmd2 = f"ceph osd crush move {bucket_name} {stretch_bucket}={dc_2_name}"
+        try:
+            cephadm.shell([stretch_enable_cmd])
+            if stretch_mode_status(rados_obj=rados_obj):
+                log.error(
+                    "The cluster has stretch mode enabled with uneven site weights...Exiting..."
+                )
+                return 1
+        except Exception as err:
+            log.info(
+                f"Unable to deploy stretch mode on cluster when the site weights are uneven.."
+                f" Scenario pass.. Err hit: {err} "
+            )
+        rados_obj.run_ceph_command(cmd=cmd2)
+
+        log.info("Completed all the pre-deployment -ve scenarios on stretch mode")
     try:
-        cephadm.shell([cmd])
+        log.debug("Executing command to enable stretch mode")
+        cephadm.shell([stretch_enable_cmd])
     except Exception as err:
         log.error(
             f"Error while enabling stretch rule on the datacenter. Command : {cmd}"
@@ -231,6 +354,12 @@ def run(ceph_cluster, **kw):
         log.error(err)
         raise Exception("Stretch mode deployment Failed")
     time.sleep(5)
+
+    if not stretch_enabled_checks(rados_obj=rados_obj):
+        log.error(
+            "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+        )
+        raise Exception("Test pre-execution checks failed")
 
     # Checking the stretch mode status
     stretch_details = rados_obj.get_stretch_mode_dump()
@@ -265,3 +394,19 @@ def run(ceph_cluster, **kw):
 
     log.info("Stretch mode deployed successfully")
     return 0
+
+
+def stretch_mode_status(rados_obj) -> bool:
+    """
+    Returns the status of stretch mode on cluster.
+
+    Args:
+        rados_obj: rados object for command execution
+
+    Returns:
+        if stretch mode is enabled on cluster -> True,
+        If stretch mode is not enabled on cluster -> False
+    """
+    log.debug("Running checks to see if stretch mode is deployed on the cluster")
+    stretch_details = rados_obj.get_stretch_mode_dump()
+    return stretch_details["stretch_mode_enabled"]
