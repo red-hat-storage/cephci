@@ -6,9 +6,9 @@ globals:
         public:
           - 10.8.128.0/21
       nodes:
-        - hostname: clara001
+        - hostname: clara002
           id: node1
-          ip: 10.8.129.1
+          ip: 10.8.129.2
           role:
             - _admin
             - installer
@@ -22,22 +22,8 @@ globals:
             - /dev/sdb
             - /dev/sdc
             - /dev/sdd
-        - hostname: clara002
-          id: node2
-          ip: 10.8.129.2
-          role:
-            - mon
-            - mgr
-            - mds
-            - osd
-          root_password: passwd
-          volumes:
-            - /dev/sda
-            - /dev/sdb
-            - /dev/sdc
-            - /dev/sdd
         - hostname: clara003
-          id: node3
+          id: node2
           ip: 10.8.129.3
           role:
             - mgr
@@ -51,7 +37,7 @@ globals:
             - /dev/sdc
             - /dev/sdd
         - hostname: clara004
-          id: node4
+          id: node3
           ip: 10.8.129.4
           role:
             - mgr
@@ -65,13 +51,12 @@ globals:
             - /dev/sdc
             - /dev/sdd
         - hostname: clara005
-          id: node5
+          id: node4
           ip: 10.8.129.5
           role:
-            - mgr
-            - mds
-            - mon
             - osd
+            - rgw
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -79,7 +64,7 @@ globals:
             - /dev/sdc
             - /dev/sdd
         - hostname: clara006
-          id: node6
+          id: node5
           ip: 10.8.129.6
           role:
             - osd
@@ -92,7 +77,7 @@ globals:
             - /dev/sdc
             - /dev/sdd
         - hostname: clara007
-          id: node7
+          id: node6
           ip: 10.8.129.7
           role:
             - osd
@@ -105,39 +90,14 @@ globals:
             - /dev/sdc
             - /dev/sdd
         - hostname: clara009
-          id: node8
+          id: node7
           ip: 10.8.129.9
-          role:
-            - osd
-            - rgw
-            - nfs
           root_password: passwd
-          volumes:
-            - /dev/sda
-            - /dev/sdb
-            - /dev/sdc
-            - /dev/sdd
+          role:
+            - Client
         - hostname: clara010
-          id: node9
+          id: node8
           ip: 10.8.129.10
-          root_password: passwd
-          role:
-            - client
-        - hostname: clara011
-          id: node10
-          ip: 10.8.129.11
-          root_password: passwd
-          role:
-            - client
-        - hostname: clara013
-          id: node11
-          root_password: passwd
-          ip: 10.8.129.13
-          role:
-            - client
-        - hostname: clara015
-          id: node12
-          ip: 10.8.129.15
           root_password: passwd
           role:
             - client
