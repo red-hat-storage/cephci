@@ -14,8 +14,8 @@ globals:
             - installer
             - osd
             - mon
-            - mds
             - mgr
+            - rgw
           root_password: passwd
           volumes:
             - /dev/sda
@@ -29,15 +29,17 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/nvme0n1
             - /dev/sdl
-            - /dev/sdm
         - hostname: mero018
           id: node2
           ip: 10.8.129.238
           role:
-            - osd
-            - mon
             - mgr
+            - rgw
+            - mon
+            - osd
+            - _admin
           root_password: passwd
           volumes:
             - /dev/sda
@@ -51,15 +53,16 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/nvme0n1
             - /dev/sdl
         - hostname: mero019
           id: node3
           ip: 10.8.129.239
           role:
-            - osd
-            - rgw
-            - nfs
+            - mds
             - mon
+            - mgr
+            - osd-bak
           root_password: passwd
           volumes:
             - /dev/sda
@@ -73,15 +76,18 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/nvme0n1
             - /dev/sdl
-            - /dev/sdm
         - hostname: mero020
           id: node4
           ip: 10.8.129.240
           role:
             - osd
-            - rgw
-            - nfs
+            - mds
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
           root_password: passwd
           volumes:
             - /dev/sda
@@ -95,8 +101,8 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
+            - /dev/nvme0n1
             - /dev/sdl
-            - /dev/sdm
         - hostname: mero013
           id: node5
           ip: 10.8.129.233
