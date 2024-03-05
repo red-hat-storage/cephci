@@ -278,6 +278,21 @@ def clone_ops(**kw):
                 return 1
             clones = json.loads(out)
             for clone in clones:
+                # due to parallel support, have to check if clone already flattened or not
+                du_out, du_err = rbd.du(pool=clone["pool"], format="json")
+                if du_err:
+                    log.error(f"rbd du failed for {pool} with error {du_err}")
+                    if test_ops_parallely:
+                        raise Exception(f"rbd du failed for {pool} with error {du_err}")
+                    return 1
+                du_out_json = json.loads(du_out)
+                for _image in du_out_json["images"]:
+                    if _image["name"] == clone["image"]:
+                        if _image["used_size"] != 0:
+                            log.info(
+                                f"{clone['image']} is already flattened so skipping"
+                            )
+                            break
                 _, err = rbd.flatten(pool=clone["pool"], image=clone["image"])
                 if "100% complete...done" not in out + err:
                     log.error(
@@ -435,11 +450,14 @@ def remove_snap_and_verify(**kw):
     image = kw.get("image")
     test_ops_parallely = kw.get("test_ops_parallely", False)
     snap_name = kw.get("snap_name", None)
+    protected = kw.get("protected", "true")
     user_defined_snap = dict()
     if snap_name is None:
         user_defined_snap = get_user_defined_snaps(rbd=rbd, pool=pool, image=image)[0]
     else:
         user_defined_snap.update({"name": snap_name})
+        if protected == "true":
+            user_defined_snap.update({"protected": protected})
     if not is_secondary and user_defined_snap.get("protected", "false") == "true":
         _, err = rbd.snap.unprotect(
             pool=pool, image=image, snap=user_defined_snap["name"]
@@ -565,11 +583,11 @@ def wrapper_for_image_snap_ops(**kw):
             "test_ops_parallely": <>
         }
     """
-    rbd = kw.get("rbd")
-    pool = kw.get("pool")
+    rbd = kw.pop("rbd")
+    pool = kw.pop("pool")
     image = kw.pop("image", {})
     snap_names = kw.pop("snap_names", [])
-    test_ops_parallely = kw.get("test_ops_parallely", False)
+    test_ops_parallely = kw.pop("test_ops_parallely", False)
     ops_module = kw.pop("ops_module", {})
     mod_obj = import_module(ops_module)
     ops_method = kw.pop("ops_method", {})
@@ -586,10 +604,11 @@ def wrapper_for_image_snap_ops(**kw):
                     image=image,
                     snap_name=snap,
                     test_ops_parallely=True,
+                    **kw,
                 )
     else:
         for snap in snap_names:
-            rc = method_obj(rbd=rbd, pool=pool, image=image, snap_name=snap)
+            rc = method_obj(rbd=rbd, pool=pool, image=image, snap_name=snap, **kw)
             if rc:
                 log.error(
                     f"Test image snap operation {ops_method} failed for {pool}/{image}/{snap}"

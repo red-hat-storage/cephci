@@ -371,3 +371,19 @@ class Rbd(Cli):
         cmd = f"{self.base_cmd} rename {image_spec} {dest_spec} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd, check_ec=False, long_running=False)
+
+    def du(self, **kw):
+        """
+        Display usage of images/snapshots/clones in a pool
+        kw(dict): Key/value pairs that needs to be provided
+        Example supported keys:
+            pool(str): <pool-name>
+            namespace(str): <namespace-name>
+            image(str): <image-name>
+            snap(str): <snap-name>
+            format(str): <format-type>
+            image-or-snap-spec: [<pool-name>/[<namespace>]/<image>/[<snap>]]
+        """
+        cmd = f"{self.base_cmd} du {build_cmd_from_args(**kw)}"
+
+        return self.execute_as_sudo(cmd=cmd)

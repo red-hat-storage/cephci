@@ -75,6 +75,7 @@ def create_single_image(
                     "snap_schedule_intervals",
                     "io_size",
                     "num_of_snaps",
+                    "num_of_clones",
                 ]
             }
         )
@@ -684,6 +685,7 @@ def run_io_and_check_rbd_status(**kw):
         image_spec = f"{pool}/{image}"
         image_conf = kw.pop("image_conf", {})
         client = kw.get("client")
+        timeout = kw.get("timeout", 120)
         test_ops_parallely = kw.get("test_ops_parallely", False)
         if image_conf.get("io_size"):
             io_size = image_conf.get("io_size")
@@ -716,7 +718,7 @@ def run_io_and_check_rbd_status(**kw):
         }
         with parallel() as p:
             p.spawn(krbd_io_handler, **io_config)
-            p.spawn(check_rbd_status, rbd=rbd, pool=pool, image=image, timeout=120)
+            p.spawn(check_rbd_status, rbd=rbd, pool=pool, image=image, timeout=timeout)
 
         out, err = rbd.status(pool=pool, image=image, format="json")
         if err:
