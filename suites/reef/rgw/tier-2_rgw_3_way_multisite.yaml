@@ -11,7 +11,8 @@
 # This particular yaml runs the tests on the primary and verifies IOs on the
 # secondary site and tertiary site.
 
-# In addition to the above, the data bucket is configured to use EC along
+# In addition to the above, the data bucket is configured to use EC 2+2
+# Sync IO rgws & Client IO rgws are sepearated
 ---
 
 tests:
@@ -81,9 +82,20 @@ tests:
                   command: apply
                   service: rgw
                   pos_args:
-                    - shared.pri
+                    - shared.pri.sync
                   args:
                     placement:
+                      count-per-host: 2
+                      nodes:
+                        - node3
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri.io
+                  args:
+                    placement:
+                      count-per-host: 2
                       nodes:
                         - node4
         ceph-sec:
@@ -140,9 +152,20 @@ tests:
                   command: apply
                   service: rgw
                   pos_args:
-                    - shared.sec
+                    - shared.sec.sync
                   args:
                     placement:
+                      count-per-host: 2
+                      nodes:
+                        - node3
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec.io
+                  args:
+                    placement:
+                      count-per-host: 2
                       nodes:
                         - node4
         ceph-ter:
@@ -199,9 +222,20 @@ tests:
                   command: apply
                   service: rgw
                   pos_args:
-                    - shared.ter
+                    - shared.ter.sync
                   args:
                     placement:
+                      count-per-host: 2
+                      nodes:
+                        - node3
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.ter.io
+                  args:
+                    placement:
+                      count-per-host: 2
                       nodes:
                         - node4
       desc: RHCS cluster deployment using cephadm.
@@ -244,6 +278,37 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
+# configuring HAproxy for IO RGW daemons on port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node4:80
+              - node4:81
+
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node4:80
+              - node4:81
+        ceph-ter:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node4:80
+              - node4:81
+
+      desc: "Configure HAproxy for IO rgws"
+      module: haproxy.py
+      name: "Configure HAproxy for IO rgws"
+
   - test:
       abort-on-fail: true
       clusters:
@@ -252,42 +317,57 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node4}:80 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node4}:80 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node3}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node3}:80 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 3way123 --secret 3way123 --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 3way123 --secret 3way123"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
-              - "ceph orch restart {service_name:shared.pri}"
+              - "ceph config set client.rgw.shared.pri.sync rgw_realm india"
+              - "ceph config set client.rgw.shared.pri.sync rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.pri.sync rgw_zone primary"
+              - "ceph config set client.rgw.shared.pri.io rgw_realm india"
+              - "ceph config set client.rgw.shared.pri.io rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.pri.io rgw_zone primary"
+              - "ceph config set client.rgw.shared.pri.io rgw_run_sync_thread false"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
         ceph-sec:
           config:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123 --default"
-              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node4}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node3}:80 --access-key 3way123 --secret 3way123 --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node3}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node3}:80 --access-key 3way123 --secret 3way123"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
-              - "ceph orch restart {service_name:shared.sec}"
+              - "ceph config set client.rgw.shared.sec.sync rgw_realm india"
+              - "ceph config set client.rgw.shared.sec.sync rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.sec.sync rgw_zone secondary"
+              - "ceph config set client.rgw.shared.sec.io rgw_realm india"
+              - "ceph config set client.rgw.shared.sec.io rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.sec.io rgw_zone secondary"
+              - "ceph config set client.rgw.shared.sec.io rgw_run_sync_thread false"
+              - "ceph orch restart {service_name:shared.sec.io}"
+              - "ceph orch restart {service_name:shared.sec.sync}"
         ceph-ter:
           config:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123 --default"
-              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone tertiary --endpoints http://{node_ip:node4}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node3}:80 --access-key 3way123 --secret 3way123 --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node3}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone tertiary --endpoints http://{node_ip:node3}:80 --access-key 3way123 --secret 3way123"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.ter} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.ter} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.ter} rgw_zone tertiary"
-              - "ceph orch restart {service_name:shared.ter}"
+              - "ceph config set client.rgw.shared.ter.sync rgw_realm india"
+              - "ceph config set client.rgw.shared.ter.sync rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.ter.sync rgw_zone tertiary"
+              - "ceph config set client.rgw.shared.ter.io rgw_realm india"
+              - "ceph config set client.rgw.shared.ter.io rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.ter.io rgw_zone tertiary"
+              - "ceph config set client.rgw.shared.ter.io rgw_run_sync_thread false"
+              - "ceph orch restart {service_name:shared.ter.io}"
+              - "ceph orch restart {service_name:shared.ter.sync}"
       desc: Setting up 3-way RGW multisite replication environment
       module: exec.py
       name: setup 3-way multisite
@@ -306,6 +386,7 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
               - "ceph osd dump"
+              - "ceph orch ls"
       desc: Retrieve the configured environment details
       module: exec.py
       name: get shared realm info on primary
@@ -323,6 +404,7 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
               - "ceph osd dump"
+              - "ceph orch ls"
       desc: Retrieve the configured environment details
       module: exec.py
       name: get shared realm info on secondary
@@ -341,6 +423,7 @@ tests:
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
               - "ceph osd dump"
+              - "ceph orch ls"
       desc: Retrieve the configured environment details
       module: exec.py
       name: get shared realm info on tertiary
@@ -415,7 +498,7 @@ tests:
               - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_auth agent"
               - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart rgw.shared.sec"
+              - "ceph orch restart rgw.shared.sec.io"
             timeout: 120
         ceph-pri:
           config:
@@ -427,7 +510,7 @@ tests:
               - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_auth agent"
               - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart rgw.shared.pri"
+              - "ceph orch restart rgw.shared.pri.io"
             timeout: 120
         ceph-ter:
           config:
@@ -439,9 +522,9 @@ tests:
               - "ceph config set client.rgw.shared.ter rgw_crypt_sse_s3_vault_auth agent"
               - "ceph config set client.rgw.shared.ter rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.ter rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart rgw.shared.ter"
+              - "ceph orch restart rgw.shared.ter.io"
             timeout: 120
-      desc: Setting vault configs for sse-s3 on multisite terhive
+      desc: Setting vault configs for sse-s3 on multisite tertiary site
       module: exec.py
       name: set sse-s3 vault configs on multisite
 
@@ -454,7 +537,8 @@ tests:
             set-env: true
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-            timeout: 300
+            run-on-haproxy: true
+            monitor-consistency-bucket-stats: true
       desc: test M buckets multipart uploads on tertiary zone
       module: sanity_rgw_multisite.py
       name: test M buckets multipart uploads on tertiary zone
@@ -470,5 +554,7 @@ tests:
           config:
             script-name: ../s3cmd/test_s3cmd.py
             config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+            run-on-haproxy: true
+            monitor-consistency-bucket-stats: true
             timeout: 300
             # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment

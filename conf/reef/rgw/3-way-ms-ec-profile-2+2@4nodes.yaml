@@ -29,6 +29,7 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node4:
         disk-size: 20
@@ -64,6 +65,7 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node4:
         disk-size: 20
@@ -101,6 +103,7 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node4:
         disk-size: 20
