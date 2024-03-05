@@ -159,23 +159,19 @@ def run(ceph_cluster, **kw):
             fs_util.client_clean_up(
                 "umount", kernel_clients=[client2], mounting_dir=kernel_mounting_dir_2
             )
-        # delete the file system I have created
-        client1.exec_command(
-            sudo=True, cmd="ceph fs volume rm cephfs --yes-i-really-mean-it"
-        )
+        fs_util.remove_fs(client1, vol_name="cephfs")
+        time.sleep(60)
+
         # create 2 file system
-        hosts_cephfs = mds_names[-5:-3]
+        hosts_cephfs = mds_names[-5:-2]
         mds_hosts = " ".join(hosts_cephfs) + " "
-        client1.exec_command(
-            sudo=True, cmd=f'ceph fs volume create cephfs --placement="3 {mds_hosts}"'
-        )
+        fs_util.create_fs(client1, vol_name="cephfs", placement=f"3 {mds_hosts}")
         client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 2")
+        wait_for_two_active_mds(client1, fs_name="cephfs")
         hosts_ec = mds_names[-2:]
         mds_hosts_ec = " ".join(hosts_ec) + " "
-        client1.exec_command(
-            sudo=True,
-            cmd=f'ceph fs volume create cephfs-ec --placement="2 {mds_hosts_ec}"',
-        )
+        fs_util.create_fs(client1, vol_name="cephfs-ec", placement=f"3 {mds_hosts_ec}")
+        fs_util.wait_for_mds_process(client1, "cephfs-ec")
 
 
 def wait_for_two_active_mds(client1, fs_name, max_wait_time=180, retry_interval=10):
