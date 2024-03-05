@@ -71,27 +71,27 @@ class Openstack:
             log.error(e)
             raise CloudProviderError(e)
 
-    def create_node(
-        self, name, image, size, cloud_data, networks, timeout=300, interval=10
-    ):
+    def create_node(self, name, timeout=300, interval=10, **config):
         """Create node on openstack
 
         Args:
             name (str): Name of node
+            timeout (int): Operation waiting time in sec
+            interval (int): Operation retry time in sec
+
+        Kwargs:
             image (str): Image to be used for node
             size (int): Node root volume size
             cloud_data (dict):
             networks (list|tuple): Networks to be attached to node
-            timeout (int): Operation waiting time in sec
-            interval (int): Operation retry time in sec
         """
         try:
             node = self._driver.create_node(
                 name=name,
-                image=image,
-                size=size,
-                ex_userdata=cloud_data,
-                networks=networks,
+                image=config.get("image"),
+                size=config.get("size"),
+                ex_userdata=config.get("cloud_data"),
+                networks=config.get("networks"),
             )
         except Exception as e:
             log.error(e)
@@ -788,7 +788,7 @@ class Openstack:
 
         return {
             "image": image,
-            "vmsize": vmsize,
+            "size": vmsize,
             "cloud_data": cloud_data,
-            "network": network,
+            "networks": network,
         }

@@ -1,5 +1,3 @@
-import multiprocessing as mp
-
 from cluster_conf import collect_conf, write_output
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
@@ -8,13 +6,10 @@ from utils.utility import set_logging_env
 from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
-from cli.exceptions import OperationFailedError
 from cli.utilities.utils import load_config
 from utility.log import Log
 
 LOG = Log(__name__)
-
-RESOURCES = []
 
 
 doc = """
@@ -51,10 +46,8 @@ Utility to provision cluster on cloud
 """
 
 
-def provision_node(name, cloud, config, disk, timeout=600, interval=10):
-    """Provision node on cloud"""
-    volcount, volsize = disk.get("no-of-volumes", 0), disk.get("disk-size", 0)
-
+def provision_osp_volume(name, volcount, volsize):
+    """Provision volumes on OSP"""
     # Provision volumes to be attached to node
     volumes = []
     for i in range(volcount):
@@ -62,12 +55,8 @@ def provision_node(name, cloud, config, disk, timeout=600, interval=10):
         volname = f"{name}-vol-{i}"
         volume = Volume(volname, cloud)
 
-        # Add volume to resource bucket
-        RESOURCES.append(volume)
-
-        LOG.info(f"Provisioning volume '{volname}'")
-
         # Provision volume
+        LOG.info(f"Provisioning volume '{volname}'")
         volume.create(volsize, timeout, interval)
         LOG.info(
             f"Volume '{volume.name}' with id '{volume.id}' provisioned successfully"
@@ -75,35 +64,34 @@ def provision_node(name, cloud, config, disk, timeout=600, interval=10):
 
         volumes.append(volname)
 
-    # Get node configs
-    cloud_data = config.get("cloud_data")
-    image = config.get("image")
-    vmsize = config.get("vmsize")
-    network = config.get("network")
+    return volumes
+
+
+def provision_node(name, cloud, config, node, timeout=600, interval=10):
+    """Provision node on cloud"""
+    # Provision OSP volumes
+    if str(cloud) == "openstack":
+        volcount, volsize = node.get("no-of-volumes", 0), node.get("disk-size", 0)
+        config["volumes"] = provision_osp_volume(name, volcount, volsize)
 
     # Create node object
     node = Node(name, cloud)
 
-    # Add volume to resource bucket
-    RESOURCES.append(node)
-
-    LOG.info(f"Provisioning node '{name}'")
-
     # Provision node
-    node.create(image, vmsize, cloud_data, network, timeout, interval)
+    node.create(timeout=timeout, interval=interval, **config)
     LOG.info(f"Node '{node.name}' with id '{node.id}' provisioned successfully")
 
     # Attach volumes provisioned to node
-    node.attach_volume(volumes)
+    node.attach_volume(config.get("volumes"))
 
     return True
 
 
-def provision(cloud, prefix, cluster_configs, node_configs, timeout=600, interval=10):
+def provision(cloud, prefix, global_configs, node_configs, timeout=600, interval=10):
     """Provision cluster with global configs"""
     # Create cluster configs
-    for _c in cluster_configs:
-        cluster, procs = _c.get("ceph-cluster"), []
+    for _c in global_configs:
+        cluster = _c.get("ceph-cluster")
         name = cluster.get("name")
 
         LOG.info(f"Provisioning cluster '{name}'")
@@ -116,28 +104,10 @@ def provision(cloud, prefix, cluster_configs, node_configs, timeout=600, interva
 
             # Get node details
             node = cluster.get(key)
-            if not node_configs.get("network"):
-                node_configs["network"] = node.get("networks")
+            if not node_configs.get("networks"):
+                node_configs["networks"] = node.get("networks")
 
-            # Provision node with details
-            proc = mp.Process(
-                target=provision_node,
-                args=(node_name, cloud, node_configs, node, timeout, interval),
-            )
-
-            # Start process and append process to the list
-            proc.start()
-            procs.append(proc)
-
-        # Wait till all nodes gets cleaned
-        [p.join() for p in procs]
-
-        # Check if any resource deletion failed
-        stale = [r.name for r in RESOURCES if r.state]
-        if stale:
-            msg = f"Failed to provision resources {', '.join(stale)}"
-            LOG.error(msg)
-            raise OperationFailedError(msg)
+            provision_node(node_name, cloud, node_configs, node, timeout, interval)
 
         LOG.info(f"Cluster '{name}' provisioned successfully")
 
