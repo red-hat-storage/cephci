@@ -53,6 +53,13 @@ credentials:
       timeout: 180
       retry: 18
 
+    baremetal:
+      server: <fake-teuthology-server>
+      env: <fake-environment-path>
+      password: <fake-password>
+      auth-url: <fake-authurl>
+      ssh_key: <fake-ssh-key-path>
+
   vault:
     url: <fake-url>
     agent:

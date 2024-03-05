@@ -103,18 +103,29 @@ def get_cloud_credentials(cloud):
     try:
         _cloud = _get_credentials()["cloud"]
         _server = _cloud[cloud]
-        _dict["username"] = _server["username"]
-        _dict["password"] = _server["password"]
-        _authurl = _dict["auth-url"] = _server["auth-url"]
-        _dict["auth-version"] = _server["auth-version"]
-        _dict["tenant-name"] = _server["tenant-name"]
-        _dict["service-region"] = _server["service-region"]
-        _dict["domain"] = _server["domain"]
-        _dict["tenant-domain-id"] = _server["tenant-domain-id"]
-        _dict["timeout"] = int(_server.get("timeout", 180))
-        _dict["retry"] = int(_server.get("retry", 18))
 
-        log.info(f"Loaded cloud details for server - {_authurl}")
+        if cloud == "baremetal":
+            server = _dict["server"] = _server["server"]
+            _dict["env"] = _server["env"]
+            _dict["username"] = _server.get("username")
+            _dict["password"] = _server.get("password")
+            _dict["ssh_key"] = _server.get("ssh_key")
+
+            log.info(f"Loaded {cloud} cloud details for server - {server}")
+
+        elif cloud == "openstack":
+            _dict["username"] = _server["username"]
+            _dict["password"] = _server["password"]
+            _authurl = _dict["auth-url"] = _server["auth-url"]
+            _dict["auth-version"] = _server["auth-version"]
+            _dict["tenant-name"] = _server["tenant-name"]
+            _dict["service-region"] = _server["service-region"]
+            _dict["domain"] = _server["domain"]
+            _dict["tenant-domain-id"] = _server["tenant-domain-id"]
+            _dict["timeout"] = int(_server.get("timeout", 180))
+            _dict["retry"] = int(_server.get("retry", 18))
+
+            log.info(f"Loaded {cloud} cloud details for server - {_authurl}")
     except KeyError:
         raise ConfigError(f"Insufficient config for '{cloud}' in cloud")
 
