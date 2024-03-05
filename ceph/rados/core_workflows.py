@@ -1480,7 +1480,11 @@ class RadosOrchestrator:
         Returns: Pg state as a string of values
         """
         cmd = f"ceph pg {pg_id} query"
-        pg_query = self.run_ceph_command(cmd=cmd)
+        try:
+            pg_query = self.run_ceph_command(cmd=cmd)
+        except Exception as err:
+            log.error(f"Hit exception : {err}")
+            return False
         log.debug(f"The status of pg : {pg_id} is {pg_query['state']}")
         return pg_query["state"]
 

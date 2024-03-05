@@ -103,7 +103,8 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     if not rados_obj.create_pool(pool_name=pool_name):
         error = "failed to create pool to run IO"
         raise TestCaseFailureException(error)
-    pool_obj.set_bulk_flag(pool_name=pool_name)
+    # Removing the setting of bulk flag as it consumes lots of time
+    pool_obj.get_bulk_details(pool_name=pool_name)
     rados_obj.bench_write(pool_name=pool_name, background=True, verify_stats=False)
     mon_db_size_list.append(get_mondb_size(mon_nodes[0], mon_daemons))
 

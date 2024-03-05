@@ -245,9 +245,6 @@ def run(ceph_cluster, **kw):
                 "Completed checking PG states on merge. No premerge PGs seen for extended duration"
             )
 
-        method_should_succeed(
-            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
-        )
         pg_count_bulk_false = rados_obj.get_pool_details(pool=pool["pool_name"])[
             "pg_num_target"
         ]
@@ -281,6 +278,10 @@ def run(ceph_cluster, **kw):
         log.info(
             "PGs decreased to desired levels after removal of bulk flag on the pool"
         )
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
+
         # Checking cluster health after OSD removal
         method_should_succeed(rados_obj.run_pool_sanity_check)
         log.info("Sanity check post test execution, Test complete, Pass")
