@@ -238,6 +238,7 @@ tests:
   - test:
       name: Versioning with copy objects and delete with different user
       desc: Versioning with copy objects and delete with different user
+      comments: Known issue BZ-2266248
       polarion-id: CEPH-9353 # Also applies for CEPH-10215
       module: sanity_rgw.py
       config:
@@ -258,6 +259,7 @@ tests:
   - test:
       name: Test copy versioned objects to another versioned bucket
       desc: copy versioned objects to another versioned bucket
+      comments: Known issue BZ-2266248
       polarion-id: CEPH-10644
       module: sanity_rgw.py
       config:

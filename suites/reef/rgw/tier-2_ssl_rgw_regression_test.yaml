@@ -138,6 +138,7 @@ tests:
   - test:
       name: STS Tests to perform Server Side Copy
       desc: Perform Server Side Copy
+      comments: Known issue BZ-2266248
       polarion-id: CEPH-83574522
       module: sanity_rgw.py
       config:
