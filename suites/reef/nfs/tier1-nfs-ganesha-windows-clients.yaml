@@ -251,3 +251,72 @@ tests:
             user: manisha
             password: Redhat
       abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha Verify access file from both v3 (windows) mount and linux v 4.1 mount
+      desc: Verify access file from both v3 (windows) mount and linux v 4.1 mount. Update the file content from 1 client and check the consistency of file from other client
+      polarion-id: CEPH-83581052
+      module: nfs_verify_file_access_linux_v4_windows_v3.py
+      config:
+        operations: [create_file]
+        nfs_version: 4.1
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
+
+
+  - test:
+      name: NFS-Ganesha Verify delete file from windows client and check if the file is deleted from v4.1 linux client
+      desc: Verify delete file from windows client and check if the file is deleted from v4.1 linux client
+      polarion-id: CEPH-83581053
+      module: nfs_verify_file_access_linux_v4_windows_v3.py
+      config:
+        operations: [create_file,delete_file]
+        nfs_version: 4.1
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
+
+
+  - test:
+      name: NFS-Ganesha mount the same export on windows and linux client via v3 protocol and run parallel IO's from both the client
+      desc: Verify mount the same export on windows and linux client via v3 protocol and run parallel IO's from both the client
+      polarion-id: CEPH-83584509
+      module: nfs_verify_linux_windows_clients_v3_io.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
+
+
+  - test:
+      name: NFS-Ganesha test parallel readdir operations from multiple windows Mount
+      desc: Verify parallel readdir operations from multiple windows Mount
+      polarion-id: CEPH-83581056
+      module: nfs_verify_windows_parallel_readdir.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.159
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
