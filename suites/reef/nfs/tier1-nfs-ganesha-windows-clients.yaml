@@ -204,3 +204,18 @@ tests:
             user: manisha
             password: Redhat
       abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha remount NFS share
+      desc: Verify remount of NFS share on windows client
+      polarion-id: CEPH-83581037
+      module: nfs_test_remount_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
