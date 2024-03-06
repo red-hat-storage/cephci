@@ -91,10 +91,10 @@ iodepth= {iodepth}
         for file in filenames:
             if self.ctx.role == "windows_client":
                 cmd = (
-                    f"fio {file} --output-format=json "
-                    f"--output={file}_windows_{mount_dir.replace('/', '')}.json"
+                    f"{mount_dir} && C:\\Users\\Manisha\\fio.exe --name=global --rw=randread --size=4G --name=job1 "
+                    f"--name=job2"
                 )
-                self.execute(sudo=True, long_running=True, cmd=cmd)
+                self.execute(long_running=True, cmd=cmd)
             else:
                 cmd = (
                     f"fio {file} --output-format=json "

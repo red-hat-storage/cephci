@@ -1,0 +1,464 @@
+#===============================================================================================
+#------------------------------------------------------------
+#---    Test Suite for Nfs Ganesha with Windows clients   ---
+#------------------------------------------------------------
+# Conf: conf/reef/nfs/1admin-3client-7node.yaml
+#===============================================================================================
+tests:
+   - test:
+       abort-on-fail: true
+       desc: Install software pre-requisites for cluster deployment.
+       module: install_prereq.py
+       name: setup pre-requisites
+
+   - test:
+       abort-on-fail: true
+       config:
+         steps:
+           - config:
+               command: bootstrap
+               service: cephadm
+               args:
+                 mon-ip: node1
+           - config:
+               command: add_hosts
+               service: host
+               args:
+                 attach_ip_address: true
+                 labels: apply-all-labels
+           - config:
+               command: apply
+               service: osd
+               args:
+                 all-available-devices: true
+           - config:
+               command: apply
+               service: rgw
+               pos_args:
+                 - rgw.1
+               args:
+                 placement:
+                   label: rgw
+           - config:
+               args:
+                 - "ceph fs volume create cephfs"
+               command: shell
+           - config:
+               args:
+                 placement:
+                   label: mds
+               base_cmd_args:
+                 verbose: true
+               command: apply
+               pos_args:
+                 - cephfs
+               service: mds
+           - config:
+               args:
+                 - "ceph osd pool create rbd"
+               command: shell
+           - config:
+               args:
+                 - "rbd pool init rbd"
+               command: shell
+       desc: bootstrap and deploy services.
+       destroy-cluster: false
+       polarion-id: CEPH-83573713
+       module: test_cephadm.py
+       name: Deploy cluster using cephadm
+
+   - test:
+       abort-on-fail: true
+       config:
+         command: add
+         id: client.1
+         node: node4
+         install_packages:
+           - ceph-common
+           - ceph-fuse
+         copy_admin_keyring: true
+       desc: Configure the RGW,RBD client system
+       destroy-cluster: false
+       module: test_client.py
+       name: configure client
+
+   - test:
+      name: NFS-Ganesha Verify fio with v3 mount on 100 windows clients
+      desc: Verify Mount the NFS volume via V3 on scale cluster with windows clients and FIO as io tool
+      polarion-id: CEPH-83581037
+      module: nfs_window_scale_fio_support.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        ha: true
+        vip: 10.8.130.236/21
+        num_of_servers: 2
+        num_of_exports: 546
+        num_of_clients: 91
+        exports_per_client: 6
+        windows_clients:
+          - ip: 10.70.47.59
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.148
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.137
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.47.42
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.191
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.124
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.47.16
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.122
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.120
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.123
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.47.12
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.47.11
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.100
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.47.15
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.110
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.105
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.15
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.104
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.245
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.85
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.106
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.71
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.47.7
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.84
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.47.24
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.11
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.12
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.101
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.13
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.86
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.253
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.48
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.51
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.50
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.210
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.97
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.46
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.41
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.96
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.211
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.17
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.45
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.42
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.205
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.22
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.23
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.193
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.126
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.121
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.47
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.20
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.223
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.218
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.58
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.26
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.217
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.56
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.44
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.27
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.35
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.212
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.99
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.236
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.238
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.75
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.53
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.52
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.55
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.59
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.54
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.25
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.70
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.231
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.182
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.18
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.225
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.67
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.227
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.229
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.90
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.92
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.93
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.82
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.83
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.46.252
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.80
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.109
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.16
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.108
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.111
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+          - ip: 10.70.45.14
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
