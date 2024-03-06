@@ -1,0 +1,85 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        - hostname: extensa005
+          ip: 10.8.130.205
+          id: node1
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
+            - crash
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: extensa006
+          ip: 10.8.130.206
+          id: node2
+          root_password: passwd
+          role:
+            - osd
+            - mon
+            - mgr
+            - mds
+            - node-exporter
+            - alertmanager
+            - crash
+            - rgw
+            - nfs
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: extensa007
+          ip: 10.8.130.207
+          id: node3
+          root_password: passwd
+          role:
+            - mon
+            - osd
+            - node-exporter
+            - crash
+            - rgw
+            - mds
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: extensa003
+          ip: 10.8.130.203
+          id: node4
+          root_password: passwd
+          role:
+            - client
+        - hostname: extensa004
+          ip: 10.8.130.204
+          id: node5
+          root_password: passwd
+          role:
+            - client
+        - hostname: extensa008
+          ip: 10.8.130.208
+          id: node6
+          root_password: passwd
+          role:
+            - client
+        - hostname: extensa009
+          ip: 10.8.130.209
+          id: node7
+          root_password: passwd
+          role:
+            - client
