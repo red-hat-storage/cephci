@@ -11,14 +11,19 @@ Test Module to perform specific functionalities of ceph-bluestore-tool.
  - ceph-bluestore-tool free-dump|free-score --path osd path [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
  - ceph-bluestore-tool show-sharding --path osd path
  - ceph-bluestore-tool bluefs-stats --path osd path
+ - ceph-bluestore-tool reshard --path osd path --sharding new sharding [ --sharding-ctrl control string ]
+ - ceph-bluestore-tool bluefs-bdev-new-wal --path osd path --dev-target new-device
+ - ceph-bluestore-tool bluefs-bdev-new-db --path osd path --dev-target new-device
 """
 import json
+import math
 import random
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.bluestoretool_workflows import BluestoreToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
+from tests.misc_env.lvm_deployer import create_lvms
 from utility.log import Log
 
 log = Log(__name__)
@@ -32,10 +37,8 @@ def run(ceph_cluster, **kw):
         1 -> Fail, 0 -> Pass
     *** Currently, covers commands/workflows valid only for collocated OSDs
     Commands reserved for future coverage with non-collocated OSDs:
-    - ceph-bluestore-tool reshard --path osd path --sharding new sharding [ --sharding-ctrl control string ]
-    - ceph-bluestore-tool bluefs-bdev-new-db --path osd path --dev-target new-device
-    - ceph-bluestore-tool bluefs-bdev-migrate --path osd path --dev-target new-device --devs-source device1
     - ceph-bluestore-tool restore_cfb --path osd path
+    - ceph-bluestore-tool bluefs-bdev-migrate --path osd path --dev-target new-device --devs-source device1
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -53,9 +56,9 @@ def run(ceph_cluster, **kw):
             # Execute ceph-bluestore-tool --help
             osd_id = random.choice(osd_list)
             log.info(
-                f"\n --------------------"
+                f"\n ---------------------------------"
                 f"\n Running cbt help for OSD {osd_id}"
-                f"\n --------------------"
+                f"\n ---------------------------------"
             )
             out = bluestore_obj.help(osd_id=osd_id)
             log.info(out)
@@ -64,32 +67,150 @@ def run(ceph_cluster, **kw):
             # ceph-bluestore-tool bluefs-bdev-new-wal --path osd path --dev-target new-device
             osd_id = random.choice(osd_list)
             log.info(
-                f"\n --------------------"
+                f"\n -------------------------------------------"
                 f"\n Adding a dedicated WAL device for OSD.{osd_id}"
-                f"\n --------------------"
+                f"\n -------------------------------------------"
             )
             osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
             empty_devices = rados_obj.get_available_devices(
-                node=osd_host, device_type="hdd"
+                node=osd_host.hostname, device_type="hdd"
             )
-            log.info(
-                f"List of available devices on osd host {osd_host}: {empty_devices}"
-            )
-            log.info(f"WAL will be added on device: {empty_devices[0]}")
+            if not empty_devices:
+                log.error(f"No spare disks available on OSD host {osd_host.hostname}")
+                raise Exception(
+                    f"No spare disks available on OSD host {osd_host.hostname}"
+                )
 
-            out = bluestore_obj.add_wal_device(
-                osd_id=osd_id, new_device=empty_devices[0]
+            # determine size of db and wal lvms
+            osd_df_stats = rados_obj.get_osd_df_stats(
+                tree=False, filter_by="name", filter=f"osd.{osd_id}"
             )
-            assert f"WAL device added {empty_devices[0]}" in out
+            osd_size = osd_df_stats["nodes"][0]["kb"]
+            log.info(osd_size)
+            db_size = int(int(osd_size) * 1024 * 0.05)
+            log.info(db_size)
+            # covert bytes to GB
+            wal_db_size = f"{math.ceil(db_size/1073741824)}G"
+            log.info(wal_db_size)
+
+            log.info(
+                f"List of available devices on osd host {osd_host.hostname}: {empty_devices}"
+            )
+
+            lvm_list = create_lvms(
+                node=osd_host, count=6, size=wal_db_size, devices=[empty_devices[0]]
+            )
+            log.info(f"List of LVMs created on {osd_host.hostname}: {lvm_list}")
+
+            wal_target = lvm_list.pop()
+            log.info(f"WAL will be added on device: {wal_target}")
+
+            out = bluestore_obj.add_wal_device(osd_id=osd_id, new_device=wal_target)
+            log.info(out)
+            assert "WAL device added" in out
             osd_metadata = ceph_cluster.get_osd_metadata(
                 osd_id=int(osd_id), client=client
             )
-            assert int(osd_metadata["bluefs_dedicated_wal"]) == 1
-            assert (
+            log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
+
+            if not int(osd_metadata["bluefs_dedicated_wal"]) == 1:
+                log.error("'bluefs_dedicated_wal' entry in OSD metadata is not 1")
+                raise AssertionError(
+                    "'bluefs_dedicated_wal' entry in OSD metadata is not 1"
+                )
+
+            if not (
                 osd_metadata["bluefs_wal_dev_node"]
                 == osd_metadata["bluefs_wal_partition_path"]
-                == empty_devices[0]
+            ):
+                log.error(
+                    "bluefs wal device node and bluefs wal partition path do not match"
+                )
+                raise AssertionError(
+                    "bluefs wal device node and bluefs wal partition path do not match"
+                )
+
+            if not osd_metadata["bluefs_wal_devices"] in empty_devices[0]:
+                log.error(f"bluefs WAL device is not pointing to {empty_devices[0]}")
+                raise AssertionError(
+                    f"bluefs WAL device is not pointing to {empty_devices[0]}"
+                )
+
+            log.info(
+                f"Dedicated WAL device successfully added for OSD {osd_id} on {empty_devices[0]}"
             )
+
+            # Add a new DB device to existing collocated OSD
+            # ceph-bluestore-tool bluefs-bdev-new-db --path osd path --dev-target new-device
+            log.info(
+                f"\n -----------------------------------------------"
+                f"\n Adding a dedicated DB device for OSD.{osd_id}"
+                f"\n -----------------------------------------------"
+            )
+            db_target = lvm_list.pop()
+            log.info(f"DB will be added on device: {db_target}")
+
+            out = bluestore_obj.add_db_device(
+                osd_id=osd_id, new_device=db_target, db_size=db_size
+            )
+            log.info(out)
+            assert "DB device added" in out
+            osd_metadata = ceph_cluster.get_osd_metadata(
+                osd_id=int(osd_id), client=client
+            )
+            log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
+
+            if not int(osd_metadata["bluefs_dedicated_db"]) == 1:
+                log.error("'bluefs_dedicated_db' entry in OSD metadata is not 1")
+                raise AssertionError(
+                    "'bluefs_dedicated_db' entry in OSD metadata is not 1"
+                )
+
+            if not (
+                osd_metadata["bluefs_db_dev_node"]
+                == osd_metadata["bluefs_db_partition_path"]
+            ):
+                log.error(
+                    "bluefs DB device node and bluefs DB partition path do not match"
+                )
+                raise AssertionError(
+                    "bluefs DB device node and bluefs DB partition path do not match"
+                )
+
+            if not osd_metadata["bluefs_db_devices"] in empty_devices[0]:
+                log.error(f"bluefs DB device is not pointing to {empty_devices[0]}")
+                raise AssertionError(
+                    f"bluefs DB device is not pointing to {empty_devices[0]}"
+                )
+
+            log.info(
+                f"Dedicated DB device successfully added for OSD {osd_id} on {empty_devices[0]}"
+            )
+
+            # Migrating new DB device to existing collocated OSD
+            # ceph-bluestore-tool bluefs-bdev-migrate --dev-target {new_device} --devs-source {device_source}
+            # Not part of execution due to blocker BZ-2269101
+            if not True:
+                log.info(
+                    f"\n -----------------------------------------------"
+                    f"\n Migrating a dedicated DB device for OSD.{osd_id}"
+                    f"\n -----------------------------------------------"
+                )
+                existing_db_device = f"dev/{osd_metadata['bluefs_db_devices']}"
+                empty_devices = rados_obj.get_available_devices(
+                    node=osd_host.hostname, device_type="hdd"
+                )
+                log.info(
+                    f"List of available devices on osd host {osd_host.hostname}: {empty_devices}"
+                )
+                log.info(f"Existing DB will be migrated to device: {empty_devices[0]}")
+                out = bluestore_obj.block_device_migrate(
+                    osd_id=osd_id,
+                    new_device=empty_devices[0],
+                    device_source=existing_db_device,
+                )
+                log.info(out)
+                log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
         else:
             # Execute ceph-bluestore-tool --help
             osd_id = random.choice(osd_list)
@@ -165,12 +286,13 @@ def run(ceph_cluster, **kw):
                      f"\n --------------------")
             out = bluestore_obj.restore_cfb(osd_id=osd_id)
             log.info(out)
-    
+
             Execution failed with below msg -
             restore_cfb failed: (1) Operation not permitted
             7fe3c5c80600 -1 bluestore::NCB::push_allocation_to_rocksdb::cct->_conf->bluestore_allocation_from_file
             must be cleared first
-            7fe3c5c80600 -1 bluestore::NCB::push_allocation_to_rocksdb::please change default to false in ceph.conf file>
+            7fe3c5c80600 -1 bluestore::NCB::push_allocation_to_rocksdb::please
+             change default to false in ceph.conf file>
             *** Needs further investigation as upstream documentation says this command is supposed to reserve changes
             done by the new NCB code | restore_cfb: Reverses changes done by the new NCB code (either through
              ceph restart or when running allocmap command) and restores RocksDB B Column-Family (allocator-map).
@@ -264,7 +386,7 @@ def run(ceph_cluster, **kw):
             out = bluestore_obj.generate_prime_osd_dir(osd_id=osd_id, device=dev)
             log.info(out)
 
-            # Execute ceph-bluestore-tool free-dump --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
+            # ceph-bluestore-tool free-dump --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
             osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
@@ -279,7 +401,7 @@ def run(ceph_cluster, **kw):
             log.debug(out)
             assert "alloc_name" in out and "extents" in out
 
-            # Execute ceph-bluestore-tool free-score --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
+            # ceph-bluestore-tool free-score --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
             osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
@@ -305,6 +427,22 @@ def run(ceph_cluster, **kw):
             out = bluestore_obj.show_sharding(osd_id=osd_id)
             log.info(out)
             assert "block_cache" in out
+
+            # Execute ceph-bluestore-tool --sharding="<>" reshard --path <osd_path>
+            osd_id = random.choice(osd_list)
+            log.info(
+                f"\n -----------------------------------------"
+                f"\n Reshard with custom value for for OSD {osd_id}"
+                f"\n -----------------------------------------"
+            )
+            new_shard = "m(3) p(3,0-12) O(3,0-13)=block_cache={type=binned_lru} L P"
+            log.info(f"New shard: {new_shard}")
+            out = bluestore_obj.do_reshard(osd_id=osd_id, new_shard=new_shard)
+            log.info(out)
+            assert "reshard success" in out
+            out = bluestore_obj.show_sharding(osd_id=osd_id)
+            log.info(f"Output of show_sharding after new shard was applied: \n {out}")
+            assert new_shard in out
 
             # Execute ceph-bluestore-tool bluefs-stats --path <osd_path>
             osd_id = random.choice(osd_list)

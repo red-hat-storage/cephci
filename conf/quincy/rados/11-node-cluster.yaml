@@ -22,6 +22,7 @@ globals:
           - node-exporter
           - alertmanager
           - crash
+          - nfs
       node3:
         role:
           - osd
@@ -50,6 +51,7 @@ globals:
           - mds
           - node-exporter
           - crash
+          - nfs
       node7:
         role:
           - client

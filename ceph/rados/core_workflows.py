@@ -2618,9 +2618,9 @@ class RadosOrchestrator:
         """
 
         if node is None:
-            cmd_orch_device = "ceph orch device ls"
+            cmd_orch_device = "ceph orch device ls --refresh"
         else:
-            cmd_orch_device = f"ceph orch device ls  {node}"
+            cmd_orch_device = f"ceph orch device ls {node} --refresh"
 
         orch_device_output = self.run_ceph_command(cmd=cmd_orch_device)
         return orch_device_output

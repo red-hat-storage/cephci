@@ -1,5 +1,5 @@
 def pvcreate(osd, devices):
-    osd.exec_command(cmd="sudo pvcreate %s" % devices)
+    osd.exec_command(cmd="sudo pvcreate -ff %s" % devices)
 
 
 def vgcreate(osd, vg_name, devices):
