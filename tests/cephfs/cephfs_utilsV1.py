@@ -3442,3 +3442,27 @@ os.system('sudo systemctl start  network')
                 mounting_dir,
             )
         return mounting_dir, mount_params["export_created"]
+
+    def config_set_runtime(self, client, service_name, key, value):
+        """
+        Set a runtime configuration for a Ceph service.
+
+        Args:
+            client (Client): The client object used to execute commands.
+            service_name (str): The name of the Ceph service to configure.
+            key (str): The configuration key to set.
+            value (str): The value to set for the configuration key.
+
+        Returns:
+            int: 0 if the configuration is successfully set, 1 otherwise.
+        """
+        cmd_set = f"ceph config set {service_name} {key} {value}"
+        cmd_get = f"ceph config get {service_name} {key}"
+
+        client.exec_command(sudo=True, cmd=cmd_set)
+        out, rc = client.exec_command(sudo=True, cmd=cmd_get)
+        log.info(f"Value of {key} is {out}")
+        if str(value) not in out.strip():
+            log.error(f"Unable to set {key}")
+            return 1
+        return 0

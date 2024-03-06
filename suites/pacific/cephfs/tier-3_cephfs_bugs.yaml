@@ -213,3 +213,10 @@ tests:
       polarion-id: CEPH-83583762
       desc: Creation of pool-level snaps for pools actively associated with a filesystem is disallowed
       abort-on-fail: false
+  - test:
+      name: Validate if no repeated mclientscaps(revoke) entries found in MDS.
+      module: cephfs_bugs.test_validate_mclientcaps_revoke_ack.py
+      polarion-id: CEPH-83584084
+      desc: Validate if no repeated mclientscaps(revoke) entries found in MDS.
+      abort-on-fail: false
+
