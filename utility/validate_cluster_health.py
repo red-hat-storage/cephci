@@ -6,7 +6,11 @@ import yaml
 from docopt import docopt
 
 from ceph.ceph import CommandFailed
+from utility.log import Log
 from utility.retry import retry
+
+LOG = Log(__name__)
+
 
 doc = """
 Standard script to Check the cluster health state
@@ -20,6 +24,12 @@ Standard script to Check the cluster health state
         --conf <str>       conffile path if baremetal or pickle file path
         --pickle           boolean
     """
+cluster_status_cmds = [
+    "ceph -s -f json",
+    "ceph health detail -f json",
+    "ceph orch ps -f json",
+    "ceph osd tree -f json",
+]
 
 
 @retry(CommandFailed, tries=3, delay=10)
@@ -27,8 +37,18 @@ def get_cluster_status(client):
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh_client.connect(client["ip"], username="root", password=client["root_password"])
+    for cmd in cluster_status_cmds:
+        stdin, stdout, stderr = ssh_client.exec_command(cmd)
+        cluster_stat = json.loads(stdout.read())
+        LOG.info(
+            f"\n{cmd}:\n--------------------------------------------------------------------------------------------- "
+            f"\n{json.dumps(cluster_stat, indent=4)}"
+            f"\n--------------------------------------------------------------------------------------------- "
+        )
+
     stdin, stdout, stderr = ssh_client.exec_command("ceph -s -f json")
     health_status = json.loads(stdout.read())["health"]["status"]
+    LOG.info(health_status)
     if health_status not in ["HEALTH_OK", "HEALTH_WARN"]:
         raise CommandFailed("Health is not OK")
     print("Cluster is in a Healthy state")
