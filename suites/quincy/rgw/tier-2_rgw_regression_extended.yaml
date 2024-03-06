@@ -167,3 +167,14 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_custom_worktime.yaml
         timeout: 300
+
+  - test:
+      name: Test Etag not empty for complete multipart upload in aws
+      desc: Test Etag not empty for complete multipart upload in aws
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      comments: known issue (bz-2266793)
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
+        timeout: 500
