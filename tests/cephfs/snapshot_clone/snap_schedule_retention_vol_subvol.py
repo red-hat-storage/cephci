@@ -5,6 +5,7 @@ import secrets
 import string
 import time
 import traceback
+from distutils.version import LooseVersion
 
 import dateutil.parser as parser
 
@@ -13,6 +14,7 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -297,6 +299,7 @@ def snap_sched_test(snap_test_params):
     fs_util = snap_test_params["fs_util"]
     client = snap_test_params["client"]
     snap_util.enable_snap_schedule(client)
+    ceph_version = get_ceph_version_from_cluster(client)
     snap_test_params["path"] = "/"
     if "subvol" in snap_test_params.get("test_case"):
         cmd = f"ceph fs subvolume getpath {snap_test_params['fs_name']} {snap_test_params.get('subvol_name')} "
@@ -307,7 +310,12 @@ def snap_sched_test(snap_test_params):
         )
         snap_test_params["path"] = f"{subvol_path.strip()}/.."
     snap_test_params["validate"] = True
-    sched_list = ["2m", "1h", "1d", "1w"]
+    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+    sched_list = (
+        ["2m", "1h", "1d", "1w"]
+        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        else ["2M", "1h", "1d", "1w"]
+    )
     mnt_list = ["kernel", "fuse", "nfs"]
     test_fail = 0
     mnt_paths = {}
@@ -322,7 +330,7 @@ def snap_sched_test(snap_test_params):
         if snap_util.create_snap_schedule(snap_test_params) == 1:
             log.info("Snapshot schedule creation/verification failed")
             test_fail = 1
-        if "m" in sched_val:
+        if m_granularity in sched_val:
             sched_list = re.split(r"(\d+)", sched_val)
             duration_min = int(sched_list[1]) * 3
             for mnt_type in mnt_list:
@@ -345,7 +353,10 @@ def snap_sched_test(snap_test_params):
                 log.info("Snapshot schedule validation failed")
                 test_fail = 1
             snap_util.deactivate_snap_schedule(
-                client, deactivate_path, sched_val=sched_val
+                client,
+                deactivate_path,
+                sched_val=sched_val,
+                fs_name=snap_test_params.get("fs_name", "cephfs"),
             )
             time.sleep(10)
             log.info(
@@ -371,12 +382,18 @@ def snap_sched_test(snap_test_params):
                 )
                 test_fail = 1
     log.info(f"Performing test {snap_test_params['test_case']} cleanup")
-    snap_util.deactivate_snap_schedule(snap_test_params["client"], deactivate_path)
+    snap_util.deactivate_snap_schedule(
+        snap_test_params["client"],
+        deactivate_path,
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
     schedule_path = snap_test_params["path"]
     if "subvol" in snap_test_params.get("test_case"):
         schedule_path = f"{subvol_path.strip()}/.."
     post_test_params["test_status"] = test_fail
-    snap_util.remove_snap_schedule(client, schedule_path)
+    snap_util.remove_snap_schedule(
+        client, schedule_path, fs_name=snap_test_params.get("fs_name", "cephfs")
+    )
 
     if "subvol" in snap_test_params.get("test_case"):
         subvol = snap_test_params["subvol_name"]
@@ -393,10 +410,20 @@ def snap_retention_test(snap_test_params):
     snap_util = snap_test_params["snap_util"]
     fs_util = snap_test_params["fs_util"]
     snap_util.enable_snap_schedule(client)
+    ceph_version = get_ceph_version_from_cluster(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
-    sched_list = ["2m", "1h", "7d", "4w"]
-    snap_test_params["retention"] = "3m1h5d4w"
+    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+    sched_list = (
+        ["2m", "1h", "7d", "4w"]
+        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        else ["2M", "1h", "7d", "4w"]
+    )
+    snap_test_params["retention"] = (
+        "3m1h5d4w"
+        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        else "3M1h5d4w"
+    )
     test_fail = 0
     mnt_list = ["kernel", "fuse", "nfs"]
     mnt_paths = {}
@@ -410,17 +437,25 @@ def snap_retention_test(snap_test_params):
         )
         snap_test_params["path"] = f"{subvol_path.strip()}/.."
     for sched_val in sched_list:
-        if "m" in sched_val:
+        if m_granularity in sched_val:
             sched_val_ret = sched_val
         snap_test_params["sched"] = sched_val
         snap_test_params["start_time"] = get_iso_time(client)
         snap_util.create_snap_schedule(snap_test_params)
     snap_util.create_snap_retention(snap_test_params)
     ret_list = re.split(r"([0-9]+[ A-Za-z]?)", snap_test_params["retention"])
-    snap_util.remove_snap_retention(client, snap_test_params["path"], ret_val="1h")
-    snap_test_params["retention"] = "3m5d4w"
+    snap_util.remove_snap_retention(
+        client,
+        snap_test_params["path"],
+        ret_val="1h",
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
+    snap_test_params["retention"] = (
+        "3m5d4w" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "3M5d4w"
+    )
+    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
     for ret_item in ret_list:
-        if "m" in ret_item:
+        if m_granularity in ret_item:
             temp_list = re.split(r"(\d+)", ret_item)
             duration_min = int(temp_list[1]) * 2
             for mnt_type in mnt_list:
@@ -449,11 +484,18 @@ def snap_retention_test(snap_test_params):
 
     post_test_params["test_status"] = test_fail
     schedule_path = snap_test_params["path"]
-    snap_util.deactivate_snap_schedule(client, schedule_path)
-    snap_util.remove_snap_retention(
-        client, snap_test_params["path"], ret_val=snap_test_params["retention"]
+    snap_util.deactivate_snap_schedule(
+        client, schedule_path, fs_name=snap_test_params.get("fs_name", "cephfs")
     )
-    snap_util.remove_snap_schedule(client, schedule_path)
+    snap_util.remove_snap_retention(
+        client,
+        snap_test_params["path"],
+        ret_val=snap_test_params["retention"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
+    snap_util.remove_snap_schedule(
+        client, schedule_path, fs_name=snap_test_params.get("fs_name", "cephfs")
+    )
 
     if "subvol" in snap_test_params.get("test_case"):
         subvol = snap_test_params["subvol_name"]
@@ -479,9 +521,12 @@ def snap_retention_count_validate(snap_test_params):
     snap_util = snap_test_params["snap_util"]
     fs_util = snap_test_params["fs_util"]
     snap_util.enable_snap_schedule(client)
+    ceph_version = get_ceph_version_from_cluster(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
-    sched_list = ["1m"]
+    sched_list = (
+        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else ["1M"]
+    )
 
     test_fail = 0
     mnt_list = ["kernel", "fuse", "nfs"]
@@ -554,7 +599,11 @@ def snap_retention_count_validate(snap_test_params):
 
     log.info("Perform schedule snaps cleanup")
     snap_util.sched_snap_cleanup(client, snap_path)
-    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+    snap_util.remove_snap_schedule(
+        client,
+        snap_test_params["path"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
 
     log.info(
         "Verify if retention field is 5n, only 5 scheduled snapshots are retained,manual snap can be created"
@@ -592,11 +641,18 @@ def snap_retention_count_validate(snap_test_params):
         out, rc = client.exec_command(sudo=True, cmd=cmd)
         log.info("Manual snapshot creation suceeded")
     snap_util.remove_snap_retention(
-        client, snap_test_params["path"], ret_val=snap_test_params["retention"]
+        client,
+        snap_test_params["path"],
+        ret_val=snap_test_params["retention"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
     )
     log.info("Perform schedule snaps cleanup")
     snap_util.sched_snap_cleanup(client, snap_path)
-    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+    snap_util.remove_snap_schedule(
+        client,
+        snap_test_params["path"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
     out, rc = client.exec_command(
         sudo=True, cmd=f"rmdir {snap_path}/.snap/manual_test_snap"
     )
@@ -683,7 +739,11 @@ def snap_retention_count_validate(snap_test_params):
     )
 
     log.info(f"Performing test{snap_test_params['test_case']} cleanup")
-    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+    snap_util.remove_snap_schedule(
+        client,
+        snap_test_params["path"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
 
     if "subvol" in snap_test_params.get("test_case"):
         subvol = snap_test_params["subvol_name"]
@@ -704,10 +764,15 @@ def snap_sched_multi_fs(snap_test_params):
     fs_util = snap_test_params["fs_util"]
     client = snap_test_params["client"]
     snap_util.enable_snap_schedule(client)
+    ceph_version = get_ceph_version_from_cluster(client)
     snap_test_params["path"] = "/"
 
     snap_test_params["validate"] = True
-    sched_list = ["1m", "1h", "1d", "1w"]
+    sched_list = (
+        ["1m", "1h", "1d", "1w"]
+        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        else ["1M", "1h", "1d", "1w"]
+    )
 
     test_fail = 0
     mnt_list = ["kernel", "fuse", "nfs"]
@@ -826,7 +891,11 @@ def snap_sched_multi_fs(snap_test_params):
                 "snap-schedule retention add without fs-name failed for unexpected error"
             )
     log.info("Verify retention add with fs-name in multi-fs setup suceeds")
-    snap_test_params["retention"] = "3m1h5d4w"
+    snap_test_params["retention"] = (
+        "3m1h5d4w"
+        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        else "3M1h5d4w"
+    )
     snap_util.create_snap_retention(snap_test_params)
 
     log.info(
@@ -886,7 +955,9 @@ def snap_sched_multi_fs(snap_test_params):
             )
     log.info("Verify deactivate with fs-name in multi-fs setup suceeds")
     snap_util.deactivate_snap_schedule(
-        client, snap_test_params["path"], fs_name=snap_test_params["fs_name"]
+        client,
+        snap_test_params["path"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
     )
 
     log.info(
@@ -961,10 +1032,15 @@ def snap_sched_non_existing_path(snap_test_params):
     snap_util = snap_test_params["snap_util"]
     fs_util = snap_test_params["fs_util"]
     snap_util.enable_snap_schedule(client)
+    ceph_version = get_ceph_version_from_cluster(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/non-existent"
-    sched_list = ["1m"]
-    snap_test_params["retention"] = "3m"
+    sched_list = (
+        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else ["1M"]
+    )
+    snap_test_params["retention"] = (
+        "3m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "3M"
+    )
     snap_test_params["start_time"] = get_iso_time(client)
     snap_test_params["sched"] = sched_list[0]
     mgr_node = snap_test_params["mgr_node"]
@@ -994,7 +1070,11 @@ def snap_sched_non_existing_path(snap_test_params):
     else:
         test_fail = 1
         log.error("Message not logged in mgr module")
-    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+    snap_util.remove_snap_schedule(
+        client,
+        snap_test_params["path"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
     log.info("Create snap-schedule for existing path, verify it works")
     snap_test_params["path"] = "/"
     sched_list = ["1h"]
@@ -1010,7 +1090,11 @@ def snap_sched_non_existing_path(snap_test_params):
     snap_path, post_test_params["export_created"] = fs_util.mount_ceph(
         "fuse", snap_test_params
     )
-    snap_util.remove_snap_schedule(client, snap_test_params["path"])
+    snap_util.remove_snap_schedule(
+        client,
+        snap_test_params["path"],
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+    )
     client.exec_command(sudo=True, cmd=f"umount {snap_path}")
     post_test_params["test_status"] = test_fail
     return post_test_params
@@ -1021,10 +1105,15 @@ def snap_retention_service_restart(snap_test_params):
     snap_util = snap_test_params["snap_util"]
     fs_util = snap_test_params["fs_util"]
     snap_util.enable_snap_schedule(client)
+    ceph_version = get_ceph_version_from_cluster(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
-    sched_list = ["1m"]
-    snap_test_params["retention"] = "3m"
+    sched_list = (
+        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else ["1M"]
+    )
+    snap_test_params["retention"] = (
+        "3m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "3M"
+    )
     svc_list = ["mgr", "mds", "mon"]
     test_fail = 0
     post_test_params = {}

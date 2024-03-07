@@ -3,12 +3,14 @@ import os
 import random
 import string
 import traceback
+from distutils.version import LooseVersion
 from time import sleep
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 from utility.retry import retry
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -47,6 +49,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
+        ceph_version = get_ceph_version_from_cluster(clients[0])
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
@@ -55,7 +58,7 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
-        default_fs = "cephfs_snap"
+        default_fs = "cephfs_snap_1"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -103,10 +106,13 @@ def run(ceph_cluster, **kw):
         )
         client1.exec_command(sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_1}/dir_fuse")
         sanp_schedule_list = ["/dir_kernel", "/dir_fuse"]
+        m_granularity = (
+            "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+        )
         commands = [
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity true",
             "ceph mgr module enable snap_schedule",
-            f"ceph fs snap-schedule add path 1m --fs {default_fs}",
+            f"ceph fs snap-schedule add path 1{m_granularity} --fs {default_fs}",
             f"ceph fs snap-schedule activate path --fs {default_fs}",
         ]
         modified_commands = [
@@ -116,8 +122,18 @@ def run(ceph_cluster, **kw):
         for cmd in modified_commands:
             client1.exec_command(sudo=True, cmd=cmd)
         sleep(300)
-        verify_snap_schedule(client1, f"{fuse_mounting_dir_1}dir_fuse/")
-        verify_snap_schedule(client1, f"{kernel_mounting_dir_1}dir_kernel/")
+        verify_snap_schedule(
+            client1,
+            f"{fuse_mounting_dir_1}dir_fuse/",
+            fs_name=default_fs,
+            schedule=f"1{m_granularity}",
+        )
+        verify_snap_schedule(
+            client1,
+            f"{kernel_mounting_dir_1}dir_kernel/",
+            fs_name=default_fs,
+            schedule=f"1{m_granularity}",
+        )
 
         return 0
     except Exception as e:
@@ -127,8 +143,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean Up in progess")
         commands = [
-            "ceph fs snap-schedule deactivate path --fs cephfs_snap",
-            "ceph fs snap-schedule remove path --fs cephfs_snap",
+            f"ceph fs snap-schedule deactivate path --fs {default_fs}",
+            f"ceph fs snap-schedule remove path --fs {default_fs}",
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity false",
         ]
         modified_commands = [
@@ -144,7 +160,7 @@ def run(ceph_cluster, **kw):
             client1.exec_command(sudo=True, cmd=cmd)
 
 
-def verify_snap_schedule(client, path):
+def verify_snap_schedule(client, path, fs_name, schedule):
     out, rc = client.exec_command(sudo=True, cmd=f"ls -lrt {path}.snap/ | wc -l")
     log.info(out)
     log.info(int(out))
@@ -153,19 +169,20 @@ def verify_snap_schedule(client, path):
     schedule_path = os.path.basename(os.path.normpath(path))
     out, rc = client.exec_command(
         sudo=True,
-        cmd=f"ceph fs snap-schedule list /{schedule_path} --recursive --fs cephfs_snap",
+        cmd=f"ceph fs snap-schedule list /{schedule_path} --recursive --fs {fs_name}",
     )
     log.info("snap-schedule list")
     log.info(out)
-    if "1M" not in out:
+
+    if schedule not in out:
         raise CommandFailed("Snap Schedule is not getting listed")
     out, rc = client.exec_command(
         sudo=True,
-        cmd=f"ceph fs snap-schedule status /{schedule_path} -f json --fs cephfs_snap",
+        cmd=f"ceph fs snap-schedule status /{schedule_path} -f json --fs {fs_name}",
     )
     log.info("snap-schedule Status")
     log.info(out)
     schedule_ls = json.loads(out)
     log.info(schedule_ls[0]["schedule"])
-    if schedule_ls[0]["schedule"] != "1M":
+    if schedule_ls[0]["schedule"] != schedule:
         raise CommandFailed("Snap Schedule is not returning status")
