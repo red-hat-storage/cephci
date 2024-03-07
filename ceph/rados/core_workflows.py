@@ -511,6 +511,8 @@ class RadosOrchestrator:
             cmd = f"{cmd} --pg_num_max {kwargs['pg_num_max']}"
         if kwargs.get("ec_profile_name"):
             cmd = f"{cmd} erasure {kwargs['ec_profile_name']}"
+        if kwargs.get("crush_rule"):
+            cmd = f"{cmd} {kwargs['crush_rule']}"
         if kwargs.get("bulk"):
             cmd = f"{cmd} --bulk"
         try:
@@ -534,7 +536,6 @@ class RadosOrchestrator:
             "erasure_code_use_overwrites": f"ceph osd pool set {pool_name} "
             f"allow_ec_overwrites {kwargs.get('erasure_code_use_overwrites')}",
             "disable_pg_autoscale": f"ceph osd pool set {pool_name} pg_autoscale_mode off",
-            "crush_rule": f"sudo ceph osd pool set {pool_name} crush_rule {kwargs.get('crush_rule')}",
             "pool_quota": f"ceph osd pool set-quota {pool_name} {kwargs.get('pool_quota')}",
         }
         for key in kwargs:
@@ -550,6 +551,27 @@ class RadosOrchestrator:
         time.sleep(5)
         log.info(f"Created pool {pool_name} successfully")
         return True
+
+    def check_health_warning(self, warning: str):
+        """
+        Method to check if Warning passed is generated on cluster
+        Args:
+            warning: name of the health warning that should be checked
+        Returns (bool) :
+            True -> Warning present on the cluster
+            False -> Warning not present on the cluster
+        """
+        status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
+        ceph_health_status = list(status_report["health"]["checks"].keys())
+        log.debug(f"Ceph report: \n\n {status_report} \n\n")
+        if warning in ceph_health_status:
+            log.info(f"warning: {warning}  present on the cluster")
+            log.info(
+                f"Warning: {warning} generated on the cluster : {ceph_health_status}"
+            )
+            return True
+        log.info(f"Warning: {warning} not present on the cluster")
+        return False
 
     def change_recovery_threads(self, config: dict, action: str):
         """
