@@ -4,7 +4,6 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from cli.exceptions import CloudProviderError, ConfigError, UnexpectedStateError
-from cli.utilities.utils import load_config
 from cli.utilities.waiter import WaitUntil
 from utility.log import Log
 
@@ -16,6 +15,35 @@ STATE_PENDING = "pending"
 STATE_RUNNING = "running"
 STATE_AVAILABLE = "available"
 STATE_DESTROY = "destroy"
+
+CLOUD_DATA = """
+    ssh_pwauth: true
+    disable_root: false
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+
+    chpasswd:
+      list: |
+        root:passwd
+        cephuser:pass123
+      expire: false
+
+    runcmd:
+      - sed -i -e 's/^Defaults\\s\\+requiretty/# \0/' /etc/sudoers
+      - hostnamectl set-hostname $(hostname -s)
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - touch /ceph-qa-ready
+
+    final_message: "Ready for ceph qa testing"
+"""
 
 
 class Openstack:
@@ -82,7 +110,6 @@ class Openstack:
         Kwargs:
             image (str): Image to be used for node
             size (int): Node root volume size
-            cloud_data (dict):
             networks (list|tuple): Networks to be attached to node
         """
         try:
@@ -90,7 +117,7 @@ class Openstack:
                 name=name,
                 image=config.get("image"),
                 size=config.get("size"),
-                ex_userdata=config.get("cloud_data"),
+                ex_userdata=CLOUD_DATA,
                 networks=config.get("networks"),
             )
         except Exception as e:
@@ -759,36 +786,3 @@ class Openstack:
             self.get_flavors()
 
         return self.get_flavor_by_id(self._flavors.get(name))
-
-    def get_inventory(self, inventory, image=None, vmsize=None, network=None):
-        """Read node configs"""
-        # Load inventory file
-        inventory = load_config(inventory).get("instance")
-
-        # Check for image details
-        if not image:
-            image = inventory.get("create").get("image-name")
-            if not image:
-                raise ConfigError(
-                    "Mandatory parameter 'image' not available in inventory or parameter"
-                )
-
-        # Check for instance details
-        if not vmsize:
-            vmsize = inventory.get("create").get("vm-size")
-            if not vmsize:
-                raise ConfigError(
-                    "Mandatory parameter 'vmsize' not provided in inventory or parameter"
-                )
-
-        # Check for instance config
-        cloud_data = inventory.get("setup")
-        if not cloud_data:
-            raise ConfigError("Mandatory parameter 'setup' not provided in inventory")
-
-        return {
-            "image": image,
-            "size": vmsize,
-            "cloud_data": cloud_data,
-            "networks": network,
-        }

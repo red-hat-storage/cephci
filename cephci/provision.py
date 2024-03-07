@@ -6,11 +6,16 @@ from utils.utility import set_logging_env
 from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
+from cli.exceptions import ConfigError
 from cli.utilities.utils import load_config
 from utility.log import Log
 
+# Set logging env
 LOG = Log(__name__)
 
+# Set default configs
+DEFAULT_VMSIZE = "ci.standard.medium"
+DEFAULT_IMAGE = "{}.0-x86_64-ga-latest"
 
 doc = """
 Utility to provision cluster on cloud
@@ -18,8 +23,9 @@ Utility to provision cluster on cloud
     Usage:
         cephci/provision.py --cloud-type <CLOUD>
             (--global-conf <YAML>)
-            (--inventory <YAML>)
-            (--prefix <STR>)
+            (--platform <STR>)
+            [--prefix <STR>]
+            [--owner <STR>]
             [--cluster-conf <YAML>]
             [--image <STR>]
             [--vmsize <STR>]
@@ -34,8 +40,9 @@ Utility to provision cluster on cloud
         -h --help               Help
         --cloud-type <CLOUD>    Cloud type [openstack|ibmc|baremetal]
         --global-conf <YAML>    Global config file with node details
-        --inventory <YAML>      Cluster details config
+        --platform <STR>        Node OS Type & Version
         --prefix <STR>          Resource name prefix
+        --owner <STR>           Baremetal node owner
         --image <STR>           Cloud images to be used for node
         --network <STR>         Cloud network to be attached to node
         --vmsize <STR>          Cloud image flavor
@@ -82,15 +89,35 @@ def provision_node(name, cloud, config, node, timeout=600, interval=10):
     LOG.info(f"Node '{node.name}' with id '{node.id}' provisioned successfully")
 
     # Attach volumes provisioned to node
-    node.attach_volume(config.get("volumes"))
+    if str(cloud) == "openstack":
+        node.attach_volume(config.get("volumes"))
 
     return True
 
 
-def provision(cloud, prefix, global_configs, node_configs, timeout=600, interval=10):
+def provision(
+    cloud,
+    prefix,
+    clusters,
+    platform,
+    image=None,
+    vmsize=None,
+    networks=None,
+    timeout=600,
+    interval=10,
+):
     """Provision cluster with global configs"""
+    # Get platform details
+    _type, _version = platform.split("-")
+    configs = {
+        "os_type": _type,
+        "os_version": _version,
+        "image": image,
+        "size": vmsize,
+    }
+
     # Create cluster configs
-    for _c in global_configs:
+    for _c in clusters:
         cluster = _c.get("ceph-cluster")
         name = cluster.get("name")
 
@@ -100,27 +127,35 @@ def provision(cloud, prefix, global_configs, node_configs, timeout=600, interval
                 continue
 
             # Create node name
-            node_name = f"{name}-{prefix}-{key}"
+            node_name = ""
+            if str(cloud) == "openstack":
+                node_name = f"{name}-{prefix}-{key}"
+            elif str(cloud) == "baremetal":
+                node_name = cluster.get(key).get("hostname")
 
             # Get node details
             node = cluster.get(key)
-            if not node_configs.get("networks"):
-                node_configs["networks"] = node.get("networks")
+            if not networks:
+                configs["networks"] = node.get("networks")
 
-            provision_node(node_name, cloud, node_configs, node, timeout, interval)
+            provision_node(node_name, cloud, configs, node, timeout, interval)
 
         LOG.info(f"Cluster '{name}' provisioned successfully")
 
 
 if __name__ == "__main__":
+    # Set configs
+    cloud_configs, global_configs = {}, []
+
     # Set user parameters
     args = docopt(doc)
 
     # Get user parameters
     cloud = args.get("--cloud-type")
     global_conf = args.get("--global-conf")
-    inventory = args.get("--inventory")
+    platform = args.get("--platform")
     prefix = args.get("--prefix")
+    owner = args.get("--owner")
     network = args.get("--network")
     image = args.get("--image")
     vmsize = args.get("--vmsize")
@@ -135,22 +170,47 @@ if __name__ == "__main__":
     # Read configuration for cloud
     get_configs(config)
 
-    # Read configurations
-    cloud_configs = get_cloud_credentials(cloud)
-    global_configs = load_config(global_conf).get("globals")
+    # Check for mandatory OSP paramters
+    if cloud == "openstack":
+        if not prefix:
+            raise ConfigError("Mandatory parameter prefix are not provided")
 
-    # Connect to cloud
-    cloud = CloudProvider(cloud, **cloud_configs)
+        vmsize = vmsize if vmsize else DEFAULT_VMSIZE
+        image = image if image else DEFAULT_IMAGE.format(platform.upper())
+
+    # Check for mandatory baremetal paramters
+    elif cloud == "baremetal":
+        if not owner:
+            raise ConfigError("Mandatory owner are not provided")
+
+        # Set cloud owner
+        cloud_configs["owner"] = owner
+
+    # Read cloud configurations
+    cloud_configs.update(get_cloud_credentials(cloud))
+
+    # Read cluster configurations
+    global_configs = load_config(global_conf).get("globals")
 
     # Get timeout and interval
     timeout, retry = cloud_configs.pop("timeout"), cloud_configs.pop("retry")
     interval = int(timeout / retry) if timeout and retry else None
 
-    # Get node configs based on inventory
-    node_configs = cloud.get_inventory(inventory, image, vmsize, network)
+    # Connect to cloud
+    cloud = CloudProvider(cloud, **cloud_configs)
 
     # Provision cluster
-    provision(cloud, prefix, global_configs, node_configs, timeout, interval)
+    provision(
+        cloud,
+        prefix,
+        global_configs,
+        platform,
+        image,
+        vmsize,
+        network,
+        timeout,
+        interval,
+    )
 
     # Collect cluster config
     data = collect_conf(cloud, prefix, global_configs)

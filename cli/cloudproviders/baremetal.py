@@ -3,7 +3,6 @@ import socket
 
 from cli.connectible.remote import Remote
 from cli.exceptions import CloudProviderError, ConfigError, UnexpectedStateError
-from cli.utilities.utils import load_config
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -263,29 +262,3 @@ class Baremetal:
             raise UnexpectedStateError(f"Failed to reimage node {name}")
 
         return True
-
-    def get_inventory(self):
-        """Read node configs"""
-        # Load inventory file
-        inventory = load_config(self._inventory)
-
-        # Get versions id
-        version_id = inventory.get("version_id")
-
-        # Get id
-        _id = inventory.get("id")
-
-        # Check for image details
-        nodes = inventory.get("instance", {}).get("nodes")
-        if not nodes:
-            raise ConfigError("Mandatory parameter 'nodes' not available in inventory")
-
-        # Check for instance config
-        cloud_data = inventory.get("setup")
-
-        return {
-            "version_id": version_id,
-            "id": _id,
-            "nodes": nodes,
-            "cloud_data": cloud_data,
-        }
