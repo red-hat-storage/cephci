@@ -1,7 +1,7 @@
 import json
 
 from cli.connectible.remote import Remote
-from cli.exceptions import ConfigError, UnexpectedStateError
+from cli.exceptions import CloudProviderError, ConfigError, UnexpectedStateError
 from cli.utilities.utils import load_config
 from utility.log import Log
 
@@ -11,20 +11,13 @@ LOG = Log(__name__)
 class Baremetal:
     """Insterface for Baremetal operations"""
 
-    def __init__(
-        self,
-        server,
-        env,
-        owner,
-        ssh_key=None,
-        username=None,
-        password=None,
-        inventory=None,
-        timeout=600,
-    ):
+    def __init__(self, timeout=600, **config):
         """Initialize instance using provided details
 
         Args:
+            timeout (int): Socket timeout
+
+        **Kwargs:
             server (str): Server IP or Hostname
             env (str): Environment where teuthology is setup
             owner (str): Owner of nodes
@@ -33,18 +26,34 @@ class Baremetal:
             username (str): Name of user to be connected
             password (str): Password of user
             inventory (str): Octa lab hdd inventory
-            timeout (int): Socket timeout
         """
-        # Set teuthology hostname configs
-        self._env = env.strip("/")
-        self._owner = owner
-        self._timeout = timeout
+        try:
+            LOG.info(
+                f"Connecting to server {config['server']} for user {config['username']}"
+            )
+            # Set teuthology hostname configs
+            self._env = config["env"].strip("/")
+            self._owner = config["owner"]
+            self._timeout = timeout
 
-        # Set node inventory
-        self._inventory = inventory
+            # Set node inventory
+            self._inventory = config.get("inventory")
 
-        # Connect to teuthology node
-        self._client = Remote(server, ssh_key, username, password)
+            # Connect to teuthology node
+            self._client = Remote(
+                config["server"],
+                config.get("ssh_key"),
+                config["username"],
+                config.get("password"),
+            )
+        except KeyError:
+            msg = "Insufficient config related to Cloud provider"
+            LOG.error(msg)
+            raise ConfigError(msg)
+
+        except Exception as e:
+            LOG.error(e)
+            raise CloudProviderError(e)
 
     def _teuthology_lock(
         self,
@@ -182,7 +191,7 @@ class Baremetal:
         Args:
             name (str): Name of node
         """
-        return self.node_details_by_name(name=name).get("name")
+        return self.get_node_details_by_name(name=name).get("name")
 
     def get_node_state_by_name(self, name):
         """Get node state
@@ -219,30 +228,36 @@ class Baremetal:
         # TODO (vamahaja): Add steps to get volumes attached
         pass
 
-    def create_node(self, name, os_type, os_version, interval=30, timeout=1800):
+    def create_node(self, name, interval=30, timeout=1800, **config):
         """Configure node with OS
 
         Args:
             name (str): Name of node
-            os_type (str): OS type
-            os_version (str): OS version
             inverval (int): Interval to retry
             timeout (int): Retry timeout
+
+        **Kwargs:
+            os_type (str): OS type
+            os_version (str): OS version
         """
         # Reimage node
-        self._teuthology_reimage(
-            name=name,
-            os_type=os_type,
-            os_version=os_version,
-            interval=interval,
-            timeout=timeout,
-        )
+        try:
+            self._teuthology_reimage(
+                name=name,
+                os_type=config["os_type"],
+                os_version=config["os_version"],
+                interval=interval,
+                timeout=timeout,
+            )
+        except Exception as e:
+            LOG.error(e)
+            raise CloudProviderError(e)
 
         # Validate node details
         node = self.get_node_details_by_name(name=name)
         if not (
-            node.get("os_type") == os_type
-            and node.get("os_version") == str(os_version)
+            node.get("os_type") == config.get("os_type")
+            and node.get("os_version") == str(config.get("os_version"))
             and node.get("up")
         ):
             raise UnexpectedStateError(f"Failed to reimage node {name}")

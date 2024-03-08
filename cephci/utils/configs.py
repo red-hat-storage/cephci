@@ -98,34 +98,40 @@ def get_cloud_credentials(cloud):
     Args:
         cloud (str): Cloud type
     """
-    _dict = {}
+    _dict, msg = {}, f"Loaded {cloud} cloud details for server"
     log.info(f"Loading cloud credentials for '{cloud}'")
     try:
+        # Get configs from file
         _cloud = _get_credentials()["cloud"]
         _server = _cloud[cloud]
 
+        # Get baremetal configs
         if cloud == "baremetal":
             server = _dict["server"] = _server["server"]
             _dict["env"] = _server["env"]
-            _dict["username"] = _server.get("username")
-            _dict["password"] = _server.get("password")
             _dict["ssh_key"] = _server.get("ssh_key")
 
-            log.info(f"Loaded {cloud} cloud details for server - {server}")
+            msg += server
 
+        # Get openstack configs
         elif cloud == "openstack":
-            _dict["username"] = _server["username"]
-            _dict["password"] = _server["password"]
             _authurl = _dict["auth-url"] = _server["auth-url"]
             _dict["auth-version"] = _server["auth-version"]
             _dict["tenant-name"] = _server["tenant-name"]
             _dict["service-region"] = _server["service-region"]
             _dict["domain"] = _server["domain"]
             _dict["tenant-domain-id"] = _server["tenant-domain-id"]
-            _dict["timeout"] = int(_server.get("timeout", 180))
-            _dict["retry"] = int(_server.get("retry", 18))
 
-            log.info(f"Loaded {cloud} cloud details for server - {_authurl}")
+            msg += _authurl
+
+        # Set common configs
+        _dict["username"] = _server.get("username")
+        _dict["password"] = _server.get("password")
+        _dict["timeout"] = int(_server.get("timeout", 1800))
+        _dict["retry"] = int(_server.get("retry", 60))
+
+        # DEBUG
+        log.info(msg)
     except KeyError:
         raise ConfigError(f"Insufficient config for '{cloud}' in cloud")
 

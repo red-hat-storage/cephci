@@ -103,6 +103,35 @@ class Node:
 
         return {"image": _image, "size": _size, "networks": [_network]}
 
+    def _get_baremetal_resources(self, **config):
+        """Validate baremetal resources
+
+        Args:
+            os_type (str): OS type
+            os_version (str): OS version
+        """
+        # Check for os type
+        if not config.get("os_type"):
+            msg = "OS type is not available"
+            log.error(msg)
+            raise ResourceNotFoundError(msg)
+
+        # Check for os version
+        if not config.get("os_version"):
+            msg = "OS version is not available"
+            log.error(msg)
+            raise ResourceNotFoundError(msg)
+
+        # Unlock node from user
+        if not self.cloud.unlock_node(self._name):
+            msg = f"Failed to unlock node {self._name}"
+            log.error(msg)
+            raise ResourceNotFoundError(msg)
+
+        # Relock node with owner
+        else:
+            self.cloud.lock_node(self._name)
+
     def create(self, timeout=300, interval=10, **configs):
         """Create node on cloud
 
@@ -121,6 +150,9 @@ class Node:
         # Get Openstack resources from Openstack
         if str(self.cloud) == "openstack":
             configs.update(self._get_osp_resources(**configs))
+
+        elif str(self.cloud) == "baremetal":
+            self._get_baremetal_resources(**configs)
 
         # Create vm
         self.cloud.create_node(
