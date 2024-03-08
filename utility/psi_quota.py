@@ -7,24 +7,33 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict
 
+import yaml
 from docopt import docopt
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
 
 from ceph.ceph import CommandFailed
-from run import load_file
 
 doc = """
 Utility to notify resource usage in RHOS-D.
 
     Usage:
-        rhos_quota.py --osp-cred <cred-file>
-        rhos_quota.py (-h | --help)
+        psi_quota.py --osp-cred <cred-file>
+        psi_quota.py (-h | --help)
 
     Options:
         -h --help           Shows the command usage
         --osp-cred <file>   API Credential file to access RHOS cloud.
 """
+
+
+def load_file(file_name):
+    """Retrieve yaml data content from file."""
+    file_path = os.path.abspath(file_name)
+    with open(file_path, "r") as conf_:
+        content = yaml.safe_load(conf_)
+
+    return content
 
 
 def execute(cmd, fail_ok=False, merge_stderr=False):
@@ -89,7 +98,7 @@ def map_userto_instances(os_nodes, os_cred):
             if state == "ACTIVE":
                 os_instance_usage_detail_json = execute(
                     cmd=openstack_basecmd(**os_cred)
-                    + f" flavor show -c ram -c vcpus -c disk {flavor.split()[0]} -f json"
+                    + f" flavor show -c ram -c vcpus -c disk {flavor['name']} -f json"
                 )
                 username = user_detail[os_node_detail_json["user_id"]]
                 if instance_detail.get(username):
@@ -123,6 +132,13 @@ def map_userto_instances(os_nodes, os_cred):
         except CommandFailed as cf:
             print(f"Openstack command failed with {cf.args[-1]}")
     return instance_detail
+
+
+def get_limit(resource_name, json_data):
+    for item in json_data:
+        if item["Resource"] == resource_name:
+            return item["Limit"]
+    return None
 
 
 def get_complete_quota(instance_detail, os_cred, project_name):
@@ -181,10 +197,14 @@ def get_complete_quota(instance_detail, os_cred, project_name):
         os_quota_json = execute(
             cmd=openstack_basecmd(**os_cred) + " quota show -f json"
         )
-        ram_percent = round((total_ram_used * 100) / (os_quota_json["ram"] / 1024), 2)
-        vcpu_percent = round((total_vcpus_used * 100) / os_quota_json["cores"], 2)
+        ram_percent = round(
+            (total_ram_used * 100) / (get_limit("ram", os_quota_json) / 1024), 2
+        )
+        vcpu_percent = round(
+            (total_vcpus_used * 100) / get_limit("cores", os_quota_json), 2
+        )
         storage_percent = round(
-            (total_volume_used * 100) / (os_quota_json["gigabytes"]), 2
+            (total_volume_used * 100) / (get_limit("gigabytes", os_quota_json)), 2
         )
         quota_usage_dict = {
             "Project Name": project_name,
