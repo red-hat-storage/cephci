@@ -9,6 +9,5 @@
         docker: "{{ docker | default(False) }}"
         image: "{{ image | default(False) }}"
         mon_ip: "{{ mon_ip }}"
-        dashboard: "{{ dashboard | default(True) }}"
         monitoring: "{{ monitoring | default(False) }}"
         firewalld: "{{ firewalld | default(False) }}"

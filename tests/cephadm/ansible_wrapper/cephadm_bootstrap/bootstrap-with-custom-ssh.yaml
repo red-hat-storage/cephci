@@ -8,7 +8,6 @@
       cephadm_bootstrap:
         mon_ip: "{{ mon_ip }}"
         image: "{{ image | default(False) }}"
-        dashboard: "{{ dashboard | default(True) }}"
         monitoring: "{{ monitoring | default(False) }}"
         firewalld: "{{ firewalld | default(False) }}"
         ssh_user: "{{ ssh_user }}"
