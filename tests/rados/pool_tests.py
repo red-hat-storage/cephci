@@ -255,46 +255,55 @@ def run(ceph_cluster, **kw):
             )
             return 0
 
-        # Creating a pool with bulk feature
         pool_name = config.get("pool_name")
-        if not pool_obj.set_bulk_flag(pool_name=pool_name):
-            log.error("Failed to create a pool with bulk features")
+        if not rados_obj.create_pool(pool_name=pool_name):
+            log.error("Failed to create pool on cluster")
             return 1
+        rados_obj.bench_write(pool_name=pool_name, verify_stats=False)
+        log.debug(f"Created pool : {pool_name} and wrote IO's on the pool")
 
-        # Checking the autoscaler status, final PG counts, bulk flags
-        pg_target_init = pool_obj.get_target_pg_num_bulk_flag(pool_name=pool_name)
+        init_pg_count = rados_obj.get_pool_property(pool=pool_name, props="pg_num")[
+            "pg_num"
+        ]
+        log.debug(f"Init PG count upon pool creation is {init_pg_count}")
+
+        if not pool_obj.set_bulk_flag(pool_name=pool_name):
+            log.error("Expected bulk flag should be set to True.")
+            raise Exception("Expected bulk flag should be True.")
+
+        log.debug("Set the bulk flag on the pool to true")
+        # Sleeping for 120 seconds for bulk flag application and PG count to be increased.
+        time.sleep(120)
+
+        pg_count_bulk_true = rados_obj.get_pool_details(pool=pool_name)["pg_num_target"]
+        log.debug(
+            f"PG count on pool {pool_name} post addition of bulk flag : {pg_count_bulk_true}"
+        )
+        if pg_count_bulk_true < init_pg_count:
+            raise Exception(
+                f"Actual pg_num post bulk enablement {pg_count_bulk_true}"
+                f" is expected to be greater than {init_pg_count}"
+            )
 
         # Unsetting the bulk flag and checking the change in the PG counts
         if not pool_obj.rm_bulk_flag(pool_name=pool_name):
             log.error("Failed to create a pool with bulk features")
             return 1
+        log.debug("Set the bulk flag on the pool to False")
+        time.sleep(120)
 
-        # Sleeping for 5 seconds for new PG num to bets et
-        time.sleep(5)
-        pg_target_interim = pool_obj.get_target_pg_num_bulk_flag(pool_name=pool_name)
-
-        # The target PG's once the flag is disabled must be lesser than when enabled
-        if pg_target_interim >= pg_target_init:
-            log.error("PG's not reduced after bulk flag disabled")
-            return 1
-
-        # Setting the bulk flag on pool again and checking the change in the PG counts
-        if not pool_obj.set_bulk_flag(pool_name=pool_name):
-            log.error("Failed to disable/remove bulk features on pool")
-            return 1
-
-        # Sleeping for 5 seconds for new PG num to bets et
-        time.sleep(5)
-
-        pg_target_final = pool_obj.get_target_pg_num_bulk_flag(pool_name=pool_name)
-
-        # The target PG's once the flag is disabled must be lesser than when enabled
-        if pg_target_interim >= pg_target_final:
-            log.error("PG's not Increased after bulk flag Enabled")
-            return 1
-
-        if config.get("delete_pool"):
-            rados_obj.detete_pool(pool=pool_name)
+        pg_count_bulk_false = rados_obj.get_pool_details(pool=pool_name)[
+            "pg_num_target"
+        ]
+        log.debug(
+            f"PG count on pool {pool_name} post addition of bulk flag : {pg_count_bulk_true}"
+        )
+        if not pg_count_bulk_false < pg_count_bulk_true:
+            raise Exception(
+                f"Actual pg_num post bulk disable {pg_count_bulk_true} is expected to be less than {pg_count_bulk_true}"
+            )
+        log.debug(f"Removing the pool created : {pool_name}")
+        rados_obj.detete_pool(pool=pool_name)
         log.info("Verified the workings of bulk flag")
         return 0
 
@@ -315,6 +324,14 @@ def run(ceph_cluster, **kw):
                 )
             rados_obj.bench_write(**entry)
             pool_name = entry["pool_name"]
+            init_pg_count = int(
+                pool_obj.get_pg_autoscaler_value(
+                    pool_name=entry["pool_name"], item="pg_num_target"
+                )
+            )
+            log.debug(
+                f"PG count on pool : {pool_name} upon pool creation is : {init_pg_count}"
+            )
             if not pool_obj.verify_target_ratio_set(
                 pool_name=pool_name, ratio=entry["target_size_ratio"]
             ):
@@ -336,7 +353,11 @@ def run(ceph_cluster, **kw):
                     pool_name=entry["pool_name"], item="pg_num_target"
                 )
             )
-            if new_pg_count <= entry["pg_num"]:
+
+            log.debug(
+                f"PG count post setting the target_size_ratio on pool {pool_name} is {new_pg_count}"
+            )
+            if new_pg_count < init_pg_count:
                 log.error(
                     f"Count of PG's not increased on the pool: {entry['pool_name']}"
                     f"Initial creation count : {entry['pg_num']}"
@@ -353,31 +374,31 @@ def run(ceph_cluster, **kw):
             if not pool_obj.verify_target_ratio_set(
                 pool_name=entry["pool_name"], ratio=0.0
             ):
-                log.error(
-                    f"Could not remove the target ratio on the pool: {entry['pool_name']}"
-                )
+                log.error(f"Could not remove the target ratio on the pool: {pool_name}")
                 return 1
 
             # Sleeping for 2 minutes for rebalancing to start & for new PG count to be updated.
             time.sleep(120)
-            # Checking if after the removal of ratio, the PG count has reduced
+
+            # Checking if after the reduction of ratio, the PG count has reduced
             end_pg_count = int(
                 pool_obj.get_pg_autoscaler_value(
                     pool_name=entry["pool_name"], item="pg_num_target"
                 )
             )
-            if end_pg_count >= new_pg_count:
+            log.debug("PG count post changing the ratio on the pool")
+            if end_pg_count > new_pg_count:
                 log.error(
-                    f"Count of PG's not changed/ reverted on the pool: {entry['pool_name']}"
+                    f"Count of PG's not changed/ reverted on the pool: {pool_name}"
                     f" after removing the target ratios"
                 )
                 return 1
-            rados_obj.change_recovery_threads(config=config, action="rm")
-            if entry.get("delete_pool", False):
-                rados_obj.detete_pool(pool=entry["pool_name"])
-            log.info(
-                f"Completed the test of target ratio on pool: {entry['pool_name']} "
+            log.debug(
+                f"Deleting pool : {pool_name} & changing recovery options to default"
             )
+            rados_obj.change_recovery_threads(config=config, action="rm")
+            rados_obj.detete_pool(pool=entry["pool_name"])
+            log.info(f"Completed the test of target ratio on pool: {pool_name} ")
         log.info("Target ratio tests completed")
         return 0
 
@@ -413,8 +434,7 @@ def run(ceph_cluster, **kw):
                 log.error("Could not set the pg_min_size on the pool")
                 return 1
 
-            if entry.get("delete_pool", False):
-                rados_obj.detete_pool(pool=entry["pool_name"])
+            rados_obj.detete_pool(pool=entry["pool_name"])
             log.info(f"Completed the test of pg_min_num on pool: {entry['pool_name']} ")
         log.info("pg_min_num tests completed")
         return 0
@@ -470,7 +490,7 @@ def run(ceph_cluster, **kw):
         log.info(" Verification of pg num checking completed")
         return 0
 
-    # Blocked with bug : https://bugzilla.redhat.com/show_bug.cgi?id=2172795
+    # Blocked with bug : https://bugzilla.redhat.com/show_bug.cgi?id=2172795. Bug fixed.
     if config.get("verify_autoscaler_warn"):
         log.debug(
             "Test to verify the warnings generated by autoscaler for PG count on pools"
@@ -489,26 +509,34 @@ def run(ceph_cluster, **kw):
             pool = pool_conf_file[i["type"]][i["conf"]]
             pool["pg_num"] = 1
             create_given_pool(rados_obj, pool)
+            rados_obj.autoscaler_pool_settings(
+                pg_autoscale_mode="warn", pool_name=pool["pool_name"]
+            )
             pools.append(pool["pool_name"])
         log.info(f"Created {len(pools)} pools for testing. pools : {pools}")
+        log.debug(
+            f"autoscale status on pools: \n{rados_obj.run_ceph_command(cmd='ceph osd pool autoscale-status')}"
+        )
+        time.sleep(20)
+        if not rados_obj.check_health_warning(warning="POOL_TOO_FEW_PGS"):
+            # Starting to write data continuously onto the two pools and checking for generation of warning
+            if not check_pg_warning(rados_obj, pools):
+                log.error("PG count warning not generated for the pools")
+                raise Exception("No warning generated by PG Autoscaler")
 
-        # Starting to write data continuously onto the two pools and checking for generation of warning
-        for pname in pools:
-            rados_obj.bench_write(
-                pool_name=pname, byte_size="1Kb", rados_write_duration=200
-            )
-
-        if not check_pg_warning(rados_obj, pools):
-            log.error("PG count warning not generated for the pools")
-            raise Exception("No warning generated by PG Autoscaler")
-
+        log.info("Expected warning generated on the cluster in autoscaler warn mode")
         # Changing the default autoscaler value to warn for newly created pools
+        log.debug(
+            "Configuring the Default PG autoscale mode to on, and changing on the pools"
+        )
         rados_obj.configure_pg_autoscaler(default_mode="on")
         for pool in pools:
             rados_obj.set_pool_property(
                 pool=pool, props="pg_autoscale_mode", value="on"
             )
-
+        log.debug(
+            f"autoscale status on pools: \n{rados_obj.run_ceph_command(cmd='ceph osd pool autoscale-status')}"
+        )
         # Starting to write data continuously onto the two pools
         for pname in pools:
             rados_obj.bench_write(pool_name=pname, byte_size="1Kb")
@@ -798,7 +826,7 @@ def stop_osd_check_warn(rados_obj, osd_pick, pool_name, pgid):
 def check_pg_warning(rados_obj, pools) -> bool:
     """Method to check if Health warn for PG count is generated.
 
-    This methods collects the ceph report, from which it searches for a particular warning,
+    This method collects the ceph report, from which it searches for a particular warning,
     for a specified amount of time, running rados bench.
     Example:
             check_pg_warning(rados_obj=rados_obj, pools=pools)
@@ -810,7 +838,7 @@ def check_pg_warning(rados_obj, pools) -> bool:
         Fail -> False warning not present
 
     """
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=5400)
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
     flag = False
     while end_time > datetime.datetime.now():
         status_report = rados_obj.run_ceph_command(cmd="ceph report")

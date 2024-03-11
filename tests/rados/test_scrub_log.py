@@ -1,7 +1,6 @@
 """
 Module to Verify if PG scrub & deep-scrub messages are logged into the OSD logs
 """
-import datetime
 import re
 import time
 
@@ -9,7 +8,6 @@ import yaml
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
 
@@ -26,7 +24,6 @@ def run(ceph_cluster, **kw) -> int:
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
-    pool_obj = PoolFunctions(node=cephadm)
     pool_configs = config["pool_configs"]
     pool_configs_path = config["pool_configs_path"]
     installer = ceph_cluster.get_nodes(role="installer")[0]
@@ -43,42 +40,46 @@ def run(ceph_cluster, **kw) -> int:
         with open(pool_configs_path, "r") as fd:
             pool_conf_file = yaml.safe_load(fd)
 
-        # Disabling recovery, back-fill on the cluster
-        rados_obj.change_recovery_flags(action="set")
-
         pools = []
         acting_sets = {}
         for i in pool_configs:
             pool = pool_conf_file[i["type"]][i["conf"]]
             create_given_pool(rados_obj, pool)
+            rados_obj.bench_write(
+                pool_name=pool["pool_name"],
+                max_objs=50,
+                check_ec=False,
+                rados_write_duration=20,
+            )
             pools.append(pool["pool_name"])
 
         log.info(f"Created {len(pools)} pools for testing. pools : {pools}")
 
         # Identifying 1 PG from each pool to initiate scrubbing
+        log.debug(
+            "Checking the states of PGs before scrub/deep-scrub and selecting a PG which is clean"
+        )
         for pool in pools:
-            pool_id = pool_obj.get_pool_id(pool_name=pool)
-            pgid = f"{pool_id}.0"
-            pg_set = rados_obj.get_pg_acting_set(pg_num=pgid)
-            acting_sets[pgid] = pg_set
+            pool_pgids = rados_obj.get_pgid(pool_name=pool)
+            for pgid in pool_pgids:
+                log.debug(f"Checking state of PG: {pgid}")
+                pg_report = rados_obj.check_pg_state(pgid=pgid)
+                if "active+clean" in pg_report:
+                    pg_set = rados_obj.get_pg_acting_set(pg_num=pgid)
+                    acting_sets[pgid] = pg_set
+                    log.debug(f"PG selected for pool : {pool}")
+                    break
+                log.debug(
+                    f"pg {pgid} not in clean state, Current PG status : {pg_report}"
+                    f" Checking another PG to initiate scrubbing tests"
+                )
+
+        # Completed selecting the PGs
         log.info(f"Identified Acting set of OSDs for the Pools. {acting_sets}")
 
         log.debug(
             "initiating Scrubbing on PGs and checking if logs are generated in OSD"
         )
-        log.debug("Checking the states of PGs before scrub")
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
-        while end_time > datetime.datetime.now():
-            for pgid in acting_sets.keys():
-                log.debug(
-                    f"Checking OSD logs of PG: {pgid}. OSDs : {acting_sets[pgid]}"
-                )
-                pg_report = rados_obj.check_pg_state(pgid=pgid)
-                if "active+clean" in pg_report:
-                    break
-                log.debug(f"pg {pgid} not in clean state, waiting for 10 seconds")
-                time.sleep(10)
-
         # Testing logs upon scrub operation
         if not check_scrub_workflow(
             installer=installer,
@@ -89,6 +90,8 @@ def run(ceph_cluster, **kw) -> int:
             log.error("Could not verify logging for scrubs")
             return 1
 
+        time.sleep(2)
+        log.info("Verified the presence of logging for ")
         # Testing logs upon deep-scrub operation
         if not check_scrub_workflow(
             installer=installer,
@@ -100,13 +103,16 @@ def run(ceph_cluster, **kw) -> int:
             return 1
 
         log.info("Completed verification of logging upon scrubs")
-        # Disabling recovery, back-fill on the cluster
-        rados_obj.change_recovery_flags(action="unset")
+
         return 0
 
     except Exception as err:
         log.error(f"Could not run the workflow Err: {err}")
         return 1
+
+    finally:
+        for pool in pools:
+            rados_obj.detete_pool(pool=pool)
 
 
 def check_scrub_workflow(installer, rados_obj, acting_sets, task) -> bool:
@@ -126,19 +132,25 @@ def check_scrub_workflow(installer, rados_obj, acting_sets, task) -> bool:
     for pgid in acting_sets.keys():
         log.debug(f"Checking OSD logs of PG: {pgid}. OSDs : {acting_sets[pgid]}")
         init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        log.debug(f"Initial time when {task} was started : {init_time}")
 
         if task == "scrub":
-            rados_obj.run_scrub(pgid=pgid)
+            log.debug(f"Running scrub on pg : {pgid}")
+            if not rados_obj.start_check_scrub_complete(pg_id=pgid):
+                log.error(f"Could not complete scrub on pg : {pgid}")
+                return False
             log_lines = [f"{pgid} scrub starts", f"{pgid} scrub ok"]
+
         elif task == "deep-scrub":
-            rados_obj.run_deep_scrub(pgid=pgid)
+            if not rados_obj.start_check_deep_scrub_complete(pg_id=pgid):
+                log.error(f"Could not complete deep-scrub on pg : {pgid}")
+                return False
             log_lines = [
                 f"{pgid} deep-scrub starts",
                 f"{pgid} deep-scrub ok",
             ]
-        # sleeping for 10 seconds, waiting for scrubbing to be over
-        time.sleep(10)
 
+        time.sleep(10)
         end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         log.debug(
             f"Checking {task} logging for OSD : {acting_sets[pgid][0]} in PG : {pgid}"

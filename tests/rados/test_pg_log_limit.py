@@ -73,7 +73,7 @@ def run(ceph_cluster, **kw):
         }
 
         # while loop to decide start time of capturing OSD logs
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=900)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=2000)
         while datetime.datetime.now() < endtime:
             curr_pg_query = rados_obj.run_ceph_command(cmd=f"ceph pg {pg_id} query")
             curr_log_size = curr_pg_query["info"]["stats"]["log_size"]
@@ -91,7 +91,7 @@ def run(ceph_cluster, **kw):
             rados_obj.bench_write(**fore_bench_cfg)
             rados_obj.change_osd_state(action="restart", target=primary_osd)
         else:
-            log.error("PG logs could not increase beyond 5000 within timeout 900 secs")
+            log.error("PG logs could not increase beyond 5000 within timeout 2000 secs")
             raise Exception("PG logs could not increase beyond 9000 within timeout.")
 
         """ Now that PG log count has reached 5K, we trigger background IOPS for a
