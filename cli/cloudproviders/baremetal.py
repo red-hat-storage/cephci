@@ -1,4 +1,5 @@
 import json
+import socket
 
 from cli.connectible.remote import Remote
 from cli.exceptions import CloudProviderError, ConfigError, UnexpectedStateError
@@ -207,8 +208,7 @@ class Baremetal:
         Args:
             name (str): Name of node
         """
-        # TODO (vamahaja): Add steps to get public IPs
-        pass
+        return socket.gethostbyname(self.get_node_id(name))
 
     def get_node_private_ips(self, name):
         """Get node private IP address
