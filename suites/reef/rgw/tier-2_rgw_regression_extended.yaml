@@ -188,3 +188,13 @@ tests:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
         timeout: 500
+
+  - test:
+      name: Test S3 PUT requests with non ascii characters in body
+      desc: Test S3 PUT requests with non ascii characters in body
+      polarion-id: CEPH-83572765
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
+        timeout: 500
