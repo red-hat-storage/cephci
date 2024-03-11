@@ -481,9 +481,6 @@ class SnapUtils(object):
         out, rc = client.exec_command(sudo=True, cmd=cmd)
         sched_status = json.loads(out)
         log.info(f"sched_status:{sched_status}")
-        import pdb
-
-        pdb.set_trace()
         for sched_item in sched_status:
             if sched_item["path"] == sched_path:
                 if sched_item.get("retention"):
