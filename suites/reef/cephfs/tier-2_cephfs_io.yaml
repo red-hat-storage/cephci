@@ -218,6 +218,7 @@ tests:
         clients:
           - client1
         benchmark: SWBUILD
+        parse_result: True
         fs_name: cephfs
         max_mds: 2
         benchmark_defination:
@@ -236,6 +237,7 @@ tests:
         clients:
           - client1
         fs_name: cephfs-ec
+        parse_result: True
         erasure: yes
         max_mds: 1
         benchmark: SWBUILD

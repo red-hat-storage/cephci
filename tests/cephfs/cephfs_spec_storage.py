@@ -9,6 +9,7 @@ from cli.exceptions import OperationFailedError
 from cli.io.spec_storage import SpecStorage
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -22,12 +23,26 @@ def run_spec_storage_io(
     clients,
     nfs_mount,
     benchmark_defination,
+    parse_results,
+    log_dir,
+    **kwargs,
 ):
     if SpecStorage(primary_client).run_spec_storage(
         benchmark, load, incr_load, num_runs, clients, nfs_mount, benchmark_defination
     ):
         raise OperationFailedError("SPECstorage run failed")
     log.info("SPECstorage run completed")
+    if parse_results:
+        ceph_version = get_ceph_version_from_cluster(primary_client)
+        SpecStorage(primary_client).parse_spectorage_results(
+            results_dir="/root/results",
+            output_file=f"{log_dir}/output.csv",
+            ceph_version=ceph_version,
+            fg_name="cephfs",
+            fs_type=kwargs.get("fs_type"),
+            max_mds=kwargs.get("max_mds"),
+            mount_type="fuse" if "fuse" in nfs_mount else "kernel",
+        )
 
 
 def run(ceph_cluster, **kw):
@@ -103,7 +118,9 @@ def run(ceph_cluster, **kw):
         )
         benchmark = config.get("benchmark", "SWBUILD")
 
-        run_spec_storage(config, spec_clients, [kernel_mounting_dir, fuse_mounting_dir])
+        run_spec_storage(
+            config, spec_clients, [kernel_mounting_dir, fuse_mounting_dir], log_dir
+        )
 
         log.info("Cleaning up!-----")
         rc = fs_util.client_clean_up(
@@ -202,7 +219,7 @@ def print_results(log_dir, benchmark, output_xml):
     print_table(data_list)
 
 
-def run_spec_storage(config, spec_clients, mount_points):
+def run_spec_storage(config, spec_clients, mount_points, log_dir):
     benchmark = config.get("benchmark", "SWBUILD")
     benchmark_defination = config.get("benchmark_defination")
     load = config.get("load", "1")
@@ -219,6 +236,10 @@ def run_spec_storage(config, spec_clients, mount_points):
             spec_clients,
             mount,
             benchmark_defination,
+            parse_results=config.get("parse_result", False),
+            log_dir=log_dir,
+            fs_type="erasure" if config.get("erasure") else "replicated",
+            max_mds=config.get("max_mds"),
         )
         nfs_mount = mount.rstrip("/")
         last_path_component = os.path.basename(nfs_mount)
