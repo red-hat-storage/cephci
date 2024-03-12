@@ -73,8 +73,12 @@ def collect_conf(cloud, prefix, config):
             if "node" not in key:
                 continue
 
-            # Create node
-            node_name = f"{name}-{prefix}-{key}"
+            # Create node name
+            node_name = ""
+            if str(cloud) == "openstack":
+                node_name = f"{name}-{prefix}-{key}"
+            elif str(cloud) == "baremetal":
+                node_name = cluster.get(key).get("hostname")
 
             LOG.info(f"Collecting info for node '{node_name}'")
             node = Node(node_name, cloud)
@@ -84,19 +88,28 @@ def collect_conf(cloud, prefix, config):
 
             # Update node details
             _conf[name][node_name] = {}
-            _conf[name][node_name]["hostname"] = node.name
-            _conf[name][node_name]["id"] = key
-            _conf[name][node_name]["credentials"] = [
+
+            # Update hostname
+            _conf[name][node_name]["hostname"] = node.id
+
+            # Update users
+            # TODO (vamahaja): Support for multiple users
+            _conf[name][node_name]["users"] = [
                 {"user": "root", "password": ROOT_PASSWD}
             ]
+
+            # Update roles
             _conf[name][node_name]["roles"] = cluster.get(key, {}).get("role")
 
+            # Update private and public IPs
+            _conf[name][node_name]["ips"] = {}
             if node.private_ips:
-                _conf[name][node_name]["private_ips"] = node.private_ips
+                _conf[name][node_name]["ips"]["private"] = node.private_ips
 
             if node.public_ips:
-                _conf[name][node_name]["public_ips"] = node.public_ips
+                _conf[name][node_name]["ips"]["public"] = node.public_ips
 
+            # Update volumes attached to node
             if node.volumes:
                 _conf[name][node_name]["devices"] = [
                     d for v in node.volumes for d in Volume(v, cloud).device
