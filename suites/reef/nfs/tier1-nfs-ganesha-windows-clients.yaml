@@ -353,3 +353,18 @@ tests:
             user: manisha
             password: Redhat
       abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha export config to mount with 1 client access
+      desc: Verify edit the export config to mount with allow access to only 1 client
+      module: nfs_edit_export_config_with_1client_access.py
+      polarion-id: CEPH-83578397
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
