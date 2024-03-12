@@ -355,7 +355,6 @@ tests:
             config-file-name: ../../aws/configs/test_delete_version_id_null.yaml
             timeout: 300
 
-  # Inlcude before this tc
   - test:
       clusters:
         ceph-pri:
@@ -367,3 +366,15 @@ tests:
       module: sanity_rgw_multisite.py
       name: Perform realm rename in master
       polarion-id: CEPH-10739
+
+  - test:
+      name: bucket granular sync policy with sync to differnt bucket
+      desc: Test bucket granular sync with sync to differnt bucket
+      polarion-id: CEPH-83575141
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_multisite_granular_bucketsync_sync_to_diff_bucket.yaml
+            timeout: 300
