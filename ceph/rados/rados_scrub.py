@@ -176,9 +176,15 @@ class RadosScrubber(RadosOrchestrator):
                 norebalance|norecover|noscrub|nodeep-scrub|notieragent
         Returns: True/False
         """
+        if value == "pause":
+            chk_string = f"pauserd,pausewr is {flag}"
+        else:
+            chk_string = f"{value} is {flag}"
+
         cmd = f"ceph osd {flag} {value}"
         out, err = self.node.shell([cmd])
-        if err:
-            log.info(f"The OSD falg {value} not {flag} on the cluster. Error: {err}")
-            return False
-        return True
+        if chk_string in out or chk_string in err:
+            log.info(f"The OSD falg {value} is {flag} on the cluster.")
+            return True
+        log.error(f"Failed to {flag} OSD flag {value}")
+        return False

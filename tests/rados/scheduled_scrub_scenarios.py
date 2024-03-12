@@ -20,29 +20,26 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.rados_scrub import RadosScrubber
+from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 
 log = Log(__name__)
 
 
-def set_default_params(rados_obj):
+def remove_parameter_configuration(mon_obj):
     """
     Used to set the default osd scrub parameter value
     Args:
-        rados_obj: Rados object
-
+        mon_obj: monitor object
     Returns : None
     """
-    rados_obj.set_osd_configuration("osd_scrub_min_interval", 86400)
-    rados_obj.set_osd_configuration("osd_scrub_max_interval", 604800)
-    rados_obj.set_osd_configuration("osd_deep_scrub_interval", 604800)
-    rados_obj.set_osd_configuration("osd_scrub_begin_week_day", 0)
-    rados_obj.set_osd_configuration("osd_scrub_end_week_day", 0)
-    rados_obj.set_osd_configuration("osd_scrub_begin_hour", 0)
-    rados_obj.set_osd_configuration("osd_scrub_end_hour", 0)
-    rados_obj.set_osd_flags("unset", "noscrub")
-    rados_obj.set_osd_flags("unset", "nodeep-scrub")
-    time.sleep(10)
+    mon_obj.remove_config(section="osd", name="osd_scrub_min_interval")
+    mon_obj.remove_config(section="osd", name="osd_scrub_max_interval")
+    mon_obj.remove_config(section="osd", name="osd_deep_scrub_interval")
+    mon_obj.remove_config(section="osd", name="osd_scrub_begin_week_day")
+    mon_obj.remove_config(section="osd", name="osd_scrub_end_week_day")
+    mon_obj.remove_config(section="osd", name="osd_scrub_begin_hour")
+    mon_obj.remove_config(section="osd", name="osd_scrub_end_hour")
 
 
 def run(ceph_cluster, **kw):
@@ -54,6 +51,7 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosScrubber(node=cephadm)
+    mon_obj = MonConfigMethods(rados_obj=rados_obj)
     # Storing the pg dump log before setting the scrub parameters
     before_scrub_log = rados_obj.get_pg_dump("pgid", "last_scrub_stamp")
     before_deep_scrub_log = rados_obj.get_pg_dump("pgid", "last_deep_scrub_stamp")
@@ -185,4 +183,7 @@ def run(ceph_cluster, **kw):
         sys.stderr.write("ERRORED LINE\t::%s:\n" % str(exc_tb.tb_lineno))
         return 1
     finally:
-        set_default_params(rados_obj)
+        remove_parameter_configuration(mon_obj)
+        rados_obj.set_osd_flags("unset", "noscrub")
+        rados_obj.set_osd_flags("unset", "nodeep-scrub")
+        time.sleep(10)
