@@ -2642,7 +2642,7 @@ class RadosOrchestrator:
         if node is None:
             cmd_orch_device = "ceph orch device ls --refresh"
         else:
-            cmd_orch_device = f"ceph orch device ls  {node} --refresh"
+            cmd_orch_device = f"ceph orch device ls {node} --refresh"
 
         orch_device_output = self.run_ceph_command(cmd=cmd_orch_device)
         return orch_device_output
@@ -3174,18 +3174,17 @@ class RadosOrchestrator:
         base_cmd = f"ceph tell osd.{osd_id} perf dump"
         return self.run_ceph_command(cmd=base_cmd)
 
-    def get_available_path_list(self, node: str, device_type: str):
+    def get_available_devices(self, node_name: str, device_type: str):
         """
-        Method returns the available device list in the provided node.
+        Method to fetch list of available device paths on the provided node.
             Args:
-                 rados_object: RadosOrchestrator class object
-                 node: node name
-
-             Returns: Returns the available device path list of the node.
-
+                node_name: node hostname
+                device_type: hdd or ssd or nvme
+            Returns:
+                List of available device paths on the node.
         """
         device_paths = []
-        available_device_list = self.get_orch_device_list(node)
+        available_device_list = self.get_orch_device_list(node_name)
         for path_list in available_device_list[0]["devices"]:
             if path_list["human_readable_type"] != device_type:
                 continue
