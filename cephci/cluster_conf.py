@@ -12,6 +12,7 @@ from utility.log import Log
 LOG = Log(__name__)
 
 ROOT_PASSWD = "passwd"
+CEPH_PASSWD = "pass123"
 
 
 doc = """
@@ -95,7 +96,8 @@ def collect_conf(cloud, prefix, config):
             # Update users
             # TODO (vamahaja): Support for multiple users
             _conf[name][node_name]["users"] = [
-                {"user": "root", "password": ROOT_PASSWD}
+                {"user": "root", "password": ROOT_PASSWD},
+                {"user": "cephuser", "password": CEPH_PASSWD},
             ]
 
             # Update roles
