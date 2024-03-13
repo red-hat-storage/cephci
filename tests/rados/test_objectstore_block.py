@@ -1,11 +1,13 @@
 import json
-import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
+from utility.utils import method_should_succeed
 
 log = Log(__name__)
 
@@ -39,6 +41,7 @@ def run(ceph_cluster, **kw):
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     iterations = config.get("write_iteration")
+    objectstore_obj = objectstoreToolWorkflows(node=cephadm)
 
     pool_name = config["pool_name"]
     object_name = config.get("object_name", "obj-objectstore")
@@ -48,10 +51,19 @@ def run(ceph_cluster, **kw):
         "of blocks when data is written to an object and removed from an object"
     )
 
+    def fetch_primary_osd():
+        osd_map = rados_obj.get_osd_map(pool=pool_name, obj=object_name)
+        acting_pg_set = osd_map["acting"]
+        log.info(f"Acting pg set for {object_name} in {pool_name}: {acting_pg_set}")
+        if not acting_pg_set:
+            log.error("Failed to retrieve acting pg set")
+            raise Exception("Failed to retrieve acting pg set")
+        return acting_pg_set[0]
+
     try:
         # create pool with given config
         if config["create_pool"]:
-            rados_obj.create_pool(pool_name=pool_name)
+            rados_obj.create_pool(pool_name=pool_name, pg_num=1, pg_num_max=1)
 
         bluestore_min_alloc_size = int(
             mon_obj.get_config(section="osd", param="bluestore_min_alloc_size_hdd")
@@ -68,31 +80,22 @@ def run(ceph_cluster, **kw):
             nobj=(iterations - 1),
         )
 
-        osd_map = rados_obj.get_osd_map(pool=pool_name, obj=object_name)
-        acting_pg_set = osd_map["acting"]
-        log.info(f"Acting pg set for {object_name} in {pool_name}: {acting_pg_set}")
-        if not acting_pg_set:
-            log.error("Failed to retrieve acting pg set")
-            raise Exception("Failed to retrieve acting pg set")
-
-        acting_osd_id = acting_pg_set[0]
-        acting_osd_node = rados_obj.fetch_host_node(
-            daemon_type="osd", daemon_id=acting_osd_id
-        )
-        osd_data_path = ceph_cluster.get_osd_metadata(acting_osd_id).get("osd_data")
-        log.info(f"osd_data_path: {osd_data_path}")
-
-        assert rados_obj.change_osd_state(action="stop", target=acting_osd_id)
-        assert rados_obj.change_osd_state(action="disable", target=acting_osd_id)
-
-        cmd_base = f"cephadm shell --name osd.{acting_osd_id} -- "
-        cmd_fetch_obj_dump = f"{cmd_base} ceph-objectstore-tool --data-path {osd_data_path} {object_name} dump"
-
         try:
-            obj_dump_, _ = acting_osd_node.exec_command(
-                sudo=True, cmd=cmd_fetch_obj_dump
-            )
-            obj_dump = json.loads(obj_dump_)
+            primary_osd = fetch_primary_osd()
+            obj_json = objectstore_obj.list_objects(
+                osd_id=primary_osd, obj_name=object_name
+            ).strip()
+            if not obj_json:
+                log.error(
+                    f"Object {object_name} could not be listed in OSD {primary_osd}"
+                )
+                return 1
+            log.info(obj_json)
+
+            primary_osd = fetch_primary_osd()
+            out = objectstore_obj.fetch_object_dump(osd_id=primary_osd, obj=obj_json)
+            log.info(out)
+            obj_dump = json.loads(out)
             obj_dump_stats = obj_dump["stat"]
             obj_dump_extents = obj_dump["onode"]["extents"]
         except (KeyError, ValueError) as e:
@@ -138,34 +141,20 @@ def run(ceph_cluster, **kw):
             log.exception(e)
             raise
 
-        assert rados_obj.change_osd_state(action="start", target=acting_osd_id)
-        assert rados_obj.change_osd_state(action="enable", target=acting_osd_id)
-
-        for i in range(2):
-            time.sleep(3)
-            new_acting_pg_set = rados_obj.get_osd_map(pool=pool_name, obj=object_name)[
-                "acting"
-            ]
-            log.info(new_acting_pg_set)
-            if new_acting_pg_set == acting_pg_set:
-                break
-            elif i == 1:
-                log.error(
-                    f"{acting_osd_id} could not return to PG {new_acting_pg_set} within timeout. "
-                    f"New acting pg set({new_acting_pg_set} and old acting pg set({acting_pg_set}) are not same"
-                )
-                raise Exception("acting pg set has changed")
+        method_should_succeed(
+            wait_for_clean_pg_sets,
+            rados_obj,
+            timeout=500,
+            sleep_interval=30,
+            test_pool=pool_name,
+        )
 
         # Perform single write operation on the same object again to overwrite all previous data
         pool_obj.do_rados_put(client=client_node, pool=pool_name, obj_name=object_name)
 
-        assert rados_obj.change_osd_state(action="stop", target=acting_osd_id)
-        assert rados_obj.change_osd_state(action="disable", target=acting_osd_id)
-
-        obj_dump_single_, _ = acting_osd_node.exec_command(
-            sudo=True, cmd=cmd_fetch_obj_dump
-        )
-        obj_dump_single = json.loads(obj_dump_single_)
+        primary_osd = fetch_primary_osd()
+        out = objectstore_obj.fetch_object_dump(osd_id=primary_osd, obj=obj_json)
+        obj_dump_single = json.loads(out)
         obj_dump_single_stats = obj_dump_single["stat"]
         obj_dump_single_extents = obj_dump_single["onode"]["extents"]
 
@@ -181,24 +170,23 @@ def run(ceph_cluster, **kw):
             assert obj_dump_single_stats["blksize"] == bluestore_min_alloc_size
             log.info(
                 f"{obj_dump_single_stats['size']} "
-                f"== {obj_dump_stats['size']} - {(iterations - 1) * 4 * 1048576}"
+                f"== {obj_dump_stats['size']} - {(iterations - 1) * (4 << 20)}"
             )
-            assert (
-                obj_dump_single_stats["size"]
-                == obj_dump_stats["size"] - (iterations - 1) * 4 * 1048576
-            )
+            assert obj_dump_single_stats["size"] == obj_dump_stats["size"] - (
+                iterations - 1
+            ) * (4 << 20)
             log.info(
                 f"{obj_dump_single_stats['blocks']} "
                 f"== {obj_dump_stats['blocks']} "
-                f"- {((iterations - 1) * 4 * 1048576) / bluestore_min_alloc_size}"
+                f"- {((iterations - 1) * (4 << 20)) / bluestore_min_alloc_size}"
             )
             assert obj_dump_single_stats["blocks"] == obj_dump_stats["blocks"] - int(
-                ((iterations - 1) * 4 * 1048576) / bluestore_min_alloc_size
+                ((iterations - 1) * (4 << 20)) / bluestore_min_alloc_size
             )
             l_offset = obj_dump_single_extents[-1]["logical_offset"]
             length = obj_dump_single_extents[-1]["length"]
-            log.info(f"{l_offset} + {length} == {4 * 1048576}")
-            assert l_offset + length == (4 * 1048576)
+            log.info(f"{l_offset} + {length} == {(4 << 20)}")
+            assert l_offset + length == (4 << 20)
             blocks_l_extent = int(
                 length / obj_dump_single_stats["blksize"]
             )  # number of blocks in a logical extent
@@ -219,9 +207,6 @@ def run(ceph_cluster, **kw):
         log.exception(e)
         return 1
     finally:
-        rados_obj.change_osd_state(action="start", target=acting_osd_id)
-        rados_obj.change_osd_state(action="enable", target=acting_osd_id)
-
         # Delete the created osd pool
         if config.get("delete_pool"):
             rados_obj.detete_pool(pool=pool_name)

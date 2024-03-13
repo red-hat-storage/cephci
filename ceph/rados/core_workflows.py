@@ -427,10 +427,10 @@ class RadosOrchestrator:
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
-        log.info(f"check_ec: {check_ec}")
         if kwargs.get("background"):
             check_ec = False
             cmd = f"{cmd} &> /dev/null &"
+        log.info(f"check_ec: {check_ec}")
 
         try:
             self.node.shell([cmd], check_status=check_ec)
@@ -1959,7 +1959,7 @@ class RadosOrchestrator:
 
     def get_ceph_pg_dump(self, pg_id: str) -> dict:
         """
-        Fetches ceph pg dump in json format and returns the data
+        Fetches 'ceph pg dump' in json format and returns the data
         for input PG
         Args:
             pg_id: Placement Group ID for which pg dump has to be fetched
@@ -1978,6 +1978,28 @@ class RadosOrchestrator:
 
         log.error(f"PG {pg_id} not found in ceph pg dump output")
         raise KeyError(f"PG {pg_id} not found in ceph pg dump output")
+
+    def get_ceph_pg_dump_pools(self, pool_id: any) -> dict:
+        """
+        Fetches 'ceph pg dump pools' in json format and returns the data
+        for input PG
+        Args:
+            pool_id: ID of the pool for which pg dump has to be fetched
+
+        Returns: dictionary output of ceph pg dump for input PG ID
+        """
+        _cmd = "ceph pg dump_pools_json"
+        pool_dump_str, _ = self.client.exec_command(cmd=_cmd)
+        if pool_dump_str.isspace():
+            return {}
+        dump_json = json.loads(pool_dump_str)
+        pool_stats = dump_json["pool_stats"]
+        for pool_stat in pool_stats:
+            if pool_stat["poolid"] == pool_id:
+                return pool_stat
+
+        log.error(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
+        raise KeyError(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
 
     def restart_daemon_services(self, daemon: str):
         """Module to restart all Orchestrator services belonging to the input
@@ -3195,3 +3217,15 @@ class RadosOrchestrator:
             ):
                 device_paths.append(path_list["path"])
         return device_paths
+
+    def get_pool_id(self, pool_name) -> int:
+        """
+        Method to fetch pool ID for a given pool
+        Args:
+            pool_name: name of the pool
+        Returns:
+            pool ID in integer format
+        """
+        _cmd = f"ceph osd pool stats {pool_name}"
+        out = self.run_ceph_command(cmd=_cmd, client_exec=True)
+        return int(out[0]["pool_id"])

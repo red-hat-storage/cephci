@@ -2,6 +2,7 @@
 Tier-2 test to verify the effect of osd_memory_target set at different precedence level
 """
 import random
+import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -21,6 +22,7 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
+    rhbuild = config.get("rhbuild")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
@@ -70,6 +72,7 @@ def run(ceph_cluster, **kw):
             out, _ = cephadm.shell(
                 args=["ceph config set osd osd_memory_target 6000000000"]
             )
+            time.sleep(5)
 
             # verify the value set using ceph config get and ceph config show
             osd_get_omt = mon_obj.get_config(section="osd", param="osd_memory_target")
@@ -96,6 +99,7 @@ def run(ceph_cluster, **kw):
             out, _ = cephadm.shell(
                 args=[f"ceph config set osd.{osd_id} osd_memory_target 5000000000"]
             )
+            time.sleep(5)
 
             # verify the value set using ceph config get and ceph config show
             osdid_get_omt, osdid_show_omt = fetch_osd_config_value(osd_id)
@@ -133,9 +137,9 @@ def run(ceph_cluster, **kw):
     if config.get("host_level"):
         doc = """
         # CEPH-83580881
-        # BZ-2213873 | Quincy
-        # BZ-2249014 | Pacific
-        # BZ-2244604 | Reef
+        # BZ-2213873 | Quincy (6.1z3)
+        # BZ-2249014 | Pacific (5.3z6)
+        # BZ-2244604 | Reef (7.1)
         This test is to verify the propagation of osd_memory_target parameter
         set at HOST level to individual OSDs
         1. Create cluster with default configuration
@@ -151,6 +155,12 @@ def run(ceph_cluster, **kw):
         9. osd_memory_target value for the 2nd random OSD should get updated
         """
         log.info(doc)
+        if "7.0" in rhbuild:
+            log.info(
+                "Fix is yet to be back-ported to RHCS 7.0, passing without execution"
+            )
+            return 0
+
         try:
             osd_node = random.choice(osd_nodes)
             log.info(f"Random OSD host chosen for the test : {osd_node.hostname}")

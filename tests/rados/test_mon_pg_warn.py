@@ -52,6 +52,7 @@ def run(ceph_cluster, **kw):
                     assert "[WRN] MANY_OBJECTS_PER_PG:" not in health_detail
                 break
             except AssertionError:
+                cephadm.shell(["ceph orch restart mgr"])
                 time.sleep(30)
                 if datetime.datetime.now() >= end_time:
                     raise
@@ -108,10 +109,11 @@ def run(ceph_cluster, **kw):
                         )
                         break
                     except AssertionError:
+                        log.info(f"PG count yet to reach 32, current value: {pg_count}")
                         time.sleep(30)
                         if datetime.datetime.now() >= timeout_time:
                             raise (
-                                f"PG count for {pool_name} is still 1 after setting "
+                                f"PG count for {pool_name} is still {pg_count} after setting "
                                 f"pg_num to 32 and waiting for 155 secs"
                             )
             else:

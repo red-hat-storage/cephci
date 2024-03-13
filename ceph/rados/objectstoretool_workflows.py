@@ -85,12 +85,13 @@ class objectstoreToolWorkflows:
         _cmd = "--help"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
 
-    def list_objects(self, osd_id: int, pgid: str = None):
+    def list_objects(self, osd_id: int, pgid: str = None, obj_name: str = None):
         """Module to Identify all objs within an OSD
         or Identify all objs within a placement group
         Args:
             osd_id: OSD ID for which cot will be executed
             pgid: pg ID for which objs will be listed
+            obj_name: name of a specific object to be listed
         Returns:
             Returns the output of
             ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op list
@@ -99,6 +100,8 @@ class objectstoreToolWorkflows:
         _cmd = "--op list"
         if pgid:
             _cmd = f"{_cmd} --pgid {pgid}"
+        if obj_name:
+            _cmd = f"{_cmd} {obj_name}"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
 
     def get_pg_from_object(self, osd_id: int, obj_id: str):
@@ -314,4 +317,16 @@ class objectstoreToolWorkflows:
             ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID $OBJECT rm-attr $KEY
         """
         _cmd = f"--pgid {pgid} '{obj}' rm-attr {attr}"
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
+
+    def fetch_object_dump(self, osd_id: int, obj: str):
+        """Module to fetch object dump
+        Args:
+            osd_id: OSD ID for which cot will be executed
+            obj: object identifier
+        Returns:
+            Returns the output of
+            ceph-objectstore-tool --data-path $PATH_TO_OSD $OBJECT dump
+        """
+        _cmd = f"'{obj}' dump"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id)

@@ -94,30 +94,31 @@ class PoolFunctions:
         """
 
         def check_omap_entries() -> bool:
-            pool_stats = self.rados_obj.get_cephdf_stats(
-                pool_name=pool_name, detail=True
-            )
-            if pool_stats["stats"]["stored_omap"] <= 0:
+            pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
+            omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
+            if not omap_keys > 0:
                 # OMAP entries are not readily available,
                 # restarting primary osd as metadata does not get updated automatically.
                 # TBD: bug raised for the issue: https://bugzilla.redhat.com/show_bug.cgi?id=2210278
                 primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[0]
                 self.rados_obj.change_osd_state(action="restart", target=primary_osd)
-                pool_stats = self.rados_obj.get_cephdf_stats(
-                    pool_name=pool_name, detail=True
-                )
-                if pool_stats["stats"]["stored_omap"] <= 0:
+                pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
+                omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
+                if omap_keys < expected_omap_keys:
                     log.error(
-                        f"No omap entries available for the pool {pool_name} even after restarting primary OSD"
+                        f"OMAP key yet to reach expected value of {expected_omap_keys} for pool {pool_name} "
+                        f"even after restarting primary OSD"
                     )
                     return False
             return True
 
         # Getting the client node to perform the operations
         client_node = self.rados_obj.ceph_cluster.get_nodes(role="client")[0]
-        obj_start = kwargs.get("obj_start", 0)
-        obj_end = kwargs.get("obj_end", 2000)
-        num_keys_obj = kwargs.get("num_keys_obj", 20000)
+        pool_id = self.rados_obj.get_pool_id(pool_name=pool_name)
+        obj_start = int(kwargs.get("obj_start", 0))
+        obj_end = int(kwargs.get("obj_end", 2000))
+        num_keys_obj = int(kwargs.get("num_keys_obj", 20000))
+        expected_omap_keys = (obj_end - obj_start) * num_keys_obj
         log.debug(
             f"Writing {(obj_end - obj_start) * num_keys_obj} Key pairs"
             f" to increase the omap entries on pool {pool_name}"
@@ -148,7 +149,7 @@ class PoolFunctions:
         self.rados_obj.run_deep_scrub(pool=pool_name)
 
         flag = 1
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=6000)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=900)
         while end_time > datetime.datetime.now():
             after_deep_scrub_log = self.scrub_obj.get_pg_dump(
                 "pgid", "last_deep_scrub_stamp"
@@ -172,7 +173,7 @@ class PoolFunctions:
 
         if not flag:
             log.error(
-                f"Could not complete deep-scrub on the pool : {pool_name} even with 6000 sec wait"
+                f"Could not complete deep-scrub on the pool : {pool_name} even with 900 sec wait"
             )
             return False
 
@@ -182,13 +183,11 @@ class PoolFunctions:
                 "No omap entries available for the pool after complete deep-scrub and OSD restart"
             )
             return False
-        pool_stats = self.rados_obj.get_cephdf_stats(pool_name=pool_name, detail=True)
+        pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
+        omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
+        omap_bytes = pool_stat["stat_sum"]["num_omap_bytes"]
         log.info(
-            f"Wrote {pool_stats['stats']['stored_omap']} bytes of omap data on the pool."
-        )
-        log.info(
-            f"Wrote {pool_stats['stats']['stored_omap']} bytes of omap data on the pool."
-            f"Total stored omap data on pool : {pool_stats['stats']['omap_bytes_used']}"
+            f"Wrote {omap_keys} keys with {omap_bytes} bytes of OMAP data on the pool."
         )
         return True
 

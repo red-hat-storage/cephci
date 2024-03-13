@@ -3,7 +3,6 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
-from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -13,7 +12,7 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    #CEPH-10787
+    # CEPH-10787
     Capture and inspect ceph osd df stats at different stages -
     - After pool creation
     - After writing data to a particular object in the pool
@@ -69,8 +68,6 @@ def run_test(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
-    pool_obj = PoolFunctions(node=cephadm)
-    client_node = ceph_cluster.get_nodes(role="client")[0]
     iterations = config.get("write_iteration")
     acting_osd_hosts = []
     acting_osd_host_osds = []
@@ -79,7 +76,6 @@ def run_test(ceph_cluster, **kw):
     new_acting_osd_host_osds = []
     verification_dict = {"WI": iterations, "host_osd_map": {}}
     pool_name = config["pool_name"]
-    object_name = config.get("object_name", "obj-osd-df")
 
     log.info("Running test case to verify ceph osd df stats")
 
@@ -96,20 +92,11 @@ def run_test(ceph_cluster, **kw):
         )
 
         # create objects and perform IOPs
-        pool_obj.do_rados_put(
-            client=client_node, pool=pool_name, obj_name=object_name, nobj=1
-        )
+        bench_cfg = {"byte_size": "4096KB", "max_objs": 200, "verify_stats": False}
+        assert rados_obj.bench_write(pool_name=pool_name, **bench_cfg)
 
-        pool_obj.do_rados_append(
-            client=client_node,
-            pool=pool_name,
-            obj_name=object_name,
-            nobj=(iterations - 1),
-        )
-
-        osd_map = rados_obj.get_osd_map(pool=pool_name, obj=object_name)
-        acting_pg_set = osd_map["acting"]
-        log.info(f"Acting set for {object_name} in {pool_name}: {acting_pg_set}")
+        acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+        log.info(f"Acting set for {pool_name}: {acting_pg_set}")
         if not acting_pg_set:
             log.error("Failed to retrieve acting pg set")
             return 1
@@ -145,21 +132,16 @@ def run_test(ceph_cluster, **kw):
         verification_dict.update({"acting_osd_host_osds": acting_osd_host_osds})
 
         # mark osds in acting set as out
-        try:
-            for osd_id in acting_pg_set:
-                assert utils.set_osd_out(ceph_cluster, osd_id)
-        except AssertionError:
-            log.error(f"Failed to mark OSD.{osd_id} out")
-            return 1
+        for osd_id in acting_pg_set:
+            if not utils.set_osd_out(ceph_cluster, osd_id):
+                log.error(f"Failed to mark OSD.{osd_id} out")
+                return 1
 
-        time.sleep(5)
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=1800)
 
-        # Retrieve new acting pg set for the same object
-        osd_map = rados_obj.get_osd_map(pool=pool_name, obj=object_name)
-        new_acting_pg_set = osd_map["acting"]
-        log.info(
-            f"New acting set for {object_name} in {pool_name}: {new_acting_pg_set}"
-        )
+        # Retrieve new acting pg set
+        new_acting_pg_set = rados_obj.get_pg_acting_set()
+        log.info(f"New acting set for {pool_name}: {new_acting_pg_set}")
         if not new_acting_pg_set:
             log.error("Failed to retrieve new acting pg set")
             return 1
@@ -203,6 +185,7 @@ def run_test(ceph_cluster, **kw):
         verification_dict.update(
             {"out_osd_df_stats": update_stats_dict(out_osd_df_stats)}
         )
+
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
@@ -219,7 +202,6 @@ def run_test(ceph_cluster, **kw):
         if config.get("delete_pool"):
             rados_obj.detete_pool(pool=pool_name)
 
-    method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=1800)
     try:
         for host in acting_osd_hosts:
             assert verify_deviation(
