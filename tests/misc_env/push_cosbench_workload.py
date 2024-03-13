@@ -92,6 +92,18 @@ symm_workload = """<?xml version="1.0" encoding="UTF-8" ?>
   </workflow>
 </workload>"""
 
+cleanup_workload = """<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="fillCluster" description="RGW testing">
+  <storage type="s3" config="timeout=900000;accesskey=x;secretkey=y;endpoint=workload_endpoint;path_style_access=true"/>
+  <auth type="none"/>
+  <workflow>
+    <workstage name="cleanup">
+        <work type="cleanup" workers="100" config="cprefix=bucket_prefix;containers=r(1,bucket_count);
+        objects=r(1,objects_count)" />
+    </workstage>
+  </workflow>
+</workload>"""
+
 
 def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     """
@@ -107,7 +119,7 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     Returns:
         workload xml file name which is created on controller node
     """
-    global fill_workload, avail_storage, hybrid_workload, bucket_prefix, symm_workload, bucket_count
+    global fill_workload, avail_storage, hybrid_workload, bucket_prefix, symm_workload, bucket_count, cleanup_workload
     workload_type = config.get("workload_type", "fill")
     if workload_type == "fill":
         workload_conf = fill_workload
@@ -115,6 +127,8 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
         workload_conf = hybrid_workload
     elif workload_type == "symmetrical":
         workload_conf = symm_workload
+    elif workload_type == "cleanup":
+        workload_conf = cleanup_workload
     bucket_prefix = config.get("bucket_prefix", "pri-bkt")
     workload_conf = workload_conf.replace("bucket_prefix", f"{bucket_prefix}")
     bucket_count = config.get("number_of_buckets", 6)
