@@ -481,7 +481,7 @@ class CephfsMirroringUtils(object):
         if not isinstance(cephfs_mirror_node, list):
             cephfs_mirror_node = [cephfs_mirror_node]
         for node in cephfs_mirror_node:
-            node.exec_command(sudo=True, cmd="yum install -y ceph-common --nogpgcheck")
+            node.exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
         fsid = self.get_fsid(cephfs_mirror_node[0])
         daemon_names = self.get_daemon_name(source_clients)
         filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
@@ -1092,3 +1092,49 @@ class CephfsMirroringUtils(object):
         log.info(
             "Validate the synced snapshots and data available on the target cluster"
         )
+
+    def get_cephfs_mirror_counters(self, cephfs_mirror_node, fsid, asok_file):
+        """
+        Get the cephfs mirror counters from the admin socket file.
+
+        Parameters:
+            cephfs_mirror_node (list): List of cephfs mirror nodes.
+            fsid (str): Filesystem ID.
+            asok_file (str): Admin socket file.
+
+        Returns:
+            dict: Dictionary containing the cephfs mirror counters.
+        """
+        command = f"ceph --admin-daemon {asok_file[cephfs_mirror_node[0].node.hostname][1]} counter dump -f json"
+        out, _ = cephfs_mirror_node[0].exec_command(
+            sudo=True, cmd=f"cd /var/run/ceph/{fsid}/ ; {command}"
+        )
+        data = json.loads(out)
+        log.info(f"Output of Metrics Report : {data}")
+        return data
+
+    def get_labels_and_counters(self, resource_name, filesystem_name, json_data):
+        """
+        Get labels and counters for a specific resource and filesystem name from JSON data.
+
+        Parameters:
+            resource_name (str): Name of the resource.
+            filesystem_name (str): Name of the filesystem.
+            json_data (dict): JSON data containing labels and counters.
+
+        Returns:
+            tuple: Tuple containing labels and counters for the specified resource and filesystem.
+        """
+        if resource_name in json_data:
+            for item in json_data[resource_name]:
+                if (
+                    "filesystem" in item["labels"]
+                    and item["labels"]["filesystem"] == filesystem_name
+                ):
+                    return item["labels"], item["counters"]
+                elif (
+                    "source_filesystem" in item["labels"]
+                    and item["labels"]["source_filesystem"] == filesystem_name
+                ):
+                    return item["labels"], item["counters"]
+        return None, None
