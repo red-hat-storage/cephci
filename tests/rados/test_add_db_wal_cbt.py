@@ -35,7 +35,9 @@ def run(ceph_cluster, **kw):
         for node in ceph_nodes:
             if node.role == "osd":
                 host_name = node.hostname
-                ssd_path_list = rados_object.get_available_path_list(host_name, "ssd")
+                ssd_path_list = rados_object.get_available_devices(
+                    node_name=host_name, device_type="ssd"
+                )
                 if not ssd_path_list:
                     log.info(f"The device paths are empty to add on the {host_name}")
                     continue
@@ -114,7 +116,9 @@ def check_osd_config(node_object, host_name, dev_path):
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
     while end_time > datetime.datetime.now():
-        ssd_path_list = node_object.get_available_path_list(host_name, "ssd")
+        ssd_path_list = node_object.get_available_devices(
+            node_name=host_name, device_type="ssd"
+        )
         if dev_path not in ssd_path_list:
             log.info(f"OSD is configured on the {dev_path} at {host_name}")
             return True

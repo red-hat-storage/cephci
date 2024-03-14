@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 from time import sleep
 
@@ -40,19 +41,21 @@ def find_storage_unit(value):
         return f"{metric}T"
 
 
-def create_lvms(node, count, size):
+def create_lvms(node, count, size, devices=None):
     """Create LVs on node.
 
     Args:
         node: CephNode obj
         count: number of LVMs
         size: LVM size
+        devices: custom volume list
     """
-    vg_name = "data_vg"
+    vg_name = "data_vg" + str(random.randrange(10))
     if not hasattr(node, "volume_list"):
         raise Exception(f"{node.hostname} has no volume_list!!!")
 
-    devices = [vol.path for vol in node.volume_list]
+    if not devices:
+        devices = [vol.path for vol in node.volume_list]
     pvcreate(node, " ".join(devices))
     vgcreate(node, vg_name, " ".join(devices))
     lvms = []
@@ -63,6 +66,7 @@ def create_lvms(node, count, size):
         )
         lvms.append(f"/dev/{vg_name}/lv{i}")
     node.volume_list = deepcopy(lvms)
+    return lvms
 
 
 def run(ceph_cluster, **kw):

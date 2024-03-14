@@ -18,7 +18,10 @@ Module to perform specific functionalities of ceph-bluestore-tool.
  - ceph-bluestore-tool bluefs-stats --path osd path
 """
 
+from typing import Dict
+
 from ceph.ceph_admin import CephAdmin
+from ceph.ceph_admin.common import config_dict_to_string
 from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
@@ -40,21 +43,28 @@ class BluestoreToolWorkflows:
         self.cluster = node.cluster
         self.client = node.cluster.get_nodes(role="client")[0]
 
-    def run_cbt_command(self, cmd: str, osd_id: int, timeout: int = 300) -> str:
+    def run_cbt_command(
+        self, cmd: str, osd_id: int, timeout: int = 300, env: Dict = None
+    ) -> str:
         """
         Runs ceph-bluestore-tool commands within OSD container
         Args:
             cmd: command that needs to be run
             osd_id: daemon ID of target OSD
             timeout: Maximum time allowed for execution.
+            env: any environment variables that needs be declared
+                e.g. - env_dict = {"env": f"CEPH_ARGS='--bluestore_block_db_size={db_size}"}
         Returns:
             output of respective ceph-bluestore-tool command in string format
         """
         osd_node = self.rados_obj.fetch_host_node(
             daemon_type="osd", daemon_id=str(osd_id)
         )
-        base_cmd = f"cephadm shell --name osd.{osd_id} --"
-        _cmd = f"{base_cmd} {cmd} --path /var/lib/ceph/osd/ceph-{osd_id}"
+        base_cmd = f"cephadm shell --name osd.{osd_id}"
+        if env:
+            env_cmd = config_dict_to_string(env)
+            base_cmd = f"{base_cmd} {env_cmd}"
+        _cmd = f"{base_cmd} -- {cmd} --path /var/lib/ceph/osd/ceph-{osd_id}"
         try:
             self.rados_obj.change_osd_state(action="stop", target=osd_id)
             out, err = osd_node.exec_command(sudo=True, cmd=_cmd, timeout=timeout)
@@ -172,21 +182,25 @@ class BluestoreToolWorkflows:
         """Module to add WAL device to BlueFS, fails if WAL device already exists.
         Args:
             osd_id: OSD ID for which cbt will be executed
+            new_device: target device to be used a dedicated WAL
         Returns:
             Returns the output of cbt bluefs-bdev-new-wal cmd
         """
         _cmd = f"ceph-bluestore-tool bluefs-bdev-new-wal --dev-target {new_device}"
         return self.run_cbt_command(cmd=_cmd, osd_id=osd_id)
 
-    def add_db_device(self, osd_id: int, new_device):
+    def add_db_device(self, osd_id: int, new_device, db_size):
         """Module to add DB device to BlueFS, fails if DB device already exists
         Args:
             osd_id: OSD ID for which cbt will be executed
+            new_device: target device to be used as dedicated db
+            db_size: size of the db device
         Returns:
             Returns the output of cbt bluefs-bdev-new-db cmd
         """
         _cmd = f"ceph-bluestore-tool bluefs-bdev-new-db --dev-target {new_device}"
-        return self.run_cbt_command(cmd=_cmd, osd_id=osd_id)
+        env_dict = {"env": f"CEPH_ARGS='--bluestore_block_db_size={db_size}'"}
+        return self.run_cbt_command(cmd=_cmd, osd_id=osd_id, env=env_dict)
 
     def block_device_migrate(self, osd_id: int, new_device, device_source):
         """Module to move BlueFS data from source device(s) to the target one,
@@ -201,7 +215,7 @@ class BluestoreToolWorkflows:
         Args:
             osd_id: OSD ID for which cbt will be executed
         Returns:
-            Returns the output of cbt bluefs-bdev-new-db cmd
+            Returns the output of cbt bluefs-bdev-migrate cmd
         """
         _cmd = (
             f"ceph-bluestore-tool bluefs-bdev-migrate "
@@ -263,7 +277,7 @@ class BluestoreToolWorkflows:
             _cmd = f"{_cmd} --allocator {allocator_type}"
         return self.run_cbt_command(cmd=_cmd, osd_id=osd_id)
 
-    def do_reshard(self, osd_id: int, new_shard, control_string: str = None):
+    def do_reshard(self, osd_id: int, new_shard: str, control_string: str = None):
         """Module to change sharding of BlueStore’s RocksDB. Sharding is
         build on top of RocksDB column families. This option allows to test
         performance of new sharding without need to redeploy OSD.
@@ -275,12 +289,12 @@ class BluestoreToolWorkflows:
         or select any other sharding scheme, including reverting to original one
         Args:
             osd_id: OSD ID for which cbt will be executed
-            new_shard:
+            new_shard: new shard in string format
             control_string: enables resharding control string
         Returns:
             Returns the output of cbt reshard cmd
         """
-        _cmd = f"ceph-bluestore-tool reshard --sharding {new_shard}"
+        _cmd = f"ceph-bluestore-tool reshard --sharding '{new_shard}'"
         if control_string:
             _cmd = f"{_cmd} --resharding-ctrl {control_string}"
         return self.run_cbt_command(cmd=_cmd, osd_id=osd_id)
