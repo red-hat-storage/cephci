@@ -92,6 +92,18 @@ symm_workload = """<?xml version="1.0" encoding="UTF-8" ?>
   </workflow>
 </workload>"""
 
+cleanup_workload = """<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="fillCluster" description="RGW testing">
+  <storage type="s3" config="timeout=900000;accesskey=x;secretkey=y;endpoint=workload_endpoint;path_style_access=true"/>
+  <auth type="none"/>
+  <workflow>
+    <workstage name="cleanup">
+        <work type="cleanup" workers="100" config="cprefix=bucket_prefix;containers=r(1,bucket_count);
+        objects=r(1,objects_count)" />
+    </workstage>
+  </workflow>
+</workload>"""
+
 
 def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     """
@@ -107,7 +119,7 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     Returns:
         workload xml file name which is created on controller node
     """
-    global fill_workload, avail_storage, hybrid_workload, bucket_prefix, symm_workload, bucket_count
+    global fill_workload, avail_storage, hybrid_workload, bucket_prefix, symm_workload, bucket_count, cleanup_workload
     workload_type = config.get("workload_type", "fill")
     if workload_type == "fill":
         workload_conf = fill_workload
@@ -115,6 +127,8 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
         workload_conf = hybrid_workload
     elif workload_type == "symmetrical":
         workload_conf = symm_workload
+    elif workload_type == "cleanup":
+        workload_conf = cleanup_workload
     bucket_prefix = config.get("bucket_prefix", "pri-bkt")
     workload_conf = workload_conf.replace("bucket_prefix", f"{bucket_prefix}")
     bucket_count = config.get("number_of_buckets", 6)
@@ -138,7 +152,19 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     bytes_to_fill = bytes_to_fill / 6
     # 404.56 KB is the average size according to sizes range in workload
     # using the average size to find number of objects
-    objects_count = math.floor(bytes_to_fill * 100 / (40456 * 1024))
+    if workload_type == "cleanup":
+        objects_count = 1
+        for bkt in range(1, bucket_count + 1):
+            bucket_name = f"{bucket_prefix}{bkt}"
+            out, err = rgw.exec_command(
+                sudo=True, cmd=f"radosgw-admin bucket stats --bucket {bucket_name}"
+            )
+            bucket_stats = json.loads(out)
+            num_objects = bucket_stats["usage"]["rgw.main"]["num_objects"]
+            if num_objects > objects_count:
+                objects_count = num_objects
+    else:
+        objects_count = math.floor(bytes_to_fill * 100 / (40456 * 1024))
     LOG.info(f"no of objects for an average of sizes in workload: {objects_count}")
     workload_conf = workload_conf.replace("objects_count", f"{objects_count}")
 
