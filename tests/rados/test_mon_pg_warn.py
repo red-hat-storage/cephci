@@ -25,7 +25,7 @@ def run(ceph_cluster, **kw):
     warning
     4. Increase pool pgs manually and observe the health warning disappearing
     5. Repeat the above steps with a fresh pool and increase the value of
-    MGR parameter 'mon_pg_warn_max_object_skew' to 100
+    MGR parameter 'mon_pg_warn_max_object_skew' to 600
     6. Observe the health warning disappearing, delete the pools
     """
     log.info(run.__doc__)
@@ -41,7 +41,7 @@ def run(ceph_cluster, **kw):
 
     def mon_pg_warn_health_warn(should_contain: bool):
         # check health warning for "MANY_OBJECTS_PER_PG"
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=125)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=180)
         while datetime.datetime.now() < end_time:
             try:
                 health_detail, _ = cephadm.shell(args=["ceph health detail"])
@@ -52,7 +52,6 @@ def run(ceph_cluster, **kw):
                     assert "[WRN] MANY_OBJECTS_PER_PG:" not in health_detail
                 break
             except AssertionError:
-                cephadm.shell(["ceph orch restart mgr"])
                 time.sleep(30)
                 if datetime.datetime.now() >= end_time:
                     raise
@@ -92,35 +91,38 @@ def run(ceph_cluster, **kw):
             if test_type == "pg_autoscale":
                 # PG autoscale WARN mode cannot be removed as it
                 # would also remove the health warning
-                # Scale up PGs in the pool to 32 using pg_num pool property
-                rados_obj.set_pool_property(pool=pool_name, props="pg_num", value=32)
-                rados_obj.set_pool_property(pool=pool_name, props="pgp_num", value=32)
+                # Scale up PGs in the pool to 64 using pg_num pool property
+                rados_obj.set_pool_property(pool=pool_name, props="pg_num", value=64)
+                rados_obj.set_pool_property(pool=pool_name, props="pgp_num", value=64)
+                rados_obj.set_pool_property(
+                    pool=pool_name, props="pg_num_min", value=64
+                )
 
-                # wait for Pool to scale to 32
-                timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=155)
+                # wait for Pool to scale to 64
+                timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=160)
                 while datetime.datetime.now() < timeout_time:
                     try:
                         pg_count = pool_obj.get_target_pg_num_bulk_flag(
                             pool_name=pool_name
                         )
-                        assert pg_count == 32
+                        assert pg_count == 64
                         log.info(
                             f"Number of PGs for {pool_name} has scaled up to {pg_count}"
                         )
                         break
                     except AssertionError:
-                        log.info(f"PG count yet to reach 32, current value: {pg_count}")
+                        log.info(f"PG count yet to reach 64, current value: {pg_count}")
                         time.sleep(30)
                         if datetime.datetime.now() >= timeout_time:
                             raise (
                                 f"PG count for {pool_name} is still {pg_count} after setting "
-                                f"pg_num to 32 and waiting for 155 secs"
+                                f"pg_num to 64 and waiting for 160 secs"
                             )
             else:
                 # with pg autoscaling restricted and pool having single PG,
-                # increase the value of 'mon_pg_warn_max_object_skew' to 100
+                # increase the value of 'mon_pg_warn_max_object_skew' to 600
                 mon_obj.set_config(
-                    section="mgr", name="mon_pg_warn_max_object_skew", value=100
+                    section="mgr", name="mon_pg_warn_max_object_skew", value=600
                 )
             # ensure health warning for "MANY_OBJECTS_PER_PG" disappears
             mon_pg_warn_health_warn(should_contain=False)
