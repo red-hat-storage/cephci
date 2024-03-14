@@ -1,4 +1,6 @@
+import csv
 import os
+import xml.etree.ElementTree as ET
 
 from cli import Cli
 from cli.utilities.packages import Package
@@ -159,3 +161,39 @@ class SpecStorage(Cli):
             f" -s {benchmark}-{self.outputlog}-{last_path_component}"
         )
         return self.execute(sudo=True, long_running=True, cmd=cmd)
+
+    def append_to_csv(self, output_file, metrics):
+        fieldnames = list(metrics.keys())
+        file_exists = os.path.isfile(output_file)
+
+        with open(output_file, "a", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(metrics)
+
+    def extract_metrics(self, remote_file, **kwargs):
+        # Create an ElementTree object from the remote file
+        tree = ET.parse(remote_file)
+        root = tree.getroot()
+
+        metrics = kwargs
+        business_metric = root.find(".//business_metric").text
+        metrics["business_metric"] = business_metric
+        benchmark = root.find(".//benchmark").attrib["name"]
+        metrics["benchmark"] = benchmark
+        for metric in root.findall(".//metric"):
+            name = metric.attrib["name"]
+            value = metric.text
+            metrics[name] = value
+        return metrics
+
+    def parse_spectorage_results(self, results_dir, output_file, **kwargs):
+        dir_items = self.primary_client.get_dir_list(results_dir, sudo=True)
+        for item in dir_items:
+            if item.endswith(".xml"):
+                remote_file_xml = self.primary_client.remote_file(
+                    file_name=f"{results_dir}/{item}", file_mode="r", sudo=True
+                )
+                metrics = self.extract_metrics(remote_file_xml, **kwargs)
+                self.append_to_csv(output_file, metrics)
