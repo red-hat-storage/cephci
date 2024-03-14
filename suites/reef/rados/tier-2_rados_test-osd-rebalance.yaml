@@ -105,13 +105,13 @@ tests:
       polarion-id: CEPH-83580881
       config:
         host_level: true
+      comments: Fix isn't included in 7.0
 
   - test:
       name: ceph osd df stats
       module: test_osd_df.py
       desc: Mark osd out and inspect stats change in ceph osd df
       polarion-id: CEPH-10787
-      abort-on-fail: true
       config:
         run_iteration: 3
         create_pool: true
@@ -119,13 +119,11 @@ tests:
         write_iteration: 4
         delete_pool: true
 
-# Acting set for the PG changes frequently, hence the test is currently out of reef suites.
   - test:
       name: ObjectStore block stats verification
       module: test_objectstore_block.py
       desc: Reduce data from an object and verify the decrease in blocks
       polarion-id: CEPH-83571714
-      abort-on-fail: true
       config:
         create_pool: true
         pool_name: test-objectstore

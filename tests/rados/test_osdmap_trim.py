@@ -99,12 +99,19 @@ def run(ceph_cluster, **kw):
         # while loop to ascertain trimming of osdmaps
         endtime = datetime.datetime.now() + datetime.timedelta(seconds=600)
         while datetime.datetime.now() < endtime:
-            curr_osdmap = rados_obj.get_osd_status(osd_id=primary_osd)
-            curr_oldest_map = curr_osdmap["oldest_map"]
-            curr_status_report = rados_obj.run_ceph_command(
-                cmd="ceph report", client_exec=True
-            )
-            curr_osdmap_first_committed = curr_status_report["osdmap_first_committed"]
+            try:
+                curr_osdmap = rados_obj.get_osd_status(osd_id=primary_osd)
+                curr_oldest_map = curr_osdmap["oldest_map"]
+                curr_status_report = rados_obj.run_ceph_command(
+                    cmd="ceph report", client_exec=True
+                )
+                curr_osdmap_first_committed = curr_status_report[
+                    "osdmap_first_committed"
+                ]
+            except Exception:
+                log.info("Fetching OSD status failed, retrying after 15 secs")
+                time.sleep(15)
+                continue
             if (
                 curr_oldest_map > init_oldest_map
                 and curr_oldest_map == curr_osdmap_first_committed

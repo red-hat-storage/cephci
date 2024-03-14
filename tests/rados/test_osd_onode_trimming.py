@@ -83,33 +83,48 @@ def run(ceph_cluster, **kw):
         rados_object.bench_write(**bench_cfg)
         rados_object.bench_read(**bench_cfg)
 
-        for id in osd_list:
-            perf_dump_output = rados_object.get_osd_perf_dump(id)
-            onode_pinned_obj = perf_dump_output["bluestore"][onode_key]
-            if int(onode_pinned_obj) != 0:
-                log.info(f"The inodes pinned in the osd {id} are {onode_pinned_obj} ")
-                onode_values[id] = onode_pinned_obj
+        time_end = time.time() + 30 * 10
+        while time.time() < time_end:
+            for id in osd_list:
+                try:
+                    perf_dump_output = rados_object.get_osd_perf_dump(id)
+                    onode_pinned_obj = perf_dump_output["bluestore"][onode_key]
+                except Exception:
+                    log.info("Fetching OSD perf dump failed, retrying after 15 secs")
+                    time.sleep(15)
+                    continue
+                if int(onode_pinned_obj) != 0:
+                    log.info(
+                        f"The inodes pinned in the osd {id} are {onode_pinned_obj} "
+                    )
+                    onode_values[id] = onode_pinned_obj
+            break
         log.info(f"The total inode list is-{onode_values}")
         for osd_id, old_inodes in onode_values.items():
             log.info(f"starting scrub on the osd-{osd_id}")
-            onode_falg = False
+            onode_flag = False
             time_end = time.time() + 60 * 10
             while time.time() < time_end:
-                rados_object.run_scrub(osd=osd_id)
-                perf_dump_output = rados_object.get_osd_perf_dump(id)
-                current_onode_value = perf_dump_output["bluestore"][onode_key]
+                try:
+                    rados_object.run_scrub(osd=osd_id)
+                    perf_dump_output = rados_object.get_osd_perf_dump(id)
+                    current_onode_value = perf_dump_output["bluestore"][onode_key]
+                except Exception:
+                    log.info("Fetching OSD perf dump failed, retrying after 15 secs")
+                    time.sleep(15)
+                    continue
                 if current_onode_value < old_inodes:
                     log.info(
                         f"The inodes are reduced from the {old_inodes} to {current_onode_value}"
                     )
-                    onode_falg = True
+                    onode_flag = True
                     break
                 log.info(
                     f"onode values are not decreased.After scrubbing the inode values are - {current_onode_value}"
                 )
                 log.info(" Checking the inode values after 10 seconds")
                 time.sleep(10)
-            if onode_falg is False:
+            if onode_flag is False:
                 log.error(f"onodes are not reduced after scrub on OSD-{osd_id}")
                 return 1
         # Checking the memory growth in the OSDs for 10 minutes
