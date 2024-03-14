@@ -200,7 +200,7 @@ class Log:
         kwargs["exc_info"] = kwargs.get("exc_info", True)
         self._log("exception", message, *args, **kwargs)
 
-    def configure_logger(self, test_name, run_dir):
+    def configure_logger(self, test_name, run_dir, disable_console_log):
         """
         Configures a new FileHandler for the root logger.
         Args:
@@ -219,7 +219,8 @@ class Log:
         full_log_name = f"{test_name}.log"
         test_logfile = os.path.join(run_dir, full_log_name)
         self.info(f"Test logfile: {test_logfile}")
-
+        if disable_console_log:
+            self._logger.propagate = False
         _handler = logging.FileHandler(test_logfile)
         _handler = logging.handlers.RotatingFileHandler(
             test_logfile,
