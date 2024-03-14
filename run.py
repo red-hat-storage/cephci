@@ -227,7 +227,7 @@ def create_nodes(
                 private_key_path = ibmc.get("private_key_path")
                 private_ip = node.ip_address
                 look_for_key = True
-                ceph_nodename = node.node.name
+                ceph_nodename = node.hostname
 
             if node.role == "win-iscsi-clients":
                 clients.append(

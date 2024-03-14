@@ -341,12 +341,12 @@ class CephVMNodeIBM:
 
             key_identity_model = dict({"id": key_id})
             key_identity_shared = {
-                "fingerprint": "SHA256:OkzMbGLDIzqUcZoH9H/j5o/v01trlqKqp5DaUpJ0tcQ"
+                "fingerprint": "SHA256:PDSaOCv0NXGlpV5IYVzxNUK/8bHCG7ywlkkNI/RITIk"
             }
 
             # Construct a dict representation of a ResourceIdentityById model
             resource_group_identity_model = dict(
-                {"id": "cb8d87c33ca04965a180fd7ab7383936"}
+                {"id": "1355ac9cc947499bbb1a9029b7982299"}
             )
 
             # Construct a dict representation of a InstanceProfileIdentityByName model
@@ -409,12 +409,12 @@ class CephVMNodeIBM:
             # DNS record creation phase
             LOG.debug(f"Adding DNS records for {node_name}")
             dns_zone = self.dns_service.list_dnszones(
-                "a55534f5-678d-452d-8cc6-e780941d8e31"
+                "b7efc2ce-ebf7-4dca-b7cf-b328171229a5"
             )
             dns_zone_id = get_dns_zone_id(zone_name, dns_zone.get_result())
 
             resource = self.dns_service.list_resource_records(
-                instance_id="a55534f5-678d-452d-8cc6-e780941d8e31",
+                instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
                 dnszone_id=dns_zone_id,
             )
             records_a = [
@@ -428,7 +428,7 @@ class CephVMNodeIBM:
             ]
             if records_ip:
                 self.dns_service.update_resource_record(
-                    instance_id="a55534f5-678d-452d-8cc6-e780941d8e31",
+                    instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
                     dnszone_id=dns_zone_id,
                     record_id=records_ip[0]["id"],
                     name=self.node["name"],
@@ -439,7 +439,7 @@ class CephVMNodeIBM:
                 self.node["primary_network_interface"]["primary_ipv4_address"]
             )
             self.dns_service.create_resource_record(
-                instance_id="a55534f5-678d-452d-8cc6-e780941d8e31",
+                instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
                 dnszone_id=dns_zone_id,
                 type="A",
                 ttl=900,
@@ -451,7 +451,7 @@ class CephVMNodeIBM:
                 f"{self.node['name']}.{zone_name}"
             )
             self.dns_service.create_resource_record(
-                instance_id="a55534f5-678d-452d-8cc6-e780941d8e31",
+                instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
                 dnszone_id=dns_zone_id,
                 type="PTR",
                 ttl=900,
@@ -559,7 +559,7 @@ class CephVMNodeIBM:
         if not self.node:
             return
 
-        zones = self.dns_service.list_dnszones("a55534f5-678d-452d-8cc6-e780941d8e31")
+        zones = self.dns_service.list_dnszones("b7efc2ce-ebf7-4dca-b7cf-b328171229a5")
         zone_id = get_dns_zone_id(zone_name, zones.get_result())
         zone_instance_id = get_dns_zone_instance_id(zone_name, zones.get_result())
 
@@ -577,14 +577,14 @@ class CephVMNodeIBM:
                         f"Deleting PTR record {record['linked_ptr_record']['name']}"
                     )
                     self.dns_service.delete_resource_record(
-                        instance_id="a55534f5-678d-452d-8cc6-e780941d8e31",
+                        instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
                         dnszone_id=zone_id,
                         record_id=record["linked_ptr_record"]["id"],
                     )
 
                 LOG.info(f"Deleting Address record {record['name']}")
                 self.dns_service.delete_resource_record(
-                    instance_id="a55534f5-678d-452d-8cc6-e780941d8e31",
+                    instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
                     dnszone_id=zone_id,
                     record_id=record["id"],
                 )
