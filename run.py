@@ -8,7 +8,6 @@ monkey.patch_all()
 import datetime
 import importlib
 import json
-import logging
 import os
 import pickle
 import re
@@ -388,7 +387,7 @@ def run(args):
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
-    disable_console_log = args.get("--disable-console-log")
+    disable_console_log = args.get("--disable-console-log", False)
     post_to_report_portal = args.get("--report-portal")
 
     # Get Perf and CPU mon param
@@ -400,15 +399,8 @@ def run(args):
     run_id = generate_unique_id(length=6)
 
     run_dir = create_run_dir(run_id, log_directory)
-    startup_log = os.path.join(run_dir, "startup.log")
 
-    handler = logging.FileHandler(startup_log)
-    log.logger.addHandler(handler)
-
-    if console_log_level:
-        log.logger.setLevel(console_log_level.upper())
-
-    log.info(f"Startup log location: {startup_log}")
+    log.configure_logger("startup", run_dir, disable_console_log)
     run_start_time = datetime.datetime.now()
     trigger_user = getuser()
 
