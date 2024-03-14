@@ -96,6 +96,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--skip-sos-report]
         [--skip-tc <items>]
         [--monitor-performance]
+        [--disable-console-log]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
 
@@ -159,6 +160,8 @@ Options:
   --skip-tc <items>                 skip test case provided in comma seperated fashion
   --monitor-performance             Monitor performance and CPU usage on all/required nodes
                                     for every test and collects data to specified dir
+  --disable-console-log             To stopping logging to console
+                                    [default: false]
 """
 log = Log()
 test_names = []
@@ -385,6 +388,7 @@ def run(args):
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
+    disable_console_log = args.get("--disable-console-log")
     post_to_report_portal = args.get("--report-portal")
 
     # Get Perf and CPU mon param
@@ -706,7 +710,9 @@ def run(args):
         unique_test_name = create_unique_test_name(tc["name"], test_names)
         test_names.append(unique_test_name)
 
-        tc["log-link"] = log.configure_logger(unique_test_name, run_dir)
+        tc["log-link"] = log.configure_logger(
+            unique_test_name, run_dir, disable_console_log
+        )
         run_config.update({"test_name": unique_test_name, "log_link": tc["log-link"]})
         mod_file_name = os.path.splitext(test_file)[0]
         test_mod = importlib.import_module(mod_file_name)
