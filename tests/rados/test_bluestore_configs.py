@@ -153,7 +153,7 @@ def run(ceph_cluster, **kw):
 
             # restart osd services
             restart_osd_service()
-            wait_for_clean_pg_sets(rados_obj, timeout=300, _sleep=10)
+            wait_for_clean_pg_sets(rados_obj, timeout=300, sleep_interval=10)
 
         log.info("BlueStore Checksum algorithm verification completed.")
         return 0
@@ -227,7 +227,7 @@ def run(ceph_cluster, **kw):
 
             # restart osd services
             restart_osd_service()
-            wait_for_clean_pg_sets(rados_obj, timeout=300, _sleep=10)
+            wait_for_clean_pg_sets(rados_obj, timeout=300, sleep_interval=10)
 
         log.info("BlueStore cache size tuning verification completed.")
         return 0

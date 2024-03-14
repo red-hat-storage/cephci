@@ -171,15 +171,15 @@ def run(ceph_cluster, **kw):
 
     # Checking cluster health after OSD removal
     method_should_succeed(rados_obj.run_pool_sanity_check)
-    log.info(
-        f"Removal of OSD : {target_osd} is successful. Proceeding to add back the OSD daemon."
-    )
     if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
         log.error(f"Inactive PGs found on pool : {pool_name}")
         inactive_pgs += 1
 
     log.debug(
         f"Ceph osd tree after OSD removal : \n\n {rados_obj.run_ceph_command(cmd='ceph osd tree')} \n\n"
+    )
+    log.info(
+        f"Removal of OSD : {target_osd} is successful. Proceeding to add back the OSD daemon."
     )
 
     # Adding the removed OSD back and checking the cluster status

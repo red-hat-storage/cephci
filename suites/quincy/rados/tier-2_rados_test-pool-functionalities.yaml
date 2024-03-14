@@ -129,11 +129,11 @@ tests:
               pool_name: ec_pool_1
               pool_type: erasure
               pg_num: 32
-              k: 8
-              m: 4
+              k: 2
+              m: 2
               plugin: jerasure
               crush-failure-domain: osd
-              target_size_ratio: 0.005
+              target_size_ratio: 0.8
               rados_write_duration: 50
               rados_read_duration: 50
               delete_pool: true
@@ -141,7 +141,7 @@ tests:
               pool_type: replicated
               pool_name: re_pool_1
               pg_num: 32
-              target_size_ratio: 0.001
+              target_size_ratio: 0.8
               rados_write_duration: 50
               rados_read_duration: 50
               delete_pool: true

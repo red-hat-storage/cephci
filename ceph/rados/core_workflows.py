@@ -821,6 +821,7 @@ class RadosOrchestrator:
                 2. target_size_ratio: ratio of cluster pool will utilize. Values -> 0 - 1. (float)
                 3. target_size_bytes: size the pool is assumed to utilize. eg: 10T (str)
                 4. pg_num_min: minimum pg's for a pool. (int)
+                5. pool_name: Name of the pool on which operation is to be done
         Returns:
         """
         pool_name = kwargs["pool_name"]
@@ -1504,11 +1505,11 @@ class RadosOrchestrator:
         cmd = f"ceph pg {pg_id} query"
         try:
             pg_query = self.run_ceph_command(cmd=cmd)
+            log.debug(f"The status of pg : {pg_id} is {pg_query['state']}")
+            return pg_query["state"]
         except Exception as err:
-            log.error(f"Hit exception : {err}")
+            log.error(f"Hit exception collecting PG state for : {pg_id}. Error:  {err}")
             return False
-        log.debug(f"The status of pg : {pg_id} is {pg_query['state']}")
-        return pg_query["state"]
 
     def get_osd_map(self, pool: str, obj: str, nspace: str = None) -> dict:
         """
@@ -2223,31 +2224,161 @@ class RadosOrchestrator:
         pg_id = osd_map_output["pgid"]
         log.info(f"The object {object_name} is created in the pg-{pg_id}")
 
-        # stoping the OSD
+        # stopping the OSD
         if not self.change_osd_state(action="stop", target=primary_osd):
             log.error(f"Unable to stop the OSD : {primary_osd}")
             raise Exception("Execution error")
-        time.sleep(30)
+        log.debug(f"Stopped OSD : {primary_osd} to create inconsistent object")
+        time.sleep(5)
         # Getting the key list
         key_list = self.get_object_key_list(primary_osd, pg_id, object_name)
+        log.debug(f"Key list before deletion : {key_list}")
         rm_key_count = 0
         for obj_key in key_list:
-            log.info(f" Deleting the {obj_key} for the {object_name} object")
-            obj_del_check = self.rm_object_key(primary_osd, pg_id, object_name, obj_key)
-            rm_key_count = rm_key_count + 1
-            if rm_key_count == 3 or not obj_del_check:
+            log.info(f" Deleting the key :{obj_key} in the {object_name} object")
+            self.rm_object_key(primary_osd, pg_id, object_name, obj_key)
+            time.sleep(5)
+            new_key_list = self.get_object_key_list(primary_osd, pg_id, object_name)
+            if obj_key in new_key_list:
+                log.error(
+                    f"The key:{obj_key} from object:{object_name} could not be deleted. Fail"
+                )
+                raise Exception("Object key not deleted error")
+            log.debug(f"Successfully Deleted the {obj_key} from object: {object_name}")
+            rm_key_count += 1
+            if rm_key_count == 3:
                 break
+        log.debug(
+            f"Done with deleting KW pairs on the OSD : {primary_osd} for Obj : object_name"
+        )
+        key_list = self.get_object_key_list(primary_osd, pg_id, object_name)
+        log.debug(f"Key list After deletion : {key_list}")
         if not self.change_osd_state(action="start", target=primary_osd):
             log.error(f"Unable to start the OSD : {primary_osd}")
             raise Exception("Execution error")
+        log.debug(
+            f"Started the OSD: {primary_osd} and performing deep scrubs on the PG"
+        )
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
-        self.run_deep_scrub(pgid=pg_id)
-        # sleeping for 10 seconds, waiting for scrubbing to be over
+        if not self.start_check_deep_scrub_complete(pg_id=pg_id):
+            log.debug(f"deep-scrubbing could not be completed on PG : {pg_id}")
+            raise Exception("PG not deep-scrubbed error")
+        log.debug(f"Completed deep-scrubbing the pg : {pg_id}")
+        # sleeping for 10 seconds
         time.sleep(10)
         health_check = self.check_inconsistent_health(True)
         assert health_check
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
+
+    def start_check_scrub_complete(self, pg_id):
+        """
+        Initiates scrubbing on the PG provided and waits until the scrubbing is complete.
+
+        """
+
+        init_pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+        log.info("Dumping scrub stats before starting scrub")
+        log.info(f"last_scrub : {init_pool_pg_dump['last_scrub']}")
+        log.info(f"last_scrub_stamp: {init_pool_pg_dump['last_scrub_stamp']}")
+
+        # Parse the timestamp string into a datetime object
+        init_scrub_stamp = datetime.datetime.strptime(
+            init_pool_pg_dump["last_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
+        )
+
+        # Running scrub on the PG provided
+        log.debug(f"Initiating scrubbing on pg : {pg_id}")
+        self.run_scrub(pgid=pg_id)
+        time.sleep(2)
+
+        start_time = datetime.datetime.now()
+        while datetime.datetime.now() <= start_time + datetime.timedelta(seconds=2000):
+            pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+            current_scrub_stamp = datetime.datetime.strptime(
+                pool_pg_dump["last_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
+            )
+            if current_scrub_stamp > init_scrub_stamp:
+                log.info(f"Scrubbing complete on the PG: {pg_id}")
+                log.debug(f"Final last_scrub: {pool_pg_dump['last_scrub']}")
+                log.debug(f"Final last_scrub_stamp: {pool_pg_dump['last_scrub_stamp']}")
+                log.debug(
+                    f"Total time taken for scrubbing to complete on the pg : {pg_id} is"
+                    f" {current_scrub_stamp - init_scrub_stamp}"
+                )
+                return True
+            else:
+                log.debug(f"Current last_scrub: {pool_pg_dump['last_scrub']}")
+                log.debug(
+                    f"Current last_scrub_stamp: {pool_pg_dump['last_scrub_stamp']}"
+                )
+                log.debug(
+                    f"Total time elapsed since starting scrub on PG: {pg_id} is"
+                    f" {current_scrub_stamp - init_scrub_stamp}"
+                )
+                log.info(
+                    f"scrub is yet to complete, pg state: {pool_pg_dump['state']}. Sleeping for 30 secs"
+                )
+                time.sleep(30)
+        else:
+            log.error(f"PG : {pg_id} could not be scrubbed in time")
+            raise Exception("Objects not scrubbed error")
+
+    def start_check_deep_scrub_complete(self, pg_id):
+        """
+        Initiates deep-scrubbing on the PG provided and waits until the deep-scrubbing is complete.
+
+        """
+
+        init_pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+        log.info("Dumping deep-scrub stats before starting deep-scrub")
+        log.info(f"last_deep_scrub : {init_pool_pg_dump['last_deep_scrub']}")
+        log.info(f"last_deep_scrub_stamp: {init_pool_pg_dump['last_deep_scrub_stamp']}")
+
+        # Parse the timestamp string into a datetime object
+        init_scrub_stamp = datetime.datetime.strptime(
+            init_pool_pg_dump["last_deep_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
+        )
+
+        # Running deep-scrub on the PG provided
+        log.debug(f"Initiating deep-scrubbing on pg : {pg_id}")
+        self.run_deep_scrub(pgid=pg_id)
+        time.sleep(2)
+
+        start_time = datetime.datetime.now()
+        while datetime.datetime.now() <= start_time + datetime.timedelta(seconds=2000):
+            pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+            # Parse the timestamp string into a datetime object
+            current_scrub_stamp = datetime.datetime.strptime(
+                pool_pg_dump["last_deep_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
+            )
+            if current_scrub_stamp > init_scrub_stamp:
+                log.info(f"Scrubbing complete on the PG: {pg_id}")
+                log.debug(f"Final last_deep_scrub: {pool_pg_dump['last_deep_scrub']}")
+                log.debug(
+                    f"Final last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}"
+                )
+                log.debug(
+                    f"Total time taken for scrubbing to complete on the pg : {pg_id} is"
+                    f" {current_scrub_stamp - init_scrub_stamp}"
+                )
+                return True
+            else:
+                log.debug(f"Current last_deep_scrub: {pool_pg_dump['last_deep_scrub']}")
+                log.debug(
+                    f"Current last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}"
+                )
+                log.debug(
+                    f"Total time elapsed since starting deep-scrub on PG: {pg_id} is"
+                    f" {current_scrub_stamp - init_scrub_stamp}"
+                )
+                log.info(
+                    f"Deep-scrub is yet to complete, pg state: {pool_pg_dump['state']}. Sleeping for 30 secs"
+                )
+                time.sleep(30)
+        else:
+            log.error(f"PG : {pg_id} could not be deep-scrubbed in time")
+            raise Exception("Objects not scrubbed error")
 
     def crash_ceph_daemon(self, daemon: str, id, manual_inject: bool = False):
         """

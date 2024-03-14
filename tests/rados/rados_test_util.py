@@ -69,7 +69,9 @@ def wait_for_device(host, osd_id, action: str, timeout: int = 9000) -> bool:
 
         out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
         container = [
-            item["Names"][0] for item in json.loads(out) if "ceph" in item["Command"]
+            item["Names"][0]
+            for item in json.loads(out)
+            if any("osd" in name for name in item["Names"])
         ]
         should_not_be_empty(container, "Failed to retrieve container ids")
         volume_out, _ = host.exec_command(

@@ -391,6 +391,8 @@ def run(ceph_cluster, **kw):
     log.info(
         f"Acting set : {acting_set} Consists of 4 OSD's per PG. test pool : {pool_name}"
     )
+    log.debug(f"Deleting the pool created ; {pool_name}")
+    rados_obj.detete_pool(pool=pool_name)
 
     log.info("Stretch mode deployed successfully")
     return 0

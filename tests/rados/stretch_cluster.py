@@ -120,6 +120,7 @@ def run(ceph_cluster, **kw):
         log.debug("Forcing the stretch cluster into healthy mode")
         cmd = "ceph osd force_healthy_stretch_mode --yes-i-really-mean-it"
         rados_obj.run_ceph_command(cmd)
+        rados_obj.detete_pool(pool=pool_name)
 
         log.info("Cluster has successfully recovered and is in healthy state")
         return 0
@@ -348,10 +349,14 @@ def wait_for_clean_pg_sets(
                 pg_state = rados_obj.get_pg_state(pg_id=pg_id)
                 if any(key in health_warnings for key in pg_state.split("+")):
                     all_pg_active_clean = False
-                    log.debug(f"PG: {pg_id} in states: {pg_state}")
+                    log.debug(
+                        f"PG: {pg_id} in states: {pg_state}"
+                        f"Waiting for active + clean. "
+                    )
+                    break
                 log.info(
-                    f"Waiting for active + clean. PG: {pg_id} in state: {pg_state}."
-                    f" Checking status again in {sleep_interval} seconds"
+                    f" PG: {pg_id} in state: {pg_state}."
+                    f" Checking status on next PG in the pool"
                 )
         else:
             try:
