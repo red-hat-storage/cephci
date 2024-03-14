@@ -6,6 +6,7 @@ from cli.utilities.utils import build_cmd_from_args
 from .config.config import Config
 from .device import Device
 from .feature import Feature
+from .group import Group
 from .image_meta import Image_meta
 from .mirror.mirror import Mirror
 from .namespace import Namespace
@@ -25,6 +26,7 @@ class Rbd(Cli):
         self.image_meta = Image_meta(nodes, self.base_cmd)
         self.config = Config(nodes, self.base_cmd)
         self.namespace = Namespace(nodes, self.base_cmd)
+        self.group = Group(nodes, self.base_cmd)
 
     def create(self, **kw):
         """

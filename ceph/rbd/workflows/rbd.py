@@ -75,6 +75,7 @@ def create_single_image(
                     "snap_schedule_intervals",
                     "io_size",
                     "num_of_snaps",
+                    "group",
                 ]
             }
         )
