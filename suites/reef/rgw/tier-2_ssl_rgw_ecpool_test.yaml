@@ -165,7 +165,7 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
-      comments: BZ2266411 - anon_put_write_access
+      comments: BZ2266411 - anon_put_write_access, BZ2268234 - list_buckets_bad_auth
 
   - test:
       name: object level retention test Governance mode
