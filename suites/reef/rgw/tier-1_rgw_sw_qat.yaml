@@ -1,0 +1,163 @@
+# This test suite tests the QAT S/w feature provided by the intree QAT driver on RHEL 9.4
+#
+# The following evaluations are carried out
+# - Build can be deployed using CephADM
+# - Enable the QAT options on the cluster
+# - Run Compression and Envryption SSE-KMS tests on the cluster
+
+# RHCS 7.x sanity test suite for RGW daemon.
+# conf : conf/reef/rgw/tier-0_rgw.yaml
+# Polarion ID : CEPH-83582013
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  # Enable Software QAT on the cluster
+
+  - test:
+      name: Enable QAT config options
+      desc: Enable QAT config options
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - "ceph config set client.rgw.{daemon_id:rgw.1} plugin_crypto_accelerator crypto_qat"
+          - "ceph config set client.rgw.{daemon_id:rgw.1} qat_compressor_enabled true"
+          - "ceph orch restart {service_name:rgw.1}"
+      module: exec.py
+
+  - test:
+      name: compresstion_with_zstd_type
+      desc: test compresstion with zstd type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+        timeout: 300
+
+  - test:
+      name: compresstion_with_snappy_type
+      desc: test compresstion with snappy type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
+        timeout: 300
+
+  - test:
+      name: compresstion_with_Zlib_type
+      desc: test compresstion with Zlib
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+        timeout: 300
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+        timeout: 300
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test on a regular bucket
+      polarion-id: CEPH-83574619 # CEPH-8357515
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
+        timeout: 300
+      desc: sse_s3_per_bucket_enc_multipart_upload
+      module: sanity_rgw_multisite.py
+      name: sse_s3_per_bucket_enc_multipart_upload
+      polarion-id: CEPH-83575155
+      comments: known issue (bz-2153452)
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_object.yaml
+        timeout: 300
+      desc: test_sse_s3_per_object_encryption
+      module: sanity_rgw.py
+      name: sse-s3 per object encryption test on a regular bucket
+      polarion-id: CEPH-83574040
