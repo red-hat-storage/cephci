@@ -4,7 +4,6 @@ from time import sleep
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
-from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
@@ -14,7 +13,6 @@ log = Log(__name__)
 
 ceph_cluster_obj = None
 setup_start_time = None
-GANESHA_CONF_PATH = "/usr/share/ceph/mgr/cephadm/templates/services/nfs/ganesha.conf.j2"
 
 
 class NfsCleanupFailed(Exception):
@@ -66,11 +64,6 @@ def setup_nfs_cluster(
 
     # Get the mount versions specific to clients
     mount_versions = _get_client_specific_mount_versions(version, clients)
-
-    # Check if the mount version v3 is included in the list of versions and
-    # if the mount version is v3, make necessary changes
-    if 3 in mount_versions.keys():
-        _enable_v3_mount(export_list, nfs_name)
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
@@ -175,65 +168,6 @@ def _get_client_specific_mount_versions(versions, clients):
         version_dict[ver] = clients[ctr : ctr + int(count)]
         ctr = ctr + int(count)
     return version_dict
-
-
-def _enable_v3_mount(exports, nfs_name):
-    installer = ceph_cluster_obj.get_nodes("installer")[0]
-
-    # Get Ganesha.conf file
-    cmd = f"-- cat {GANESHA_CONF_PATH} > ganesha.conf"
-    CephAdm(installer).shell(cmd=cmd)
-
-    # Edit ganesha.conf file to include the version 3 and "mount_path_pseudo = true"
-    cmds = [
-        "sed -i 's/Protocols = 4;/Protocols = 3, 4;/' ganesha.conf",
-        r"sed -i '/Protocols = 3, 4;/a \        mount_path_pseudo = true;' ganesha.conf",
-    ]
-    for cmd in cmds:
-        installer.exec_command(cmd=cmd, sudo=True)
-
-    # Mount the ganesha file inside shell
-    cmd = (
-        "--mount ganesha.conf:/var/lib/ceph/ganesha.conf -- "
-        "ceph config-key set mgr/cephadm/services/nfs/ganesha.conf -i /var/lib/ceph/ganesha.conf"
-    )
-    CephAdm(installer).shell(cmd=cmd)
-
-    # Get the ganesha conf to verify the set operation
-    CephAdm(installer).ceph.config_key.get(key="mgr/cephadm/services/nfs/ganesha.conf")
-
-    # Enable v3 support on NFS export
-    enable_v3_export(exports, nfs_name, installer)
-
-
-def enable_v3_export(exports, nfs_name, installer):
-    # Update all export file content to accommodate v3
-    for export in exports:
-        export_file = f"export_{export[-1]}.conf"
-        cmd = f" -- ceph nfs export info {nfs_name} {export} > {export_file}"
-        CephAdm(installer).shell(cmd=cmd)
-
-        # Add v3 to the export file
-        cmd = rf"sed -i '/\"protocols\": /a \    3,' {export_file}"
-        installer.exec_command(cmd=cmd, sudo=True)
-
-        # Mount the export file with changes
-        cmd = (
-            f" --mount {export_file}:/var/lib/ceph/{export_file} "
-            f"-- ceph nfs export apply {nfs_name} -i /var/lib/ceph/{export_file}"
-        )
-        CephAdm(installer).shell(cmd=cmd)
-
-        # Apply the export
-        CephAdm(installer).ceph.nfs.export.apply(
-            nfs_name=nfs_name, export_conf=f"/var/lib/ceph/{export_file}"
-        )
-
-    # Redeploy nfs
-    CephAdm(installer).ceph.orch.redeploy(service=f"nfs.{nfs_name}")
-
-    # Adding a sleep for the redeployment to complete
-    sleep(10)
 
 
 def perform_failover(nfs_nodes, failover_node, vip):

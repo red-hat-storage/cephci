@@ -1,6 +1,6 @@
 from time import sleep
 
-from nfs_operations import cleanup_cluster, enable_v3_export, setup_nfs_cluster
+from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
@@ -113,11 +113,6 @@ def run(ceph_cluster, **kw):
             nfs_export=nfs_export2,
             fs=fs_name,
         )
-
-        # Enable v3 on second export export
-        exports = [nfs_export2]
-        installer = ceph_cluster.get_nodes("installer")[0]
-        enable_v3_export(exports, nfs_name, installer)
 
         # Mount the second export via v3 to window clients
         cmd = f"mount {nfs_nodes[0].ip_address}:/default_export {window_nfs_mount2}"
