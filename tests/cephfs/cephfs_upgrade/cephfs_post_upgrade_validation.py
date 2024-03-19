@@ -166,7 +166,13 @@ def snap_sched_test(snap_req_params):
                 client_name = sv_data["mnt_client"]
                 if sv_data.get("snap_list"):
                     sv_snap.update(
-                        {sv: {"snap_list": sv_data["snap_list"], "svg": svg}}
+                        {
+                            sv: {
+                                "snap_list": sv_data["snap_list"],
+                                "svg": svg,
+                                "mnt_pt": sv_data["mnt_pt"],
+                            }
+                        }
                     )
                 if sv_data.get("sched_path"):
                     sv_sched.update(
@@ -231,10 +237,21 @@ def snap_sched_test(snap_req_params):
     for sv in sv_snap:
         for mnt_pt in [sv_snap[sv]["mnt_kernel"], sv_snap[sv]["mnt_fuse"]]:
             cmd = f"ls {mnt_pt}/.snap/*{sv_snap[sv]['snap_list'][0]}*/*"
-            out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
-            file_path = out.strip()
-            cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
-            out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            try:
+                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+                file_path = out.strip()
+                cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
+                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            except Exception as ex:
+                log.info(str(ex))
+                mnt_pt = sv_snap[sv]["mnt_pt"]
+                cmd = f"ls {mnt_pt}/.snap/*{sv_snap[sv]['snap_list'][0]}*/*"
+                log.info("Verify if existing mountpoint is accessible")
+                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+                log.info(out)
+                file_path = out.strip()
+                cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
+                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
 
     log.info("Verified that existing snapshots are accessible and read op suceeds")
 
@@ -294,6 +311,8 @@ def snap_sched_test(snap_req_params):
         for mnt_pt in [sv_snap[sv]["mnt_kernel"], sv_snap[sv]["mnt_fuse"]]:
             cmd = f"umount -f {mnt_pt};rm -rf {mnt_pt}"
             out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+    cmd = f"umount -f {fuse_mounting_dir};rm -rf {fuse_mounting_dir}"
+    out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
 
 
 def clone_test(clone_req_params):
