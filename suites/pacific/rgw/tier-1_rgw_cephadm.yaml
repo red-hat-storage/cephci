@@ -181,6 +181,27 @@ tests:
       polarion-id: CEPH-83573815
 
   - test:
+      abort-on-fail: true
+      config:
+        node: node7
+        sudo: True
+        commands:
+          - "yum install -y jq"
+          - "radosgw-admin zonegroup get --rgw-zonegroup=south > /tmp/zonegroup_south_backup.json"
+          - "jq -r '.zones[].log_data=false | .zones[].sync_from_all=false' /tmp/zonegroup_south_backup.json > /tmp/zonegroup_south.json"
+          - "radosgw-admin zonegroup set --rgw-zonegroup=south --infile=/tmp/zonegroup_south.json"
+          - "radosgw-admin period update --rgw-realm india --commit"
+          - "radosgw-admin zonegroup get --rgw-zonegroup=east > /tmp/zonegroup_east_backup.json"
+          - "jq -r '.zones[].log_data=false | .zones[].sync_from_all=false' /tmp/zonegroup_east_backup.json > /tmp/zonegroup_east.json"
+          - "radosgw-admin zonegroup set --rgw-zonegroup=east --infile=/tmp/zonegroup_east.json"
+          - "radosgw-admin period update --rgw-realm us --commit"
+          - "sleep 20"
+      desc: Disabling sync between the zones
+      module: exec.py
+      name: disable sync between zones
+      polarion-id: CEPH-83581229
+
+  - test:
       name: Test the byte ranges with get object
       desc: Test the byte ranges with get_object
       polarion-id: CEPH-83572691
