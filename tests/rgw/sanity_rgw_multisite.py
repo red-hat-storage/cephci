@@ -391,7 +391,6 @@ def set_test_env(config, rgw_node):
             )
             rgw_node.exec_command(cmd="python3 -m venv venv")
             rgw_node.exec_command(cmd="venv/bin/pip install --upgrade pip")
-            rgw_node.exec_command(cmd="venv/bin/pip install configobj")
             rgw_node.exec_command(
                 cmd=f"venv/bin/pip install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
             )
