@@ -401,6 +401,10 @@ def run(args):
     run_dir = create_run_dir(run_id, log_directory)
 
     log.configure_logger("startup", run_dir, disable_console_log)
+
+    if console_log_level:
+        log.logger.setLevel(console_log_level.upper())
+
     run_start_time = datetime.datetime.now()
     trigger_user = getuser()
 
