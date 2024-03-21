@@ -8,8 +8,8 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
+from ceph.nvmegw_cli.common import NVMeCLI, find_client_daemon_id
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -158,9 +158,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                                 "subnqn": f"nqn.2016-06.io.spdk:cnode{num}",
                                 "port": listener_port,
                             }
-                            client_id = find_client_daemon_id(
-                                ceph_cluster, pool, node_name=node.hostname
-                            )
+                            client_id = find_client_daemon_id(node)
                             listener.update(
                                 {"gateway-name": client_id, "traddr": node.ip_address}
                             )

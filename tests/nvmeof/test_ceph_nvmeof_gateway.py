@@ -9,7 +9,6 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof, test_orch
@@ -28,12 +27,12 @@ def configure_subsystems(rbd, pool, subsystem, config):
     )
 
     listener_cfg = {
-        "gateway-name": config.pop("gateway-name"),
+        "gateway-name": subsystem.fetch_gateway_client_name(),
         "traddr": subsystem.node.ip_address,
         "trsvcid": config["listener_port"],
     }
     subsystem.listener.add(**{"args": {**listener_cfg, **sub_args}})
-    subsystem.host.add(**{"args": {**sub_args, **{"host": config["allow_host"]}}})
+    subsystem.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
         with parallel() as p:
@@ -160,7 +159,7 @@ def teardown(ceph_cluster, rbd_obj, config):
             sub_node = get_node_by_id(ceph_cluster, node)
             sub_gw = Subsystem(sub_node, 5500)
             LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {node}")
-            sub_gw.delete(**{"args": {"subsystem": sub_cfg["nqn"]}})
+            sub_gw.delete(**{"args": {"subsystem": sub_cfg["nqn"], "force": True}})
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
@@ -273,9 +272,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if config.get("subsystems"):
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
-                    subsys_args["gateway-name"] = find_client_daemon_id(
-                        ceph_cluster, rbd_pool, node_name=gw_node.hostname
-                    )
                     p.spawn(
                         configure_subsystems, rbd_obj, rbd_pool, subsystem, subsys_args
                     )

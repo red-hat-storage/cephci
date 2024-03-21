@@ -3,6 +3,7 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
+from ceph.nvmegw_cli.common import find_client_daemon_id
 from ceph.nvmegw_cli.connection import Connection
 from ceph.nvmegw_cli.gateway import Gateway
 from ceph.nvmegw_cli.host import Host
@@ -12,7 +13,6 @@ from ceph.nvmegw_cli.namespace import Namespace
 from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmegw_cli.version import Version
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -97,7 +97,6 @@ def configure_subsystems(config, _cls, command):
 
 def configure_listeners(config, _cls, command, ceph_cluster):
     port = config["args"].pop("port")
-    pool_name = config["args"].pop("pool")
     subsystems = config["args"].pop("subsystems")
     nodes = config["args"].pop("nodes")
     LOG.info(nodes)
@@ -105,9 +104,7 @@ def configure_listeners(config, _cls, command, ceph_cluster):
         LOG.info(node)
         listener_node = get_node_by_id(ceph_cluster, node)
         for num in range(1, subsystems + 1):
-            client_id = find_client_daemon_id(
-                ceph_cluster, pool_name, node_name=listener_node.hostname
-            )
+            client_id = find_client_daemon_id(listener_node)
             config["args"].update(
                 {
                     "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",

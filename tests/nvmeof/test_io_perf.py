@@ -10,7 +10,6 @@ import yaml
 
 from ceph.ceph import Ceph
 from ceph.nvmegw_cli.subsystem import Subsystem
-from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof, test_orch
@@ -479,9 +478,6 @@ def nvmeof(ceph_cluster, **args):
             "allow_host": "*",
             "listener_port": find_free_port(gw_node),
             "node": args["gw_node"],
-            "gateway-name": find_client_daemon_id(
-                ceph_cluster, pool, node_name=gw_node.hostname
-            ),
         }
         initiator_cfg = {
             "subnqn": subsystem["nqn"],

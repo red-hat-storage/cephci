@@ -13,7 +13,7 @@ import paramiko
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.nvmeof.nvmeof_gwcli import NVMeCLI
+from ceph.nvmegw_cli.common import NVMeCLI
 from ceph.utils import get_node_by_id
 from utility.log import Log
 
