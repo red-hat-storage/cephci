@@ -5,7 +5,6 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof, test_orch
@@ -24,7 +23,7 @@ def configure_subsystems(rbd, pool, subsystem, config):
     )
 
     listener_cfg = {
-        "gateway-name": config.pop("gateway-name"),
+        "gateway-name": subsystem.fetch_gateway_client_name(),
         "traddr": subsystem.node.ip_address,
         "trsvcid": config["listener_port"],
     }
@@ -136,10 +135,10 @@ def teardown(ceph_cluster, rbd_obj, config):
     """
     # Delete the multiple Initiators across multiple gateways
     if "initiators" in config["cleanup"]:
-        for initiator_cfg in config["initiators"]:
-            disconnect_initiator(
-                ceph_cluster, initiator_cfg["node"], initiator_cfg["subnqn"]
-            )
+        initiator_cfg = config["initiators"]
+        disconnect_initiator(
+            ceph_cluster, initiator_cfg["node"], initiator_cfg["subnqn"]
+        )
 
     # Delete the multiple subsystems across multiple gateways
     if "subsystems" in config["cleanup"]:
@@ -151,7 +150,7 @@ def teardown(ceph_cluster, rbd_obj, config):
             sub_node = get_node_by_id(ceph_cluster, node)
             sub_gw = Subsystem(sub_node, 5500)
             LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {node}")
-            sub_gw.delete(**{"args": {"subsystem": sub_cfg["nqn"]}})
+            sub_gw.delete(**{"args": {"subsystem": sub_cfg["nqn"], "force": True}})
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
@@ -190,7 +189,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
-    rbd_obj.ceph_client = get_node_by_id(ceph_cluster, config["initiator"]["node"])
+    rbd_obj.ceph_client = get_node_by_id(ceph_cluster, config["initiators"]["node"])
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
@@ -219,15 +218,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if config.get("subsystems"):
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
-                    subsys_args["gateway-name"] = find_client_daemon_id(
-                        ceph_cluster, rbd_pool, node_name=gw_node.hostname
-                    )
                     p.spawn(
                         configure_subsystems, rbd_obj, rbd_pool, subsystem, subsys_args
                     )
 
-        if config.get("initiator"):
-            targets = initiators(ceph_cluster, subsystem, config["initiator"])
+        if config.get("initiators"):
+            targets = initiators(ceph_cluster, subsystem, config["initiators"])
             LOG.info(f"Targets discovered: {targets}")
 
             # verifying data integrity on NVMe targets
@@ -302,15 +298,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     )
                     return 1
                 # reboot the client node
-                initiator = get_node_by_id(ceph_cluster, config["initiator"]["node"])
+                initiator = get_node_by_id(ceph_cluster, config["initiators"]["node"])
                 initiator.exec_command(sudo=True, cmd="reboot", check_ec=False)
                 # Sleep before and after reconnect
                 time.sleep(60)
                 initiator.reconnect()
                 time.sleep(10)
                 # Connect to Initiator
-                if config.get("initiator"):
-                    targets = initiators(ceph_cluster, subsystem, config["initiator"])
+                if config.get("initiators"):
+                    targets = initiators(ceph_cluster, subsystem, config["initiators"])
                     LOG.info(f"Targets discovered: {targets}")
                 # mount the NVMe target
                 target = targets[0]

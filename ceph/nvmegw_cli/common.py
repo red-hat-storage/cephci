@@ -6,26 +6,18 @@
 from json import loads
 
 from ceph.ceph_admin.common import config_dict_to_string
-from ceph.ceph_admin.orch import Orch
 from cli.utilities.configs import get_registry_details
 from cli.utilities.containers import Registry
 from utility.log import Log
 
+from . import NVMeGWCLI
+
 LOG = Log(__name__)
 
 
-def find_client_daemon_id(cluster, pool_name, node_name=None):
+def find_client_daemon_id(node, port=5500):
     """Find client daemon Id."""
-    orch = Orch(cluster=cluster, **{})
-    daemons, _ = orch.ps(
-        {"base_cmd_args": {"format": "json"}, "args": {"daemon_type": "nvmeof"}}
-    )
-    for daemon in loads(daemons):
-        if daemon["service_name"] == f"nvmeof.{pool_name}":
-            if node_name:
-                if daemon["hostname"] != node_name:
-                    continue
-            return f"client.{daemon['daemon_name']}"
+    return NVMeGWCLI(node, port).fetch_gateway_client_name()
 
 
 class NVMeCLI:

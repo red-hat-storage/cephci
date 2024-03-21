@@ -13,7 +13,6 @@ from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
@@ -43,7 +42,7 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
     subsystem = dict()
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:cnode_negative",
+            "nqn": "nqn.2016-06.io.spdk:negative",
             "serial": 114,
             "listener_port": listener_port,
             "allow_host": "*",
@@ -51,14 +50,11 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
     )
 
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:cnode_negative",
+        "subnqn": "nqn.2016-06.io.spdk:negative",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -100,21 +96,18 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83576084",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83576084",
             "serial": 112,
             "listener_port": listener_port,
             "allow_host": "*",
         }
     )
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83576084",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83576084",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -206,21 +199,18 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83575467",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83575467",
             "serial": 111,
             "listener_port": listener_port,
             "allow_host": "*",
         }
     )
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83575467",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575467",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -283,7 +273,7 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83576085",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83576085",
             "serial": 113,
             "listener_port": listener_port,
             "allow_host": "*",
@@ -291,7 +281,7 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     )
 
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83576085",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83576085",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
@@ -307,9 +297,6 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -379,7 +366,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83576087",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83576087",
             "serial": 113,
             "listener_port": listener_port,
             "allow_host": "*",
@@ -387,7 +374,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     )
 
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83576087",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83576087",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
@@ -403,9 +390,6 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -484,22 +468,19 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83576093",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83576093",
             "serial": 113,
             "listener_port": listener_port,
             "allow_host": "*",
         }
     )
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83576093",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83576093",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
 
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -592,14 +573,14 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83575455",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83575455",
             "serial": 113,
             "listener_port": listener_port,
             "allow_host": initiator_nqn,
         }
     )
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83575455",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575455",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
@@ -608,9 +589,6 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -716,7 +694,7 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83575813",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83575813",
             "serial": 83575813,
             "listener_port": listener_port,
             "allow_host": "*",
@@ -724,16 +702,13 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     )
 
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83575813",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575813",
         "listener_port": listener_port,
         "node": config["initiator_node"],
     }
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator = Initiator(client)
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -775,10 +750,10 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
 
         # Expand the images and validate the sizes at the client side
         gateway.namespace.resize(
-            **{"args": {"subsystem": subsystem["nqn"], "nsid": 1, "size": 3000}}
+            **{"args": {"subsystem": subsystem["nqn"], "nsid": 1, "size": "3G"}}
         )
         gateway.namespace.resize(
-            **{"args": {"subsystem": subsystem["nqn"], "nsid": 2, "size": 4000}}
+            **{"args": {"subsystem": subsystem["nqn"], "nsid": 2, "size": "4G"}}
         )
 
         for img in rbd.get_disk_usage_for_pool(pool)["images"]:
@@ -821,21 +796,18 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83575814",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83575814",
             "serial": 83575814,
             "listener_port": listener_port,
             "allow_host": "*",
         }
     )
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575814",
         "listener_port": listener_port,
         "node": config.get("initiator_node"),
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         name = generate_unique_id(length=4)
 
@@ -902,25 +874,22 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_83581753",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83581753",
             "serial": 83581753,
             "listener_port": listener_port,
             "allow_host": "*",
         }
     )
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575814",
         "listener_port": listener_port,
         "node": config.get("initiator_node"),
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         list_args = {}
         list_args.setdefault("args", {}).update(
-            {"subsystem": "nqn.2016-06.io.spdk:ceph_83581753"}
+            {"subsystem": "nqn.2016-06.io.spdk:ceph-83581753"}
         )
         name = generate_unique_id(length=4)
 
@@ -998,21 +967,18 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
     listener_port = find_free_port(gw_node)
     subsystem.update(
         {
-            "nqn": "nqn.2016-06.io.spdk:ceph_883581945",
+            "nqn": "nqn.2016-06.io.spdk:ceph-83581945",
             "serial": 83581945,
             "listener_port": listener_port,
             "allow_host": "*",
         }
     )
     initiator_cfg = {
-        "subnqn": "nqn.2016-06.io.spdk:ceph_83575814",
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575814",
         "listener_port": listener_port,
         "node": config.get("initiator_node"),
     }
     try:
-        subsystem["gateway-name"] = find_client_daemon_id(
-            ceph_cluster, pool, node_name=gw_node.hostname
-        )
         configure_subsystems(rbd, pool, gateway, subsystem)
         list_args = {}
         list_args.setdefault("args", {}).update({"subsystem": subsystem["nqn"]})

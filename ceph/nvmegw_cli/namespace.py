@@ -35,3 +35,11 @@ class Namespace(NVMeGWCLI):
     def resize(self, **kwargs):
         """Resize namespaces under subsystem."""
         return self.run_nvme_cli("resize", **kwargs)
+
+    def change_load_balancing_group(self, **kwargs):
+        """change LB Group Id for namespaces under subsystem."""
+        return self.run_nvme_cli("change_load_balancing_group", **kwargs)
+
+    def get_io_stats(self, **kwargs):
+        """Get IO Stats for namespace."""
+        return self.run_nvme_cli("get_io_stats", **kwargs)

@@ -68,7 +68,7 @@ tests:
       config:
         cleanup:
           - subsystems
-          - intiators
+          - initiators
           - pool
           - gateway
         gw_node: node2
@@ -86,7 +86,7 @@ tests:
               size: 10G
             listener_port: 5001
             allow_host: "*"
-        initiator:                              # Configure Initiators with all pre-req
+        initiators:                              # Configure Initiators with all pre-req
             subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 5001
             node: node10
@@ -109,7 +109,7 @@ tests:
         install: true                           # Run SPDK with all pre-requisites
         cleanup:
           - subsystems
-          - intiators
+          - initiators
           - pool
           - gateway
         subsystems:                             # Configure subsystems with all sub-entities
@@ -143,7 +143,7 @@ tests:
         install: true                           # Run SPDK with all pre-requisites
         cleanup:
           - subsystems
-          - intiators
+          - initiators
           - pool
           - gateway
         subsystems:                             # Configure subsystems with all sub-entities
@@ -177,7 +177,7 @@ tests:
         install: true                           # Run SPDK with all pre-requisites
         cleanup:
           - subsystems
-          - intiators
+          - initiators
           - pool
           - gateway
         subsystems:                             # Configure subsystems with all sub-entities
@@ -221,7 +221,7 @@ tests:
         install: true                           # Run SPDK with all pre-requisites
         cleanup:
           - subsystems
-          - intiators
+          - initiators
           - pool
           - gateway
         subsystems: # Configure subsystems with all sub-entities

@@ -5,8 +5,8 @@ LOG = Log(__name__)
 
 
 class ExecuteCommandMixin:
-    BASE_CMD = "podman run"
-    NVMEOF_CLI_IMAGE = "quay.io/ceph/nvmeof-cli:v0.0.3"
+    BASE_CMD = "podman run --rm"
+    NVMEOF_CLI_IMAGE = "quay.io/ceph/nvmeof-cli:1.1.0"
 
     def __init__(self, node, port=5500) -> None:
         self.port = port

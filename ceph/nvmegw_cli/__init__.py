@@ -1,3 +1,5 @@
+from json import loads
+
 from ceph.nvmegw_cli.connection import Connection
 from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 from ceph.nvmegw_cli.gateway import Gateway
@@ -15,3 +17,17 @@ class NVMeGWCLI(ExecuteCommandMixin):
         self.name = " "
         for clas in [self.loglevel, self.gateway, self.version, self.connection]:
             clas.NVMEOF_CLI_IMAGE = self.NVMEOF_CLI_IMAGE
+
+    def fetch_gateway_client_name(self):
+        """Return Gateway Client name/id."""
+        gwinfo = {"base_cmd_args": {"format": "json"}}
+        _, out = self.gateway.info(**gwinfo)
+        out = loads(out)
+        return out["name"]
+
+    def fetch_gateway_lb_group_id(self):
+        """Return Gateway Load balancing group Id."""
+        gwinfo = {"base_cmd_args": {"format": "json"}}
+        _, out = self.gateway.info(**gwinfo)
+        out = loads(out)
+        return out["load_balancing_group"]

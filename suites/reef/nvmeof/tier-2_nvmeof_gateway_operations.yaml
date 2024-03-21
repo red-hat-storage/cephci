@@ -210,15 +210,49 @@ tests:
                 nsid: 1
           - config:
               service: namespace
+              command: add              # Namespace add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                rbd-image: image2
+                rbd-pool: rbd
+                nsid: 2
+                rbd-create-image: true
+                size: 10G
+          - config:
+              service: namespace
               command: list             # namespace list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: namespace
+              command: resize              # Namespace resize
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 2
+                size: 15G
+          - config:
+              service: namespace
+              command: list             # namespace list
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: namespace
+              command: get_io_stats             # namespace get_io_stats
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 1
           - config:
               service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
                 nsid: 1
+          - config:
+              service: namespace
+              command: delete           # namespace delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 2
           - config:
               service: subsystem
               command: delete           # subsystem delete
