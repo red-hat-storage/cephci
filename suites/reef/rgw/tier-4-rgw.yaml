@@ -223,3 +223,24 @@ tests:
         script-name: test_swift_basic_ops.py
         config-file-name: test_s3_and_swift_versioning.yaml
         timeout: 500
+
+  # test s3-select with query generation of incorrect syntax
+  - test:
+      name: test s3select with depth1 queries on csv objects
+      desc: test s3select with depth1 queries of incorrect syntax for checking rgw crashes on csv objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_csv_depth1.yaml
+        timeout: 3600
+
+  - test:
+      name: test s3select with depth2 queries on csv objects
+      desc: test s3select with depth2 queries of incorrect syntax for checking rgw crashes on csv objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_csv_depth2.yaml
+        timeout: 3600
