@@ -1,0 +1,130 @@
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        - hostname: extensa010
+          ip: 10.8.130.210
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: extensa011
+          ip: 10.8.130.211
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+            - rbd-mirror
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: extensa012
+          ip: 10.8.130.212
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: extensa013
+          ip: 10.8.130.213
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - rbd-mirror
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: extensa014
+          ip: 10.8.130.214
+          root_password: passwd
+          role:
+            - client
+
+  - ceph-cluster:
+      name: ceph-sec
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        - hostname: clara011
+          ip: 10.8.129.11
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: clara012
+          ip: 110.8.129.12
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+            - rbd-mirror
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: clara013
+          ip: 10.8.129.13
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: clara014
+          ip: 10.8.129.14
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - rbd-mirror
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sda
+        - hostname: clara015
+          ip: 10.8.129.15
+          root_password: passwd
+          role:
+            - client
