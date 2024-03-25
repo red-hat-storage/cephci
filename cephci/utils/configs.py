@@ -267,3 +267,27 @@ def get_reports(service):
         return _dict
     except KeyError:
         raise ConfigError(f"Insufficient config for '{service}'")
+
+
+def get_database_credentials(config, database):
+    """
+    Gets the credentials of the database
+    Args:
+        config (conf): User specified config
+        database (str): Name of the database
+    """
+    get_configs(config)
+    if not CONFIG:
+        raise ConfigError("Configuration is not passed")
+    _dict = {}
+    try:
+        log.info(f"Loading credentials for reporting service '{database}'")
+        credentials = CONFIG["reports"][database]
+        _dict["name"] = credentials["name"]
+        _dict["user"] = credentials["user"]
+        _dict["pwd"] = credentials["pwd"]
+        _dict["host"] = credentials["host"]
+        _dict["port"] = credentials["port"]
+        return _dict
+    except KeyError:
+        raise ConfigError(f"Insufficient config for '{database}'")
