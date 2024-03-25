@@ -375,6 +375,7 @@ tests:
       desc: initiate cosbench hybrid workload
       module: push_cosbench_workload.py
       name: push cosbench hybrid workload
+      polarion-id: CEPH-83575831
 
   - test:
       clusters:
