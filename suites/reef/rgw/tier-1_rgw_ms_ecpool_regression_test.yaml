@@ -348,7 +348,6 @@ tests:
   - test:
       name: reverting object to one of the versions on primary
       desc: test_versioning_objects_copy on secondary
-      comments: Known issue BZ-2266248
       polarion-id: CEPH-9179
       module: sanity_rgw_multisite.py
       clusters:

@@ -73,7 +73,6 @@ tests:
   - test:
       name: Test BucketNotification with users in same tenant and different tenant
       desc: BucketNotification with users in same tenant and different tenant
-      comments: Known issue BZ-2266248
       polarion-id: CEPH-11204
       module: sanity_rgw.py
       config:
@@ -110,7 +109,6 @@ tests:
       name: S3CMD small and multipart object download
       desc: S3CMD small and multipart object download or GET
       polarion-id: CEPH-83575477
-      comments: Known issue BZ-2266248
       module: sanity_rgw.py
       config:
         script-name: ../s3cmd/test_s3cmd.py
@@ -121,7 +119,6 @@ tests:
       name: Swift user with read access
       desc: Swift user with read access
       polarion-id: CEPH-9220
-      comments: Known issue BZ-2266248
       module: sanity_rgw.py
       config:
         script-name: test_swift_basic_ops.py
