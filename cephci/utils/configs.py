@@ -267,3 +267,14 @@ def get_reports(service):
         return _dict
     except KeyError:
         raise ConfigError(f"Insufficient config for '{service}'")
+
+
+def get_reporting_credentials(config):
+    get_configs(config)
+    if not CONFIG:
+        raise ConfigError("Configuration is not passed")
+
+    try:
+        return CONFIG["reports"]
+    except KeyError:
+        raise ConfigError(f"Reports configurations are missing from {config}")
