@@ -250,3 +250,13 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
         timeout: 300
+
+  - test:
+      name: Test by adding almost 10K buckets to the resharding queue
+      desc: disable and enable dynamic resharding for 10K buckets
+      polarion-id: CEPH-11478
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_1k_bucket.yaml
+        timeout: 300
