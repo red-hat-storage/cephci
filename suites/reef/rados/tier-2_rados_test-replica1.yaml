@@ -1,4 +1,5 @@
 # Suite contains tests for replica-1 non-resilient pool
+# conf: conf/reef/rados/11-node-replica1-cluster.yaml
 tests:
   - test:
       name: setup install pre-requisistes
@@ -109,4 +110,16 @@ tests:
       name: replica-1 non-resilient pools
       module: test_replica1.py
       polarion-id: CEPH-83575297
+      config:
+       replica-1: true
       desc: Test replica-1 non-resilient pools
+
+# test should run in succession with previous test(replica-1 non-resilient pools)
+# as it needs replica-1 pools to be present on the cluster
+  - test:
+      name: EIO flag on replica-1 non-resilient pools
+      module: test_replica1.py
+      polarion-id: CEPH-83582009
+      config:
+        eio: true
+      desc: Test EIO flag on replica-1 non-resilient pools

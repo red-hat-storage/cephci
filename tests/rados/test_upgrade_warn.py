@@ -48,7 +48,7 @@ def run(ceph_cluster, **kw):
         warn_flag = False
         upgrade_complete = False
         # Monitor upgrade status, till completion, checking for the warning to be generated
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=14400)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
         while end_time > datetime.datetime.now():
             cmd = "ceph orch upgrade status"
             out = rados_obj.run_ceph_command(cmd=cmd, client_exec=True)

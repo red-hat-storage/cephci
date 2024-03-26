@@ -104,6 +104,7 @@ class PoolFunctions:
                 self.rados_obj.change_osd_state(action="restart", target=primary_osd)
                 pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
                 omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
+                log.info(f"Current value of OMAP keys: {omap_keys}")
                 if omap_keys < expected_omap_keys:
                     log.error(
                         f"OMAP key yet to reach expected value of {expected_omap_keys} for pool {pool_name} "
@@ -698,3 +699,17 @@ class PoolFunctions:
 
         log.info(f"Executing command: {_cmd}")
         return self.node.shell([_cmd])
+
+    def fetch_pool_stats(self, pool: str) -> dict:
+        """
+        Fetch pool statistics using ceph osd pool stats <pool-name>
+        Args:
+            pool: name of the pool in string format
+        Returns:
+            dictionary output of ceph osd pool stats command
+            e.g. [{"pool_name":"replica1_zone2","pool_id":9,"recovery":{},"recovery_rate":{},
+            "client_io_rate":{"write_bytes_sec":1255027894,"read_op_per_sec":0,"write_op_per_sec":299}}]
+        """
+        _cmd = f"ceph osd pool stats {pool}"
+        pool_stat = self.rados_obj.run_ceph_command(cmd=_cmd, client_exec=True)
+        return pool_stat[0]

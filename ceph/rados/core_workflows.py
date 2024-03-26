@@ -267,10 +267,8 @@ class RadosOrchestrator:
             log.error(f"requested pool {pool} is not present on the cluster")
             return False
 
-        cmd = f"ceph osd pool get {pool} {props} -f json"
-        out, err = self.node.shell([cmd])
-        prop_details = json.loads(out)
-        return prop_details
+        cmd = f"ceph osd pool get {pool} {props}"
+        return self.run_ceph_command(cmd=cmd, client_exec=True)
 
     def get_pool_details(self, pool) -> dict:
         """
