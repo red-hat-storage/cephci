@@ -108,3 +108,53 @@ function remove_repos {
     sshpass -p ${password} ssh ${username}@${node} 'sudo rm -f /etc/yum.repos.d/*; sudo yum clean all'
 
   }
+
+function reboot_node {
+  local node="$1"
+    local username="${2:-root}"
+    local password="${3:-passwd}"
+
+    echo 'Cleaning default repo files to avoid conflicts'
+    sshpass -p ${password} ssh ${username}@${node} 'sudo reboot'
+
+  }
+
+function wait_for_node {
+  local node="$1"
+    local username="${2:-root}"
+    local password="${3:-passwd}"
+    local max_attempts=10
+    local wait_time=60
+
+    echo "Waiting for node ${node} to come back online..."
+
+    for ((attempt=1; attempt<=max_attempts; attempt++)); do
+        if ping -c 1 ${node} &> /dev/null; then
+            echo "Node ${node} is online"
+            return 0
+        else
+            echo "Node ${node} is still offline. Attempt ${attempt}/${max_attempts}"
+            sleep ${wait_time}
+        fi
+    done
+
+    echo "Node ${node} did not come back online after ${max_attempts} attempts."
+    return 1
+ }
+
+function verify_disk() {
+    local node="$1"
+    local username="${2:-root}"
+    local password="${3:-passwd}"
+    echo "Verifying wipefs on ${node}"
+    output=$(sshpass -p ${password} ssh ${username}@${node} 'sudo lsblk -o name,fstype')
+    echo "ouput of lsblk ${output}"
+    # Check if any block device has a non-empty fstype
+    while read -r line; do
+        if [[ ! -z $(echo "${line}" | awk '{print $2}') ]]; then
+            echo true
+            return
+        fi
+    done <<< "$output"
+    echo false
+}
