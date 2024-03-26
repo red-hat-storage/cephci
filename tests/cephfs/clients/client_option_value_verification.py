@@ -68,7 +68,7 @@ def run(ceph_cluster, **kw):
         for conf in conf_default:
             output = client1.exec_command(sudo=True, cmd=f"{conf_get} {conf[0]}")
             conf[1] = output[0].strip()
-        print(conf_default)
+        log.info(f"\n conf default values: {conf_default}")
         conf_target = [
             ("debug_client", "20/20"),
             ("client_acl_type", "posix_acl"),
@@ -165,5 +165,7 @@ def run(ceph_cluster, **kw):
         for default in conf_default:
             client_conf = default[0]
             value = default[1]
+            if not value:
+                value = "''"
             client1.exec_command(sudo=True, cmd=f"{conf_set} {client_conf} {value}")
         log.info("Successfully reset all the client config values to default")

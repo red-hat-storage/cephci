@@ -40,6 +40,9 @@ def run(ceph_cluster, **kw):
         fs_util_ceph2.auth_list(target_clients)
         source_fs = "cephfs"
         target_fs = "cephfs"
+        # create fs
+        fs_util_ceph1.create_fs(source_clients[0], source_fs)
+        fs_util_ceph2.create_fs(target_clients[0], target_fs)
         target_user = "mirror_remote"
         target_site_name = "remote_site"
         log.info("Deploy CephFS Mirroring Configuration")
@@ -376,7 +379,6 @@ def run(ceph_cluster, **kw):
                 cmd=f"rmdir {fuse_mounting_dir_1}{subvol2_path}/.snap/{snap}",
                 check_ec=False,
             )
-
         log.info("Unmount the paths")
         paths_to_unmount = [kernel_mounting_dir_1, fuse_mounting_dir_1]
         for path in paths_to_unmount:
@@ -389,7 +391,6 @@ def run(ceph_cluster, **kw):
         fs_mirroring_utils.remove_path_from_mirroring(
             source_clients[0], source_fs, subvol2_path
         )
-
         log.info("Destroy CephFS Mirroring Setup")
         fs_mirroring_utils.destroy_cephfs_mirroring(
             source_fs,
@@ -399,7 +400,6 @@ def run(ceph_cluster, **kw):
             target_user,
             peer_uuid,
         )
-
         log.info("Remove Subvolumes")
         for subvolume in subvolume_list:
             # print the file in the subvolume
@@ -412,21 +412,12 @@ def run(ceph_cluster, **kw):
                 source_clients[0],
                 **subvolume,
             )
-
         log.info("Remove Subvolume Group")
         for subvolumegroup in subvolumegroup_list:
             fs_util_ceph1.remove_subvolumegroup(source_clients[0], **subvolumegroup)
-
         log.info("Delete the mounted paths")
         source_clients[0].exec_command(sudo=True, cmd=f"rmdir {kernel_mounting_dir_1}")
         source_clients[0].exec_command(sudo=True, cmd=f"rmdir {fuse_mounting_dir_1}")
 
         log.info("Cleanup Target Client")
         fs_mirroring_utils.cleanup_target_client(target_clients[0], target_mount_path)
-        log.info("Unmount the paths")
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}"
-        )
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"umount -l {fuse_mounting_dir_1}"
-        )

@@ -22,7 +22,6 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
-    rhbuild = config.get("rhbuild")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
@@ -140,6 +139,7 @@ def run(ceph_cluster, **kw):
         # BZ-2213873 | Quincy (6.1z3)
         # BZ-2249014 | Pacific (5.3z6)
         # BZ-2244604 | Reef (7.1)
+        # BZ-2270263 | Reef (7.0)
         This test is to verify the propagation of osd_memory_target parameter
         set at HOST level to individual OSDs
         1. Create cluster with default configuration
@@ -155,11 +155,6 @@ def run(ceph_cluster, **kw):
         9. osd_memory_target value for the 2nd random OSD should get updated
         """
         log.info(doc)
-        if "7.0" in rhbuild:
-            log.info(
-                "Fix is yet to be back-ported to RHCS 7.0, passing without execution"
-            )
-            return 0
 
         try:
             osd_node = random.choice(osd_nodes)
