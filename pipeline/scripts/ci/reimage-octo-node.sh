@@ -72,10 +72,56 @@ if [ ${#nodes_with_mismatch[@]} -gt 0 ]; then
     printf '%s\n' "${nodes_with_mismatch[@]}"
     exit 1
 fi
-
+failed_nodes=()
 # Additional setup steps
-for node in ${NODES} ; do
+for node in ${NODES}; do
     initial_setup "${node}"
-    wipe_drives "${node}"
     set_hostnames_repos "${node}"
+    wipe_drives "${node}"
+    reboot_node "${node}"
 done
+
+# Check status of all nodes and perform disk verification for online nodes
+for node in ${NODES}; do
+    if wait_for_node "${node}"; then
+        output=$(verify_disk "${node}")
+        if [[ $output == true ]]; then
+            failed_nodes+=("$node")
+        fi
+    else
+        echo "Failed to bring node ${node} back online after reboot."
+        failed_nodes+=("$node")
+    fi
+done
+
+retry_count=0
+while [ ${#failed_nodes[@]} -gt 0 ] && [ ${retry_count} -lt 3 ]; do
+    echo "Retrying for failed nodes (Attempt $((retry_count + 1)))"
+    new_failed_nodes=()
+    for node in "${failed_nodes[@]}"; do
+        wipe_drives "${node}"
+        reboot_node "${node}"
+    done
+
+    # Check status of all nodes and perform disk verification for online nodes
+    for node in "${failed_nodes[@]}"; do
+        if wait_for_node "${node}"; then
+            output=$(verify_disk "${node}")
+            if [[ $output == true ]]; then
+                new_failed_nodes+=("$node")
+            fi
+        else
+            echo "Failed to bring node ${node} back online after reboot."
+            new_failed_nodes+=("$node")
+        fi
+    done
+
+    failed_nodes=("${new_failed_nodes[@]}")
+    ((retry_count++))
+done
+
+# If there are still failed nodes, print them and fail the script
+if [[ ${#failed_nodes[@]} -gt 0 ]]; then
+    echo "Failed nodes after retry: ${failed_nodes[@]}"
+    exit 1
+fi
