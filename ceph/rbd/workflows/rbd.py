@@ -649,7 +649,7 @@ def check_rbd_status(rbd, pool, image, timeout):
     starttime = datetime.datetime.now()
 
     out = str()
-    sleep(5)
+    sleep(15)
     while datetime.datetime.now() - starttime <= timeout:
         out, err = rbd.status(pool=pool, image=image, format="json")
         if err:

@@ -93,3 +93,24 @@ tests:
           test_ops_parallely: true
         fio:
           size: 100M
+
+  - test:
+        desc: Run all image trash operations in scale
+        module: test_rbd_trash_operations.py
+        name: RBD image trash operations in scale
+        polarion-id: CEPH-83582444
+        config:
+          rep_pool_config:
+            num_pools: 10
+            num_images: 100
+            size: 4G
+            create_pool_parallely: true
+            create_image_parallely: true
+            test_ops_parallely: true
+          ec_pool_config:
+            num_pools: 10
+            num_images: 100
+            size: 4G
+            create_pool_parallely: true
+            create_image_parallely: true
+            test_ops_parallely: true
