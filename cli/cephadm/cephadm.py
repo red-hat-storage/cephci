@@ -1,5 +1,6 @@
 from cli import Cli
 from cli.ceph.ceph import Ceph
+from cli.ceph.ceph_volume.ceph_volume import CephVolume
 from cli.utilities.utils import build_cmd_from_args
 
 
@@ -15,6 +16,7 @@ class CephAdm(Cli):
             self.base_shell_cmd += f" --mount {mount}:{mount} --"
 
         self.ceph = Ceph(nodes, self.base_shell_cmd)
+        self.ceph_volume = CephVolume(nodes, self.base_shell_cmd)
 
     def shell(self, cmd):
         """Ceph orchestrator shell interface to run ceph commands.
