@@ -407,6 +407,7 @@ tests:
       polarion-id: CEPH-83573390
       module: sanity_rgw_multisite.py
       name: test multipart+encrypt object access at the archive site
+      comments: product bug duplicates in archive zone, bz-2213138
   - test:
       clusters:
         ceph-pri:
