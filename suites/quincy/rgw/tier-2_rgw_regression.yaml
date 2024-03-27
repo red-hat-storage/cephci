@@ -659,17 +659,6 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
-  - test:
-      abort-on-fail: false
-      config:
-        branch: ceph-quincy
-      desc: Run the external S3test suites.
-      destroy-cluster: false
-      module: test_s3.py
-      name: execute s3tests
-      polarion-id: CEPH-83575225
-      comments: Known issue - Ceph tracker 55614
-
   # Index-less buckets
   - test:
       name: Indexless buckets

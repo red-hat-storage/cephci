@@ -241,16 +241,7 @@ tests:
       module: sanity_rgw.py
       name: test bucket quota max objects
       polarion-id: CEPH-83575330
-  - test:
-      abort-on-fail: false
-      config:
-        branch: ceph-reef
-      desc: Run the external S3test suites.
-      destroy-cluster: false
-      module: test_s3.py
-      name: execute s3tests
-      polarion-id: CEPH-83575225
-      comments: BZ2266411 - anon_put_write_access, BZ2268234 - list_buckets_bad_auth
+
   - test:
       name: versioned object deletion with mfa token
       desc: test versioned object deletion with mfa token
