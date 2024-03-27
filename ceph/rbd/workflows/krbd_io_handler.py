@@ -194,7 +194,7 @@ def krbd_io_handler(**kw):
                     }
                     if operations.get("device_map"):
                         cleanup_config.update(
-                            {"device-type": config.get("device_type", "nbd")}
+                            {"device_type": config.get("device_type", "nbd")}
                         )
                     return_flag = device_cleanup(**cleanup_config)
     kw["config"]["device_names"] = device_names

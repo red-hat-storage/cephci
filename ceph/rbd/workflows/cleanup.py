@@ -138,7 +138,7 @@ def device_cleanup(rbd, client, **kw):
             flag = 1
 
     if kw.get("device_name"):
-        if kw.get("device-type"):
+        if kw.get("device_type"):
             # RBD image map cleanup with device map
             map_config = {
                 "image-snap-or-device-spec": kw["device_name"],
