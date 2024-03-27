@@ -73,11 +73,13 @@ def run(ceph_cluster, **kw):
         raise ConfigError("The test requires more linux clients than available")
 
     # Windows clients
-    for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
-        ceph_cluster.node_list.append(windows_client_obj)
-    windows_clients = ceph_cluster.get_nodes("windows_client")
-    if windows_clients:
-        new_clients_values = f"{windows_clients[0].ip_address}"
+    is_windows = config.get("windows_clients", None)
+    if is_windows:
+        for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
+            ceph_cluster.node_list.append(windows_client_obj)
+        windows_clients = ceph_cluster.get_nodes("windows_client")
+        if windows_clients:
+            new_clients_values = f"{windows_clients[0].ip_address}"
 
     try:
         # Setup nfs cluster
@@ -130,7 +132,7 @@ def run(ceph_cluster, **kw):
         sleep(15)
 
         # Mount the export on client0 which is authorized.Mount should pass
-        if windows_clients:
+        if is_windows:
             cmd = f"mount {nfs_nodes[0].ip_address}:/export_1 {window_nfs_mount}"
             out = windows_clients[0].exec_command(cmd=cmd)
             if "is now successfully connected" not in out[0]:
@@ -161,7 +163,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Cleaning up")
-        if windows_clients:
+        if is_windows:
             for windows_client in windows_clients:
                 cmd = f"del /q /f {window_nfs_mount}\\*.*"
                 windows_client.exec_command(cmd=cmd)
