@@ -382,3 +382,17 @@ tests:
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
+
+  - test:
+      name: NFS-Ganesha multi node mount with v3 and v4.1 and perform node reboot
+      desc: Verify node reboot when cluister mounted on linux and windows clients
+      polarion-id: CEPH-83581307
+      module: nfs_verify_multi_client_reboot_with_io.py
+      config:
+        nfs_version: 4.1
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
