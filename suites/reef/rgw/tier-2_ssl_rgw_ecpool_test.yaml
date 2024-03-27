@@ -90,7 +90,7 @@ tests:
                     nodes:
                       - node7
                   spec:
-                    ssl: false
+                    ssl: true
                     rgw_frontend_ssl_certificate: create-cert
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83573777
@@ -154,6 +154,17 @@ tests:
       module: install_vault.py
       name: configure vault agent
       polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: false
+      config:
+        kms_keyid: testKey01
+        ssl: true
+      desc: Java S3tests
+      destroy-cluster: false
+      module: java_s3tests.py
+      name: execute Java s3tests
+      polarion-id: CEPH-83586289
 
   - test:
       abort-on-fail: false
