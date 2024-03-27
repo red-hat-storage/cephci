@@ -8,6 +8,7 @@ This method contains the scenarios to check the-
 """
 
 import random
+import re
 import time
 from configparser import ConfigParser
 
@@ -28,6 +29,11 @@ def run(ceph_cluster, **kw):
     rados_object = RadosOrchestrator(node=cephadm)
     mon_object = MonConfigMethods(rados_obj=rados_object)
     config_info = ConfigParser()
+
+    # Get the RHCS build
+    regex = r"\s*(\d.\d)-rhel-\d"
+    build = (re.search(regex, config.get("build", config.get("rhbuild")))).groups()[0]
+    log.info(f"The rhcs build version is-{build}")
 
     # To get the OSD list
     ceph_nodes = kw.get("ceph_nodes")
@@ -206,7 +212,28 @@ def run(ceph_cluster, **kw):
                                 f"In the mclock {profile}  {param[0]} parameter value is changeable"
                             )
                             return 1
-        return 0
+        # RocksDB compression parameter check
+
+    if config.get("scenario") == "rocksdb_compression":
+        # Checking the RHCS version.
+        if float(build) < 7.1:
+            log.info(
+                "Test running on version less than 7.1, skipping verifying rocksdb compression parameter check"
+            )
+            return 0
+
+        rocksdb_chk = mon_object.get_config(
+            section="osd", param="bluestore_rocksdb_options"
+        )
+        if "kLZ4Compression" not in rocksdb_chk:
+            log.error(
+                f"The default compression value is not  kLZ4Compression- {rocksdb_chk}"
+            )
+            return 1
+        log.info(
+            f"The RocksDB compression value is found to be  kLZ4Compression-{rocksdb_chk}"
+        )
+    return 0
 
 
 def config_param_checker(obj, id_list, parameters):

@@ -91,3 +91,10 @@ tests:
       config:
         scenario: mclock_chg_chk
         ini-file: conf/reef/rados/test-confs/rados_config_parameters.ini
+  - test:
+      name: Check RocksDB compression default value
+      desc: Check that RocksDB compression value is kLZ4Compression
+      polarion-id: CEPH-83582326
+      module: test_config_parameter_chk.py
+      config:
+        scenario: rocksdb_compression
