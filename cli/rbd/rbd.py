@@ -12,6 +12,7 @@ from .mirror.mirror import Mirror
 from .namespace import Namespace
 from .pool import Pool
 from .snap import Snap
+from .trash.trash import Trash
 
 
 class Rbd(Cli):
@@ -27,6 +28,7 @@ class Rbd(Cli):
         self.config = Config(nodes, self.base_cmd)
         self.namespace = Namespace(nodes, self.base_cmd)
         self.group = Group(nodes, self.base_cmd)
+        self.trash = Trash(nodes, self.base_cmd)
 
     def create(self, **kw):
         """
