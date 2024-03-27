@@ -3466,3 +3466,27 @@ os.system('sudo systemctl start  network')
             log.error(f"Unable to set {key}")
             return 1
         return 0
+
+    def wait_for_stable_fs(self, client, standby_replay, timeout=180, interval=5):
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info("Wait for the command to pass")
+        while end_time > datetime.datetime.now():
+            try:
+                out1, rc = client.exec_command(sudo=True, cmd="ceph fs status")
+                print(out1)
+                out, rc = client.exec_command(
+                    sudo=True, cmd="ceph fs status | awk '{print $2}'"
+                )
+                output = out.splitlines()
+                if (
+                    "active" in output[3]
+                    and "standby-replay" in output[4]
+                    and standby_replay == "true"
+                ):
+                    return 0
+                if "standby-replay" not in output[4] and standby_replay == "false":
+                    return 0
+                sleep(interval)
+            except Exception as e:
+                log.info(e)
+                raise CommandFailed
