@@ -1,0 +1,13 @@
+{
+    "endpoints": {
+        "common": {"AUTH": "/api/auth", "CHECK_AUTH": "/api/auth/check"},
+        "rbd": {
+            "CREATE_POOL": "/api/pool",
+            "GET_POOL": "/api/pool/{pool_name}",
+            "LIST_POOL": "/api/pool",
+            "CREATE_IMAGE": "/api/block/image",
+            "GET_IMAGE": "/api/block/image/{image_spec}",
+            "LIST_IMAGE": "/api/block/image",
+        },
+    }
+}

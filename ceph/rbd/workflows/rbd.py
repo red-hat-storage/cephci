@@ -737,6 +737,9 @@ def run_io_and_check_rbd_status(**kw):
                 )
             return 1
     except Exception as e:
+        log.error(
+            f"Run IOs and verify rbd status failed for {pool}/{image} with error {e}"
+        )
         if test_ops_parallely:
             raise Exception(
                 f"Run IOs and verify rbd status failed for {pool}/{image} with error {e}"
