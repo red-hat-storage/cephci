@@ -1,0 +1,483 @@
+# Test suite for for baremetal rgw-multisite deployment and testing multisite sync at scale.
+#
+# This suite deploys a Longevity environment on baremetal machines. It is a multisite environment with each site having a storage capacity of 617Tb.
+# each site has around 4 osd hosts and a total of 16 osds.
+# A single realm (India) spanning across two RHCS clusters. It has a
+# zonegroup (shared) which also spans across the clusters. There exists a master (primary)
+# and secondary (secondary) zone within this group. The master zone is part of the pri
+# cluster whereas the sec zone is part of the sec datacenter (cluster).
+
+# The deployment is evaluated by running IOs across the environments.
+# tested with conf file: conf/baremetal/rgw_multisite_extensa_clara.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: extensa010
+                    allow-fqdn-hostname: true
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri.8080
+                  args:
+                    port: 8080
+                    placement:
+                      nodes:
+                        - extensa010
+                        - extensa011
+                        - extensa012
+                        - extensa013
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: clara011
+                    allow-fqdn-hostname: true
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec.8080
+                  args:
+                    port: 8080
+                    placement:
+                      nodes:
+                        - clara011
+                        - clara012
+                        - clara013
+                        - clara014
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - extensa010
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - extensa010
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - clara011
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - clara011
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.pri
+            node:
+              - extensa010
+              - extensa014
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.sec
+            node:
+              - clara011
+              - clara015
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:extensa010}:8080,http://{node_ip:extensa011}:8080,http://{node_ip:extensa012}:8080,http://{node_ip:extensa013}:8080 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:extensa010}:8080,http://{node_ip:extensa011}:8080,http://{node_ip:extensa012}:8080,http://{node_ip:extensa013}:8080 --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key test123 --secret test123 --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key test123 --secret test123"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.* rgw_realm india"
+              - "ceph config set client.rgw.* rgw_zonegroup shared"
+              - "ceph config set client.rgw.* rgw_zone primary"
+              - "ceph orch restart rgw.shared.pri.8080"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://extensa010:8080 --access-key test123 --secret test123 --default"
+              - "radosgw-admin period pull --url http://extensa010:8080 --access-key test123 --secret test123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:clara011}:8080,http://{node_ip:clara012}:8080,http://{node_ip:clara013}:8080,http://{node_ip:clara014}:8080 --access-key test123 --secret test123"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.* rgw_realm india"
+              - "ceph config set client.rgw.* rgw_zonegroup shared"
+              - "ceph config set client.rgw.* rgw_zone secondary"
+              - "ceph orch restart rgw.shared.sec.8080"
+      desc: Setting up RGW multisite replication environment
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "radosgw-admin user list"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "radosgw-admin user list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - extensa010
+              - extensa014
+            rgw_endpoints:
+              - "extensa010:8080"
+              - "extensa011:8080"
+              - "extensa012:8080"
+              - "extensa013:8080"
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - clara011
+              - clara015
+            rgw_endpoints:
+              - "clara011:8080"
+              - "clara012:8080"
+              - "clara013:8080"
+              - "clara014:8080"
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+      polarion-id: CEPH-83572703
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - extensa010
+            drivers:
+              count: 4
+              hosts:
+                - extensa010
+                - extensa014
+        ceph-sec:
+          config:
+            controllers:
+              - clara011
+            drivers:
+              count: 4
+              hosts:
+                - clara011
+                - clara015
+      desc: Start COS Bench controller and driver
+      module: cosbench.py
+      name: deploy cosbench
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - extensa010
+            drivers: # if drivers are not specified will use one of the rgw node
+              - extensa010
+              - extensa014
+            fill_percent: 30
+      desc: prepare and push cosbench fill workload
+      module: push_cosbench_workload.py
+      name: push cosbench fill workload
+      polarion-id: CEPH-83574428
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - extensa010
+            drivers: # if drivers are not specified will use one of the rgw node
+              - extensa010
+              - extensa014
+            fill_percent: 30
+            workload_type: hybrid
+            run_time: 3600 # value in seconds
+      desc: initiate cosbench hybrid workload
+      module: push_cosbench_workload.py
+      name: push cosbench hybrid workload
+      polarion-id: CEPH-83575831
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+            timeout: 300
+      desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+      polarion-id: CEPH-83575199
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_versioned_bucket_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create versioned bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create versioned bucket in primary
+      polarion-id: CEPH-83575073
+
+  - test:
+      name: Parallel upload of objects to versioned bucket
+      desc: Parallel upload of objects to versioned bucket
+      module: test_parallel.py
+      parallel:
+        - test:
+            abort-on-fail: true
+            clusters:
+              ceph-pri:
+                config:
+                  controllers:
+                    - extensa010
+                  drivers:
+                    - extensa010
+                    - extensa014
+                  fill_percent: 35
+                  workload_type: symmetrical
+                  record_sync_on_site: ceph-sec
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench push workload from primary
+            module: push_cosbench_workload.py
+            name: push cosbench push workload from primary
+            polarion-id: CEPH-83575073
+        - test:
+            abort-on-fail: true
+            clusters:
+              ceph-sec:
+                config:
+                  controllers:
+                    - clara011
+                  drivers:
+                    - clara011
+                    - clara015
+                  fill_percent: 35
+                  workload_type: symmetrical
+                  record_sync_on_site: ceph-pri
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench push workload from secondary
+            module: push_cosbench_workload.py
+            name: push cosbench push workload from secondary
+            polarion-id: CEPH-83575073
+
+  - test:
+      name: Parallel delete of objects from bucket
+      desc: Parallel delete of objects from bucket
+      module: test_parallel.py
+      parallel:
+        - test:
+            abort-on-fail: true
+            clusters:
+              ceph-pri:
+                config:
+                  controllers:
+                    - extensa010
+                  drivers:
+                    - extensa010
+                    - extensa014
+                  workload_type: cleanup
+                  record_sync_on_site: ceph-sec
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench cleanup workload from primary
+            module: push_cosbench_workload.py
+            name: push cosbench cleanup workload from primary
+            polarion-id: CEPH-83575074
+        - test:
+            abort-on-fail: true
+            clusters:
+              ceph-sec:
+                config:
+                  controllers:
+                    - clara011
+                  drivers:
+                    - clara011
+                    - clara015
+                  workload_type: cleanup
+                  record_sync_on_site: ceph-pri
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench cleanup workload from secondary
+            module: push_cosbench_workload.py
+            name: push cosbench cleanup workload from secondary
+            polarion-id: CEPH-83575074
+
