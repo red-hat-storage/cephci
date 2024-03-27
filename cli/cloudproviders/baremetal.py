@@ -64,6 +64,7 @@ class Baremetal:
         lock=False,
         unlock=False,
         machine_type=None,
+        all=False,
     ):
         """Execute teuthology lock operation
 
@@ -100,8 +101,11 @@ class Baremetal:
         # Check for --machine-type parameter
         cmd += f" --machine-type {machine_type}" if machine_type else ""
 
+        # Get all node details
+        cmd += " --all" if all else ""
+
         # Set teuthology environment
-        cmd = f"{self._env}/{cmd}"
+        cmd = f"/{self._env}/{cmd}"
 
         # Execute command
         return self._client.run(cmd)
@@ -184,6 +188,19 @@ class Baremetal:
                 return node
 
         return {}
+
+    def get_node_details(self, machine_type=None, all=True):
+        """Get node details
+
+        Args:
+            name (str): Name of node
+        """
+        stdout, _ = self._teuthology_lock(list=True, machine_type=machine_type, all=all)
+        # Check for ouotput
+        if not stdout:
+            LOG.error("No hosts are available on octa lab")
+
+        return json.loads(stdout)
 
     def get_node_id(self, name):
         """Get node id
