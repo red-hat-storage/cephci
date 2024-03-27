@@ -97,6 +97,9 @@ def run(ceph_cluster, **kw):
         cephadm = CephAdmin(cluster=ceph_cluster, **config)
         rados_obj = RadosOrchestrator(node=cephadm)
         clients = ceph_cluster.get_ceph_objects("client")
+        build = config.get("build", config.get("rhbuild"))
+        fs_util.prepare_clients(clients, build)
+        fs_util.auth_list(clients)
         client1 = clients[0]
         mount_dir = "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
@@ -127,14 +130,14 @@ def run(ceph_cluster, **kw):
                     fs_util,
                     client1,
                     kernel_mount_dir + f"/kernel_{iteration}",
-                    timeout=0,
+                    timeout=600,
                 )
                 p.spawn(
                     start_io_time,
                     fs_util,
                     client1,
                     fuse_mount_dir + f"/fuse_{iteration}",
-                    timeout=0,
+                    timeout=600,
                 )
                 p.spawn(rm_osd_id, ceph_cluster, osd_id, rados_obj, host, dev_path)
             iteration = iteration + 1
@@ -150,14 +153,14 @@ def run(ceph_cluster, **kw):
                     fs_util,
                     client1,
                     kernel_mount_dir + f"/kernel_{iteration}",
-                    timeout=0,
+                    timeout=600,
                 )
                 p.spawn(
                     start_io_time,
                     fs_util,
                     client1,
                     fuse_mount_dir + f"/fuse_{iteration}",
-                    timeout=0,
+                    timeout=600,
                 )
                 p.spawn(
                     add_osd_id,

@@ -134,7 +134,7 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node8
+        node: node9
       desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
       module: test_client.py
@@ -149,7 +149,7 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node9
+        node: node10
       desc: "Configure the Cephfs client system 2"
       destroy-cluster: false
       module: test_client.py
@@ -164,7 +164,7 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node10
+        node: node11
       desc: "Configure the Cephfs client system 3"
       destroy-cluster: false
       module: test_client.py
@@ -179,7 +179,7 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
-        node: node11
+        node: node12
       desc: "Configure the Cephfs client system 4"
       destroy-cluster: false
       module: test_client.py
