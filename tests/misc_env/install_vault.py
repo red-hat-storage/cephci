@@ -116,7 +116,7 @@ def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
     """
     if "agent" in config["install"]:
         vault_cfg = get_cephci_config().get("vault")
-        _install_agent(ceph_cluster, vault_cfg)
+        _install_agent(ceph_cluster, config, vault_cfg)
 
         client = ceph_cluster.get_nodes(role="client")[0]
         _configure_rgw_daemons(client, vault_cfg)
@@ -149,13 +149,14 @@ def _write_remote_file(node: CephNode, file_name: str, content: str) -> None:
     file_handle.close()
 
 
-def _install_agent(cluster: Ceph, config: Dict) -> None:
+def _install_agent(cluster: Ceph, config: Dict, vault_cfg: Dict) -> None:
     """
     Installs and configures the vault-agent on all RGW nodes
 
     Args:
         cluster     Ceph cluster participating in the test
         config      key/value pairs useful for customization
+        vault_cfg   Vault configuration parameters
 
     Returns:
         None
@@ -166,17 +167,18 @@ def _install_agent(cluster: Ceph, config: Dict) -> None:
     rgw_nodes = cluster.get_nodes(role="rgw")
     for node in rgw_nodes:
         LOG.debug(f"Vault install and configuration on {node.shortname}")
-        _install_vault_packages(node)
-        _create_agent_config(node, config)
+        _install_vault_packages(node, config)
+        _create_agent_config(node, vault_cfg)
         _create_agent_systemd(node)
 
 
-def _install_vault_packages(node: CephNode) -> None:
+def _install_vault_packages(node: CephNode, config: Dict) -> None:
     """
     Installs the required packages for vault
 
     Args:
         node    The system on which the package needs to be installed
+        config  Config passed from CI, mainly needed for OS version
 
     Returns:
         None
@@ -185,7 +187,13 @@ def _install_vault_packages(node: CephNode) -> None:
         CommandFailed
     """
     vault_repo = "https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo"
-    commands = [f"yum-config-manager --add-repo {vault_repo}", "yum install -y vault"]
+    # Pass os_ver in config if needed to be run on rhel 8
+    os_ver = config.get("os_ver", "9")
+    commands = [
+        f"yum-config-manager --add-repo {vault_repo}",
+        rf'sudo sed -i -e "s/\$releasever/{os_ver}/g" "/etc/yum.repos.d/hashicorp.repo"',
+        "yum install -y vault",
+    ]
     for command in commands:
         node.exec_command(sudo=True, cmd=command, check_ec=False)
 
