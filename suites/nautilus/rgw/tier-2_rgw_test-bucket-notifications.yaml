@@ -102,13 +102,13 @@ tests:
         timeout: 300
 
   - test:
-      name: bucket notification with kafka endpoint
+      name: bucket notification with kafka_none_persistent
       desc: notify on multipart upload events with kafka_none_persistent
       polarion-id: CEPH-83574070
       module: sanity_rgw.py
       config:
         script-name: test_bucket_notifications.py
-        config-file-name: test_bucket_notification_kafka_none_multipart.yaml
+        config-file-name: test_bucket_notification_kafka_none_persistent_multipart.yaml
         timeout: 300
 
   # kafka broker type none
