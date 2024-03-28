@@ -452,6 +452,41 @@ tests:
             polarion-id: CEPH-83575073
 
   - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - folio01
+            drivers:
+              - folio01
+              - folio02
+              - folio03
+            workload_type: fill_runtime
+            run_time: 7200
+            record_sync_on_site: ceph-sec
+            bucket_prefix: cosbench01-bkt-
+            number_of_buckets: 1
+            number_of_objects: 2000000
+      desc: initiate cosbench fill workload for versioned bucket
+      name: push cosbench fill workload for versioned bucket
+      module: push_cosbench_workload.py
+      polarion-id: CEPH-83575077
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - radosgw-admin bucket sync markers --bucket cosbench01-bkt-1 --source-zone secondary
+      desc: Run radosgw-admin bucket sync markers from primary
+      name: Run radosgw-admin bucket sync markers from primary
+      polarion-id: CEPH-83575077
+      module: exec.py
+
+  - test:
       name: Parallel delete of objects from bucket
       desc: Parallel delete of objects from bucket
       module: test_parallel.py
