@@ -346,3 +346,15 @@ tests:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_multisite_granular_bucketsync_forbidden_forbidden.yaml
             timeout: 300
+
+  - test:
+      name: Test Changing datalog num shards not cause any crash
+      desc: Test Changing datalog num shards not cause any crash
+      polarion-id: CEPH-83574088
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_changing_data_log_num_shards_cause_no_crash.yaml
+            timeout: 300
