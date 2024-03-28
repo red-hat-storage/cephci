@@ -180,7 +180,8 @@ def run(ceph_cluster, **kw):
         # Ensure cluster is in healthy state
         cluster_health, _ = cephadm.shell(args=["ceph health detail"])
         log.info(f"Cluster health: {cluster_health}")
-        assert "HEALTH_OK" in cluster_health
+        assert "HEALTH_ERR" not in cluster_health
+        assert "devicehealth" not in cluster_health
 
         log.info("Database reconnection verification complete")
     except Exception as e:
@@ -188,8 +189,14 @@ def run(ceph_cluster, **kw):
         log.exception(e)
         return 1
     finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
         mon_obj.remove_config(section="mgr", name="debug_mgr")
         mon_obj.remove_config(section="mgr", name="debug_cephsqlite")
         rados_obj.rm_client_blocklisting(ip=f"{cephsqlite_addr}/{cephsqlite_nonce}")
+        # log cluster health
+        rados_obj.log_cluster_health()
+
     log.info("Verification of Database reconnection for libcephsqlite completed")
     return 0

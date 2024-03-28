@@ -101,6 +101,12 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # log cluster health
+        rados_object.log_cluster_health()
     return 0
 
 

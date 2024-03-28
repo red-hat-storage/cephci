@@ -52,87 +52,97 @@ def run(ceph_cluster, **kw):
         pool_name = df_config["pool_name"]
         obj_nums = df_config["obj_nums"]
 
-        # create pool with given config
-        if df_config["create_pool"]:
-            rados_obj.create_pool(pool_name=pool_name)
+        try:
+            # create pool with given config
+            if df_config["create_pool"]:
+                rados_obj.create_pool(pool_name=pool_name)
 
-        for obj_num in obj_nums:
-            # create 'obj_num' number of objects
-            pool_obj.do_rados_put(client=client, pool=pool_name, nobj=obj_num)
+            for obj_num in obj_nums:
+                # create 'obj_num' number of objects
+                pool_obj.do_rados_put(client=client, pool=pool_name, nobj=obj_num)
 
-            """ [upd] Jul'23: it now takes more time than before for ceph df stats
-             to account for all the objects in a pool
-             blind sleep in being increased from 5 to 30,
-             cannot implement smart wait along because it would pass the test even
-             if the objects are displayed correctly momentarily and change later on,
-             the number of objects should be stable and correct after a while"""
-            time.sleep(30)  # blind sleep to let all the objs show up in ceph df
+                """ [upd] Jul'23: it now takes more time than before for ceph df stats
+                 to account for all the objects in a pool
+                 blind sleep in being increased from 5 to 30,
+                 cannot implement smart wait along because it would pass the test even
+                 if the objects are displayed correctly momentarily and change later on,
+                 the number of objects should be stable and correct after a while"""
+                time.sleep(30)  # blind sleep to let all the objs show up in ceph df
 
-            # Verify Ceph df output post object creation
-            try:
-                while counter < 3:
-                    pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                    ceph_df_obj = pool_stat["stats"]["objects"]
-                    if ceph_df_obj == obj_num:
-                        log.info(
-                            f"ceph df stats display correct objects {ceph_df_obj} for {pool_name}"
-                        )
-                        break
+                # Verify Ceph df output post object creation
+                try:
+                    while counter < 3:
+                        pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                        ceph_df_obj = pool_stat["stats"]["objects"]
+                        if ceph_df_obj == obj_num:
+                            log.info(
+                                f"ceph df stats display correct objects {ceph_df_obj} for {pool_name}"
+                            )
+                            break
+                        else:
+                            log.error(
+                                f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                            )
+                            log.info(
+                                f"Validation failed in round #{counter}, retying after 30 secs.."
+                            )
+                            counter += 1
+                            time.sleep(30)
                     else:
                         log.error(
-                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after"
+                            f" 60 secs"
                         )
-                        log.info(
-                            f"Validation failed in round #{counter}, retying after 30 secs.."
-                        )
-                        counter += 1
-                        time.sleep(30)
-                else:
-                    log.error(
-                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after"
-                        f" 60 secs"
-                    )
+                        return 1
+                except KeyError:
+                    log.error("No stats about the pools requested found on the cluster")
                     return 1
-            except KeyError:
-                log.error("No stats about the pools requested found on the cluster")
-                return 1
 
-            # delete all objects from the pool
-            pool_obj.do_rados_delete(pool_name=pool_name)
-            time.sleep(30)  # blind sleep to let all the objs get removed from stats
+                # delete all objects from the pool
+                pool_obj.do_rados_delete(pool_name=pool_name)
+                time.sleep(30)  # blind sleep to let all the objs get removed from stats
 
-            # Verify Ceph df output post objects deletion
-            try:
-                counter = 1
-                while counter < 3:
-                    pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                    ceph_df_obj = pool_stat.get("stats")["objects"]
-                    if ceph_df_obj == 0:
-                        log.info(f"ceph df stats display 0 objects for {pool_name}")
-                        break
+                # Verify Ceph df output post objects deletion
+                try:
+                    counter = 1
+                    while counter < 3:
+                        pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                        ceph_df_obj = pool_stat.get("stats")["objects"]
+                        if ceph_df_obj == 0:
+                            log.info(f"ceph df stats display 0 objects for {pool_name}")
+                            break
+                        else:
+                            log.error(
+                                f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                            )
+                            log.info(
+                                f"Validation failed in round #{counter}, retying after 30 secs.."
+                            )
+                            counter += 1
+                            time.sleep(30)
                     else:
                         log.error(
-                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name}"
+                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after"
+                            f"60 secs"
                         )
-                        log.info(
-                            f"Validation failed in round #{counter}, retying after 30 secs.."
-                        )
-                        counter += 1
-                        time.sleep(30)
-                else:
-                    log.error(
-                        f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after"
-                        f"60 secs"
-                    )
+                        return 1
+                except KeyError:
+                    log.error("No stats about the pools requested found on the cluster")
                     return 1
-            except KeyError:
-                log.error("No stats about the pools requested found on the cluster")
-                return 1
 
-            log.info(f"ceph df stats verification completed for {obj_num} objects")
-
-        if df_config.get("delete_pool"):
-            rados_obj.detete_pool(pool=pool_name)
+                log.info(f"ceph df stats verification completed for {obj_num} objects")
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here \n \n ***************"
+            )
+            if df_config.get("delete_pool"):
+                rados_obj.delete_pool(pool=pool_name)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
         log.info("ceph df stats verification completed")
         return 0
@@ -258,7 +268,9 @@ def run(ceph_cluster, **kw):
                 name=f"osd.{osd_id}", weight=org_weight
             )
             if df_config.get("delete_pool"):
-                rados_obj.detete_pool(pool=pool_name)
+                rados_obj.delete_pool(pool=pool_name)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
         log.info("ceph df MAX AVAIL stats verification completed")
         return 0

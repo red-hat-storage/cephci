@@ -38,47 +38,62 @@ def run(ceph_cluster, **kw):
     pool_target_configs = config["verify_osd_omap_entries"]["configurations"]
     omap_target_configs = config["verify_osd_omap_entries"]["omap_config"]
 
-    # Creating pools and starting the test
-    for entry in pool_target_configs.values():
-        log.debug(
-            f"Creating {entry['pool_type']} pool on the cluster with name {entry['pool_name']}"
-        )
-        method_should_succeed(
-            rados_obj.create_pool,
-            **entry,
+    try:
+        # Creating pools and starting the test
+        for entry in pool_target_configs.values():
+            log.debug(
+                f"Creating {entry['pool_type']} pool on the cluster with name {entry['pool_name']}"
+            )
+            method_should_succeed(
+                rados_obj.create_pool,
+                **entry,
+            )
+
+            log.info(
+                f"Created the pool {entry['pool_name']}. beginning to create large number of omap entries on the pool"
+            )
+
+        # Creating omaps
+        create_omap(pool_obj, pool_target_configs, omap_target_configs)
+
+        # Check for large omap warning
+        if not pool_obj.check_large_omap_warning(
+            pool=entry["pool_name"],
+            obj_num=omap_target_configs["obj_end"],
+            obj_check=False,
+        ):
+            log.error("Failed to generate large omap warning on the cluster")
+            return 1
+        log.info("Generated Large OMAP warning on the cluster")
+
+        scrub_thread = Thread(
+            target=perform_scrubbing, args=[rados_obj, scrub_obj, pool_target_configs]
         )
 
-        log.info(
-            f"Created the pool {entry['pool_name']}. beginning to create large number of omap entries on the pool"
-        )
+        # verification of OSDs for 30 minutes
+        verification_osd_thread = Thread(target=verification_osd, args=[rados_obj, 30])
+        scrub_thread.daemon = True
+        log.info("Starting scrubbing thread")
+        scrub_thread.start()
+        log.info("Starting OSD state verification thread")
+        verification_osd_thread.start()
+        verification_osd_thread.join()
+        scrub_thread.join()
 
-    # Creating omaps
-    create_omap(pool_obj, pool_target_configs, omap_target_configs)
-
-    # Check for large omap warning
-    if not pool_obj.check_large_omap_warning(
-        pool=entry["pool_name"],
-        obj_num=omap_target_configs["obj_end"],
-        obj_check=False,
-    ):
-        log.error("Failed to generate large omap warning on the cluster")
+    except Exception as e:
+        log.error(f"Failed with exception: {e.__doc__}")
+        log.exception(e)
         return 1
-    log.info("Generated Large OMAP warning on the cluster")
 
-    scrub_thread = Thread(
-        target=perform_scrubbing, args=[rados_obj, scrub_obj, pool_target_configs]
-    )
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # removal of rados pools
+        rados_obj.rados_pool_cleanup()
 
-    # verification of OSDs for 30 minutes
-    verification_osd_thread = Thread(target=verification_osd, args=[rados_obj, 30])
-    scrub_thread.daemon = True
-    log.info("Starting scrubbing thread")
-    scrub_thread.start()
-    log.info("Starting OSD state verification thread")
-    verification_osd_thread.start()
-    verification_osd_thread.join()
-    scrub_thread.join()
-
+        # log cluster health
+        rados_obj.log_cluster_health()
     if result == 0:
         return 0
     else:

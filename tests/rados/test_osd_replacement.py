@@ -108,5 +108,18 @@ def run(ceph_cluster, **kw):
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        if rados_obj.fetch_osd_status(_osd_id=osd_id) == "destroyed":
+            out, err = cephadm.shell(
+                [f"ceph orch daemon add osd {osd_hostname}:{osd_device}"]
+            )
+        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
+
+        # log cluster health
+        rados_obj.log_cluster_health()
+
     log.info("Verification complete for replacement of OSD by retaining its ID")
     return 0

@@ -40,6 +40,7 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
     if config.get("mondb_trim_config"):
         db_config = config.get("mondb_trim_config")
         try:
@@ -48,6 +49,16 @@ def run(ceph_cluster, **kw):
         except (TestCaseFailureException, TestBedSetupFailure):
             log.error("Failed to verify mon db trimming")
             return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here \n \n ***************"
+            )
+            # removal of rados pools
+            rados_obj.rados_pool_cleanup()
+            # Reverting the config changes made for generation slow_ops
+            change_config_for_slow_ops(rados_obj=rados_obj, action="rm", **db_config)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
     log.info("Completed running the customer Scenario(s)")
     return 0
@@ -110,7 +121,7 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
 
     # deleting a previously created pool to increase OSD operations and map changes
     # Pool created as part of suite set-up workflow.
-    rados_obj.detete_pool(pool="delete_pool")
+    rados_obj.delete_pool(pool="delete_pool")
 
     # Proceeding to reboot 1 OSD from each host to trigger rebalance & Backfill
     for onode in osd_nodes:
@@ -120,7 +131,7 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
         time.sleep(5)
         break
 
-    # Re-weighting the OSd's based on usage to trigger rebalance
+    # Re-weighting the OSDs based on usage to trigger rebalance
     # todo: Verify re-balancing process on OSD's ( PG movement across cluster)
     # todo: Add re-balancing based on crush item provided
     # BZ: https://bugzilla.redhat.com/show_bug.cgi?id=1766702

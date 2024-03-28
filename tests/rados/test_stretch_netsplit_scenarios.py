@@ -309,7 +309,10 @@ def run(ceph_cluster, **kw):
             host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
 
         if config.get("delete_pool"):
-            rados_obj.detete_pool(pool=pool_name)
+            rados_obj.delete_pool(pool=pool_name)
+
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info("All the tests completed on the cluster, Pass!!!")
     return 0

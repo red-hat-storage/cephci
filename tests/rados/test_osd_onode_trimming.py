@@ -162,12 +162,14 @@ def run(ceph_cluster, **kw):
                 return 1
     finally:
         log.info("Execution of finally block")
-        method_should_succeed(rados_object.detete_pool, pool_name)
+        method_should_succeed(rados_object.delete_pool, pool_name)
         log.info("deleted the pool successfully")
         mon_obj.remove_config(section="osd", name="debug_bluestore")
         mon_obj.remove_config(
             section="osd", name="bluestore_cache_trim_max_skip_pinned"
         )
+        # log cluster health
+        rados_object.log_cluster_health()
     return 0
 
 

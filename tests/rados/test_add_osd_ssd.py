@@ -41,7 +41,7 @@ def run(ceph_cluster, **kw):
                 # Check that OSD is configured or not
                 end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
                 while end_time > datetime.datetime.now():
-                    volume_status = is_ssd_availabel(rados_object, host_name, dev_path)
+                    volume_status = is_ssd_available(rados_object, host_name, dev_path)
                     if volume_status is False:
                         log.info(f"OSD is configured on the {dev_path} at {host_name}")
                         osd_falg_status = osd_falg_status + 1
@@ -57,10 +57,16 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # log cluster health
+        rados_object.log_cluster_health()
     return 0
 
 
-def is_ssd_availabel(rados_object, node, path):
+def is_ssd_available(rados_object, node, path):
     """
     Method returns the True or False based of device path availability.
         Args:

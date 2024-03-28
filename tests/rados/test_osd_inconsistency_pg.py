@@ -152,6 +152,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Execution of finally block")
         if config.get("delete_pool"):
-            method_should_succeed(rados_obj.detete_pool, pool_name)
+            method_should_succeed(rados_obj.delete_pool, pool_name)
             log.info("deleted the pool successfully")
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0

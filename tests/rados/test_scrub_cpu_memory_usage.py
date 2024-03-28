@@ -129,10 +129,14 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("\n--Executing finally block--\n")
         log.info(f"Deleting the {pool_name} pool")
-        method_should_succeed(rados_object.detete_pool, pool_name)
+        method_should_succeed(rados_object.delete_pool, pool_name)
         log.info(f"{pool_name} pool is deleted")
         log.info("Setting the parameters in to default  values")
         set_default_params(mon_obj)
+
+        # log cluster health
+        rados_object.log_cluster_health()
+
     return 0
 
 

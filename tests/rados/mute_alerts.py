@@ -3,6 +3,7 @@ import time
 import traceback
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
 log = Log(__name__)
@@ -25,47 +26,62 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
-    all_alerts = get_alerts(cephadm)
-    alert_list = ["MON_DISK_BIG", "OSDMAP_FLAGS"]
-    if all_alerts["active_alerts"]:
+    rados_obj = RadosOrchestrator(node=cephadm)
+    try:
+        all_alerts = get_alerts(cephadm)
+        alert_list = ["MON_DISK_BIG", "OSDMAP_FLAGS"]
+        if all_alerts["active_alerts"]:
+            log.info(
+                f"There are health alerts generated on the cluster. Alerts : {all_alerts}"
+            )
+        else:
+            log.info("Cluster Health is ok. \n Generating a alert to verify feature")
+
+        # Scenario 1 : Verify the auto-unmute of alert after TTL
+        log.info("Scenario 1: Verify the auto-unmute of alert after TTL")
+        alert = alert_list[1]
+        if not verify_alert_with_ttl(node=cephadm, alert=alert, ttl=8, flag="noscrub"):
+            log.error(f"Scenario 1 for alert : {alert} has failed")
+            return 1
+
+        # Scenario 2 : Verify the auto-unmute of alert if the health alert is generated again. ( without sticky )
         log.info(
-            f"There are health alerts generated on the cluster. Alerts : {all_alerts}"
+            "Scenario 2: Verify the auto-unmute of alert if the health alert is generated again."
         )
-    else:
-        log.info("Cluster Health is ok. \n Generating a alert to verify feature")
+        alert = alert_list[1]
+        if not verify_alert_unmute(node=cephadm, alert=alert):
+            log.error(f"Scenario 2 for alert : {alert} has failed")
+            return 1
 
-    # Scenario 1 : Verify the auto-unmute of alert after TTL
-    log.info("Scenario 1: Verify the auto-unmute of alert after TTL")
-    alert = alert_list[1]
-    if not verify_alert_with_ttl(node=cephadm, alert=alert, ttl=8, flag="noscrub"):
-        log.error(f"Scenario 1 for alert : {alert} has failed")
-        return 1
+        # Scenario 3 : Verify the auto-unmute of alert if the health alert is generated again. ( with sticky )
+        log.info(
+            "Scenario 3: Verify the auto-unmute of alert if the health alert is generated again."
+        )
+        alert = alert_list[1]
+        if not verify_alert_unmute(node=cephadm, alert=alert, sticky=True):
+            log.error(f"Scenario 3 for alert : {alert} has failed")
+            return 1
 
-    # Scenario 2 : Verify the auto-unmute of alert if the health alert is generated again. ( without sticky )
-    log.info(
-        "Scenario 2: Verify the auto-unmute of alert if the health alert is generated again."
-    )
-    alert = alert_list[1]
-    if not verify_alert_unmute(node=cephadm, alert=alert):
-        log.error(f"Scenario 2 for alert : {alert} has failed")
+        log.info(f"All the current alerts : {get_alerts(cephadm)}")
+        # Scenario 4 : Verify the unmute command with sticky
+        log.info("Scenario 4 : Verify the unmute command")
+        alert = alert_list[0]
+        if not verify_unmute_cli(node=cephadm, alert=alert, sticky=True):
+            log.error(f"Scenario 4 for alert : {alert} has failed")
+            return 1
+    except Exception as e:
+        log.error(f"Failed with exception: {e.__doc__}")
+        log.exception(e)
         return 1
-
-    # Scenario 3 : Verify the auto-unmute of alert if the health alert is generated again. ( with sticky )
-    log.info(
-        "Scenario 3: Verify the auto-unmute of alert if the health alert is generated again."
-    )
-    alert = alert_list[1]
-    if not verify_alert_unmute(node=cephadm, alert=alert, sticky=True):
-        log.error(f"Scenario 3 for alert : {alert} has failed")
-        return 1
-
-    log.info(f"All the current alerts : {get_alerts(cephadm)}")
-    # Scenario 4 : Verify the unmute command with sticky
-    log.info("Scenario 4 : Verify the unmute command")
-    alert = alert_list[0]
-    if not verify_unmute_cli(node=cephadm, alert=alert, sticky=True):
-        log.error(f"Scenario 4 for alert : {alert} has failed")
-        return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # removal of rados pools
+        rados_obj.rados_pool_cleanup()
+        unmute_health_alert(alert=alert, node=cephadm)
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info("All the scenarios have passed")
     return 0
@@ -152,9 +168,6 @@ def verify_alert_unmute(node: CephAdmin, alert: str, **kwargs) -> bool:
         generate_health_alert(alert=alert, node=node, flag="nodeep-scrub", clear=True)
         log.info(f"Auto-unmute was verified for the alert : {alert}. Scenario pass")
         return True
-
-    log.error(f"the scenario not available for the alert : {alert}")
-    return True
 
 
 def verify_unmute_cli(node: CephAdmin, alert: str, **kwargs) -> bool:

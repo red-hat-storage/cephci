@@ -485,5 +485,12 @@ def run(ceph_cluster, **kw):
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # log cluster health
+        rados_obj.log_cluster_health()
+
     log.info("Completed verification of Ceph-BlueStore-Tool commands.")
     return 0

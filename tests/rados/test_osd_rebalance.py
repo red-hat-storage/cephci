@@ -35,102 +35,122 @@ def run(ceph_cluster, **kw):
     timeout = config.get("timeout", 10800)
 
     log.info("Running create pool test case")
-    if config.get("create_pools"):
-        pools = config.get("create_pools")
-        for each_pool in pools:
-            cr_pool = each_pool["create_pool"]
-            if cr_pool.get("pool_type", "replicated") == "erasure":
-                method_should_succeed(
-                    rados_obj.create_erasure_pool, name=cr_pool["pool_name"], **cr_pool
-                )
-            else:
-                method_should_succeed(rados_obj.create_pool, **cr_pool)
-            if cr_pool.get("rados_put", False):
-                do_rados_put(mon=client_node, pool=cr_pool["pool_name"], nobj=100)
-            else:
-                method_should_succeed(rados_obj.bench_write, **cr_pool)
-        pool = random.choice(pools)["create_pool"]
-    if not pool:
-        log.error("Failed to retrieve pool details")
+    try:
+        if config.get("create_pools"):
+            pools = config.get("create_pools")
+            for each_pool in pools:
+                cr_pool = each_pool["create_pool"]
+                if cr_pool.get("pool_type", "replicated") == "erasure":
+                    method_should_succeed(
+                        rados_obj.create_erasure_pool,
+                        name=cr_pool["pool_name"],
+                        **cr_pool,
+                    )
+                else:
+                    method_should_succeed(rados_obj.create_pool, **cr_pool)
+                if cr_pool.get("rados_put", False):
+                    do_rados_put(mon=client_node, pool=cr_pool["pool_name"], nobj=100)
+                else:
+                    method_should_succeed(rados_obj.bench_write, **cr_pool)
+            pool = random.choice(pools)["create_pool"]
+        if not pool:
+            log.error("Failed to retrieve pool details")
+            return 1
+
+        pool_name = pool["pool_name"]
+        # Set recover threads configurations
+        rados_obj.change_recovery_threads(config=pool, action="set")
+
+        # Set mclock_profile
+        if rhbuild.startswith("6") and config.get("mclock_profile"):
+            rados_obj.set_mclock_profile(profile=config["mclock_profile"])
+
+        acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+        log.info(f"Acting set {acting_pg_set}")
+        if not acting_pg_set:
+            log.error("Failed to retrieve acting pg set")
+            return 1
+        osd_id = acting_pg_set[0]
+        host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+        if not host:
+            log.error("Failed to fetch host details")
+            return 1
+        # fetch container id
+        out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
+        container_id = [
+            item["Names"][0]
+            for item in json.loads(out)
+            if item.get("Command") and f"osd.{osd_id}" in item["Command"]
+        ][0]
+        if not container_id:
+            log.error("Failed to retrieve container id")
+            return 1
+        # fetch device path by osd_id
+        volume_out, _ = host.exec_command(
+            sudo=True,
+            cmd=f"podman exec {container_id} ceph-volume lvm list --format json",
+        )
+        dev_path = [
+            v[0]["devices"][0]
+            for k, v in json.loads(volume_out).items()
+            if str(k) == str(osd_id)
+        ][0]
+        if not dev_path:
+            log.error("Failed to get device path")
+            return 1
+        log.debug(
+            f"device path  : {dev_path}, osd_id : {osd_id}, host.hostname : {host.hostname}"
+        )
+        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+        method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
+        utils.osd_remove(ceph_cluster, osd_id)
+        if cr_pool.get("rados_put", False):
+            do_rados_get(client_node, pool["pool_name"], 1)
+
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
+        method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
+        method_should_succeed(wait_for_device, host, osd_id, action="remove")
+        utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
+        method_should_succeed(wait_for_device, host, osd_id, action="add")
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
+        do_rados_put(mon=client_node, pool=pool["pool_name"], nobj=1000)
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
+        )
+        if cr_pool.get("rados_put", False):
+            do_rados_get(client_node, pool["pool_name"], 1)
+        rados_obj.change_recovery_threads(config=pool, action="rm")
+    except Exception as e:
+        log.error(f"Failed with exception: {e.__doc__}")
+        log.exception(e)
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        out, _ = cephadm.shell(args=["ceph osd ls"])
+        active_osd_list = out.strip().split("\n")
+        log.debug(f"List of active OSDs: \n{active_osd_list}")
+        if osd_id not in active_osd_list:
+            utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+            utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
+            method_should_succeed(wait_for_device, host, osd_id, action="add")
 
-    pool_name = pool["pool_name"]
-    # Set recover threads configurations
-    rados_obj.change_recovery_threads(config=pool, action="set")
+        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
+        if config.get("delete_pools"):
+            for name in config["delete_pools"]:
+                method_should_succeed(rados_obj.delete_pool, name)
+            log.info("deleted all the given pools successfully")
 
-    # Set mclock_profile
-    if rhbuild.startswith("6") and config.get("mclock_profile"):
-        rados_obj.set_mclock_profile(profile=config["mclock_profile"])
-
-    acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
-    log.info(f"Acting set {acting_pg_set}")
-    if not acting_pg_set:
-        log.error("Failed to retrieve acting pg set")
-        return 1
-    osd_id = acting_pg_set[0]
-    host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
-    if not host:
-        log.error("Failed to fetch host details")
-        return 1
-    # fetch container id
-    out, _ = host.exec_command(sudo=True, cmd="podman ps --format json")
-    container_id = [
-        item["Names"][0]
-        for item in json.loads(out)
-        if item.get("Command") and f"osd.{osd_id}" in item["Command"]
-    ][0]
-    if not container_id:
-        log.error("Failed to retrieve container id")
-        return 1
-    # fetch device path by osd_id
-    volume_out, _ = host.exec_command(
-        sudo=True,
-        cmd=f"podman exec {container_id} ceph-volume lvm list --format json",
-    )
-    dev_path = [
-        v[0]["devices"][0]
-        for k, v in json.loads(volume_out).items()
-        if str(k) == str(osd_id)
-    ][0]
-    if not dev_path:
-        log.error("Failed to get device path")
-        return 1
-    log.debug(
-        f"device path  : {dev_path}, osd_id : {osd_id}, host.hostname : {host.hostname}"
-    )
-    utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
-    method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
-    method_should_succeed(
-        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
-    )
-    utils.osd_remove(ceph_cluster, osd_id)
-    if cr_pool.get("rados_put", False):
-        do_rados_get(client_node, pool["pool_name"], 1)
-
-    method_should_succeed(
-        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
-    )
-    method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
-    method_should_succeed(wait_for_device, host, osd_id, action="remove")
-    utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
-    method_should_succeed(wait_for_device, host, osd_id, action="add")
-    method_should_succeed(
-        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
-    )
-    do_rados_put(mon=client_node, pool=pool["pool_name"], nobj=1000)
-    method_should_succeed(
-        wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
-    )
-    if cr_pool.get("rados_put", False):
-        do_rados_get(client_node, pool["pool_name"], 1)
-    utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
-    rados_obj.change_recovery_threads(config=pool, action="rm")
-
-    if config.get("delete_pools"):
-        for name in config["delete_pools"]:
-            method_should_succeed(rados_obj.detete_pool, name)
-        log.info("deleted all the given pools successfully")
-
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0
 
 

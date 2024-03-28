@@ -461,4 +461,6 @@ def run(ceph_cluster, **kw):
         log.info("\n\n\nIn the finally block of reads balancer tests\n\n\n")
         if config.get("delete_pools"):
             for pool_name in config.get("delete_pools"):
-                rados_obj.detete_pool(pool=pool_name)
+                rados_obj.delete_pool(pool=pool_name)
+        # log cluster health
+        rados_obj.log_cluster_health()

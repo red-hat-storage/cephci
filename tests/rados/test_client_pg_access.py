@@ -40,45 +40,57 @@ def run(ceph_cluster, **kw):
 
     # Creating pools and starting the test
     for entry in pool_target_configs.values():
-        pool_name = entry["pool_name"]
-        log.debug(
-            f"Creating {entry['pool_type']} pool on the cluster with name {pool_name}"
-        )
-        if entry.get("pool_type", "replicated") == "erasure":
-            method_should_succeed(
-                rados_obj.create_erasure_pool, name=pool_name, **entry
+        try:
+            pool_name = entry["pool_name"]
+            log.debug(
+                f"Creating {entry['pool_type']} pool on the cluster with name {pool_name}"
             )
-        else:
-            method_should_succeed(
-                rados_obj.create_pool,
-                **entry,
-            )
-
-        # Creating and reading objects
-        with parallel() as p:
-            p.spawn(do_rados_put, client_node, pool_name, 500)
-            p.spawn(do_rados_get, client_node, pool_name, 1)
-
-        # Creating and deleting snapshots on the pool
-        snapshots = []
-        for _ in range(num_snaps):
-            snap = pool_obj.create_pool_snap(pool_name=pool_name)
-            if snap:
-                snapshots.append(snap)
+            if entry.get("pool_type", "replicated") == "erasure":
+                method_should_succeed(
+                    rados_obj.create_erasure_pool, name=pool_name, **entry
+                )
             else:
-                log.error("Could not create snapshot on the pool")
+                method_should_succeed(
+                    rados_obj.create_pool,
+                    **entry,
+                )
+
+            # Creating and reading objects
+            with parallel() as p:
+                p.spawn(do_rados_put, client_node, pool_name, 500)
+                p.spawn(do_rados_get, client_node, pool_name, 1)
+
+            # Creating and deleting snapshots on the pool
+            snapshots = []
+            for _ in range(num_snaps):
+                snap = pool_obj.create_pool_snap(pool_name=pool_name)
+                if snap:
+                    snapshots.append(snap)
+                else:
+                    log.error("Could not create snapshot on the pool")
+                    return 1
+
+            if not pool_obj.delete_pool_snap(pool_name=pool_name):
+                log.error("Could not delete the snapshots created")
                 return 1
 
-        if not pool_obj.delete_pool_snap(pool_name=pool_name):
-            log.error("Could not delete the snapshots created")
+            # Deleting the objects created on the pool
+            if not pool_obj.do_rados_delete(pool_name=pool_name):
+                log.error("Could not delete the objects present on pool")
+                return 1
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
             return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here \n \n ***************"
+            )
+            # removal of rados pool
+            rados_obj.delete_pool(pool=pool_name)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
-        # Deleting the objects created on the pool
-        if not pool_obj.do_rados_delete(pool_name=pool_name):
-            log.error("Could not delete the objects present on pool")
-            return 1
-
-        rados_obj.detete_pool(pool=pool_name)
         log.info(f"Completed all operations on pool {pool_name}")
 
     log.info(

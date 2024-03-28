@@ -27,22 +27,22 @@ def run(ceph_cluster, **kw):
     pool_configs_path = config["pool_configs_path"]
     log.debug("Verifying CIDR Blocklisting of ceph clients")
 
-    with open(pool_configs_path, "r") as fd:
-        pool_conf = yaml.safe_load(fd)
-
-    pool_names = []
-    for i in pool_details.values():
-        pool = pool_conf[i["type"]][i["conf"]]
-        pool.update({"app_name": "rbd"})
-        create_given_pool(rados_obj, pool)
-        pool_names.append(pool["pool_name"])
-
-    log.debug(
-        f"Pools created on the cluster for testing CIDR blocklisting : {pool_names}. "
-        f"Initializing the pools with RBD and creating images on the pools for testing"
-    )
-
     try:
+        with open(pool_configs_path, "r") as fd:
+            pool_conf = yaml.safe_load(fd)
+
+        pool_names = []
+        for i in pool_details.values():
+            pool = pool_conf[i["type"]][i["conf"]]
+            pool.update({"app_name": "rbd"})
+            create_given_pool(rados_obj, pool)
+            pool_names.append(pool["pool_name"])
+
+        log.debug(
+            f"Pools created on the cluster for testing CIDR blocklisting : {pool_names}. "
+            f"Initializing the pools with RBD and creating images on the pools for testing"
+        )
+
         rbd_images = {}
         img_count = 0
         for pool_name in pool_names:
@@ -276,8 +276,13 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("----------------- IN FINALLY BLOCK ------------------")
+        if not rados_obj.rm_client_blocklisting(cidr=test_client.subnet):
+            log.error(f"Could not remove CIDR {test_client.subnet} from blocklist")
+            return 1
         for pool in pool_names:
-            rados_obj.detete_pool(pool=pool)
+            rados_obj.delete_pool(pool=pool)
+        # log cluster health
+        rados_obj.log_cluster_health()
     log.info("Completed testing CIDR blocklisting of ceph clients. Pass!")
     return 0
 

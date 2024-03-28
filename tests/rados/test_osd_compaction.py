@@ -238,10 +238,14 @@ def run(ceph_cluster, **kw):
         log.exception(e)
         return 1
     finally:
-        log.info("**************** Executing finally block **************")
-        rados_obj.detete_pool(pool=pool_name)
-        rados_obj.detete_pool(pool=bench_pool_name)
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        rados_obj.delete_pool(pool=pool_name)
+        rados_obj.delete_pool(pool=bench_pool_name)
         rados_obj.change_osd_state(action="start", target=osd_id)
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info("Completed testing effects of large number of omap entries on pools ")
     return 0

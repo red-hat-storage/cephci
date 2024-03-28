@@ -73,35 +73,52 @@ def run(ceph_cluster, **kw):
         config_info.read(ini_file)
         mclock_sleep_parameters = config_info.items("Mclock_sleep")
         for profile in mclock_profile:
-            mon_object.set_config(
-                section="osd", name="osd_mclock_profile", value=profile
-            )
-            # Setting the osd_mclock_override_recovery_settings parameters
-            for option in True, False:
+            try:
                 mon_object.set_config(
-                    section="osd",
-                    name="osd_mclock_override_recovery_settings",
-                    value=option,
+                    section="osd", name="osd_mclock_profile", value=profile
                 )
-                # setting the  sleep parameters from 0 to 0.1
-                for param in mclock_sleep_parameters:
+                # Setting the osd_mclock_override_recovery_settings parameters
+                for option in True, False:
                     mon_object.set_config(
-                        section="osd", name=param[0], value="0.100000"
+                        section="osd",
+                        name="osd_mclock_override_recovery_settings",
+                        value=option,
                     )
-                # Check that sleep parameters are not modifiable and the value is 0
-                result = config_param_checker(
-                    mon_object, osd_list, mclock_sleep_parameters
+                    # setting the  sleep parameters from 0 to 0.1
+                    for param in mclock_sleep_parameters:
+                        mon_object.set_config(
+                            section="osd", name=param[0], value="0.100000"
+                        )
+                    # Check that sleep parameters are not modifiable and the value is 0
+                    result = config_param_checker(
+                        mon_object, osd_list, mclock_sleep_parameters
+                    )
+                    if not result:
+                        log.error(
+                            "The Mclock sleep parameter value is not correct in the 6.x build"
+                        )
+                        return 1
+            except Exception as e:
+                log.error(f"Failed with exception: {e.__doc__}")
+                log.exception(e)
+                return 1
+            finally:
+                log.info(
+                    "\n \n ************** Execution of finally block begins here \n \n ***************"
                 )
-                if not result:
-                    log.error(
-                        "The Mclock sleep parameter value is not correct in the 6.x build"
-                    )
-                    return 1
+                for param in mclock_sleep_parameters:
+                    mon_object.remove_config(section="osd", name=param[0])
+                mon_object.remove_config(section="osd", name="osd_mclock_profile")
+                mon_object.remove_config(
+                    section="osd", name="osd_mclock_override_recovery_settings"
+                )
+                # log cluster health
+                rados_object.log_cluster_health()
         return 0
 
-    change_backfill_values = [0, 1, 2, 3]
-    chk_flag = False
     if config.get("scenario") == "mclock_chg_chk":
+        change_backfill_values = [0, 1, 2, 3]
+        chk_flag = False
         ini_file = config.get("ini-file")
         config_info.read(ini_file)
         mclock_chg_parameters = config_info.items("Mclock_paramert_set")
@@ -111,26 +128,26 @@ def run(ceph_cluster, **kw):
                 section="osd", name="osd_mclock_profile", value=profile
             )
             for option in (True, False):
-                mon_object.set_config(
-                    section="osd",
-                    name="osd_mclock_override_recovery_settings",
-                    value=option,
-                )
-
-                # Checking the Recovery/Backfill options in all mclock profiles
-                result = config_param_checker(
-                    mon_object, osd_list, mclock_default_parmeters
-                )
-                if not result:
-                    log.error(
-                        f"The Mclock default parameter value is not correct for the {profile} profile"
-                    )
-                    return 1
-                log.info(
-                    f"The default parameter values are correct for the {profile} profile"
-                )
-                # Changing the Recovery/Backfill options
                 try:
+                    mon_object.set_config(
+                        section="osd",
+                        name="osd_mclock_override_recovery_settings",
+                        value=option,
+                    )
+
+                    # Checking the Recovery/Backfill options in all mclock profiles
+                    result = config_param_checker(
+                        mon_object, osd_list, mclock_default_parmeters
+                    )
+                    if not result:
+                        log.error(
+                            f"The Mclock default parameter value is not correct for the {profile} profile"
+                        )
+                        return 1
+                    log.info(
+                        f"The default parameter values are correct for the {profile} profile"
+                    )
+                    # Changing the Recovery/Backfill options
                     for parameter, old_value in zip(
                         mclock_default_parmeters, change_backfill_values
                     ):
@@ -163,19 +180,22 @@ def run(ceph_cluster, **kw):
                     log.error(
                         f"Error occured while testing the default backfill/recovery paramters:{er}"
                     )
+                    return 1
                 finally:
+                    log.info(
+                        "\n \n ************** Execution of finally block begins here \n \n ***************"
+                    )
                     # Setting to default values
                     for parameter in mclock_default_parmeters:
-                        mon_object.set_config(
-                            section="osd", name=parameter[0], value=parameter[-1]
-                        )
-                    mon_object.set_config(
+                        mon_object.remove_config(section="osd", name=parameter[0])
+                    mon_object.remove_config(
                         section="osd",
                         name="osd_mclock_override_recovery_settings",
-                        value="false",
                     )
                     if not chk_flag:
                         return 1
+                    # log cluster health
+                    rados_object.log_cluster_health()
 
                 # The logic implemented is -
                 # 1.Getting the expected value of the parameter using the config show
@@ -184,36 +204,53 @@ def run(ceph_cluster, **kw):
                 # 4.Compare the expected value and actual value.
                 for param in mclock_chg_parameters:
                     for id in osd_list:
-                        # Get the Value of the parameter using config show
-                        old_value = mon_object.show_config("osd", id, param[0])
-                        old_value = str(old_value).strip()
-                        old_value = int(old_value) if "wgt" in param[0] else old_value
-                        log.debug(f"The {param[0]}  parameter value is{old_value} ")
-                        chg_value = float(old_value) + float(param[-1])
-                        chg_value = int(chg_value) if "wgt" in param[0] else chg_value
-                        # set the new value to OSDs
-                        mon_object.set_config(
-                            section="osd", name=param[0], value=chg_value
-                        )
-                        # Implicit Wait after set configuration
-                        time.sleep(5)
-                        # Get the new value of the parameter using config show
-                        actual_value = mon_object.show_config("osd", id, param[0])
-                        actual_value = str(actual_value).strip()
-                        actual_value = (
-                            int(actual_value) if "wgt" in param[0] else actual_value
-                        )
-                        log.debug(
-                            f"The {param[0]}  parameter value after setting is {actual_value}"
-                        )
-                        # Comparing the actual value with the expected value.
-                        if actual_value != old_value:
-                            log.error(
-                                f"In the mclock {profile}  {param[0]} parameter value is changeable"
+                        try:
+                            # Get the Value of the parameter using config show
+                            old_value = mon_object.show_config("osd", id, param[0])
+                            old_value = str(old_value).strip()
+                            old_value = (
+                                int(old_value) if "wgt" in param[0] else old_value
                             )
+                            log.debug(f"The {param[0]}  parameter value is{old_value} ")
+                            chg_value = float(old_value) + float(param[-1])
+                            chg_value = (
+                                int(chg_value) if "wgt" in param[0] else chg_value
+                            )
+                            # set the new value to OSDs
+                            mon_object.set_config(
+                                section="osd", name=param[0], value=chg_value
+                            )
+                            # Implicit Wait after set configuration
+                            time.sleep(5)
+                            # Get the new value of the parameter using config show
+                            actual_value = mon_object.show_config("osd", id, param[0])
+                            actual_value = str(actual_value).strip()
+                            actual_value = (
+                                int(actual_value) if "wgt" in param[0] else actual_value
+                            )
+                            log.debug(
+                                f"The {param[0]}  parameter value after setting is {actual_value}"
+                            )
+                            # Comparing the actual value with the expected value.
+                            if actual_value != old_value:
+                                log.error(
+                                    f"In the mclock {profile}  {param[0]} parameter value is changeable"
+                                )
+                                return 1
+                        except Exception as e:
+                            log.error(f"Failed with exception: {e.__doc__}")
+                            log.exception(e)
                             return 1
-        # RocksDB compression parameter check
+                        finally:
+                            log.info(
+                                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                            )
+                            # remove value set for OSDs
+                            mon_object.remove_config(section="osd", name=param[0])
+                            # log cluster health
+                            rados_object.log_cluster_health()
 
+    # RocksDB compression parameter check
     if config.get("scenario") == "rocksdb_compression":
         # Checking the RHCS version.
         if float(build) < 7.1:

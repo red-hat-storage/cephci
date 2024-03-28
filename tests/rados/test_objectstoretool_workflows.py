@@ -554,6 +554,9 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("\n\n\n*********** Execution of finally block starts ***********\n\n")
-        rados_obj.detete_pool(pool="cot-pool")
+        rados_obj.delete_pool(pool="cot-pool")
+        # log cluster health
+        rados_obj.log_cluster_health()
+
     log.info("Completed verification of Ceph-objectstore-Tool commands.")
     return 0

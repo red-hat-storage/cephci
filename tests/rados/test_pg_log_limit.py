@@ -148,7 +148,12 @@ def run(ceph_cluster, **kw):
         log.exception(e)
         return 1
     finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
         mon_obj.remove_config(section="osd", name="debug_osd")
         mon_obj.remove_config(section="osd", name="osd_max_pg_log_entries")
-        rados_obj.detete_pool(pool=_pool_name)
+        rados_obj.delete_pool(pool=_pool_name)
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0

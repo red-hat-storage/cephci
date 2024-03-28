@@ -183,7 +183,12 @@ def run(ceph_cluster, **kw):
         sys.stderr.write("ERRORED LINE\t::%s:\n" % str(exc_tb.tb_lineno))
         return 1
     finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
         remove_parameter_configuration(mon_obj)
         rados_obj.set_osd_flags("unset", "noscrub")
         rados_obj.set_osd_flags("unset", "nodeep-scrub")
         time.sleep(10)
+        # log cluster health
+        rados_obj.log_cluster_health()

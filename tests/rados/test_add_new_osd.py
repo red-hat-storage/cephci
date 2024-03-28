@@ -1,6 +1,7 @@
 import random
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
 log = Log(__name__)
@@ -18,6 +19,7 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
     client = ceph_cluster.get_nodes(role="client")[0]
 
     log.info("Running test case to verify addition of new OSD on existing OSD disk")
@@ -36,11 +38,17 @@ def run(ceph_cluster, **kw):
         )
         log.info(out)
         assert "Created no osd(s) on host" in out and "already created" in out
+        log.info(
+            "Verification complete, addition of new OSD on existing OSD disk, failed as expected"
+        )
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
         return 1
-    log.info(
-        "Verification complete, addition of new OSD on existing OSD disk, failed as expected"
-    )
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0

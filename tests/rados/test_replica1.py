@@ -347,5 +347,7 @@ def run(ceph_cluster, **kw):
             # unset eio flag on all replica-1 pools
             for pool in repli_pools_org:
                 set_eio_flag(_pool=pool, val="false")
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     return 0

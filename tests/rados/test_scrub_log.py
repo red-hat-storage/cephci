@@ -111,8 +111,13 @@ def run(ceph_cluster, **kw) -> int:
         return 1
 
     finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
         for pool in pools:
-            rados_obj.detete_pool(pool=pool)
+            rados_obj.delete_pool(pool=pool)
+        # log cluster health
+        rados_obj.log_cluster_health()
 
 
 def check_scrub_workflow(installer, rados_obj, acting_sets, task) -> bool:

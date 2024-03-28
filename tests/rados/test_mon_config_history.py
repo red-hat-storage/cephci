@@ -34,25 +34,26 @@ def run(ceph_cluster, **kw):
     log.info(
         "Setting new changes and verifying if the changes are reflected in the log"
     )
-    if not mon_obj.set_config(section="osd", name="osd_max_scrubs", value="8"):
-        log.error("Error setting config ")
-        return 1
-
-    # Checking the versions and changes made.
-    test_config = mon_obj.get_ceph_log(count=1)[0]
-    log.info(
-        "Config changes made for test. \n"
-        f"Version: {test_config['version']}"
-        f"Changes made: {test_config['changes']}"
-    )
-
-    if not test_config["version"] > init_config["version"]:
-        log.error(
-            f"The log is not updated with new config changes."
-            f"Version: {test_config['version']}"
-        )
-        return 1
     try:
+        if not mon_obj.set_config(section="osd", name="osd_max_scrubs", value="8"):
+            log.error("Error setting config ")
+            return 1
+
+        # Checking the versions and changes made.
+        test_config = mon_obj.get_ceph_log(count=1)[0]
+        log.info(
+            "Config changes made for test. \n"
+            f"Version: {test_config['version']}"
+            f"Changes made: {test_config['changes']}"
+        )
+
+        if not test_config["version"] > init_config["version"]:
+            log.error(
+                f"The log is not updated with new config changes."
+                f"Version: {test_config['version']}"
+            )
+            return 1
+
         name = test_config["changes"][0].get("name")
         value = str(test_config["changes"][0].get("new_value"))
         if not name == "osd/osd_max_scrubs" and value == "8":
@@ -61,9 +62,17 @@ def run(ceph_cluster, **kw):
                 f"Changes made: {test_config['changes']}"
             )
             return 1
-    except Exception:
-        log.error("The log collected does not contain the value and changes made")
+        log.info("The ceph config log is successfully updated after changes ")
+    except Exception as e:
+        log.error(f"Failed with exception: {e.__doc__}")
+        log.exception(e)
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        mon_obj.remove_config(section="osd", name="osd_max_scrubs")
+        # log cluster health
+        rados_obj.log_cluster_health()
 
-    log.info("The ceph config log is successfully updated after changes ")
     return 0

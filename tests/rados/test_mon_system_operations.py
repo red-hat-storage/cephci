@@ -34,255 +34,281 @@ def run(ceph_cluster, **kw):
     init_mon_nodes = ceph_cluster.get_nodes(role="mon")
 
     pool_name = "mon_service_test_pool"
-    if not rados_obj.create_pool(pool_name=pool_name):
-        log.error(f"Could not create pool {pool_name} for mon tests")
-        raise Exception("Pool not created error")
+    try:
+        if not rados_obj.create_pool(pool_name=pool_name):
+            log.error(f"Could not create pool {pool_name} for mon tests")
+            raise Exception("Pool not created error")
 
-    rados_obj.bench_write(pool_name=pool_name, byte_size=1024, rados_write_duration=50)
-
-    # Increasing backfill & recovery rate
-    rados_obj.change_recovery_threads(config={}, action="set")
-
-    log.info("---------- starting workflow 1 - Addition of new mons --------")
-    # Setting the mon service as unmanaged by cephadm
-    if not mon_obj.set_mon_service_managed_type(unmanaged=True):
-        log.error("Could not set the mon service to unmanaged")
-        raise Exception("mon service not unmanaged error")
-
-    found = False
-    # Idenitfying test host without any mons to deploy new mons
-    for item in cluster_nodes:
-        if item.hostname not in [mon.hostname for mon in init_mon_nodes]:
-            alt_mon_host = item
-            found = True
-            break
-    if not found:
-        log.error("No alternate mon host was found... fail")
-        raise Exception("No free mon host found error")
-
-    log.debug(
-        f"Selected host: {alt_mon_host.hostname} with "
-        f"IP : {alt_mon_host.ip_address} to deploy new mon daemon"
-    )
-
-    # Adding the new mon to the cluster
-    if not mon_obj.add_mon_service(host=alt_mon_host):
-        log.error(f"Could not add mon service on host {alt_mon_host.hostname} ")
-        raise Exception("mon service not added error")
-
-    # Setting the mon service as managed by cephadm
-    if not mon_obj.set_mon_service_managed_type(unmanaged=False):
-        log.error("Could not set the mon service to managed")
-        raise Exception("mon service not managed error")
-
-    # Checking if the new mon added is part of Mon Quorum
-    quorum = mon_obj.get_mon_quorum_hosts()
-    if alt_mon_host.hostname not in quorum:
-        log.error(
-            f"selected host : {alt_mon_host.hostname} does not have mon as part of Quorum post addition"
+        rados_obj.bench_write(
+            pool_name=pool_name, byte_size=1024, rados_write_duration=50
         )
-        raise Exception("Mon not in quorum error")
 
-    log.info("Completed workflow 1. Addition of new mon daemon")
+        # Increasing backfill & recovery rate
+        rados_obj.change_recovery_threads(config={}, action="set")
 
-    log.info("---------- starting workflow 2 - Removal of new mons --------")
-    # Setting the mon service as unmanaged
-    if not mon_obj.set_mon_service_managed_type(unmanaged=True):
-        log.error("Could not set the mon service to unmanaged")
-        raise Exception("mon service not unmanaged error")
+        log.info("---------- starting workflow 1 - Addition of new mons --------")
+        # Setting the mon service as unmanaged by cephadm
+        if not mon_obj.set_mon_service_managed_type(unmanaged=True):
+            log.error("Could not set the mon service to unmanaged")
+            raise Exception("mon service not unmanaged error")
 
-    # Removing mon service
-    if not mon_obj.remove_mon_service(host=alt_mon_host.hostname):
-        log.error("Could not remove the new mon added previously")
-        raise Exception("mon service not removed error")
+        found = False
+        # Identifying test host without any mons to deploy new mons
+        for item in cluster_nodes:
+            if item.hostname not in [mon.hostname for mon in init_mon_nodes]:
+                alt_mon_host = item
+                found = True
+                break
+        if not found:
+            log.error("No alternate mon host was found... fail")
+            raise Exception("No free mon host found error")
 
-    # Setting the mon service as managed by cephadm
-    if not mon_obj.set_mon_service_managed_type(unmanaged=False):
-        log.error("Could not set the mon service to managed")
-        raise Exception("mon service not managed error")
-
-    quorum = mon_obj.get_mon_quorum_hosts()
-    if alt_mon_host.hostname in quorum:
-        log.error(
-            f"selected host : {alt_mon_host.hostname} is present as part of Quorum post removal"
+        log.debug(
+            f"Selected host: {alt_mon_host.hostname} with "
+            f"IP : {alt_mon_host.ip_address} to deploy new mon daemon"
         )
-        raise Exception("Mon in quorum error post removal")
 
-    log.info("Completed Scenario 2")
+        # Adding the new mon to the cluster
+        if not mon_obj.add_mon_service(host=alt_mon_host):
+            log.error(f"Could not add mon service on host {alt_mon_host.hostname} ")
+            raise Exception("mon service not added error")
 
-    log.info(
-        "---------- starting workflow 3 - Removal of mons during OSD down --------"
-    )
+        # Setting the mon service as managed by cephadm
+        if not mon_obj.set_mon_service_managed_type(unmanaged=False):
+            log.error("Could not set the mon service to managed")
+            raise Exception("mon service not managed error")
 
-    # fetching all the OSDs on the cluster and selecting 1 OSD at random to be shut down.
-    out, _ = cephadm.shell(args=["ceph osd ls"])
-    osd_list = out.strip().split("\n")
+        # Checking if the new mon added is part of Mon Quorum
+        quorum = mon_obj.get_mon_quorum_hosts()
+        if alt_mon_host.hostname not in quorum:
+            log.error(
+                f"selected host : {alt_mon_host.hostname} does not have mon as part of Quorum post addition"
+            )
+            raise Exception("Mon not in quorum error")
 
-    osd_id = int(random.choice(osd_list))
-    log.debug(f"Selected OSD : {osd_id} to be shut down")
-    if not rados_obj.change_osd_state(action="stop", target=osd_id):
-        log.error(f"Could not stop OSD : {osd_id}")
-        raise Exception("OSD not stopped error")
+        log.info("Completed workflow 1. Addition of new mon daemon")
 
-    # Selecting one mon host to be removed at random during OSD down
-    test_mon_host = random.choice(init_mon_nodes)
+        log.info("---------- starting workflow 2 - Removal of new mons --------")
+        # Setting the mon service as unmanaged
+        if not mon_obj.set_mon_service_managed_type(unmanaged=True):
+            log.error("Could not set the mon service to unmanaged")
+            raise Exception("mon service not unmanaged error")
 
-    log.debug(f"Selected mon : {test_mon_host.hostname} to be removed from cluster")
-    # Setting the mon service as unmanaged
-    if not mon_obj.set_mon_service_managed_type(unmanaged=True):
-        log.error("Could not set the mon service to unmanaged")
-        raise Exception("mon service not unmanaged error")
+        # Removing mon service
+        if not mon_obj.remove_mon_service(host=alt_mon_host.hostname):
+            log.error("Could not remove the new mon added previously")
+            raise Exception("mon service not removed error")
 
-    # Removing mon service
-    if not mon_obj.remove_mon_service(host=test_mon_host.hostname):
-        log.error("Could not remove the new mon added previously")
-        raise Exception("mon service not removed error")
+        # Setting the mon service as managed by cephadm
+        if not mon_obj.set_mon_service_managed_type(unmanaged=False):
+            log.error("Could not set the mon service to managed")
+            raise Exception("mon service not managed error")
 
-    quorum = mon_obj.get_mon_quorum_hosts()
-    if test_mon_host.hostname in quorum:
-        log.error(
-            f"selected host : {test_mon_host.hostname} has a mon daemon present as part of Quorum post Removal"
+        quorum = mon_obj.get_mon_quorum_hosts()
+        if alt_mon_host.hostname in quorum:
+            log.error(
+                f"selected host : {alt_mon_host.hostname} is present as part of Quorum post removal"
+            )
+            raise Exception("Mon in quorum error post removal")
+
+        log.info("Completed Scenario 2")
+
+        log.info(
+            "---------- starting workflow 3 - Removal of mons during OSD down --------"
         )
-        raise Exception("Mon in quorum error post removal error")
 
-    # Writing Objects on pool post mon removal and OSD down
-    rados_obj.bench_write(
-        pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
-    )
+        # fetching all the OSDs on the cluster and selecting 1 OSD at random to be shut down.
+        out, _ = cephadm.shell(args=["ceph osd ls"])
+        osd_list = out.strip().split("\n")
 
-    if not rados_obj.change_osd_state(action="start", target=osd_id):
-        log.error(f"Could not start OSD : {osd_id}")
-        raise Exception("OSD not started error")
+        osd_id = int(random.choice(osd_list))
+        log.debug(f"Selected OSD : {osd_id} to be shut down")
+        if not rados_obj.change_osd_state(action="stop", target=osd_id):
+            log.error(f"Could not stop OSD : {osd_id}")
+            raise Exception("OSD not stopped error")
 
-    # Now that the OSD is restarted, waiting for the recovery while the mon is removed
-    log.debug(
-        " waiting for PGs to settle down and recover post OSD stop and start during mon removal"
-    )
-    method_should_succeed(
-        wait_for_clean_pg_sets, rados_obj, timeout=5000, test_pool=pool_name
-    )
+        # Selecting one mon host to be removed at random during OSD down
+        test_mon_host = random.choice(init_mon_nodes)
 
-    if not rados_obj.run_pool_sanity_check():
-        log.error("Checks failed post mon removal and OSD rebalance")
-        raise Exception("Secnario 3 of Mon tests failed")
+        log.debug(f"Selected mon : {test_mon_host.hostname} to be removed from cluster")
+        # Setting the mon service as unmanaged
+        if not mon_obj.set_mon_service_managed_type(unmanaged=True):
+            log.error("Could not set the mon service to unmanaged")
+            raise Exception("mon service not unmanaged error")
 
-    log.info("Completed scenario 3. Pass")
+        # Removing mon service
+        if not mon_obj.remove_mon_service(host=test_mon_host.hostname):
+            log.error("Could not remove the new mon added previously")
+            raise Exception("mon service not removed error")
 
-    log.info(
-        "---------- starting workflow 4 - Addition of mons during OSD down --------"
-    )
+        quorum = mon_obj.get_mon_quorum_hosts()
+        if test_mon_host.hostname in quorum:
+            log.error(
+                f"selected host : {test_mon_host.hostname} has a mon daemon present as part of Quorum post Removal"
+            )
+            raise Exception("Mon in quorum error post removal error")
 
-    # fetching all the OSDs on the cluster and selecting 1 OSD at random to be shut down.
-    out, _ = cephadm.shell(args=["ceph osd ls"])
-    osd_list = out.strip().split("\n")
-
-    osd_id = int(random.choice(osd_list))
-    log.debug(f"Selected OSD : {osd_id} to be shut down")
-    if not rados_obj.change_osd_state(action="stop", target=osd_id):
-        log.error(f"Could not stop OSD : {osd_id}")
-        raise Exception("OSD not stopped error")
-
-    # Adding the mon back to the cluster
-    if not mon_obj.add_mon_service(host=test_mon_host):
-        log.error(f"Could not add mon service on host {test_mon_host}")
-        raise Exception("mon service not added error")
-
-    # Setting the mon service as managed by cephadm
-    if not mon_obj.set_mon_service_managed_type(unmanaged=False):
-        log.error("Could not set the mon service to managed")
-        raise Exception("mon service not managed error")
-
-    # Checking if the mon added is part of Mon Quorum
-    quorum = mon_obj.get_mon_quorum_hosts()
-    if test_mon_host.hostname not in quorum:
-        log.error(
-            f"selected host : {test_mon_host.hostname} does not have mon as part of Quorum post addition"
+        # Writing Objects on pool post mon removal and OSD down
+        rados_obj.bench_write(
+            pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
         )
-        raise Exception("Mon not in quorum post addition error")
 
-    # Writing Objects on pool post mon Addition and OSD down
-    rados_obj.bench_write(
-        pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
-    )
+        if not rados_obj.change_osd_state(action="start", target=osd_id):
+            log.error(f"Could not start OSD : {osd_id}")
+            raise Exception("OSD not started error")
 
-    if not rados_obj.change_osd_state(action="start", target=osd_id):
-        log.error(f"Could not start OSD : {osd_id}")
-        raise Exception("OSD not started error")
+        # Now that the OSD is restarted, waiting for the recovery while the mon is removed
+        log.debug(
+            " waiting for PGs to settle down and recover post OSD stop and start during mon removal"
+        )
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=5000, test_pool=pool_name
+        )
 
-    # Now that the OSD is restarted, waiting for the recovery while the mon is Added
-    log.debug(
-        " waiting for PGs to settle down and recover post OSD stop and start during mon Addition"
-    )
-    method_should_succeed(
-        wait_for_clean_pg_sets, rados_obj, timeout=5000, test_pool=pool_name
-    )
+        if not rados_obj.run_pool_sanity_check():
+            log.error("Checks failed post mon removal and OSD rebalance")
+            raise Exception("Secnario 3 of Mon tests failed")
 
-    if not rados_obj.run_pool_sanity_check():
-        log.error("Checks failed post mon addition and OSD rebalance")
-        raise Exception("Secnario 4 of Mon tests failed")
+        log.info("Completed scenario 3. Pass")
 
-    log.info("Completed scenario 4. Pass")
+        log.info(
+            "---------- starting workflow 4 - Addition of mons during OSD down --------"
+        )
 
-    log.info(
-        "---------- starting workflow 5 - Start and Stop of mon daemons with IOs --------"
-    )
-    test_mon_host = random.choice(init_mon_nodes)
-    log.debug(f"Selected mon : {test_mon_host.hostname} to be stopped")
-    if not rados_obj.change_daemon_systemctl_state(
-        action="stop", daemon_type="mon", daemon_id=test_mon_host.hostname
-    ):
-        log.error(f"Failed to stop mon on host {test_mon_host.hostname}")
-        raise Exception("Mon stop failure error")
+        # fetching all the OSDs on the cluster and selecting 1 OSD at random to be shut down.
+        out, _ = cephadm.shell(args=["ceph osd ls"])
+        osd_list = out.strip().split("\n")
 
-    # Writing Objects on pool post mon down
-    rados_obj.bench_write(
-        pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
-    )
+        osd_id = int(random.choice(osd_list))
+        log.debug(f"Selected OSD : {osd_id} to be shut down")
+        if not rados_obj.change_osd_state(action="stop", target=osd_id):
+            log.error(f"Could not stop OSD : {osd_id}")
+            raise Exception("OSD not stopped error")
 
-    if not rados_obj.run_pool_sanity_check():
-        log.error("Checks failed post mon down")
-        raise Exception("Sanity check failed post mon down")
+        # Adding the mon back to the cluster
+        if not mon_obj.add_mon_service(host=test_mon_host):
+            log.error(f"Could not add mon service on host {test_mon_host}")
+            raise Exception("mon service not added error")
 
-    if not rados_obj.change_daemon_systemctl_state(
-        action="start", daemon_type="mon", daemon_id=test_mon_host.hostname
-    ):
-        log.error(f"Failed to start mon on host {test_mon_host.hostname}")
-        raise Exception("Mon start failure error")
+        # Setting the mon service as managed by cephadm
+        if not mon_obj.set_mon_service_managed_type(unmanaged=False):
+            log.error("Could not set the mon service to managed")
+            raise Exception("mon service not managed error")
 
-    # Writing Objects on pool post mon Up
-    rados_obj.bench_write(
-        pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
-    )
+        # Checking if the mon added is part of Mon Quorum
+        quorum = mon_obj.get_mon_quorum_hosts()
+        if test_mon_host.hostname not in quorum:
+            log.error(
+                f"selected host : {test_mon_host.hostname} does not have mon as part of Quorum post addition"
+            )
+            raise Exception("Mon not in quorum post addition error")
 
-    if not rados_obj.run_pool_sanity_check():
-        log.error("Checks failed post mon Up")
-        raise Exception("Sanity check failed post mon start")
+        # Writing Objects on pool post mon Addition and OSD down
+        rados_obj.bench_write(
+            pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
+        )
 
-    log.info("Completed scenario 5. Pass")
+        if not rados_obj.change_osd_state(action="start", target=osd_id):
+            log.error(f"Could not start OSD : {osd_id}")
+            raise Exception("OSD not started error")
 
-    log.info(
-        "---------- starting workflow 6 - rolling reboot of all mon daemons with IOs --------"
-    )
+        # Now that the OSD is restarted, waiting for the recovery while the mon is Added
+        log.debug(
+            " waiting for PGs to settle down and recover post OSD stop and start during mon Addition"
+        )
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=5000, test_pool=pool_name
+        )
 
-    for mon_node in init_mon_nodes:
+        if not rados_obj.run_pool_sanity_check():
+            log.error("Checks failed post mon addition and OSD rebalance")
+            raise Exception("Secnario 4 of Mon tests failed")
+
+        log.info("Completed scenario 4. Pass")
+
+        log.info(
+            "---------- starting workflow 5 - Start and Stop of mon daemons with IOs --------"
+        )
+        test_mon_host = random.choice(init_mon_nodes)
+        log.debug(f"Selected mon : {test_mon_host.hostname} to be stopped")
         if not rados_obj.change_daemon_systemctl_state(
-            action="restart", daemon_type="mon", daemon_id=mon_node.hostname
+            action="stop", daemon_type="mon", daemon_id=test_mon_host.hostname
         ):
-            log.error(f"Failed to reboot mon on host {test_mon_host.hostname}")
-            raise Exception("Mon restart failure error")
+            log.error(f"Failed to stop mon on host {test_mon_host.hostname}")
+            raise Exception("Mon stop failure error")
 
-        # Writing Objects on pool post mon reboots
+        # Writing Objects on pool post mon down
         rados_obj.bench_write(
             pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
         )
 
         if not rados_obj.run_pool_sanity_check():
-            log.error("Checks failed post mon reboots")
-            raise Exception("Sanity check failed post mon reboots")
-        log.debug(f"Successfully restarted mon : {mon_node.hostname}")
+            log.error("Checks failed post mon down")
+            raise Exception("Sanity check failed post mon down")
 
-    # setting the backfill & recovery rate to default
-    rados_obj.change_recovery_threads(config={}, action="rm")
+        if not rados_obj.change_daemon_systemctl_state(
+            action="start", daemon_type="mon", daemon_id=test_mon_host.hostname
+        ):
+            log.error(f"Failed to start mon on host {test_mon_host.hostname}")
+            raise Exception("Mon start failure error")
+
+        # Writing Objects on pool post mon Up
+        rados_obj.bench_write(
+            pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
+        )
+
+        if not rados_obj.run_pool_sanity_check():
+            log.error("Checks failed post mon Up")
+            raise Exception("Sanity check failed post mon start")
+
+        log.info("Completed scenario 5. Pass")
+
+        log.info(
+            "---------- starting workflow 6 - rolling reboot of all mon daemons with IOs --------"
+        )
+
+        for mon_node in init_mon_nodes:
+            if not rados_obj.change_daemon_systemctl_state(
+                action="restart", daemon_type="mon", daemon_id=mon_node.hostname
+            ):
+                log.error(f"Failed to reboot mon on host {test_mon_host.hostname}")
+                raise Exception("Mon restart failure error")
+
+            # Writing Objects on pool post mon reboots
+            rados_obj.bench_write(
+                pool_name=pool_name,
+                byte_size=1024,
+                rados_write_duration=50,
+                check_ec=False,
+            )
+
+            if not rados_obj.run_pool_sanity_check():
+                log.error("Checks failed post mon reboots")
+                raise Exception("Sanity check failed post mon reboots")
+            log.debug(f"Successfully restarted mon : {mon_node.hostname}")
+    except Exception as e:
+        log.error(f"Failed with exception: {e.__doc__}")
+        log.exception(e)
+        mon_obj.remove_mon_service(host=alt_mon_host.hostname)
+        mon_obj.add_mon_service(host=test_mon_host)
+        return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # setting the backfill & recovery rate to default
+        rados_obj.change_recovery_threads(config={}, action="rm")
+        rados_obj.change_daemon_systemctl_state(
+            action="start", daemon_type="mon", daemon_id=test_mon_host.hostname
+        )
+        mon_obj.set_mon_service_managed_type(unmanaged=False)
+        rados_obj.change_osd_state(action="stop", target=osd_id)
+
+        # removal of rados pools
+        rados_obj.rados_pool_cleanup()
+
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info(
         "Completed rolling reboot of all mon daemons and sanity check."

@@ -41,217 +41,237 @@ def run(ceph_cluster, **kw):
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
     add_network_delay = config.get("add_network_delay", False)
 
-    if not stretch_enabled_checks(rados_obj=rados_obj):
-        log.error(
-            "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+    try:
+        if not stretch_enabled_checks(rados_obj=rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+        log.info(
+            f"Starting tests performing site down of {shutdown_site}. Pre-checks Passed"
         )
-        raise Exception("Test pre-execution checks failed")
-
-    log.info(
-        f"Starting tests performing site down of {shutdown_site}. Pre-checks Passed"
-    )
-    osd_tree_cmd = "ceph osd tree"
-    buckets = rados_obj.run_ceph_command(osd_tree_cmd)
-    dc_buckets = [d for d in buckets["nodes"] if d.get("type") == "datacenter"]
-    dc_1 = dc_buckets.pop()
-    dc_1_name = dc_1["name"]
-    dc_2 = dc_buckets.pop()
-    dc_2_name = dc_2["name"]
-    all_hosts = get_stretch_site_hosts(
-        rados_obj=rados_obj, tiebreaker_mon_site_name=tiebreaker_mon_site_name
-    )
-    dc_1_hosts = all_hosts.dc_1_hosts
-    dc_2_hosts = all_hosts.dc_2_hosts
-    tiebreaker_hosts = all_hosts.tiebreaker_hosts
-
-    log.debug(f"Hosts present in Datacenter : {dc_1_name} : {dc_1_hosts}")
-    log.debug(f"Hosts present in Datacenter : {dc_2_name} : {dc_2_hosts}")
-    log.debug(
-        f"Hosts present in Datacenter : {tiebreaker_mon_site_name} : {tiebreaker_hosts}"
-    )
-    if add_network_delay:
-        for host in dc_1_hosts:
-            rados_obj.add_network_delay_on_host(
-                hostname=host, delay="10ms", set_delay=True
-            )
-        for host in dc_2_hosts:
-            rados_obj.add_network_delay_on_host(
-                hostname=host, delay="10ms", set_delay=True
-            )
-        for host in tiebreaker_hosts:
-            rados_obj.add_network_delay_on_host(
-                hostname=host, delay="100ms", set_delay=True
-            )
-
-        log.info("Successfully set network delays on the Stretch cluster nodes")
-
-    # Checking if the site passed to shut down is present in the Cluster CRUSH
-    if shutdown_site not in [tiebreaker_mon_site_name, dc_1_name, dc_2_name]:
-        log.error(
-            f"Passed site : {shutdown_site} not part of crush locations on cluster.\n"
-            f"locations present on cluster : {[tiebreaker_mon_site_name, dc_1_name, dc_2_name]}"
+        osd_tree_cmd = "ceph osd tree"
+        buckets = rados_obj.run_ceph_command(osd_tree_cmd)
+        dc_buckets = [d for d in buckets["nodes"] if d.get("type") == "datacenter"]
+        dc_1 = dc_buckets.pop()
+        dc_1_name = dc_1["name"]
+        dc_2 = dc_buckets.pop()
+        dc_2_name = dc_2["name"]
+        all_hosts = get_stretch_site_hosts(
+            rados_obj=rados_obj, tiebreaker_mon_site_name=tiebreaker_mon_site_name
         )
-        raise Exception("Test execution failed")
+        dc_1_hosts = all_hosts.dc_1_hosts
+        dc_2_hosts = all_hosts.dc_2_hosts
+        tiebreaker_hosts = all_hosts.tiebreaker_hosts
 
-    # Creating test pool to check the effect of Site down on the Pool IO
-    if not rados_obj.create_pool(pool_name=pool_name):
-        log.error(f"Failed to create pool : {pool_name}")
-        raise Exception("Test execution failed")
+        log.debug(f"Hosts present in Datacenter : {dc_1_name} : {dc_1_hosts}")
+        log.debug(f"Hosts present in Datacenter : {dc_2_name} : {dc_2_hosts}")
+        log.debug(
+            f"Hosts present in Datacenter : {tiebreaker_mon_site_name} : {tiebreaker_hosts}"
+        )
+        if add_network_delay:
+            for host in dc_1_hosts:
+                rados_obj.add_network_delay_on_host(
+                    hostname=host, delay="10ms", set_delay=True
+                )
+            for host in dc_2_hosts:
+                rados_obj.add_network_delay_on_host(
+                    hostname=host, delay="10ms", set_delay=True
+                )
+            for host in tiebreaker_hosts:
+                rados_obj.add_network_delay_on_host(
+                    hostname=host, delay="100ms", set_delay=True
+                )
 
-    # Sleeping for 10 seconds for pool to be populated in the cluster
-    time.sleep(10)
+            log.info("Successfully set network delays on the Stretch cluster nodes")
 
-    # Collecting the init no of objects on the pool, before site down
-    pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-    init_objects = pool_stat["stats"]["objects"]
+        # Checking if the site passed to shut down is present in the Cluster CRUSH
+        if shutdown_site not in [tiebreaker_mon_site_name, dc_1_name, dc_2_name]:
+            log.error(
+                f"Passed site : {shutdown_site} not part of crush locations on cluster.\n"
+                f"locations present on cluster : {[tiebreaker_mon_site_name, dc_1_name, dc_2_name]}"
+            )
+            raise Exception("Test execution failed")
 
-    # Checking which DC to be turned off, It would be either data site or Arbiter site
-    # Proceeding to Shut down either one of the Data DCs if crush name sent is either DC1 or DC2.
-    if shutdown_site in [dc_1_name, dc_2_name]:
-        log.debug(f"Proceeding to shutdown one of the data site {dc_1_name}")
-        for host in dc_1_hosts:
-            log.debug(f"Proceeding to shutdown host {host}")
-            if not host_shutdown(gyaml=osp_cred, name=host):
-                log.error(f"Failed to shutdown host : {host}")
-                raise Exception("Test execution Failed")
+        # Creating test pool to check the effect of Site down on the Pool IO
+        if not rados_obj.create_pool(pool_name=pool_name):
+            log.error(f"Failed to create pool : {pool_name}")
+            raise Exception("Test execution failed")
 
-        log.info(f"Completed shutdown of all the hosts in data site {dc_1_name}.")
-
-        # sleeping for 10 seconds for the DC to be identified as down and proceeding to next checks
+        # Sleeping for 10 seconds for pool to be populated in the cluster
         time.sleep(10)
 
-        # Checking the health status of the cluster and the active alerts for site down
-        # These should be generated on the cluster
-        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
-        ceph_health_status = list(status_report["health"]["checks"].keys())
-        expected_health_warns = (
-            "OSD_HOST_DOWN",
-            "OSD_DOWN",
-            "OSD_DATACENTER_DOWN",
-            "MON_DOWN",
-            "DEGRADED_STRETCH_MODE",
-        )
-        if not all(elem in ceph_health_status for elem in expected_health_warns):
-            log.error(
-                f"We do not have the expected health warnings generated on the cluster.\n"
-                f" Warns on cluster : {ceph_health_status}\n"
-                f"Expected Warnings : {expected_health_warns}\n"
+        # Collecting the init no of objects on the pool, before site down
+        pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+        init_objects = pool_stat["stats"]["objects"]
+
+        # Checking which DC to be turned off, It would be either data site or Arbiter site
+        # Proceeding to Shut down either one of the Data DCs if crush name sent is either DC1 or DC2.
+        if shutdown_site in [dc_1_name, dc_2_name]:
+            log.debug(f"Proceeding to shutdown one of the data site {dc_1_name}")
+            for host in dc_1_hosts:
+                log.debug(f"Proceeding to shutdown host {host}")
+                if not host_shutdown(gyaml=osp_cred, name=host):
+                    log.error(f"Failed to shutdown host : {host}")
+                    raise Exception("Test execution Failed")
+
+            log.info(f"Completed shutdown of all the hosts in data site {dc_1_name}.")
+
+            # sleeping for 10 seconds for the DC to be identified as down and proceeding to next checks
+            time.sleep(10)
+
+            # Checking the health status of the cluster and the active alerts for site down
+            # These should be generated on the cluster
+            status_report = rados_obj.run_ceph_command(
+                cmd="ceph report", client_exec=True
+            )
+            ceph_health_status = list(status_report["health"]["checks"].keys())
+            expected_health_warns = (
+                "OSD_HOST_DOWN",
+                "OSD_DOWN",
+                "OSD_DATACENTER_DOWN",
+                "MON_DOWN",
+                "DEGRADED_STRETCH_MODE",
+            )
+            if not all(elem in ceph_health_status for elem in expected_health_warns):
+                log.error(
+                    f"We do not have the expected health warnings generated on the cluster.\n"
+                    f" Warns on cluster : {ceph_health_status}\n"
+                    f"Expected Warnings : {expected_health_warns}\n"
+                )
+
+            log.info(
+                f"The expected health warnings are generated on the cluster. Warnings : {ceph_health_status}"
             )
 
-        log.info(
-            f"The expected health warnings are generated on the cluster. Warnings : {ceph_health_status}"
-        )
+            # Checking is the cluster is marked degraed and operating in degraded mode post data site down
+            stretch_details = rados_obj.get_stretch_mode_dump()
+            if not stretch_details["degraded_stretch_mode"]:
+                log.error(
+                    f"Stretch Cluster is not marked as degraded even though we have DC down : {stretch_details}"
+                )
+                raise Exception(
+                    "Stretch mode degraded test Failed on the provided cluster"
+                )
 
-        # Checking is the cluster is marked degraed and operating in degraded mode post data site down
-        stretch_details = rados_obj.get_stretch_mode_dump()
-        if not stretch_details["degraded_stretch_mode"]:
-            log.error(
-                f"Stretch Cluster is not marked as degraded even though we have DC down : {stretch_details}"
+            log.info(
+                f"Cluster is marked degraded post DC Failure {stretch_details},"
+                f"Proceeding to try writes into cluster"
             )
-            raise Exception("Stretch mode degraded test Failed on the provided cluster")
 
-        log.info(
-            f"Cluster is marked degraded post DC Failure {stretch_details},"
-            f"Proceeding to try writes into cluster"
-        )
+        else:
+            log.info("Shutting down arbiter mon site")
+            for host in tiebreaker_hosts:
+                log.debug(f"Proceeding to shutdown host {host}")
+                if not host_shutdown(gyaml=osp_cred, name=host):
+                    log.error(f"Failed to shutdown host : {host}")
+                    raise Exception("Test execution Failed")
+            time.sleep(20)
 
-    else:
-        log.info("Shutting down arbiter mon site")
-        for host in tiebreaker_hosts:
-            log.debug(f"Proceeding to shutdown host {host}")
-            if not host_shutdown(gyaml=osp_cred, name=host):
-                log.error(f"Failed to shutdown host : {host}")
-                raise Exception("Test execution Failed")
+            # Installer node will be down at this point. all operations need to be done at client nodes
+            status_report = rados_obj.run_ceph_command(
+                cmd="ceph report", client_exec=True
+            )
+            ceph_health_status = list(status_report["health"]["checks"].keys())
+            expected_health_warns = ("MON_DOWN",)
+            if not all(elem in ceph_health_status for elem in expected_health_warns):
+                log.error(
+                    f"We do not have the expected health warnings generated on the cluster.\n"
+                    f" Warns on cluster : {ceph_health_status}\n"
+                    f"Expected Warnings : {expected_health_warns}\n"
+                )
+
+            log.info(
+                f"The expected health warnings are generated on the cluster. Warnings : {ceph_health_status}"
+            )
+            log.info(
+                f"Completed shutdown of hosts in site {shutdown_site}. "
+                f"Host names :{tiebreaker_hosts}. Proceeding to write"
+            )
+
+        # perform rados put to check if write ops is possible
+        pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=200, timeout=50)
+
+        log.debug("sleeping for 20 seconds for the objects to be displayed in ceph df")
         time.sleep(20)
 
-        # Installer node will be down at this point. all operations need to be done at client nodes
-        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
-        ceph_health_status = list(status_report["health"]["checks"].keys())
-        expected_health_warns = ("MON_DOWN",)
-        if not all(elem in ceph_health_status for elem in expected_health_warns):
+        # Getting the number of objects post write, to check if writes were successful
+        pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+        log.debug(pool_stat)
+
+        # Objects should be more than the initial no of objects
+        if pool_stat["stats"]["objects"] <= init_objects:
             log.error(
-                f"We do not have the expected health warnings generated on the cluster.\n"
-                f" Warns on cluster : {ceph_health_status}\n"
-                f"Expected Warnings : {expected_health_warns}\n"
+                "Write ops should be possible, number of objects in the pool has not changed"
+            )
+            raise Exception(
+                f"Pool {pool_name} has {pool_stat['stats']['objects']} objs"
+            )
+        log.info(
+            f"Successfully wrote {pool_stat['stats']['objects']} on pool {pool_name} in degraded mode\n"
+            f"Proceeding to bring up the nodes and recover the cluster from degraded mode"
+        )
+
+        # Starting to restart the down hosts.
+        if shutdown_site in [dc_1_name, dc_2_name]:
+            log.debug(f"Proceeding to reboot data site {dc_1_name}")
+            for host in dc_1_hosts:
+                log.debug(f"Proceeding to reboot host {host}")
+                if not host_restart(gyaml=osp_cred, name=host):
+                    log.error(f"Failed to restart host : {host}")
+                    raise Exception("Test execution Failed")
+            log.info(
+                f"Completed restart of all the hosts in site {dc_1_name}. Host names : {dc_1_hosts}"
             )
 
+        else:
+            log.info("Restarting arbiter mon site")
+            for host in tiebreaker_hosts:
+                log.debug(f"Proceeding to Restart host {host}")
+                if not host_restart(gyaml=osp_cred, name=host):
+                    log.error(f"Failed to Restart host : {host}")
+                    raise Exception("Test execution Failed")
+            time.sleep(20)
+            log.info(
+                f"Completed Restart of all the hosts in site {shutdown_site}. Host names : {tiebreaker_hosts}"
+            )
+
+        log.info("Proceeding to do checks post Stretch mode site down scenarios")
+    except Exception as e:
+        log.error(f"Failed with exception: {e.__doc__}")
+        log.exception(e)
+        return 1
+    finally:
         log.info(
-            f"The expected health warnings are generated on the cluster. Warnings : {ceph_health_status}"
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
         )
-        log.info(
-            f"Completed shutdown of hosts in site {shutdown_site}. Host names :{tiebreaker_hosts}. Proceeding to write"
-        )
+        if not post_site_down_checks(rados_obj=rados_obj):
+            log.error(f"Checks failed post Site {shutdown_site} Down and Up scenarios")
+            raise Exception("Post execution checks failed on the Stretch cluster")
 
-    # perform rados put to check if write ops is possible
-    pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=200, timeout=50)
+        if not rados_obj.run_pool_sanity_check():
+            log.error(f"Checks failed post Site {shutdown_site} Down and Up scenarios")
+            raise Exception("Post execution checks failed on the Stretch cluster")
 
-    log.debug("sleeping for 20 seconds for the objects to be displayed in ceph df")
-    time.sleep(20)
+        if add_network_delay:
+            # The tc configs are removed post reboots.
+            # for host in dc_1_hosts:
+            #     rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
+            for host in dc_2_hosts:
+                rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
+            for host in tiebreaker_hosts:
+                rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
 
-    # Getting the number of objects post write, to check if writes were successful
-    pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-    log.debug(pool_stat)
+            log.info(
+                "Successfully removed the network delays added on the Stretch cluster nodes"
+            )
 
-    # Objects should be more than the initial no of objects
-    if pool_stat["stats"]["objects"] <= init_objects:
-        log.error(
-            "Write ops should be possible, number of objects in the pool has not changed"
-        )
-        raise Exception(f"Pool {pool_name} has {pool_stat['stats']['objects']} objs")
-    log.info(
-        f"Successfully wrote {pool_stat['stats']['objects']} on pool {pool_name} in degraded mode\n"
-        f"Proceeding to bring up the nodes and recover the cluster from degraded mode"
-    )
+        if config.get("delete_pool"):
+            rados_obj.delete_pool(pool=pool_name)
 
-    # Starting to restart the down hosts.
-    if shutdown_site in [dc_1_name, dc_2_name]:
-        log.debug(f"Proceeding to reboot data site {dc_1_name}")
-        for host in dc_1_hosts:
-            log.debug(f"Proceeding to reboot host {host}")
-            if not host_restart(gyaml=osp_cred, name=host):
-                log.error(f"Failed to restart host : {host}")
-                raise Exception("Test execution Failed")
-        log.info(
-            f"Completed restart of all the hosts in site {dc_1_name}. Host names : {dc_1_hosts}"
-        )
-
-    else:
-        log.info("Restarting arbiter mon site")
-        for host in tiebreaker_hosts:
-            log.debug(f"Proceeding to Restart host {host}")
-            if not host_restart(gyaml=osp_cred, name=host):
-                log.error(f"Failed to Restart host : {host}")
-                raise Exception("Test execution Failed")
-        time.sleep(20)
-        log.info(
-            f"Completed Restart of all the hosts in site {shutdown_site}. Host names : {tiebreaker_hosts}"
-        )
-
-    log.info("Proceeding to do checks post Stretch mode site down scenarios")
-
-    if not post_site_down_checks(rados_obj=rados_obj):
-        log.error(f"Checks failed post Site {shutdown_site} Down and Up scenarios")
-        raise Exception("Post execution checks failed on the Stretch cluster")
-
-    if not rados_obj.run_pool_sanity_check():
-        log.error(f"Checks failed post Site {shutdown_site} Down and Up scenarios")
-        raise Exception("Post execution checks failed on the Stretch cluster")
-
-    if add_network_delay:
-        # The tc configs are removed post reboots.
-        # for host in dc_1_hosts:
-        #     rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
-        for host in dc_2_hosts:
-            rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
-        for host in tiebreaker_hosts:
-            rados_obj.add_network_delay_on_host(hostname=host, set_delay=False)
-
-        log.info(
-            "Successfully removed the network delays added on the Stretch cluster nodes"
-        )
-
-    if config.get("delete_pool"):
-        rados_obj.detete_pool(pool=pool_name)
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info("All the tests completed on the cluster, Pass!!!")
     return 0

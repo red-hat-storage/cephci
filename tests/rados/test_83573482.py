@@ -1,3 +1,4 @@
+# Test is not running in Ceph version >= Pacific
 import json
 from time import sleep
 

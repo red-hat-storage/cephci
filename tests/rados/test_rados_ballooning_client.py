@@ -69,4 +69,6 @@ def run(ceph_cluster, **kw):
         client.exec_command(sudo=True, cmd="iptables -F", long_running=True)
         log.debug("Sleeping for 30 seconds...")
         time.sleep(30)
+        # log cluster health
+        rados_object.log_cluster_health()
     return 0

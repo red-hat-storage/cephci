@@ -97,9 +97,14 @@ def run(ceph_cluster, **kw):
             log.exception(e)
             return 1
         finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here \n \n ***************"
+            )
             rados_obj.change_recovery_threads(config={}, action="rm")
             # deleting the pool created after the test
-            rados_obj.detete_pool(pool=pool_name)
+            rados_obj.delete_pool(pool=pool_name)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
     log.info("Completed testing effects of large number of omap entries on pools ")
     return 0
