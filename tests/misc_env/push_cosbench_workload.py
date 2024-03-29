@@ -49,13 +49,14 @@ fill_workload = """<?xml version="1.0" encoding="UTF-8" ?>
 
     <workstage name="preparing_cluster">
         <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);oprefix=pri-obj;
-        objects=r(1,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
+        objects=r(obj_num_start,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
     </workstage>
   </workflow>
 </workload>"""
 
 avail_storage = 0
 bucket_count = 0
+objects_count = 0
 bucket_prefix = ""
 
 hybrid_workload = """<?xml version="1.0" encoding="UTF-8" ?>
@@ -66,15 +67,15 @@ hybrid_workload = """<?xml version="1.0" encoding="UTF-8" ?>
     <workstage name="MAIN">
         <work name="hybrid" workers="1" runtime="run_time" >
             <operation name="writeOP" type="write" ratio="36" config="cprefix=bucket_prefix;containers=u(1,2);
-            oprefix=pri-obj;objects=u(1,objects_count);
+            oprefix=pri-obj;objects=u(obj_num_start,objects_count);
             sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
             <operation name="deleteOP" type="delete" ratio="5" config="cprefix=bucket_prefix;containers=u(3,4);
-            oprefix=pri-obj;objects=u(1,objects_count);
+            oprefix=pri-obj;objects=u(obj_num_start,objects_count);
             sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
             <operation name="readOP" type="read" ratio="44" config="cprefix=bucket_prefix;containers=u(5,6);
-            oprefix=pri-obj;objects=u(1,objects_count)" />
+            oprefix=pri-obj;objects=u(obj_num_start,objects_count)" />
             <operation name="listOP" type="list" ratio="15" config="cprefix=bucket_prefix;containers=u(5,6);
-            oprefix=pri-obj;objects=u(1,objects_count)" />
+            oprefix=pri-obj;objects=u(obj_num_start,objects_count)" />
         </work>
     </workstage>
   </workflow>
@@ -87,7 +88,7 @@ symm_workload = """<?xml version="1.0" encoding="UTF-8" ?>
   <workflow>
     <workstage name="preparing_cluster">
         <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);
-        objects=r(1,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
+        objects=r(obj_num_start,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
     </workstage>
   </workflow>
 </workload>"""
@@ -98,8 +99,23 @@ cleanup_workload = """<?xml version="1.0" encoding="UTF-8" ?>
   <auth type="none"/>
   <workflow>
     <workstage name="cleanup">
-        <work type="cleanup" workers="100" config="cprefix=bucket_prefix;containers=r(1,bucket_count);
-        objects=r(1,objects_count)" />
+        <work type="cleanup" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);
+        objects=r(obj_num_start,objects_count)" />
+    </workstage>
+  </workflow>
+</workload>"""
+
+fill_runtime_workload = """<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="fillCluster-s3" description="RGW testing">
+  <storage type="s3" config="timeout=900000;accesskey=x;secretkey=y;endpoint=workload_endpoint;path_style_access=true"/>
+  <auth type="none"/>
+  <workflow>
+    <workstage name="MAIN">
+        <work name="fill with runtime" workers="1" runtime="run_time" >
+            <operation name="writeOP" type="write" ratio="100" config="cprefix=bucket_prefix;
+            containers=r(1,bucket_count);oprefix=pri-obj;objects=r(obj_num_start,objects_count);
+            sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
+        </work>
     </workstage>
   </workflow>
 </workload>"""
@@ -120,6 +136,7 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
         workload xml file name which is created on controller node
     """
     global fill_workload, avail_storage, hybrid_workload, bucket_prefix, symm_workload, bucket_count, cleanup_workload
+    global fill_runtime_workload, objects_count
     workload_type = config.get("workload_type", "fill")
     if workload_type == "fill":
         workload_conf = fill_workload
@@ -129,6 +146,8 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
         workload_conf = symm_workload
     elif workload_type == "cleanup":
         workload_conf = cleanup_workload
+    elif workload_type == "fill_runtime":
+        workload_conf = fill_runtime_workload
     bucket_prefix = config.get("bucket_prefix", "pri-bkt")
     workload_conf = workload_conf.replace("bucket_prefix", f"{bucket_prefix}")
     bucket_count = config.get("number_of_buckets", 6)
@@ -153,7 +172,7 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     # 404.56 KB is the average size according to sizes range in workload
     # using the average size to find number of objects
     if workload_type == "cleanup":
-        objects_count = 1
+        object_count = 1
         for bkt in range(1, bucket_count + 1):
             bucket_name = f"{bucket_prefix}{bkt}"
             out, err = rgw.exec_command(
@@ -161,12 +180,15 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
             )
             bucket_stats = json.loads(out)
             num_objects = bucket_stats["usage"]["rgw.main"]["num_objects"]
-            if num_objects > objects_count:
-                objects_count = num_objects
+            if num_objects > object_count:
+                object_count = num_objects
     else:
-        objects_count = math.floor(bytes_to_fill * 100 / (40456 * 1024))
+        object_count = math.floor(bytes_to_fill * 100 / (40456 * 1024))
+    objects_count = config.get("number_of_objects", object_count)
+    obj_num_start = config.get("object_num_start", 1)
     LOG.info(f"no of objects for an average of sizes in workload: {objects_count}")
     workload_conf = workload_conf.replace("objects_count", f"{objects_count}")
+    workload_conf = workload_conf.replace("obj_num_start", f"{obj_num_start}")
 
     workload_endpoint = "http://localhost:5000"
     if not config.get("drivers"):
