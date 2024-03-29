@@ -180,7 +180,6 @@ tests:
       desc: Test Etag not empty for complete multipart upload in aws
       polarion-id: CEPH-9801
       module: sanity_rgw.py
-      comments: known issue (bz-2266579)
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
