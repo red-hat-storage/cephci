@@ -7,12 +7,14 @@ from cli.utilities.utils import build_cmd_from_args
 class CephAdm(Cli):
     """This module provides CLI interface to manage the CephAdm operations"""
 
-    def __init__(self, nodes, mount=None, base_cmd="cephadm"):
+    def __init__(self, nodes, src_mount=None, mount=None, base_cmd="cephadm"):
         super(CephAdm, self).__init__(nodes)
 
         self.base_cmd = base_cmd
         self.base_shell_cmd = f"{self.base_cmd} shell"
-        if mount:
+        if src_mount:
+            self.base_shell_cmd += f" --mount {src_mount}:{mount} --"
+        elif mount:
             self.base_shell_cmd += f" --mount {mount}:{mount} --"
 
         self.ceph = Ceph(nodes, self.base_shell_cmd)
