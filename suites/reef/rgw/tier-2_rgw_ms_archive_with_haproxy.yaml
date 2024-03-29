@@ -653,3 +653,65 @@ tests:
       polarion-id: CEPH-83575473
       module: sanity_rgw_multisite.py
       name: test rgw restore index tool on versioned bucket
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
+              - "radosgw-admin zone placement modify --rgw-zone primary --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+              - "ceph orch restart rgw.shared.pri"
+            timeout: 120
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.sec rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
+              - "radosgw-admin zone placement modify --rgw-zone secondary --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+              - "ceph arch restart rgw.shared.sec"
+            timeout: 120
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.arc rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
+              - "radosgw-admin zone placement modify --rgw-zone archive --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+              - "ceph arch restart rgw.shared.arc"
+            timeout: 120
+      desc: enabled default encryption and zlib compression
+      module: exec.py
+      name: enabled default encryption and zlib compression
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_s3_copy_encryption.py
+            config-file-name: test_server_side_copy_object_via_encryption.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: test server_side_copy_object_via_encryption
+      polarion-id: CEPH-83575711
+      module: sanity_rgw_multisite.py
+      name: test server_side_copy_object_via_encryption
+      comments: product fails in 7.1 bug-2149450
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_encrypted_bucket_chown.py
+            config-file-name: test_encrypted_bucket_chown.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: Change bucket ownership to a different user when encryption is enabled
+      polarion-id: CEPH-83574621
+      module: sanity_rgw_multisite.py
+      name: Change bucket ownership to a different user when encryption is enabled
