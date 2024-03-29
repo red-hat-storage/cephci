@@ -242,6 +242,17 @@ tests:
         timeout: 300
 
   - test:
+      name: Test ratelimit on bucket owner change
+      desc: Test ratelimit on bucket owner change
+      polarion-id: CEPH-83574920
+      module: sanity_rgw.py
+      comments: known issue BZ2262919
+      config:
+        script-name: ../s3cmd/test_ratelimit_bucketowner.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_bucketowner.yaml
+        timeout: 300
+
+  - test:
       name: Test deletlifecycle rule via s3cmd
       desc: Test deletlifecycle rule via s3cmd
       polarion-id: CEPH-83580364
