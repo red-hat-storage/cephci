@@ -118,7 +118,7 @@ tests:
       config:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
-        config-file-name: test_bucket_notification_kafka_none_multipart.yaml
+        config-file-name: test_bucket_notification_kafka_none_persistent_multipart.yaml
         timeout: 300
 
   # kafka broker type none
