@@ -10,6 +10,7 @@ Input Args checked:
 """
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
 log = Log(__name__)
@@ -32,6 +33,7 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
     cmd_list = config["cmd_list"]
     base_cmd = "ceph osd"
     oload_invalid = [100, -10, 0, "abcd"]
@@ -86,5 +88,11 @@ def run(ceph_cluster, **kw):
         log.error(f"Execution failed with exception: {AE.__doc__}")
         log.exception(AE)
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # log cluster health
+        rados_obj.log_cluster_health()
     log.info("All verifications completed")
     return 0

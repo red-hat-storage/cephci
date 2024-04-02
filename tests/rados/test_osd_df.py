@@ -200,7 +200,7 @@ def run_test(ceph_cluster, **kw):
 
         # Delete the created osd pool
         if config.get("delete_pool"):
-            rados_obj.detete_pool(pool=pool_name)
+            rados_obj.delete_pool(pool=pool_name)
 
     try:
         for host in acting_osd_hosts:
@@ -251,6 +251,15 @@ def run_test(ceph_cluster, **kw):
         log.error(f"Verification failed with exception: {AE.__doc__}")
         log.exception(AE)
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        # removal of rados pools
+        rados_obj.rados_pool_cleanup()
+
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0
 
 

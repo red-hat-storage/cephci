@@ -347,6 +347,8 @@ def run(ceph_cluster, **kw) -> int:
             log.info("*********** Execution of finally block starts ***********")
             # Flush iptables to reset the rules
             out, _ = installer_node.exec_command(sudo=True, cmd="iptables -F")
+            # log cluster health
+            rados_obj.log_cluster_health()
             # log.info(
             #     f"----- Adding the failed OSD host {osd_hosts[0]} which was removed -------"
             # )

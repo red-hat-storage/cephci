@@ -33,14 +33,14 @@ def run(ceph_cluster, **kw):
     11. Mark osd out
     12. Add first osd and wait for device present and pgs to be active+clean
     """
-    try:
-        log.info(run.__doc__)
-        config = kw["config"]
-        cephadm = CephAdmin(cluster=ceph_cluster, **config)
-        rados_obj = RadosOrchestrator(node=cephadm)
-        client_node = ceph_cluster.get_nodes(role="client")[0]
+    log.info(run.__doc__)
+    config = kw["config"]
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
 
-        log.info("Running osd in progress rebalance tests")
+    log.info("Running osd in progress rebalance tests")
+    try:
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
         pool_name = pool["pool_name"]
@@ -84,14 +84,34 @@ def run(ceph_cluster, **kw):
 
         if pool.get("rados_put", False):
             do_rados_get(client_node, pool["pool_name"], 1)
-        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
-        rados_obj.change_recovery_threads(config=pool, action="rm")
-        if config.get("delete_pools"):
-            for name in config["delete_pools"]:
-                method_should_succeed(rados_obj.detete_pool, name)
-            log.info("deleted all the given pools successfully")
-        return 0
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        out, _ = cephadm.shell(args=["ceph osd ls"])
+        active_osd_list = out.strip().split("\n")
+        log.debug(f"List of active OSDs: \n{active_osd_list}")
+        if osd_id not in active_osd_list:
+            utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+            utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
+            method_should_succeed(wait_for_device, host, osd_id, action="add")
+
+        if osd_id1 not in active_osd_list:
+            utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+            utils.add_osd(ceph_cluster, host1.hostname, dev_path1, osd_id1)
+            method_should_succeed(wait_for_device, host1, osd_id, action="add")
+
+        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
+        rados_obj.change_recovery_threads(config=pool, action="rm")
+        if config.get("delete_pools"):
+            for name in config["delete_pools"]:
+                method_should_succeed(rados_obj.delete_pool, name)
+            log.info("deleted all the given pools successfully")
+
+        # log cluster health
+        rados_obj.log_cluster_health()
+    return 0

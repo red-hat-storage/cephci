@@ -133,13 +133,15 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Execution of finally block")
         if config.get("delete_pool"):
-            method_should_succeed(rados_object.detete_pool, entry["pool_name"])
+            method_should_succeed(rados_object.delete_pool, entry["pool_name"])
             log.info("deleted the pool successfully")
         mon_obj.remove_config(section="osd", name="osd_shallow_scrub_chunk_max")
         mon_obj.remove_config(section="osd", name="osd_scrub_chunk_max")
         mon_obj.remove_config(section="osd", name="debug_osd")
         # intentional wait for 5 seconds
         time.sleep(5)
+        # log cluster health
+        rados_object.log_cluster_health()
 
     return 0
 

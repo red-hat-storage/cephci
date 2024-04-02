@@ -131,11 +131,16 @@ def run(ceph_cluster, **kw):
             log.exception(e)
             return 1
         finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here \n \n ***************"
+            )
             mon_obj.remove_config(
                 section="global", name="osd_pool_default_pg_autoscale_mode"
             )
             mon_obj.remove_config(section="mgr", name="mon_pg_warn_max_object_skew")
-            rados_obj.detete_pool(pool=pool_name)
+            rados_obj.delete_pool(pool=pool_name)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
     log.info(
         "Verification of heath warnings related to 'mon_pg_warn_max_object_skew' parameter completed"

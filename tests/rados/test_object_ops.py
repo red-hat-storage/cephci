@@ -98,8 +98,13 @@ def run(ceph_cluster, **kw):
         log.exception(e)
         return 1
     finally:
-        rados_obj.detete_pool(pool="re_pool_concurrent_io")
-        rados_obj.detete_pool(pool="re_pool_parallel_io")
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        rados_obj.delete_pool(pool="re_pool_concurrent_io")
+        rados_obj.delete_pool(pool="re_pool_parallel_io")
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info(
         "Verification of concurrent and parallel IOPS on an object completed successfully"

@@ -371,8 +371,11 @@ def run(ceph_cluster, **kw):
                 log.exception(e)
                 return 1
             finally:
+                log.info(
+                    "\n \n ************** Execution of finally block begins here \n \n ***************"
+                )
                 # deleting the pool created after the test
-                rados_obj.detete_pool(pool=pool_name)
+                rados_obj.delete_pool(pool=pool_name)
                 # reset full ratios
                 cmds = [
                     "ceph osd set-nearfull-ratio 0.85",
@@ -382,6 +385,9 @@ def run(ceph_cluster, **kw):
                 [cephadm.shell(args=[cmd]) for cmd in cmds]
                 if rhbuild and rhbuild.split(".")[0] >= "6":
                     rados_obj.set_mclock_profile(reset=True)
+
+                # log cluster health
+                rados_obj.log_cluster_health()
 
             log.info(
                 "Verification of PG autoscaling and cluster behavior with nearfull,"
@@ -630,8 +636,11 @@ def run(ceph_cluster, **kw):
                 log.exception(e)
                 return 1
             finally:
+                log.info(
+                    "\n \n ************** Execution of finally block begins here \n \n ***************"
+                )
                 # deleting the created pool
-                rados_obj.detete_pool(pool=pool_name)
+                rados_obj.delete_pool(pool=pool_name)
 
                 # reset full ratios
                 cmds = [
@@ -732,6 +741,8 @@ def run(ceph_cluster, **kw):
                     if rhbuild and rhbuild.split(".")[0] >= "6":
                         rados_obj.set_mclock_profile(reset=True)
 
+                    # log cluster health
+                    rados_obj.log_cluster_health()
             log.info(
                 "Verification of OSD host addition during rebalancing and cluster full has been completed"
             )
@@ -871,9 +882,9 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             # deleting the created pool
-            rados_obj.detete_pool(pool=pool1_name)
-            rados_obj.detete_pool(pool=pool2_name)
-            rados_obj.detete_pool(pool=pool3_name)
+            rados_obj.delete_pool(pool=pool1_name)
+            rados_obj.delete_pool(pool=pool2_name)
+            rados_obj.delete_pool(pool=pool3_name)
 
             # reset full ratios
             cmds = [

@@ -207,8 +207,13 @@ def run(ceph_cluster, **kw):
         log.exception(e)
         return 1
     finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
         # Delete the created osd pool
         if config.get("delete_pool"):
-            rados_obj.detete_pool(pool=pool_name)
+            rados_obj.delete_pool(pool=pool_name)
 
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0

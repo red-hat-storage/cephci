@@ -120,7 +120,7 @@ def run(ceph_cluster, **kw):
         log.debug("Forcing the stretch cluster into healthy mode")
         cmd = "ceph osd force_healthy_stretch_mode --yes-i-really-mean-it"
         rados_obj.run_ceph_command(cmd)
-        rados_obj.detete_pool(pool=pool_name)
+        rados_obj.delete_pool(pool=pool_name)
 
         log.info("Cluster has successfully recovered and is in healthy state")
         return 0
@@ -132,7 +132,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"A non-replicated pool found : {entry['pool_name']}, proceeding to delete pool"
             )
-            if not rados_obj.detete_pool(pool=entry["pool_name"]):
+            if not rados_obj.delete_pool(pool=entry["pool_name"]):
                 log.error(f"the pool {entry['pool_name']} could not be deleted")
                 return 1
         log.debug("No pools other than replicated found on cluster")
@@ -299,7 +299,7 @@ def run(ceph_cluster, **kw):
             f"There are {len(acting_set)} OSD's in PG. OSDs: {acting_set}. Stretch cluster requires 4"
         )
         return 1
-    log.info(f"Acting set : {acting_set} Consists of 4 OSD's per PG")
+    log.info(f"Acting set : {acting_set} Consists of 4 OSDs per PG")
     log.info("Stretch rule with arbiter monitor node set up successfully")
     return 0
 

@@ -15,6 +15,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -34,6 +35,7 @@ def run(ceph_cluster, **kw) -> int:
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
+    mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_obj = PoolFunctions(node=cephadm)
     pool_configs = config["pool_configs"]
     pool_configs_path = config["pool_configs_path"]
@@ -211,8 +213,15 @@ def run(ceph_cluster, **kw) -> int:
         CONTINEOUS_IO = False
         contineous_io_thread.join()
         time.sleep(2)
+        [rados_obj.node.shell([cmd]) for cmd in flag_set_cmds]
         for pool in pools:
-            rados_obj.detete_pool(pool=pool)
+            rados_obj.delete_pool(pool=pool)
+
+        mon_obj.remove_config(section="mgr", name="mgr/cephadm/no_five_one_rgw")
+        mon_obj.remove_config(section="osd", name="osd_max_pg_log_entries")
+
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info("Completed the workflow")
     return 0

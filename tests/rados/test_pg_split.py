@@ -33,17 +33,18 @@ def run(ceph_cluster, **kw):
     9. Verify restart osd when split is in progress.
     10. Verify delete object when split is in progress.
     """
-    try:
-        log.info(run.__doc__)
-        config = kw["config"]
-        cephadm = CephAdmin(cluster=ceph_cluster, **config)
-        rados_obj = RadosOrchestrator(node=cephadm)
-        pool_obj = PoolFunctions(node=cephadm)
-        client_node = ceph_cluster.get_nodes(role="client")[0]
-        cluster_nodes = ceph_cluster.get_nodes()
-        timeout = config.get("timeout", 10800)
-        add_network_delay = config.get("add_network_delay", False)
 
+    log.info(run.__doc__)
+    config = kw["config"]
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
+    pool_obj = PoolFunctions(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
+    cluster_nodes = ceph_cluster.get_nodes()
+    timeout = config.get("timeout", 10800)
+    add_network_delay = config.get("add_network_delay", False)
+
+    try:
         if add_network_delay:
             for host in cluster_nodes:
                 rados_obj.add_network_delay_on_host(
@@ -300,8 +301,21 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("*********** Execution of finally block starts ***********")
+        out, _ = cephadm.shell(args=["ceph osd ls"])
+        active_osd_list = out.strip().split("\n")
+        log.debug(f"List of active OSDs: \n{active_osd_list}")
+
+        if target_osd not in active_osd_list:
+            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
+            utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
+            method_should_succeed(wait_for_device, host, target_osd, action="add")
+        utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
+
         if config.get("delete_pools"):
             for name in config["delete_pools"]:
-                method_should_succeed(rados_obj.detete_pool, name)
+                method_should_succeed(rados_obj.delete_pool, name)
             log.info("deleted all the given pools successfully")
+
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0

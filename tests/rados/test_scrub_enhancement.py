@@ -24,17 +24,17 @@ def run(ceph_cluster, **kw):
     Returns:
         1 -> Fail, 0 -> Pass
     """
+    log.info(run.__doc__)
+    global rados_obj, acting_osd_node, config, scrub_obj
+    config = kw["config"]
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
+    pool_obj = PoolFunctions(node=cephadm)
+    scrub_obj = RadosScrubber(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
+    mount_point = "~/automation_dir"
+    test_scenarios = ["scrub", "deep-scrub"]
     try:
-        log.info(run.__doc__)
-        global rados_obj, acting_osd_node, config, scrub_obj
-        config = kw["config"]
-        cephadm = CephAdmin(cluster=ceph_cluster, **config)
-        rados_obj = RadosOrchestrator(node=cephadm)
-        pool_obj = PoolFunctions(node=cephadm)
-        scrub_obj = RadosScrubber(node=cephadm)
-        client_node = ceph_cluster.get_nodes(role="client")[0]
-        mount_point = "~/automation_dir"
-        test_scenarios = ["scrub", "deep-scrub"]
         log.info("Running scrub enhancement feature testing")
         for test_input in test_scenarios:
             log.info(f"The feature is testing with the {test_input}")
@@ -181,6 +181,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Execution of finally block")
         node_cleanup(mount_point, primary_osd)
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0
 
 
@@ -199,7 +201,7 @@ def node_cleanup(rm_dir, primary_osd):
     rados_obj.change_osd_state(action="start", target=primary_osd)
     if config.get("delete_pools"):
         for name in config["delete_pools"]:
-            method_should_succeed(rados_obj.detete_pool, name)
+            method_should_succeed(rados_obj.delete_pool, name)
         log.info("deleted all the given pools successfully")
     cmd_rmdir = f"rm -rf {rm_dir}"
     acting_osd_node.exec_command(sudo=True, cmd=cmd_rmdir)

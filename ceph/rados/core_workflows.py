@@ -1027,7 +1027,7 @@ class RadosOrchestrator:
 
         return True
 
-    def detete_pool(self, pool: str) -> bool:
+    def delete_pool(self, pool: str) -> bool:
         """
         Deletes the given pool from the cluster
         Args:
@@ -2205,7 +2205,7 @@ class RadosOrchestrator:
         time_check = 600
         start_time = time.time()
         while time.time() - start_time < time_check:
-            health_detail, _ = self.node.shell(args=["ceph health detail"])
+            health_detail = self.node.shell(args=["ceph health detail"])
             log.info(f"Health warning: \n {health_detail}")
             if "inconsistent" not in health_detail and inconsistent_present is False:
                 log.info("pg inconsistent not exists in the cluster")
@@ -3357,3 +3357,45 @@ class RadosOrchestrator:
         _cmd = f"ceph osd pool stats {pool_name}"
         out = self.run_ceph_command(cmd=_cmd, client_exec=True)
         return int(out[0]["pool_id"])
+
+    def rados_pool_cleanup(self):
+        """
+        Method to remove any existing rados pool on the cluster
+        Returns:
+                True -> All pools removed successfully
+                Raise exception if any of the pool removal fails
+        """
+        # fetch list of all the pools on the cluster
+        _cmd = "ceph osd pool ls detail"
+        pool_json = self.run_ceph_command(cmd=_cmd, client_exec=True)
+
+        # filter out pools which have rados application enable
+        # rados_pools = [
+        #     pool for pool in pool_json if pool["application_metadata"].get("rados") is not None
+        # ]
+        rados_pools = [
+            pool for pool in pool_json if "rados" in pool["application_metadata"].keys()
+        ]
+
+        if not rados_pools:
+            log.info(f"List of rados pool on the cluster is empty: {rados_pools}")
+            log.info("Nothing to remove")
+            return True
+
+        for pool_name in rados_pools:
+            if not self.delete_pool(pool=pool_name):
+                log.error(f"Failed to delete pool {pool_name}")
+                raise Exception(f"Failed to delete pool {pool_name}")
+            log.info(f"Pool {pool_name} deleted successfully")
+
+        return True
+
+    def log_cluster_health(self):
+        """
+        Method to log cluster health detail to STDOUT
+        Returns:
+            Output of ceph health detail
+        """
+        health_detail, _ = self.node.shell(args=["ceph health detail"])
+        log.info(f"\n****\n Cluster health detail: \n {health_detail} \n ****")
+        return health_detail

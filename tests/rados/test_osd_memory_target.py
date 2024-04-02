@@ -131,6 +131,8 @@ def run(ceph_cluster, **kw):
             log.info("\n ****** Executing finally block ******* \n")
             mon_obj.remove_config(section="osd", name="osd_memory_target")
             mon_obj.remove_config(section=f"osd.{osd_id}", name="osd_memory_target")
+            # log cluster health
+            rados_obj.log_cluster_health()
         return 0
 
     if config.get("host_level"):
@@ -293,5 +295,7 @@ def run(ceph_cluster, **kw):
                 name="osd_memory_target",
             )
             mon_obj.remove_config(section="osd", name="osd_memory_target")
+            # log cluster health
+            rados_obj.log_cluster_health()
         log.info("All verifications completed")
         return 0

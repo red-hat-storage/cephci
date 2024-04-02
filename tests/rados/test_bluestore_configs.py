@@ -60,7 +60,7 @@ def run(ceph_cluster, **kw):
         except Exception:
             raise
         finally:
-            assert rados_obj.detete_pool(pool=pool_name)
+            assert rados_obj.delete_pool(pool=pool_name)
 
     def modify_cache_size(factor):
         cache_value = int(1073741824 * factor)
@@ -139,21 +139,24 @@ def run(ceph_cluster, **kw):
                 ) if "crc" in checksum else create_pool_write_iops(
                     param=checksum, pool_type="ec"
                 )
-
         except Exception as E:
             log.error(f"Verification failed with exception: {E.__doc__}")
             log.error(E)
             log.exception(E)
             return 1
         finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here \n \n ***************"
+            )
             # reset global checksum config
             assert mon_obj.remove_config(
                 **{"section": "osd", "name": "bluestore_csum_type"}
             )
-
             # restart osd services
             restart_osd_service()
             wait_for_clean_pg_sets(rados_obj, timeout=300, sleep_interval=10)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
         log.info("BlueStore Checksum algorithm verification completed.")
         return 0
@@ -217,6 +220,9 @@ def run(ceph_cluster, **kw):
             log.exception(E)
             return 1
         finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here \n \n ***************"
+            )
             # reset modified cache configs
             mon_obj.remove_config(
                 **{"section": "osd", "name": "bluestore_cache_size_hdd"}
@@ -224,10 +230,11 @@ def run(ceph_cluster, **kw):
             mon_obj.remove_config(
                 **{"section": "osd", "name": "bluestore_cache_size_ssd"}
             )
-
             # restart osd services
             restart_osd_service()
             wait_for_clean_pg_sets(rados_obj, timeout=300, sleep_interval=10)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
         log.info("BlueStore cache size tuning verification completed.")
         return 0

@@ -171,5 +171,7 @@ def run(ceph_cluster, **kw):
         mon_obj.remove_config(section="mon", name="paxos_service_trim_min")
         mon_obj.remove_config(section="mon", name="mon_min_osdmap_epochs")
         # Delete the created osd pool
-        rados_obj.detete_pool(pool=_pool_name)
+        rados_obj.delete_pool(pool=_pool_name)
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0

@@ -123,6 +123,8 @@ def run(ceph_cluster, **kw):
                 host_online = True
                 break
             time.sleep(30)
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     if logs_found and host_online:
         log.info(f"Found {heartbeat_log}__ in osd logs")

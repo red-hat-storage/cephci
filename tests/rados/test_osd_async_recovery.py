@@ -30,7 +30,6 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_object = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_object)
-    ceph_nodes = kw.get("ceph_nodes")
     installer = ceph_cluster.get_nodes(role="installer")[0]
     try:
         target_configs = config["async_recovery"]["configurations"]
@@ -49,15 +48,10 @@ def run(ceph_cluster, **kw):
             rados_object.bench_write(
                 pool_name=pool_name, rados_write_duration=900, background=True
             )
-            log_lines = [
-                "choose_async_recovery_replicated candidates by cost are",
-                "choose_async_recovery_replicated",
-            ]
-            osd_list = []
-            for node in ceph_nodes:
-                if node.role == "osd":
-                    node_osds = rados_object.collect_osd_daemon_ids(node)
-                    osd_list = osd_list + node_osds
+
+            out, _ = cephadm.shell(args=["ceph osd ls"])
+            osd_list = out.strip().split("\n")
+            log.debug(f"List of OSDs: \n{osd_list}")
             log.info(f"The number of OSDs in the cluster are-{len(osd_list)}")
 
             log_osd_count = 0
@@ -81,9 +75,7 @@ def run(ceph_cluster, **kw):
                     osd=osd_id,
                     start_time=init_time,
                     end_time=end_time,
-                    lines=log_lines,
                 ):
-                    log.info(f"found the log lines in the osd id -{osd_id}")
                     log_osd_count = log_osd_count + 1
                     found_osd_list.append(osd_id)
                 if log_osd_count == 2:
@@ -99,19 +91,23 @@ def run(ceph_cluster, **kw):
         log.info(traceback.format_exc())
         return 1
     finally:
-        log.info("Execution of finally block")
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
         if config.get("delete_pool"):
-            method_should_succeed(rados_object.detete_pool, entry["pool_name"])
+            method_should_succeed(rados_object.delete_pool, entry["pool_name"])
             log.info("deleted the pool successfully")
         mon_obj.remove_config(section="osd", name="osd_async_recovery_min_cost")
         mon_obj.remove_config(section="osd", name="debug_osd")
         # intentional wait for 5 seconds
         time.sleep(5)
+        # log cluster health
+        rados_object.log_cluster_health()
     return 0
 
 
 def verify_async_recovery_log(
-    rados_obj: RadosOrchestrator, osd, start_time, end_time, lines
+    rados_obj: RadosOrchestrator, osd, start_time, end_time
 ) -> bool:
     """
     Retrieve the async recovery log using journalctl command
@@ -120,10 +116,13 @@ def verify_async_recovery_log(
         osd: osd id
         start_time: time to start reading the journalctl logs - format ('2022-07-20 09:40:10')
         end_time: time to stop reading the journalctl logs - format ('2022-07-20 10:58:49')
-        lines: Log lines to search in the journalctl logs
-    Returns:  True-> if the lines are exist in the journalctl logs
-              False -> if the lines are not exist in the journalctl logs
+    Returns:  True-> if the lines exist in the journalctl logs
+              False -> if the lines do not exist in the journalctl logs
     """
+    expected_lines = [
+        "choose_async_recovery_replicated candidates by cost are",
+        "choose_async_recovery_replicated",
+    ]
     log.info("Checking for the async messages in the OSD logs")
     log_lines = rados_obj.get_journalctl_log(
         start_time=start_time,
@@ -131,12 +130,11 @@ def verify_async_recovery_log(
         daemon_type="osd",
         daemon_id=osd,
     )
-    log.debug(f"Journalctl logs : {log_lines}")
-    for line in lines:
+    # log.debug(f"Journalctl logs : {log_lines}")
+    for line in expected_lines:
         if line not in log_lines:
-            log.error(f" did not find logging on OSD : {osd}")
-            log.error(f"Journalctl logs lines: {log_lines}")
-            log.error(f"expected logs lines: {lines}")
+            log.error(f"Did not find expected log line on OSD : {osd}")
+            log.info(f"Expected logs line: {line}")
             return False
-    log.info(f"Found the log lines on OSD : {osd}")
+    log.info(f"Found the log lines for OSD : {osd}")
     return True

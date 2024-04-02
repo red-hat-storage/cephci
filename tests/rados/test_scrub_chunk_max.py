@@ -183,7 +183,9 @@ def run(ceph_cluster, **kw):
         mon_obj.remove_config(section="osd", name="osd_scrub_chunk_max")
         mon_obj.remove_config(section="osd", name="debug_osd")
         if config.get("delete_pool"):
-            rados_obj.detete_pool(pool=pool_name)
+            rados_obj.delete_pool(pool=pool_name)
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info("Verification of scrub_chunk_max parameter completed")
     return 0

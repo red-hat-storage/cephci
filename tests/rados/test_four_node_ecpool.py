@@ -418,11 +418,13 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("---------------IN FINALLY-----------------------")
-        if not rados_obj.detete_pool(pool=pool_name):
+        if not rados_obj.delete_pool(pool=pool_name):
             log.error(f"the pool {pool_name} could not be deleted")
 
         # removing the recovery threads on the cluster
         rados_obj.change_recovery_threads(config={}, action="rm")
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     if not test_fail:
         log.info("EC 2+2 pool is working as expected.")

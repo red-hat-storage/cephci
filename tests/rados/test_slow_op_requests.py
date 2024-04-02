@@ -50,3 +50,14 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.error(traceback.format_exc())
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here \n \n ***************"
+        )
+        rados_obj.change_recovery_threads(config=pool, action="rm")
+
+        # removal of rados pools
+        rados_obj.rados_pool_cleanup()
+
+        # log cluster health
+        rados_obj.log_cluster_health()
