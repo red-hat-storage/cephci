@@ -247,3 +247,17 @@ def get_nfs_pid_and_memory(nfs_nodes):
                 f"failed get nfs process ID and rss for {nfs_node}"
             )
     return nfs_server_info
+
+
+def permission(client, nfs_name, nfs_export, old_permission, new_permission):
+    # Change export permissions to RO
+    out = Ceph(client).nfs.export.get(nfs_name, f"{nfs_export}_0")
+    client.exec_command(sudo=True, cmd=f"echo '{out}' > export.conf")
+    client.exec_command(
+        sudo=True,
+        cmd=f'sed -i \'s/"access_type": "{old_permission}"/"access_type": "{new_permission}"/\' export.conf',
+    )
+    Ceph(client).nfs.export.apply(nfs_name, "export.conf")
+
+    # Wait till the NFS daemons are up
+    sleep(10)
