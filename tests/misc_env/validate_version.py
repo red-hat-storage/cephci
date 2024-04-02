@@ -1,4 +1,5 @@
 import traceback
+from distutils.version import LooseVersion
 
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster, get_ceph_version_from_repo
@@ -13,7 +14,7 @@ def run(ceph_cluster, **kw):
         log.info(kw.get("config"))
         ceph_version_installed = get_ceph_version_from_cluster(clients[0])
         ceph_version = get_ceph_version_from_repo(clients[0], config)
-        if ceph_version <= ceph_version_installed:
+        if LooseVersion(ceph_version) <= LooseVersion(ceph_version_installed):
             log.info(
                 f"Upgrade should not proceeded as installed versions is {ceph_version_installed} "
                 f"greater than or equal to latest Version i.e., {ceph_version}"
