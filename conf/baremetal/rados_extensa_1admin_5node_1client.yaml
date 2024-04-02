@@ -41,6 +41,7 @@ globals:
             - mgr
             - nfs
             - osd
+            - mds
             - osd-bak
           volumes:
             - /dev/sdb
@@ -52,9 +53,10 @@ globals:
           id: node4
           root_password: passwd
           role:
+            - mon
+            - mgr
             - rgw
             - osd
-            - mds
             - osd-bak
           volumes:
             - /dev/sdb
