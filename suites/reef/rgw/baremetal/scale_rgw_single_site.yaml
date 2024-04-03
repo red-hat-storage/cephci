@@ -1,0 +1,145 @@
+# RGW build evaluation
+# The following evaluations are carried out
+# - Build can be deployed using CephADM
+# - The cluster health is good
+# - End users can perform object operations.
+
+# tested with conf file: conf/quincy/baremetal_pipeline/mero_conf.yaml
+
+tests:
+
+  # Testing stage
+
+  - test:
+      name: Parallel run
+      desc: RGW tier-0 parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
+
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with delete
+            module: sanity_rgw.py
+            name: Test delete using M buckets with N objects
+            polarion-id: CEPH-14237
+
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with download
+            module: sanity_rgw.py
+            name: Test download with M buckets with N objects
+            polarion-id: CEPH-14237
+
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+            module: sanity_rgw.py
+            name: Test multipart upload of M buckets with N objects
+            polarion-id: CEPH-9801
+
+        - test:
+            config:
+              script-name: test_swift_basic_ops.py
+              config-file-name: test_swift_basic_ops.yaml
+              timeout: 300
+              install_common: false
+              run-on-rgw: true
+            desc: Test object operations with swift
+            module: sanity_rgw.py
+            name: Swift based tests
+            polarion-id: CEPH-11019
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node10
+        rgw_endpoints:
+          - "node4:80"
+          - "node5:80"
+          - "node6:80"
+          - "node14:80"
+          - "node15:80"
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+      polarion-id: CEPH-83572703
+
+  - test:
+      abort-on-fail: true
+      config:
+        controllers:
+          - node10
+        drivers:
+          count: 2
+          hosts:
+            - node10
+      desc: Start COS Bench controller and driver
+      module: cosbench.py
+      name: deploy cosbench
+
+  - test:
+      abort-on-fail: true
+      config:
+        controllers:
+          - node10
+        drivers: # if drivers are not specified will use one of the rgw node
+          - node10
+        fill_percent: 20
+        bucket_prefix: test-bkt-
+      desc: prepare and push cosbench fill workload
+      module: push_cosbench_workload.py
+      name: push cosbench fill workload
+      polarion-id: CEPH-83574428
+
+  - test:
+      abort-on-fail: true
+      config:
+        controllers:
+          - node10
+        drivers: # if drivers are not specified will use one of the rgw node
+          - node10
+        fill_percent: 20
+        workload_type: hybrid
+        bucket_prefix: test-bkt-
+        run_time: 600 # value in seconds
+      desc: initiate cosbench hybrid workload
+      module: push_cosbench_workload.py
+      name: push cosbench hybrid workload
+      polarion-id: CEPH-83575831
+
+  - test:
+      name: Test by adding almost 10K buckets to the resharding queue
+      desc: disable and enable dynamic resharding for 10K buckets
+      polarion-id: CEPH-11478
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_10k_bucket.yaml
+        timeout: 300
