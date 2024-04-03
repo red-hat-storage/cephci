@@ -2,6 +2,9 @@ import json
 
 from ceph.ceph_admin.common import config_dict_to_string
 from cli import Cli
+from utility.log import Log
+
+LOG = Log(__name__)
 
 
 class NVMeCLI(Cli):
@@ -71,7 +74,9 @@ class NVMeCLI(Cli):
         json_kwargs = {"output-format": "json"}
         out, _ = self.list(**json_kwargs)
         devs = json.loads(out)["Devices"]
-        return [dev for dev in devs if dev["ModelNumber"].startswith("SPDK")]
+        return [
+            dev for dev in devs if dev["ModelNumber"].startswith("Ceph bdev Controller")
+        ]
 
     def disconnect(self, **kwargs):
         """Disconnect controller connected to the subsystem.

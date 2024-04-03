@@ -4,10 +4,11 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 
 """
 import json
+from copy import deepcopy
 
 from ceph.ceph import Ceph
+from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmeof.initiator import Initiator
-from ceph.nvmeof.nvmeof_gwcli import NVMeCLI, find_client_daemon_id
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof, test_orch
@@ -18,15 +19,20 @@ from utility.utils import generate_unique_id, run_fio
 LOG = Log(__name__)
 
 
-def configure_subsystems(rbd, pool, gw, config):
+def configure_subsystems(rbd, pool, subsystem, config):
     """Configure Ceph-NVMEoF Subsystems."""
-    sub_nqn = config["nqn"]
-    max_ns = {"max-namespaces": config.get("max_ns", 32)}
-    gw.create_subsystem(sub_nqn, config["serial"], **max_ns)
+    sub_args = {"subsystem": config["nqn"]}
+    subsystem.add(
+        **{"args": {**sub_args, **{"max-namespaces": config.get("max_ns", 32)}}}
+    )
 
-    cfg = {"gateway-name": config.pop("gateway-name"), "traddr": gw.node.ip_address}
-    gw.create_listener(sub_nqn, config["listener_port"], **cfg)
-    gw.add_host(sub_nqn, config["allow_host"])
+    listener_cfg = {
+        "gateway-name": subsystem.fetch_gateway_client_name(),
+        "traddr": subsystem.node.ip_address,
+        "trsvcid": config["listener_port"],
+    }
+    subsystem.listener.add(**{"args": {**listener_cfg, **sub_args}})
+    subsystem.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
         with parallel() as p:
@@ -35,21 +41,14 @@ def configure_subsystems(rbd, pool, gw, config):
             # Create image
             for num in range(count):
                 p.spawn(rbd.create_image, pool, f"{name}-image{num}", size)
-
+        namespace_args = {**sub_args, **{"rbd-pool": pool}}
         with parallel() as p:
-            # Create block device in gateway
+            # Create namespace in gateway
             for num in range(count):
-                p.spawn(
-                    gw.create_block_device,
-                    f"{name}-bdev{num}",
-                    f"{name}-image{num}",
-                    pool,
-                )
-
-        with parallel() as p:
-            # Add namespace
-            for num in range(count):
-                p.spawn(gw.add_namespace, sub_nqn, f"{name}-bdev{num}")
+                ns_args = deepcopy(namespace_args)
+                ns_args.update({"rbd-image": f"{name}-image{num}"})
+                ns_args = {"args": ns_args}
+                p.spawn(subsystem.namespace.add, **ns_args)
 
 
 def initiators(ceph_cluster, gateway, config):
@@ -79,7 +78,7 @@ def initiators(ceph_cluster, gateway, config):
     json_format = {"output-format": "json"}
 
     # Discover the subsystems
-    discovery_port = {"trsvcid": config["listener_port"]}
+    discovery_port = {"trsvcid": 8009}
     _disc_cmd = {**cmd_args, **discovery_port, **json_format}
     sub_nqns, _ = initiator.discover(**_disc_cmd)
     LOG.debug(sub_nqns)
@@ -158,9 +157,9 @@ def teardown(ceph_cluster, rbd_obj, config):
         for sub_cfg in config_sub_node:
             node = config["gw_node"] if "node" not in sub_cfg else sub_cfg["node"]
             sub_node = get_node_by_id(ceph_cluster, node)
-            sub_gw = NVMeCLI(sub_node)
+            sub_gw = Subsystem(sub_node, 5500)
             LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {node}")
-            sub_gw.delete_subsystem(subnqn=sub_cfg["nqn"])
+            sub_gw.delete(**{"args": {"subsystem": sub_cfg["nqn"], "force": True}})
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
@@ -248,7 +247,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            NVMeCLI.CEPH_NVMECLI_IMAGE = value
+            Subsystem.NVMEOF_CLI_IMAGE = value
             break
 
     if config.get("cleanup-only"):
@@ -257,8 +256,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     try:
         gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-
-        gateway = NVMeCLI(gw_node)
+        gw_port = config.get("gw_port", 5500)
+        subsystem = Subsystem(gw_node, gw_port)
         if config.get("install"):
             cfg = {
                 "config": {
@@ -272,16 +271,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         if config.get("subsystems"):
             with parallel() as p:
-                for subsystem in config["subsystems"]:
-                    subsystem["gateway-name"] = find_client_daemon_id(
-                        ceph_cluster, rbd_pool, node_name=gw_node.hostname
+                for subsys_args in config["subsystems"]:
+                    p.spawn(
+                        configure_subsystems, rbd_obj, rbd_pool, subsystem, subsys_args
                     )
-                    p.spawn(configure_subsystems, rbd_obj, rbd_pool, gateway, subsystem)
 
         if config.get("initiators"):
             with parallel() as p:
                 for initiator in config["initiators"]:
-                    p.spawn(initiators, ceph_cluster, gateway, initiator)
+                    p.spawn(initiators, ceph_cluster, subsystem, initiator)
 
         return 0
     except Exception as err:
