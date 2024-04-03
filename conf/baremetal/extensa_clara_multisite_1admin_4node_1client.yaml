@@ -85,7 +85,7 @@ globals:
             - /dev/sdd
             - /dev/sda
         - hostname: clara012
-          ip: 110.8.129.12
+          ip: 10.8.129.12
           root_password: passwd
           role:
             - mon
