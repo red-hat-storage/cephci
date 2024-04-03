@@ -15,6 +15,9 @@
 #   CEPH-83575762: Run create and unlink operations concurrently.
 #   CEPH-83575630: Check for large omaps with files and snapshots.
 #   CEPH-83575624: Check for Standby-reply nodes changes if there is a network glitch for more than 60 seconds.
+#   CEPH-83583762: Check to prevent usage of Pools which has Pool level snaps for Filesystem creation.
+#   CEPH-83584084: Validate if no repeated mclientscaps(revoke) entries found in MDS.
+#   CEPH-83586730: validate standby replay node not removed after setting mds_inject_health_dummy
 #=======================================================================================================================
 ---
 tests:
@@ -221,4 +224,10 @@ tests:
       module: cephfs_bugs.test_validate_mclientcaps_revoke_ack.py
       polarion-id: CEPH-83584084
       desc: Validate if no repeated mclientscaps(revoke) entries found in MDS.
+      abort-on-fail: false
+  - test:
+      name: validate standby replay node not removed after setting mds_inject_health_dummy
+      module: cephfs_bugs.test_mds_inject_health_dummy.py
+      polarion-id: CEPH-83586730
+      desc: validate standby reply node not removed after setting mds_inject_health_dummy
       abort-on-fail: false
