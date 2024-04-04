@@ -98,7 +98,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             rados_obj.change_recovery_threads(config={}, action="rm")
             # deleting the pool created after the test

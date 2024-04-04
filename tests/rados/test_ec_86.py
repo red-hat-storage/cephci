@@ -97,7 +97,7 @@ step emit""",
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # removal of rados pool
         if config.get("delete_pool"):

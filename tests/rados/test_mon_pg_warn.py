@@ -132,7 +132,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             mon_obj.remove_config(
                 section="global", name="osd_pool_default_pg_autoscale_mode"

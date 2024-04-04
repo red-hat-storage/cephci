@@ -99,7 +99,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         rados_obj.delete_pool(pool="re_pool_concurrent_io")
         rados_obj.delete_pool(pool="re_pool_parallel_io")

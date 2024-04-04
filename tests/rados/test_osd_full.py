@@ -372,7 +372,7 @@ def run(ceph_cluster, **kw):
                 return 1
             finally:
                 log.info(
-                    "\n \n ************** Execution of finally block begins here \n \n ***************"
+                    "\n \n ************** Execution of finally block begins here *************** \n \n"
                 )
                 # deleting the pool created after the test
                 rados_obj.delete_pool(pool=pool_name)
@@ -637,7 +637,7 @@ def run(ceph_cluster, **kw):
                 return 1
             finally:
                 log.info(
-                    "\n \n ************** Execution of finally block begins here \n \n ***************"
+                    "\n \n ************** Execution of finally block begins here *************** \n \n"
                 )
                 # deleting the created pool
                 rados_obj.delete_pool(pool=pool_name)

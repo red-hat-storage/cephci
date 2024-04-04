@@ -19,7 +19,7 @@ tests:
         verify_cluster_health: true
         steps:
           - config:
-              rhcs-version: 6.1
+              rhcs-version: 7.0
               release: rc
               command: bootstrap
               orphan-initial-daemons: true
@@ -171,7 +171,7 @@ tests:
             compression_algorithm: snappy
         delete_pools:
           - test_ec_pool
-      desc: Create, modily & delete EC pools and run IO
+      desc: Create, modify & delete EC pools and run IO
 
   - test:
       name: EC pool with Overwrites

@@ -112,7 +112,7 @@ def run(ceph_cluster, **kw) -> int:
 
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         for pool in pools:
             rados_obj.delete_pool(pool=pool)

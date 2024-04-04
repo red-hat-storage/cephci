@@ -3382,11 +3382,11 @@ class RadosOrchestrator:
             log.info("Nothing to remove")
             return True
 
-        for pool_name in rados_pools:
-            if not self.delete_pool(pool=pool_name):
-                log.error(f"Failed to delete pool {pool_name}")
-                raise Exception(f"Failed to delete pool {pool_name}")
-            log.info(f"Pool {pool_name} deleted successfully")
+        for pool in rados_pools:
+            if not self.delete_pool(pool=pool["pool_name"]):
+                log.error(f"Failed to delete pool {pool['pool_name']}")
+                raise Exception(f"Failed to delete pool {pool['pool_name']}")
+            log.info(f"Pool {pool['pool_name']} deleted successfully")
 
         return True
 

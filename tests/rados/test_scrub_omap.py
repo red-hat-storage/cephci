@@ -87,7 +87,7 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # removal of rados pools
         rados_obj.rados_pool_cleanup()

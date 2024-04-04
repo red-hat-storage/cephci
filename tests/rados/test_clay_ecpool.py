@@ -209,7 +209,7 @@ def run(ceph_cluster, **kw) -> int:
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         if ec_config.get("delete_pools"):
             rados_obj.delete_pool(pool=pool_name)

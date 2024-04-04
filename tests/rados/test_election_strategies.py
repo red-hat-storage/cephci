@@ -91,7 +91,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             # log cluster health
             rados_obj.log_cluster_health()
@@ -183,7 +183,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             # Changing strategy to default
             if not mon_obj.set_election_strategy(mode="classic"):
