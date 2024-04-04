@@ -254,6 +254,8 @@ tests:
               - "ceph config set client.rgw.shared.pri.io rgw_zonegroup shared"
               - "ceph config set client.rgw.shared.pri.io rgw_zone primary"
               - "ceph config set client.rgw.shared.pri.io rgw_run_sync_thread false"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
         ceph-sec:
           config:
             cephadm: true
