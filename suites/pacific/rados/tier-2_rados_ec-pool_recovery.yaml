@@ -153,7 +153,7 @@ tests:
             compression_algorithm: snappy
         delete_pools:
           - test_ec_pool
-      desc: Create, modily & delete EC pools and run IO
+      desc: Create, modify & delete EC pools and run IO
 
   - test:
       name: EC pool with Overwrites

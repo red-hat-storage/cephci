@@ -54,7 +54,7 @@ def run(ceph_cluster, **kw):
     try:
         if config.get("non-collocated"):
             log.info(
-                "\n\n*************** Execution begins for CBT non-collocated scenarios ************ \n\n"
+                "\n\n Execution begins for CBT non-collocated scenarios ************ \n\n"
             )
             # Execute ceph-bluestore-tool --help
             osd_id = random.choice(osd_list)
@@ -216,7 +216,7 @@ def run(ceph_cluster, **kw):
                 log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
         else:
             log.info(
-                "\n\n*************** Execution begins for CBT collocated scenarios ************ \n\n"
+                "\n\n Execution begins for CBT collocated scenarios ************ \n\n"
             )
             # Execute ceph-bluestore-tool --help
             osd_id = random.choice(osd_list)
@@ -487,7 +487,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # log cluster health
         rados_obj.log_cluster_health()

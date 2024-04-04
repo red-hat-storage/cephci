@@ -137,7 +137,7 @@ def run(ceph_cluster, **kw) -> int:
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # deleting the Original & Target pool created after cppool
         rados_obj.delete_pool(pool=pool_target["pool_name"])

@@ -289,7 +289,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         if not post_site_down_checks(rados_obj=rados_obj):
             log.error(

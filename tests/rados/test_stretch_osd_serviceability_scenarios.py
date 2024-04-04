@@ -326,7 +326,7 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         if add_network_delay:
             for host in dc_1_hosts:

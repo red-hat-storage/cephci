@@ -104,7 +104,7 @@ def run(ceph_cluster, **kw):
                 return 1
             finally:
                 log.info(
-                    "\n \n ************** Execution of finally block begins here \n \n ***************"
+                    "\n \n ************** Execution of finally block begins here *************** \n \n"
                 )
                 for param in mclock_sleep_parameters:
                     mon_object.remove_config(section="osd", name=param[0])
@@ -183,7 +183,7 @@ def run(ceph_cluster, **kw):
                     return 1
                 finally:
                     log.info(
-                        "\n \n ************** Execution of finally block begins here \n \n ***************"
+                        "\n \n ************** Execution of finally block begins here *************** \n \n"
                     )
                     # Setting to default values
                     for parameter in mclock_default_parmeters:
@@ -243,7 +243,7 @@ def run(ceph_cluster, **kw):
                             return 1
                         finally:
                             log.info(
-                                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                                "\n \n ************** Execution of finally block begins here *************** \n \n"
                             )
                             # remove value set for OSDs
                             mon_object.remove_config(section="osd", name=param[0])

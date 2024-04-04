@@ -111,19 +111,21 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
-  - test:
-        name: Testing async recovery
-        desc: Testing async recovery
-        module: test_osd_async_recovery.py
-        polarion-id: CEPH-83574487
-        config:
-          async_recovery:
-            configurations:
-              pool-1:
-                pool_type: replicated
-                pool_name: async_recover
-                pg_num: 16
-          desc: Verification of the async recovery
+# commented until a definite method to
+# trigger Async recovery is found
+#  - test:
+#        name: Testing async recovery
+#        desc: Testing async recovery
+#        module: test_osd_async_recovery.py
+#        polarion-id: CEPH-83574487
+#        config:
+#          async_recovery:
+#            configurations:
+#              pool-1:
+#                pool_type: replicated
+#                pool_name: async_recover
+#                pg_num: 16
+#          desc: Verification of the async recovery
 
   - test:
       name: Limit PG log size

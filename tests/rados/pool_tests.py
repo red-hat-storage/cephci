@@ -146,7 +146,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             # removal of rados pools
             rados_obj.rados_pool_cleanup()
@@ -261,7 +261,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             # removal of rados pools
             rados_obj.rados_pool_cleanup()
@@ -453,7 +453,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             # removal of rados pools
             rados_obj.rados_pool_cleanup()
@@ -476,7 +476,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             mon_obj.remove_config(**pg_conf)
             # log cluster health
@@ -522,7 +522,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             # removal of rados pools
             rados_obj.rados_pool_cleanup()
@@ -576,7 +576,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             if config.get("delete_pool"):
                 rados_obj.delete_pool(pool=pool_name)
@@ -691,7 +691,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             for pool in pools:
                 rados_obj.delete_pool(pool=pool)
@@ -744,7 +744,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info(
-                "\n \n ************** Execution of finally block begins here \n \n ***************"
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
             # removal of rados pool
             rados_obj.delete_pool(pool=pool_name)

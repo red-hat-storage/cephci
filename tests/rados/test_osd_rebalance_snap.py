@@ -119,7 +119,7 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         out, _ = cephadm.shell(args=["ceph osd ls"])
         active_osd_list = out.strip().split("\n")

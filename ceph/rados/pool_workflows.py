@@ -100,8 +100,8 @@ class PoolFunctions:
                 # OMAP entries are not readily available,
                 # restarting primary osd as metadata does not get updated automatically.
                 # TBD: bug raised for the issue: https://bugzilla.redhat.com/show_bug.cgi?id=2210278
-                primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[0]
-                self.rados_obj.change_osd_state(action="restart", target=primary_osd)
+                # primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[0]
+                # self.rados_obj.change_osd_state(action="restart", target=primary_osd)
                 pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
                 omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
                 log.info(f"Current value of OMAP keys: {omap_keys}")

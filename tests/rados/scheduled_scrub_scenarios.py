@@ -184,7 +184,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         remove_parameter_configuration(mon_obj)
         rados_obj.set_osd_flags("unset", "noscrub")

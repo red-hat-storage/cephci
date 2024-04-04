@@ -79,7 +79,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # Setting the mon service as managed by cephadm
         if not mon_obj.set_mon_service_managed_type(unmanaged=False):

@@ -19,8 +19,8 @@ tests:
         base_cmd_args:
           verbose: true
         args:
-          rhcs-version: 5.3
-          release: rc
+          rhcs-version: 6.1
+          release: z4
           mon-ip: node1
           orphan-initial-daemons: true
           registry-url: registry.redhat.io

@@ -92,7 +92,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info(
-            "\n \n ************** Execution of finally block begins here \n \n ***************"
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         if config.get("delete_pool"):
             method_should_succeed(rados_object.delete_pool, entry["pool_name"])
@@ -130,7 +130,6 @@ def verify_async_recovery_log(
         daemon_type="osd",
         daemon_id=osd,
     )
-    # log.debug(f"Journalctl logs : {log_lines}")
     for line in expected_lines:
         if line not in log_lines:
             log.error(f"Did not find expected log line on OSD : {osd}")
