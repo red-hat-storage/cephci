@@ -118,3 +118,17 @@ tests:
             user: manisha
             password: Redhat
       abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha node reboot and perform failover in windows client
+      desc: Verify node reboot scenario when io is in progress
+      polarion-id: CEPH-83586265
+      module: nfs_verify_multi_client_failover_windows.py
+      config:
+        nfs_version: 4.1
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
