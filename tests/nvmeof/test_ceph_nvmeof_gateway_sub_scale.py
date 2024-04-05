@@ -3,7 +3,6 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.nvmegw_cli.common import find_client_daemon_id
 from ceph.nvmegw_cli.connection import Connection
 from ceph.nvmegw_cli.gateway import Gateway
 from ceph.nvmegw_cli.host import Host
@@ -104,11 +103,10 @@ def configure_listeners(config, _cls, command, ceph_cluster):
         LOG.info(node)
         listener_node = get_node_by_id(ceph_cluster, node)
         for num in range(1, subsystems + 1):
-            client_id = find_client_daemon_id(listener_node)
             config["args"].update(
                 {
                     "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
-                    "gateway-name": client_id,
+                    "gateway-name": listener_node.hostname,
                     "traddr": listener_node.ip_address,
                     "trsvcid": port,
                 }
