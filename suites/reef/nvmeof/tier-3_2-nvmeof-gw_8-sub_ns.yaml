@@ -126,14 +126,12 @@ tests:
               args:
                 subsystems: 8
                 max-namespaces: 2048
-                ana-reporting: ""
           - config:
               service: listener
               command: add
               args:
                 subsystems: 8
                 port: 4420
-                pool: nvmeof_pool
                 nodes:
                   - node4
                   - node5
