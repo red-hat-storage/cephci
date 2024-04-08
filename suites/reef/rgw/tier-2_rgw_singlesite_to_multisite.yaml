@@ -340,6 +340,8 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_s3_auth_use_sts true"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_sts_key abcdefghijklmnoq"
               - "ceph orch restart {service_name:shared.sec}"
       desc: Setting up RGW multisite replication environment
       module: exec.py

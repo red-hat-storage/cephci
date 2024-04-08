@@ -1,5 +1,5 @@
 tests:
-
+  # Conf file is conf/reef/rgw/migrate_default_single_to_multisite.yaml
   # Cluster deployment stage
 
   - test:
@@ -198,7 +198,7 @@ tests:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm create --rgw-realm india —default"
+              - "radosgw-admin realm create --rgw-realm india --default"
               - "radosgw-admin zonegroup rename --rgw-zonegroup default --zonegroup-new-name shared"
               - "radosgw-admin zone rename --rgw-zone default --zone-new-name primary --rgw-zonegroup shared"
               - "radosgw-admin zonegroup modify --rgw-realm india --commit --rgw-zonegroup shared --endpoints  http://{node_ip:node6}:5000 --master --default"
