@@ -38,13 +38,14 @@ def run(ceph_cluster, **kw):
         fs_util_ceph2.prepare_clients(target_clients, build)
         fs_util_ceph1.auth_list(source_clients)
         fs_util_ceph2.auth_list(target_clients)
-        source_fs = "cephfs"
-        target_fs = "cephfs"
+        fs_name = "".join(random.choice(string.ascii_lowercase) for i in range(3))
+        source_fs = f"cephfs_{fs_name}"
+        target_fs = f"cephfs_{fs_name}"
         # create fs
         fs_util_ceph1.create_fs(source_clients[0], source_fs)
         fs_util_ceph2.create_fs(target_clients[0], target_fs)
-        target_user = "mirror_remote"
-        target_site_name = "remote_site"
+        target_user = f"mirror_remote_{fs_name}"
+        target_site_name = f"remote_site_{fs_name}"
         log.info("Deploy CephFS Mirroring Configuration")
         fs_mirroring_utils.deploy_cephfs_mirroring(
             source_fs,
@@ -58,21 +59,21 @@ def run(ceph_cluster, **kw):
         log.info("Create Subvolumes for adding Data")
         log.info("Scenario 1 : ")
         subvolumegroup_list = [
-            {"vol_name": source_fs, "group_name": "subvolgroup_1"},
+            {"vol_name": source_fs, "group_name": "subvolgroup_jul1"},
         ]
         for subvolumegroup in subvolumegroup_list:
             fs_util_ceph1.create_subvolumegroup(source_clients[0], **subvolumegroup)
         subvolume_list = [
             {
                 "vol_name": source_fs,
-                "subvol_name": "subvol_1",
-                "group_name": "subvolgroup_1",
+                "subvol_name": "subvol_jul1",
+                "group_name": "subvolgroup_jul1",
                 "size": "5368709120",
             },
             {
                 "vol_name": source_fs,
-                "subvol_name": "subvol_2",
-                "group_name": "subvolgroup_1",
+                "subvol_name": "subvol_jul2",
+                "group_name": "subvolgroup_jul1",
                 "size": "5368709120",
             },
         ]
@@ -88,36 +89,39 @@ def run(ceph_cluster, **kw):
         log.info("Get the path of subvolume1 on  filesystem")
         subvol_path1, rc = source_clients[0].exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume getpath {source_fs} subvol_1 subvolgroup_1",
+            cmd=f"ceph fs subvolume getpath {source_fs} subvol_jul1 subvolgroup_jul1",
         )
-        index = subvol_path1.find("subvol_1/")
+        index = subvol_path1.find("subvol_jul1/")
         if index != -1:
-            subvol1_path = subvol_path1[: index + len("subvol_1/")]
+            subvol1_path = subvol_path1[: index + len("subvol_jul1/")]
             log.info(subvol1_path)
         else:
             subvol1_path = subvol_path1[:-1]
 
         subvol1_path = subvol1_path + "/"
+        # mount the client in the volume created
         fs_util_ceph1.kernel_mount(
             [source_clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={source_fs}",
         )
         log.info("Get the path of subvolume2 on filesystem")
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         subvol_path2, rc = source_clients[0].exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume getpath {source_fs} subvol_2 subvolgroup_1",
+            cmd=f"ceph fs subvolume getpath {source_fs} subvol_jul2 subvolgroup_jul1",
         )
-        index = subvol_path2.find("subvol_2/")
+        index = subvol_path2.find("subvol_jul2/")
         if index != -1:
-            subvol2_path = subvol_path2[: index + len("subvol_2/")]
+            subvol2_path = subvol_path2[: index + len("subvol_jul2/")]
         else:
             subvol2_path = subvol_path2[:-1]
         log.info(subvol2_path)
         fs_util_ceph1.fuse_mount(
             [source_clients[0]],
             fuse_mounting_dir_1,
+            extra_params=f"--client_fs {source_fs}",
         )
         log.info("Add subvolumes for mirroring to remote location")
         fs_mirroring_utils.add_path_for_mirroring(
@@ -232,9 +236,10 @@ def run(ceph_cluster, **kw):
         fs_util_ceph2.fuse_mount(
             [target_clients[0]],
             target_mount_path,
+            extra_params=f"--client_fs {target_fs}",
         )
 
-        @retry(CommandFailed, tries=5, delay=10)
+        @retry(CommandFailed, tries=5, delay=30)
         def check_perm(client1, filepath1, client2, filepath2, statlist):
             for stat in statlist:
                 perm1 = fs_util_ceph1.get_stats(client1, filepath1)[stat]
