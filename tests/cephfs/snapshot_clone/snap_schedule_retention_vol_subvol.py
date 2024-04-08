@@ -310,10 +310,10 @@ def snap_sched_test(snap_test_params):
         )
         snap_test_params["path"] = f"{subvol_path.strip()}/.."
     snap_test_params["validate"] = True
-    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
     sched_list = (
         ["2m", "1h", "1d", "1w"]
-        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        if LooseVersion(ceph_version) >= LooseVersion("17.2.6")
         else ["2M", "1h", "1d", "1w"]
     )
     mnt_list = ["kernel", "fuse", "nfs"]
@@ -413,15 +413,15 @@ def snap_retention_test(snap_test_params):
     ceph_version = get_ceph_version_from_cluster(client)
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
-    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
     sched_list = (
         ["2m", "1h", "7d", "4w"]
-        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        if LooseVersion(ceph_version) >= LooseVersion("17.2.6")
         else ["2M", "1h", "7d", "4w"]
     )
     snap_test_params["retention"] = (
         "3m1h5d4w"
-        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        if LooseVersion(ceph_version) >= LooseVersion("17.2.6")
         else "3M1h5d4w"
     )
     test_fail = 0
@@ -451,9 +451,9 @@ def snap_retention_test(snap_test_params):
         fs_name=snap_test_params.get("fs_name", "cephfs"),
     )
     snap_test_params["retention"] = (
-        "3m5d4w" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "3M5d4w"
+        "3m5d4w" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "3M5d4w"
     )
-    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+    m_granularity = "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
     for ret_item in ret_list:
         if m_granularity in ret_item:
             temp_list = re.split(r"(\d+)", ret_item)
@@ -525,7 +525,7 @@ def snap_retention_count_validate(snap_test_params):
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
     sched_list = (
-        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else ["1M"]
+        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else ["1M"]
     )
 
     test_fail = 0
@@ -770,7 +770,7 @@ def snap_sched_multi_fs(snap_test_params):
     snap_test_params["validate"] = True
     sched_list = (
         ["1m", "1h", "1d", "1w"]
-        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        if LooseVersion(ceph_version) >= LooseVersion("17.2.6")
         else ["1M", "1h", "1d", "1w"]
     )
 
@@ -893,7 +893,7 @@ def snap_sched_multi_fs(snap_test_params):
     log.info("Verify retention add with fs-name in multi-fs setup suceeds")
     snap_test_params["retention"] = (
         "3m1h5d4w"
-        if LooseVersion(ceph_version) >= LooseVersion("18.2.1")
+        if LooseVersion(ceph_version) >= LooseVersion("17.2.6")
         else "3M1h5d4w"
     )
     snap_util.create_snap_retention(snap_test_params)
@@ -1036,10 +1036,10 @@ def snap_sched_non_existing_path(snap_test_params):
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/non-existent"
     sched_list = (
-        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else ["1M"]
+        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else ["1M"]
     )
     snap_test_params["retention"] = (
-        "3m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "3M"
+        "3m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "3M"
     )
     snap_test_params["start_time"] = get_iso_time(client)
     snap_test_params["sched"] = sched_list[0]
@@ -1109,10 +1109,10 @@ def snap_retention_service_restart(snap_test_params):
     snap_test_params["validate"] = True
     snap_test_params["path"] = "/"
     sched_list = (
-        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else ["1M"]
+        ["1m"] if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else ["1M"]
     )
     snap_test_params["retention"] = (
-        "3m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "3M"
+        "3m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "3M"
     )
     svc_list = ["mgr", "mds", "mon"]
     test_fail = 0

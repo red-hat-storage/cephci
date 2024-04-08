@@ -107,7 +107,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_1}/dir_fuse")
         sanp_schedule_list = ["/dir_kernel", "/dir_fuse"]
         m_granularity = (
-            "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+            "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
         )
         commands = [
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity true",
