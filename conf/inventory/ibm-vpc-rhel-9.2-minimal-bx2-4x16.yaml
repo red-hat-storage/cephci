@@ -1,0 +1,38 @@
+---
+version_id: 9.2
+id: rhel
+instance:
+  create:
+    image-name: ibm-redhat-9-2-minimal-amd64-3
+    network_name: sn-20240306-02
+    private_key: ssh-ceph-qe-jenkins
+    group_access: flick-outgoing-rejoicing-broadways
+    profile: bx2-4x16
+
+  setup:  |
+    disable_root: false
+    ssh_pwauth: true
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+
+    chpasswd:
+      users:
+        - name: cephuser
+          password: $y$j9T$PxJ09a3yVNnPj0Veb8QDT.$bdWoyLq1IdGwlimyJC98P5OsSFE2w7.9ac68z4eoa01
+        - name: root
+          password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
+      expire: false
+
+    runcmd:
+      - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - update-ca-trust
+      - touch /ceph-qa-ready
