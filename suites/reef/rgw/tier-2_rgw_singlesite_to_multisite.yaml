@@ -502,6 +502,39 @@ tests:
             script-name: test_bucket_request_payer.py
             config-file-name: test_bucket_request_payer.yaml
             timeout: 300
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_cloud_transition_ibm_retain_true.yaml
+            timeout: 30
+      desc: test LC cloud transition to IBM cos with retain true
+      polarion-id: CEPH-83581972 #CEPH-83575498
+      module: sanity_rgw_multisite.py
+      name: test LC cloud transition to IBM cos with retain true
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_cloud_transition_ibm_retain_false.yaml
+            timeout: 30
+      desc: test LC cloud transition to IBM cos with retain false
+      polarion-id: CEPH-83581973 #CEPH-83581975
+      module: sanity_rgw_multisite.py
+      name: test LC cloud transition to IBM cos with retain false
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sts_using_boto.py
+            config-file-name: test_sts_multisite.yaml
+            timeout: 30
+      desc: test assume role at secondary, with s3 ops
+      polarion-id: CEPH-83575592
+      module: sanity_rgw_multisite.py
+      name: test assume role at secondary, with s3 ops
 
   # please include test cases before below rename testcase as the process is disruptive currently
   - test:
@@ -516,38 +549,3 @@ tests:
       name: Perform zone rename in non master that is secondary
       polarion-id: CEPH-10740
       comments: known issue (BZ2210757)
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_lifecycle_object_expiration_transition.py
-            config-file-name: test_lc_cloud_transition_ibm_retain_true.yaml
-            timeout: 30
-      desc: test LC cloud transition to IBM cos with retain true
-      polarion-id: CEPH-83581972 #CEPH-83575498
-      module: sanity_rgw_multisite.py
-      name: test LC cloud transition to IBM cos with retain true
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_lifecycle_object_expiration_transition.py
-            config-file-name: test_lc_cloud_transition_ibm_retain_false.yaml
-            timeout: 30
-      desc: test LC cloud transition to IBM cos with retain false
-      polarion-id: CEPH-83581973 #CEPH-83581975
-      module: sanity_rgw_multisite.py
-      name: test LC cloud transition to IBM cos with retain false
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sts_using_boto.py
-            config-file-name: test_sts_multisite.yaml
-            timeout: 30
-      desc: test assume role at secondary, with s3 ops
-      polarion-id: CEPH-83575592
-      module: sanity_rgw_multisite.py
-      name: test assume role at secondary, with s3 ops
