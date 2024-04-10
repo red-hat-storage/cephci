@@ -191,9 +191,14 @@ class SpecStorage(Cli):
     def parse_spectorage_results(self, results_dir, output_file, **kwargs):
         dir_items = self.primary_client.get_dir_list(results_dir, sudo=True)
         for item in dir_items:
-            if item.endswith(".xml"):
+            if item.endswith(".xml") and "_parsed" not in item:
                 remote_file_xml = self.primary_client.remote_file(
                     file_name=f"{results_dir}/{item}", file_mode="r", sudo=True
                 )
                 metrics = self.extract_metrics(remote_file_xml, **kwargs)
                 self.append_to_csv(output_file, metrics)
+                # Rename the processed XML file
+                new_name = item.replace(".xml", "_parsed.xml")
+                self.primary_client.exec_command(
+                    cmd=f"mv {results_dir}/{item} {results_dir}/{new_name}", sudo=True
+                )
