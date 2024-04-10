@@ -5,7 +5,7 @@ instance:
   create:
     image-name: ibm-redhat-9-2-minimal-amd64-3
     network_name: sn-20240306-02
-    private_key: ssh-ceph-qe-jenkins
+    private_key: ceph-qe-jenkins
     group_access: flick-outgoing-rejoicing-broadways
     profile: bx2-4x16
 
@@ -21,6 +21,8 @@ instance:
         primary-group: cephuser
         sudo: ALL=(ALL) NOPASSWD:ALL
         shell: /bin/bash
+        ssh-authorized-keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDdDC+Hul7b76AGu4U27Zk8stcTmmJmB3OB+BJ8ytigwC/Pm3XTj+zpOgDkc3blWZY0fSS5cfNXU7tX7P0L8WTpkj2BrjRPjw1AIOJNhFk+bmlhGoKwATvHkMZYsz48WJhG4pN3/cPyeuldHLnwxxDecFMDpE5ELPHHw+S0Q6tSz6RYsl23d0P1vzyeqSxL5pDQ69ofhEIpb1vPKpK/Dekm5NniOFaTe9cpeSi+qZMt9EKdpcdNebg+n6zYfcRaWA+sigjqLo6y/ZTSEhPZI8qXU3Z0fMEF0kclrCg1a3OSWvHzD7uA01w1uv168OqQXMj4ofiOezgqYd/N+AfYlfy+vwn5fS4hxkqcvbLC22Cek1O5Bw8T7/7XdyY9ZDolUvIELfFzVj6jNmhuGS3x9DmFaAtm9zRSns31Eixz7AO//pYBngmS5ssCJctmeg+qHMtNPlxTNlMzPq9YB+7pppwZVgw9UY+gU72nD+b2tThQ5tBrUyL43YbKV0p93Va2JiE= jenkins@cephqevs
 
     chpasswd:
       users:
