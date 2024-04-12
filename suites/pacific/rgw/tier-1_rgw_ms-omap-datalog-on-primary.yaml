@@ -352,6 +352,7 @@ tests:
       name: Test Changing datalog num shards not cause any crash
       desc: Test Changing datalog num shards not cause any crash
       polarion-id: CEPH-83574088
+      comments: Known issue BZ-2274680
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
