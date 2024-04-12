@@ -268,6 +268,7 @@ def run(**kw):
         )
         if monitor_consistency_via_bucket_stats:
             log.info("Monitor sync consistency via bucket stats across sites.")
+            time.sleep(120)
             test_sync_via_bucket_stats(primary_rgw_node, secondary_rgw_node)
 
         test_bucket_stats_at_archive = config.get("test-archive-bucket-stats")
