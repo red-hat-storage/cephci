@@ -342,7 +342,6 @@ tests:
       name: deploy cosbench
 
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
@@ -359,7 +358,6 @@ tests:
       polarion-id: CEPH-83574428
 
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
@@ -411,7 +409,6 @@ tests:
       module: test_parallel.py
       parallel:
         - test:
-            abort-on-fail: true
             clusters:
               ceph-pri:
                 config:
@@ -431,7 +428,6 @@ tests:
             name: push cosbench push workload from primary
             polarion-id: CEPH-83575073
         - test:
-            abort-on-fail: true
             clusters:
               ceph-sec:
                 config:
@@ -452,7 +448,6 @@ tests:
             polarion-id: CEPH-83575073
 
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
@@ -474,7 +469,6 @@ tests:
       polarion-id: CEPH-83575077
 
   - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
@@ -492,7 +486,6 @@ tests:
       module: test_parallel.py
       parallel:
         - test:
-            abort-on-fail: true
             clusters:
               ceph-pri:
                 config:
@@ -511,7 +504,6 @@ tests:
             name: push cosbench cleanup workload from primary
             polarion-id: CEPH-83575074
         - test:
-            abort-on-fail: true
             clusters:
               ceph-sec:
                 config:
