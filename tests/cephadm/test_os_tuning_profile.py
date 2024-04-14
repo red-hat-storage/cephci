@@ -46,7 +46,10 @@ def verify_tunables(hosts, settings):
         for setting, value in settings.items():
             cmd = f"sysctl {setting}"
             for w in WaitUntil(timeout=timeout, interval=interval):
-                out, _ = host.exec_command(sudo=True, cmd=cmd)
+                out, err = host.exec_command(sudo=True, cmd=cmd)
+                print("***********************")
+                print(out)
+                print(err)
                 if str(value) == out.split("=")[1].strip():
                     break
             if w.expired:
