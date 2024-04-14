@@ -164,9 +164,6 @@ def run(ceph_cluster, **kw):
         log.debug(
             f" waiting for PGs to settle down on pool {pool['pool_name']} after applying bulk flag"
         )
-        method_should_succeed(
-            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
-        )
 
         endtime = datetime.datetime.now() + datetime.timedelta(seconds=10000)
         while datetime.datetime.now() < endtime:
@@ -190,6 +187,9 @@ def run(ceph_cluster, **kw):
             )
         log.info(
             "PGs increased to desired levels after application of bulk flag on the pool"
+        )
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
         )
 
         log.info(
@@ -305,11 +305,14 @@ def run(ceph_cluster, **kw):
         active_osd_list = out.strip().split("\n")
         log.debug(f"List of active OSDs: \n{active_osd_list}")
 
-        if target_osd not in active_osd_list:
-            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
-            utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
-            method_should_succeed(wait_for_device, host, target_osd, action="add")
-        utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
+        if "target_osd" in locals() or "target_osd" in globals():
+            if target_osd not in active_osd_list:
+                utils.set_osd_devices_unmanaged(
+                    ceph_cluster, target_osd, unmanaged=True
+                )
+                utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
+                method_should_succeed(wait_for_device, host, target_osd, action="add")
+            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
 
         if config.get("delete_pools"):
             for name in config["delete_pools"]:
