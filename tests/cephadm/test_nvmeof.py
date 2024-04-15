@@ -28,5 +28,6 @@ def run(ceph_cluster, **kw):
         method(config)
     finally:
         # Get cluster state
-        get_cluster_state(nvmeof)
+        if kw.get("no_cluster_state", True):
+            get_cluster_state(nvmeof)
     return 0
