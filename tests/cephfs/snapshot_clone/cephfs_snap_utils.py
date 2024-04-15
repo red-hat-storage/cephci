@@ -286,7 +286,7 @@ class SnapUtils(object):
         sched_snap_list = out.split()
         ceph_version = get_ceph_version_from_cluster(client)
         m_granularity = (
-            "M" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "m"
+            "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
         )
         if sched_type not in [m_granularity, "H"]:
             log.info(
@@ -459,11 +459,11 @@ class SnapUtils(object):
         log.info("Validate if scheduled snapshots are retained as per Retention policy")
         ceph_version = get_ceph_version_from_cluster(client)
         m_granularity = (
-            "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+            "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
         )
         if ret_type == "m":
             ret_type = (
-                "m" if LooseVersion(ceph_version) >= LooseVersion("18.2.1") else "M"
+                "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
             )
         out, rc = client.exec_command(
             sudo=True, cmd=f'ls -lrt {client_path}/.snap/| grep "scheduled" | wc -l'
