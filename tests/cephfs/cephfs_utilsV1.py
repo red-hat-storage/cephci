@@ -3467,6 +3467,12 @@ os.system('sudo systemctl start  network')
             return 1
         return 0
 
+    @retry(CommandFailed, tries=3, delay=30)
+    def wait_for_standby_replay_mds(self, client1, fs_name):
+        standby_reply_mds = self.get_standby_replay_mdss(client1, fs_name=fs_name)
+        if not standby_reply_mds:
+            raise CommandFailed("No Stanby Replay MDS")
+
     def wait_for_stable_fs(self, client, standby_replay, timeout=180, interval=5):
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         log.info("Wait for the command to pass")
