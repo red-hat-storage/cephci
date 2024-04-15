@@ -73,21 +73,23 @@ def run(ceph_cluster, **kw):
         cg_snap_io = CG_snap_IO(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
-        mgr_node = ceph_cluster.get_ceph_objects("mgr")[0]
-        build = config.get("build", config.get("rhbuild"))
-        fs_util_v1.prepare_clients(clients, build)
-        default_fs = config.get("fs_name", "cephfs")
-        qs_cnt_def = random.randrange(5, 11)
-        qs_cnt = config.get("qs_cnt", qs_cnt_def)
-        fs_util_v1.auth_list(clients)
-
-        client1 = clients[0]
-        log.info("checking Pre-requisites")
-        if len(clients) < 1:
+        if len(clients) < 2:
             log.info(
-                f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
+                f"This test requires minimum 2 client nodes.This has only {len(clients)} clients"
             )
             return 1
+        qs_clients = [clients[0], clients[1]]
+        mgr_node = ceph_cluster.get_ceph_objects("mgr")[0]
+        build = config.get("build", config.get("rhbuild"))
+        fs_util_v1.prepare_clients(qs_clients, build)
+        default_fs = config.get("fs_name", "cephfs")
+        qs_cnt_def = random.randrange(5, 11)
+        # qs_cnt_def = 2
+        qs_cnt = config.get("qs_cnt", qs_cnt_def)
+        fs_util_v1.auth_list(qs_clients)
+
+        client1 = qs_clients[0]
+        log.info("checking Pre-requisites")
 
         fs_details = fs_util_v1.get_fs_info(client1, fs_name=default_fs)
         if not fs_details:
@@ -158,7 +160,7 @@ def run(ceph_cluster, **kw):
             "fs_util": fs_util_v1,
             "cg_snap_util": cg_snap_util,
             "cg_snap_io": cg_snap_io,
-            "clients": clients,
+            "clients": qs_clients,
             "mgr_node": mgr_node,
             "qs_sets": qs_sets,
         }
@@ -226,8 +228,14 @@ def cg_snap_func_1(cg_test_params):
     fs_util = cg_test_params["fs_util"]
     clients = cg_test_params["clients"]
     client = cg_test_params["clients"][0]
-    client1 = client
+    client1 = cg_test_params["clients"][1]
     client2 = cg_test_params["clients"][1]
+    qs_clients = [client1, client2]
+    log.info(f"client:{client.node.hostname}")
+    for client_tmp in clients:
+        log.info(f"client:{client_tmp.node.hostname}")
+    for qs_client in qs_clients:
+        log.info(f"qs_client:{qs_client.node.hostname}")
     qs_sets = cg_test_params["qs_sets"]
     cg_snap_util = cg_test_params["cg_snap_util"]
     cg_snap_io = cg_test_params["cg_snap_io"]
@@ -237,16 +245,15 @@ def cg_snap_func_1(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-        qs_member_dict2 = cg_snap_util.mount_qs_members(client2, qs_set, fs_name)
-        client_mnt_dict.update({client2.node.hostname: qs_member_dict2})
 
+        log.info(f"client:{client.node.hostname}")
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 100
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
         time.sleep(45)
@@ -265,6 +272,7 @@ def cg_snap_func_1(cg_test_params):
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 log.info(f"Quiesce the set {qs_set}")
+                log.info(f"client:{client.node.hostname}")
                 cg_snap_util.cg_quiesce(
                     client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
                 )
@@ -334,10 +342,7 @@ def cg_snap_func_1(cg_test_params):
         log.info("Remove CG IO files and unmount")
         cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
         mnt_pt_list.clear()
-        for qs_member in qs_member_dict2:
-            mnt_pt_list.append(qs_member_dict2[qs_member]["mount_point"])
-        log.info("Unmount")
-        cg_snap_util.cleanup_cg_io(client2, mnt_pt_list, del_data=0)
+
         snap_name = f"cg_snap_{rand_str}"
         log.info("Remove CG snapshots")
         for qs_member in qs_member_dict1:
@@ -369,22 +374,21 @@ def cg_snap_func_1(cg_test_params):
         log.error("FAIL: Workflow 1a - quiesce lifecycle with await option")
         test_fail = 0
         total_fail += 1
+    else:
+        log.info("PASS: Workflow 1a - quiesce lifecycle with await option")
 
     log.info("Workflow 1b - Test quiesce without --await option")
     for qs_set in qs_sets:
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-        qs_member_dict2 = cg_snap_util.mount_qs_members(client2, qs_set, fs_name)
-        client_mnt_dict.update({client2.node.hostname: qs_member_dict2})
-
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 100
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
         time.sleep(35)
@@ -526,10 +530,10 @@ def cg_snap_func_1(cg_test_params):
         log.info("Remove CG IO files and unmount")
         cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
         mnt_pt_list.clear()
-        for qs_member in qs_member_dict2:
+        """for qs_member in qs_member_dict2:
             mnt_pt_list.append(qs_member_dict2[qs_member]["mount_point"])
         log.info("Unmount")
-        cg_snap_util.cleanup_cg_io(client2, mnt_pt_list, del_data=0)
+        cg_snap_util.cleanup_cg_io(client2, mnt_pt_list, del_data=0)"""
 
         snap_name = f"cg_snap_{rand_str}"
         log.info("Remove CG snapshots")
@@ -561,7 +565,8 @@ def cg_snap_func_1(cg_test_params):
     if test_fail == 1:
         log.error("FAIL: Workflow 1b - quiesce lifecycle without await option")
         total_fail += 1
-
+    else:
+        log.info("PASS: Workflow 1b - quiesce lifecycle without await option")
     if total_fail > 0:
         return 1
     return 0
@@ -576,19 +581,21 @@ def cg_snap_func_2(cg_test_params):
     fs_util = cg_test_params["fs_util"]
     clients = cg_test_params["clients"]
     client = cg_test_params["clients"][0]
-    client1 = client
-    client2 = cg_test_params["clients"][1]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    log.info(f"client:{client.node.hostname}")
+    for client_tmp in clients:
+        log.info(f"client:{client_tmp.node.hostname}")
+    for qs_client in qs_clients:
+        log.info(f"qs_client:{qs_client.node.hostname}")
     qs_sets = cg_test_params["qs_sets"]
     cg_snap_util = cg_test_params["cg_snap_util"]
     cg_snap_io = cg_test_params["cg_snap_io"]
     test_fail = 0
-
     for qs_set in qs_sets:
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-        qs_member_dict2 = cg_snap_util.mount_qs_members(client2, qs_set, fs_name)
-        client_mnt_dict.update({client2.node.hostname: qs_member_dict2})
 
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
@@ -596,7 +603,7 @@ def cg_snap_func_2(cg_test_params):
         io_run_time = 100
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
         time.sleep(45)
@@ -615,6 +622,7 @@ def cg_snap_func_2(cg_test_params):
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 log.info(f"Quiesce the set {qs_set}")
+                log.info(f"client:{client.node.hostname}")
                 qs_op_out = cg_snap_util.cg_quiesce(
                     client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
                 )
@@ -657,7 +665,7 @@ def cg_snap_func_2(cg_test_params):
                     client, qs_id_val, if_await=True, if_version=db_version
                 )
                 if out == 1:
-                    test_fail = 1
+                    test_fail += 1
                     log.error(
                         f"FAIL : Quiesce set release with if-version failed on {qs_id_val}"
                     )
@@ -688,7 +696,7 @@ def cg_snap_func_2(cg_test_params):
                     client, qs_id_val, [exclude_sv_name], if_await=True
                 )
                 if qs_exclude_status == 1:
-                    test_fail = 1
+                    test_fail += 1
                     log.error(
                         f"Exclude of {exclude_sv_name} in qs set {qs_id_val} failed"
                     )
@@ -702,96 +710,112 @@ def cg_snap_func_2(cg_test_params):
                     log.error(
                         f"State of qs set {qs_id_val} after exclude is not as expected - {state}"
                     )
-                    test_fail = 1
+                    test_fail += 1
 
-                if test_fail == 0:
-                    log.info(
-                        f"Verify quiesce set {qs_id_val} release after exclude with if-version"
+                log.info(
+                    f"Verify quiesce set {qs_id_val} release after exclude with if-version"
+                )
+                log.info(f"db_version before exclude - {ver_before_exclude}")
+                log.info(f"db_version after exclude : {ver_after_exclude}")
+                if ver_before_exclude == ver_after_exclude:
+                    log.error("db_version has NOT changed after exclude")
+                    test_fail += 1
+                else:
+                    out = cg_snap_util.cg_quiesce_release(
+                        client, qs_id_val, if_version=ver_after_exclude
                     )
-                    log.info(f"db_version before exclude - {ver_before_exclude}")
-                    log.info(f"db_version after exclude : {ver_after_exclude}")
-                    if ver_before_exclude == ver_after_exclude:
-                        log.error("db_version has NOT changed after exclude")
-                        test_fail = 1
-                    else:
-                        out = cg_snap_util.cg_quiesce_release(
-                            client, qs_id_val, if_version=ver_after_exclude
+                    if out == 1:
+                        test_fail += 1
+                        log.error(
+                            f"FAIL : Release with if-version with exclude before release on {qs_id_val}"
                         )
-                        if out == 1:
-                            test_fail = 1
-                            log.error(
-                                f"FAIL : Release with if-version with exclude before release on {qs_id_val}"
-                            )
-
-                log.info(f"Reset the quiesce set {qs_id_val}")
-                if cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set) == 1:
-                    log.error("Reset failed")
-                    test_fail = 1
+                qs_set_new = qs_set.copy()
+                qs_set_new.remove(exclude_sv_name)
+                qs_id_val_new = qs_id_val + "_new"
+                log.info(f"quiesce set {qs_set_new} with set-id {qs_id_val_new}")
+                if (
+                    cg_snap_util.cg_quiesce(
+                        client,
+                        qs_set_new,
+                        qs_id=qs_id_val_new,
+                        timeout=300,
+                        expiration=300,
+                    )
+                    == 1
+                ):
+                    log.error("quiesce failed")
+                    test_fail += 1
                     rand_str = "".join(
                         random.choice(string.ascii_lowercase + string.digits)
                         for _ in list(range(3))
                     )
-                    qs_id_val = f"cg_test1_{rand_str}"
+                    qs_id_val_new = f"cg_test1_{rand_str}"
                     qs_op_out = cg_snap_util.cg_quiesce(
-                        client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                        client,
+                        qs_set_new,
+                        qs_id=qs_id_val_new,
+                        timeout=300,
+                        expiration=300,
                     )
 
                 log.info(
-                    f"Verify release with if-version with include before release on quiesce set {qs_id_val}"
+                    f"Verify release with if-version with include before release on quiesce set {qs_id_val_new}"
                 )
                 include_sv_name = exclude_sv_name
                 log.info(
-                    f"Include a subvolume {include_sv_name} in quiesce set {qs_id_val}"
+                    f"Include a subvolume {include_sv_name} in quiesce set {qs_id_val_new}"
                 )
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
-                ver_before_include = qs_query_out["sets"][qs_id_val]["version"]
-                for qs_member in qs_query_out["sets"][qs_id_val]["members"]:
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val_new)
+                ver_before_include = qs_query_out["sets"][qs_id_val_new]["version"]
+                for qs_member in qs_query_out["sets"][qs_id_val_new]["members"]:
                     if exclude_sv_name in qs_member:
-                        exclude_state = qs_query_out["sets"][qs_id_val]["members"][
+                        exclude_state = qs_query_out["sets"][qs_id_val_new]["members"][
                             qs_member
                         ]["excluded"]
                         log.info(
                             f"excluded value of {exclude_sv_name} before include : {exclude_state}"
                         )
                 qs_include_status = cg_snap_util.cg_quiesce_include(
-                    client, qs_id_val, [include_sv_name], if_await=True
+                    client, qs_id_val_new, [include_sv_name], if_await=True
                 )
                 if qs_include_status == 1:
-                    test_fail = 1
+                    test_fail += 1
                     log.error(
-                        f"Include of {include_sv_name} in qs set {qs_id_val} failed"
+                        f"Include of {include_sv_name} in qs set {qs_id_val_new} failed"
                     )
-                log.info(f"Verify quiesce set {qs_id_val} state after include")
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
-                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
-                ver_after_include = qs_query_out["sets"][qs_id_val]["version"]
+                log.info(f"Verify quiesce set {qs_id_val_new} state after include")
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val_new)
+                state = qs_query_out["sets"][qs_id_val_new]["state"]["name"]
+                ver_after_include = qs_query_out["sets"][qs_id_val_new]["version"]
                 if state == "QUIESCED":
-                    log.info(f"State of qs set {qs_id_val} after include is QUIESCED")
+                    log.info(
+                        f"State of qs set {qs_id_val_new} after include is QUIESCED"
+                    )
                 else:
                     log.error(
-                        f"State of qs set {qs_id_val} after include is not as expected - {state}"
+                        f"State of qs set {qs_id_val_new} after include is not as expected - {state}"
                     )
-                    test_fail = 1
+                    test_fail += 1
                 if test_fail == 0:
                     log.info(
-                        f"Verify quiesce set {qs_id_val} release after include with if-version"
+                        f"Verify quiesce set {qs_id_val_new} release after include with if-version"
                     )
                     log.info(f"db_version before include - {ver_before_include}")
                     log.info(f"db_version after include : {ver_after_include}")
                     if ver_before_include == ver_after_include:
                         log.error("db_version has NOT changed after include")
-                        test_fail = 1
+                        test_fail += 1
                     else:
                         out = cg_snap_util.cg_quiesce_release(
-                            client, qs_id_val, if_version=ver_after_include
+                            client, qs_id_val_new, if_version=ver_after_include
                         )
                         if out == 1:
-                            test_fail = 1
+                            test_fail += 1
                             log.error(
-                                f"FAIL : Release with if-version with include before release on {qs_id_val}"
+                                f"FAIL : Release with if-version with include before release on {qs_id_val_new}"
                             )
 
-                if test_fail == 1:
+                if test_fail >= 1:
                     i = repeat_cnt
                 else:
                     i += 1
@@ -826,10 +850,7 @@ def cg_snap_func_2(cg_test_params):
         log.info("Remove CG IO files and unmount")
         cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
         mnt_pt_list.clear()
-        for qs_member in qs_member_dict2:
-            mnt_pt_list.append(qs_member_dict2[qs_member]["mount_point"])
-        log.info("Unmount")
-        cg_snap_util.cleanup_cg_io(client2, mnt_pt_list, del_data=0)
+
         snap_name = f"cg_snap_{rand_str}"
         log.info("Remove CG snapshots")
         for qs_member in qs_member_dict1:
@@ -855,9 +876,9 @@ def cg_snap_func_2(cg_test_params):
             log.error(
                 f"CG IO test exits with failure during quiesce lifecycle with await on qs_set-{qs_id_val}"
             )
-            test_fail = 1
+            test_fail += 1
 
-    if test_fail == 1:
+    if test_fail >= 1:
         log.error(
             "FAIL: Workflow 2 - Verify quiesce release with if-version,with exclude,include prior to release"
         )
