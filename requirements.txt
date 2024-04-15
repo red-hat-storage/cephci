@@ -6,3 +6,4 @@ tfacon
 uplink
 awscli
 pylero
+python-dotenv
