@@ -1,7 +1,7 @@
-from ceph.nvmegw_cli import NVMeGWCLI
+from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 
 
-class Host(NVMeGWCLI):
+class Host(ExecuteCommandMixin):
     def __init__(self, node, port) -> None:
         super().__init__(node, port)
         self.name = "host"

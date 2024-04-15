@@ -9,7 +9,7 @@ import plotly.io as pio
 import yaml
 
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli.subsystem import Subsystem
+from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof, test_orch
@@ -451,8 +451,8 @@ def nvmeof(ceph_cluster, **args):
 
     # Configure NVMEoF Gateway
     gw_node = get_node_by_id(ceph_cluster, args["gw_node"])
-    Subsystem.NVMEOF_CLI_IMAGE = cli_image
-    gateway = Subsystem(gw_node, 5500)
+    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
+    nvmegwcli = NVMeGWCLI(gw_node, 5500)
     initiator = get_node_by_id(ceph_cluster, args["initiator_node"])
     initiator.exec_command(cmd=f"mkdir -p {ARTIFACTS_DIR}", sudo=True)
 
@@ -484,7 +484,7 @@ def nvmeof(ceph_cluster, **args):
             "listener_port": subsystem["listener_port"],
             "node": args["initiator_node"],
         }
-        configure_subsystems(rbd, pool, gateway, subsystem)
+        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
         try:
             for i in range(args["image"]["count"]):
                 rbd.create_image(pool, f"{name}-image{i}", args["image"]["size"])
@@ -495,7 +495,7 @@ def nvmeof(ceph_cluster, **args):
                         "rbd-image": f"{name}-image{i}",
                     }
                 }
-                gateway.namespace.add(**ns_args)
+                nvmegwcli.namespace.add(**ns_args)
 
             # Run with profiles and collect results
             for io_profile in args["io_profiles"]:
@@ -513,7 +513,7 @@ def nvmeof(ceph_cluster, **args):
                     parse_fio_output(
                         get_node_by_id(ceph_cluster, args["initiator_node"]), i
                     )
-                    for i in initiators(ceph_cluster, gateway, initiator_cfg)
+                    for i in initiators(ceph_cluster, nvmegwcli, initiator_cfg)
                 ]
 
                 # disconnect initiator
@@ -530,7 +530,7 @@ def nvmeof(ceph_cluster, **args):
                 "subsystems": [subsystem],
             }
 
-            teardown(ceph_cluster, rbd, cleanup_cfg)
+            teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
 
             # cleanup images
             for i in range(args["image"]["count"]):

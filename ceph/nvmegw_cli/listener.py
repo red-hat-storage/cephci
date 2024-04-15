@@ -1,7 +1,7 @@
-from ceph.nvmegw_cli import NVMeGWCLI
+from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 
 
-class Listener(NVMeGWCLI):
+class Listener(ExecuteCommandMixin):
     def __init__(self, port, node) -> None:
         super().__init__(port, node)
         self.name = "listener"

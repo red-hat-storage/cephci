@@ -1,9 +1,9 @@
 import re
 
-from ceph.nvmegw_cli import NVMeGWCLI
+from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 
 
-class Namespace(NVMeGWCLI):
+class Namespace(ExecuteCommandMixin):
     def __init__(self, node, port) -> None:
         super().__init__(node, port)
         self.name = "namespace"

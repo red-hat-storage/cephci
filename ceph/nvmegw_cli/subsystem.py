@@ -1,18 +1,10 @@
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmegw_cli.host import Host
-from ceph.nvmegw_cli.listener import Listener
-from ceph.nvmegw_cli.namespace import Namespace
+from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 
 
-class Subsystem(NVMeGWCLI):
+class Subsystem(ExecuteCommandMixin):
     def __init__(self, node, port) -> None:
         super().__init__(node, port)
         self.name = "subsystem"
-        self.listener = Listener(node, port)
-        self.namespace = Namespace(node, port)
-        self.host = Host(node, port)
-        for clas in [self.listener, self.namespace, self.host]:
-            clas.NVMEOF_CLI_IMAGE = self.NVMEOF_CLI_IMAGE
 
     def add(self, **kwargs):
         return self.run_nvme_cli("add", **kwargs)
