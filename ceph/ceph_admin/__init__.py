@@ -134,6 +134,9 @@ class CephAdmin(BootstrapMixin, ShellMixin):
                 base_url += "Tools"
             else:
                 base_url += "compose/Tools/x86_64/os/"
+            cmd = f"yum-config-manager --add-repo {base_url}"
+            for node in self.cluster.get_nodes():
+                node.exec_command(sudo=True, cmd=cmd)
 
     def set_cdn_tool_repo(self):
         """
