@@ -20,6 +20,11 @@ def find_client_daemon_id(node, port=5500):
     return NVMeGWCLI(node, port).fetch_gateway_client_name()
 
 
+def find_gateway_hostname(node, port=5500):
+    """Find client daemon Id."""
+    return NVMeGWCLI(node, port).fetch_gateway_hostname()
+
+
 class NVMeCLI:
     """NVMeCLI class for managing NVMeoF Gateway entities."""
 

@@ -27,7 +27,7 @@ def configure_subsystems(rbd, pool, subsystem, config):
     )
 
     listener_cfg = {
-        "gateway-name": subsystem.fetch_gateway_client_name(),
+        "host-name": subsystem.fetch_gateway_hostname(),
         "traddr": subsystem.node.ip_address,
         "trsvcid": config["listener_port"],
     }
