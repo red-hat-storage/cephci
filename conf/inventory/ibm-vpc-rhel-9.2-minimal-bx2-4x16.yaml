@@ -10,6 +10,7 @@ instance:
     profile: bx2-4x16
 
   setup:  |
+    #cloud-config
     disable_root: false
     ssh_pwauth: true
 
