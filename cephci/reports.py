@@ -22,7 +22,7 @@ Utility to report result to service
 
     Usage:
         cephci/reports.py --service <SERVICE>
-            (--testrun-template <STR>)
+            [--testrun-template <STR>]
             [--project <STR>]
             [--testrun-id <STR>]
             [--testrun-title <STR>]
