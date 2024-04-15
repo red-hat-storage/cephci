@@ -27,7 +27,7 @@ def configure_subsystems(rbd, pool, subsystem, config):
     )
 
     listener_cfg = {
-        "gateway-name": subsystem.fetch_gateway_client_name(),
+        "host-name": subsystem.fetch_gateway_hostname(),
         "traddr": subsystem.node.ip_address,
         "trsvcid": config["listener_port"],
     }
@@ -164,11 +164,12 @@ def teardown(ceph_cluster, rbd_obj, config):
     # Delete the gateway
     if "gateway" in config["cleanup"]:
         cfg = {
+            "no_cluster_state": False,
             "config": {
                 "command": "remove",
                 "service": "nvmeof",
                 "args": {"service_name": f"nvmeof.{config['rbd_pool']}"},
-            }
+            },
         }
         test_orch.run(ceph_cluster, **cfg)
 
@@ -260,12 +261,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         subsystem = Subsystem(gw_node, gw_port)
         if config.get("install"):
             cfg = {
+                "no_cluster_state": False,
                 "config": {
                     "command": "apply",
                     "service": "nvmeof",
                     "args": {"placement": {"nodes": [gw_node.hostname]}},
                     "pos_args": [rbd_pool],
-                }
+                },
             }
             test_nvmeof.run(ceph_cluster, **cfg)
 

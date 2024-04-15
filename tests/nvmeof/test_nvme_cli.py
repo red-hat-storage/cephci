@@ -8,7 +8,7 @@ from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
-from ceph.nvmegw_cli.common import find_client_daemon_id
+from ceph.nvmegw_cli.common import find_gateway_hostname
 from ceph.nvmegw_cli.connection import Connection
 from ceph.nvmegw_cli.gateway import Gateway
 from ceph.nvmegw_cli.host import Host
@@ -92,9 +92,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 _cls.NVMEOF_CLI_IMAGE = cli_image
             if service in "listener" and command in ["add", "delete"]:
                 gw_node = get_node_by_id(ceph_cluster, cfg["args"]["gateway-name"])
-                client_id = find_client_daemon_id(gw_node)
+                hostname = find_gateway_hostname(gw_node)
                 cfg["args"].update(
-                    {"gateway-name": client_id, "traddr": gw_node.ip_address}
+                    {"host-name": hostname, "traddr": gw_node.ip_address}
                 )
             func = fetch_method(_cls, command)
             func(**cfg)

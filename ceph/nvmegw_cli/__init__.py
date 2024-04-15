@@ -31,3 +31,10 @@ class NVMeGWCLI(ExecuteCommandMixin):
         _, out = self.gateway.info(**gwinfo)
         out = loads(out)
         return out["load_balancing_group"]
+
+    def fetch_gateway_hostname(self):
+        """Return Gateway load balancing group host name"""
+        gwinfo = {"base_cmd_args": {"format": "json"}}
+        _, out = self.gateway.info(**gwinfo)
+        out = loads(out)
+        return out["hostname"]

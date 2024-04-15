@@ -106,7 +106,7 @@ def configure_listeners(config, _cls, command, ceph_cluster):
             config["args"].update(
                 {
                     "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
-                    "gateway-name": listener_node.hostname,
+                    "host-name": listener_node.hostname,
                     "traddr": listener_node.ip_address,
                     "trsvcid": port,
                 }
