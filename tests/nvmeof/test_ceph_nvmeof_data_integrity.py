@@ -3,7 +3,7 @@ import time
 from copy import deepcopy
 
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli.subsystem import Subsystem
+from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
@@ -15,20 +15,20 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
-def configure_subsystems(rbd, pool, subsystem, config):
+def configure_subsystems(rbd, pool, nvmegwcli, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
-    subsystem.add(
+    nvmegwcli.subsystem.add(
         **{"args": {**sub_args, **{"max-namespaces": config.get("max_ns", 32)}}}
     )
 
     listener_cfg = {
-        "host-name": subsystem.fetch_gateway_hostname(),
-        "traddr": subsystem.node.ip_address,
+        "host-name": nvmegwcli.fetch_gateway_hostname(),
+        "traddr": nvmegwcli.node.ip_address,
         "trsvcid": config["listener_port"],
     }
-    subsystem.listener.add(**{"args": {**listener_cfg, **sub_args}})
-    subsystem.host.add(**{"args": {**sub_args, **{"host": config["allow_host"]}}})
+    nvmegwcli.listener.add(**{"args": {**listener_cfg, **sub_args}})
+    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": config["allow_host"]}}})
 
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
@@ -45,7 +45,7 @@ def configure_subsystems(rbd, pool, subsystem, config):
                 ns_args = deepcopy(namespace_args)
                 ns_args.update({"rbd-image": f"{name}-image{num}"})
                 ns_args = {"args": ns_args}
-                p.spawn(subsystem.namespace.add, **ns_args)
+                p.spawn(nvmegwcli.namespace.add, **ns_args)
 
 
 def create_filesystem_and_mount(rbd_obj, devicepath, mount_point):
@@ -125,7 +125,7 @@ def disconnect_initiator(ceph_cluster, node, subnqn):
     initiator.disconnect(**{"nqn": subnqn})
 
 
-def teardown(ceph_cluster, rbd_obj, config):
+def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
     """Cleanup the ceph-nvme gw entities.
 
     Args:
@@ -147,19 +147,20 @@ def teardown(ceph_cluster, rbd_obj, config):
             config_sub_node = [config_sub_node]
         for sub_cfg in config_sub_node:
             node = config["gw_node"] if "node" not in sub_cfg else sub_cfg["node"]
-            sub_node = get_node_by_id(ceph_cluster, node)
-            sub_gw = Subsystem(sub_node, 5500)
             LOG.info(f"Deleting subsystem {sub_cfg['nqn']} on gateway {node}")
-            sub_gw.delete(**{"args": {"subsystem": sub_cfg["nqn"], "force": True}})
+            nvmegwcli.subsystem.delete(
+                **{"args": {"subsystem": sub_cfg["nqn"], "force": True}}
+            )
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
         cfg = {
+            "no_cluster_state": False,
             "config": {
                 "command": "remove",
                 "service": "nvmeof",
                 "args": {"service_name": f"nvmeof.{config['rbd_pool']}"},
-            }
+            },
         }
         test_orch.run(ceph_cluster, **cfg)
 
@@ -194,36 +195,38 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            Subsystem.NVMEOF_CLI_IMAGE = value
+            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
             break
 
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    gw_port = config.get("gw_port", 5500)
+    nvmegwcli = NVMeGWCLI(gw_node, gw_port)
+
     if config.get("cleanup-only"):
-        teardown(ceph_cluster, rbd_obj, config)
+        teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
         return 0
 
     try:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        gw_port = config.get("gw_port", 5500)
-        subsystem = Subsystem(gw_node, gw_port)
         if config.get("install"):
             cfg = {
+                "no_cluster_state": False,
                 "config": {
                     "command": "apply",
                     "service": "nvmeof",
                     "args": {"placement": {"nodes": [gw_node.hostname]}},
                     "pos_args": [rbd_pool],
-                }
+                },
             }
             test_nvmeof.run(ceph_cluster, **cfg)
         if config.get("subsystems"):
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
                     p.spawn(
-                        configure_subsystems, rbd_obj, rbd_pool, subsystem, subsys_args
+                        configure_subsystems, rbd_obj, rbd_pool, nvmegwcli, subsys_args
                     )
 
         if config.get("initiators"):
-            targets = initiators(ceph_cluster, subsystem, config["initiators"])
+            targets = initiators(ceph_cluster, nvmegwcli, config["initiators"])
             LOG.info(f"Targets discovered: {targets}")
 
             # verifying data integrity on NVMe targets
@@ -306,7 +309,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 time.sleep(10)
                 # Connect to Initiator
                 if config.get("initiators"):
-                    targets = initiators(ceph_cluster, subsystem, config["initiators"])
+                    targets = initiators(ceph_cluster, nvmegwcli, config["initiators"])
                     LOG.info(f"Targets discovered: {targets}")
                 # mount the NVMe target
                 target = targets[0]
@@ -333,6 +336,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.error(err)
     finally:
         if config.get("cleanup"):
-            teardown(ceph_cluster, rbd_obj, config)
+            teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
 
     return 1

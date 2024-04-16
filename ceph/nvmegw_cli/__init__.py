@@ -3,19 +3,37 @@ from json import loads
 from ceph.nvmegw_cli.connection import Connection
 from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 from ceph.nvmegw_cli.gateway import Gateway
+from ceph.nvmegw_cli.host import Host
+from ceph.nvmegw_cli.listener import Listener
 from ceph.nvmegw_cli.log_level import LogLevel
+from ceph.nvmegw_cli.namespace import Namespace
+from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmegw_cli.version import Version
 
 
 class NVMeGWCLI(ExecuteCommandMixin):
     def __init__(self, node, port=5500) -> None:
         super().__init__(node, port)
-        self.loglevel = LogLevel(node, port)
-        self.gateway = Gateway(node, port)
-        self.version = Version(node, port)
         self.connection = Connection(node, port)
+        self.gateway = Gateway(node, port)
+        self.host = Host(node, port)
+        self.loglevel = LogLevel(node, port)
+        self.listener = Listener(node, port)
+        self.namespace = Namespace(node, port)
+        self.subsystem = Subsystem(node, port)
+        self.version = Version(node, port)
+
         self.name = " "
-        for clas in [self.loglevel, self.gateway, self.version, self.connection]:
+        for clas in [
+            self.loglevel,
+            self.gateway,
+            self.version,
+            self.connection,
+            self.host,
+            self.subsystem,
+            self.namespace,
+            self.listener,
+        ]:
             clas.NVMEOF_CLI_IMAGE = self.NVMEOF_CLI_IMAGE
 
     def fetch_gateway_client_name(self):
@@ -38,3 +56,7 @@ class NVMeGWCLI(ExecuteCommandMixin):
         _, out = self.gateway.info(**gwinfo)
         out = loads(out)
         return out["hostname"]
+
+    def get_subsystems(self, **kwargs):
+        """Nvme CLI get_subsystems"""
+        return self.run_nvme_cli(**kwargs)
