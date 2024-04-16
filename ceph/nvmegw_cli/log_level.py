@@ -2,8 +2,8 @@ from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 
 
 class LogLevel(ExecuteCommandMixin):
-    def __init__(self, port, node) -> None:
-        super().__init__(port, node)
+    def __init__(self, node, port) -> None:
+        super().__init__(node, port)
         self.name = "log_level"
 
     def get(self, **kwargs):
