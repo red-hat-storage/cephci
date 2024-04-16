@@ -560,17 +560,17 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: Datalog trimming test on secondary
-      desc: test datalog trimming on secondary
+      name: Datalog trimming test on primary
+      desc: test datalog trimming on primary
       polarion-id: CEPH-10540 #CEPH-10722, CEPH-10547
       module: sanity_rgw_multisite.py
       clusters:
-        ceph-sec:
+        ceph-pri:
           config:
             script-name: test_bilog_trimming.py
             config-file-name: test_datalog_trimming.yaml
             timeout: 300
-            verify-io-on-site: ["ceph-pri"]
+            verify-io-on-site: ["ceph-sec"]
 
 
   - test:
