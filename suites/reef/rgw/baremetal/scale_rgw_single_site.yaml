@@ -105,7 +105,6 @@ tests:
       name: deploy cosbench
 
   - test:
-      abort-on-fail: true
       config:
         controllers:
           - node10
@@ -119,7 +118,6 @@ tests:
       polarion-id: CEPH-83574428
 
   - test:
-      abort-on-fail: true
       config:
         controllers:
           - node10
